@@ -7,6 +7,12 @@ pub struct Tick {
 }
 
 impl Tick {
+    /// Creates a Tick from a 'hash' and how many times it hashed the previous entry 'n'.
+    pub fn new(hash: u64, n: u64) -> Self {
+        let data = None;
+        Tick { hash, n, data }
+    }
+
     /// Creates a Tick from by hashing 'seed' 'n' times.
     ///
     /// ```
@@ -16,14 +22,13 @@ impl Tick {
     pub fn run(seed: u64, n: u64) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        let data = None;
         let mut hash = seed;
         let mut hasher = DefaultHasher::new();
         for _ in 0..n {
             hash.hash(&mut hasher);
             hash = hasher.finish();
         }
-        Tick { hash, n, data }
+        Self::new(hash, n)
     }
     /// Verifies self.hash is the result of hashing a 'seed' 'self.n' times.
     ///
