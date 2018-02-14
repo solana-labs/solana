@@ -49,13 +49,7 @@ impl Tick {
 /// assert!(!verify_slice(&vec![Tick::new(0, 0), Tick::new(1, 0)], 0)); // lazy inductive case, bad
 /// ```
 pub fn verify_slice(ticks: &[Tick], seed: u64) -> bool {
-    // Verify the first item against the seed.
-    match ticks.first() {
-        None => return true,
-        Some(x) if !x.verify(seed) => return false,
-        Some(_) => (),
-    }
-    // Verify all follow items using the hash in the item before it.
-    let mut tick_pairs = ticks.iter().zip(ticks.iter().skip(1));
+    let genesis = [Tick { hash: seed, n: 0 }];
+    let mut tick_pairs = genesis.iter().chain(ticks).zip(ticks);
     tick_pairs.all(|(x, x1)| x1.verify(x.hash))
 }
