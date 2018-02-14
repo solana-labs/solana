@@ -1,0 +1,17 @@
+language: rust
+matrix:
+  allow_failures:
+  - rust: nightly
+  include:
+  - rust: beta
+  - rust: nightly
+    env:
+    - FEATURES='unstable'
+cache: cargo
+before_script:
+- export PATH="$PATH:$HOME/.cargo/bin"
+- rustup component add rustfmt-preview
+script:
+- cargo fmt -- --write-mode=diff
+- cargo build --verbose --features "$FEATURES"
+- cargo test --verbose --features "$FEATURES"

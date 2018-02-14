@@ -3,4 +3,9 @@ name = "loomination"
 version = "0.1.0"
 authors = ["Greg Fitzgerald <garious@gmail.com>"]
 
+[features]
+unstable = []
+
 [dependencies]
+rayon = "0.9"
+itertools = "0.7.6"
