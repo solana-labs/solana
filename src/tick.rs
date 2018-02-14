@@ -3,6 +3,7 @@
 pub struct Tick {
     pub hash: u64,
     pub n: u64,
+    pub data: Option<u64>,
 }
 
 impl Tick {
@@ -15,14 +16,14 @@ impl Tick {
     pub fn new(seed: u64, n: u64) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-
+        let data = None;
         let mut hash = seed;
         let mut hasher = DefaultHasher::new();
         for _ in 0..n {
             hash.hash(&mut hasher);
             hash = hasher.finish();
         }
-        Tick { hash, n }
+        Tick { hash, n, data }
     }
     /// Verifies self.hash is the result of hashing a 'seed' 'self.n' times.
     ///
@@ -50,14 +51,14 @@ impl Tick {
 /// ```
 pub fn verify_slice(ticks: &[Tick], seed: u64) -> bool {
     use rayon::prelude::*;
-    let genesis = [Tick { hash: seed, n: 0 }];
+    let genesis = [Tick::new(seed, 0)];
     let tick_pairs = genesis.par_iter().chain(ticks).zip(ticks);
     tick_pairs.all(|(x, x1)| x1.verify(x.hash))
 }
 
 /// Verifies the hashes and ticks serially. Exists only for reference.
 pub fn verify_slice_seq(ticks: &[Tick], seed: u64) -> bool {
-    let genesis = [Tick { hash: seed, n: 0 }];
+    let genesis = [Tick::new(seed, 0)];
     let tick_pairs = genesis.iter().chain(ticks).zip(ticks);
     tick_pairs.into_iter().all(|(x, x1)| x1.verify(x.hash))
 }
