@@ -96,11 +96,11 @@ pub fn verify_slice_seq(events: &[Event], start_hash: u64) -> bool {
     event_pairs.into_iter().all(|(x, x1)| x1.verify(x.end_hash))
 }
 
-/// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'hashes_since_prev'.
-pub fn create_ticks(start_hash: u64, hashes_since_prev: u64, len: usize) -> Vec<Event> {
+/// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'num_hashes'.
+pub fn create_ticks(start_hash: u64, num_hashes: u64, len: usize) -> Vec<Event> {
     use itertools::unfold;
     let mut events = unfold(start_hash, |state| {
-        let event = next_tick(*state, hashes_since_prev);
+        let event = next_tick(*state, num_hashes);
         *state = event.end_hash;
         return Some(event);
     });
