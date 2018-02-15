@@ -43,7 +43,7 @@ impl Event {
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
     ///
     /// ```
-    /// use loomination::event::{Event, next_tick};
+    /// use phist::event::{Event, next_tick};
     /// assert!(Event::new_tick(0, 0).verify(0)); // base case
     /// assert!(!Event::new_tick(0, 0).verify(1)); // base case, bad
     /// assert!(next_tick(0, 1).verify(0)); // inductive case
@@ -57,7 +57,7 @@ impl Event {
 /// Creates the next Tick Event 'num_hashes' after 'start_hash'.
 ///
 /// ```
-/// use loomination::event::next_tick;
+/// use phist::event::next_tick;
 /// assert_eq!(next_tick(0, 1).num_hashes, 1)
 /// ```
 pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
@@ -75,7 +75,7 @@ pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
 /// Verifies the hashes and counts of a slice of events are all consistent.
 ///
 /// ```
-/// use loomination::event::{Event, next_tick, verify_slice};
+/// use phist::event::{Event, next_tick, verify_slice};
 /// assert!(verify_slice(&vec![], 0)); // base case
 /// assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
 /// assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad

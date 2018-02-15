@@ -1,3 +1,5 @@
-[![Build Status](https://travis-ci.org/garious/loomination.svg?branch=master)](https://travis-ci.org/garious/loomination)
+[![Build Status](https://travis-ci.org/garious/phist.svg?branch=master)](https://travis-ci.org/garious/phist)
 
-# loomination
+# phist
+
+An implementation of Loom's Proof-of-History.
