@@ -31,7 +31,7 @@ pub enum EventData {
 impl Event {
     /// Creates an Event from the number of hashes 'num_hashes' since the previous event
     /// and that resulting 'end_hash'.
-    pub fn new(num_hashes: u64, end_hash: u64) -> Self {
+    pub fn new_tick(num_hashes: u64, end_hash: u64) -> Self {
         let data = EventData::Tick;
         Event {
             num_hashes,
@@ -40,66 +40,67 @@ impl Event {
         }
     }
 
-    /// Creates an Event from by hashing 'start_hash' 'num_hashes' times.
-    ///
-    /// ```
-    /// use loomination::event::Event;
-    /// assert_eq!(Event::run(0, 1).num_hashes, 1)
-    /// ```
-    pub fn run(start_hash: u64, num_hashes: u64) -> Self {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut end_hash = start_hash;
-        let mut hasher = DefaultHasher::new();
-        for _ in 0..num_hashes {
-            end_hash.hash(&mut hasher);
-            end_hash = hasher.finish();
-        }
-        Self::new(num_hashes, end_hash)
-    }
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
     ///
     /// ```
-    /// use loomination::event::Event;
-    /// assert!(Event::run(0, 0).verify(0)); // base case
-    /// assert!(!Event::run(0, 0).verify(1)); // base case, bad
-    /// assert!(Event::run(0, 1).verify(0)); // inductive case
-    /// assert!(!Event::run(0, 1).verify(1)); // inductive case, bad
+    /// use loomination::event::{Event, next_tick};
+    /// assert!(Event::new_tick(0, 0).verify(0)); // base case
+    /// assert!(!Event::new_tick(0, 0).verify(1)); // base case, bad
+    /// assert!(next_tick(0, 1).verify(0)); // inductive case
+    /// assert!(!next_tick(0, 1).verify(1)); // inductive case, bad
     /// ```
     pub fn verify(self: &Self, start_hash: u64) -> bool {
-        self.end_hash == Self::run(start_hash, self.num_hashes).end_hash
+        self.end_hash == next_tick(start_hash, self.num_hashes).end_hash
     }
+}
+
+/// Creates the next Tick Event 'num_hashes' after 'start_hash'.
+///
+/// ```
+/// use loomination::event::next_tick;
+/// assert_eq!(next_tick(0, 1).num_hashes, 1)
+/// ```
+pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut end_hash = start_hash;
+    let mut hasher = DefaultHasher::new();
+    for _ in 0..num_hashes {
+        end_hash.hash(&mut hasher);
+        end_hash = hasher.finish();
+    }
+    Event::new_tick(num_hashes, end_hash)
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 ///
 /// ```
-/// use loomination::event::{verify_slice, Event};
+/// use loomination::event::{next_tick, verify_slice};
 /// assert!(verify_slice(&vec![], 0)); // base case
-/// assert!(verify_slice(&vec![Event::run(0, 0)], 0)); // singleton case 1
-/// assert!(!verify_slice(&vec![Event::run(0, 0)], 1)); // singleton case 2, bad
-/// assert!(verify_slice(&vec![Event::run(0, 0), Event::run(0, 0)], 0)); // lazy inductive case
-/// assert!(!verify_slice(&vec![Event::run(0, 0), Event::run(1, 0)], 0)); // lazy inductive case, bad
+/// assert!(verify_slice(&vec![next_tick(0, 0)], 0)); // singleton case 1
+/// assert!(!verify_slice(&vec![next_tick(0, 0)], 1)); // singleton case 2, bad
+/// assert!(verify_slice(&vec![next_tick(0, 0), next_tick(0, 0)], 0)); // lazy inductive case
+/// assert!(!verify_slice(&vec![next_tick(0, 0), next_tick(1, 0)], 0)); // lazy inductive case, bad
 /// ```
 pub fn verify_slice(events: &[Event], start_hash: u64) -> bool {
     use rayon::prelude::*;
-    let genesis = [Event::run(start_hash, 0)];
+    let genesis = [Event::new_tick(0, start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| x1.verify(x0.end_hash))
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq(events: &[Event], start_hash: u64) -> bool {
-    let genesis = [Event::run(start_hash, 0)];
+    let genesis = [Event::new_tick(0, start_hash)];
     let event_pairs = genesis.iter().chain(events).zip(events);
     event_pairs.into_iter().all(|(x, x1)| x1.verify(x.end_hash))
 }
 
 /// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'hashes_since_prev'.
-pub fn create_events(start_hash: u64, hashes_since_prev: u64, len: usize) -> Vec<Event> {
+pub fn create_ticks(start_hash: u64, hashes_since_prev: u64, len: usize) -> Vec<Event> {
     use itertools::unfold;
     let mut events = unfold(start_hash, |state| {
-        let event = Event::run(*state, hashes_since_prev);
+        let event = next_tick(*state, hashes_since_prev);
         *state = event.end_hash;
         return Some(event);
     });
@@ -115,7 +116,7 @@ mod bench {
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = 0;
-        let events = event::create_events(start_hash, 100_000, 4);
+        let events = event::create_ticks(start_hash, 100_000, 4);
         bencher.iter(|| {
             assert!(event::verify_slice(&events, start_hash));
         });
