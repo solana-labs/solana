@@ -49,13 +49,13 @@ impl Event {
     pub fn run(start_hash: u64, num_hashes: u64) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        let mut hash = start_hash;
+        let mut end_hash = start_hash;
         let mut hasher = DefaultHasher::new();
         for _ in 0..num_hashes {
-            hash.hash(&mut hasher);
-            hash = hasher.finish();
+            end_hash.hash(&mut hasher);
+            end_hash = hasher.finish();
         }
-        Self::new(num_hashes, hash)
+        Self::new(num_hashes, end_hash)
     }
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
     ///
