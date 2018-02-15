@@ -75,12 +75,12 @@ pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
 /// Verifies the hashes and counts of a slice of events are all consistent.
 ///
 /// ```
-/// use loomination::event::{next_tick, verify_slice};
+/// use loomination::event::{Event, next_tick, verify_slice};
 /// assert!(verify_slice(&vec![], 0)); // base case
-/// assert!(verify_slice(&vec![next_tick(0, 0)], 0)); // singleton case 1
-/// assert!(!verify_slice(&vec![next_tick(0, 0)], 1)); // singleton case 2, bad
-/// assert!(verify_slice(&vec![next_tick(0, 0), next_tick(0, 0)], 0)); // lazy inductive case
-/// assert!(!verify_slice(&vec![next_tick(0, 0), next_tick(1, 0)], 0)); // lazy inductive case, bad
+/// assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
+/// assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad
+/// assert!(verify_slice(&vec![Event::new_tick(0, 0), next_tick(0, 0)], 0)); // lazy inductive case
+/// assert!(!verify_slice(&vec![Event::new_tick(0, 0), next_tick(1, 0)], 0)); // lazy inductive case, bad
 /// ```
 pub fn verify_slice(events: &[Event], start_hash: u64) -> bool {
     use rayon::prelude::*;
