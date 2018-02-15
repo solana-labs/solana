@@ -92,8 +92,8 @@ pub fn verify_slice(events: &[Event], start_hash: u64) -> bool {
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq(events: &[Event], start_hash: u64) -> bool {
     let genesis = [Event::new_tick(0, start_hash)];
-    let event_pairs = genesis.iter().chain(events).zip(events);
-    event_pairs.into_iter().all(|(x, x1)| x1.verify(x.end_hash))
+    let mut event_pairs = genesis.iter().chain(events).zip(events);
+    event_pairs.all(|(x0, x1)| x1.verify(x0.end_hash))
 }
 
 /// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'num_hashes'.
