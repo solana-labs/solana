@@ -3,7 +3,7 @@ matrix:
   allow_failures:
   - rust: nightly
   include:
-  - rust: beta
+  - rust: stable
   - rust: nightly
     env:
     - FEATURES='unstable'

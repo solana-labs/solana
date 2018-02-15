@@ -7,5 +7,5 @@ authors = ["Greg Fitzgerald <garious@gmail.com>"]
 unstable = []
 
 [dependencies]
-rayon = "0.9"
+rayon = "1.0.0"
 itertools = "0.7.6"
