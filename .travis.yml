@@ -1,5 +1,7 @@
 language: rust
-sudo: required # Work around for travis-ci/travis-ci#9061
+required: sudo
+services:
+- docker
 matrix:
   allow_failures:
   - rust: nightly
@@ -11,28 +13,10 @@ matrix:
 before_script: |
   export PATH="$PATH:$HOME/.cargo/bin"
   rustup component add rustfmt-preview
-  PKGNAME="phist" # must match with cargo.toml
-  LOCAL="~/.local" # install here to avoid `sudo`
-  export PATH=$LOCAL/bin:$PATH
-addons:
-  apt:
-    packages:
-    - libcurl4-openssl-dev
-    - libelf-dev
-    - libdw-dev
-    - binutils-dev # required for `--verify`
 script:
 - cargo fmt -- --write-mode=diff
 - cargo build --verbose --features "$FEATURES"
 - cargo test --verbose --features "$FEATURES"
 after_success: |
-  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-  tar xzf master.tar.gz && mkdir kcov-master/build && cd kcov-master/build &&
-  cmake -DCMAKE_INSTALL_PREFIX:PATH=$LOCAL .. && make &&
-  make install && cd ../.. &&
-
-  kcov --verify \
-       --exclude-pattern=/.cargo \
-       target/kcov target/debug/$PKGNAME-*
-
-  bash <(curl -s https://codecov.io/bash) -s target/kcov
+  docker run -it --rm --security-opt seccomp=unconfined --volume "$PWD:/volume" elmtai/docker-rust-kcov
+  bash <(curl -s https://codecov.io/bash) -s target/cov
