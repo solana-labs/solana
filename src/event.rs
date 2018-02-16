@@ -2,9 +2,9 @@
 
 /// A Proof-of-History is an ordered log of events in time. Each entry contains three
 /// pieces of data. The 'num_hashes' field is the number of hashes performed since the previous
-/// entry.  The 'hash' field is the result of hashing 'hash' from the previous entry 'num_hashes'
-/// times.  The 'data' field is an optional foreign key (a hash) pointing to some arbitrary
-/// data that a client is looking to associate with the entry.
+/// entry.  The 'end_hash' field is the result of hashing 'end_hash' from the previous entry
+/// 'num_hashes' times.  The 'data' field is an optional foreign key (a hash) pointing to some
+/// arbitrary data that a client is looking to associate with the entry.
 ///
 /// If you divide 'num_hashes' by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last event. Since processing power increases
@@ -18,11 +18,11 @@ pub struct Event {
     pub data: EventData,
 }
 
-/// When 'data' is Tick, the event represents a simple "tick", and exists for the
+/// When 'data' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
-/// be generated in 'num_hashes' hashes and verified in 'num_hashes' hashes.  By logging a hash alongside
-/// the tick, each tick and be verified in parallel using the 'end_hash' of the preceding
-/// tick to seed its hashing.
+/// be generated in 'num_hashes' hashes and verified in 'num_hashes' hashes.  By logging
+/// a hash alongside the tick, each tick and be verified in parallel using the 'end_hash'
+/// of the preceding tick to seed its hashing.
 pub enum EventData {
     Tick,
     UserDataKey(u64),
@@ -134,9 +134,9 @@ mod bench {
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = 0;
-        let events = event::create_ticks(start_hash, 100_000, 4);
+        let events = event::create_ticks(start_hash, 100_000, 8);
         bencher.iter(|| {
-            assert!(event::verify_slice(&events, start_hash));
+            assert!(event::verify_slice_seq(&events, start_hash));
         });
     }
 }
