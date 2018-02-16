@@ -1,3 +1,5 @@
+[![Silk crate](https://img.shields.io/crates/v/silk.svg)](https://crates.io/crates/silk)
+[![Silk documentation](https://docs.rs/silk/badge.svg)](https://docs.rs/silk)
 [![Build Status](https://travis-ci.org/loomprotocol/silk.svg?branch=master)](https://travis-ci.org/loomprotocol/silk)
 [![codecov](https://codecov.io/gh/loomprotocol/silk/branch/master/graph/badge.svg)](https://codecov.io/gh/loomprotocol/silk)
 
