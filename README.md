@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/loomprotocol/silk.svg?branch=master)](https://travis-ci.org/loomprotocol/silk)
 [![codecov](https://codecov.io/gh/loomprotocol/silk/branch/master/graph/badge.svg)](https://codecov.io/gh/loomprotocol/silk)
 
-# Silk, A Silky Smooth Implementation of the Loom Architecture
+# Silk, a silky smooth implementation of the Loom specification
 
 Loom is a new achitecture for a high performance blockchain. Its whitepaper boasts a theoretical
 throughput of 710k transactions per second on a 1 gbps network. The first implementation of the
