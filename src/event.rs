@@ -136,6 +136,15 @@ mod bench {
         let start_hash = 0;
         let events = event::create_ticks(start_hash, 100_000, 8);
         bencher.iter(|| {
+            assert!(event::verify_slice(&events, start_hash));
+        });
+    }
+
+    #[bench]
+    fn event_bench_seq(bencher: &mut Bencher) {
+        let start_hash = 0;
+        let events = event::create_ticks(start_hash, 100_000, 8);
+        bencher.iter(|| {
             assert!(event::verify_slice_seq(&events, start_hash));
         });
     }

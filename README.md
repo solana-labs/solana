@@ -8,10 +8,15 @@ An implementation of Loom's Proof-of-History.
 
 # Developing
 
-Install Rust and Cargo:
+Building
+---
+
+Install rustc, cargo and rustfmt:
 
 ```bash
 $ curl https://sh.rustup.rs -sSf | sh
+$ source $HOME/.cargo/env
+$ rustup component add rustfmt-preview
 ```
 
 Download the source code:
@@ -21,8 +26,26 @@ $ git clone https://github.com/garious/phist.git
 $ cd phist
 ```
 
+Testing
+---
+
 Run the test suite:
 
 ```bash
 cargo test
+```
+
+Benchmarking
+---
+
+First install the nightly build of rustc. `cargo bench` requires unstable features:
+
+```bash
+$ rustup install nightly
+```
+
+Run the benchmarks:
+
+```bash
+$ cargo +nightly bench --features="unstable"
 ```
