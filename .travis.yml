@@ -8,7 +8,6 @@ matrix:
   - rust: nightly
     env:
     - FEATURES='unstable'
-cache: cargo
 before_script: |
   export PATH="$PATH:$HOME/.cargo/bin"
   rustup component add rustfmt-preview
