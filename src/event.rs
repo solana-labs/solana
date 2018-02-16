@@ -41,25 +41,12 @@ impl Event {
     }
 
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
-    ///
-    /// ```
-    /// use phist::event::{Event, next_tick};
-    /// assert!(Event::new_tick(0, 0).verify(0)); // base case
-    /// assert!(!Event::new_tick(0, 0).verify(1)); // base case, bad
-    /// assert!(next_tick(0, 1).verify(0)); // inductive case
-    /// assert!(!next_tick(0, 1).verify(1)); // inductive case, bad
-    /// ```
     pub fn verify(self: &Self, start_hash: u64) -> bool {
         self.end_hash == next_tick(start_hash, self.num_hashes).end_hash
     }
 }
 
 /// Creates the next Tick Event 'num_hashes' after 'start_hash'.
-///
-/// ```
-/// use phist::event::next_tick;
-/// assert_eq!(next_tick(0, 1).num_hashes, 1)
-/// ```
 pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -73,15 +60,6 @@ pub fn next_tick(start_hash: u64, num_hashes: u64) -> Event {
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
-///
-/// ```
-/// use phist::event::{Event, next_tick, verify_slice};
-/// assert!(verify_slice(&vec![], 0)); // base case
-/// assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
-/// assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad
-/// assert!(verify_slice(&vec![Event::new_tick(0, 0), next_tick(0, 0)], 0)); // lazy inductive case
-/// assert!(!verify_slice(&vec![Event::new_tick(0, 0), next_tick(1, 0)], 0)); // lazy inductive case, bad
-/// ```
 pub fn verify_slice(events: &[Event], start_hash: u64) -> bool {
     use rayon::prelude::*;
     let genesis = [Event::new_tick(0, start_hash)];
@@ -105,6 +83,39 @@ pub fn create_ticks(start_hash: u64, num_hashes: u64, len: usize) -> Vec<Event> 
         return Some(event);
     });
     events.by_ref().take(len).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_verify() {
+        assert!(Event::new_tick(0, 0).verify(0)); // base case
+        assert!(!Event::new_tick(0, 0).verify(1)); // base case, bad
+        assert!(next_tick(0, 1).verify(0)); // inductive case
+        assert!(!next_tick(0, 1).verify(1)); // inductive case, bad
+    }
+
+    #[test]
+    fn test_next_tick() {
+        assert_eq!(next_tick(0, 1).num_hashes, 1)
+    }
+
+    #[test]
+    fn test_verify_slice() {
+        assert!(verify_slice(&vec![], 0)); // base case
+        assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
+        assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad
+        assert!(verify_slice(
+            &vec![Event::new_tick(0, 0), next_tick(0, 0)],
+            0
+        )); // lazy inductive case
+        assert!(!verify_slice(
+            &vec![Event::new_tick(0, 0), next_tick(1, 0)],
+            0
+        )); // lazy inductive case, bad
+    }
 }
 
 #[cfg(all(feature = "unstable", test))]
