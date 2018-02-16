@@ -1,7 +1,11 @@
 [package]
 name = "silk"
 version = "0.1.0"
-authors = ["Greg Fitzgerald <garious@gmail.com>"]
+authors = [
+    "Anatoly Yakovenko <aeyakovenko@gmail.com>",
+    "Greg Fitzgerald <garious@gmail.com>",
+]
+license = "APACHE-2.0"
 
 [features]
 unstable = []
