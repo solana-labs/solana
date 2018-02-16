@@ -1,4 +1,5 @@
 language: rust
+sudo: required # Work around for travis-ci/travis-ci#9061
 matrix:
   allow_failures:
   - rust: nightly
