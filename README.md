@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/garious/phist.svg?branch=master)](https://travis-ci.org/garious/phist)
+[![codecov](https://codecov.io/gh/garious/phist/branch/master/graph/badge.svg)](https://codecov.io/gh/garious/phist)
 
 # :punch: phist :punch:
 
