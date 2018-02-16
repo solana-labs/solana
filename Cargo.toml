@@ -9,7 +9,7 @@ authors = [
 license = "Apache-2.0"
 
 [badges]
-codecov = { repository = "https://github.com/loomprotocol/silk.git", branch = "master", service = "github" }
+codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 
 [features]
 unstable = []
