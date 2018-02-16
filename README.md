@@ -10,7 +10,7 @@ throughput of 710k transactions per second on a 1 gbps network. The specificatio
 in two git repositories. Reserach is performed in the loom repository. That work drives the
 Loom specification forward. This repository, on the other hand, aims to implement the specification
 as-is.  We care a great deal about quality, clarity and short learning curve. We avoid the use
-of `unsafe` Rust and an write tests for *everything*.  Optimizations are only added when
+of `unsafe` Rust and write tests for *everything*.  Optimizations are only added when
 corresponding benchmarks are also added that demonstrate real performance boots. We expect the
 feature set here will always be a ways behind the loom repo, but that this is an implementation
 you can take to the bank, literally.
