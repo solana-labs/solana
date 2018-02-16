@@ -1,11 +1,15 @@
 [package]
 name = "silk"
+description = "A silky smooth implementation of the Loom architecture"
 version = "0.1.0"
 authors = [
     "Anatoly Yakovenko <aeyakovenko@gmail.com>",
     "Greg Fitzgerald <garious@gmail.com>",
 ]
 license = "APACHE-2.0"
+
+[badges]
+codecov = { repository = "https://github.com/loomprotocol/silk.git", branch = "master", service = "github" }
 
 [features]
 unstable = []
