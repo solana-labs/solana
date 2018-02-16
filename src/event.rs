@@ -93,8 +93,8 @@ mod tests {
     fn test_event_verify() {
         assert!(Event::new_tick(0, 0).verify(0)); // base case
         assert!(!Event::new_tick(0, 0).verify(1)); // base case, bad
-        assert!(next_tick(0, 1).verify(0)); // inductive case
-        assert!(!next_tick(0, 1).verify(1)); // inductive case, bad
+        assert!(next_tick(0, 1).verify(0)); // inductive step
+        assert!(!next_tick(0, 1).verify(1)); // inductive step, bad
     }
 
     #[test]
@@ -102,17 +102,27 @@ mod tests {
         assert_eq!(next_tick(0, 1).num_hashes, 1)
     }
 
-    #[test]
-    fn test_verify_slice() {
+    fn verify_slice_generic(verify_slice: fn(&[Event], u64) -> bool) {
         assert!(verify_slice(&vec![], 0)); // base case
         assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
         assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad
-        assert!(verify_slice(&create_ticks(0, 0, 2), 0)); // inductive case
+        assert!(verify_slice(&create_ticks(0, 0, 2), 0)); // inductive step
 
         let mut bad_ticks = create_ticks(0, 0, 2);
         bad_ticks[1].end_hash = 1;
-        assert!(!verify_slice(&bad_ticks, 0)); // inductive case, bad
+        assert!(!verify_slice(&bad_ticks, 0)); // inductive step, bad
     }
+
+    #[test]
+    fn test_verify_slice() {
+        verify_slice_generic(verify_slice);
+    }
+
+    #[test]
+    fn test_verify_slice_seq() {
+        verify_slice_generic(verify_slice_seq);
+    }
+
 }
 
 #[cfg(all(feature = "unstable", test))]
