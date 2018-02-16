@@ -107,14 +107,11 @@ mod tests {
         assert!(verify_slice(&vec![], 0)); // base case
         assert!(verify_slice(&vec![Event::new_tick(0, 0)], 0)); // singleton case 1
         assert!(!verify_slice(&vec![Event::new_tick(0, 0)], 1)); // singleton case 2, bad
-        assert!(verify_slice(
-            &vec![Event::new_tick(0, 0), next_tick(0, 0)],
-            0
-        )); // lazy inductive case
-        assert!(!verify_slice(
-            &vec![Event::new_tick(0, 0), next_tick(1, 0)],
-            0
-        )); // lazy inductive case, bad
+        assert!(verify_slice(&create_ticks(0, 0, 2), 0)); // inductive case
+
+        let mut bad_ticks = create_ticks(0, 0, 2);
+        bad_ticks[1].end_hash = 1;
+        assert!(!verify_slice(&bad_ticks, 0)); // inductive case, bad
     }
 }
 
