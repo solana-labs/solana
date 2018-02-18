@@ -15,6 +15,7 @@ pub struct Historian {
     pub thread_hdl: JoinHandle<(Event, EventThreadExitReason)>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EventThreadExitReason {
     RecvDisconnected,
     SendDisconnected,
@@ -34,14 +35,9 @@ fn drain_queue(
                 let e = Event {
                     end_hash,
                     num_hashes,
-                    data: data.clone(),
+                    data,
                 };
-                if let Err(_) = sender.send(e) {
-                    let e = Event {
-                        end_hash,
-                        num_hashes,
-                        data,
-                    };
+                if let Err(_) = sender.send(e.clone()) {
                     return Err((e, EventThreadExitReason::SendDisconnected));
                 }
                 num_hashes = 0;
@@ -120,6 +116,23 @@ mod tests {
         let e1 = hist.receiver.recv().unwrap();
         assert_eq!(e1.data, data);
 
+        drop(hist.sender);
+        assert_eq!(
+            hist.thread_hdl.join().unwrap().1,
+            EventThreadExitReason::RecvDisconnected
+        );
+
         verify_slice(&[e0, e1], 0);
+    }
+
+    #[test]
+    fn test_historian_closed_sender() {
+        let hist = Historian::new(0);
+        drop(hist.receiver);
+        hist.sender.send(EventData::Tick).unwrap();
+        assert_eq!(
+            hist.thread_hdl.join().unwrap().1,
+            EventThreadExitReason::SendDisconnected
+        );
     }
 }
