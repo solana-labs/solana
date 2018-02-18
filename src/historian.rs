@@ -21,7 +21,7 @@ pub enum ExitReason {
     SendDisconnected,
 }
 
-fn drain_queue(
+fn log_events(
     receiver: &Receiver<Event>,
     sender: &Sender<Entry>,
     num_hashes: u64,
@@ -59,7 +59,7 @@ fn drain_queue(
 
 /// A background thread that will continue tagging received Event messages and
 /// sending back Entry messages until either the receiver or sender channel is closed.
-pub fn event_stream(
+pub fn create_logger(
     start_hash: u64,
     receiver: Receiver<Event>,
     sender: Sender<Entry>,
@@ -72,7 +72,7 @@ pub fn event_stream(
         let mut hasher = DefaultHasher::new();
         let mut num_hashes = 0;
         loop {
-            match drain_queue(&receiver, &sender, num_hashes, end_hash) {
+            match log_events(&receiver, &sender, num_hashes, end_hash) {
                 Ok(n) => num_hashes = n,
                 Err(err) => return err,
             }
@@ -88,7 +88,7 @@ impl Historian {
         use std::sync::mpsc::channel;
         let (sender, event_receiver) = channel();
         let (entry_sender, receiver) = channel();
-        let thread_hdl = event_stream(start_hash, event_receiver, entry_sender);
+        let thread_hdl = create_logger(start_hash, event_receiver, entry_sender);
         Historian {
             sender,
             receiver,
