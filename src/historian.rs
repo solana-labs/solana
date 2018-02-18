@@ -7,7 +7,7 @@
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use event::{Entry, Event};
+use log::{Entry, Event};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -100,7 +100,7 @@ impl Historian {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use event::*;
+    use log::*;
 
     #[test]
     fn test_historian() {

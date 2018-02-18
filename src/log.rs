@@ -1,10 +1,10 @@
-//! The `event` crate provides the foundational data structures for Proof-of-History
+//! The `log` crate provides the foundational data structures for Proof-of-History,
+//! an ordered log of events in time.
 
-/// A Proof-of-History is an ordered log of events in time. Each entry contains three
-/// pieces of data. The 'num_hashes' field is the number of hashes performed since the previous
-/// entry.  The 'end_hash' field is the result of hashing 'end_hash' from the previous entry
-/// 'num_hashes' times.  The 'event' field points to an Event that took place shortly
-/// after 'end_hash' was generated.
+/// Each log entry contains three pieces of data. The 'num_hashes' field is the number
+/// of hashes performed since the previous entry.  The 'end_hash' field is the result
+/// of hashing 'end_hash' from the previous entry 'num_hashes' times.  The 'event'
+/// field points to an Event that took place shortly after 'end_hash' was generated.
 ///
 /// If you divide 'num_hashes' by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last event. Since processing power increases
@@ -131,23 +131,23 @@ mod tests {
 mod bench {
     extern crate test;
     use self::test::Bencher;
-    use event;
+    use log::*;
 
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = 0;
-        let events = event::create_ticks(start_hash, 100_000, 8);
+        let events = create_ticks(start_hash, 100_000, 8);
         bencher.iter(|| {
-            assert!(event::verify_slice(&events, start_hash));
+            assert!(verify_slice(&events, start_hash));
         });
     }
 
     #[bench]
     fn event_bench_seq(bencher: &mut Bencher) {
         let start_hash = 0;
-        let events = event::create_ticks(start_hash, 100_000, 8);
+        let events = create_ticks(start_hash, 100_000, 8);
         bencher.iter(|| {
-            assert!(event::verify_slice_seq(&events, start_hash));
+            assert!(verify_slice_seq(&events, start_hash));
         });
     }
 }
