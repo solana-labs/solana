@@ -1,44 +1,44 @@
 //! The `historian` crate provides a microservice for generating a Proof-of-History.
-//! It logs EventData items on behalf of its users. It continuously generates
-//! new hashes, only stopping to check if it has been sent an EventData item. It
-//! tags each EventData with an Event and sends it back. The Event includes the
-//! EventData, the latest hash, and the number of hashes since the last event.
-//! The resulting Event stream represents ordered events in time.
+//! It logs Event items on behalf of its users. It continuously generates
+//! new hashes, only stopping to check if it has been sent an Event item. It
+//! tags each Event with an Entry and sends it back. The Entry includes the
+//! Event, the latest hash, and the number of hashes since the last event.
+//! The resulting stream of entries represents ordered events in time.
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use event::{Event, EventData};
+use event::{Entry, Event};
 
 pub struct Historian {
-    pub sender: Sender<EventData>,
-    pub receiver: Receiver<Event>,
-    pub thread_hdl: JoinHandle<(Event, EventThreadExitReason)>,
+    pub sender: Sender<Event>,
+    pub receiver: Receiver<Entry>,
+    pub thread_hdl: JoinHandle<(Entry, ExitReason)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum EventThreadExitReason {
+pub enum ExitReason {
     RecvDisconnected,
     SendDisconnected,
 }
 
 fn drain_queue(
-    receiver: &Receiver<EventData>,
-    sender: &Sender<Event>,
+    receiver: &Receiver<Event>,
+    sender: &Sender<Entry>,
     num_hashes: u64,
     end_hash: u64,
-) -> Result<u64, (Event, EventThreadExitReason)> {
+) -> Result<u64, (Entry, ExitReason)> {
     use std::sync::mpsc::TryRecvError;
     let mut num_hashes = num_hashes;
     loop {
         match receiver.try_recv() {
-            Ok(data) => {
-                let e = Event {
+            Ok(event) => {
+                let entry = Entry {
                     end_hash,
                     num_hashes,
-                    data,
+                    event,
                 };
-                if let Err(_) = sender.send(e.clone()) {
-                    return Err((e, EventThreadExitReason::SendDisconnected));
+                if let Err(_) = sender.send(entry.clone()) {
+                    return Err((entry, ExitReason::SendDisconnected));
                 }
                 num_hashes = 0;
             }
@@ -46,24 +46,24 @@ fn drain_queue(
                 return Ok(num_hashes);
             }
             Err(TryRecvError::Disconnected) => {
-                let e = Event {
+                let entry = Entry {
                     end_hash,
                     num_hashes,
-                    data: EventData::Tick,
+                    event: Event::Tick,
                 };
-                return Err((e, EventThreadExitReason::RecvDisconnected));
+                return Err((entry, ExitReason::RecvDisconnected));
             }
         }
     }
 }
 
-/// A background thread that will continue tagging received EventData messages and
-/// sending back Event messages until either the receiver or sender channel is closed.
+/// A background thread that will continue tagging received Event messages and
+/// sending back Entry messages until either the receiver or sender channel is closed.
 pub fn event_stream(
     start_hash: u64,
-    receiver: Receiver<EventData>,
-    sender: Sender<Event>,
-) -> JoinHandle<(Event, EventThreadExitReason)> {
+    receiver: Receiver<Event>,
+    sender: Sender<Entry>,
+) -> JoinHandle<(Entry, ExitReason)> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     use std::thread;
@@ -74,7 +74,7 @@ pub fn event_stream(
         loop {
             match drain_queue(&receiver, &sender, num_hashes, end_hash) {
                 Ok(n) => num_hashes = n,
-                Err(e) => return e,
+                Err(err) => return err,
             }
             end_hash.hash(&mut hasher);
             end_hash = hasher.finish();
@@ -86,9 +86,9 @@ pub fn event_stream(
 impl Historian {
     pub fn new(start_hash: u64) -> Self {
         use std::sync::mpsc::channel;
-        let (sender, event_data_receiver) = channel();
-        let (event_sender, receiver) = channel();
-        let thread_hdl = event_stream(start_hash, event_data_receiver, event_sender);
+        let (sender, event_receiver) = channel();
+        let (entry_sender, receiver) = channel();
+        let thread_hdl = event_stream(start_hash, event_receiver, entry_sender);
         Historian {
             sender,
             receiver,
@@ -106,33 +106,33 @@ mod tests {
     fn test_historian() {
         let hist = Historian::new(0);
 
-        let data = EventData::Tick;
-        hist.sender.send(data.clone()).unwrap();
-        let e0 = hist.receiver.recv().unwrap();
-        assert_eq!(e0.data, data);
+        let event = Event::Tick;
+        hist.sender.send(event.clone()).unwrap();
+        let entry0 = hist.receiver.recv().unwrap();
+        assert_eq!(entry0.event, event);
 
-        let data = EventData::UserDataKey(0xdeadbeef);
-        hist.sender.send(data.clone()).unwrap();
-        let e1 = hist.receiver.recv().unwrap();
-        assert_eq!(e1.data, data);
+        let event = Event::UserDataKey(0xdeadbeef);
+        hist.sender.send(event.clone()).unwrap();
+        let entry1 = hist.receiver.recv().unwrap();
+        assert_eq!(entry1.event, event);
 
         drop(hist.sender);
         assert_eq!(
             hist.thread_hdl.join().unwrap().1,
-            EventThreadExitReason::RecvDisconnected
+            ExitReason::RecvDisconnected
         );
 
-        verify_slice(&[e0, e1], 0);
+        verify_slice(&[entry0, entry1], 0);
     }
 
     #[test]
     fn test_historian_closed_sender() {
         let hist = Historian::new(0);
         drop(hist.receiver);
-        hist.sender.send(EventData::Tick).unwrap();
+        hist.sender.send(Event::Tick).unwrap();
         assert_eq!(
             hist.thread_hdl.join().unwrap().1,
-            EventThreadExitReason::SendDisconnected
+            ExitReason::SendDisconnected
         );
     }
 }
