@@ -15,6 +15,54 @@ corresponding benchmarks are also added that demonstrate real performance boots.
 feature set here will always be a ways behind the loom repo, but that this is an implementation
 you can take to the bank, literally.
 
+# Usage
+
+Add the latest [silk package](https://crates.io/crates/silk) to the `[dependencies]` section
+of your Cargo.toml.
+
+Create a *Historian* and send it *events* to generate an *event log*, where each log *entry*
+is tagged with the historian's latest *hash*. Then ensure the order of events was not tampered
+with by verifying each entry's hash can be generated from the hash in the previous entry:
+
+```rust
+extern crate silk;
+
+use silk::historian::Historian;
+use silk::log::{verify_slice, Entry, Event};
+use std::{thread, time};
+use std::sync::mpsc::SendError;
+
+fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
+    hist.sender.send(Event::Tick)?;
+    thread::sleep(time::Duration::new(0, 100_000));
+    hist.sender.send(Event::UserDataKey(0xdeadbeef))?;
+    thread::sleep(time::Duration::new(0, 100_000));
+    hist.sender.send(Event::Tick)?;
+    Ok(())
+}
+
+fn main() {
+    let seed = 0;
+    let hist = Historian::new(seed);
+    create_log(&hist).expect("send error");
+    drop(hist.sender);
+    let entries: Vec<Entry> = hist.receiver.iter().collect();
+    for entry in &entries {
+        println!("{:?}", entry);
+    }
+    assert!(verify_slice(&entries, seed));
+}
+```
+
+Running the program should produce a log similar to:
+
+```
+Entry { num_hashes: 0, end_hash: 0, event: Tick }
+Entry { num_hashes: 245, end_hash: 11504657626326377539, event: UserDataKey(3735928559) }
+Entry { num_hashes: 154, end_hash: 13410333856574024888, event: Tick }
+```
+
+
 # Developing
 
 Building

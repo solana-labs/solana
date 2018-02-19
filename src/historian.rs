@@ -7,7 +7,7 @@
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use log::{Entry, Event};
+use log::{hash, Entry, Event};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -64,20 +64,16 @@ pub fn create_logger(
     receiver: Receiver<Event>,
     sender: Sender<Entry>,
 ) -> JoinHandle<(Entry, ExitReason)> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
     use std::thread;
     thread::spawn(move || {
         let mut end_hash = start_hash;
-        let mut hasher = DefaultHasher::new();
         let mut num_hashes = 0;
         loop {
             match log_events(&receiver, &sender, num_hashes, end_hash) {
                 Ok(n) => num_hashes = n,
                 Err(err) => return err,
             }
-            end_hash.hash(&mut hasher);
-            end_hash = hasher.finish();
+            end_hash = hash(end_hash);
             num_hashes += 1;
         }
     })
@@ -104,17 +100,22 @@ mod tests {
 
     #[test]
     fn test_historian() {
+        use std::thread::sleep;
+        use std::time::Duration;
+
         let hist = Historian::new(0);
 
-        let event = Event::Tick;
-        hist.sender.send(event.clone()).unwrap();
-        let entry0 = hist.receiver.recv().unwrap();
-        assert_eq!(entry0.event, event);
+        hist.sender.send(Event::Tick).unwrap();
+        sleep(Duration::new(0, 1_000_000));
+        hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
+        sleep(Duration::new(0, 1_000_000));
+        hist.sender.send(Event::Tick).unwrap();
 
-        let event = Event::UserDataKey(0xdeadbeef);
-        hist.sender.send(event.clone()).unwrap();
+        let entry0 = hist.receiver.recv().unwrap();
         let entry1 = hist.receiver.recv().unwrap();
-        assert_eq!(entry1.event, event);
+        let entry2 = hist.receiver.recv().unwrap();
+        assert!(entry1.num_hashes != 0);
+        assert!(entry2.num_hashes != 0);
 
         drop(hist.sender);
         assert_eq!(
@@ -122,7 +123,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        verify_slice(&[entry0, entry1], 0);
+        assert!(verify_slice(&[entry0, entry1, entry2], 0));
     }
 
     #[test]
