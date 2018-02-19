@@ -114,8 +114,6 @@ mod tests {
         let entry0 = hist.receiver.recv().unwrap();
         let entry1 = hist.receiver.recv().unwrap();
         let entry2 = hist.receiver.recv().unwrap();
-        assert!(entry1.num_hashes != 0);
-        assert!(entry2.num_hashes != 0);
 
         drop(hist.sender);
         assert_eq!(
