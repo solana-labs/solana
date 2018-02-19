@@ -57,9 +57,9 @@ fn main() {
 Running the program should produce a log similar to:
 
 ```rust
-Entry { num_hashes: 0, end_hash: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], event: Tick }
-Entry { num_hashes: 6, end_hash: [67, 145, 165, 199, 159, 253, 199, 152, 131, 3, 101, 3, 202, 85, 22, 115, 192, 157, 238, 194, 141, 244, 50, 168, 216, 141, 235, 199, 250, 46, 201, 30], event: UserDataKey(3735928559) }
-Entry { num_hashes: 5, end_hash: [123, 31, 124, 59, 147, 255, 100, 48, 35, 214, 59, 187, 225, 130, 161, 121, 146, 42, 216, 90, 42, 160, 224, 62, 245, 1, 112, 181, 131, 126, 147, 34], event: Tick }
+Entry { num_hashes: 0, end_hash: [0, ...], event: Tick }
+Entry { num_hashes: 6, end_hash: [67, ...], event: UserDataKey(3735928559) }
+Entry { num_hashes: 5, end_hash: [123, ...], event: Tick }
 ```
 
 
