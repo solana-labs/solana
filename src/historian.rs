@@ -122,7 +122,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        verify_slice(&[entry0, entry1], 0);
+        assert!(verify_slice(&[entry0, entry1], 0));
     }
 
     #[test]
