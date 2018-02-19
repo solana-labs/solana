@@ -48,15 +48,19 @@ impl Entry {
     }
 }
 
-/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_tick(start_hash: u64, num_hashes: u64) -> Entry {
+pub fn hash(val: u64) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    let mut end_hash = start_hash;
     let mut hasher = DefaultHasher::new();
+    val.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+pub fn next_tick(start_hash: u64, num_hashes: u64) -> Entry {
+    let mut end_hash = start_hash;
     for _ in 0..num_hashes {
-        end_hash.hash(&mut hasher);
-        end_hash = hasher.finish();
+        end_hash = hash(end_hash);
     }
     Entry::new_tick(num_hashes, end_hash)
 }

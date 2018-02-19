@@ -7,7 +7,7 @@
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use log::{Entry, Event};
+use log::{hash, Entry, Event};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -64,24 +64,16 @@ pub fn create_logger(
     receiver: Receiver<Event>,
     sender: Sender<Entry>,
 ) -> JoinHandle<(Entry, ExitReason)> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
     use std::thread;
     thread::spawn(move || {
         let mut end_hash = start_hash;
-        let mut hasher = DefaultHasher::new();
         let mut num_hashes = 0;
         loop {
             match log_events(&receiver, &sender, num_hashes, end_hash) {
-                Ok(0) => {
-                    num_hashes = 0;
-                    hasher = DefaultHasher::new();
-                }
-                Ok(_) => {}
+                Ok(n) => num_hashes = n,
                 Err(err) => return err,
             }
-            end_hash.hash(&mut hasher);
-            end_hash = hasher.finish();
+            end_hash = hash(end_hash);
             num_hashes += 1;
         }
     })
