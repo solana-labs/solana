@@ -106,9 +106,9 @@ mod tests {
         let hist = Historian::new(0);
 
         hist.sender.send(Event::Tick).unwrap();
-        sleep(Duration::new(0, 100_000));
+        sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
-        sleep(Duration::new(0, 100_000));
+        sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::Tick).unwrap();
 
         let entry0 = hist.receiver.recv().unwrap();
