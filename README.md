@@ -25,21 +25,44 @@ is tagged with the historian's latest *hash*. Then ensure the order of events wa
 with by verifying each entry's hash can be generated from the hash in the previous entry:
 
 ```rust
-use historian::Historian;
-use log::{Event, verify_slice};
+extern crate silk;
+
+use silk::historian::Historian;
+use silk::log::{verify_slice, Entry, Event};
+use std::{thread, time};
+
+fn create_log(hist: &Historian) -> Vec<Entry> {
+    hist.sender.send(Event::Tick).unwrap();
+    thread::sleep(time::Duration::new(0, 100_000));
+    hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
+    thread::sleep(time::Duration::new(0, 100_000));
+    hist.sender.send(Event::Tick).unwrap();
+
+    let entry0 = hist.receiver.recv().unwrap();
+    let entry1 = hist.receiver.recv().unwrap();
+    let entry2 = hist.receiver.recv().unwrap();
+    vec![entry0, entry1, entry2]
+}
 
 fn main() {
-    let hist = Historian::new(0);
-
-    hist.sender.send(Event::Tick).unwrap();
-    let entry0 = hist.receiver.recv().unwrap();
-
-    hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
-    let entry1 = hist.receiver.recv().unwrap();
-
-    assert!(verify_slice(&[entry0, entry1], 0));
+    let seed = 0;
+    let hist = Historian::new(seed);
+    let entries = create_log(&hist);
+    for entry in &entries {
+        println!("{:?}", entry);
+    }
+    assert!(verify_slice(&entries, seed));
 }
 ```
+
+Running the program should produce a log similar to:
+
+```
+Entry { num_hashes: 0, end_hash: 0, event: Tick }
+Entry { num_hashes: 245, end_hash: 11504657626326377539, event: UserDataKey(3735928559) }
+Entry { num_hashes: 154, end_hash: 13410333856574024888, event: Tick }
+```
+
 
 # Developing
 

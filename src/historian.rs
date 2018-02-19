@@ -73,7 +73,11 @@ pub fn create_logger(
         let mut num_hashes = 0;
         loop {
             match log_events(&receiver, &sender, num_hashes, end_hash) {
-                Ok(n) => num_hashes = n,
+                Ok(0) => {
+                    num_hashes = 0;
+                    hasher = DefaultHasher::new();
+                }
+                Ok(_) => {}
                 Err(err) => return err,
             }
             end_hash.hash(&mut hasher);
@@ -104,17 +108,22 @@ mod tests {
 
     #[test]
     fn test_historian() {
+        use std::thread::sleep;
+        use std::time::Duration;
+
         let hist = Historian::new(0);
 
-        let event = Event::Tick;
-        hist.sender.send(event.clone()).unwrap();
-        let entry0 = hist.receiver.recv().unwrap();
-        assert_eq!(entry0.event, event);
+        hist.sender.send(Event::Tick).unwrap();
+        sleep(Duration::new(0, 100_000));
+        hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
+        sleep(Duration::new(0, 100_000));
+        hist.sender.send(Event::Tick).unwrap();
 
-        let event = Event::UserDataKey(0xdeadbeef);
-        hist.sender.send(event.clone()).unwrap();
+        let entry0 = hist.receiver.recv().unwrap();
         let entry1 = hist.receiver.recv().unwrap();
-        assert_eq!(entry1.event, event);
+        let entry2 = hist.receiver.recv().unwrap();
+        assert!(entry1.num_hashes != 0);
+        assert!(entry2.num_hashes != 0);
 
         drop(hist.sender);
         assert_eq!(
@@ -122,7 +131,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        assert!(verify_slice(&[entry0, entry1], 0));
+        assert!(verify_slice(&[entry0, entry1, entry2], 0));
     }
 
     #[test]

@@ -11,6 +11,10 @@ authors = [
 ]
 license = "Apache-2.0"
 
+[[bin]]
+name = "silk-demo"
+path = "src/bin/demo.rs"
+
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 
