@@ -3,24 +3,23 @@ extern crate silk;
 use silk::historian::Historian;
 use silk::log::{verify_slice, Entry, Event};
 use std::{thread, time};
+use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian) -> Vec<Entry> {
-    hist.sender.send(Event::Tick).unwrap();
+fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
+    hist.sender.send(Event::Tick)?;
     thread::sleep(time::Duration::new(0, 100_000));
-    hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
+    hist.sender.send(Event::UserDataKey(0xdeadbeef))?;
     thread::sleep(time::Duration::new(0, 100_000));
-    hist.sender.send(Event::Tick).unwrap();
-
-    let entry0 = hist.receiver.recv().unwrap();
-    let entry1 = hist.receiver.recv().unwrap();
-    let entry2 = hist.receiver.recv().unwrap();
-    vec![entry0, entry1, entry2]
+    hist.sender.send(Event::Tick)?;
+    Ok(())
 }
 
 fn main() {
     let seed = 0;
     let hist = Historian::new(seed);
-    let entries = create_log(&hist);
+    create_log(&hist).expect("send error");
+    drop(hist.sender);
+    let entries: Vec<Entry> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }
