@@ -17,7 +17,7 @@ you can take to the bank, literally.
 
 # Usage
 
-Add the latest [silk package] (https://crates.io/crates/silk) to the `[dependencies]` section
+Add the latest [silk package](https://crates.io/crates/silk) to the `[dependencies]` section
 of your Cargo.toml.
 
 Create a *Historian* and send it *events* to generate an *event log*, where each log *entry*
