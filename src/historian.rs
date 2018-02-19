@@ -7,7 +7,7 @@
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use log::{hash, Entry, Event};
+use log::{hash, Entry, Event, Sha256Hash};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -25,7 +25,7 @@ fn log_events(
     receiver: &Receiver<Event>,
     sender: &Sender<Entry>,
     num_hashes: u64,
-    end_hash: u64,
+    end_hash: Sha256Hash,
 ) -> Result<u64, (Entry, ExitReason)> {
     use std::sync::mpsc::TryRecvError;
     let mut num_hashes = num_hashes;
@@ -60,7 +60,7 @@ fn log_events(
 /// A background thread that will continue tagging received Event messages and
 /// sending back Entry messages until either the receiver or sender channel is closed.
 pub fn create_logger(
-    start_hash: u64,
+    start_hash: Sha256Hash,
     receiver: Receiver<Event>,
     sender: Sender<Entry>,
 ) -> JoinHandle<(Entry, ExitReason)> {
@@ -73,18 +73,18 @@ pub fn create_logger(
                 Ok(n) => num_hashes = n,
                 Err(err) => return err,
             }
-            end_hash = hash(end_hash);
+            end_hash = hash(&end_hash);
             num_hashes += 1;
         }
     })
 }
 
 impl Historian {
-    pub fn new(start_hash: u64) -> Self {
+    pub fn new(start_hash: &Sha256Hash) -> Self {
         use std::sync::mpsc::channel;
         let (sender, event_receiver) = channel();
         let (entry_sender, receiver) = channel();
-        let thread_hdl = create_logger(start_hash, event_receiver, entry_sender);
+        let thread_hdl = create_logger(*start_hash, event_receiver, entry_sender);
         Historian {
             sender,
             receiver,
@@ -103,7 +103,8 @@ mod tests {
         use std::thread::sleep;
         use std::time::Duration;
 
-        let hist = Historian::new(0);
+        let zero = Sha256Hash::default();
+        let hist = Historian::new(&zero);
 
         hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
@@ -121,12 +122,13 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        assert!(verify_slice(&[entry0, entry1, entry2], 0));
+        assert!(verify_slice(&[entry0, entry1, entry2], &zero));
     }
 
     #[test]
     fn test_historian_closed_sender() {
-        let hist = Historian::new(0);
+        let zero = Sha256Hash::default();
+        let hist = Historian::new(&zero);
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
         assert_eq!(

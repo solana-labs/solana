@@ -20,7 +20,11 @@ codecov = { repository = "loomprotocol/silk", branch = "master", service = "gith
 
 [features]
 unstable = []
+asm = ["sha2-asm"]
 
 [dependencies]
 rayon = "1.0.0"
 itertools = "0.7.6"
+sha2 = "0.7.0"
+sha2-asm = {version="0.3", optional=true}
+digest = "0.7.2"
