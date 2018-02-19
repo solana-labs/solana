@@ -28,7 +28,7 @@ with by verifying each entry's hash can be generated from the hash in the previo
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::log::{verify_slice, Entry, Event};
+use silk::log::{verify_slice, Entry, Event, Sha256Hash};
 use std::{thread, time};
 use std::sync::mpsc::SendError;
 
@@ -42,24 +42,24 @@ fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
 }
 
 fn main() {
-    let seed = 0;
-    let hist = Historian::new(seed);
+    let seed = Sha256Hash::default();
+    let hist = Historian::new(&seed);
     create_log(&hist).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }
-    assert!(verify_slice(&entries, seed));
+    assert!(verify_slice(&entries, &seed));
 }
 ```
 
 Running the program should produce a log similar to:
 
-```
-Entry { num_hashes: 0, end_hash: 0, event: Tick }
-Entry { num_hashes: 245, end_hash: 11504657626326377539, event: UserDataKey(3735928559) }
-Entry { num_hashes: 154, end_hash: 13410333856574024888, event: Tick }
+```rust
+Entry { num_hashes: 0, end_hash: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], event: Tick }
+Entry { num_hashes: 6, end_hash: [67, 145, 165, 199, 159, 253, 199, 152, 131, 3, 101, 3, 202, 85, 22, 115, 192, 157, 238, 194, 141, 244, 50, 168, 216, 141, 235, 199, 250, 46, 201, 30], event: UserDataKey(3735928559) }
+Entry { num_hashes: 5, end_hash: [123, 31, 124, 59, 147, 255, 100, 48, 35, 214, 59, 187, 225, 130, 161, 121, 146, 42, 216, 90, 42, 160, 224, 62, 245, 1, 112, 181, 131, 126, 147, 34], event: Tick }
 ```
 
 
