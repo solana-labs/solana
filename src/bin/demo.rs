@@ -1,7 +1,7 @@
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::log::{verify_slice, Entry, Event};
+use silk::log::{verify_slice, Entry, Event, Sha256Hash};
 use std::{thread, time};
 use std::sync::mpsc::SendError;
 
@@ -15,13 +15,13 @@ fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
 }
 
 fn main() {
-    let seed = 0;
-    let hist = Historian::new(seed);
+    let seed = Sha256Hash::default();
+    let hist = Historian::new(&seed);
     create_log(&hist).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }
-    assert!(verify_slice(&entries, seed));
+    assert!(verify_slice(&entries, &seed));
 }
