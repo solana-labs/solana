@@ -149,7 +149,7 @@ mod bench {
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = Default::default();
-        let events = create_ticks(&start_hash, 100_000, 8);
+        let events = create_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
             assert!(verify_slice(&events, &start_hash));
         });
@@ -158,7 +158,7 @@ mod bench {
     #[bench]
     fn event_bench_seq(bencher: &mut Bencher) {
         let start_hash = Default::default();
-        let events = create_ticks(&start_hash, 100_000, 8);
+        let events = create_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
             assert!(verify_slice_seq(&events, &start_hash));
         });
