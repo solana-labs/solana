@@ -7,7 +7,7 @@
 
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
-use log::{hash, Entry, Event, Sha256Hash};
+use log::{extend_and_hash, hash, Entry, Event, Sha256Hash};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -24,31 +24,33 @@ pub enum ExitReason {
 fn log_events(
     receiver: &Receiver<Event>,
     sender: &Sender<Entry>,
-    num_hashes: u64,
-    end_hash: Sha256Hash,
-) -> Result<u64, (Entry, ExitReason)> {
+    num_hashes: &mut u64,
+    end_hash: &mut Sha256Hash,
+) -> Result<(), (Entry, ExitReason)> {
     use std::sync::mpsc::TryRecvError;
-    let mut num_hashes = num_hashes;
     loop {
         match receiver.try_recv() {
             Ok(event) => {
+                if let Event::UserDataKey(key) = event {
+                    *end_hash = extend_and_hash(end_hash, &key);
+                }
                 let entry = Entry {
-                    end_hash,
-                    num_hashes,
+                    end_hash: *end_hash,
+                    num_hashes: *num_hashes,
                     event,
                 };
                 if let Err(_) = sender.send(entry.clone()) {
                     return Err((entry, ExitReason::SendDisconnected));
                 }
-                num_hashes = 0;
+                *num_hashes = 0;
             }
             Err(TryRecvError::Empty) => {
-                return Ok(num_hashes);
+                return Ok(());
             }
             Err(TryRecvError::Disconnected) => {
                 let entry = Entry {
-                    end_hash,
-                    num_hashes,
+                    end_hash: *end_hash,
+                    num_hashes: *num_hashes,
                     event: Event::Tick,
                 };
                 return Err((entry, ExitReason::RecvDisconnected));
@@ -69,9 +71,8 @@ pub fn create_logger(
         let mut end_hash = start_hash;
         let mut num_hashes = 0;
         loop {
-            match log_events(&receiver, &sender, num_hashes, end_hash) {
-                Ok(n) => num_hashes = n,
-                Err(err) => return err,
+            if let Err(err) = log_events(&receiver, &sender, &mut num_hashes, &mut end_hash) {
+                return err;
             }
             end_hash = hash(&end_hash);
             num_hashes += 1;
@@ -108,7 +109,7 @@ mod tests {
 
         hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::UserDataKey(0xdeadbeef)).unwrap();
+        hist.sender.send(Event::UserDataKey(zero)).unwrap();
         sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::Tick).unwrap();
 

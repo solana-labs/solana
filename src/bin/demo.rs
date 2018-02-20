@@ -8,7 +8,7 @@ use std::sync::mpsc::SendError;
 fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
     hist.sender.send(Event::Tick)?;
     thread::sleep(time::Duration::new(0, 100_000));
-    hist.sender.send(Event::UserDataKey(0xdeadbeef))?;
+    hist.sender.send(Event::UserDataKey(Sha256Hash::default()))?;
     thread::sleep(time::Duration::new(0, 100_000));
     hist.sender.send(Event::Tick)?;
     Ok(())

@@ -32,24 +32,24 @@ pub struct Entry {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Event {
     Tick,
-    UserDataKey(u64),
+    UserDataKey(Sha256Hash),
 }
 
 impl Entry {
     /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
     /// and that resulting 'end_hash'.
     pub fn new_tick(num_hashes: u64, end_hash: &Sha256Hash) -> Self {
-        let event = Event::Tick;
         Entry {
             num_hashes,
             end_hash: *end_hash,
-            event,
+            event: Event::Tick,
         }
     }
 
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
+    /// If the event is a UserDataKey, then hash that as well.
     pub fn verify(self: &Self, start_hash: &Sha256Hash) -> bool {
-        self.end_hash == next_tick(start_hash, self.num_hashes).end_hash
+        self.end_hash == next_hash(start_hash, self.num_hashes, &self.event)
     }
 }
 
@@ -60,13 +60,36 @@ pub fn hash(val: &[u8]) -> Sha256Hash {
     hasher.result()
 }
 
-/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry {
+/// Return the hash of the given hash extended with the given value.
+pub fn extend_and_hash(end_hash: &Sha256Hash, val: &[u8]) -> Sha256Hash {
+    let mut hash_data = end_hash.to_vec();
+    hash_data.extend_from_slice(val);
+    hash(&hash_data)
+}
+
+pub fn next_hash(start_hash: &Sha256Hash, num_hashes: u64, event: &Event) -> Sha256Hash {
     let mut end_hash = *start_hash;
     for _ in 0..num_hashes {
         end_hash = hash(&end_hash);
     }
-    Entry::new_tick(num_hashes, &end_hash)
+    if let Event::UserDataKey(key) = *event {
+        return extend_and_hash(&end_hash, &key);
+    }
+    end_hash
+}
+
+/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+pub fn next_entry(start_hash: &Sha256Hash, num_hashes: u64, event: Event) -> Entry {
+    Entry {
+        num_hashes,
+        end_hash: next_hash(start_hash, num_hashes, &event),
+        event,
+    }
+}
+
+/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry {
+    next_entry(start_hash, num_hashes, Event::Tick)
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
@@ -86,13 +109,16 @@ pub fn verify_slice_seq(events: &[Entry], start_hash: &Sha256Hash) -> bool {
 
 /// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'num_hashes'.
 pub fn create_ticks(start_hash: &Sha256Hash, num_hashes: u64, len: usize) -> Vec<Entry> {
-    use itertools::unfold;
-    let mut events = unfold(*start_hash, |state| {
-        let event = next_tick(state, num_hashes);
-        *state = event.end_hash;
-        return Some(event);
-    });
-    events.by_ref().take(len).collect()
+    use std::iter;
+    let mut end_hash = *start_hash;
+    iter::repeat(Event::Tick)
+        .take(len)
+        .map(|event| {
+            let entry = next_entry(&end_hash, num_hashes, event);
+            end_hash = entry.end_hash;
+            entry
+        })
+        .collect()
 }
 
 #[cfg(test)]
