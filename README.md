@@ -35,7 +35,7 @@ use std::sync::mpsc::SendError;
 fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
     hist.sender.send(Event::Tick)?;
     thread::sleep(time::Duration::new(0, 100_000));
-    hist.sender.send(Event::UserDataKey(0xdeadbeef))?;
+    hist.sender.send(Event::UserDataKey(Sha256Hash::default()))?;
     thread::sleep(time::Duration::new(0, 100_000));
     hist.sender.send(Event::Tick)?;
     Ok(())
@@ -50,6 +50,9 @@ fn main() {
     for entry in &entries {
         println!("{:?}", entry);
     }
+
+    // Proof-of-History: Verify the historian learned about the events
+    // in the same order they appear in the vector.
     assert!(verify_slice(&entries, &seed));
 }
 ```
@@ -62,6 +65,19 @@ Entry { num_hashes: 6, end_hash: [67, ...], event: UserDataKey(3735928559) }
 Entry { num_hashes: 5, end_hash: [123, ...], event: Tick }
 ```
 
+Proof-of-History
+---
+
+Take note of the last line:
+
+```rust
+assert!(verify_slice(&entries, &seed));
+```
+
+[It's a proof!](https://en.wikipedia.org/wiki/Curry–Howard_correspondence) For each entry returned by the
+historian, we can verify that `end_hash` is the result of applying a sha256 hash to the previous `end_hash`
+exactly `num_hashes` times, and then hashing then event data on top of that. Because the event data is
+included in the hash, the events cannot be reordered without regenerating all the hashes.
 
 # Developing
 
