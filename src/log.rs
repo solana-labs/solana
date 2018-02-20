@@ -164,6 +164,32 @@ mod tests {
         verify_slice_generic(verify_slice_seq);
     }
 
+    #[test]
+    fn test_reorder_attack() {
+        let zero = Sha256Hash::default();
+        let one = hash(&zero);
+
+        // First, verify UserData events
+        let mut end_hash = zero;
+        let events = [Event::UserDataKey(zero), Event::UserDataKey(one)];
+        let mut entries: Vec<Entry> = events
+            .iter()
+            .map(|event| {
+                let entry = next_entry(&end_hash, 0, event.clone());
+                end_hash = entry.end_hash;
+                entry
+            })
+            .collect();
+        assert!(verify_slice(&entries, &zero)); // inductive step
+
+        // Next, swap only two UserData events and ensure verification fails.
+        let event0 = entries[0].event.clone();
+        let event1 = entries[1].event.clone();
+        entries[0].event = event1;
+        entries[1].event = event0;
+        assert!(!verify_slice(&entries, &zero)); // inductive step
+    }
+
 }
 
 #[cfg(all(feature = "unstable", test))]
