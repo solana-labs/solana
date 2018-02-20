@@ -26,4 +26,6 @@ asm = ["sha2-asm"]
 rayon = "1.0.0"
 sha2 = "0.7.0"
 sha2-asm = {version="0.3", optional=true}
-digest = "0.7.2"
+generic-array = { version = "0.9.0", default-features = false, features = ["serde"] }
+serde = "1.0.27"
+serde_derive = "1.0.27"
