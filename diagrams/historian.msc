@@ -1,8 +1,6 @@
 msc {
   client,historian,logger;
 
-  client=>historian [ label = "Tick" ] ;
-  historian=>logger [ label = "Tick" ] ;
   logger=>historian [ label = "e0 = Entry{hash: h0, n: 0, event: Tick}" ] ;
   logger=>logger [ label = "h1 = hash(h0)" ] ;
   logger=>logger [ label = "h2 = hash(h1)" ] ;
@@ -13,8 +11,6 @@ msc {
   logger=>logger [ label = "h4 = hash(h3)" ] ;
   logger=>logger [ label = "h5 = hash(h4)" ] ;
   logger=>logger [ label = "h6 = hash(h5)" ] ;
-  client=>historian [ label = "Tick" ] ;
-  historian=>logger [ label = "Tick" ] ;
   logger=>historian [ label = "e2 = Entry{hash: h6, n: 3, event: Tick}" ] ;
   client=>historian [ label = "collect()" ] ;
   historian=>client [ label = "entries = [e0, e1, e2]" ] ;
