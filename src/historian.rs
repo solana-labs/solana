@@ -129,12 +129,11 @@ impl Historian {
 mod tests {
     use super::*;
     use log::*;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_historian() {
-        use std::thread::sleep;
-        use std::time::Duration;
-
         let zero = Sha256Hash::default();
         let hist = Historian::new(&zero, None);
 
@@ -167,5 +166,22 @@ mod tests {
             hist.thread_hdl.join().unwrap().1,
             ExitReason::SendDisconnected
         );
+    }
+
+    #[test]
+    fn test_ticking_historian() {
+        let zero = Sha256Hash::default();
+        let hist = Historian::new(&zero, Some(2));
+        sleep(Duration::from_millis(3));
+        hist.sender.send(Event::UserDataKey(zero)).unwrap();
+        sleep(Duration::from_millis(1));
+        drop(hist.sender);
+        assert_eq!(
+            hist.thread_hdl.join().unwrap().1,
+            ExitReason::RecvDisconnected
+        );
+
+        let entries: Vec<Entry> = hist.receiver.iter().collect();
+        assert!(verify_slice(&entries, &zero));
     }
 }

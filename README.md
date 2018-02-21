@@ -24,28 +24,27 @@ Create a *Historian* and send it *events* to generate an *event log*, where each
 is tagged with the historian's latest *hash*. Then ensure the order of events was not tampered
 with by verifying each entry's hash can be generated from the hash in the previous entry:
 
-![historian](https://user-images.githubusercontent.com/55449/36492930-97a572be-16eb-11e8-8289-358e9507189e.png)
+![historian](https://user-images.githubusercontent.com/55449/36499105-7c8db6a0-16fd-11e8-8b88-c6e0f52d7a50.png)
 
 ```rust
 extern crate silk;
 
 use silk::historian::Historian;
 use silk::log::{verify_slice, Entry, Event, Sha256Hash};
-use std::{thread, time};
+use std::thread::sleep;
+use std::time::Duration;
 use std::sync::mpsc::SendError;
 
 fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
-    hist.sender.send(Event::Tick)?;
-    thread::sleep(time::Duration::new(0, 100_000));
+    sleep(Duration::from_millis(15));
     hist.sender.send(Event::UserDataKey(Sha256Hash::default()))?;
-    thread::sleep(time::Duration::new(0, 100_000));
-    hist.sender.send(Event::Tick)?;
+    sleep(Duration::from_millis(10));
     Ok(())
 }
 
 fn main() {
     let seed = Sha256Hash::default();
-    let hist = Historian::new(&seed, None);
+    let hist = Historian::new(&seed, Some(10));
     create_log(&hist).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry> = hist.receiver.iter().collect();
