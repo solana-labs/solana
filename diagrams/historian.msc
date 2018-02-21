@@ -18,5 +18,5 @@ msc {
   logger=>historian [ label = "e2 = Entry{hash: h6, n: 3, event: Tick}" ] ;
   client=>historian [ label = "collect()" ] ;
   historian=>client [ label = "entries = [e0, e1, e2]" ] ;
-  client=>client [ label = "verify_slice(entries)" ] ;
+  client=>client [ label = "verify_slice(entries, h0)" ] ;
 }
