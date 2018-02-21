@@ -171,10 +171,10 @@ mod tests {
     #[test]
     fn test_ticking_historian() {
         let zero = Sha256Hash::default();
-        let hist = Historian::new(&zero, Some(2));
-        sleep(Duration::from_millis(3));
+        let hist = Historian::new(&zero, Some(20));
+        sleep(Duration::from_millis(30));
         hist.sender.send(Event::UserDataKey(zero)).unwrap();
-        sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(15));
         drop(hist.sender);
         assert_eq!(
             hist.thread_hdl.join().unwrap().1,
@@ -182,6 +182,7 @@ mod tests {
         );
 
         let entries: Vec<Entry> = hist.receiver.iter().collect();
+        assert!(entries.len() > 1);
         assert!(verify_slice(&entries, &zero));
     }
 }
