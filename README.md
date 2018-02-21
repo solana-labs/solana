@@ -45,7 +45,7 @@ fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
 
 fn main() {
     let seed = Sha256Hash::default();
-    let hist = Historian::new(&seed);
+    let hist = Historian::new(&seed, None);
     create_log(&hist).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry> = hist.receiver.iter().collect();
