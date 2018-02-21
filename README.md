@@ -24,6 +24,8 @@ Create a *Historian* and send it *events* to generate an *event log*, where each
 is tagged with the historian's latest *hash*. Then ensure the order of events was not tampered
 with by verifying each entry's hash can be generated from the hash in the previous entry:
 
+![historian](https://user-images.githubusercontent.com/55449/36492299-151c65e2-16ea-11e8-97b6-14f1d9b97985.png)
+
 ```rust
 extern crate silk;
 
