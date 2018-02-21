@@ -11,7 +11,7 @@ in two git repositories. Reserach is performed in the loom repository. That work
 Loom specification forward. This repository, on the other hand, aims to implement the specification
 as-is.  We care a great deal about quality, clarity and short learning curve. We avoid the use
 of `unsafe` Rust and write tests for *everything*.  Optimizations are only added when
-corresponding benchmarks are also added that demonstrate real performance boots. We expect the
+corresponding benchmarks are also added that demonstrate real performance boosts. We expect the
 feature set here will always be a ways behind the loom repo, but that this is an implementation
 you can take to the bank, literally.
 
@@ -63,8 +63,8 @@ Running the program should produce a log similar to:
 
 ```rust
 Entry { num_hashes: 0, end_hash: [0, ...], event: Tick }
-Entry { num_hashes: 6, end_hash: [67, ...], event: UserDataKey(3735928559) }
-Entry { num_hashes: 5, end_hash: [123, ...], event: Tick }
+Entry { num_hashes: 2, end_hash: [67, ...], event: UserDataKey(3735928559) }
+Entry { num_hashes: 3, end_hash: [123, ...], event: Tick }
 ```
 
 Proof-of-History
