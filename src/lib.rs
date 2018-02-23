@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod log;
 pub mod historian;
+pub mod accountant;
 extern crate bincode;
 extern crate generic_array;
 extern crate rayon;
