@@ -37,7 +37,8 @@ use std::sync::mpsc::SendError;
 
 fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
     sleep(Duration::from_millis(15));
-    hist.sender.send(Event::Discovery(Sha256Hash::default()))?;
+    let data = Sha256Hash::default();
+    hist.sender.send(Event::Discovery { data })?;
     sleep(Duration::from_millis(10));
     Ok(())
 }
@@ -62,7 +63,7 @@ Running the program should produce a log similar to:
 
 ```rust
 Entry { num_hashes: 0, end_hash: [0, ...], event: Tick }
-Entry { num_hashes: 2, end_hash: [67, ...], event: Discovery(3735928559) }
+Entry { num_hashes: 2, end_hash: [67, ...], event: Discovery { data: [37, ...] } }
 Entry { num_hashes: 3, end_hash: [123, ...], event: Tick }
 ```
 

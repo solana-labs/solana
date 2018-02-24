@@ -8,7 +8,8 @@ use std::sync::mpsc::SendError;
 
 fn create_log(hist: &Historian) -> Result<(), SendError<Event>> {
     sleep(Duration::from_millis(15));
-    hist.sender.send(Event::Discovery(Sha256Hash::default()))?;
+    let data = Sha256Hash::default();
+    hist.sender.send(Event::Discovery { data })?;
     sleep(Duration::from_millis(10));
     Ok(())
 }

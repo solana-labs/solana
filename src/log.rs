@@ -35,7 +35,9 @@ pub struct Entry {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event {
     Tick,
-    Discovery(Sha256Hash),
+    Discovery {
+        data: Sha256Hash,
+    },
     Claim {
         key: PublicKey,
         data: Sha256Hash,
@@ -97,7 +99,7 @@ pub fn extend_and_hash(end_hash: &Sha256Hash, ty: u8, val: &[u8]) -> Sha256Hash 
 pub fn hash_event(end_hash: &Sha256Hash, event: &Event) -> Sha256Hash {
     match *event {
         Event::Tick => *end_hash,
-        Event::Discovery(data) => extend_and_hash(end_hash, 1, &data),
+        Event::Discovery { data } => extend_and_hash(end_hash, 1, &data),
         Event::Claim { key, data, sig } => {
             let mut event_data = data.to_vec();
             event_data.extend_from_slice(&sig);
@@ -218,7 +220,10 @@ mod tests {
 
         // First, verify Discovery events
         let mut end_hash = zero;
-        let events = [Event::Discovery(zero), Event::Discovery(one)];
+        let events = [
+            Event::Discovery { data: zero },
+            Event::Discovery { data: one },
+        ];
         let mut entries: Vec<Entry> = events
             .iter()
             .map(|event| {
