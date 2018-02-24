@@ -8,7 +8,7 @@
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
-use log::{extend_and_hash, hash, Entry, Event, Sha256Hash};
+use log::{hash, hash_event, Entry, Event, Sha256Hash};
 
 pub struct Historian {
     pub sender: Sender<Event>,
@@ -27,9 +27,7 @@ fn log_event(
     end_hash: &mut Sha256Hash,
     event: Event,
 ) -> Result<(), (Entry, ExitReason)> {
-    if let Event::Discovery(key) = event {
-        *end_hash = extend_and_hash(end_hash, &key);
-    }
+    *end_hash = hash_event(end_hash, &event);
     let entry = Entry {
         end_hash: *end_hash,
         num_hashes: *num_hashes,
