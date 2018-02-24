@@ -27,7 +27,7 @@ fn log_event(
     end_hash: &mut Sha256Hash,
     event: Event,
 ) -> Result<(), (Entry, ExitReason)> {
-    if let Event::UserDataKey(key) = event {
+    if let Event::Discovery(key) = event {
         *end_hash = extend_and_hash(end_hash, &key);
     }
     let entry = Entry {
@@ -139,7 +139,7 @@ mod tests {
 
         hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::UserDataKey(zero)).unwrap();
+        hist.sender.send(Event::Discovery(zero)).unwrap();
         sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::Tick).unwrap();
 
@@ -173,7 +173,7 @@ mod tests {
         let zero = Sha256Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
-        hist.sender.send(Event::UserDataKey(zero)).unwrap();
+        hist.sender.send(Event::Discovery(zero)).unwrap();
         sleep(Duration::from_millis(15));
         drop(hist.sender);
         assert_eq!(

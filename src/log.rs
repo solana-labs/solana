@@ -32,7 +32,7 @@ pub struct Entry {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event {
     Tick,
-    UserDataKey(Sha256Hash),
+    Discovery(Sha256Hash),
 }
 
 impl Entry {
@@ -47,7 +47,7 @@ impl Entry {
     }
 
     /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
-    /// If the event is a UserDataKey, then hash that as well.
+    /// If the event is not a Tick, then hash that as well.
     pub fn verify(self: &Self, start_hash: &Sha256Hash) -> bool {
         self.end_hash == next_hash(start_hash, self.num_hashes, &self.event)
     }
@@ -72,8 +72,8 @@ pub fn next_hash(start_hash: &Sha256Hash, num_hashes: u64, event: &Event) -> Sha
     for _ in 0..num_hashes {
         end_hash = hash(&end_hash);
     }
-    if let Event::UserDataKey(key) = *event {
-        return extend_and_hash(&end_hash, &key);
+    if let Event::Discovery(data) = *event {
+        return extend_and_hash(&end_hash, &data);
     }
     end_hash
 }
@@ -169,9 +169,9 @@ mod tests {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
 
-        // First, verify UserData events
+        // First, verify Discovery events
         let mut end_hash = zero;
-        let events = [Event::UserDataKey(zero), Event::UserDataKey(one)];
+        let events = [Event::Discovery(zero), Event::Discovery(one)];
         let mut entries: Vec<Entry> = events
             .iter()
             .map(|event| {
@@ -182,7 +182,7 @@ mod tests {
             .collect();
         assert!(verify_slice(&entries, &zero)); // inductive step
 
-        // Next, swap only two UserData events and ensure verification fails.
+        // Next, swap two Discovery events and ensure verification fails.
         let event0 = entries[0].event.clone();
         let event1 = entries[1].event.clone();
         entries[0].event = event1;
