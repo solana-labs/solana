@@ -259,6 +259,34 @@ mod tests {
             .collect();
         assert!(verify_slice(&entries, &zero));
     }
+
+    #[test]
+    fn test_bad_signature() {
+        use untrusted;
+        use ring::{rand, signature};
+        let rng = rand::SystemRandom::new();
+        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        let key_pair =
+            signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).unwrap();
+        const MESSAGE: &'static [u8] = b"hello, world";
+        let mut event0 = sign_hash(&hash(MESSAGE), &key_pair);
+        if let Event::Claim { key, sig, .. } = event0 {
+            const GOODBYE: &'static [u8] = b"goodbye cruel world";
+            let data = hash(GOODBYE);
+            event0 = Event::Claim { key, data, sig };
+        }
+        let zero = Sha256Hash::default();
+        let mut end_hash = zero;
+        let entries: Vec<Entry> = [event0]
+            .iter()
+            .map(|event| {
+                let entry = next_entry(&end_hash, 0, event.clone());
+                end_hash = entry.end_hash;
+                entry
+            })
+            .collect();
+        assert!(!verify_slice(&entries, &zero));
+    }
 }
 
 #[cfg(all(feature = "unstable", test))]
