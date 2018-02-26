@@ -24,7 +24,7 @@ pub type Signature = GenericArray<u8, U64>;
 pub struct Entry {
     pub num_hashes: u64,
     pub end_hash: Sha256Hash,
-    pub event: Event,
+    pub event: Event<Sha256Hash>,
 }
 
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
@@ -33,20 +33,20 @@ pub struct Entry {
 /// a hash alongside the tick, each tick and be verified in parallel using the 'end_hash'
 /// of the preceding tick to seed its hashing.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Event {
+pub enum Event<T> {
     Tick,
     Discovery {
-        data: Sha256Hash,
+        data: T,
     },
     Claim {
         key: PublicKey,
-        data: Sha256Hash,
+        data: T,
         sig: Signature,
     },
     Transaction {
         from: PublicKey,
         to: PublicKey,
-        data: Sha256Hash,
+        data: T,
         sig: Signature,
     },
 }
@@ -73,7 +73,7 @@ pub fn generate_keypair() -> Ed25519KeyPair {
 }
 
 /// Return a Claim Event for the given hash and key-pair.
-pub fn sign_hash(data: &Sha256Hash, keypair: &Ed25519KeyPair) -> Event {
+pub fn sign_hash(data: &Sha256Hash, keypair: &Ed25519KeyPair) -> Event<Sha256Hash> {
     let sig = keypair.sign(data);
     let peer_public_key_bytes = keypair.public_key_bytes();
     let sig_bytes = sig.as_ref();
@@ -85,7 +85,11 @@ pub fn sign_hash(data: &Sha256Hash, keypair: &Ed25519KeyPair) -> Event {
 }
 
 /// Return a Transaction Event that indicates a transfer in ownership of the given hash.
-pub fn transfer_hash(data: &Sha256Hash, keypair: &Ed25519KeyPair, to: PublicKey) -> Event {
+pub fn transfer_hash(
+    data: &Sha256Hash,
+    keypair: &Ed25519KeyPair,
+    to: PublicKey,
+) -> Event<Sha256Hash> {
     let from_public_key_bytes = keypair.public_key_bytes();
     let mut sign_data = data.to_vec();
     sign_data.extend_from_slice(&to);
@@ -115,7 +119,7 @@ pub fn extend_and_hash(end_hash: &Sha256Hash, ty: u8, val: &[u8]) -> Sha256Hash 
     hash(&hash_data)
 }
 
-pub fn hash_event(end_hash: &Sha256Hash, event: &Event) -> Sha256Hash {
+pub fn hash_event(end_hash: &Sha256Hash, event: &Event<Sha256Hash>) -> Sha256Hash {
     match *event {
         Event::Tick => *end_hash,
         Event::Discovery { data } => extend_and_hash(end_hash, 1, &data),
@@ -140,7 +144,11 @@ pub fn hash_event(end_hash: &Sha256Hash, event: &Event) -> Sha256Hash {
     }
 }
 
-pub fn next_hash(start_hash: &Sha256Hash, num_hashes: u64, event: &Event) -> Sha256Hash {
+pub fn next_hash(
+    start_hash: &Sha256Hash,
+    num_hashes: u64,
+    event: &Event<Sha256Hash>,
+) -> Sha256Hash {
     let mut end_hash = *start_hash;
     for _ in 0..num_hashes {
         end_hash = hash(&end_hash);
@@ -149,7 +157,7 @@ pub fn next_hash(start_hash: &Sha256Hash, num_hashes: u64, event: &Event) -> Sha
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_entry(start_hash: &Sha256Hash, num_hashes: u64, event: Event) -> Entry {
+pub fn next_entry(start_hash: &Sha256Hash, num_hashes: u64, event: Event<Sha256Hash>) -> Entry {
     Entry {
         num_hashes,
         end_hash: next_hash(start_hash, num_hashes, &event),
@@ -157,7 +165,11 @@ pub fn next_entry(start_hash: &Sha256Hash, num_hashes: u64, event: Event) -> Ent
     }
 }
 
-pub fn next_entry_mut(start_hash: &mut Sha256Hash, num_hashes: u64, event: Event) -> Entry {
+pub fn next_entry_mut(
+    start_hash: &mut Sha256Hash,
+    num_hashes: u64,
+    event: Event<Sha256Hash>,
+) -> Entry {
     let entry = next_entry(start_hash, num_hashes, event);
     *start_hash = entry.end_hash;
     entry
@@ -217,7 +229,11 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
     signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
 }
 
-pub fn create_entries(start_hash: &Sha256Hash, num_hashes: u64, events: &[Event]) -> Vec<Entry> {
+pub fn create_entries(
+    start_hash: &Sha256Hash,
+    num_hashes: u64,
+    events: &[Event<Sha256Hash>],
+) -> Vec<Entry> {
     let mut end_hash = *start_hash;
     events
         .iter()

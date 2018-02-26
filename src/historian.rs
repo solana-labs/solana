@@ -11,7 +11,7 @@ use std::time::{Duration, SystemTime};
 use log::{hash, hash_event, Entry, Event, Sha256Hash};
 
 pub struct Historian {
-    pub sender: Sender<Event>,
+    pub sender: Sender<Event<Sha256Hash>>,
     pub receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<(Entry, ExitReason)>,
 }
@@ -25,7 +25,7 @@ fn log_event(
     sender: &Sender<Entry>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
-    event: Event,
+    event: Event<Sha256Hash>,
 ) -> Result<(), (Entry, ExitReason)> {
     *end_hash = hash_event(end_hash, &event);
     let entry = Entry {
@@ -41,7 +41,7 @@ fn log_event(
 }
 
 fn log_events(
-    receiver: &Receiver<Event>,
+    receiver: &Receiver<Event<Sha256Hash>>,
     sender: &Sender<Entry>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
@@ -82,7 +82,7 @@ fn log_events(
 pub fn create_logger(
     start_hash: Sha256Hash,
     ms_per_tick: Option<u64>,
-    receiver: Receiver<Event>,
+    receiver: Receiver<Event<Sha256Hash>>,
     sender: Sender<Entry>,
 ) -> JoinHandle<(Entry, ExitReason)> {
     use std::thread;
