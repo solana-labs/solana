@@ -61,30 +61,6 @@ impl Entry {
             event: Event::Tick,
         }
     }
-
-    /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
-    /// If the event is not a Tick, then hash that as well.
-    pub fn verify(self: &Self, start_hash: &Sha256Hash) -> bool {
-        if let Event::Claim { key, data, sig } = self.event {
-            if !verify_signature(&key, &data, &sig) {
-                return false;
-            }
-        }
-        if let Event::Transaction {
-            from,
-            to,
-            data,
-            sig,
-        } = self.event
-        {
-            let mut sign_data = data.to_vec();
-            sign_data.extend_from_slice(&to);
-            if !verify_signature(&from, &sign_data, &sig) {
-                return false;
-            }
-        }
-        self.end_hash == next_hash(start_hash, self.num_hashes, &self.event)
-    }
 }
 
 // Return a new ED25519 keypair
@@ -192,19 +168,43 @@ pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry {
     next_entry(start_hash, num_hashes, Event::Tick)
 }
 
+/// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
+/// If the event is not a Tick, then hash that as well.
+pub fn verify_entry(entry: &Entry, start_hash: &Sha256Hash) -> bool {
+    if let Event::Claim { key, data, sig } = entry.event {
+        if !verify_signature(&key, &data, &sig) {
+            return false;
+        }
+    }
+    if let Event::Transaction {
+        from,
+        to,
+        data,
+        sig,
+    } = entry.event
+    {
+        let mut sign_data = data.to_vec();
+        sign_data.extend_from_slice(&to);
+        if !verify_signature(&from, &sign_data, &sig) {
+            return false;
+        }
+    }
+    entry.end_hash == next_hash(start_hash, entry.num_hashes, &entry.event)
+}
+
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice(events: &[Entry], start_hash: &Sha256Hash) -> bool {
     use rayon::prelude::*;
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| x1.verify(&x0.end_hash))
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq(events: &[Entry], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];
     let mut event_pairs = genesis.iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| x1.verify(&x0.end_hash))
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
 }
 
 /// Verify a signed message with the given public key.
@@ -243,10 +243,10 @@ mod tests {
     fn test_event_verify() {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
-        assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
-        assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
-        assert!(next_tick(&zero, 1).verify(&zero)); // inductive step
-        assert!(!next_tick(&zero, 1).verify(&one)); // inductive step, bad
+        assert!(verify_entry(&Entry::new_tick(0, &zero), &zero)); // base case
+        assert!(!verify_entry(&Entry::new_tick(0, &zero), &one)); // base case, bad
+        assert!(verify_entry(&next_tick(&zero, 1), &zero)); // inductive step
+        assert!(!verify_entry(&next_tick(&zero, 1), &one)); // inductive step, bad
     }
 
     #[test]
