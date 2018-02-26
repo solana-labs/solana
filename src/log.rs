@@ -16,6 +16,8 @@
 use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};
 use ring::signature::Ed25519KeyPair;
+use serde::Serialize;
+
 pub type Sha256Hash = GenericArray<u8, U32>;
 pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
@@ -73,32 +75,30 @@ pub fn generate_keypair() -> Ed25519KeyPair {
 }
 
 /// Return a Claim Event for the given hash and key-pair.
-pub fn sign_hash(data: &Sha256Hash, keypair: &Ed25519KeyPair) -> Event<Sha256Hash> {
-    let sig = keypair.sign(data);
+pub fn sign_hash<T: Serialize>(data: T, keypair: &Ed25519KeyPair) -> Event<T> {
+    use bincode::serialize;
+    let sig = keypair.sign(&serialize(&data).unwrap());
     let peer_public_key_bytes = keypair.public_key_bytes();
     let sig_bytes = sig.as_ref();
     Event::Claim {
         key: GenericArray::clone_from_slice(peer_public_key_bytes),
-        data: GenericArray::clone_from_slice(data),
+        data,
         sig: GenericArray::clone_from_slice(sig_bytes),
     }
 }
 
 /// Return a Transaction Event that indicates a transfer in ownership of the given hash.
-pub fn transfer_hash(
-    data: &Sha256Hash,
-    keypair: &Ed25519KeyPair,
-    to: PublicKey,
-) -> Event<Sha256Hash> {
+pub fn transfer_hash<T: Serialize>(data: T, keypair: &Ed25519KeyPair, to: PublicKey) -> Event<T> {
+    use bincode::serialize;
     let from_public_key_bytes = keypair.public_key_bytes();
-    let mut sign_data = data.to_vec();
+    let mut sign_data = serialize(&data).unwrap();
     sign_data.extend_from_slice(&to);
     let sig = keypair.sign(&sign_data);
     let sig_bytes = sig.as_ref();
     Event::Transaction {
         from: GenericArray::clone_from_slice(from_public_key_bytes),
         to,
-        data: GenericArray::clone_from_slice(data),
+        data,
         sig: GenericArray::clone_from_slice(sig_bytes),
     }
 }
@@ -119,12 +119,13 @@ pub fn extend_and_hash(end_hash: &Sha256Hash, ty: u8, val: &[u8]) -> Sha256Hash 
     hash(&hash_data)
 }
 
-pub fn hash_event(end_hash: &Sha256Hash, event: &Event<Sha256Hash>) -> Sha256Hash {
+pub fn hash_event<T: Serialize>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
+    use bincode::serialize;
     match *event {
         Event::Tick => *end_hash,
-        Event::Discovery { data } => extend_and_hash(end_hash, 1, &data),
-        Event::Claim { key, data, sig } => {
-            let mut event_data = data.to_vec();
+        Event::Discovery { ref data } => extend_and_hash(end_hash, 1, &serialize(&data).unwrap()),
+        Event::Claim { key, ref data, sig } => {
+            let mut event_data = serialize(&data).unwrap();
             event_data.extend_from_slice(&sig);
             event_data.extend_from_slice(&key);
             extend_and_hash(end_hash, 2, &event_data)
@@ -132,10 +133,10 @@ pub fn hash_event(end_hash: &Sha256Hash, event: &Event<Sha256Hash>) -> Sha256Has
         Event::Transaction {
             from,
             to,
-            data,
+            ref data,
             sig,
         } => {
-            let mut event_data = data.to_vec();
+            let mut event_data = serialize(&data).unwrap();
             event_data.extend_from_slice(&sig);
             event_data.extend_from_slice(&from);
             event_data.extend_from_slice(&to);
@@ -144,10 +145,11 @@ pub fn hash_event(end_hash: &Sha256Hash, event: &Event<Sha256Hash>) -> Sha256Has
     }
 }
 
-pub fn next_hash(
+/// Creates the hash 'num_hashes' after start_hash, plus an additional hash for any event data.
+pub fn next_hash<T: Serialize>(
     start_hash: &Sha256Hash,
     num_hashes: u64,
-    event: &Event<Sha256Hash>,
+    event: &Event<T>,
 ) -> Sha256Hash {
     let mut end_hash = *start_hash;
     for _ in 0..num_hashes {
@@ -157,11 +159,11 @@ pub fn next_hash(
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_entry(
+pub fn next_entry<T: Serialize>(
     start_hash: &Sha256Hash,
     num_hashes: u64,
-    event: Event<Sha256Hash>,
-) -> Entry<Sha256Hash> {
+    event: Event<T>,
+) -> Entry<T> {
     Entry {
         num_hashes,
         end_hash: next_hash(start_hash, num_hashes, &event),
@@ -169,37 +171,40 @@ pub fn next_entry(
     }
 }
 
-pub fn next_entry_mut(
+/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+pub fn next_entry_mut<T: Serialize>(
     start_hash: &mut Sha256Hash,
     num_hashes: u64,
-    event: Event<Sha256Hash>,
-) -> Entry<Sha256Hash> {
+    event: Event<T>,
+) -> Entry<T> {
     let entry = next_entry(start_hash, num_hashes, event);
     *start_hash = entry.end_hash;
     entry
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry<Sha256Hash> {
+pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entry<T> {
     next_entry(start_hash, num_hashes, Event::Tick)
 }
 
 /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
 /// If the event is not a Tick, then hash that as well.
-pub fn verify_entry(entry: &Entry<Sha256Hash>, start_hash: &Sha256Hash) -> bool {
-    if let Event::Claim { key, data, sig } = entry.event {
-        if !verify_signature(&key, &data, &sig) {
+pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
+    use bincode::serialize;
+    if let Event::Claim { key, ref data, sig } = entry.event {
+        let mut claim_data = serialize(&data).unwrap();
+        if !verify_signature(&key, &claim_data, &sig) {
             return false;
         }
     }
     if let Event::Transaction {
         from,
         to,
-        data,
+        ref data,
         sig,
     } = entry.event
     {
-        let mut sign_data = data.to_vec();
+        let mut sign_data = serialize(&data).unwrap();
         sign_data.extend_from_slice(&to);
         if !verify_signature(&from, &sign_data, &sig) {
             return false;
@@ -217,7 +222,7 @@ pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bo
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
-pub fn verify_slice_seq(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
+pub fn verify_slice_seq<T: Serialize>(events: &[Entry<T>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];
     let mut event_pairs = genesis.iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
@@ -233,15 +238,15 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
     signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
 }
 
-pub fn create_entries(
+pub fn create_entries<T: Serialize>(
     start_hash: &Sha256Hash,
     num_hashes: u64,
-    events: &[Event<Sha256Hash>],
-) -> Vec<Entry<Sha256Hash>> {
+    events: Vec<Event<T>>,
+) -> Vec<Entry<T>> {
     let mut end_hash = *start_hash;
     events
-        .iter()
-        .map(|event| next_entry_mut(&mut end_hash, num_hashes, event.clone()))
+        .into_iter()
+        .map(|event| next_entry_mut(&mut end_hash, num_hashes, event))
         .collect()
 }
 
@@ -267,16 +272,16 @@ mod tests {
     fn test_event_verify() {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
-        assert!(verify_entry(&Entry::new_tick(0, &zero), &zero)); // base case
-        assert!(!verify_entry(&Entry::new_tick(0, &zero), &one)); // base case, bad
-        assert!(verify_entry(&next_tick(&zero, 1), &zero)); // inductive step
-        assert!(!verify_entry(&next_tick(&zero, 1), &one)); // inductive step, bad
+        assert!(verify_entry::<u8>(&Entry::new_tick(0, &zero), &zero)); // base case
+        assert!(!verify_entry::<u8>(&Entry::new_tick(0, &zero), &one)); // base case, bad
+        assert!(verify_entry::<u8>(&next_tick(&zero, 1), &zero)); // inductive step
+        assert!(!verify_entry::<u8>(&next_tick(&zero, 1), &one)); // inductive step, bad
     }
 
     #[test]
     fn test_next_tick() {
         let zero = Sha256Hash::default();
-        assert_eq!(next_tick(&zero, 1).num_hashes, 1)
+        assert_eq!(next_tick::<Sha256Hash>(&zero, 1).num_hashes, 1)
     }
 
     fn verify_slice_generic(verify_slice: fn(&[Entry<Sha256Hash>], &Sha256Hash) -> bool) {
@@ -299,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice_seq() {
-        verify_slice_generic(verify_slice_seq);
+        verify_slice_generic(verify_slice_seq::<Sha256Hash>);
     }
 
     #[test]
@@ -308,11 +313,11 @@ mod tests {
         let one = hash(&zero);
 
         // First, verify Discovery events
-        let events = [
+        let events = vec![
             Event::Discovery { data: zero },
             Event::Discovery { data: one },
         ];
-        let mut entries = create_entries(&zero, 0, &events);
+        let mut entries = create_entries(&zero, 0, events);
         assert!(verify_slice(&entries, &zero));
 
         // Next, swap two Discovery events and ensure verification fails.
@@ -326,22 +331,22 @@ mod tests {
     #[test]
     fn test_claim() {
         let keypair = generate_keypair();
-        let event0 = sign_hash(&hash(b"hello, world"), &keypair);
+        let event0 = sign_hash(hash(b"hello, world"), &keypair);
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, &[event0]);
+        let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
 
     #[test]
     fn test_wrong_data_claim_attack() {
         let keypair = generate_keypair();
-        let mut event0 = sign_hash(&hash(b"hello, world"), &keypair);
+        let mut event0 = sign_hash(hash(b"hello, world"), &keypair);
         if let Event::Claim { key, sig, .. } = event0 {
             let data = hash(b"goodbye cruel world");
             event0 = Event::Claim { key, data, sig };
         }
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, &[event0]);
+        let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 
@@ -350,9 +355,9 @@ mod tests {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let event0 = transfer_hash(&hash(b"hello, world"), &keypair0, pubkey1);
+        let event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, &[event0]);
+        let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
 
@@ -361,7 +366,7 @@ mod tests {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let mut event0 = transfer_hash(&hash(b"hello, world"), &keypair0, pubkey1);
+        let mut event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
         if let Event::Transaction { from, to, sig, .. } = event0 {
             let data = hash(b"goodbye cruel world");
             event0 = Event::Transaction {
@@ -372,7 +377,7 @@ mod tests {
             };
         }
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, &[event0]);
+        let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 
@@ -381,7 +386,7 @@ mod tests {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let mut event0 = transfer_hash(&hash(b"hello, world"), &keypair0, pubkey1);
+        let mut event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
         if let Event::Transaction {
             from, data, sig, ..
         } = event0
@@ -396,7 +401,7 @@ mod tests {
             };
         }
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, &[event0]);
+        let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 }
@@ -421,7 +426,7 @@ mod bench {
         let start_hash = Default::default();
         let events = create_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
-            assert!(verify_slice_seq(&events, &start_hash));
+            assert!(verify_slice(&events, &start_hash));
         });
     }
 }
