@@ -12,8 +12,8 @@ use log::{hash, hash_event, Entry, Event, Sha256Hash};
 
 pub struct Historian {
     pub sender: Sender<Event<Sha256Hash>>,
-    pub receiver: Receiver<Entry>,
-    pub thread_hdl: JoinHandle<(Entry, ExitReason)>,
+    pub receiver: Receiver<Entry<Sha256Hash>>,
+    pub thread_hdl: JoinHandle<(Entry<Sha256Hash>, ExitReason)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -22,11 +22,11 @@ pub enum ExitReason {
     SendDisconnected,
 }
 fn log_event(
-    sender: &Sender<Entry>,
+    sender: &Sender<Entry<Sha256Hash>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     event: Event<Sha256Hash>,
-) -> Result<(), (Entry, ExitReason)> {
+) -> Result<(), (Entry<Sha256Hash>, ExitReason)> {
     *end_hash = hash_event(end_hash, &event);
     let entry = Entry {
         end_hash: *end_hash,
@@ -42,13 +42,13 @@ fn log_event(
 
 fn log_events(
     receiver: &Receiver<Event<Sha256Hash>>,
-    sender: &Sender<Entry>,
+    sender: &Sender<Entry<Sha256Hash>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     epoch: SystemTime,
     num_ticks: &mut u64,
     ms_per_tick: Option<u64>,
-) -> Result<(), (Entry, ExitReason)> {
+) -> Result<(), (Entry<Sha256Hash>, ExitReason)> {
     use std::sync::mpsc::TryRecvError;
     loop {
         if let Some(ms) = ms_per_tick {
@@ -83,8 +83,8 @@ pub fn create_logger(
     start_hash: Sha256Hash,
     ms_per_tick: Option<u64>,
     receiver: Receiver<Event<Sha256Hash>>,
-    sender: Sender<Entry>,
-) -> JoinHandle<(Entry, ExitReason)> {
+    sender: Sender<Entry<Sha256Hash>>,
+) -> JoinHandle<(Entry<Sha256Hash>, ExitReason)> {
     use std::thread;
     thread::spawn(move || {
         let mut end_hash = start_hash;
@@ -179,7 +179,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        let entries: Vec<Entry> = hist.receiver.iter().collect();
+        let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
         assert!(entries.len() > 1);
         assert!(verify_slice(&entries, &zero));
     }

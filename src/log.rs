@@ -21,10 +21,10 @@ pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Entry {
+pub struct Entry<T> {
     pub num_hashes: u64,
     pub end_hash: Sha256Hash,
-    pub event: Event<Sha256Hash>,
+    pub event: Event<T>,
 }
 
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
@@ -51,7 +51,7 @@ pub enum Event<T> {
     },
 }
 
-impl Entry {
+impl<T> Entry<T> {
     /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
     /// and that resulting 'end_hash'.
     pub fn new_tick(num_hashes: u64, end_hash: &Sha256Hash) -> Self {
@@ -157,7 +157,11 @@ pub fn next_hash(
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_entry(start_hash: &Sha256Hash, num_hashes: u64, event: Event<Sha256Hash>) -> Entry {
+pub fn next_entry(
+    start_hash: &Sha256Hash,
+    num_hashes: u64,
+    event: Event<Sha256Hash>,
+) -> Entry<Sha256Hash> {
     Entry {
         num_hashes,
         end_hash: next_hash(start_hash, num_hashes, &event),
@@ -169,20 +173,20 @@ pub fn next_entry_mut(
     start_hash: &mut Sha256Hash,
     num_hashes: u64,
     event: Event<Sha256Hash>,
-) -> Entry {
+) -> Entry<Sha256Hash> {
     let entry = next_entry(start_hash, num_hashes, event);
     *start_hash = entry.end_hash;
     entry
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry {
+pub fn next_tick(start_hash: &Sha256Hash, num_hashes: u64) -> Entry<Sha256Hash> {
     next_entry(start_hash, num_hashes, Event::Tick)
 }
 
 /// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
 /// If the event is not a Tick, then hash that as well.
-pub fn verify_entry(entry: &Entry, start_hash: &Sha256Hash) -> bool {
+pub fn verify_entry(entry: &Entry<Sha256Hash>, start_hash: &Sha256Hash) -> bool {
     if let Event::Claim { key, data, sig } = entry.event {
         if !verify_signature(&key, &data, &sig) {
             return false;
@@ -205,7 +209,7 @@ pub fn verify_entry(entry: &Entry, start_hash: &Sha256Hash) -> bool {
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
-pub fn verify_slice(events: &[Entry], start_hash: &Sha256Hash) -> bool {
+pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
     use rayon::prelude::*;
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
@@ -213,7 +217,7 @@ pub fn verify_slice(events: &[Entry], start_hash: &Sha256Hash) -> bool {
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
-pub fn verify_slice_seq(events: &[Entry], start_hash: &Sha256Hash) -> bool {
+pub fn verify_slice_seq(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];
     let mut event_pairs = genesis.iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
@@ -233,7 +237,7 @@ pub fn create_entries(
     start_hash: &Sha256Hash,
     num_hashes: u64,
     events: &[Event<Sha256Hash>],
-) -> Vec<Entry> {
+) -> Vec<Entry<Sha256Hash>> {
     let mut end_hash = *start_hash;
     events
         .iter()
@@ -242,7 +246,11 @@ pub fn create_entries(
 }
 
 /// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'num_hashes'.
-pub fn create_ticks(start_hash: &Sha256Hash, num_hashes: u64, len: usize) -> Vec<Entry> {
+pub fn create_ticks(
+    start_hash: &Sha256Hash,
+    num_hashes: u64,
+    len: usize,
+) -> Vec<Entry<Sha256Hash>> {
     use std::iter;
     let mut end_hash = *start_hash;
     iter::repeat(Event::Tick)
@@ -271,7 +279,7 @@ mod tests {
         assert_eq!(next_tick(&zero, 1).num_hashes, 1)
     }
 
-    fn verify_slice_generic(verify_slice: fn(&[Entry], &Sha256Hash) -> bool) {
+    fn verify_slice_generic(verify_slice: fn(&[Entry<Sha256Hash>], &Sha256Hash) -> bool) {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
         assert!(verify_slice(&vec![], &zero)); // base case

@@ -19,7 +19,7 @@ fn main() {
     let hist = Historian::new(&seed, Some(10));
     create_log(&hist).expect("send error");
     drop(hist.sender);
-    let entries: Vec<Entry> = hist.receiver.iter().collect();
+    let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }
