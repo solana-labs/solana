@@ -426,7 +426,7 @@ mod bench {
         let start_hash = Default::default();
         let events = create_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
-            assert!(verify_slice(&events, &start_hash));
+            assert!(verify_slice_seq(&events, &start_hash));
         });
     }
 }
