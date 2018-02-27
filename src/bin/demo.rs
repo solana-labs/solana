@@ -6,7 +6,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian) -> Result<(), SendError<Event<Sha256Hash>>> {
+fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256Hash>>> {
     sleep(Duration::from_millis(15));
     let data = Sha256Hash::default();
     hist.sender.send(Event::Discovery { data })?;
