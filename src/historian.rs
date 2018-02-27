@@ -9,11 +9,12 @@ use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 use log::{hash, hash_event, Entry, Event, Sha256Hash};
+use serde::Serialize;
 
-pub struct Historian {
-    pub sender: Sender<Event>,
-    pub receiver: Receiver<Entry>,
-    pub thread_hdl: JoinHandle<(Entry, ExitReason)>,
+pub struct Historian<T> {
+    pub sender: Sender<Event<T>>,
+    pub receiver: Receiver<Entry<T>>,
+    pub thread_hdl: JoinHandle<(Entry<T>, ExitReason)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -21,12 +22,12 @@ pub enum ExitReason {
     RecvDisconnected,
     SendDisconnected,
 }
-fn log_event(
-    sender: &Sender<Entry>,
+fn log_event<T: Serialize + Clone>(
+    sender: &Sender<Entry<T>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
-    event: Event,
-) -> Result<(), (Entry, ExitReason)> {
+    event: Event<T>,
+) -> Result<(), (Entry<T>, ExitReason)> {
     *end_hash = hash_event(end_hash, &event);
     let entry = Entry {
         end_hash: *end_hash,
@@ -40,15 +41,15 @@ fn log_event(
     Ok(())
 }
 
-fn log_events(
-    receiver: &Receiver<Event>,
-    sender: &Sender<Entry>,
+fn log_events<T: Serialize + Clone>(
+    receiver: &Receiver<Event<T>>,
+    sender: &Sender<Entry<T>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     epoch: SystemTime,
     num_ticks: &mut u64,
     ms_per_tick: Option<u64>,
-) -> Result<(), (Entry, ExitReason)> {
+) -> Result<(), (Entry<T>, ExitReason)> {
     use std::sync::mpsc::TryRecvError;
     loop {
         if let Some(ms) = ms_per_tick {
@@ -79,12 +80,12 @@ fn log_events(
 
 /// A background thread that will continue tagging received Event messages and
 /// sending back Entry messages until either the receiver or sender channel is closed.
-pub fn create_logger(
+pub fn create_logger<T: 'static + Serialize + Clone + Send>(
     start_hash: Sha256Hash,
     ms_per_tick: Option<u64>,
-    receiver: Receiver<Event>,
-    sender: Sender<Entry>,
-) -> JoinHandle<(Entry, ExitReason)> {
+    receiver: Receiver<Event<T>>,
+    sender: Sender<Entry<T>>,
+) -> JoinHandle<(Entry<T>, ExitReason)> {
     use std::thread;
     thread::spawn(move || {
         let mut end_hash = start_hash;
@@ -109,7 +110,7 @@ pub fn create_logger(
     })
 }
 
-impl Historian {
+impl<T: 'static + Serialize + Clone + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
         use std::sync::mpsc::channel;
         let (sender, event_receiver) = channel();
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn test_historian_closed_sender() {
         let zero = Sha256Hash::default();
-        let hist = Historian::new(&zero, None);
+        let hist = Historian::<u8>::new(&zero, None);
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
         assert_eq!(
@@ -179,7 +180,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        let entries: Vec<Entry> = hist.receiver.iter().collect();
+        let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
         assert!(entries.len() > 1);
         assert!(verify_slice(&entries, &zero));
     }
