@@ -105,19 +105,84 @@ mod tests {
     #[test]
     fn test_accountant() {
         let zero = Sha256Hash::default();
-
         let mut acc = Accountant::new(&zero, Some(2));
-
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
         acc.deposit(10_000, &alice_keypair).unwrap();
         acc.deposit(1_000, &bob_keypair).unwrap();
 
+        sleep(Duration::from_millis(30));
         let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
 
         sleep(Duration::from_millis(30));
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+
+        drop(acc.historian.sender);
+        assert_eq!(
+            acc.historian.thread_hdl.join().unwrap().1,
+            ExitReason::RecvDisconnected
+        );
+    }
+
+    #[test]
+    fn test_invalid_transfer() {
+        let zero = Sha256Hash::default();
+        let mut acc = Accountant::new(&zero, Some(2));
+        let alice_keypair = generate_keypair();
+        let bob_keypair = generate_keypair();
+        acc.deposit(10_000, &alice_keypair).unwrap();
+        acc.deposit(1_000, &bob_keypair).unwrap();
+
+        sleep(Duration::from_millis(30));
+        let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
+        acc.transfer(10_001, &alice_keypair, bob_pubkey).unwrap();
+
+        sleep(Duration::from_millis(30));
+        let alice_pubkey = GenericArray::clone_from_slice(alice_keypair.public_key_bytes());
+        assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
+
+        drop(acc.historian.sender);
+        assert_eq!(
+            acc.historian.thread_hdl.join().unwrap().1,
+            ExitReason::RecvDisconnected
+        );
+    }
+
+    #[test]
+    fn test_mulitple_claims() {
+        let zero = Sha256Hash::default();
+        let mut acc = Accountant::new(&zero, Some(2));
+        let keypair = generate_keypair();
+        acc.deposit(1, &keypair).unwrap();
+        acc.deposit(2, &keypair).unwrap();
+
+        let pubkey = GenericArray::clone_from_slice(keypair.public_key_bytes());
+        sleep(Duration::from_millis(30));
+        assert_eq!(acc.get_balance(&pubkey).unwrap(), 3);
+
+        drop(acc.historian.sender);
+        assert_eq!(
+            acc.historian.thread_hdl.join().unwrap().1,
+            ExitReason::RecvDisconnected
+        );
+    }
+
+    #[test]
+    fn test_transfer_to_newb() {
+        let zero = Sha256Hash::default();
+        let mut acc = Accountant::new(&zero, Some(2));
+        let alice_keypair = generate_keypair();
+        let bob_keypair = generate_keypair();
+        acc.deposit(10_000, &alice_keypair).unwrap();
+
+        sleep(Duration::from_millis(30));
+        let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
+        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+
+        sleep(Duration::from_millis(30));
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 
         drop(acc.historian.sender);
         assert_eq!(
