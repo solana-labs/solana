@@ -116,8 +116,7 @@ mod tests {
         let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
 
-        sleep(Duration::new(0, 1_000_000));
-
+        sleep(Duration::from_millis(30));
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
 
         drop(acc.historian.sender);
