@@ -65,7 +65,7 @@ impl<T> Entry<T> {
     }
 }
 
-// Return a new ED25519 keypair
+/// Return a new ED25519 keypair
 pub fn generate_keypair() -> Ed25519KeyPair {
     use ring::{rand, signature};
     use untrusted;
@@ -74,33 +74,25 @@ pub fn generate_keypair() -> Ed25519KeyPair {
     signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).unwrap()
 }
 
-/// Return a Claim Event for the given hash and key-pair.
-pub fn sign_hash<T: Serialize>(data: T, keypair: &Ed25519KeyPair) -> Event<T> {
-    use bincode::serialize;
-    let sig = keypair.sign(&serialize(&data).unwrap());
-    let peer_public_key_bytes = keypair.public_key_bytes();
-    let sig_bytes = sig.as_ref();
-    Event::Claim {
-        key: GenericArray::clone_from_slice(peer_public_key_bytes),
-        data,
-        sig: GenericArray::clone_from_slice(sig_bytes),
-    }
+/// Return the public key for the given keypair
+pub fn get_pubkey(keypair: &Ed25519KeyPair) -> PublicKey {
+    GenericArray::clone_from_slice(keypair.public_key_bytes())
 }
 
-/// Return a Transaction Event that indicates a transfer in ownership of the given hash.
-pub fn transfer_hash<T: Serialize>(data: T, keypair: &Ed25519KeyPair, to: PublicKey) -> Event<T> {
+/// Return a signature for the given data using the private key from the given keypair.
+pub fn sign_serialized<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
     use bincode::serialize;
-    let from_public_key_bytes = keypair.public_key_bytes();
-    let mut sign_data = serialize(&data).unwrap();
-    sign_data.extend_from_slice(&to);
-    let sig = keypair.sign(&sign_data);
-    let sig_bytes = sig.as_ref();
-    Event::Transaction {
-        from: GenericArray::clone_from_slice(from_public_key_bytes),
-        to,
-        data,
-        sig: GenericArray::clone_from_slice(sig_bytes),
-    }
+    let serialized = serialize(data).unwrap();
+    GenericArray::clone_from_slice(keypair.sign(&serialized).as_ref())
+}
+
+/// Return a signature for the given transaction data using the private key from the given keypair.
+pub fn sign_transaction_data<T: Serialize>(
+    data: &T,
+    keypair: &Ed25519KeyPair,
+    to: &PublicKey,
+) -> Signature {
+    sign_serialized(&(data, to), keypair)
 }
 
 /// Return a Sha256 hash for the given data.
@@ -202,8 +194,7 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
         sig,
     } = *event
     {
-        let mut sign_data = serialize(&data).unwrap();
-        sign_data.extend_from_slice(&to);
+        let sign_data = serialize(&(&data, &to)).unwrap();
         if !verify_signature(&from, &sign_data, &sig) {
             return false;
         }
@@ -338,7 +329,12 @@ mod tests {
     #[test]
     fn test_claim() {
         let keypair = generate_keypair();
-        let event0 = sign_hash(hash(b"hello, world"), &keypair);
+        let data = hash(b"hello, world");
+        let event0 = Event::Claim {
+            key: get_pubkey(&keypair),
+            data,
+            sig: sign_serialized(&data, &keypair),
+        };
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -347,11 +343,11 @@ mod tests {
     #[test]
     fn test_wrong_data_claim_attack() {
         let keypair = generate_keypair();
-        let mut event0 = sign_hash(hash(b"hello, world"), &keypair);
-        if let Event::Claim { key, sig, .. } = event0 {
-            let data = hash(b"goodbye cruel world");
-            event0 = Event::Claim { key, data, sig };
-        }
+        let event0 = Event::Claim {
+            key: get_pubkey(&keypair),
+            data: hash(b"goodbye cruel world"),
+            sig: sign_serialized(&hash(b"hello, world"), &keypair),
+        };
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
@@ -361,8 +357,14 @@ mod tests {
     fn test_transfer() {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
-        let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
+        let pubkey1 = get_pubkey(&keypair1);
+        let data = hash(b"hello, world");
+        let event0 = Event::Transaction {
+            from: get_pubkey(&keypair0),
+            to: pubkey1,
+            data,
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+        };
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -372,17 +374,14 @@ mod tests {
     fn test_wrong_data_transfer_attack() {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
-        let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let mut event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
-        if let Event::Transaction { from, to, sig, .. } = event0 {
-            let data = hash(b"goodbye cruel world");
-            event0 = Event::Transaction {
-                from,
-                to,
-                data,
-                sig,
-            };
-        }
+        let pubkey1 = get_pubkey(&keypair1);
+        let data = hash(b"hello, world");
+        let event0 = Event::Transaction {
+            from: get_pubkey(&keypair0),
+            to: pubkey1,
+            data: hash(b"goodbye cruel world"), // <-- attack!
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+        };
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
@@ -392,21 +391,15 @@ mod tests {
     fn test_transfer_hijack_attack() {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
-        let pubkey1 = GenericArray::clone_from_slice(keypair1.public_key_bytes());
-        let mut event0 = transfer_hash(hash(b"hello, world"), &keypair0, pubkey1);
-        if let Event::Transaction {
-            from, data, sig, ..
-        } = event0
-        {
-            let theif_keypair = generate_keypair();
-            let to = GenericArray::clone_from_slice(theif_keypair.public_key_bytes());
-            event0 = Event::Transaction {
-                from,
-                to,
-                data,
-                sig,
-            };
-        }
+        let thief_keypair = generate_keypair();
+        let pubkey1 = get_pubkey(&keypair1);
+        let data = hash(b"hello, world");
+        let event0 = Event::Transaction {
+            from: get_pubkey(&keypair0),
+            to: get_pubkey(&thief_keypair), // <-- attack!
+            data: hash(b"goodbye cruel world"),
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+        };
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));

@@ -192,11 +192,11 @@ mod tests {
         let zero = Sha256Hash::default();
         let hist = Historian::new(&zero, None);
         let keypair = generate_keypair();
-        let mut event0 = sign_hash(hash(b"hello, world"), &keypair);
-        if let Event::Claim { key, sig, .. } = event0 {
-            let data = hash(b"goodbye cruel world");
-            event0 = Event::Claim { key, data, sig };
-        }
+        let event0 = Event::Claim {
+            key: get_pubkey(&keypair),
+            data: hash(b"goodbye cruel world"),
+            sig: sign_serialized(&hash(b"hello, world"), &keypair),
+        };
         hist.sender.send(event0).unwrap();
         drop(hist.sender);
         assert_eq!(

@@ -15,6 +15,10 @@ license = "Apache-2.0"
 name = "silk-demo"
 path = "src/bin/demo.rs"
 
+[[bin]]
+name = "silk-client-demo"
+path = "src/bin/client-demo.rs"
+
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 
