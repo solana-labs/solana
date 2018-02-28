@@ -8,7 +8,7 @@
 use std::thread::JoinHandle;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
-use log::{hash, hash_event, Entry, Event, Sha256Hash};
+use log::{hash, hash_event, verify_event, Entry, Event, Sha256Hash};
 use serde::Serialize;
 
 pub struct Historian<T> {
@@ -61,7 +61,9 @@ fn log_events<T: Serialize + Clone>(
         }
         match receiver.try_recv() {
             Ok(event) => {
-                log_event(sender, num_hashes, end_hash, event)?;
+                if verify_event(&event) {
+                    log_event(sender, num_hashes, end_hash, event)?;
+                }
             }
             Err(TryRecvError::Empty) => {
                 return Ok(());
@@ -183,5 +185,25 @@ mod tests {
         let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
         assert!(entries.len() > 1);
         assert!(verify_slice(&entries, &zero));
+    }
+
+    #[test]
+    fn test_bad_event_attack() {
+        let zero = Sha256Hash::default();
+        let hist = Historian::new(&zero, None);
+        let keypair = generate_keypair();
+        let mut event0 = sign_hash(hash(b"hello, world"), &keypair);
+        if let Event::Claim { key, sig, .. } = event0 {
+            let data = hash(b"goodbye cruel world");
+            event0 = Event::Claim { key, data, sig };
+        }
+        hist.sender.send(event0).unwrap();
+        drop(hist.sender);
+        assert_eq!(
+            hist.thread_hdl.join().unwrap().1,
+            ExitReason::RecvDisconnected
+        );
+        let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
+        assert_eq!(entries.len(), 0);
     }
 }

@@ -187,11 +187,9 @@ pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entr
     next_entry(start_hash, num_hashes, Event::Tick)
 }
 
-/// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
-/// If the event is not a Tick, then hash that as well.
-pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
+pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     use bincode::serialize;
-    if let Event::Claim { key, ref data, sig } = entry.event {
+    if let Event::Claim { key, ref data, sig } = *event {
         let mut claim_data = serialize(&data).unwrap();
         if !verify_signature(&key, &claim_data, &sig) {
             return false;
@@ -202,13 +200,22 @@ pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> 
         to,
         ref data,
         sig,
-    } = entry.event
+    } = *event
     {
         let mut sign_data = serialize(&data).unwrap();
         sign_data.extend_from_slice(&to);
         if !verify_signature(&from, &sign_data, &sig) {
             return false;
         }
+    }
+    true
+}
+
+/// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
+/// If the event is not a Tick, then hash that as well.
+pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
+    if !verify_event(&entry.event) {
+        return false;
     }
     entry.end_hash == next_hash(start_hash, entry.num_hashes, &entry.event)
 }
