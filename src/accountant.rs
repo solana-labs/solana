@@ -89,6 +89,7 @@ impl Accountant {
         sig: Signature,
     ) -> Result<(), SendError<Event<u64>>> {
         if self.get_balance(&from).unwrap() < data {
+            // TODO: Replace the SendError result with a custom one.
             return Ok(());
         }
         let event = Event::Transaction {

@@ -7,7 +7,7 @@ pub struct AccountantSkel {
     pub obj: Accountant,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
     Deposit {
         key: PublicKey,
@@ -25,12 +25,16 @@ pub enum Request {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: u64 },
 }
 
 impl AccountantSkel {
+    pub fn new(obj: Accountant) -> Self {
+        AccountantSkel { obj }
+    }
+
     pub fn process_message(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
             Request::Deposit { key, val, sig } => {
@@ -54,18 +58,18 @@ impl AccountantSkel {
         use std::io::{Read, Write};
         use bincode::{deserialize, serialize};
         let listener = TcpListener::bind(addr)?;
-        let mut buf = vec![];
+        let mut buf = vec![0u8; 1024];
         loop {
-            let (mut stream, addr) = listener.accept()?;
-            println!("connection received from {}", addr);
+            let (mut stream, _addr) = listener.accept()?;
 
             // TODO: Guard against large message DoS attack.
-            stream.read_to_end(&mut buf)?;
+            let _sz = stream.read(&mut buf)?;
 
             // TODO: Return a descriptive error message if deserialization fails.
-            let msg = deserialize(&buf).unwrap();
-            if let Some(resp) = self.process_message(msg) {
-                stream.write(&serialize(&resp).unwrap())?;
+            let req = deserialize(&buf).expect("deserialize request");
+
+            if let Some(resp) = self.process_message(req) {
+                stream.write(&serialize(&resp).expect("serialize response"))?;
             }
         }
     }

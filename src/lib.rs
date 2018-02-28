@@ -3,6 +3,7 @@ pub mod log;
 pub mod historian;
 pub mod accountant;
 pub mod accountant_skel;
+pub mod accountant_stub;
 extern crate bincode;
 extern crate generic_array;
 extern crate rayon;
