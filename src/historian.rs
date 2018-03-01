@@ -116,8 +116,8 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
 impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
         use std::sync::mpsc::sync_channel;
-        let (sender, event_receiver) = sync_channel(4000);
-        let (entry_sender, receiver) = sync_channel(4000);
+        let (sender, event_receiver) = sync_channel(12000);
+        let (entry_sender, receiver) = sync_channel(12000);
         let thread_hdl = create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
         Historian {
             sender,

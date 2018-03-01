@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{Event, PublicKey, Sha256Hash, Signature};
+use log::{Entry, Event, PublicKey, Sha256Hash, Signature};
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::{RecvError, SendError};
@@ -51,7 +51,7 @@ impl Accountant {
         }
     }
 
-    pub fn sync(self: &mut Self) {
+    pub fn sync(self: &mut Self) -> Vec<Entry<u64>> {
         let mut entries = vec![];
         while let Ok(entry) = self.historian.receiver.try_recv() {
             entries.push(entry);
@@ -67,6 +67,8 @@ impl Accountant {
         for e in &entries {
             self.process_event(&e.event);
         }
+
+        entries
     }
 
     pub fn deposit_signed(
@@ -83,11 +85,11 @@ impl Accountant {
         self: &Self,
         n: u64,
         keypair: &Ed25519KeyPair,
-    ) -> Result<(), SendError<Event<u64>>> {
+    ) -> Result<Signature, SendError<Event<u64>>> {
         use log::{get_pubkey, sign_serialized};
         let key = get_pubkey(keypair);
         let sig = sign_serialized(&n, keypair);
-        self.deposit_signed(key, n, sig)
+        self.deposit_signed(key, n, sig).map(|_| sig)
     }
 
     pub fn transfer_signed(
@@ -116,25 +118,41 @@ impl Accountant {
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
-    ) -> Result<(), SendError<Event<u64>>> {
+    ) -> Result<Signature, SendError<Event<u64>>> {
         use log::{get_pubkey, sign_transaction_data};
 
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
-        self.transfer_signed(from, to, n, sig)
+        self.transfer_signed(from, to, n, sig).map(|_| sig)
     }
 
     pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> Result<u64, RecvError> {
         self.sync();
         Ok(*self.balances.get(pubkey).unwrap_or(&0))
     }
+
+    pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) {
+        use std::thread::sleep;
+        use std::time::Duration;
+        let mut entries = self.sync();
+        let mut found = false;
+        while !found {
+            found = entries.iter().any(|e| match e.event {
+                Event::Claim { sig, .. } => sig == *wait_sig,
+                Event::Transaction { sig, .. } => sig == *wait_sig,
+                _ => false,
+            });
+            if !found {
+                sleep(Duration::from_millis(30));
+                entries = self.sync();
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread::sleep;
-    use std::time::Duration;
     use log::{generate_keypair, get_pubkey};
     use historian::ExitReason;
 
@@ -145,13 +163,13 @@ mod tests {
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
         acc.deposit(10_000, &alice_keypair).unwrap();
-        acc.deposit(1_000, &bob_keypair).unwrap();
+        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
+        acc.wait_on_signature(&sig);
 
-        sleep(Duration::from_millis(30));
         let bob_pubkey = get_pubkey(&bob_keypair);
-        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        acc.wait_on_signature(&sig);
 
-        sleep(Duration::from_millis(30));
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
 
         drop(acc.historian.sender);
@@ -163,18 +181,20 @@ mod tests {
 
     #[test]
     fn test_invalid_transfer() {
+        use std::thread::sleep;
+        use std::time::Duration;
         let zero = Sha256Hash::default();
         let mut acc = Accountant::new(&zero, Some(2));
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
         acc.deposit(10_000, &alice_keypair).unwrap();
-        acc.deposit(1_000, &bob_keypair).unwrap();
+        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
+        acc.wait_on_signature(&sig);
 
-        sleep(Duration::from_millis(30));
         let bob_pubkey = get_pubkey(&bob_keypair);
         acc.transfer(10_001, &alice_keypair, bob_pubkey).unwrap();
-
         sleep(Duration::from_millis(30));
+
         let alice_pubkey = get_pubkey(&alice_keypair);
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
@@ -192,10 +212,10 @@ mod tests {
         let mut acc = Accountant::new(&zero, Some(2));
         let keypair = generate_keypair();
         acc.deposit(1, &keypair).unwrap();
-        acc.deposit(2, &keypair).unwrap();
+        let sig = acc.deposit(2, &keypair).unwrap();
+        acc.wait_on_signature(&sig);
 
         let pubkey = get_pubkey(&keypair);
-        sleep(Duration::from_millis(30));
         assert_eq!(acc.get_balance(&pubkey).unwrap(), 3);
 
         drop(acc.historian.sender);
@@ -211,13 +231,12 @@ mod tests {
         let mut acc = Accountant::new(&zero, Some(2));
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
-        acc.deposit(10_000, &alice_keypair).unwrap();
+        let sig = acc.deposit(10_000, &alice_keypair).unwrap();
+        acc.wait_on_signature(&sig);
 
-        sleep(Duration::from_millis(30));
         let bob_pubkey = get_pubkey(&bob_keypair);
-        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
-
-        sleep(Duration::from_millis(30));
+        let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        acc.wait_on_signature(&sig);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 
         drop(acc.historian.sender);
