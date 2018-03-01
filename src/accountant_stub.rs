@@ -2,9 +2,8 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use std::net::TcpStream;
+use std::net::UdpSocket;
 use std::io;
-use std::io::{Read, Write};
 use bincode::{deserialize, serialize};
 use log::{PublicKey, Signature};
 use ring::signature::Ed25519KeyPair;
@@ -12,12 +11,14 @@ use accountant_skel::{Request, Response};
 
 pub struct AccountantStub {
     pub addr: String,
+    pub socket: UdpSocket,
 }
 
 impl AccountantStub {
-    pub fn new(addr: &str) -> Self {
+    pub fn new(addr: &str, socket: UdpSocket) -> Self {
         AccountantStub {
             addr: addr.to_string(),
+            socket,
         }
     }
 
@@ -29,15 +30,14 @@ impl AccountantStub {
     ) -> io::Result<usize> {
         let req = Request::Deposit { key, val, sig };
         let data = serialize(&req).unwrap();
-        let mut stream = TcpStream::connect(&self.addr)?;
-        stream.write(&data)
+        self.socket.send_to(&data, &self.addr)
     }
 
-    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<usize> {
+    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
         use log::{get_pubkey, sign_serialized};
         let key = get_pubkey(keypair);
         let sig = sign_serialized(&n, keypair);
-        self.deposit_signed(key, n, sig)
+        self.deposit_signed(key, n, sig).map(|_| sig)
     }
 
     pub fn transfer_signed(
@@ -49,8 +49,7 @@ impl AccountantStub {
     ) -> io::Result<usize> {
         let req = Request::Transfer { from, to, val, sig };
         let data = serialize(&req).unwrap();
-        let mut stream = TcpStream::connect(&self.addr)?;
-        stream.write(&data)
+        self.socket.send_to(&data, &self.addr)
     }
 
     pub fn transfer(
@@ -58,24 +57,39 @@ impl AccountantStub {
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
-    ) -> io::Result<usize> {
+    ) -> io::Result<Signature> {
         use log::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
-        self.transfer_signed(from, to, n, sig)
+        self.transfer_signed(from, to, n, sig).map(|_| sig)
     }
 
     pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> io::Result<u64> {
-        let mut stream = TcpStream::connect(&self.addr)?;
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
-        stream.write(&data)?;
+        self.socket.send_to(&data, &self.addr)?;
         let mut buf = vec![0u8; 1024];
-        stream.read(&mut buf)?;
+        self.socket.recv_from(&mut buf)?;
         let resp = deserialize(&buf).expect("deserialize balance");
-        let Response::Balance { key, val } = resp;
-        assert_eq!(key, *pubkey);
-        Ok(val)
+        if let Response::Balance { key, val } = resp {
+            assert_eq!(key, *pubkey);
+            return Ok(val);
+        }
+        Ok(0)
+    }
+
+    pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) -> io::Result<()> {
+        let req = Request::Wait { sig: *wait_sig };
+        let data = serialize(&req).unwrap();
+        self.socket.send_to(&data, &self.addr).map(|_| ())?;
+
+        let mut buf = vec![0u8; 1024];
+        self.socket.recv_from(&mut buf)?;
+        let resp = deserialize(&buf).expect("deserialize signature");
+        if let Response::Confirmed { sig } = resp {
+            assert_eq!(sig, *wait_sig);
+        }
+        Ok(())
     }
 }
 
@@ -90,7 +104,8 @@ mod tests {
 
     #[test]
     fn test_accountant_stub() {
-        let addr = "127.0.0.1:8000";
+        let addr = "127.0.0.1:9000";
+        let send_addr = "127.0.0.1:9001";
         spawn(move || {
             let zero = Sha256Hash::default();
             let acc = Accountant::new(&zero, None);
@@ -100,17 +115,17 @@ mod tests {
 
         sleep(Duration::from_millis(30));
 
-        let mut acc = AccountantStub::new(addr);
+        let socket = UdpSocket::bind(send_addr).unwrap();
+        let mut acc = AccountantStub::new(addr, socket);
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
         acc.deposit(10_000, &alice_keypair).unwrap();
-        acc.deposit(1_000, &bob_keypair).unwrap();
+        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
+        acc.wait_on_signature(&sig).unwrap();
 
-        sleep(Duration::from_millis(30));
         let bob_pubkey = get_pubkey(&bob_keypair);
-        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
-
-        sleep(Duration::from_millis(300));
+        let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
     }
 }
