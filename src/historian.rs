@@ -10,6 +10,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, SystemTime};
 use log::{hash, hash_event, verify_event, Entry, Event, Sha256Hash};
 use serde::Serialize;
+use std::fmt::Debug;
 
 pub struct Historian<T> {
     pub sender: Sender<Event<T>>,
@@ -22,13 +23,14 @@ pub enum ExitReason {
     RecvDisconnected,
     SendDisconnected,
 }
-fn log_event<T: Serialize + Clone>(
+fn log_event<T: Serialize + Clone + Debug>(
     sender: &Sender<Entry<T>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     event: Event<T>,
 ) -> Result<(), (Entry<T>, ExitReason)> {
     *end_hash = hash_event(end_hash, &event);
+    println!("historian: logging event {:?}", event);
     let entry = Entry {
         end_hash: *end_hash,
         num_hashes: *num_hashes,
@@ -41,7 +43,7 @@ fn log_event<T: Serialize + Clone>(
     Ok(())
 }
 
-fn log_events<T: Serialize + Clone>(
+fn log_events<T: Serialize + Clone + Debug>(
     receiver: &Receiver<Event<T>>,
     sender: &Sender<Entry<T>>,
     num_hashes: &mut u64,
@@ -82,7 +84,7 @@ fn log_events<T: Serialize + Clone>(
 
 /// A background thread that will continue tagging received Event messages and
 /// sending back Entry messages until either the receiver or sender channel is closed.
-pub fn create_logger<T: 'static + Serialize + Clone + Send>(
+pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
     start_hash: Sha256Hash,
     ms_per_tick: Option<u64>,
     receiver: Receiver<Event<T>>,
@@ -112,7 +114,7 @@ pub fn create_logger<T: 'static + Serialize + Clone + Send>(
     })
 }
 
-impl<T: 'static + Serialize + Clone + Send> Historian<T> {
+impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
         use std::sync::mpsc::channel;
         let (sender, event_receiver) = channel();

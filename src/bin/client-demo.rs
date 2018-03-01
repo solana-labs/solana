@@ -10,13 +10,18 @@ fn main() {
     let mut acc = AccountantStub::new(addr);
     let alice_keypair = generate_keypair();
     let bob_keypair = generate_keypair();
+    println!("Depositing...");
     acc.deposit(10_000, &alice_keypair).unwrap();
     acc.deposit(1_000, &bob_keypair).unwrap();
+    println!("Done.");
 
     sleep(Duration::from_millis(30));
     let bob_pubkey = get_pubkey(&bob_keypair);
+    println!("Transferring...");
     acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+    println!("Done.");
 
-    sleep(Duration::from_millis(300));
-    assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+    sleep(Duration::from_millis(30));
+    println!("Done. Checking balance.");
+    println!("Balance {}", acc.get_balance(&bob_pubkey).unwrap());
 }

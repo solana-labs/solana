@@ -19,6 +19,10 @@ path = "src/bin/demo.rs"
 name = "silk-client-demo"
 path = "src/bin/client-demo.rs"
 
+[[bin]]
+name = "silk-testnode"
+path = "src/bin/testnode.rs"
+
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 

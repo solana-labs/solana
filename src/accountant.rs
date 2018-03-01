@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{verify_entry, Event, PublicKey, Sha256Hash, Signature};
+use log::{Event, PublicKey, Sha256Hash, Signature};
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::{RecvError, SendError};
@@ -24,8 +24,9 @@ impl Accountant {
         }
     }
 
-    pub fn process_event(self: &mut Self, event: Event<u64>) {
-        match event {
+    pub fn process_event(self: &mut Self, event: &Event<u64>) {
+        println!("accountant: Processing event: {:?}", event);
+        match *event {
             Event::Claim { key, data, .. } => {
                 if self.balances.contains_key(&key) {
                     if let Some(x) = self.balances.get_mut(&key) {
@@ -52,11 +53,21 @@ impl Accountant {
     }
 
     pub fn sync(self: &mut Self) {
+        let mut entries = vec![];
         while let Ok(entry) = self.historian.receiver.try_recv() {
-            assert!(verify_entry(&entry, &self.end_hash));
-            self.end_hash = entry.end_hash;
-
-            self.process_event(entry.event);
+            println!("accountant: got event {:?}", entry.event);
+            entries.push(entry);
+        }
+        // TODO: Does this cause the historian's channel to get blocked?
+        //use log::verify_slice_u64;
+        //println!("accountant: verifying {} entries...", entries.len());
+        //assert!(verify_slice_u64(&entries, &self.end_hash));
+        //println!("accountant: Done verifying {} entries.", entries.len());
+        if let Some(last_entry) = entries.last() {
+            self.end_hash = last_entry.end_hash;
+        }
+        for e in &entries {
+            self.process_event(&e.event);
         }
     }
 
@@ -88,16 +99,20 @@ impl Accountant {
         data: u64,
         sig: Signature,
     ) -> Result<(), SendError<Event<u64>>> {
+        println!("accountant: Checking funds (needs sync)...");
         if self.get_balance(&from).unwrap() < data {
             // TODO: Replace the SendError result with a custom one.
+            println!("Error: Insufficient funds");
             return Ok(());
         }
+        println!("accountant: Sufficient funds.");
         let event = Event::Transaction {
             from,
             to,
             data,
             sig,
         };
+        println!("accountant: Sending Transaction to historian.");
         self.historian.sender.send(event)
     }
 
@@ -115,7 +130,9 @@ impl Accountant {
     }
 
     pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> Result<u64, RecvError> {
+        println!("accountant: syncing the log...");
         self.sync();
+        println!("accountant: done syncing.");
         Ok(*self.balances.get(pubkey).unwrap_or(&0))
     }
 }

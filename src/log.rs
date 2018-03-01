@@ -219,6 +219,14 @@ pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bo
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
 }
 
+/// Verifies the hashes and counts of a slice of events are all consistent.
+pub fn verify_slice_u64(events: &[Entry<u64>], start_hash: &Sha256Hash) -> bool {
+    use rayon::prelude::*;
+    let genesis = [Entry::new_tick(Default::default(), start_hash)];
+    let event_pairs = genesis.par_iter().chain(events).zip(events);
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
+}
+
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq<T: Serialize>(events: &[Entry<T>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];

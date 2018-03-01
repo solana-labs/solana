@@ -35,14 +35,16 @@ impl AccountantSkel {
         AccountantSkel { obj }
     }
 
-    pub fn process_message(self: &mut Self, msg: Request) -> Option<Response> {
+    pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
             Request::Deposit { key, val, sig } => {
                 let _ = self.obj.deposit_signed(key, val, sig);
                 None
             }
             Request::Transfer { from, to, val, sig } => {
+                println!("skel: Invoking transfer_signed...");
                 let _ = self.obj.transfer_signed(from, to, val, sig);
+                println!("skel: transfer_signed done.");
                 None
             }
             Request::GetBalance { key } => {
@@ -60,17 +62,21 @@ impl AccountantSkel {
         let listener = TcpListener::bind(addr)?;
         let mut buf = vec![0u8; 1024];
         loop {
-            let (mut stream, _addr) = listener.accept()?;
-
-            // TODO: Guard against large message DoS attack.
+            println!("skel: Waiting for incoming connections...");
+            let (mut stream, addr) = listener.accept()?;
+            println!("skel: Accepted incoming connection frm {:?}.", addr);
             let _sz = stream.read(&mut buf)?;
 
             // TODO: Return a descriptive error message if deserialization fails.
             let req = deserialize(&buf).expect("deserialize request");
+            println!("skel: Got request {:?}", req);
 
-            if let Some(resp) = self.process_message(req) {
+            println!("skel: Processing request...");
+            if let Some(resp) = self.process_request(req) {
+                println!("skel: Writing response...");
                 stream.write(&serialize(&resp).expect("serialize response"))?;
             }
+            println!("skel: Done processing request.");
         }
     }
 }

@@ -49,8 +49,13 @@ impl AccountantStub {
     ) -> io::Result<usize> {
         let req = Request::Transfer { from, to, val, sig };
         let data = serialize(&req).unwrap();
+        println!("TcpStream::connect()...");
         let mut stream = TcpStream::connect(&self.addr)?;
-        stream.write(&data)
+        println!("Connected.");
+        println!("accountant_stub: Writing transfer message...");
+        let ret = stream.write(&data);
+        println!("Done.");
+        ret
     }
 
     pub fn transfer(
