@@ -116,24 +116,8 @@ pub fn hash_event<T: Serialize>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha2
     match *event {
         Event::Tick => *end_hash,
         Event::Discovery { ref data } => extend_and_hash(end_hash, 1, &serialize(&data).unwrap()),
-        Event::Claim { key, ref data, sig } => {
-            let mut event_data = serialize(&data).unwrap();
-            event_data.extend_from_slice(&sig);
-            event_data.extend_from_slice(&key);
-            extend_and_hash(end_hash, 2, &event_data)
-        }
-        Event::Transaction {
-            from,
-            to,
-            ref data,
-            sig,
-        } => {
-            let mut event_data = serialize(&data).unwrap();
-            event_data.extend_from_slice(&sig);
-            event_data.extend_from_slice(&from);
-            event_data.extend_from_slice(&to);
-            extend_and_hash(end_hash, 2, &event_data)
-        }
+        Event::Claim { sig, .. } => extend_and_hash(end_hash, 2, &sig),
+        Event::Transaction { sig, .. } => extend_and_hash(end_hash, 3, &sig),
     }
 }
 
