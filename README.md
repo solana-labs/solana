@@ -3,9 +3,15 @@
 [![Build Status](https://travis-ci.org/loomprotocol/silk.svg?branch=master)](https://travis-ci.org/loomprotocol/silk)
 [![codecov](https://codecov.io/gh/loomprotocol/silk/branch/master/graph/badge.svg)](https://codecov.io/gh/loomprotocol/silk)
 
-# Silk, a silky smooth implementation of the Loom specification
+Disclaimer
+===
 
-Loom is a new achitecture for a high performance blockchain. Its whitepaper boasts a theoretical
+All claims, content, designs, algorithms, estimates, roadmaps, specifications, and performance measurements described in this project are done with the author's best effort.  It is up to the reader to check and validate their accuracy and truthfulness.  Furthermore nothing in this project constitutes a solicitation for investment.
+
+Silk, a silky smooth implementation of the Loom specification
+===
+
+Loom&trade; is a new achitecture for a high performance blockchain. Its whitepaper boasts a theoretical
 throughput of 710k transactions per second on a 1 gbps network. The specification is implemented
 in two git repositories. Reserach is performed in the loom repository. That work drives the
 Loom specification forward. This repository, on the other hand, aims to implement the specification
@@ -15,7 +21,8 @@ corresponding benchmarks are also added that demonstrate real performance boosts
 feature set here will always be a ways behind the loom repo, but that this is an implementation
 you can take to the bank, literally.
 
-# Usage
+Usage
+===
 
 Add the latest [silk package](https://crates.io/crates/silk) to the `[dependencies]` section
 of your Cargo.toml.
@@ -81,7 +88,8 @@ historian, we can verify that `end_hash` is the result of applying a sha256 hash
 exactly `num_hashes` times, and then hashing then event data on top of that. Because the event data is
 included in the hash, the events cannot be reordered without regenerating all the hashes.
 
-# Developing
+Developing
+===
 
 Building
 ---
