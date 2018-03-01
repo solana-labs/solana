@@ -6,14 +6,14 @@
 //! The resulting stream of entries represents ordered events in time.
 
 use std::thread::JoinHandle;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, SystemTime};
 use log::{hash, hash_event, verify_event, Entry, Event, Sha256Hash};
 use serde::Serialize;
 use std::fmt::Debug;
 
 pub struct Historian<T> {
-    pub sender: Sender<Event<T>>,
+    pub sender: SyncSender<Event<T>>,
     pub receiver: Receiver<Entry<T>>,
     pub thread_hdl: JoinHandle<(Entry<T>, ExitReason)>,
 }
@@ -24,13 +24,12 @@ pub enum ExitReason {
     SendDisconnected,
 }
 fn log_event<T: Serialize + Clone + Debug>(
-    sender: &Sender<Entry<T>>,
+    sender: &SyncSender<Entry<T>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     event: Event<T>,
 ) -> Result<(), (Entry<T>, ExitReason)> {
     *end_hash = hash_event(end_hash, &event);
-    println!("historian: logging event {:?}", event);
     let entry = Entry {
         end_hash: *end_hash,
         num_hashes: *num_hashes,
@@ -45,7 +44,7 @@ fn log_event<T: Serialize + Clone + Debug>(
 
 fn log_events<T: Serialize + Clone + Debug>(
     receiver: &Receiver<Event<T>>,
-    sender: &Sender<Entry<T>>,
+    sender: &SyncSender<Entry<T>>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     epoch: SystemTime,
@@ -88,7 +87,7 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
     start_hash: Sha256Hash,
     ms_per_tick: Option<u64>,
     receiver: Receiver<Event<T>>,
-    sender: Sender<Entry<T>>,
+    sender: SyncSender<Entry<T>>,
 ) -> JoinHandle<(Entry<T>, ExitReason)> {
     use std::thread;
     thread::spawn(move || {
@@ -116,9 +115,9 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
 
 impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
-        use std::sync::mpsc::channel;
-        let (sender, event_receiver) = channel();
-        let (entry_sender, receiver) = channel();
+        use std::sync::mpsc::sync_channel;
+        let (sender, event_receiver) = sync_channel(4000);
+        let (entry_sender, receiver) = sync_channel(4000);
         let thread_hdl = create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
         Historian {
             sender,

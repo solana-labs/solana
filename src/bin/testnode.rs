@@ -9,5 +9,6 @@ fn main() {
     let zero = Sha256Hash::default();
     let acc = Accountant::new(&zero, Some(1000));
     let mut skel = AccountantSkel::new(acc);
+    println!("Listening on {}", addr);
     skel.serve(addr).unwrap();
 }

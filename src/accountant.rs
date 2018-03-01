@@ -25,7 +25,6 @@ impl Accountant {
     }
 
     pub fn process_event(self: &mut Self, event: &Event<u64>) {
-        println!("accountant: Processing event: {:?}", event);
         match *event {
             Event::Claim { key, data, .. } => {
                 if self.balances.contains_key(&key) {
@@ -55,7 +54,6 @@ impl Accountant {
     pub fn sync(self: &mut Self) {
         let mut entries = vec![];
         while let Ok(entry) = self.historian.receiver.try_recv() {
-            println!("accountant: got event {:?}", entry.event);
             entries.push(entry);
         }
         // TODO: Does this cause the historian's channel to get blocked?
@@ -99,20 +97,17 @@ impl Accountant {
         data: u64,
         sig: Signature,
     ) -> Result<(), SendError<Event<u64>>> {
-        println!("accountant: Checking funds (needs sync)...");
         if self.get_balance(&from).unwrap() < data {
             // TODO: Replace the SendError result with a custom one.
             println!("Error: Insufficient funds");
             return Ok(());
         }
-        println!("accountant: Sufficient funds.");
         let event = Event::Transaction {
             from,
             to,
             data,
             sig,
         };
-        println!("accountant: Sending Transaction to historian.");
         self.historian.sender.send(event)
     }
 
@@ -130,9 +125,7 @@ impl Accountant {
     }
 
     pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> Result<u64, RecvError> {
-        println!("accountant: syncing the log...");
         self.sync();
-        println!("accountant: done syncing.");
         Ok(*self.balances.get(pubkey).unwrap_or(&0))
     }
 }
