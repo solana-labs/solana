@@ -1,7 +1,7 @@
 [package]
 name = "silk"
 description = "A silky smooth implementation of the Loom architecture"
-version = "0.2.3"
+version = "0.3.0"
 documentation = "https://docs.rs/silk"
 homepage = "http://loomprotocol.com/"
 repository = "https://github.com/loomprotocol/silk"
@@ -14,6 +14,14 @@ license = "Apache-2.0"
 [[bin]]
 name = "silk-demo"
 path = "src/bin/demo.rs"
+
+[[bin]]
+name = "silk-client-demo"
+path = "src/bin/client-demo.rs"
+
+[[bin]]
+name = "silk-testnode"
+path = "src/bin/testnode.rs"
 
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }

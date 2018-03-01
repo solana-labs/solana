@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{verify_entry, Event, PublicKey, Sha256Hash};
+use log::{Event, PublicKey, Sha256Hash, Signature};
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::{RecvError, SendError};
@@ -24,8 +24,8 @@ impl Accountant {
         }
     }
 
-    pub fn process_event(self: &mut Self, event: Event<u64>) {
-        match event {
+    pub fn process_event(self: &mut Self, event: &Event<u64>) {
+        match *event {
             Event::Claim { key, data, .. } => {
                 if self.balances.contains_key(&key) {
                     if let Some(x) = self.balances.get_mut(&key) {
@@ -52,12 +52,31 @@ impl Accountant {
     }
 
     pub fn sync(self: &mut Self) {
+        let mut entries = vec![];
         while let Ok(entry) = self.historian.receiver.try_recv() {
-            assert!(verify_entry(&entry, &self.end_hash));
-            self.end_hash = entry.end_hash;
-
-            self.process_event(entry.event);
+            entries.push(entry);
         }
+        // TODO: Does this cause the historian's channel to get blocked?
+        //use log::verify_slice_u64;
+        //println!("accountant: verifying {} entries...", entries.len());
+        //assert!(verify_slice_u64(&entries, &self.end_hash));
+        //println!("accountant: Done verifying {} entries.", entries.len());
+        if let Some(last_entry) = entries.last() {
+            self.end_hash = last_entry.end_hash;
+        }
+        for e in &entries {
+            self.process_event(&e.event);
+        }
+    }
+
+    pub fn deposit_signed(
+        self: &Self,
+        key: PublicKey,
+        data: u64,
+        sig: Signature,
+    ) -> Result<(), SendError<Event<u64>>> {
+        let event = Event::Claim { key, data, sig };
+        self.historian.sender.send(event)
     }
 
     pub fn deposit(
@@ -65,8 +84,30 @@ impl Accountant {
         n: u64,
         keypair: &Ed25519KeyPair,
     ) -> Result<(), SendError<Event<u64>>> {
-        use log::sign_hash;
-        let event = sign_hash(n, &keypair);
+        use log::{get_pubkey, sign_serialized};
+        let key = get_pubkey(keypair);
+        let sig = sign_serialized(&n, keypair);
+        self.deposit_signed(key, n, sig)
+    }
+
+    pub fn transfer_signed(
+        self: &mut Self,
+        from: PublicKey,
+        to: PublicKey,
+        data: u64,
+        sig: Signature,
+    ) -> Result<(), SendError<Event<u64>>> {
+        if self.get_balance(&from).unwrap() < data {
+            // TODO: Replace the SendError result with a custom one.
+            println!("Error: Insufficient funds");
+            return Ok(());
+        }
+        let event = Event::Transaction {
+            from,
+            to,
+            data,
+            sig,
+        };
         self.historian.sender.send(event)
     }
 
@@ -74,17 +115,13 @@ impl Accountant {
         self: &mut Self,
         n: u64,
         keypair: &Ed25519KeyPair,
-        pubkey: PublicKey,
+        to: PublicKey,
     ) -> Result<(), SendError<Event<u64>>> {
-        use log::transfer_hash;
-        use generic_array::GenericArray;
+        use log::{get_pubkey, sign_transaction_data};
 
-        let sender_pubkey = GenericArray::clone_from_slice(keypair.public_key_bytes());
-        if self.get_balance(&sender_pubkey).unwrap() >= n {
-            let event = transfer_hash(n, keypair, pubkey);
-            return self.historian.sender.send(event);
-        }
-        Ok(())
+        let from = get_pubkey(keypair);
+        let sig = sign_transaction_data(&n, keypair, &to);
+        self.transfer_signed(from, to, n, sig)
     }
 
     pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> Result<u64, RecvError> {
@@ -98,9 +135,8 @@ mod tests {
     use super::*;
     use std::thread::sleep;
     use std::time::Duration;
-    use log::generate_keypair;
+    use log::{generate_keypair, get_pubkey};
     use historian::ExitReason;
-    use generic_array::GenericArray;
 
     #[test]
     fn test_accountant() {
@@ -112,7 +148,7 @@ mod tests {
         acc.deposit(1_000, &bob_keypair).unwrap();
 
         sleep(Duration::from_millis(30));
-        let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
+        let bob_pubkey = get_pubkey(&bob_keypair);
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
 
         sleep(Duration::from_millis(30));
@@ -135,11 +171,11 @@ mod tests {
         acc.deposit(1_000, &bob_keypair).unwrap();
 
         sleep(Duration::from_millis(30));
-        let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
+        let bob_pubkey = get_pubkey(&bob_keypair);
         acc.transfer(10_001, &alice_keypair, bob_pubkey).unwrap();
 
         sleep(Duration::from_millis(30));
-        let alice_pubkey = GenericArray::clone_from_slice(alice_keypair.public_key_bytes());
+        let alice_pubkey = get_pubkey(&alice_keypair);
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
@@ -151,14 +187,14 @@ mod tests {
     }
 
     #[test]
-    fn test_mulitple_claims() {
+    fn test_multiple_claims() {
         let zero = Sha256Hash::default();
         let mut acc = Accountant::new(&zero, Some(2));
         let keypair = generate_keypair();
         acc.deposit(1, &keypair).unwrap();
         acc.deposit(2, &keypair).unwrap();
 
-        let pubkey = GenericArray::clone_from_slice(keypair.public_key_bytes());
+        let pubkey = get_pubkey(&keypair);
         sleep(Duration::from_millis(30));
         assert_eq!(acc.get_balance(&pubkey).unwrap(), 3);
 
@@ -178,7 +214,7 @@ mod tests {
         acc.deposit(10_000, &alice_keypair).unwrap();
 
         sleep(Duration::from_millis(30));
-        let bob_pubkey = GenericArray::clone_from_slice(bob_keypair.public_key_bytes());
+        let bob_pubkey = get_pubkey(&bob_keypair);
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
 
         sleep(Duration::from_millis(30));
