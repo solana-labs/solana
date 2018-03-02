@@ -35,7 +35,7 @@ pub enum Event<T> {
         sig: Signature,
     },
     Transaction {
-        from: PublicKey,
+        from: Option<PublicKey>,
         to: PublicKey,
         data: T,
         sig: Signature,
@@ -106,7 +106,7 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     } = *event
     {
         let sign_data = serialize(&(&data, &to)).unwrap();
-        if !verify_signature(&from, &sign_data, &sig) {
+        if !verify_signature(&from.unwrap_or(to), &sign_data, &sig) {
             return false;
         }
     }
