@@ -26,5 +26,7 @@ fn main() {
     for entry in &entries {
         println!("{:?}", entry);
     }
+    // Proof-of-History: Verify the historian learned about the events
+    // in the same order they appear in the vector.
     assert!(verify_slice(&entries, &seed));
 }
