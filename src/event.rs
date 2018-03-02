@@ -29,11 +29,6 @@ pub type Signature = GenericArray<u8, U64>;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event<T> {
     Tick,
-    Claim {
-        to: PublicKey,
-        data: T,
-        sig: Signature,
-    },
     Transaction {
         from: Option<PublicKey>,
         to: PublicKey,
@@ -44,14 +39,12 @@ pub enum Event<T> {
 
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
-        // TODO: Change this to a Transaction
-        Event::Claim { to, data, sig }
-        //Event::Transaction {
-        //    from: None,
-        //    to,
-        //    data,
-        //    sig,
-        //}
+        Event::Transaction {
+            from: None,
+            to,
+            data,
+            sig,
+        }
     }
 }
 
@@ -103,19 +96,12 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
 pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
     match *event {
         Event::Tick => None,
-        Event::Claim { sig, .. } => Some(sig),
         Event::Transaction { sig, .. } => Some(sig),
     }
 }
 
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     use bincode::serialize;
-    if let Event::Claim { to, ref data, sig } = *event {
-        let sign_data = serialize(&(&data, &to)).unwrap();
-        if !verify_signature(&to, &sign_data, &sig) {
-            return false;
-        }
-    }
     if let Event::Transaction {
         from,
         to,

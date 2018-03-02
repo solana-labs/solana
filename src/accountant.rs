@@ -137,7 +137,6 @@ impl Accountant {
         let mut found = false;
         while !found {
             found = entries.iter().any(|e| match e.event {
-                Event::Claim { sig, .. } => sig == *wait_sig,
                 Event::Transaction { sig, .. } => sig == *wait_sig,
                 _ => false,
             });
