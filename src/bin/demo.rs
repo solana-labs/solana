@@ -1,8 +1,8 @@
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::log::{generate_keypair, get_pubkey, sign_serialized, verify_slice, Entry, Event,
-                Sha256Hash};
+use silk::log::{verify_slice, Entry, Sha256Hash};
+use silk::event::{generate_keypair, get_pubkey, sign_serialized, Event};
 use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;

@@ -4,7 +4,7 @@ fn main() {
     use silk::accountant_stub::AccountantStub;
     use std::time::Instant;
     use std::net::UdpSocket;
-    use silk::log::{generate_keypair, get_pubkey};
+    use silk::event::{generate_keypair, get_pubkey};
 
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";

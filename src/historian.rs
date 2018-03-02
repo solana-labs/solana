@@ -9,7 +9,8 @@ use std::thread::JoinHandle;
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, SystemTime};
-use log::{get_signature, hash, hash_event, verify_event, Entry, Event, Sha256Hash, Signature};
+use log::{hash, hash_event, Entry, Sha256Hash};
+use event::{get_signature, verify_event, Event, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
 
@@ -141,6 +142,7 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
 mod tests {
     use super::*;
     use log::*;
+    use event::*;
     use std::thread::sleep;
     use std::time::Duration;
 

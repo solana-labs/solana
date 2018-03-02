@@ -2,7 +2,8 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{Entry, Event, PublicKey, Sha256Hash, Signature};
+use log::{Entry, Sha256Hash};
+use event::{Event, PublicKey, Signature};
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::{RecvError, SendError};
@@ -86,7 +87,7 @@ impl Accountant {
         n: u64,
         keypair: &Ed25519KeyPair,
     ) -> Result<Signature, SendError<Event<u64>>> {
-        use log::{get_pubkey, sign_serialized};
+        use event::{get_pubkey, sign_serialized};
         let key = get_pubkey(keypair);
         let sig = sign_serialized(&n, keypair);
         self.deposit_signed(key, n, sig).map(|_| sig)
@@ -119,7 +120,7 @@ impl Accountant {
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> Result<Signature, SendError<Event<u64>>> {
-        use log::{get_pubkey, sign_transaction_data};
+        use event::{get_pubkey, sign_transaction_data};
 
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
@@ -153,7 +154,7 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::{generate_keypair, get_pubkey};
+    use event::{generate_keypair, get_pubkey};
     use historian::ExitReason;
 
     #[test]
