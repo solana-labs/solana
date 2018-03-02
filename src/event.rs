@@ -124,19 +124,12 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
 mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
-    use log::{hash, Sha256Hash};
 
     #[test]
     fn test_serialize_claim() {
-        //let claim0 = Event::new_claim(Default::default(), 0u8, Default::default());
-        let claim0 = Event::Transaction {
-            from: None,
-            to: Default::default(),
-            data: hash(b"hi"),
-            sig: Default::default(),
-        };
+        let claim0 = Event::new_claim(Default::default(), 0u8, Default::default());
         let buf = serialize(&claim0).unwrap();
-        let claim1: Event<Sha256Hash> = deserialize(&buf).unwrap();
+        let claim1: Event<u8> = deserialize(&buf).unwrap();
         assert_eq!(claim1, claim0);
     }
 }
