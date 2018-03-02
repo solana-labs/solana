@@ -101,18 +101,24 @@ pub fn hash(val: &[u8]) -> Sha256Hash {
 }
 
 /// Return the hash of the given hash extended with the given value.
-pub fn extend_and_hash(end_hash: &Sha256Hash, ty: u8, val: &[u8]) -> Sha256Hash {
+pub fn extend_and_hash(end_hash: &Sha256Hash, val: &[u8]) -> Sha256Hash {
     let mut hash_data = end_hash.to_vec();
-    hash_data.push(ty);
     hash_data.extend_from_slice(val);
     hash(&hash_data)
 }
 
-pub fn hash_event<T>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
+pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
     match *event {
-        Event::Tick => *end_hash,
-        Event::Claim { sig, .. } => extend_and_hash(end_hash, 2, &sig),
-        Event::Transaction { sig, .. } => extend_and_hash(end_hash, 3, &sig),
+        Event::Tick => None,
+        Event::Claim { sig, .. } => Some(sig),
+        Event::Transaction { sig, .. } => Some(sig),
+    }
+}
+
+pub fn hash_event<T>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
+    match get_signature(event) {
+        None => *end_hash,
+        Some(sig) => extend_and_hash(end_hash, &sig),
     }
 }
 
