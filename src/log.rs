@@ -209,24 +209,15 @@ mod tests {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
 
-        // First, verify Claim events
+        // First, verify entries
         let keypair = generate_keypair();
-        let event0 = Event::Claim {
-            to: get_pubkey(&keypair),
-            data: zero,
-            sig: sign_serialized(&zero, &keypair),
-        };
-
-        let event1 = Event::Claim {
-            to: get_pubkey(&keypair),
-            data: one,
-            sig: sign_serialized(&one, &keypair),
-        };
+        let event0 = Event::new_claim(get_pubkey(&keypair), zero, sign_serialized(&zero, &keypair));
+        let event1 = Event::new_claim(get_pubkey(&keypair), one, sign_serialized(&one, &keypair));
         let events = vec![event0, event1];
         let mut entries = create_entries(&zero, 0, events);
         assert!(verify_slice(&entries, &zero));
 
-        // Next, swap two Claim events and ensure verification fails.
+        // Next, swap two events and ensure verification fails.
         let event0 = entries[0].event.clone();
         let event1 = entries[1].event.clone();
         entries[0].event = event1;
@@ -238,11 +229,7 @@ mod tests {
     fn test_claim() {
         let keypair = generate_keypair();
         let data = hash(b"hello, world");
-        let event0 = Event::Claim {
-            to: get_pubkey(&keypair),
-            data,
-            sig: sign_serialized(&data, &keypair),
-        };
+        let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_serialized(&data, &keypair));
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -251,11 +238,11 @@ mod tests {
     #[test]
     fn test_wrong_data_claim_attack() {
         let keypair = generate_keypair();
-        let event0 = Event::Claim {
-            to: get_pubkey(&keypair),
-            data: hash(b"goodbye cruel world"),
-            sig: sign_serialized(&hash(b"hello, world"), &keypair),
-        };
+        let event0 = Event::new_claim(
+            get_pubkey(&keypair),
+            hash(b"goodbye cruel world"),
+            sign_serialized(&hash(b"hello, world"), &keypair),
+        );
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(!verify_slice(&entries, &zero));

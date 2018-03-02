@@ -42,6 +42,12 @@ pub enum Event<T> {
     },
 }
 
+impl<T> Event<T> {
+    pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
+        Event::Claim { to, data, sig }
+    }
+}
+
 /// Return a new ED25519 keypair
 pub fn generate_keypair() -> Ed25519KeyPair {
     use ring::{rand, signature};

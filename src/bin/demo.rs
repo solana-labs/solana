@@ -11,11 +11,7 @@ fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256
     sleep(Duration::from_millis(15));
     let data = Sha256Hash::default();
     let keypair = generate_keypair();
-    let event0 = Event::Claim {
-        to: get_pubkey(&keypair),
-        data,
-        sig: sign_serialized(&data, &keypair),
-    };
+    let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_serialized(&data, &keypair));
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));
     Ok(())

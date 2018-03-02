@@ -49,7 +49,7 @@ impl Accountant {
     }
 
     pub fn deposit_signed(self: &mut Self, to: PublicKey, data: u64, sig: Signature) -> Result<()> {
-        let event = Event::Claim { to, data, sig };
+        let event = Event::new_claim(to, data, sig);
         if !self.historian.verify_event(&event) {
             return Err(AccountingError::InvalidEvent);
         }

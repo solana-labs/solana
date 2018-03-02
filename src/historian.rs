@@ -215,11 +215,7 @@ mod tests {
     fn test_bad_event_signature() {
         let keypair = generate_keypair();
         let sig = sign_serialized(&hash(b"hello, world"), &keypair);
-        let event0 = Event::Claim {
-            to: get_pubkey(&keypair),
-            data: hash(b"goodbye cruel world"),
-            sig,
-        };
+        let event0 = Event::new_claim(get_pubkey(&keypair), hash(b"goodbye cruel world"), sig);
         let mut sigs = HashSet::new();
         assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
         assert!(!sigs.contains(&sig));
@@ -231,7 +227,7 @@ mod tests {
         let to = get_pubkey(&keypair);
         let data = &hash(b"hello, world");
         let sig = sign_serialized(data, &keypair);
-        let event0 = Event::Claim { to, data, sig };
+        let event0 = Event::new_claim(to, data, sig);
         let mut sigs = HashSet::new();
         assert!(verify_event_and_reserve_signature(&mut sigs, &event0));
         assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
