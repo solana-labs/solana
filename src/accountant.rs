@@ -57,14 +57,11 @@ impl Accountant {
         while let Ok(entry) = self.historian.receiver.try_recv() {
             entries.push(entry);
         }
-        // TODO: Does this cause the historian's channel to get blocked?
-        //use log::verify_slice_u64;
-        //println!("accountant: verifying {} entries...", entries.len());
-        //assert!(verify_slice_u64(&entries, &self.end_hash));
-        //println!("accountant: Done verifying {} entries.", entries.len());
+
         if let Some(last_entry) = entries.last() {
             self.end_hash = last_entry.end_hash;
         }
+
         for e in &entries {
             self.process_event(&e.event);
         }
