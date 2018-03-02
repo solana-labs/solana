@@ -211,8 +211,8 @@ mod tests {
 
         // First, verify entries
         let keypair = generate_keypair();
-        let event0 = Event::new_claim(get_pubkey(&keypair), zero, sign_serialized(&zero, &keypair));
-        let event1 = Event::new_claim(get_pubkey(&keypair), one, sign_serialized(&one, &keypair));
+        let event0 = Event::new_claim(get_pubkey(&keypair), zero, sign_claim_data(&zero, &keypair));
+        let event1 = Event::new_claim(get_pubkey(&keypair), one, sign_claim_data(&one, &keypair));
         let events = vec![event0, event1];
         let mut entries = create_entries(&zero, 0, events);
         assert!(verify_slice(&entries, &zero));
@@ -229,7 +229,7 @@ mod tests {
     fn test_claim() {
         let keypair = generate_keypair();
         let data = hash(b"hello, world");
-        let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_serialized(&data, &keypair));
+        let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_claim_data(&data, &keypair));
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -241,7 +241,7 @@ mod tests {
         let event0 = Event::new_claim(
             get_pubkey(&keypair),
             hash(b"goodbye cruel world"),
-            sign_serialized(&hash(b"hello, world"), &keypair),
+            sign_claim_data(&hash(b"hello, world"), &keypair),
         );
         let zero = Sha256Hash::default();
         let entries = create_entries(&zero, 0, vec![event0]);

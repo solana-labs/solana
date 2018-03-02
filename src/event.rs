@@ -44,7 +44,14 @@ pub enum Event<T> {
 
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
+        // TODO: Change this to a Transaction
         Event::Claim { to, data, sig }
+        //Event::Transaction {
+        //    from: None,
+        //    to,
+        //    data,
+        //    sig,
+        //}
     }
 }
 
@@ -63,7 +70,7 @@ pub fn get_pubkey(keypair: &Ed25519KeyPair) -> PublicKey {
 }
 
 /// Return a signature for the given data using the private key from the given keypair.
-pub fn sign_serialized<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
+fn sign_serialized<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
     use bincode::serialize;
     let serialized = serialize(data).unwrap();
     GenericArray::clone_from_slice(keypair.sign(&serialized).as_ref())
@@ -76,6 +83,11 @@ pub fn sign_transaction_data<T: Serialize>(
     to: &PublicKey,
 ) -> Signature {
     sign_serialized(&(data, to), keypair)
+}
+
+/// Return a signature for the given data using the private key from the given keypair.
+pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
+    sign_transaction_data(data, keypair, &get_pubkey(keypair))
 }
 
 /// Verify a signed message with the given public key.
@@ -99,8 +111,8 @@ pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     use bincode::serialize;
     if let Event::Claim { to, ref data, sig } = *event {
-        let mut claim_data = serialize(&data).unwrap();
-        if !verify_signature(&to, &claim_data, &sig) {
+        let sign_data = serialize(&(&data, &to)).unwrap();
+        if !verify_signature(&to, &sign_data, &sig) {
             return false;
         }
     }
@@ -117,4 +129,25 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bincode::{deserialize, serialize};
+    use log::{hash, Sha256Hash};
+
+    #[test]
+    fn test_serialize_claim() {
+        //let claim0 = Event::new_claim(Default::default(), 0u8, Default::default());
+        let claim0 = Event::Transaction {
+            from: None,
+            to: Default::default(),
+            data: hash(b"hi"),
+            sig: Default::default(),
+        };
+        let buf = serialize(&claim0).unwrap();
+        let claim1: Event<Sha256Hash> = deserialize(&buf).unwrap();
+        assert_eq!(claim1, claim0);
+    }
 }

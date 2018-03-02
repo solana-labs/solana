@@ -34,9 +34,9 @@ impl AccountantStub {
     }
 
     pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
-        use event::{get_pubkey, sign_serialized};
+        use event::{get_pubkey, sign_claim_data};
         let key = get_pubkey(keypair);
-        let sig = sign_serialized(&n, keypair);
+        let sig = sign_claim_data(&n, keypair);
         self.deposit_signed(key, n, sig).map(|_| sig)
     }
 
