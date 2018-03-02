@@ -8,6 +8,16 @@ use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
+use std::result;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum AccountingError {
+    InsufficientFunds,
+    InvalidEvent,
+    SendError,
+}
+
+pub type Result<T> = result::Result<T, AccountingError>;
 
 pub struct Accountant {
     pub historian: Historian<u64>,
@@ -43,12 +53,13 @@ impl Accountant {
         key: PublicKey,
         data: u64,
         sig: Signature,
-    ) -> Result<(), SendError<Event<u64>>> {
+    ) -> Result<()> {
         let event = Event::Claim { key, data, sig };
         if !self.historian.verify_event(&event) {
-            // TODO: Replace the SendError result with a custom one.
-            println!("Rejecting transaction: Invalid event");
-            return Ok(());
+            return Err(AccountingError::InvalidEvent);
+        }
+        if let Err(SendError(_)) = self.historian.sender.send(event) {
+            return Err(AccountingError::SendError);
         }
 
         if self.balances.contains_key(&key) {
@@ -59,14 +70,10 @@ impl Accountant {
             self.balances.insert(key, data);
         }
 
-        self.historian.sender.send(event)
+        Ok(())
     }
 
-    pub fn deposit(
-        self: &mut Self,
-        n: u64,
-        keypair: &Ed25519KeyPair,
-    ) -> Result<Signature, SendError<Event<u64>>> {
+    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> Result<Signature> {
         use event::{get_pubkey, sign_serialized};
         let key = get_pubkey(keypair);
         let sig = sign_serialized(&n, keypair);
@@ -79,7 +86,11 @@ impl Accountant {
         to: PublicKey,
         data: u64,
         sig: Signature,
-    ) -> Result<(), SendError<Event<u64>>> {
+    ) -> Result<()> {
+        if self.get_balance(&from).unwrap_or(0) < data {
+            return Err(AccountingError::InsufficientFunds);
+        }
+
         let event = Event::Transaction {
             from,
             to,
@@ -87,15 +98,10 @@ impl Accountant {
             sig,
         };
         if !self.historian.verify_event(&event) {
-            // TODO: Replace the SendError result with a custom one.
-            println!("Rejecting transaction: Invalid event");
-            return Ok(());
+            return Err(AccountingError::InvalidEvent);
         }
-
-        if self.get_balance(&from).unwrap_or(0) < data {
-            // TODO: Replace the SendError result with a custom one.
-            println!("Rejecting transaction: Insufficient funds");
-            return Ok(());
+        if let Err(SendError(_)) = self.historian.sender.send(event) {
+            return Err(AccountingError::SendError);
         }
 
         if let Some(x) = self.balances.get_mut(&from) {
@@ -110,7 +116,7 @@ impl Accountant {
             self.balances.insert(to, data);
         }
 
-        self.historian.sender.send(event)
+        Ok(())
     }
 
     pub fn transfer(
@@ -118,7 +124,7 @@ impl Accountant {
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
-    ) -> Result<Signature, SendError<Event<u64>>> {
+    ) -> Result<Signature> {
         use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
@@ -190,7 +196,10 @@ mod tests {
         acc.wait_on_signature(&sig);
 
         let bob_pubkey = get_pubkey(&bob_keypair);
-        acc.transfer(10_001, &alice_keypair, bob_pubkey).unwrap();
+        assert_eq!(
+            acc.transfer(10_001, &alice_keypair, bob_pubkey),
+            Err(AccountingError::InsufficientFunds)
+        );
         sleep(Duration::from_millis(30));
 
         let alice_pubkey = get_pubkey(&alice_keypair);
