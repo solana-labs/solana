@@ -12,7 +12,7 @@ fn main() {
     let mut acc = AccountantStub::new(addr, socket);
     let alice_keypair = generate_keypair();
     let alice_pubkey = get_pubkey(&alice_keypair);
-    let txs = 10_000;
+    let txs = 2_000;
     println!("Depositing {} units in Alice's account...", txs);
     let sig = acc.deposit(txs, &alice_keypair).unwrap();
     acc.wait_on_signature(&sig).unwrap();
