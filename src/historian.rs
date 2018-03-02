@@ -141,7 +141,7 @@ mod tests {
 
         hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::Discovery { data: zero }).unwrap();
+        hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::Tick).unwrap();
 
@@ -175,7 +175,7 @@ mod tests {
         let zero = Sha256Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
-        hist.sender.send(Event::Discovery { data: zero }).unwrap();
+        hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::from_millis(15));
         drop(hist.sender);
         assert_eq!(
