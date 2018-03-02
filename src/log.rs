@@ -37,9 +37,6 @@ pub struct Entry<T> {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event<T> {
     Tick,
-    Discovery {
-        data: T,
-    },
     Claim {
         key: PublicKey,
         data: T,
@@ -104,36 +101,24 @@ pub fn hash(val: &[u8]) -> Sha256Hash {
 }
 
 /// Return the hash of the given hash extended with the given value.
-pub fn extend_and_hash(end_hash: &Sha256Hash, ty: u8, val: &[u8]) -> Sha256Hash {
+pub fn extend_and_hash(end_hash: &Sha256Hash, val: &[u8]) -> Sha256Hash {
     let mut hash_data = end_hash.to_vec();
-    hash_data.push(ty);
     hash_data.extend_from_slice(val);
     hash(&hash_data)
 }
 
-pub fn hash_event<T: Serialize>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
-    use bincode::serialize;
+pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
     match *event {
-        Event::Tick => *end_hash,
-        Event::Discovery { ref data } => extend_and_hash(end_hash, 1, &serialize(&data).unwrap()),
-        Event::Claim { key, ref data, sig } => {
-            let mut event_data = serialize(&data).unwrap();
-            event_data.extend_from_slice(&sig);
-            event_data.extend_from_slice(&key);
-            extend_and_hash(end_hash, 2, &event_data)
-        }
-        Event::Transaction {
-            from,
-            to,
-            ref data,
-            sig,
-        } => {
-            let mut event_data = serialize(&data).unwrap();
-            event_data.extend_from_slice(&sig);
-            event_data.extend_from_slice(&from);
-            event_data.extend_from_slice(&to);
-            extend_and_hash(end_hash, 2, &event_data)
-        }
+        Event::Tick => None,
+        Event::Claim { sig, .. } => Some(sig),
+        Event::Transaction { sig, .. } => Some(sig),
+    }
+}
+
+pub fn hash_event<T>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
+    match get_signature(event) {
+        None => *end_hash,
+        Some(sig) => extend_and_hash(end_hash, &sig),
     }
 }
 
@@ -318,15 +303,24 @@ mod tests {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
 
-        // First, verify Discovery events
-        let events = vec![
-            Event::Discovery { data: zero },
-            Event::Discovery { data: one },
-        ];
+        // First, verify Claim events
+        let keypair = generate_keypair();
+        let event0 = Event::Claim {
+            key: get_pubkey(&keypair),
+            data: zero,
+            sig: sign_serialized(&zero, &keypair),
+        };
+
+        let event1 = Event::Claim {
+            key: get_pubkey(&keypair),
+            data: one,
+            sig: sign_serialized(&one, &keypair),
+        };
+        let events = vec![event0, event1];
         let mut entries = create_entries(&zero, 0, events);
         assert!(verify_slice(&entries, &zero));
 
-        // Next, swap two Discovery events and ensure verification fails.
+        // Next, swap two Claim events and ensure verification fails.
         let event0 = entries[0].event.clone();
         let event1 = entries[1].event.clone();
         entries[0].event = event1;

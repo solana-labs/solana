@@ -6,9 +6,10 @@
 //! The resulting stream of entries represents ordered events in time.
 
 use std::thread::JoinHandle;
+use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, SystemTime};
-use log::{hash, hash_event, verify_event, Entry, Event, Sha256Hash};
+use log::{get_signature, hash, hash_event, verify_event, Entry, Event, Sha256Hash, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
 
@@ -45,6 +46,7 @@ fn log_event<T: Serialize + Clone + Debug>(
 fn log_events<T: Serialize + Clone + Debug>(
     receiver: &Receiver<Event<T>>,
     sender: &SyncSender<Entry<T>>,
+    signatures: &mut HashMap<Signature, bool>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     epoch: SystemTime,
@@ -63,6 +65,12 @@ fn log_events<T: Serialize + Clone + Debug>(
         match receiver.try_recv() {
             Ok(event) => {
                 if verify_event(&event) {
+                    if let Some(sig) = get_signature(&event) {
+                        if signatures.contains_key(&sig) {
+                            continue;
+                        }
+                        signatures.insert(sig, true);
+                    }
                     log_event(sender, num_hashes, end_hash, event)?;
                 }
             }
@@ -94,11 +102,13 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
         let mut end_hash = start_hash;
         let mut num_hashes = 0;
         let mut num_ticks = 0;
+        let mut signatures = HashMap::new();
         let epoch = SystemTime::now();
         loop {
             if let Err(err) = log_events(
                 &receiver,
                 &sender,
+                &mut signatures,
                 &mut num_hashes,
                 &mut end_hash,
                 epoch,
@@ -141,7 +151,7 @@ mod tests {
 
         hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::Discovery { data: zero }).unwrap();
+        hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
         hist.sender.send(Event::Tick).unwrap();
 
@@ -175,7 +185,7 @@ mod tests {
         let zero = Sha256Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
-        hist.sender.send(Event::Discovery { data: zero }).unwrap();
+        hist.sender.send(Event::Tick).unwrap();
         sleep(Duration::from_millis(15));
         drop(hist.sender);
         assert_eq!(

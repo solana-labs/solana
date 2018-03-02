@@ -11,7 +11,6 @@ use std::collections::HashMap;
 pub struct Accountant {
     pub historian: Historian<u64>,
     pub balances: HashMap<PublicKey, u64>,
-    pub signatures: HashMap<Signature, bool>,
     pub end_hash: Sha256Hash,
 }
 
@@ -21,19 +20,13 @@ impl Accountant {
         Accountant {
             historian: hist,
             balances: HashMap::new(),
-            signatures: HashMap::new(),
             end_hash: *start_hash,
         }
     }
 
     pub fn process_event(self: &mut Self, event: &Event<u64>) {
         match *event {
-            Event::Claim { key, data, sig } => {
-                if self.signatures.contains_key(&sig) {
-                    return;
-                }
-                self.signatures.insert(sig, true);
-
+            Event::Claim { key, data, .. } => {
                 if self.balances.contains_key(&key) {
                     if let Some(x) = self.balances.get_mut(&key) {
                         *x += data;
@@ -42,16 +35,7 @@ impl Accountant {
                     self.balances.insert(key, data);
                 }
             }
-            Event::Transaction {
-                from,
-                to,
-                data,
-                sig,
-            } => {
-                if self.signatures.contains_key(&sig) {
-                    return;
-                }
-                self.signatures.insert(sig, true);
+            Event::Transaction { from, to, data, .. } => {
                 if let Some(x) = self.balances.get_mut(&from) {
                     *x -= data;
                 }
