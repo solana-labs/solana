@@ -1,6 +1,6 @@
 use std::io;
 use accountant::Accountant;
-use log::{PublicKey, Signature};
+use event::{PublicKey, Signature};
 //use serde::Serialize;
 
 pub struct AccountantSkel {

@@ -2,11 +2,22 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{Entry, Event, PublicKey, Sha256Hash, Signature};
+use log::{Entry, Sha256Hash};
+use event::{Event, PublicKey, Signature};
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
-use std::sync::mpsc::{RecvError, SendError};
+use std::sync::mpsc::SendError;
 use std::collections::HashMap;
+use std::result;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum AccountingError {
+    InsufficientFunds,
+    InvalidEvent,
+    SendError,
+}
+
+pub type Result<T> = result::Result<T, AccountingError>;
 
 pub struct Accountant {
     pub historian: Historian<u64>,
@@ -24,71 +35,43 @@ impl Accountant {
         }
     }
 
-    pub fn process_event(self: &mut Self, event: &Event<u64>) {
-        match *event {
-            Event::Claim { key, data, .. } => {
-                if self.balances.contains_key(&key) {
-                    if let Some(x) = self.balances.get_mut(&key) {
-                        *x += data;
-                    }
-                } else {
-                    self.balances.insert(key, data);
-                }
-            }
-            Event::Transaction { from, to, data, .. } => {
-                if let Some(x) = self.balances.get_mut(&from) {
-                    *x -= data;
-                }
-                if self.balances.contains_key(&to) {
-                    if let Some(x) = self.balances.get_mut(&to) {
-                        *x += data;
-                    }
-                } else {
-                    self.balances.insert(to, data);
-                }
-            }
-            _ => (),
-        }
-    }
-
     pub fn sync(self: &mut Self) -> Vec<Entry<u64>> {
         let mut entries = vec![];
         while let Ok(entry) = self.historian.receiver.try_recv() {
             entries.push(entry);
         }
-        // TODO: Does this cause the historian's channel to get blocked?
-        //use log::verify_slice_u64;
-        //println!("accountant: verifying {} entries...", entries.len());
-        //assert!(verify_slice_u64(&entries, &self.end_hash));
-        //println!("accountant: Done verifying {} entries.", entries.len());
+
         if let Some(last_entry) = entries.last() {
             self.end_hash = last_entry.end_hash;
-        }
-        for e in &entries {
-            self.process_event(&e.event);
         }
 
         entries
     }
 
-    pub fn deposit_signed(
-        self: &Self,
-        key: PublicKey,
-        data: u64,
-        sig: Signature,
-    ) -> Result<(), SendError<Event<u64>>> {
-        let event = Event::Claim { key, data, sig };
-        self.historian.sender.send(event)
+    pub fn deposit_signed(self: &mut Self, to: PublicKey, data: u64, sig: Signature) -> Result<()> {
+        let event = Event::new_claim(to, data, sig);
+        if !self.historian.verify_event(&event) {
+            return Err(AccountingError::InvalidEvent);
+        }
+        if let Err(SendError(_)) = self.historian.sender.send(event) {
+            return Err(AccountingError::SendError);
+        }
+
+        if self.balances.contains_key(&to) {
+            if let Some(x) = self.balances.get_mut(&to) {
+                *x += data;
+            }
+        } else {
+            self.balances.insert(to, data);
+        }
+
+        Ok(())
     }
 
-    pub fn deposit(
-        self: &Self,
-        n: u64,
-        keypair: &Ed25519KeyPair,
-    ) -> Result<Signature, SendError<Event<u64>>> {
-        use log::{get_pubkey, sign_serialized};
+    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> Result<Signature> {
+        use event::{get_pubkey, sign_claim_data};
         let key = get_pubkey(keypair);
-        let sig = sign_serialized(&n, keypair);
+        let sig = sign_claim_data(&n, keypair);
         self.deposit_signed(key, n, sig).map(|_| sig)
     }
 
@@ -98,19 +81,37 @@ impl Accountant {
         to: PublicKey,
         data: u64,
         sig: Signature,
-    ) -> Result<(), SendError<Event<u64>>> {
-        if self.get_balance(&from).unwrap() < data {
-            // TODO: Replace the SendError result with a custom one.
-            println!("Error: Insufficient funds");
-            return Ok(());
+    ) -> Result<()> {
+        if self.get_balance(&from).unwrap_or(0) < data {
+            return Err(AccountingError::InsufficientFunds);
         }
+
         let event = Event::Transaction {
-            from,
+            from: Some(from),
             to,
             data,
             sig,
         };
-        self.historian.sender.send(event)
+        if !self.historian.verify_event(&event) {
+            return Err(AccountingError::InvalidEvent);
+        }
+        if let Err(SendError(_)) = self.historian.sender.send(event) {
+            return Err(AccountingError::SendError);
+        }
+
+        if let Some(x) = self.balances.get_mut(&from) {
+            *x -= data;
+        }
+
+        if self.balances.contains_key(&to) {
+            if let Some(x) = self.balances.get_mut(&to) {
+                *x += data;
+            }
+        } else {
+            self.balances.insert(to, data);
+        }
+
+        Ok(())
     }
 
     pub fn transfer(
@@ -118,17 +119,15 @@ impl Accountant {
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
-    ) -> Result<Signature, SendError<Event<u64>>> {
-        use log::{get_pubkey, sign_transaction_data};
-
+    ) -> Result<Signature> {
+        use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
         self.transfer_signed(from, to, n, sig).map(|_| sig)
     }
 
-    pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> Result<u64, RecvError> {
-        self.sync();
-        Ok(*self.balances.get(pubkey).unwrap_or(&0))
+    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<u64> {
+        self.balances.get(pubkey).map(|x| *x)
     }
 
     pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) {
@@ -138,7 +137,6 @@ impl Accountant {
         let mut found = false;
         while !found {
             found = entries.iter().any(|e| match e.event {
-                Event::Claim { sig, .. } => sig == *wait_sig,
                 Event::Transaction { sig, .. } => sig == *wait_sig,
                 _ => false,
             });
@@ -153,7 +151,7 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::{generate_keypair, get_pubkey};
+    use event::{generate_keypair, get_pubkey};
     use historian::ExitReason;
 
     #[test]
@@ -192,7 +190,10 @@ mod tests {
         acc.wait_on_signature(&sig);
 
         let bob_pubkey = get_pubkey(&bob_keypair);
-        acc.transfer(10_001, &alice_keypair, bob_pubkey).unwrap();
+        assert_eq!(
+            acc.transfer(10_001, &alice_keypair, bob_pubkey),
+            Err(AccountingError::InsufficientFunds)
+        );
         sleep(Duration::from_millis(30));
 
         let alice_pubkey = get_pubkey(&alice_keypair);

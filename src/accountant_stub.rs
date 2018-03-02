@@ -5,7 +5,7 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use log::{PublicKey, Signature};
+use event::{PublicKey, Signature};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 
@@ -34,9 +34,9 @@ impl AccountantStub {
     }
 
     pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
-        use log::{get_pubkey, sign_serialized};
+        use event::{get_pubkey, sign_claim_data};
         let key = get_pubkey(keypair);
-        let sig = sign_serialized(&n, keypair);
+        let sig = sign_claim_data(&n, keypair);
         self.deposit_signed(key, n, sig).map(|_| sig)
     }
 
@@ -58,7 +58,7 @@ impl AccountantStub {
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> io::Result<Signature> {
-        use log::{get_pubkey, sign_transaction_data};
+        use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
         self.transfer_signed(from, to, n, sig).map(|_| sig)
@@ -100,7 +100,8 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use log::{generate_keypair, get_pubkey, Sha256Hash};
+    use log::Sha256Hash;
+    use event::{generate_keypair, get_pubkey};
 
     #[test]
     fn test_accountant_stub() {
