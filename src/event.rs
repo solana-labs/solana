@@ -75,12 +75,15 @@ pub fn sign_transaction_data<T: Serialize>(
     keypair: &Ed25519KeyPair,
     to: &PublicKey,
 ) -> Signature {
-    sign_serialized(&(data, to), keypair)
+    let from = &Some(get_pubkey(keypair));
+    sign_serialized(&(from, to, data), keypair)
 }
 
 /// Return a signature for the given data using the private key from the given keypair.
 pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
-    sign_transaction_data(data, keypair, &get_pubkey(keypair))
+    let to = get_pubkey(keypair);
+    let from: Option<PublicKey> = None;
+    sign_serialized(&(&from, &to, data), keypair)
 }
 
 /// Verify a signed message with the given public key.
@@ -109,7 +112,7 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
         sig,
     } = *event
     {
-        let sign_data = serialize(&(&data, &to)).unwrap();
+        let sign_data = serialize(&(&from, &to, &data)).unwrap();
         if !verify_signature(&from.unwrap_or(to), &sign_data, &sig) {
             return false;
         }
