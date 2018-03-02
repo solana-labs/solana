@@ -6,7 +6,7 @@
 //! The resulting stream of entries represents ordered events in time.
 
 use std::thread::JoinHandle;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::time::{Duration, SystemTime};
 use log::{hash, hash_event, Entry, Sha256Hash};
@@ -18,6 +18,7 @@ pub struct Historian<T> {
     pub sender: SyncSender<Event<T>>,
     pub receiver: Receiver<Entry<T>>,
     pub thread_hdl: JoinHandle<(Entry<T>, ExitReason)>,
+    pub signatures: HashSet<Signature>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -44,10 +45,25 @@ fn log_event<T: Serialize + Clone + Debug>(
     Ok(())
 }
 
+fn verify_event_and_reserve_signature<T: Serialize>(
+    signatures: &mut HashSet<Signature>,
+    event: &Event<T>,
+) -> bool {
+    if !verify_event(&event) {
+        return false;
+    }
+    if let Some(sig) = get_signature(&event) {
+        if signatures.contains(&sig) {
+            return false;
+        }
+        signatures.insert(sig);
+    }
+    true
+}
+
 fn log_events<T: Serialize + Clone + Debug>(
     receiver: &Receiver<Event<T>>,
     sender: &SyncSender<Entry<T>>,
-    signatures: &mut HashMap<Signature, bool>,
     num_hashes: &mut u64,
     end_hash: &mut Sha256Hash,
     epoch: SystemTime,
@@ -65,15 +81,7 @@ fn log_events<T: Serialize + Clone + Debug>(
         }
         match receiver.try_recv() {
             Ok(event) => {
-                if verify_event(&event) {
-                    if let Some(sig) = get_signature(&event) {
-                        if signatures.contains_key(&sig) {
-                            continue;
-                        }
-                        signatures.insert(sig, true);
-                    }
-                    log_event(sender, num_hashes, end_hash, event)?;
-                }
+                log_event(sender, num_hashes, end_hash, event)?;
             }
             Err(TryRecvError::Empty) => {
                 return Ok(());
@@ -103,13 +111,11 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
         let mut end_hash = start_hash;
         let mut num_hashes = 0;
         let mut num_ticks = 0;
-        let mut signatures = HashMap::new();
         let epoch = SystemTime::now();
         loop {
             if let Err(err) = log_events(
                 &receiver,
                 &sender,
-                &mut signatures,
                 &mut num_hashes,
                 &mut end_hash,
                 epoch,
@@ -130,11 +136,16 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
         let thread_hdl = create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
+        let signatures = HashSet::new();
         Historian {
             sender,
             receiver,
             thread_hdl,
+            signatures,
         }
+    }
+    pub fn verify_event(self: &mut Self, event: &Event<T>) -> bool {
+        return verify_event_and_reserve_signature(&mut self.signatures, event);
     }
 }
 
@@ -201,22 +212,28 @@ mod tests {
     }
 
     #[test]
-    fn test_bad_event_attack() {
-        let zero = Sha256Hash::default();
-        let hist = Historian::new(&zero, None);
+    fn test_bad_event_signature() {
         let keypair = generate_keypair();
+        let sig = sign_serialized(&hash(b"hello, world"), &keypair);
         let event0 = Event::Claim {
             key: get_pubkey(&keypair),
             data: hash(b"goodbye cruel world"),
-            sig: sign_serialized(&hash(b"hello, world"), &keypair),
+            sig,
         };
-        hist.sender.send(event0).unwrap();
-        drop(hist.sender);
-        assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
-            ExitReason::RecvDisconnected
-        );
-        let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
-        assert_eq!(entries.len(), 0);
+        let mut sigs = HashSet::new();
+        assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
+        assert!(!sigs.contains(&sig));
+    }
+
+    #[test]
+    fn test_duplicate_event_signature() {
+        let keypair = generate_keypair();
+        let key = get_pubkey(&keypair);
+        let data = &hash(b"hello, world");
+        let sig = sign_serialized(data, &keypair);
+        let event0 = Event::Claim { key, data, sig };
+        let mut sigs = HashSet::new();
+        assert!(verify_event_and_reserve_signature(&mut sigs, &event0));
+        assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
     }
 }
