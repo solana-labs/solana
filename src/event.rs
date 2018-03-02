@@ -30,7 +30,7 @@ pub type Signature = GenericArray<u8, U64>;
 pub enum Event<T> {
     Tick,
     Claim {
-        key: PublicKey,
+        to: PublicKey,
         data: T,
         sig: Signature,
     },
@@ -92,9 +92,9 @@ pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
 
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     use bincode::serialize;
-    if let Event::Claim { key, ref data, sig } = *event {
+    if let Event::Claim { to, ref data, sig } = *event {
         let mut claim_data = serialize(&data).unwrap();
-        if !verify_signature(&key, &claim_data, &sig) {
+        if !verify_signature(&to, &claim_data, &sig) {
             return false;
         }
     }

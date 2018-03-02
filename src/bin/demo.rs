@@ -12,7 +12,7 @@ fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256
     let data = Sha256Hash::default();
     let keypair = generate_keypair();
     let event0 = Event::Claim {
-        key: get_pubkey(&keypair),
+        to: get_pubkey(&keypair),
         data,
         sig: sign_serialized(&data, &keypair),
     };

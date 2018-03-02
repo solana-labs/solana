@@ -216,7 +216,7 @@ mod tests {
         let keypair = generate_keypair();
         let sig = sign_serialized(&hash(b"hello, world"), &keypair);
         let event0 = Event::Claim {
-            key: get_pubkey(&keypair),
+            to: get_pubkey(&keypair),
             data: hash(b"goodbye cruel world"),
             sig,
         };
@@ -228,10 +228,10 @@ mod tests {
     #[test]
     fn test_duplicate_event_signature() {
         let keypair = generate_keypair();
-        let key = get_pubkey(&keypair);
+        let to = get_pubkey(&keypair);
         let data = &hash(b"hello, world");
         let sig = sign_serialized(data, &keypair);
-        let event0 = Event::Claim { key, data, sig };
+        let event0 = Event::Claim { to, data, sig };
         let mut sigs = HashSet::new();
         assert!(verify_event_and_reserve_signature(&mut sigs, &event0));
         assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));

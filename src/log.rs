@@ -212,13 +212,13 @@ mod tests {
         // First, verify Claim events
         let keypair = generate_keypair();
         let event0 = Event::Claim {
-            key: get_pubkey(&keypair),
+            to: get_pubkey(&keypair),
             data: zero,
             sig: sign_serialized(&zero, &keypair),
         };
 
         let event1 = Event::Claim {
-            key: get_pubkey(&keypair),
+            to: get_pubkey(&keypair),
             data: one,
             sig: sign_serialized(&one, &keypair),
         };
@@ -239,7 +239,7 @@ mod tests {
         let keypair = generate_keypair();
         let data = hash(b"hello, world");
         let event0 = Event::Claim {
-            key: get_pubkey(&keypair),
+            to: get_pubkey(&keypair),
             data,
             sig: sign_serialized(&data, &keypair),
         };
@@ -252,7 +252,7 @@ mod tests {
     fn test_wrong_data_claim_attack() {
         let keypair = generate_keypair();
         let event0 = Event::Claim {
-            key: get_pubkey(&keypair),
+            to: get_pubkey(&keypair),
             data: hash(b"goodbye cruel world"),
             sig: sign_serialized(&hash(b"hello, world"), &keypair),
         };

@@ -48,13 +48,8 @@ impl Accountant {
         entries
     }
 
-    pub fn deposit_signed(
-        self: &mut Self,
-        key: PublicKey,
-        data: u64,
-        sig: Signature,
-    ) -> Result<()> {
-        let event = Event::Claim { key, data, sig };
+    pub fn deposit_signed(self: &mut Self, to: PublicKey, data: u64, sig: Signature) -> Result<()> {
+        let event = Event::Claim { to, data, sig };
         if !self.historian.verify_event(&event) {
             return Err(AccountingError::InvalidEvent);
         }
@@ -62,12 +57,12 @@ impl Accountant {
             return Err(AccountingError::SendError);
         }
 
-        if self.balances.contains_key(&key) {
-            if let Some(x) = self.balances.get_mut(&key) {
+        if self.balances.contains_key(&to) {
+            if let Some(x) = self.balances.get_mut(&to) {
                 *x += data;
             }
         } else {
-            self.balances.insert(key, data);
+            self.balances.insert(to, data);
         }
 
         Ok(())
