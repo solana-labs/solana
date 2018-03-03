@@ -31,7 +31,6 @@ fn main() {
         })
         .collect();
     let duration = now.elapsed();
-
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
@@ -39,6 +38,28 @@ fn main() {
         "Done. {} thousand signatures per second, {}us per signature",
         bsps * 1_000_000_f64,
         nsps / 1_000_f64
+    );
+
+    println!("Verify signatures...");
+    use silk::event::{verify_event, Event};
+    let now = Instant::now();
+    for &(k, s) in &sigs {
+        let e = Event::Transaction {
+            from: Some(alice_pubkey),
+            to: k,
+            data: one,
+            sig: s,
+        };
+        assert!(verify_event(&e));
+    }
+    let duration = now.elapsed();
+    let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
+    let bsvps = txs as f64 / ns as f64;
+    let nspsv = ns as f64 / txs as f64;
+    println!(
+        "Done. {} thousand signature verifications per second, {}us per signature verification",
+        bsvps * 1_000_000_f64,
+        nspsv / 1_000_f64
     );
 
     println!("Transferring 1 unit {} times...", txs);
