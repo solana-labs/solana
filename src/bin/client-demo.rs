@@ -22,13 +22,16 @@ fn main() {
     let one = 1;
     println!("Signing transactions...");
     let now = Instant::now();
-    let sigs = (0..txs).map(|_| {
-        let rando_keypair = generate_keypair();
-        let rando_pubkey = get_pubkey(&rando_keypair);
-        let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey);
-        (rando_pubkey, sig)
-    });
+    let sigs: Vec<(_, _)> = (0..txs)
+        .map(|_| {
+            let rando_keypair = generate_keypair();
+            let rando_pubkey = get_pubkey(&rando_keypair);
+            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey);
+            (rando_pubkey, sig)
+        })
+        .collect();
     let duration = now.elapsed();
+
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
