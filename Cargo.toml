@@ -23,6 +23,10 @@ path = "src/bin/client-demo.rs"
 name = "silk-testnode"
 path = "src/bin/testnode.rs"
 
+[[bin]]
+name = "silk-genesis-block"
+path = "src/bin/genesis-block.rs"
+
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 
@@ -37,6 +41,7 @@ sha2-asm = {version="0.3", optional=true}
 generic-array = { version = "0.9.0", default-features = false, features = ["serde"] }
 serde = "1.0.27"
 serde_derive = "1.0.27"
+serde_json = "1.0.10"
 ring = "0.12.1"
 untrusted = "0.5.1"
 bincode = "1.0.0"

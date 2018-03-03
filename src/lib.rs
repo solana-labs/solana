@@ -2,6 +2,7 @@
 pub mod log;
 pub mod logger;
 pub mod event;
+pub mod genesis;
 pub mod historian;
 pub mod accountant;
 pub mod accountant_skel;

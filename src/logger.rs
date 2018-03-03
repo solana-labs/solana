@@ -110,6 +110,8 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
+    use genesis::*;
+    use std::sync::mpsc::sync_channel;
 
     #[test]
     fn test_bad_event_signature() {
@@ -131,5 +133,28 @@ mod tests {
         let mut sigs = HashSet::new();
         assert!(verify_event_and_reserve_signature(&mut sigs, &event0));
         assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
+    }
+
+    fn run_genesis(gen: &Genesis) -> Vec<Entry<u64>> {
+        let (_sender, event_receiver) = sync_channel(100);
+        let (entry_sender, receiver) = sync_channel(100);
+        let mut logger = Logger::new(event_receiver, entry_sender, gen.seed);
+        for tx in gen.create_events() {
+            logger.log_event(tx).unwrap();
+        }
+        drop(logger.sender);
+        receiver.iter().collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn test_genesis_no_creators() {
+        let gen = Genesis::new(100, vec![]);
+        assert!(verify_slice_u64(&run_genesis(&gen), &gen.seed));
+    }
+
+    #[test]
+    fn test_genesis() {
+        let gen = Genesis::new(100, vec![Creator::new("Satoshi", 42)]);
+        assert!(verify_slice_u64(&run_genesis(&gen), &gen.seed));
     }
 }
