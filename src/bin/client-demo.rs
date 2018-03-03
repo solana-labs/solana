@@ -36,8 +36,9 @@ fn main() {
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
     println!(
-        "Done. {} billion signatures per second, {}ns per signature",
-        bsps, nsps
+        "Done. {} thousand signatures per second, {}us per signature",
+        bsps * 1_000_000_f64,
+        nsps / 1_000_f64
     );
 
     println!("Transferring 1 unit {} times...", txs);
