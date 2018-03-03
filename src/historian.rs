@@ -26,6 +26,15 @@ pub enum ExitReason {
     RecvDisconnected,
     SendDisconnected,
 }
+
+pub struct Logger<T> {
+    pub sender: SyncSender<Entry<T>>,
+    pub receiver: Receiver<Event<T>>,
+    pub end_hash: Sha256Hash,
+    pub num_hashes: u64,
+    pub num_ticks: u64,
+}
+
 fn log_event<T: Serialize + Clone + Debug>(
     sender: &SyncSender<Entry<T>>,
     num_hashes: &mut u64,
@@ -108,24 +117,28 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
 ) -> JoinHandle<(Entry<T>, ExitReason)> {
     use std::thread;
     thread::spawn(move || {
-        let mut end_hash = start_hash;
-        let mut num_hashes = 0;
-        let mut num_ticks = 0;
+        let mut logger = Logger {
+            receiver: receiver,
+            sender: sender,
+            end_hash: start_hash,
+            num_hashes: 0,
+            num_ticks: 0,
+        };
         let epoch = SystemTime::now();
         loop {
             if let Err(err) = log_events(
-                &receiver,
-                &sender,
-                &mut num_hashes,
-                &mut end_hash,
+                &logger.receiver,
+                &logger.sender,
+                &mut logger.num_hashes,
+                &mut logger.end_hash,
                 epoch,
-                &mut num_ticks,
+                &mut logger.num_ticks,
                 ms_per_tick,
             ) {
                 return err;
             }
-            end_hash = hash(&end_hash);
-            num_hashes += 1;
+            logger.end_hash = hash(&logger.end_hash);
+            logger.num_hashes += 1;
         }
     })
 }
