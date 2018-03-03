@@ -70,38 +70,46 @@ fn verify_event_and_reserve_signature<T: Serialize>(
     true
 }
 
-fn log_events<T: Serialize + Clone + Debug>(
-    receiver: &Receiver<Event<T>>,
-    sender: &SyncSender<Entry<T>>,
-    num_hashes: &mut u64,
-    end_hash: &mut Sha256Hash,
-    epoch: SystemTime,
-    num_ticks: &mut u64,
-    ms_per_tick: Option<u64>,
-) -> Result<(), (Entry<T>, ExitReason)> {
-    use std::sync::mpsc::TryRecvError;
-    loop {
-        if let Some(ms) = ms_per_tick {
-            let now = SystemTime::now();
-            if now > epoch + Duration::from_millis((*num_ticks + 1) * ms) {
-                log_event(sender, num_hashes, end_hash, Event::Tick)?;
-                *num_ticks += 1;
+impl<T: Serialize + Clone + Debug> Logger<T> {
+    fn log_events(
+        &mut self,
+        epoch: SystemTime,
+        ms_per_tick: Option<u64>,
+    ) -> Result<(), (Entry<T>, ExitReason)> {
+        use std::sync::mpsc::TryRecvError;
+        loop {
+            if let Some(ms) = ms_per_tick {
+                let now = SystemTime::now();
+                if now > epoch + Duration::from_millis((self.num_ticks + 1) * ms) {
+                    log_event(
+                        &self.sender,
+                        &mut self.num_hashes,
+                        &mut self.end_hash,
+                        Event::Tick,
+                    )?;
+                    self.num_ticks += 1;
+                }
             }
-        }
-        match receiver.try_recv() {
-            Ok(event) => {
-                log_event(sender, num_hashes, end_hash, event)?;
-            }
-            Err(TryRecvError::Empty) => {
-                return Ok(());
-            }
-            Err(TryRecvError::Disconnected) => {
-                let entry = Entry {
-                    end_hash: *end_hash,
-                    num_hashes: *num_hashes,
-                    event: Event::Tick,
-                };
-                return Err((entry, ExitReason::RecvDisconnected));
+            match self.receiver.try_recv() {
+                Ok(event) => {
+                    log_event(
+                        &self.sender,
+                        &mut self.num_hashes,
+                        &mut self.end_hash,
+                        event,
+                    )?;
+                }
+                Err(TryRecvError::Empty) => {
+                    return Ok(());
+                }
+                Err(TryRecvError::Disconnected) => {
+                    let entry = Entry {
+                        end_hash: self.end_hash,
+                        num_hashes: self.num_hashes,
+                        event: Event::Tick,
+                    };
+                    return Err((entry, ExitReason::RecvDisconnected));
+                }
             }
         }
     }
@@ -126,15 +134,7 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
         };
         let epoch = SystemTime::now();
         loop {
-            if let Err(err) = log_events(
-                &logger.receiver,
-                &logger.sender,
-                &mut logger.num_hashes,
-                &mut logger.end_hash,
-                epoch,
-                &mut logger.num_ticks,
-                ms_per_tick,
-            ) {
+            if let Err(err) = logger.log_events(epoch, ms_per_tick) {
                 return err;
             }
             logger.end_hash = hash(&logger.end_hash);
