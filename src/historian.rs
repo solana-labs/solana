@@ -8,7 +8,7 @@
 use std::thread::JoinHandle;
 use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, SyncSender};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use log::{hash, hash_event, Entry, Sha256Hash};
 use event::{get_signature, verify_event, Event, Signature};
 use serde::Serialize;
@@ -35,25 +35,6 @@ pub struct Logger<T> {
     pub num_ticks: u64,
 }
 
-fn log_event<T: Serialize + Clone + Debug>(
-    sender: &SyncSender<Entry<T>>,
-    num_hashes: &mut u64,
-    end_hash: &mut Sha256Hash,
-    event: Event<T>,
-) -> Result<(), (Entry<T>, ExitReason)> {
-    *end_hash = hash_event(end_hash, &event);
-    let entry = Entry {
-        end_hash: *end_hash,
-        num_hashes: *num_hashes,
-        event,
-    };
-    if let Err(_) = sender.send(entry.clone()) {
-        return Err((entry, ExitReason::SendDisconnected));
-    }
-    *num_hashes = 0;
-    Ok(())
-}
-
 fn verify_event_and_reserve_signature<T: Serialize>(
     signatures: &mut HashSet<Signature>,
     event: &Event<T>,
@@ -71,33 +52,50 @@ fn verify_event_and_reserve_signature<T: Serialize>(
 }
 
 impl<T: Serialize + Clone + Debug> Logger<T> {
+    fn new(
+        receiver: Receiver<Event<T>>,
+        sender: SyncSender<Entry<T>>,
+        start_hash: Sha256Hash,
+    ) -> Self {
+        Logger {
+            receiver,
+            sender,
+            end_hash: start_hash,
+            num_hashes: 0,
+            num_ticks: 0,
+        }
+    }
+
+    fn log_event(&mut self, event: Event<T>) -> Result<(), (Entry<T>, ExitReason)> {
+        self.end_hash = hash_event(&self.end_hash, &event);
+        let entry = Entry {
+            end_hash: self.end_hash,
+            num_hashes: self.num_hashes,
+            event,
+        };
+        if let Err(_) = self.sender.send(entry.clone()) {
+            return Err((entry, ExitReason::SendDisconnected));
+        }
+        self.num_hashes = 0;
+        Ok(())
+    }
+
     fn log_events(
         &mut self,
-        epoch: SystemTime,
+        epoch: Instant,
         ms_per_tick: Option<u64>,
     ) -> Result<(), (Entry<T>, ExitReason)> {
         use std::sync::mpsc::TryRecvError;
         loop {
             if let Some(ms) = ms_per_tick {
-                let now = SystemTime::now();
-                if now > epoch + Duration::from_millis((self.num_ticks + 1) * ms) {
-                    log_event(
-                        &self.sender,
-                        &mut self.num_hashes,
-                        &mut self.end_hash,
-                        Event::Tick,
-                    )?;
+                if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
+                    self.log_event(Event::Tick)?;
                     self.num_ticks += 1;
                 }
             }
             match self.receiver.try_recv() {
                 Ok(event) => {
-                    log_event(
-                        &self.sender,
-                        &mut self.num_hashes,
-                        &mut self.end_hash,
-                        event,
-                    )?;
+                    self.log_event(event)?;
                 }
                 Err(TryRecvError::Empty) => {
                     return Ok(());
@@ -125,16 +123,10 @@ pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
 ) -> JoinHandle<(Entry<T>, ExitReason)> {
     use std::thread;
     thread::spawn(move || {
-        let mut logger = Logger {
-            receiver: receiver,
-            sender: sender,
-            end_hash: start_hash,
-            num_hashes: 0,
-            num_ticks: 0,
-        };
-        let epoch = SystemTime::now();
+        let mut logger = Logger::new(receiver, sender, start_hash);
+        let now = Instant::now();
         loop {
-            if let Err(err) = logger.log_events(epoch, ms_per_tick) {
+            if let Err(err) = logger.log_events(now, ms_per_tick) {
                 return err;
             }
             logger.end_hash = hash(&logger.end_hash);
