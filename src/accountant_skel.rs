@@ -42,11 +42,15 @@ impl AccountantSkel {
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
             Request::Deposit { key, val, sig } => {
-                let _ = self.obj.deposit_signed(key, val, sig);
+                if let Err(err) = self.obj.deposit_signed(key, val, sig) {
+                    println!("Deposit error: {:?}", err);
+                }
                 None
             }
             Request::Transfer { from, to, val, sig } => {
-                let _ = self.obj.transfer_signed(from, to, val, sig);
+                if let Err(err) = self.obj.transfer_signed(from, to, val, sig) {
+                    println!("Transfer error: {:?}", err);
+                }
                 None
             }
             Request::GetBalance { key } => {
