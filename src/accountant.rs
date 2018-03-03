@@ -152,7 +152,7 @@ impl Accountant {
 mod tests {
     use super::*;
     use event::{generate_keypair, get_pubkey};
-    use historian::ExitReason;
+    use logger::ExitReason;
 
     #[test]
     fn test_accountant() {
