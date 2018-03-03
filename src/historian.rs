@@ -18,34 +18,13 @@ pub struct Historian<T> {
     pub signatures: HashSet<Signature>,
 }
 
-/// A background thread that will continue tagging received Event messages and
-/// sending back Entry messages until either the receiver or sender channel is closed.
-pub fn create_logger<T: 'static + Serialize + Clone + Debug + Send>(
-    start_hash: Sha256Hash,
-    ms_per_tick: Option<u64>,
-    receiver: Receiver<Event<T>>,
-    sender: SyncSender<Entry<T>>,
-) -> JoinHandle<(Entry<T>, ExitReason)> {
-    use std::thread;
-    thread::spawn(move || {
-        let mut logger = Logger::new(receiver, sender, start_hash);
-        let now = Instant::now();
-        loop {
-            if let Err(err) = logger.log_events(now, ms_per_tick) {
-                return err;
-            }
-            logger.end_hash = hash(&logger.end_hash);
-            logger.num_hashes += 1;
-        }
-    })
-}
-
 impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
         use std::sync::mpsc::sync_channel;
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
-        let thread_hdl = create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
+        let thread_hdl =
+            Historian::create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
         let signatures = HashSet::new();
         Historian {
             sender,
@@ -54,8 +33,31 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
             signatures,
         }
     }
+
     pub fn verify_event(self: &mut Self, event: &Event<T>) -> bool {
         return verify_event_and_reserve_signature(&mut self.signatures, event);
+    }
+
+    /// A background thread that will continue tagging received Event messages and
+    /// sending back Entry messages until either the receiver or sender channel is closed.
+    fn create_logger(
+        start_hash: Sha256Hash,
+        ms_per_tick: Option<u64>,
+        receiver: Receiver<Event<T>>,
+        sender: SyncSender<Entry<T>>,
+    ) -> JoinHandle<(Entry<T>, ExitReason)> {
+        use std::thread;
+        thread::spawn(move || {
+            let mut logger = Logger::new(receiver, sender, start_hash);
+            let now = Instant::now();
+            loop {
+                if let Err(err) = logger.log_events(now, ms_per_tick) {
+                    return err;
+                }
+                logger.end_hash = hash(&logger.end_hash);
+                logger.num_hashes += 1;
+            }
+        })
     }
 }
 
