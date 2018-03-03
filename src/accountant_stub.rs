@@ -23,7 +23,7 @@ impl AccountantStub {
     }
 
     pub fn deposit_signed(
-        self: &mut Self,
+        self: &Self,
         key: PublicKey,
         val: u64,
         sig: Signature,
@@ -33,7 +33,7 @@ impl AccountantStub {
         self.socket.send_to(&data, &self.addr)
     }
 
-    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
+    pub fn deposit(self: &Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
         use event::{get_pubkey, sign_claim_data};
         let key = get_pubkey(keypair);
         let sig = sign_claim_data(&n, keypair);
@@ -41,7 +41,7 @@ impl AccountantStub {
     }
 
     pub fn transfer_signed(
-        self: &mut Self,
+        self: &Self,
         from: PublicKey,
         to: PublicKey,
         val: u64,
@@ -53,7 +53,7 @@ impl AccountantStub {
     }
 
     pub fn transfer(
-        self: &mut Self,
+        self: &Self,
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
@@ -64,7 +64,7 @@ impl AccountantStub {
         self.transfer_signed(from, to, n, sig).map(|_| sig)
     }
 
-    pub fn get_balance(self: &mut Self, pubkey: &PublicKey) -> io::Result<u64> {
+    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> io::Result<u64> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket.send_to(&data, &self.addr)?;
@@ -78,7 +78,7 @@ impl AccountantStub {
         Ok(0)
     }
 
-    pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) -> io::Result<()> {
+    pub fn wait_on_signature(self: &Self, wait_sig: &Signature) -> io::Result<()> {
         let req = Request::Wait { sig: *wait_sig };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr).map(|_| ())?;
@@ -117,7 +117,7 @@ mod tests {
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
-        let mut acc = AccountantStub::new(addr, socket);
+        let acc = AccountantStub::new(addr, socket);
         let alice_keypair = generate_keypair();
         let bob_keypair = generate_keypair();
         acc.deposit(10_000, &alice_keypair).unwrap();
