@@ -255,7 +255,7 @@ mod tests {
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
         let event0 = Event::Transaction {
-            from: Some(get_pubkey(&keypair0)),
+            from: get_pubkey(&keypair0),
             to: pubkey1,
             data,
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),
@@ -272,7 +272,7 @@ mod tests {
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
         let event0 = Event::Transaction {
-            from: Some(get_pubkey(&keypair0)),
+            from: get_pubkey(&keypair0),
             to: pubkey1,
             data: hash(b"goodbye cruel world"), // <-- attack!
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),
@@ -290,7 +290,7 @@ mod tests {
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
         let event0 = Event::Transaction {
-            from: Some(get_pubkey(&keypair0)),
+            from: get_pubkey(&keypair0),
             to: get_pubkey(&thief_keypair), // <-- attack!
             data: hash(b"goodbye cruel world"),
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),

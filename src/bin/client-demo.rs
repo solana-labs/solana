@@ -45,7 +45,7 @@ fn main() {
     let now = Instant::now();
     for &(k, s) in &sigs {
         let e = Event::Transaction {
-            from: Some(alice_pubkey),
+            from: alice_pubkey,
             to: k,
             data: one,
             sig: s,

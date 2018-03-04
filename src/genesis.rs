@@ -22,7 +22,7 @@ impl Creator {
     }
 
     pub fn create_transaction(&self, keypair: &Ed25519KeyPair) -> Event<u64> {
-        let from = Some(get_pubkey(keypair));
+        let from = get_pubkey(keypair);
         let to = self.pubkey;
         let data = self.tokens;
         let sig = sign_transaction_data(&data, keypair, &to);

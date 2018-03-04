@@ -87,7 +87,7 @@ impl Accountant {
         }
 
         let event = Event::Transaction {
-            from: Some(from),
+            from,
             to,
             data,
             sig,
