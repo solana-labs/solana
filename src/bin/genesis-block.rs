@@ -5,23 +5,12 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::genesis::Genesis;
-use silk::log::{hash, verify_slice_u64};
-use silk::logger::Logger;
-use std::sync::mpsc::sync_channel;
+use silk::log::{create_entries, hash, verify_slice_u64};
 use std::io::stdin;
 
 fn main() {
     let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-
-    let (_sender, event_receiver) = sync_channel(100);
-    let (entry_sender, receiver) = sync_channel(100);
-    let mut logger = Logger::new(event_receiver, entry_sender, hash(&gen.pkcs8));
-    for tx in gen.create_events() {
-        logger.log_event(tx).unwrap();
-    }
-    drop(logger.sender);
-
-    let entries = receiver.iter().collect::<Vec<_>>();
+    let entries = create_entries(&hash(&gen.pkcs8), gen.create_events());
     verify_slice_u64(&entries, &entries[0].id);
     println!("[");
     let len = entries.len();
