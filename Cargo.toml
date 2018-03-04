@@ -27,6 +27,10 @@ path = "src/bin/testnode.rs"
 name = "silk-genesis-block"
 path = "src/bin/genesis-block.rs"
 
+[[bin]]
+name = "silk-genesis-file-demo"
+path = "src/bin/genesis-file-demo.rs"
+
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }
 

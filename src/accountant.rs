@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_accountant() {
-        let bob = Creator::new("Bob", 1_000);
+        let bob = Creator::new(1_000);
         let bob_pubkey = bob.pubkey;
         let alice = Genesis::new(10_000, vec![bob]);
         let mut acc = Accountant::new(&alice, Some(2));
@@ -182,7 +182,7 @@ mod tests {
     fn test_invalid_transfer() {
         use std::thread::sleep;
         use std::time::Duration;
-        let bob = Creator::new("Bob", 1_000);
+        let bob = Creator::new(1_000);
         let bob_pubkey = bob.pubkey;
         let alice = Genesis::new(11_000, vec![bob]);
         let mut acc = Accountant::new(&alice, Some(2));

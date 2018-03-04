@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_genesis() {
-        let entries = run_genesis(Genesis::new(100, vec![Creator::new("Satoshi", 42)]));
+        let entries = run_genesis(Genesis::new(100, vec![Creator::new(42)]));
         assert!(verify_slice_u64(&entries, &entries[0].end_hash));
     }
 }

@@ -88,7 +88,7 @@ mod tests {
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        let bob = Creator::new("Bob", 1_000);
+        let bob = Creator::new(1_000);
         let bob_pubkey = bob.pubkey;
         let alice = Genesis::new(10_000, vec![bob]);
         let acc = Accountant::new(&alice, None);

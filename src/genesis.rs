@@ -7,15 +7,13 @@ use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Creator {
-    pub name: String,
     pub pubkey: PublicKey,
     pub tokens: u64,
 }
 
 impl Creator {
-    pub fn new(name: &str, tokens: u64) -> Self {
+    pub fn new(tokens: u64) -> Self {
         Creator {
-            name: name.to_string(),
             pubkey: get_pubkey(&generate_keypair()),
             tokens,
         }
@@ -93,7 +91,7 @@ mod tests {
     #[test]
     fn test_create_creator() {
         assert_eq!(
-            Genesis::new(100, vec![Creator::new("Satoshi", 42)])
+            Genesis::new(100, vec![Creator::new(42)])
                 .create_events()
                 .len(),
             3

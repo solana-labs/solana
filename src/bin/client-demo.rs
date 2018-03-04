@@ -1,4 +1,7 @@
+//extern crate serde_json;
 extern crate silk;
+
+//use std::io::stdin;
 
 fn main() {
     use silk::accountant_stub::AccountantStub;
@@ -15,8 +18,12 @@ fn main() {
     let send_addr = "127.0.0.1:8001";
 
     let txs = 200;
+
     let gen = Genesis::new(txs, vec![]);
     let alice_keypair = generate_keypair();
+    //let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
+    //let alice_keypair = gen.get_keypair();
+
     let acc = Accountant::new(&gen, None);
     spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
     sleep(Duration::from_millis(30));
