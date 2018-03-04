@@ -1,7 +1,6 @@
 use std::io;
 use accountant::Accountant;
-use event::{PublicKey, Signature};
-//use serde::Serialize;
+use event::{Event, PublicKey, Signature};
 
 pub struct AccountantSkel {
     pub obj: Accountant,
@@ -9,11 +8,6 @@ pub struct AccountantSkel {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
-    Deposit {
-        key: PublicKey,
-        val: u64,
-        sig: Signature,
-    },
     Transfer {
         from: PublicKey,
         to: PublicKey,
@@ -41,14 +35,14 @@ impl AccountantSkel {
 
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
-            Request::Deposit { key, val, sig } => {
-                if let Err(err) = self.obj.deposit_signed(key, val, sig) {
-                    println!("Deposit error: {:?}", err);
-                }
-                None
-            }
             Request::Transfer { from, to, val, sig } => {
-                if let Err(err) = self.obj.transfer_signed(from, to, val, sig) {
+                let event = Event::Transaction {
+                    from,
+                    to,
+                    data: val,
+                    sig,
+                };
+                if let Err(err) = self.obj.process_event(event) {
                     println!("Transfer error: {:?}", err);
                 }
                 None

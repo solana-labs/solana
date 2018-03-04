@@ -48,70 +48,62 @@ impl Accountant {
         entries
     }
 
-    pub fn deposit_signed(self: &mut Self, to: PublicKey, data: u64, sig: Signature) -> Result<()> {
-        let event = Event::new_claim(to, data, sig);
-        if !self.historian.verify_event(&event) {
-            return Err(AccountingError::InvalidEvent);
-        }
-        if let Err(SendError(_)) = self.historian.sender.send(event) {
-            return Err(AccountingError::SendError);
-        }
-
-        if self.balances.contains_key(&to) {
-            if let Some(x) = self.balances.get_mut(&to) {
-                *x += data;
-            }
-        } else {
-            self.balances.insert(to, data);
-        }
-
-        Ok(())
-    }
-
     pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> Result<Signature> {
         use event::{get_pubkey, sign_claim_data};
-        let key = get_pubkey(keypair);
+        let to = get_pubkey(keypair);
         let sig = sign_claim_data(&n, keypair);
-        self.deposit_signed(key, n, sig).map(|_| sig)
-    }
-
-    pub fn transfer_signed(
-        self: &mut Self,
-        from: PublicKey,
-        to: PublicKey,
-        data: u64,
-        sig: Signature,
-    ) -> Result<()> {
-        if self.get_balance(&from).unwrap_or(0) < data {
-            return Err(AccountingError::InsufficientFunds);
-        }
-
-        let event = Event::Transaction {
-            from,
-            to,
-            data,
-            sig,
-        };
+        let event = Event::new_claim(to, n, sig);
         if !self.historian.verify_event(&event) {
             return Err(AccountingError::InvalidEvent);
         }
-        if let Err(SendError(_)) = self.historian.sender.send(event) {
-            return Err(AccountingError::SendError);
-        }
+        self.process_verified_event(event, true).map(|_| sig)
+    }
 
-        if let Some(x) = self.balances.get_mut(&from) {
-            *x -= data;
-        }
+    fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
+        allow_deposits && from == to
+    }
 
-        if self.balances.contains_key(&to) {
-            if let Some(x) = self.balances.get_mut(&to) {
-                *x += data;
+    pub fn process_event(self: &mut Self, event: Event<u64>) -> Result<()> {
+        if !self.historian.verify_event(&event) {
+            return Err(AccountingError::InvalidEvent);
+        }
+        self.process_verified_event(event, false)
+    }
+
+    fn process_verified_event(
+        self: &mut Self,
+        event: Event<u64>,
+        allow_deposits: bool,
+    ) -> Result<()> {
+        match event {
+            Event::Tick => Ok(()),
+            Event::Transaction { from, to, data, .. } => {
+                if !Self::is_deposit(allow_deposits, &from, &to) {
+                    if self.get_balance(&from).unwrap_or(0) < data {
+                        return Err(AccountingError::InsufficientFunds);
+                    }
+                }
+
+                if let Err(SendError(_)) = self.historian.sender.send(event) {
+                    return Err(AccountingError::SendError);
+                }
+
+                if !Self::is_deposit(allow_deposits, &from, &to) {
+                    if let Some(x) = self.balances.get_mut(&from) {
+                        *x -= data;
+                    }
+                }
+
+                if self.balances.contains_key(&to) {
+                    if let Some(x) = self.balances.get_mut(&to) {
+                        *x += data;
+                    }
+                } else {
+                    self.balances.insert(to, data);
+                }
+                Ok(())
             }
-        } else {
-            self.balances.insert(to, data);
         }
-
-        Ok(())
     }
 
     pub fn transfer(
@@ -123,7 +115,13 @@ impl Accountant {
         use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
-        self.transfer_signed(from, to, n, sig).map(|_| sig)
+        let event = Event::Transaction {
+            from,
+            to,
+            data: n,
+            sig,
+        };
+        self.process_event(event).map(|_| sig)
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<u64> {
