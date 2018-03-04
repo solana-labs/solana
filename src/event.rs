@@ -40,7 +40,7 @@ pub enum Event<T> {
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
         Event::Transaction {
-            from: None,
+            from: Some(to),
             to,
             data,
             sig,
@@ -81,9 +81,7 @@ pub fn sign_transaction_data<T: Serialize>(
 
 /// Return a signature for the given data using the private key from the given keypair.
 pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
-    let to = get_pubkey(keypair);
-    let from: Option<PublicKey> = None;
-    sign_serialized(&(&from, &to, data), keypair)
+    sign_transaction_data(data, keypair, &get_pubkey(keypair))
 }
 
 /// Verify a signed message with the given public key.

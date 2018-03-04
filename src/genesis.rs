@@ -1,6 +1,6 @@
 //! A library for generating the chain's genesis block.
 
-use event::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data, Event, PublicKey};
+use event::{generate_keypair, get_pubkey, sign_transaction_data, Event, PublicKey};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use untrusted::Input;
@@ -55,9 +55,9 @@ impl Genesis {
 
     pub fn create_events(&self) -> Vec<Event<u64>> {
         let org_keypair = Ed25519KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap();
-        let sig = sign_claim_data(&self.tokens, &org_keypair);
         let event0 = Event::Tick;
-        let event1 = Event::new_claim(get_pubkey(&org_keypair), self.tokens, sig);
+        let treasury = Creator::new("Treasury", self.tokens);
+        let event1 = treasury.create_transaction(&org_keypair);
         let mut events = vec![event0, event1];
 
         for creator in &self.creators {
