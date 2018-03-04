@@ -16,7 +16,10 @@
 use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};
 use ring::signature::Ed25519KeyPair;
+use ring::{rand, signature};
+use untrusted;
 use serde::Serialize;
+use bincode::serialize;
 
 pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
@@ -50,8 +53,6 @@ impl<T> Event<T> {
 
 /// Return a new ED25519 keypair
 pub fn generate_keypair() -> Ed25519KeyPair {
-    use ring::{rand, signature};
-    use untrusted;
     let rng = rand::SystemRandom::new();
     let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
     signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).unwrap()
@@ -64,7 +65,6 @@ pub fn get_pubkey(keypair: &Ed25519KeyPair) -> PublicKey {
 
 /// Return a signature for the given data using the private key from the given keypair.
 fn sign_serialized<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
-    use bincode::serialize;
     let serialized = serialize(data).unwrap();
     GenericArray::clone_from_slice(keypair.sign(&serialized).as_ref())
 }
@@ -86,8 +86,6 @@ pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Sign
 
 /// Verify a signed message with the given public key.
 pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_bytes: &[u8]) -> bool {
-    use untrusted;
-    use ring::signature;
     let peer_public_key = untrusted::Input::from(peer_public_key_bytes);
     let msg = untrusted::Input::from(msg_bytes);
     let sig = untrusted::Input::from(sig_bytes);
@@ -102,7 +100,6 @@ pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
 }
 
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
-    use bincode::serialize;
     if let Event::Transaction {
         from,
         to,

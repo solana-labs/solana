@@ -6,7 +6,7 @@
 //! The resulting stream of entries represents ordered events in time.
 
 use std::collections::HashSet;
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 use log::{hash_event, Entry, Sha256Hash};
 use event::{get_signature, verify_event, Event, Signature};
@@ -77,7 +77,6 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
         epoch: Instant,
         ms_per_tick: Option<u64>,
     ) -> Result<(), (Entry<T>, ExitReason)> {
-        use std::sync::mpsc::TryRecvError;
         loop {
             if let Some(ms) = ms_per_tick {
                 if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {

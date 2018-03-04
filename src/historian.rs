@@ -3,13 +3,14 @@
 
 use std::thread::JoinHandle;
 use std::collections::HashSet;
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use log::{hash, Entry, Sha256Hash};
 use logger::{verify_event_and_reserve_signature, ExitReason, Logger};
 use event::{Event, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
+use std::thread;
 
 pub struct Historian<T> {
     pub sender: SyncSender<Event<T>>,
@@ -20,7 +21,6 @@ pub struct Historian<T> {
 
 impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
-        use std::sync::mpsc::sync_channel;
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
         let thread_hdl =
@@ -46,7 +46,6 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
     ) -> JoinHandle<(Entry<T>, ExitReason)> {
-        use std::thread;
         thread::spawn(move || {
             let mut logger = Logger::new(receiver, sender, start_hash);
             let now = Instant::now();

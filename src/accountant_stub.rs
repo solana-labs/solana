@@ -5,7 +5,7 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{PublicKey, Signature};
+use event::{get_pubkey, sign_transaction_data, PublicKey, Signature};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 
@@ -40,7 +40,6 @@ impl AccountantStub {
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> io::Result<Signature> {
-        use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
         self.transfer_signed(from, to, n, sig).map(|_| sig)

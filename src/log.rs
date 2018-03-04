@@ -17,6 +17,9 @@ use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use serde::Serialize;
 use event::*;
+use sha2::{Digest, Sha256};
+use rayon::prelude::*;
+use std::iter;
 
 pub type Sha256Hash = GenericArray<u8, U32>;
 
@@ -41,7 +44,6 @@ impl<T> Entry<T> {
 
 /// Return a Sha256 hash for the given data.
 pub fn hash(val: &[u8]) -> Sha256Hash {
-    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::default();
     hasher.input(val);
     hasher.result()
@@ -114,7 +116,6 @@ pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> 
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
-    use rayon::prelude::*;
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
@@ -122,7 +123,6 @@ pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bo
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice_u64(events: &[Entry<u64>], start_hash: &Sha256Hash) -> bool {
-    use rayon::prelude::*;
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
@@ -153,7 +153,6 @@ pub fn create_ticks(
     num_hashes: u64,
     len: usize,
 ) -> Vec<Entry<Sha256Hash>> {
-    use std::iter;
     let mut end_hash = *start_hash;
     iter::repeat(Event::Tick)
         .take(len)

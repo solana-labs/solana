@@ -1,19 +1,18 @@
 //extern crate serde_json;
 extern crate silk;
 
+use silk::accountant_stub::AccountantStub;
+use silk::accountant_skel::AccountantSkel;
+use silk::accountant::Accountant;
+use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event};
+use silk::genesis::Genesis;
+use std::time::Instant;
+use std::net::UdpSocket;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
 //use std::io::stdin;
 
 fn main() {
-    use silk::accountant_stub::AccountantStub;
-    use silk::accountant_skel::AccountantSkel;
-    use silk::accountant::Accountant;
-    use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
-    use silk::genesis::Genesis;
-    use std::time::Instant;
-    use std::net::UdpSocket;
-    use std::thread::{sleep, spawn};
-    use std::time::Duration;
-
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
 
@@ -53,7 +52,6 @@ fn main() {
     );
 
     println!("Verify signatures...");
-    use silk::event::{verify_event, Event};
     let now = Instant::now();
     for &(k, s) in &sigs {
         let e = Event::Transaction {
