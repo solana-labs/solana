@@ -20,19 +20,6 @@ impl Creator {
             tokens,
         }
     }
-
-    pub fn create_transaction(&self, keypair: &Ed25519KeyPair) -> Event<u64> {
-        let from = get_pubkey(keypair);
-        let to = self.pubkey;
-        let data = self.tokens;
-        let sig = sign_transaction_data(&data, keypair, &to);
-        Event::Transaction {
-            from,
-            to,
-            data,
-            sig,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -53,15 +40,33 @@ impl Genesis {
         }
     }
 
+    pub fn get_keypair(&self) -> Ed25519KeyPair {
+        Ed25519KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap()
+    }
+
+    pub fn get_pubkey(&self) -> PublicKey {
+        get_pubkey(&self.get_keypair())
+    }
+
+    pub fn create_transaction(&self, data: u64, to: &PublicKey) -> Event<u64> {
+        let from = self.get_pubkey();
+        let sig = sign_transaction_data(&data, &self.get_keypair(), to);
+        Event::Transaction {
+            from,
+            to: *to,
+            data,
+            sig,
+        }
+    }
+
     pub fn create_events(&self) -> Vec<Event<u64>> {
-        let org_keypair = Ed25519KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap();
+        let pubkey = self.get_pubkey();
         let event0 = Event::Tick;
-        let treasury = Creator::new("Treasury", self.tokens);
-        let event1 = treasury.create_transaction(&org_keypair);
+        let event1 = self.create_transaction(self.tokens, &pubkey);
         let mut events = vec![event0, event1];
 
-        for creator in &self.creators {
-            let tx = creator.create_transaction(&org_keypair);
+        for x in &self.creators {
+            let tx = self.create_transaction(x.tokens, &x.pubkey);
             events.push(tx);
         }
 
@@ -72,17 +77,21 @@ impl Genesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use event::verify_event;
-
-    #[test]
-    fn test_creator_transaction() {
-        assert!(verify_event(&Creator::new("Satoshi", 42)
-            .create_transaction(&generate_keypair())));
-    }
 
     #[test]
     fn test_create_events() {
-        assert_eq!(Genesis::new(100, vec![]).create_events().len(), 2);
+        let mut events = Genesis::new(100, vec![]).create_events().into_iter();
+        assert_eq!(events.next().unwrap(), Event::Tick);
+        if let Event::Transaction { from, to, .. } = events.next().unwrap() {
+            assert_eq!(from, to);
+        } else {
+            assert!(false);
+        }
+        assert_eq!(events.next(), None);
+    }
+
+    #[test]
+    fn test_create_creator() {
         assert_eq!(
             Genesis::new(100, vec![Creator::new("Satoshi", 42)])
                 .create_events()

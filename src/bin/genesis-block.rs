@@ -1,7 +1,6 @@
 //! A command-line executable for generating the chain's genesis block.
 
 extern crate ring;
-extern crate serde;
 extern crate serde_json;
 extern crate silk;
 

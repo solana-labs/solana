@@ -5,6 +5,7 @@ fn main() {
     use silk::accountant_skel::AccountantSkel;
     use silk::accountant::Accountant;
     use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
+    use silk::genesis::Genesis;
     use std::time::Instant;
     use std::net::UdpSocket;
     use std::thread::{sleep, spawn};
@@ -13,12 +14,10 @@ fn main() {
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
 
-    let zero = Default::default();
-    let alice_keypair = generate_keypair();
-    let mut acc = Accountant::new(&zero, None);
     let txs = 200;
-    let sig = acc.deposit(txs, &alice_keypair).unwrap();
-    acc.wait_on_signature(&sig);
+    let gen = Genesis::new(txs, vec![]);
+    let alice_keypair = generate_keypair();
+    let acc = Accountant::new(&gen, None);
     spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
     sleep(Duration::from_millis(30));
 
