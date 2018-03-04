@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
-use log::{hash_event, Entry, Sha256Hash};
+use log::{extend_and_hash, Entry, Sha256Hash};
 use event::{get_signature, verify_event, Event, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
@@ -59,7 +59,9 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
     }
 
     pub fn log_event(&mut self, event: Event<T>) -> Result<(), (Entry<T>, ExitReason)> {
-        self.last_id = hash_event(&self.last_id, &event);
+        if let Some(sig) = get_signature(&event) {
+            self.last_id = extend_and_hash(&self.last_id, &sig);
+        }
         let entry = Entry {
             id: self.last_id,
             num_hashes: self.num_hashes,

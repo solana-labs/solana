@@ -16,7 +16,7 @@
 use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use serde::Serialize;
-use event::*;
+use event::{get_signature, verify_event, Event};
 use sha2::{Digest, Sha256};
 use rayon::prelude::*;
 use std::iter;
@@ -56,13 +56,6 @@ pub fn extend_and_hash(id: &Sha256Hash, val: &[u8]) -> Sha256Hash {
     hash(&hash_data)
 }
 
-pub fn hash_event<T>(id: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
-    match get_signature(event) {
-        None => *id,
-        Some(sig) => extend_and_hash(id, &sig),
-    }
-}
-
 /// Creates the hash 'num_hashes' after start_hash, plus an additional hash for any event data.
 pub fn next_hash<T: Serialize>(
     start_hash: &Sha256Hash,
@@ -73,7 +66,10 @@ pub fn next_hash<T: Serialize>(
     for _ in 0..num_hashes {
         id = hash(&id);
     }
-    hash_event(&id, event)
+    match get_signature(event) {
+        None => id,
+        Some(sig) => extend_and_hash(&id, &sig),
+    }
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
@@ -163,6 +159,7 @@ pub fn create_ticks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use event::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data};
 
     #[test]
     fn test_event_verify() {
