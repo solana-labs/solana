@@ -2,9 +2,9 @@
 //! an ordered log of events in time.
 
 /// Each log entry contains three pieces of data. The 'num_hashes' field is the number
-/// of hashes performed since the previous entry.  The 'end_hash' field is the result
-/// of hashing 'end_hash' from the previous entry 'num_hashes' times.  The 'event'
-/// field points to an Event that took place shortly after 'end_hash' was generated.
+/// of hashes performed since the previous entry.  The 'id' field is the result
+/// of hashing 'id' from the previous entry 'num_hashes' times.  The 'event'
+/// field points to an Event that took place shortly after 'id' was generated.
 ///
 /// If you divide 'num_hashes' by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last event. Since processing power increases
@@ -27,7 +27,7 @@ pub type Signature = GenericArray<u8, U64>;
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
 /// be generated in 'num_hashes' hashes and verified in 'num_hashes' hashes.  By logging
-/// a hash alongside the tick, each tick and be verified in parallel using the 'end_hash'
+/// a hash alongside the tick, each tick and be verified in parallel using the 'id'
 /// of the preceding tick to seed its hashing.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event<T> {

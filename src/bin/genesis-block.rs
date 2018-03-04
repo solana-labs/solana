@@ -22,7 +22,7 @@ fn main() {
     drop(logger.sender);
 
     let entries = receiver.iter().collect::<Vec<_>>();
-    verify_slice_u64(&entries, &entries[0].end_hash);
+    verify_slice_u64(&entries, &entries[0].id);
     println!("[");
     let len = entries.len();
     for (i, x) in entries.iter().enumerate() {

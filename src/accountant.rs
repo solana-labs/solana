@@ -25,7 +25,7 @@ pub type Result<T> = result::Result<T, AccountingError>;
 pub struct Accountant {
     pub historian: Historian<u64>,
     pub balances: HashMap<PublicKey, u64>,
-    pub end_hash: Sha256Hash,
+    pub last_id: Sha256Hash,
 }
 
 impl Accountant {
@@ -35,7 +35,7 @@ impl Accountant {
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
-            end_hash: start_hash,
+            last_id: start_hash,
         };
         for (i, event) in gen.create_events().into_iter().enumerate() {
             acc.process_verified_event(event, i < 2).unwrap();
@@ -50,7 +50,7 @@ impl Accountant {
         }
 
         if let Some(last_entry) = entries.last() {
-            self.end_hash = last_entry.end_hash;
+            self.last_id = last_entry.id;
         }
 
         entries

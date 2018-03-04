@@ -1,17 +1,17 @@
 msc {
   client,historian,logger;
 
-  logger=>historian [ label = "e0 = Entry{hash: h0, n: 0, event: Tick}" ] ;
+  logger=>historian [ label = "e0 = Entry{id: h0, n: 0, event: Tick}" ] ;
   logger=>logger [ label = "h1 = hash(h0)" ] ;
   logger=>logger [ label = "h2 = hash(h1)" ] ;
   client=>historian [ label = "Claim(d0)" ] ;
   historian=>logger [ label = "Claim(d0)" ] ;
   logger=>logger [ label = "h3 = hash(h2 + d0)" ] ;
-  logger=>historian [ label = "e1 = Entry{hash: hash(h3), n: 2, event: Claim(d0)}" ] ;
+  logger=>historian [ label = "e1 = Entry{id: hash(h3), n: 2, event: Claim(d0)}" ] ;
   logger=>logger [ label = "h4 = hash(h3)" ] ;
   logger=>logger [ label = "h5 = hash(h4)" ] ;
   logger=>logger [ label = "h6 = hash(h5)" ] ;
-  logger=>historian [ label = "e2 = Entry{hash: h6, n: 3, event: Tick}" ] ;
+  logger=>historian [ label = "e2 = Entry{id: h6, n: 3, event: Tick}" ] ;
   client=>historian [ label = "collect()" ] ;
   historian=>client [ label = "entries = [e0, e1, e2]" ] ;
   client=>client [ label = "verify_slice(entries, h0)" ] ;

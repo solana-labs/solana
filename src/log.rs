@@ -2,9 +2,9 @@
 //! an ordered log of events in time.
 
 /// Each log entry contains three pieces of data. The 'num_hashes' field is the number
-/// of hashes performed since the previous entry.  The 'end_hash' field is the result
-/// of hashing 'end_hash' from the previous entry 'num_hashes' times.  The 'event'
-/// field points to an Event that took place shortly after 'end_hash' was generated.
+/// of hashes performed since the previous entry.  The 'id' field is the result
+/// of hashing 'id' from the previous entry 'num_hashes' times.  The 'event'
+/// field points to an Event that took place shortly after 'id' was generated.
 ///
 /// If you divide 'num_hashes' by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last event. Since processing power increases
@@ -26,17 +26,17 @@ pub type Sha256Hash = GenericArray<u8, U32>;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry<T> {
     pub num_hashes: u64,
-    pub end_hash: Sha256Hash,
+    pub id: Sha256Hash,
     pub event: Event<T>,
 }
 
 impl<T> Entry<T> {
     /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
-    /// and that resulting 'end_hash'.
-    pub fn new_tick(num_hashes: u64, end_hash: &Sha256Hash) -> Self {
+    /// and that resulting 'id'.
+    pub fn new_tick(num_hashes: u64, id: &Sha256Hash) -> Self {
         Entry {
             num_hashes,
-            end_hash: *end_hash,
+            id: *id,
             event: Event::Tick,
         }
     }
@@ -50,16 +50,16 @@ pub fn hash(val: &[u8]) -> Sha256Hash {
 }
 
 /// Return the hash of the given hash extended with the given value.
-pub fn extend_and_hash(end_hash: &Sha256Hash, val: &[u8]) -> Sha256Hash {
-    let mut hash_data = end_hash.to_vec();
+pub fn extend_and_hash(id: &Sha256Hash, val: &[u8]) -> Sha256Hash {
+    let mut hash_data = id.to_vec();
     hash_data.extend_from_slice(val);
     hash(&hash_data)
 }
 
-pub fn hash_event<T>(end_hash: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
+pub fn hash_event<T>(id: &Sha256Hash, event: &Event<T>) -> Sha256Hash {
     match get_signature(event) {
-        None => *end_hash,
-        Some(sig) => extend_and_hash(end_hash, &sig),
+        None => *id,
+        Some(sig) => extend_and_hash(id, &sig),
     }
 }
 
@@ -69,11 +69,11 @@ pub fn next_hash<T: Serialize>(
     num_hashes: u64,
     event: &Event<T>,
 ) -> Sha256Hash {
-    let mut end_hash = *start_hash;
+    let mut id = *start_hash;
     for _ in 0..num_hashes {
-        end_hash = hash(&end_hash);
+        id = hash(&id);
     }
-    hash_event(&end_hash, event)
+    hash_event(&id, event)
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
@@ -84,7 +84,7 @@ pub fn next_entry<T: Serialize>(
 ) -> Entry<T> {
     Entry {
         num_hashes,
-        end_hash: next_hash(start_hash, num_hashes, &event),
+        id: next_hash(start_hash, num_hashes, &event),
         event,
     }
 }
@@ -96,7 +96,7 @@ pub fn next_entry_mut<T: Serialize>(
     event: Event<T>,
 ) -> Entry<T> {
     let entry = next_entry(start_hash, num_hashes, event);
-    *start_hash = entry.end_hash;
+    *start_hash = entry.id;
     entry
 }
 
@@ -105,34 +105,34 @@ pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entr
     next_entry(start_hash, num_hashes, Event::Tick)
 }
 
-/// Verifies self.end_hash is the result of hashing a 'start_hash' 'self.num_hashes' times.
+/// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
 /// If the event is not a Tick, then hash that as well.
 pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
     if !verify_event(&entry.event) {
         return false;
     }
-    entry.end_hash == next_hash(start_hash, entry.num_hashes, &entry.event)
+    entry.id == next_hash(start_hash, entry.num_hashes, &entry.event)
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice_u64(events: &[Entry<u64>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq<T: Serialize>(events: &[Entry<T>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];
     let mut event_pairs = genesis.iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.end_hash))
+    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
 }
 
 pub fn create_entries<T: Serialize>(
@@ -140,10 +140,10 @@ pub fn create_entries<T: Serialize>(
     num_hashes: u64,
     events: Vec<Event<T>>,
 ) -> Vec<Entry<T>> {
-    let mut end_hash = *start_hash;
+    let mut id = *start_hash;
     events
         .into_iter()
-        .map(|event| next_entry_mut(&mut end_hash, num_hashes, event))
+        .map(|event| next_entry_mut(&mut id, num_hashes, event))
         .collect()
 }
 
@@ -153,10 +153,10 @@ pub fn create_ticks(
     num_hashes: u64,
     len: usize,
 ) -> Vec<Entry<Sha256Hash>> {
-    let mut end_hash = *start_hash;
+    let mut id = *start_hash;
     iter::repeat(Event::Tick)
         .take(len)
-        .map(|event| next_entry_mut(&mut end_hash, num_hashes, event))
+        .map(|event| next_entry_mut(&mut id, num_hashes, event))
         .collect()
 }
 
@@ -189,7 +189,7 @@ mod tests {
         assert!(verify_slice(&create_ticks(&zero, 0, 2), &zero)); // inductive step
 
         let mut bad_ticks = create_ticks(&zero, 0, 2);
-        bad_ticks[1].end_hash = one;
+        bad_ticks[1].id = one;
         assert!(!verify_slice(&bad_ticks, &zero)); // inductive step, bad
     }
 

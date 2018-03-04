@@ -53,7 +53,7 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
                 if let Err(err) = logger.log_events(now, ms_per_tick) {
                     return err;
                 }
-                logger.end_hash = hash(&logger.end_hash);
+                logger.last_id = hash(&logger.last_id);
                 logger.num_hashes += 1;
             }
         })

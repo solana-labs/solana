@@ -22,7 +22,7 @@ pub enum ExitReason {
 pub struct Logger<T> {
     pub sender: SyncSender<Entry<T>>,
     pub receiver: Receiver<Event<T>>,
-    pub end_hash: Sha256Hash,
+    pub last_id: Sha256Hash,
     pub num_hashes: u64,
     pub num_ticks: u64,
 }
@@ -52,16 +52,16 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
         Logger {
             receiver,
             sender,
-            end_hash: start_hash,
+            last_id: start_hash,
             num_hashes: 0,
             num_ticks: 0,
         }
     }
 
     pub fn log_event(&mut self, event: Event<T>) -> Result<(), (Entry<T>, ExitReason)> {
-        self.end_hash = hash_event(&self.end_hash, &event);
+        self.last_id = hash_event(&self.last_id, &event);
         let entry = Entry {
-            end_hash: self.end_hash,
+            id: self.last_id,
             num_hashes: self.num_hashes,
             event,
         };
@@ -93,7 +93,7 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
                 }
                 Err(TryRecvError::Disconnected) => {
                     let entry = Entry {
-                        end_hash: self.end_hash,
+                        id: self.last_id,
                         num_hashes: self.num_hashes,
                         event: Event::Tick,
                     };
@@ -148,12 +148,12 @@ mod tests {
     #[test]
     fn test_genesis_no_creators() {
         let entries = run_genesis(Genesis::new(100, vec![]));
-        assert!(verify_slice_u64(&entries, &entries[0].end_hash));
+        assert!(verify_slice_u64(&entries, &entries[0].id));
     }
 
     #[test]
     fn test_genesis() {
         let entries = run_genesis(Genesis::new(100, vec![Creator::new(42)]));
-        assert!(verify_slice_u64(&entries, &entries[0].end_hash));
+        assert!(verify_slice_u64(&entries, &entries[0].id));
     }
 }
