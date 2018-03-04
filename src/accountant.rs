@@ -54,17 +54,6 @@ impl Accountant {
         entries
     }
 
-    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> Result<Signature> {
-        use event::{get_pubkey, sign_claim_data};
-        let to = get_pubkey(keypair);
-        let sig = sign_claim_data(&n, keypair);
-        let event = Event::new_claim(to, n, sig);
-        if !self.historian.verify_event(&event) {
-            return Err(AccountingError::InvalidEvent);
-        }
-        self.process_verified_event(event, true).map(|_| sig)
-    }
-
     fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
         allow_deposits && from == to
     }
@@ -210,9 +199,6 @@ mod tests {
         let mut acc = Accountant::new(&alice, Some(2));
         let alice_keypair = alice.get_keypair();
         let bob_keypair = generate_keypair();
-        let sig = acc.deposit(10_000, &alice_keypair).unwrap();
-        acc.wait_on_signature(&sig);
-
         let bob_pubkey = get_pubkey(&bob_keypair);
         let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         acc.wait_on_signature(&sig);
