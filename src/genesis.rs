@@ -1,8 +1,7 @@
 //! A library for generating the chain's genesis block.
 
 use event::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data, Event, PublicKey};
-use log::Sha256Hash;
-use ring::rand::{SecureRandom, SystemRandom};
+use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use untrusted::Input;
 
@@ -38,7 +37,6 @@ impl Creator {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Genesis {
-    pub seed: Sha256Hash,
     pub pkcs8: Vec<u8>,
     pub tokens: u64,
     pub creators: Vec<Creator>,
@@ -47,12 +45,8 @@ pub struct Genesis {
 impl Genesis {
     pub fn new(tokens: u64, creators: Vec<Creator>) -> Self {
         let rnd = SystemRandom::new();
-        let mut seed_arr = [0; 32];
-        rnd.fill(&mut seed_arr).unwrap();
-        let seed = *Sha256Hash::from_slice(&seed_arr);
         let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
         Genesis {
-            seed,
             pkcs8,
             tokens,
             creators,
@@ -62,8 +56,9 @@ impl Genesis {
     pub fn create_events(&self) -> Vec<Event<u64>> {
         let org_keypair = Ed25519KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap();
         let sig = sign_claim_data(&self.tokens, &org_keypair);
-        let event0 = Event::new_claim(get_pubkey(&org_keypair), self.tokens, sig);
-        let mut events = vec![event0];
+        let event0 = Event::Tick;
+        let event1 = Event::new_claim(get_pubkey(&org_keypair), self.tokens, sig);
+        let mut events = vec![event0, event1];
 
         for creator in &self.creators {
             let tx = creator.create_transaction(&org_keypair);
@@ -87,12 +82,12 @@ mod tests {
 
     #[test]
     fn test_create_events() {
-        assert_eq!(Genesis::new(100, vec![]).create_events().len(), 1);
+        assert_eq!(Genesis::new(100, vec![]).create_events().len(), 2);
         assert_eq!(
             Genesis::new(100, vec![Creator::new("Satoshi", 42)])
                 .create_events()
                 .len(),
-            2
+            3
         );
     }
 }

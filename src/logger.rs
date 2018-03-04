@@ -135,10 +135,10 @@ mod tests {
         assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
     }
 
-    fn run_genesis(gen: &Genesis) -> Vec<Entry<u64>> {
+    fn run_genesis(gen: Genesis) -> Vec<Entry<u64>> {
         let (_sender, event_receiver) = sync_channel(100);
         let (entry_sender, receiver) = sync_channel(100);
-        let mut logger = Logger::new(event_receiver, entry_sender, gen.seed);
+        let mut logger = Logger::new(event_receiver, entry_sender, hash(&gen.pkcs8));
         for tx in gen.create_events() {
             logger.log_event(tx).unwrap();
         }
@@ -148,13 +148,13 @@ mod tests {
 
     #[test]
     fn test_genesis_no_creators() {
-        let gen = Genesis::new(100, vec![]);
-        assert!(verify_slice_u64(&run_genesis(&gen), &gen.seed));
+        let entries = run_genesis(Genesis::new(100, vec![]));
+        assert!(verify_slice_u64(&entries, &entries[0].end_hash));
     }
 
     #[test]
     fn test_genesis() {
-        let gen = Genesis::new(100, vec![Creator::new("Satoshi", 42)]);
-        assert!(verify_slice_u64(&run_genesis(&gen), &gen.seed));
+        let entries = run_genesis(Genesis::new(100, vec![Creator::new("Satoshi", 42)]));
+        assert!(verify_slice_u64(&entries, &entries[0].end_hash));
     }
 }
