@@ -19,7 +19,6 @@ use serde::Serialize;
 use event::{get_signature, verify_event, Event};
 use sha2::{Digest, Sha256};
 use rayon::prelude::*;
-use std::iter;
 
 pub type Sha256Hash = GenericArray<u8, U32>;
 
@@ -77,32 +76,41 @@ pub fn next_hash<T: Serialize>(
 }
 
 /// Creates the next Entry 'num_hashes' after 'start_hash'.
-pub fn next_entry<T: Serialize>(
+pub fn create_entry<T: Serialize>(
     start_hash: &Sha256Hash,
-    num_hashes: u64,
+    cur_hashes: u64,
     event: Event<T>,
 ) -> Entry<T> {
+    let sig = get_signature(&event);
+    let num_hashes = cur_hashes + if sig.is_some() { 1 } else { 0 };
+    let id = next_hash(start_hash, 0, &event);
     Entry {
         num_hashes,
-        id: next_hash(start_hash, num_hashes, &event),
+        id,
         event,
     }
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_entry_mut<T: Serialize>(
+pub fn create_entry_mut<T: Serialize>(
     start_hash: &mut Sha256Hash,
-    num_hashes: u64,
+    cur_hashes: &mut u64,
     event: Event<T>,
 ) -> Entry<T> {
-    let entry = next_entry(start_hash, num_hashes, event);
+    let entry = create_entry(start_hash, *cur_hashes, event);
     *start_hash = entry.id;
+    *cur_hashes = 0;
     entry
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
 pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entry<T> {
-    next_entry(start_hash, num_hashes, Event::Tick)
+    let event = Event::Tick;
+    Entry {
+        num_hashes,
+        id: next_hash(start_hash, num_hashes, &event),
+        event,
+    }
 }
 
 /// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
@@ -137,27 +145,25 @@ pub fn verify_slice_seq<T: Serialize>(events: &[Entry<T>], start_hash: &Sha256Ha
 
 pub fn create_entries<T: Serialize>(
     start_hash: &Sha256Hash,
-    num_hashes: u64,
     events: Vec<Event<T>>,
 ) -> Vec<Entry<T>> {
     let mut id = *start_hash;
     events
         .into_iter()
-        .map(|event| next_entry_mut(&mut id, num_hashes, event))
+        .map(|event| create_entry_mut(&mut id, &mut 0, event))
         .collect()
 }
 
 /// Create a vector of Ticks of length 'len' from 'start_hash' hash and 'num_hashes'.
-pub fn create_ticks(
-    start_hash: &Sha256Hash,
-    num_hashes: u64,
-    len: usize,
-) -> Vec<Entry<Sha256Hash>> {
+pub fn next_ticks(start_hash: &Sha256Hash, num_hashes: u64, len: usize) -> Vec<Entry<Sha256Hash>> {
     let mut id = *start_hash;
-    iter::repeat(Event::Tick)
-        .take(len)
-        .map(|event| next_entry_mut(&mut id, num_hashes, event))
-        .collect()
+    let mut ticks = vec![];
+    for _ in 0..len {
+        let entry = next_tick(&id, num_hashes);
+        id = entry.id;
+        ticks.push(entry);
+    }
+    ticks
 }
 
 #[cfg(test)]
@@ -187,9 +193,9 @@ mod tests {
         assert!(verify_slice(&vec![], &zero)); // base case
         assert!(verify_slice(&vec![Entry::new_tick(0, &zero)], &zero)); // singleton case 1
         assert!(!verify_slice(&vec![Entry::new_tick(0, &zero)], &one)); // singleton case 2, bad
-        assert!(verify_slice(&create_ticks(&zero, 0, 2), &zero)); // inductive step
+        assert!(verify_slice(&next_ticks(&zero, 0, 2), &zero)); // inductive step
 
-        let mut bad_ticks = create_ticks(&zero, 0, 2);
+        let mut bad_ticks = next_ticks(&zero, 0, 2);
         bad_ticks[1].id = one;
         assert!(!verify_slice(&bad_ticks, &zero)); // inductive step, bad
     }
@@ -214,7 +220,7 @@ mod tests {
         let event0 = Event::new_claim(get_pubkey(&keypair), zero, sign_claim_data(&zero, &keypair));
         let event1 = Event::new_claim(get_pubkey(&keypair), one, sign_claim_data(&one, &keypair));
         let events = vec![event0, event1];
-        let mut entries = create_entries(&zero, 0, events);
+        let mut entries = create_entries(&zero, events);
         assert!(verify_slice(&entries, &zero));
 
         // Next, swap two events and ensure verification fails.
@@ -231,7 +237,7 @@ mod tests {
         let data = hash(b"hello, world");
         let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_claim_data(&data, &keypair));
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, vec![event0]);
+        let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
 
@@ -244,7 +250,7 @@ mod tests {
             sign_claim_data(&hash(b"hello, world"), &keypair),
         );
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, vec![event0]);
+        let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 
@@ -261,7 +267,7 @@ mod tests {
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),
         };
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, vec![event0]);
+        let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
 
@@ -278,7 +284,7 @@ mod tests {
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),
         };
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, vec![event0]);
+        let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 
@@ -296,7 +302,7 @@ mod tests {
             sig: sign_transaction_data(&data, &keypair0, &pubkey1),
         };
         let zero = Sha256Hash::default();
-        let entries = create_entries(&zero, 0, vec![event0]);
+        let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 }
@@ -310,7 +316,7 @@ mod bench {
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = Default::default();
-        let events = create_ticks(&start_hash, 10_000, 8);
+        let events = next_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
             assert!(verify_slice(&events, &start_hash));
         });
@@ -319,7 +325,7 @@ mod bench {
     #[bench]
     fn event_bench_seq(bencher: &mut Bencher) {
         let start_hash = Default::default();
-        let events = create_ticks(&start_hash, 10_000, 8);
+        let events = next_ticks(&start_hash, 10_000, 8);
         bencher.iter(|| {
             assert!(verify_slice_seq(&events, &start_hash));
         });
