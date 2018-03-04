@@ -61,6 +61,7 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
     pub fn log_event(&mut self, event: Event<T>) -> Result<(), (Entry<T>, ExitReason)> {
         if let Some(sig) = get_signature(&event) {
             self.last_id = extend_and_hash(&self.last_id, &sig);
+            self.num_hashes += 1;
         }
         let entry = Entry {
             id: self.last_id,

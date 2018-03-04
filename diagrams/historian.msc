@@ -4,10 +4,10 @@ msc {
   logger=>historian [ label = "e0 = Entry{id: h0, n: 0, event: Tick}" ] ;
   logger=>logger [ label = "h1 = hash(h0)" ] ;
   logger=>logger [ label = "h2 = hash(h1)" ] ;
-  client=>historian [ label = "Claim(d0)" ] ;
-  historian=>logger [ label = "Claim(d0)" ] ;
+  client=>historian [ label = "Transaction(d0)" ] ;
+  historian=>logger [ label = "Transaction(d0)" ] ;
   logger=>logger [ label = "h3 = hash(h2 + d0)" ] ;
-  logger=>historian [ label = "e1 = Entry{id: hash(h3), n: 2, event: Claim(d0)}" ] ;
+  logger=>historian [ label = "e1 = Entry{id: hash(h3), n: 3, event: Transaction(d0)}" ] ;
   logger=>logger [ label = "h4 = hash(h3)" ] ;
   logger=>logger [ label = "h5 = hash(h4)" ] ;
   logger=>logger [ label = "h6 = hash(h5)" ] ;

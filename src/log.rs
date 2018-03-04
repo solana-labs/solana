@@ -56,23 +56,27 @@ pub fn extend_and_hash(id: &Sha256Hash, val: &[u8]) -> Sha256Hash {
     hash(&hash_data)
 }
 
-/// Creates the hash 'num_hashes' after start_hash, plus an additional hash for any event data.
+/// Creates the hash 'num_hashes' after start_hash. If the event contains
+/// signature, the final hash will be a hash of both the previous ID and
+/// the signature.
 pub fn next_hash<T: Serialize>(
     start_hash: &Sha256Hash,
     num_hashes: u64,
     event: &Event<T>,
 ) -> Sha256Hash {
     let mut id = *start_hash;
-    for _ in 0..num_hashes {
+    let sig = get_signature(event);
+    let start_index = if sig.is_some() { 1 } else { 0 };
+    for _ in start_index..num_hashes {
         id = hash(&id);
     }
-    match get_signature(event) {
-        None => id,
-        Some(sig) => extend_and_hash(&id, &sig),
+    if let Some(sig) = sig {
+        id = extend_and_hash(&id, &sig);
     }
+    id
 }
 
-/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+/// Creates the next Entry 'num_hashes' after 'start_hash'.
 pub fn next_entry<T: Serialize>(
     start_hash: &Sha256Hash,
     num_hashes: u64,

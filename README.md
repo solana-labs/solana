@@ -72,7 +72,7 @@ Running the program should produce a log similar to:
 
 ```rust
 Entry { num_hashes: 0, id: [0, ...], event: Tick }
-Entry { num_hashes: 2, id: [67, ...], event: Transaction { data: [37, ...] } }
+Entry { num_hashes: 3, id: [67, ...], event: Transaction { data: [37, ...] } }
 Entry { num_hashes: 3, id: [123, ...], event: Tick }
 ```
 
