@@ -1,6 +1,8 @@
 use std::io;
 use accountant::Accountant;
 use event::{Event, PublicKey, Signature};
+use std::net::UdpSocket;
+use bincode::{deserialize, serialize};
 
 pub struct AccountantSkel {
     pub obj: Accountant,
@@ -60,8 +62,6 @@ impl AccountantSkel {
 
     /// UDP Server that forwards messages to Accountant methods.
     pub fn serve(self: &mut Self, addr: &str) -> io::Result<()> {
-        use std::net::UdpSocket;
-        use bincode::{deserialize, serialize};
         let socket = UdpSocket::bind(addr)?;
         let mut buf = vec![0u8; 1024];
         loop {

@@ -3,13 +3,15 @@
 //! transfer funds to other users.
 
 use log::{hash, Entry, Sha256Hash};
-use event::{Event, PublicKey, Signature};
+use event::{get_pubkey, sign_transaction_data, Event, PublicKey, Signature};
 use genesis::Genesis;
 use historian::Historian;
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
 use std::result;
+use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -23,7 +25,7 @@ pub type Result<T> = result::Result<T, AccountingError>;
 pub struct Accountant {
     pub historian: Historian<u64>,
     pub balances: HashMap<PublicKey, u64>,
-    pub end_hash: Sha256Hash,
+    pub last_id: Sha256Hash,
 }
 
 impl Accountant {
@@ -33,7 +35,7 @@ impl Accountant {
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
-            end_hash: start_hash,
+            last_id: start_hash,
         };
         for (i, event) in gen.create_events().into_iter().enumerate() {
             acc.process_verified_event(event, i < 2).unwrap();
@@ -48,21 +50,10 @@ impl Accountant {
         }
 
         if let Some(last_entry) = entries.last() {
-            self.end_hash = last_entry.end_hash;
+            self.last_id = last_entry.id;
         }
 
         entries
-    }
-
-    pub fn deposit(self: &mut Self, n: u64, keypair: &Ed25519KeyPair) -> Result<Signature> {
-        use event::{get_pubkey, sign_claim_data};
-        let to = get_pubkey(keypair);
-        let sig = sign_claim_data(&n, keypair);
-        let event = Event::new_claim(to, n, sig);
-        if !self.historian.verify_event(&event) {
-            return Err(AccountingError::InvalidEvent);
-        }
-        self.process_verified_event(event, true).map(|_| sig)
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
@@ -118,7 +109,6 @@ impl Accountant {
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> Result<Signature> {
-        use event::{get_pubkey, sign_transaction_data};
         let from = get_pubkey(keypair);
         let sig = sign_transaction_data(&n, keypair, &to);
         let event = Event::Transaction {
@@ -135,8 +125,6 @@ impl Accountant {
     }
 
     pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) {
-        use std::thread::sleep;
-        use std::time::Duration;
         let mut entries = self.sync();
         let mut found = false;
         while !found {
@@ -158,6 +146,8 @@ mod tests {
     use event::{generate_keypair, get_pubkey};
     use logger::ExitReason;
     use genesis::Creator;
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_accountant() {
@@ -180,8 +170,6 @@ mod tests {
 
     #[test]
     fn test_invalid_transfer() {
-        use std::thread::sleep;
-        use std::time::Duration;
         let bob = Creator::new(1_000);
         let bob_pubkey = bob.pubkey;
         let alice = Genesis::new(11_000, vec![bob]);
@@ -210,9 +198,6 @@ mod tests {
         let mut acc = Accountant::new(&alice, Some(2));
         let alice_keypair = alice.get_keypair();
         let bob_keypair = generate_keypair();
-        let sig = acc.deposit(10_000, &alice_keypair).unwrap();
-        acc.wait_on_signature(&sig);
-
         let bob_pubkey = get_pubkey(&bob_keypair);
         let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         acc.wait_on_signature(&sig);
