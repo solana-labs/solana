@@ -1,24 +1,36 @@
+//extern crate serde_json;
 extern crate silk;
+
+//use std::io::stdin;
 
 fn main() {
     use silk::accountant_stub::AccountantStub;
+    use silk::accountant_skel::AccountantSkel;
+    use silk::accountant::Accountant;
+    use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
+    use silk::genesis::Genesis;
     use std::time::Instant;
     use std::net::UdpSocket;
-    use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
+    use std::thread::{sleep, spawn};
+    use std::time::Duration;
 
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
+
+    let txs = 200;
+
+    let gen = Genesis::new(txs, vec![]);
+    let alice_keypair = generate_keypair();
+    //let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
+    //let alice_keypair = gen.get_keypair();
+
+    let acc = Accountant::new(&gen, None);
+    spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
+    sleep(Duration::from_millis(30));
+
     let socket = UdpSocket::bind(send_addr).unwrap();
     let acc = AccountantStub::new(addr, socket);
-    let alice_keypair = generate_keypair();
     let alice_pubkey = get_pubkey(&alice_keypair);
-    let txs = 2_000;
-    println!("Depositing {} units in Alice's account...", txs);
-    let sig = acc.deposit(txs, &alice_keypair).unwrap();
-    acc.wait_on_signature(&sig).unwrap();
-    assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), txs);
-    println!("Done.");
-
     let one = 1;
     println!("Signing transactions...");
     let now = Instant::now();
@@ -45,7 +57,7 @@ fn main() {
     let now = Instant::now();
     for &(k, s) in &sigs {
         let e = Event::Transaction {
-            from: Some(alice_pubkey),
+            from: alice_pubkey,
             to: k,
             data: one,
             sig: s,
@@ -64,7 +76,7 @@ fn main() {
 
     println!("Transferring 1 unit {} times...", txs);
     let now = Instant::now();
-    let mut sig = sig;
+    let mut sig = Default::default();
     for (k, s) in sigs {
         acc.transfer_signed(alice_pubkey, k, one, s).unwrap();
         sig = s;

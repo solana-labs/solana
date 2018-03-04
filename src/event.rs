@@ -30,7 +30,7 @@ pub type Signature = GenericArray<u8, U64>;
 pub enum Event<T> {
     Tick,
     Transaction {
-        from: Option<PublicKey>,
+        from: PublicKey,
         to: PublicKey,
         data: T,
         sig: Signature,
@@ -40,7 +40,7 @@ pub enum Event<T> {
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
         Event::Transaction {
-            from: None,
+            from: to,
             to,
             data,
             sig,
@@ -75,15 +75,13 @@ pub fn sign_transaction_data<T: Serialize>(
     keypair: &Ed25519KeyPair,
     to: &PublicKey,
 ) -> Signature {
-    let from = &Some(get_pubkey(keypair));
+    let from = &get_pubkey(keypair);
     sign_serialized(&(from, to, data), keypair)
 }
 
 /// Return a signature for the given data using the private key from the given keypair.
 pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
-    let to = get_pubkey(keypair);
-    let from: Option<PublicKey> = None;
-    sign_serialized(&(&from, &to, data), keypair)
+    sign_transaction_data(data, keypair, &get_pubkey(keypair))
 }
 
 /// Verify a signed message with the given public key.
@@ -113,7 +111,7 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
     } = *event
     {
         let sign_data = serialize(&(&from, &to, &data)).unwrap();
-        if !verify_signature(&from.unwrap_or(to), &sign_data, &sig) {
+        if !verify_signature(&from, &sign_data, &sig) {
             return false;
         }
     }

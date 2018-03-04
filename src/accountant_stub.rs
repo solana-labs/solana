@@ -22,24 +22,6 @@ impl AccountantStub {
         }
     }
 
-    pub fn deposit_signed(
-        self: &Self,
-        key: PublicKey,
-        val: u64,
-        sig: Signature,
-    ) -> io::Result<usize> {
-        let req = Request::Deposit { key, val, sig };
-        let data = serialize(&req).unwrap();
-        self.socket.send_to(&data, &self.addr)
-    }
-
-    pub fn deposit(self: &Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
-        use event::{get_pubkey, sign_claim_data};
-        let key = get_pubkey(keypair);
-        let sig = sign_claim_data(&n, keypair);
-        self.deposit_signed(key, n, sig).map(|_| sig)
-    }
-
     pub fn transfer_signed(
         self: &Self,
         from: PublicKey,
@@ -100,32 +82,22 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use log::Sha256Hash;
-    use event::{generate_keypair, get_pubkey};
+    use genesis::{Creator, Genesis};
 
     #[test]
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        spawn(move || {
-            let zero = Sha256Hash::default();
-            let acc = Accountant::new(&zero, None);
-            let mut skel = AccountantSkel::new(acc);
-            skel.serve(addr).unwrap();
-        });
-
+        let bob = Creator::new(1_000);
+        let bob_pubkey = bob.pubkey;
+        let alice = Genesis::new(10_000, vec![bob]);
+        let acc = Accountant::new(&alice, None);
+        spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
         let acc = AccountantStub::new(addr, socket);
-        let alice_keypair = generate_keypair();
-        let bob_keypair = generate_keypair();
-        acc.deposit(10_000, &alice_keypair).unwrap();
-        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
-        acc.wait_on_signature(&sig).unwrap();
-
-        let bob_pubkey = get_pubkey(&bob_keypair);
-        let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
         acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
     }
