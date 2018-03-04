@@ -22,24 +22,6 @@ impl AccountantStub {
         }
     }
 
-    pub fn deposit_signed(
-        self: &Self,
-        key: PublicKey,
-        val: u64,
-        sig: Signature,
-    ) -> io::Result<usize> {
-        let req = Request::Deposit { key, val, sig };
-        let data = serialize(&req).unwrap();
-        self.socket.send_to(&data, &self.addr)
-    }
-
-    pub fn deposit(self: &Self, n: u64, keypair: &Ed25519KeyPair) -> io::Result<Signature> {
-        use event::{get_pubkey, sign_claim_data};
-        let key = get_pubkey(keypair);
-        let sig = sign_claim_data(&n, keypair);
-        self.deposit_signed(key, n, sig).map(|_| sig)
-    }
-
     pub fn transfer_signed(
         self: &Self,
         from: PublicKey,
@@ -107,23 +89,18 @@ mod tests {
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        spawn(move || {
-            let zero = Sha256Hash::default();
-            let acc = Accountant::new(&zero, None);
-            let mut skel = AccountantSkel::new(acc);
-            skel.serve(addr).unwrap();
-        });
-
+        let zero = Sha256Hash::default();
+        let alice_keypair = generate_keypair();
+        let bob_keypair = generate_keypair();
+        let mut acc = Accountant::new(&zero, None);
+        acc.deposit(10_000, &alice_keypair).unwrap();
+        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
+        acc.wait_on_signature(&sig);
+        spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
         let acc = AccountantStub::new(addr, socket);
-        let alice_keypair = generate_keypair();
-        let bob_keypair = generate_keypair();
-        acc.deposit(10_000, &alice_keypair).unwrap();
-        let sig = acc.deposit(1_000, &bob_keypair).unwrap();
-        acc.wait_on_signature(&sig).unwrap();
-
         let bob_pubkey = get_pubkey(&bob_keypair);
         let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         acc.wait_on_signature(&sig).unwrap();

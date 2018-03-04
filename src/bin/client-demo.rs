@@ -2,23 +2,29 @@ extern crate silk;
 
 fn main() {
     use silk::accountant_stub::AccountantStub;
+    use silk::accountant_skel::AccountantSkel;
+    use silk::accountant::Accountant;
+    use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
     use std::time::Instant;
     use std::net::UdpSocket;
-    use silk::event::{generate_keypair, get_pubkey, sign_transaction_data};
+    use std::thread::{sleep, spawn};
+    use std::time::Duration;
 
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
+
+    let zero = Default::default();
+    let alice_keypair = generate_keypair();
+    let mut acc = Accountant::new(&zero, None);
+    let txs = 200;
+    let sig = acc.deposit(txs, &alice_keypair).unwrap();
+    acc.wait_on_signature(&sig);
+    spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
+    sleep(Duration::from_millis(30));
+
     let socket = UdpSocket::bind(send_addr).unwrap();
     let acc = AccountantStub::new(addr, socket);
-    let alice_keypair = generate_keypair();
     let alice_pubkey = get_pubkey(&alice_keypair);
-    let txs = 2_000;
-    println!("Depositing {} units in Alice's account...", txs);
-    let sig = acc.deposit(txs, &alice_keypair).unwrap();
-    acc.wait_on_signature(&sig).unwrap();
-    assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), txs);
-    println!("Done.");
-
     let one = 1;
     println!("Signing transactions...");
     let now = Instant::now();
@@ -64,7 +70,7 @@ fn main() {
 
     println!("Transferring 1 unit {} times...", txs);
     let now = Instant::now();
-    let mut sig = sig;
+    let mut sig = Default::default();
     for (k, s) in sigs {
         acc.transfer_signed(alice_pubkey, k, one, s).unwrap();
         sig = s;
