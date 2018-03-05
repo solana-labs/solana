@@ -1,7 +1,7 @@
 //! A library for generating the chain's genesis block.
 
 use event::{generate_keypair, get_pubkey, sign_transaction_data, Event, PublicKey};
-use log::{hash, Sha256Hash};
+use log::{create_entries, hash, Entry, Sha256Hash};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use untrusted::Input;
@@ -76,6 +76,10 @@ impl Genesis {
         }
 
         events
+    }
+
+    pub fn create_entries(&self) -> Vec<Entry<u64>> {
+        create_entries(&self.get_seed(), self.create_events())
     }
 }
 
