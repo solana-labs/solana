@@ -1,6 +1,7 @@
 use std::io;
 use accountant::Accountant;
 use event::{Event, PublicKey, Signature};
+use log::{Entry, Sha256Hash};
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
 
@@ -19,8 +20,8 @@ pub enum Request {
     GetBalance {
         key: PublicKey,
     },
-    Wait {
-        sig: Signature,
+    GetEntries {
+        last_id: Option<Sha256Hash>,
     },
 }
 
@@ -28,6 +29,7 @@ pub enum Request {
 pub enum Response {
     Balance { key: PublicKey, val: u64 },
     Confirmed { sig: Signature },
+    Entries { entries: Vec<Entry<u64>> },
 }
 
 impl AccountantSkel {
@@ -53,7 +55,7 @@ impl AccountantSkel {
                 let val = self.obj.get_balance(&key).unwrap();
                 Some(Response::Balance { key, val })
             }
-            Request::Wait { sig } => Some(Response::Confirmed { sig }),
+            Request::GetEntries { .. } => Some(Response::Entries { entries: vec![] }),
         }
     }
 

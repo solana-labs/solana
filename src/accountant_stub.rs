@@ -5,13 +5,15 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{get_pubkey, sign_transaction_data, PublicKey, Signature};
+use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature};
+use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 
 pub struct AccountantStub {
     pub addr: String,
     pub socket: UdpSocket,
+    pub last_id: Option<Sha256Hash>,
 }
 
 impl AccountantStub {
@@ -19,11 +21,12 @@ impl AccountantStub {
         AccountantStub {
             addr: addr.to_string(),
             socket,
+            last_id: None,
         }
     }
 
     pub fn transfer_signed(
-        self: &Self,
+        &self,
         from: PublicKey,
         to: PublicKey,
         val: u64,
@@ -35,7 +38,7 @@ impl AccountantStub {
     }
 
     pub fn transfer(
-        self: &Self,
+        &self,
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
@@ -45,7 +48,7 @@ impl AccountantStub {
         self.transfer_signed(from, to, n, sig).map(|_| sig)
     }
 
-    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> io::Result<u64> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<u64> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket.send_to(&data, &self.addr)?;
@@ -59,17 +62,28 @@ impl AccountantStub {
         Ok(0)
     }
 
-    pub fn wait_on_signature(self: &Self, wait_sig: &Signature) -> io::Result<()> {
-        let req = Request::Wait { sig: *wait_sig };
+    pub fn wait_on_signature(&mut self, wait_sig: &Signature) -> io::Result<()> {
+        let req = Request::GetEntries {
+            last_id: self.last_id,
+        };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr).map(|_| ())?;
 
         let mut buf = vec![0u8; 1024];
         self.socket.recv_from(&mut buf)?;
         let resp = deserialize(&buf).expect("deserialize signature");
-        if let Response::Confirmed { sig } = resp {
-            assert_eq!(sig, *wait_sig);
+        if let Response::Entries { entries } = resp {
+            for Entry { id, event, .. } in entries {
+                self.last_id = Some(id);
+                if let Some(sig) = get_signature(&event) {
+                    if sig == *wait_sig {
+                        return Ok(());
+                    }
+                }
+            }
         }
+
+        // TODO: Loop until we found it.
         Ok(())
     }
 }
@@ -95,7 +109,7 @@ mod tests {
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
-        let acc = AccountantStub::new(addr, socket);
+        let mut acc = AccountantStub::new(addr, socket);
         let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
         acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);

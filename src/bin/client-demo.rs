@@ -28,7 +28,7 @@ fn main() {
     sleep(Duration::from_millis(30));
 
     let socket = UdpSocket::bind(send_addr).unwrap();
-    let acc = AccountantStub::new(addr, socket);
+    let mut acc = AccountantStub::new(addr, socket);
     let alice_pubkey = get_pubkey(&alice_keypair);
     let one = 1;
     println!("Signing transactions...");
