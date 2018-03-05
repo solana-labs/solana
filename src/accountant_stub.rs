@@ -30,9 +30,16 @@ impl AccountantStub {
         from: PublicKey,
         to: PublicKey,
         val: u64,
+        last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
-        let req = Request::Transfer { from, to, val, sig };
+        let req = Request::Transfer {
+            from,
+            to,
+            val,
+            last_id,
+            sig,
+        };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)
     }
@@ -42,10 +49,12 @@ impl AccountantStub {
         n: u64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
+        last_id: &Sha256Hash,
     ) -> io::Result<Signature> {
         let from = get_pubkey(keypair);
-        let sig = sign_transaction_data(&n, keypair, &to);
-        self.transfer_signed(from, to, n, sig).map(|_| sig)
+        let sig = sign_transaction_data(&n, keypair, &to, last_id);
+        self.transfer_signed(from, to, n, *last_id, sig)
+            .map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<u64> {
@@ -62,10 +71,34 @@ impl AccountantStub {
         Ok(0)
     }
 
+    fn get_id(&self, is_last: bool) -> io::Result<Sha256Hash> {
+        let req = Request::GetId { is_last };
+        let data = serialize(&req).expect("serialize GetId");
+        self.socket.send_to(&data, &self.addr)?;
+        let mut buf = vec![0u8; 1024];
+        self.socket.recv_from(&mut buf)?;
+        let resp = deserialize(&buf).expect("deserialize Id");
+        if let Response::Id { id, .. } = resp {
+            return Ok(id);
+        }
+        Ok(Default::default())
+    }
+
+    pub fn get_last_id(&self) -> io::Result<Sha256Hash> {
+        self.get_id(true)
+    }
+
     pub fn wait_on_signature(&mut self, wait_sig: &Signature) -> io::Result<()> {
-        let req = Request::GetEntries {
-            last_id: self.last_id,
+        let last_id = match self.last_id {
+            None => {
+                let first_id = self.get_id(false)?;
+                self.last_id = Some(first_id);
+                first_id
+            }
+            Some(last_id) => last_id,
         };
+
+        let req = Request::GetEntries { last_id };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr).map(|_| ())?;
 
@@ -110,7 +143,9 @@ mod tests {
 
         let socket = UdpSocket::bind(send_addr).unwrap();
         let mut acc = AccountantStub::new(addr, socket);
-        let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
+        let last_id = acc.get_last_id().unwrap();
+        let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey, &last_id)
+            .unwrap();
         acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
     }

@@ -217,8 +217,18 @@ mod tests {
 
         // First, verify entries
         let keypair = generate_keypair();
-        let event0 = Event::new_claim(get_pubkey(&keypair), zero, sign_claim_data(&zero, &keypair));
-        let event1 = Event::new_claim(get_pubkey(&keypair), one, sign_claim_data(&one, &keypair));
+        let event0 = Event::new_claim(
+            get_pubkey(&keypair),
+            zero,
+            zero,
+            sign_claim_data(&zero, &keypair, &zero),
+        );
+        let event1 = Event::new_claim(
+            get_pubkey(&keypair),
+            one,
+            zero,
+            sign_claim_data(&one, &keypair, &zero),
+        );
         let events = vec![event0, event1];
         let mut entries = create_entries(&zero, events);
         assert!(verify_slice(&entries, &zero));
@@ -235,8 +245,13 @@ mod tests {
     fn test_claim() {
         let keypair = generate_keypair();
         let data = hash(b"hello, world");
-        let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_claim_data(&data, &keypair));
         let zero = Sha256Hash::default();
+        let event0 = Event::new_claim(
+            get_pubkey(&keypair),
+            data,
+            zero,
+            sign_claim_data(&data, &keypair, &zero),
+        );
         let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
@@ -244,18 +259,20 @@ mod tests {
     #[test]
     fn test_wrong_data_claim_attack() {
         let keypair = generate_keypair();
+        let zero = Sha256Hash::default();
         let event0 = Event::new_claim(
             get_pubkey(&keypair),
             hash(b"goodbye cruel world"),
-            sign_claim_data(&hash(b"hello, world"), &keypair),
+            zero,
+            sign_claim_data(&hash(b"hello, world"), &keypair, &zero),
         );
-        let zero = Sha256Hash::default();
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
 
     #[test]
     fn test_transfer() {
+        let zero = Sha256Hash::default();
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
@@ -264,9 +281,9 @@ mod tests {
             from: get_pubkey(&keypair0),
             to: pubkey1,
             data,
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+            last_id: zero,
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
         };
-        let zero = Sha256Hash::default();
         let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
@@ -277,13 +294,14 @@ mod tests {
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
+        let zero = Sha256Hash::default();
         let event0 = Event::Transaction {
             from: get_pubkey(&keypair0),
             to: pubkey1,
             data: hash(b"goodbye cruel world"), // <-- attack!
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+            last_id: zero,
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
         };
-        let zero = Sha256Hash::default();
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
@@ -295,13 +313,14 @@ mod tests {
         let thief_keypair = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
+        let zero = Sha256Hash::default();
         let event0 = Event::Transaction {
             from: get_pubkey(&keypair0),
             to: get_pubkey(&thief_keypair), // <-- attack!
             data: hash(b"goodbye cruel world"),
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1),
+            last_id: zero,
+            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
         };
-        let zero = Sha256Hash::default();
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }

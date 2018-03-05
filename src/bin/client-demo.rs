@@ -29,6 +29,7 @@ fn main() {
 
     let socket = UdpSocket::bind(send_addr).unwrap();
     let mut acc = AccountantStub::new(addr, socket);
+    let last_id = acc.get_last_id().unwrap();
     let alice_pubkey = get_pubkey(&alice_keypair);
     let one = 1;
     println!("Signing transactions...");
@@ -37,7 +38,7 @@ fn main() {
         .map(|_| {
             let rando_keypair = generate_keypair();
             let rando_pubkey = get_pubkey(&rando_keypair);
-            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey);
+            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey, &last_id);
             (rando_pubkey, sig)
         })
         .collect();
@@ -58,6 +59,7 @@ fn main() {
             from: alice_pubkey,
             to: k,
             data: one,
+            last_id,
             sig: s,
         };
         assert!(verify_event(&e));
@@ -76,7 +78,8 @@ fn main() {
     let now = Instant::now();
     let mut sig = Default::default();
     for (k, s) in sigs {
-        acc.transfer_signed(alice_pubkey, k, one, s).unwrap();
+        acc.transfer_signed(alice_pubkey, k, one, last_id, s)
+            .unwrap();
         sig = s;
     }
     println!("Waiting for last transaction to be confirmed...",);

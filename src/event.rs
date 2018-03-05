@@ -20,6 +20,7 @@ use ring::{rand, signature};
 use untrusted;
 use serde::Serialize;
 use bincode::serialize;
+use log::Sha256Hash;
 
 pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
@@ -36,16 +37,18 @@ pub enum Event<T> {
         from: PublicKey,
         to: PublicKey,
         data: T,
+        last_id: Sha256Hash,
         sig: Signature,
     },
 }
 
 impl<T> Event<T> {
-    pub fn new_claim(to: PublicKey, data: T, sig: Signature) -> Self {
+    pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
         Event::Transaction {
             from: to,
             to,
             data,
+            last_id,
             sig,
         }
     }
@@ -74,14 +77,19 @@ pub fn sign_transaction_data<T: Serialize>(
     data: &T,
     keypair: &Ed25519KeyPair,
     to: &PublicKey,
+    last_id: &Sha256Hash,
 ) -> Signature {
     let from = &get_pubkey(keypair);
-    sign_serialized(&(from, to, data), keypair)
+    sign_serialized(&(from, to, data, last_id), keypair)
 }
 
 /// Return a signature for the given data using the private key from the given keypair.
-pub fn sign_claim_data<T: Serialize>(data: &T, keypair: &Ed25519KeyPair) -> Signature {
-    sign_transaction_data(data, keypair, &get_pubkey(keypair))
+pub fn sign_claim_data<T: Serialize>(
+    data: &T,
+    keypair: &Ed25519KeyPair,
+    last_id: &Sha256Hash,
+) -> Signature {
+    sign_transaction_data(data, keypair, &get_pubkey(keypair), last_id)
 }
 
 /// Verify a signed message with the given public key.
@@ -104,10 +112,11 @@ pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
         from,
         to,
         ref data,
+        last_id,
         sig,
     } = *event
     {
-        let sign_data = serialize(&(&from, &to, &data)).unwrap();
+        let sign_data = serialize(&(&from, &to, &data, &last_id)).unwrap();
         if !verify_signature(&from, &sign_data, &sig) {
             return false;
         }
@@ -122,7 +131,12 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let claim0 = Event::new_claim(Default::default(), 0u8, Default::default());
+        let claim0 = Event::new_claim(
+            Default::default(),
+            0u8,
+            Default::default(),
+            Default::default(),
+        );
         let buf = serialize(&claim0).unwrap();
         let claim1: Event<u8> = deserialize(&buf).unwrap();
         assert_eq!(claim1, claim0);

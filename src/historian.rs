@@ -114,8 +114,9 @@ mod tests {
         let keypair = generate_keypair();
         let to = get_pubkey(&keypair);
         let data = b"hello, world";
-        let sig = sign_claim_data(&data, &keypair);
-        let event0 = Event::new_claim(to, &data, sig);
+        let zero = Sha256Hash::default();
+        let sig = sign_claim_data(&data, &keypair, &zero);
+        let event0 = Event::new_claim(to, &data, zero, sig);
         let mut sigs = HashSet::new();
         assert!(reserve_signature(&mut sigs, &event0));
         assert!(!reserve_signature(&mut sigs, &event0));

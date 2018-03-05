@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{hash, Entry, Sha256Hash};
+use log::Sha256Hash;
 use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
@@ -23,16 +23,18 @@ pub type Result<T> = result::Result<T, AccountingError>;
 pub struct Accountant {
     pub historian: Historian<u64>,
     pub balances: HashMap<PublicKey, u64>,
+    pub first_id: Sha256Hash,
     pub last_id: Sha256Hash,
 }
 
 impl Accountant {
     pub fn new(gen: &Genesis, ms_per_tick: Option<u64>) -> Self {
-        let start_hash = hash(&gen.pkcs8);
+        let start_hash = gen.get_seed();
         let hist = Historian::<u64>::new(&start_hash, ms_per_tick);
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
+            first_id: start_hash,
             last_id: start_hash,
         };
         for (i, event) in gen.create_events().iter().enumerate() {
@@ -41,17 +43,11 @@ impl Accountant {
         acc
     }
 
-    pub fn sync(self: &mut Self) -> Vec<Entry<u64>> {
-        let mut entries = vec![];
+    pub fn sync(self: &mut Self) -> Sha256Hash {
         while let Ok(entry) = self.historian.receiver.try_recv() {
-            entries.push(entry);
+            self.last_id = entry.id;
         }
-
-        if let Some(last_entry) = entries.last() {
-            self.last_id = last_entry.id;
-        }
-
-        entries
+        self.last_id
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
@@ -112,11 +108,13 @@ impl Accountant {
         to: PublicKey,
     ) -> Result<Signature> {
         let from = get_pubkey(keypair);
-        let sig = sign_transaction_data(&n, keypair, &to);
+        let last_id = self.last_id;
+        let sig = sign_transaction_data(&n, keypair, &to, &last_id);
         let event = Event::Transaction {
             from,
             to,
             data: n,
+            last_id,
             sig,
         };
         self.process_event(event).map(|_| sig)

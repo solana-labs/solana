@@ -83,16 +83,22 @@ mod tests {
 
     #[test]
     fn test_bad_event_signature() {
+        let zero = Sha256Hash::default();
         let keypair = generate_keypair();
-        let sig = sign_claim_data(&hash(b"hello, world"), &keypair);
-        let event0 = Event::new_claim(get_pubkey(&keypair), hash(b"goodbye cruel world"), sig);
+        let sig = sign_claim_data(&hash(b"hello, world"), &keypair, &zero);
+        let event0 = Event::new_claim(
+            get_pubkey(&keypair),
+            hash(b"goodbye cruel world"),
+            zero,
+            sig,
+        );
         assert!(!verify_event(&event0));
     }
 
     fn run_genesis(gen: Genesis) -> Vec<Entry<u64>> {
         let (sender, event_receiver) = sync_channel(100);
         let (entry_sender, receiver) = sync_channel(100);
-        let mut logger = Logger::new(event_receiver, entry_sender, hash(&gen.pkcs8));
+        let mut logger = Logger::new(event_receiver, entry_sender, gen.get_seed());
         for tx in gen.create_events() {
             sender.send(tx).unwrap();
         }
