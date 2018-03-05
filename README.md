@@ -59,9 +59,9 @@ Now kill the server with Ctrl-C and take a look at the transaction log. You shou
 see something similar to:
 
 ```json
-{"num_hashes":27,"id":[0, ...],"event":"Tick"}
-{"num_hashes:"3,"id":[67, ...],"event":{"Transaction":{"data":[37, ...]}}}
-{"num_hashes":27,"id":[0, ...],"event":"Tick"}
+{"num_hashes":27,"id":[0, "..."],"event":"Tick"}
+{"num_hashes:"3","id":[67, "..."],"event":{"Transaction":{"data":[37, ...]}}}
+{"num_hashes":27,"id":[0, "..."],"event":"Tick"}
 ```
 
 Now restart the server from where we left off. Pass it both the genesis log and
