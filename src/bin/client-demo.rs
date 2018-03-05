@@ -1,35 +1,28 @@
-//extern crate serde_json;
+extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::accountant_skel::AccountantSkel;
-use silk::accountant::Accountant;
 use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event};
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;
-use std::thread::{sleep, spawn};
-use std::time::Duration;
-//use std::io::stdin;
+use std::io::stdin;
 
 fn main() {
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
 
-    let txs = 200;
-
-    let gen = Genesis::new(txs, vec![]);
-    let alice_keypair = generate_keypair();
-    //let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-    //let alice_keypair = gen.get_keypair();
-
-    let acc = Accountant::new(&gen, None);
-    spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
-    sleep(Duration::from_millis(30));
+    let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
+    let alice_keypair = gen.get_keypair();
+    let alice_pubkey = gen.get_pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
-    let acc = AccountantStub::new(addr, socket);
-    let alice_pubkey = get_pubkey(&alice_keypair);
+    let mut acc = AccountantStub::new(addr, socket);
+    let last_id = acc.get_last_id().unwrap();
+
+    let txs = acc.get_balance(&alice_pubkey).unwrap().unwrap();
+    println!("Alice's Initial Balance {}", txs);
+
     let one = 1;
     println!("Signing transactions...");
     let now = Instant::now();
@@ -37,7 +30,7 @@ fn main() {
         .map(|_| {
             let rando_keypair = generate_keypair();
             let rando_pubkey = get_pubkey(&rando_keypair);
-            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey);
+            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey, &last_id);
             (rando_pubkey, sig)
         })
         .collect();
@@ -58,6 +51,7 @@ fn main() {
             from: alice_pubkey,
             to: k,
             data: one,
+            last_id,
             sig: s,
         };
         assert!(verify_event(&e));
@@ -76,7 +70,8 @@ fn main() {
     let now = Instant::now();
     let mut sig = Default::default();
     for (k, s) in sigs {
-        acc.transfer_signed(alice_pubkey, k, one, s).unwrap();
+        acc.transfer_signed(alice_pubkey, k, one, last_id, s)
+            .unwrap();
         sig = s;
     }
     println!("Waiting for last transaction to be confirmed...",);
@@ -86,7 +81,7 @@ fn main() {
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
     println!("Done. {} tps!", tps);
-    let val = acc.get_balance(&alice_pubkey).unwrap();
+    let val = acc.get_balance(&alice_pubkey).unwrap().unwrap();
     println!("Alice's Final Balance {}", val);
     assert_eq!(val, 0);
 }

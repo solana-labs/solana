@@ -21,74 +21,64 @@ corresponding benchmarks are also added that demonstrate real performance boosts
 feature set here will always be a ways behind the loom repo, but that this is an implementation
 you can take to the bank, literally.
 
-Usage
+Running the demo
 ===
 
-Add the latest [silk package](https://crates.io/crates/silk) to the `[dependencies]` section
-of your Cargo.toml.
+First, build the demo executables in release mode (optimized for performance):
 
-Create a *Historian* and send it *events* to generate an *event log*, where each log *entry*
-is tagged with the historian's latest *hash*. Then ensure the order of events was not tampered
-with by verifying each entry's hash can be generated from the hash in the previous entry:
-
-![historian](https://user-images.githubusercontent.com/55449/36950845-459bdb58-1fb9-11e8-850e-894586f3729b.png)
-
-```rust
-extern crate silk;
-
-use silk::historian::Historian;
-use silk::log::{verify_slice, Entry, Sha256Hash};
-use silk::event::{generate_keypair, get_pubkey, sign_claim_data, Event};
-use std::thread::sleep;
-use std::time::Duration;
-use std::sync::mpsc::SendError;
-
-fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256Hash>>> {
-    sleep(Duration::from_millis(15));
-    let data = Sha256Hash::default();
-    let keypair = generate_keypair();
-    let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_claim_data(&data, &keypair));
-    hist.sender.send(event0)?;
-    sleep(Duration::from_millis(10));
-    Ok(())
-}
-
-fn main() {
-    let seed = Sha256Hash::default();
-    let hist = Historian::new(&seed, Some(10));
-    create_log(&hist).expect("send error");
-    drop(hist.sender);
-    let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
-    for entry in &entries {
-        println!("{:?}", entry);
-    }
-    // Proof-of-History: Verify the historian learned about the events
-    // in the same order they appear in the vector.
-    assert!(verify_slice(&entries, &seed));
-}
+```bash
+    $ cargo build --release
+    $ cd target/release
 ```
 
-Running the program should produce a log similar to:
+The testnode server is initialized with a transaction log from stdin and
+generates a log on stdout. To create the input log, we'll need to create
+a *genesis* configuration file and then generate a log from it. It's done
+in two steps here because the demo-genesis.json file contains a private
+key that will be used later in this demo.
 
-```rust
-Entry { num_hashes: 0, id: [0, ...], event: Tick }
-Entry { num_hashes: 3, id: [67, ...], event: Transaction { data: [37, ...] } }
-Entry { num_hashes: 3, id: [123, ...], event: Tick }
+```bash
+    $ ./silk-genesis-file-demo > demo-genesis.jsoc
+    $ cat demo-genesis.json | ./silk-genesis-block > demo-genesis.log
 ```
 
-Proof-of-History
----
+Now you can start the server:
 
-Take note of the last line:
-
-```rust
-assert!(verify_slice(&entries, &seed));
+```bash
+    $ cat demo-genesis.log | ./silk-testnode > demo-entries0.log
 ```
 
-[It's a proof!](https://en.wikipedia.org/wiki/Curry–Howard_correspondence) For each entry returned by the
-historian, we can verify that `id` is the result of applying a sha256 hash to the previous `id`
-exactly `num_hashes` times, and then hashing then event data on top of that. Because the event data is
-included in the hash, the events cannot be reordered without regenerating all the hashes.
+Then, in a seperate shell, let's execute some transactions. Note we pass in
+the JSON configuration file here, not the genesis log.
+
+```bash
+    $ cat demo-genesis.json | ./silk-client-demo
+```
+
+Now kill the server with Ctrl-C and take a look at the transaction log. You should
+see something similar to:
+
+```json
+{"num_hashes":27,"id":[0, ...],"event":"Tick"}
+{"num_hashes:"3,"id":[67, ...],"event":{"Transaction":{"data":[37, ...]}}}
+{"num_hashes":27,"id":[0, ...],"event":"Tick"}
+```
+
+Now restart the server from where we left off. Pass it both the genesis log and
+the transaction log.
+
+```bash
+    $ cat demo-genesis.log demo-entries0.log | ./silk-testnode > demo-entries1.log
+```
+
+Lastly, run the client demo again and verify that all funds were spent in the
+previous round and so no additional transactions are added.
+
+```bash
+    $ cat demo-genesis.json | ./silk-client-demo
+```
+
+Stop the server again and verify there are only Tick entries and no Transaction entries.
 
 Developing
 ===

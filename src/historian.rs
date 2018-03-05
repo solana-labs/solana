@@ -1,21 +1,20 @@
 //! The `historian` crate provides a microservice for generating a Proof-of-History.
 //! It manages a thread containing a Proof-of-History Logger.
 
-use std::thread::JoinHandle;
+use std::thread::{spawn, JoinHandle};
 use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use log::{hash, Entry, Sha256Hash};
-use logger::{verify_event_and_reserve_signature, ExitReason, Logger};
-use event::{Event, Signature};
+use logger::{ExitReason, Logger};
+use event::{get_signature, Event, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
-use std::thread;
 
 pub struct Historian<T> {
     pub sender: SyncSender<Event<T>>,
     pub receiver: Receiver<Entry<T>>,
-    pub thread_hdl: JoinHandle<(Entry<T>, ExitReason)>,
+    pub thread_hdl: JoinHandle<ExitReason>,
     pub signatures: HashSet<Signature>,
 }
 
@@ -34,10 +33,6 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         }
     }
 
-    pub fn verify_event(self: &mut Self, event: &Event<T>) -> bool {
-        return verify_event_and_reserve_signature(&mut self.signatures, event);
-    }
-
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     fn create_logger(
@@ -45,12 +40,12 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         ms_per_tick: Option<u64>,
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
-    ) -> JoinHandle<(Entry<T>, ExitReason)> {
-        thread::spawn(move || {
+    ) -> JoinHandle<ExitReason> {
+        spawn(move || {
             let mut logger = Logger::new(receiver, sender, start_hash);
             let now = Instant::now();
             loop {
-                if let Err(err) = logger.log_events(now, ms_per_tick) {
+                if let Err(err) = logger.process_events(now, ms_per_tick) {
                     return err;
                 }
                 logger.last_id = hash(&logger.last_id);
@@ -58,6 +53,16 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
             }
         })
     }
+}
+
+pub fn reserve_signature<T>(sigs: &mut HashSet<Signature>, event: &Event<T>) -> bool {
+    if let Some(sig) = get_signature(&event) {
+        if sigs.contains(&sig) {
+            return false;
+        }
+        sigs.insert(sig);
+    }
+    true
 }
 
 #[cfg(test)]
@@ -85,7 +90,7 @@ mod tests {
 
         drop(hist.sender);
         assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
+            hist.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
 
@@ -99,9 +104,22 @@ mod tests {
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
         assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
+            hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
         );
+    }
+
+    #[test]
+    fn test_duplicate_event_signature() {
+        let keypair = generate_keypair();
+        let to = get_pubkey(&keypair);
+        let data = b"hello, world";
+        let zero = Sha256Hash::default();
+        let sig = sign_claim_data(&data, &keypair, &zero);
+        let event0 = Event::new_claim(to, &data, zero, sig);
+        let mut sigs = HashSet::new();
+        assert!(reserve_signature(&mut sigs, &event0));
+        assert!(!reserve_signature(&mut sigs, &event0));
     }
 
     #[test]
@@ -110,15 +128,14 @@ mod tests {
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
         hist.sender.send(Event::Tick).unwrap();
-        sleep(Duration::from_millis(15));
         drop(hist.sender);
-        assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
-            ExitReason::RecvDisconnected
-        );
-
         let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
-        assert!(entries.len() > 1);
-        assert!(verify_slice(&entries, &zero));
+
+        // Ensure one entry is sent back for each tick sent in.
+        assert_eq!(entries.len(), 1);
+
+        // Ensure the ID is not the seed, which indicates another Tick
+        // was logged before the one we sent.
+        assert_ne!(entries[0].id, zero);
     }
 }

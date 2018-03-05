@@ -7,11 +7,19 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256Hash>>> {
+fn create_log(
+    hist: &Historian<Sha256Hash>,
+    seed: &Sha256Hash,
+) -> Result<(), SendError<Event<Sha256Hash>>> {
     sleep(Duration::from_millis(15));
     let data = Sha256Hash::default();
     let keypair = generate_keypair();
-    let event0 = Event::new_claim(get_pubkey(&keypair), data, sign_claim_data(&data, &keypair));
+    let event0 = Event::new_claim(
+        get_pubkey(&keypair),
+        data,
+        *seed,
+        sign_claim_data(&data, &keypair, seed),
+    );
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));
     Ok(())
@@ -20,7 +28,7 @@ fn create_log(hist: &Historian<Sha256Hash>) -> Result<(), SendError<Event<Sha256
 fn main() {
     let seed = Sha256Hash::default();
     let hist = Historian::new(&seed, Some(10));
-    create_log(&hist).expect("send error");
+    create_log(&hist, &seed).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
     for entry in &entries {
