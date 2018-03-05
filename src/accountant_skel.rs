@@ -53,10 +53,7 @@ impl AccountantSkel {
                 let val = self.obj.get_balance(&key).unwrap();
                 Some(Response::Balance { key, val })
             }
-            Request::Wait { sig } => {
-                self.obj.wait_on_signature(&sig);
-                Some(Response::Confirmed { sig })
-            }
+            Request::Wait { sig } => Some(Response::Confirmed { sig }),
         }
     }
 

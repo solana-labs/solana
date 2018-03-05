@@ -10,8 +10,6 @@ use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
 use std::result;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -127,21 +125,6 @@ impl Accountant {
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<u64> {
         self.balances.get(pubkey).map(|x| *x)
     }
-
-    pub fn wait_on_signature(self: &mut Self, wait_sig: &Signature) {
-        let mut entries = self.sync();
-        let mut found = false;
-        while !found {
-            found = entries.iter().any(|e| match e.event {
-                Event::Transaction { sig, .. } => sig == *wait_sig,
-                _ => false,
-            });
-            if !found {
-                sleep(Duration::from_millis(30));
-                entries = self.sync();
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -150,8 +133,6 @@ mod tests {
     use event::{generate_keypair, get_pubkey};
     use logger::ExitReason;
     use genesis::Creator;
-    use std::thread::sleep;
-    use std::time::Duration;
 
     #[test]
     fn test_accountant() {
@@ -160,9 +141,7 @@ mod tests {
         let alice = Genesis::new(10_000, vec![bob]);
         let mut acc = Accountant::new(&alice, Some(2));
 
-        let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
-        acc.wait_on_signature(&sig);
-
+        acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
 
         drop(acc.historian.sender);
@@ -178,12 +157,10 @@ mod tests {
         let bob_pubkey = bob.pubkey;
         let alice = Genesis::new(11_000, vec![bob]);
         let mut acc = Accountant::new(&alice, Some(2));
-
         assert_eq!(
             acc.transfer(10_001, &alice.get_keypair(), bob_pubkey),
             Err(AccountingError::InsufficientFunds)
         );
-        sleep(Duration::from_millis(30));
 
         let alice_pubkey = get_pubkey(&alice.get_keypair());
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
@@ -203,8 +180,7 @@ mod tests {
         let alice_keypair = alice.get_keypair();
         let bob_keypair = generate_keypair();
         let bob_pubkey = get_pubkey(&bob_keypair);
-        let sig = acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
-        acc.wait_on_signature(&sig);
+        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 
         drop(acc.historian.sender);
