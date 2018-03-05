@@ -11,6 +11,7 @@ use log::{create_entry_mut, Entry, Sha256Hash};
 use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;
+use serde_json;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExitReason {
@@ -43,6 +44,7 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
 
     pub fn log_event(&mut self, event: Event<T>) -> Result<Entry<T>, ExitReason> {
         let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, event);
+        println!("{}", serde_json::to_string(&entry).unwrap());
         Ok(entry)
     }
 
@@ -78,8 +80,6 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
-    use genesis::*;
-    use std::sync::mpsc::sync_channel;
 
     #[test]
     fn test_bad_event_signature() {
@@ -93,29 +93,5 @@ mod tests {
             sig,
         );
         assert!(!verify_event(&event0));
-    }
-
-    fn run_genesis(gen: Genesis) -> Vec<Entry<u64>> {
-        let (sender, event_receiver) = sync_channel(100);
-        let (entry_sender, receiver) = sync_channel(100);
-        let mut logger = Logger::new(event_receiver, entry_sender, gen.get_seed());
-        for tx in gen.create_events() {
-            sender.send(tx).unwrap();
-        }
-        logger.process_events(Instant::now(), None).unwrap();
-        drop(logger.sender);
-        receiver.iter().collect::<Vec<_>>()
-    }
-
-    #[test]
-    fn test_genesis_no_creators() {
-        let entries = run_genesis(Genesis::new(100, vec![]));
-        assert!(verify_slice_u64(&entries, &entries[0].id));
-    }
-
-    #[test]
-    fn test_genesis() {
-        let entries = run_genesis(Genesis::new(100, vec![Creator::new(42)]));
-        assert!(verify_slice_u64(&entries, &entries[0].id));
     }
 }

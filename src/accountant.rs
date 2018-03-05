@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::Sha256Hash;
+use log::{Entry, Sha256Hash};
 use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
@@ -28,8 +28,17 @@ pub struct Accountant {
 }
 
 impl Accountant {
-    pub fn new(gen: &Genesis, ms_per_tick: Option<u64>) -> Self {
-        let start_hash = gen.get_seed();
+    pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> Self
+    where
+        I: IntoIterator<Item = Entry<u64>>,
+    {
+        let mut entries = entries.into_iter();
+
+        // The first item in the log is required to be an entry with zero num_hashes,
+        // which implies its id can be used as the log's seed.
+        let entry0 = entries.next().unwrap();
+        let start_hash = entry0.id;
+
         let hist = Historian::<u64>::new(&start_hash, ms_per_tick);
         let mut acc = Accountant {
             historian: hist,
@@ -37,10 +46,21 @@ impl Accountant {
             first_id: start_hash,
             last_id: start_hash,
         };
-        for (i, event) in gen.create_events().iter().enumerate() {
-            acc.process_verified_event(event, i < 2).unwrap();
+
+        // The second item in the log is a special transaction where the to and from
+        // fields are the same. That entry should be treated as a deposit, not a
+        // transfer to oneself.
+        let entry1 = entries.next().unwrap();
+        acc.process_verified_event(&entry1.event, true).unwrap();
+
+        for entry in entries {
+            acc.process_verified_event(&entry.event, false).unwrap();
         }
         acc
+    }
+
+    pub fn new(gen: &Genesis, ms_per_tick: Option<u64>) -> Self {
+        Self::new_from_entries(gen.create_entries(), ms_per_tick)
     }
 
     pub fn sync(self: &mut Self) -> Sha256Hash {
@@ -66,7 +86,6 @@ impl Accountant {
         }
 
         self.process_verified_event(&event, false)?;
-
         if let Err(SendError(_)) = self.historian.sender.send(event) {
             return Err(AccountingError::SendError);
         }

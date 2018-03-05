@@ -31,7 +31,7 @@ pub enum Request {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    Balance { key: PublicKey, val: u64 },
+    Balance { key: PublicKey, val: Option<u64> },
     Entries { entries: Vec<Entry<u64>> },
     Id { id: Sha256Hash, is_last: bool },
 }
@@ -58,12 +58,12 @@ impl AccountantSkel {
                     sig,
                 };
                 if let Err(err) = self.acc.process_event(event) {
-                    println!("Transfer error: {:?}", err);
+                    eprintln!("Transfer error: {:?}", err);
                 }
                 None
             }
             Request::GetBalance { key } => {
-                let val = self.acc.get_balance(&key).unwrap();
+                let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
             Request::GetEntries { .. } => Some(Response::Entries { entries: vec![] }),

@@ -32,6 +32,7 @@ impl Genesis {
     pub fn new(tokens: u64, creators: Vec<Creator>) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
+        println!("{:?}", pkcs8);
         Genesis {
             pkcs8,
             tokens,
@@ -86,6 +87,7 @@ impl Genesis {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log::verify_slice_u64;
 
     #[test]
     fn test_create_events() {
@@ -107,5 +109,17 @@ mod tests {
                 .len(),
             3
         );
+    }
+
+    #[test]
+    fn test_verify_entries() {
+        let entries = Genesis::new(100, vec![]).create_entries();
+        assert!(verify_slice_u64(&entries, &entries[0].id));
+    }
+
+    #[test]
+    fn test_verify_entries_with_transactions() {
+        let entries = Genesis::new(100, vec![Creator::new(42)]).create_entries();
+        assert!(verify_slice_u64(&entries, &entries[0].id));
     }
 }

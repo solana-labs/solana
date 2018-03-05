@@ -57,7 +57,7 @@ impl AccountantStub {
             .map(|_| sig)
     }
 
-    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<u64> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<u64>> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket.send_to(&data, &self.addr)?;
@@ -68,7 +68,7 @@ impl AccountantStub {
             assert_eq!(key, *pubkey);
             return Ok(val);
         }
-        Ok(0)
+        Ok(None)
     }
 
     fn get_id(&self, is_last: bool) -> io::Result<Sha256Hash> {
@@ -147,6 +147,6 @@ mod tests {
         let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey, &last_id)
             .unwrap();
         acc.wait_on_signature(&sig).unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 1_500);
     }
 }

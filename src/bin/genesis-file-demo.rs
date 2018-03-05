@@ -14,6 +14,6 @@ fn main() {
         pubkey: get_pubkey(&generate_keypair()),
     };
     let creators = vec![alice, bob];
-    let gen = Genesis::new(300, creators);
+    let gen = Genesis::new(500, creators);
     println!("{}", serde_json::to_string(&gen).unwrap());
 }
