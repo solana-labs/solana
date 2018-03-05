@@ -1,16 +1,15 @@
 //! The `historian` crate provides a microservice for generating a Proof-of-History.
 //! It manages a thread containing a Proof-of-History Logger.
 
-use std::thread::JoinHandle;
+use std::thread::{spawn, JoinHandle};
 use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use log::{hash, Entry, Sha256Hash};
-use logger::{verify_event_and_reserve_signature, ExitReason, Logger};
-use event::{Event, Signature};
+use logger::{ExitReason, Logger};
+use event::{get_signature, Event, Signature};
 use serde::Serialize;
 use std::fmt::Debug;
-use std::thread;
 
 pub struct Historian<T> {
     pub sender: SyncSender<Event<T>>,
@@ -34,10 +33,6 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         }
     }
 
-    pub fn verify_event(self: &mut Self, event: &Event<T>) -> bool {
-        return verify_event_and_reserve_signature(&mut self.signatures, event);
-    }
-
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     fn create_logger(
@@ -46,7 +41,7 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
     ) -> JoinHandle<(Entry<T>, ExitReason)> {
-        thread::spawn(move || {
+        spawn(move || {
             let mut logger = Logger::new(receiver, sender, start_hash);
             let now = Instant::now();
             loop {
@@ -58,6 +53,16 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
             }
         })
     }
+}
+
+pub fn reserve_signature<T>(sigs: &mut HashSet<Signature>, event: &Event<T>) -> bool {
+    if let Some(sig) = get_signature(&event) {
+        if sigs.contains(&sig) {
+            return false;
+        }
+        sigs.insert(sig);
+    }
+    true
 }
 
 #[cfg(test)]
@@ -102,6 +107,18 @@ mod tests {
             hist.thread_hdl.join().unwrap().1,
             ExitReason::SendDisconnected
         );
+    }
+
+    #[test]
+    fn test_duplicate_event_signature() {
+        let keypair = generate_keypair();
+        let to = get_pubkey(&keypair);
+        let data = b"hello, world";
+        let sig = sign_claim_data(&data, &keypair);
+        let event0 = Event::new_claim(to, &data, sig);
+        let mut sigs = HashSet::new();
+        assert!(reserve_signature(&mut sigs, &event0));
+        assert!(!reserve_signature(&mut sigs, &event0));
     }
 
     #[test]

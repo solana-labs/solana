@@ -3,9 +3,9 @@
 //! transfer funds to other users.
 
 use log::{hash, Entry, Sha256Hash};
-use event::{get_pubkey, sign_transaction_data, Event, PublicKey, Signature};
+use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature};
 use genesis::Genesis;
-use historian::Historian;
+use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ impl Accountant {
             balances: HashMap::new(),
             last_id: start_hash,
         };
-        for (i, event) in gen.create_events().into_iter().enumerate() {
+        for (i, event) in gen.create_events().iter().enumerate() {
             acc.process_verified_event(event, i < 2).unwrap();
         }
         acc
@@ -61,46 +61,50 @@ impl Accountant {
     }
 
     pub fn process_event(self: &mut Self, event: Event<u64>) -> Result<()> {
-        if !self.historian.verify_event(&event) {
+        if !verify_event(&event) {
             return Err(AccountingError::InvalidEvent);
         }
-        self.process_verified_event(event, false)
+
+        if let Event::Transaction { from, data, .. } = event {
+            if self.get_balance(&from).unwrap_or(0) < data {
+                return Err(AccountingError::InsufficientFunds);
+            }
+        }
+
+        self.process_verified_event(&event, false)?;
+
+        if let Err(SendError(_)) = self.historian.sender.send(event) {
+            return Err(AccountingError::SendError);
+        }
+
+        Ok(())
     }
 
     fn process_verified_event(
         self: &mut Self,
-        event: Event<u64>,
+        event: &Event<u64>,
         allow_deposits: bool,
     ) -> Result<()> {
-        match event {
-            Event::Tick => Ok(()),
-            Event::Transaction { from, to, data, .. } => {
-                if !Self::is_deposit(allow_deposits, &from, &to) {
-                    if self.get_balance(&from).unwrap_or(0) < data {
-                        return Err(AccountingError::InsufficientFunds);
-                    }
-                }
+        if !reserve_signature(&mut self.historian.signatures, event) {
+            return Err(AccountingError::InvalidEvent);
+        }
 
-                if let Err(SendError(_)) = self.historian.sender.send(event) {
-                    return Err(AccountingError::SendError);
+        if let Event::Transaction { from, to, data, .. } = *event {
+            if !Self::is_deposit(allow_deposits, &from, &to) {
+                if let Some(x) = self.balances.get_mut(&from) {
+                    *x -= data;
                 }
+            }
 
-                if !Self::is_deposit(allow_deposits, &from, &to) {
-                    if let Some(x) = self.balances.get_mut(&from) {
-                        *x -= data;
-                    }
+            if self.balances.contains_key(&to) {
+                if let Some(x) = self.balances.get_mut(&to) {
+                    *x += data;
                 }
-
-                if self.balances.contains_key(&to) {
-                    if let Some(x) = self.balances.get_mut(&to) {
-                        *x += data;
-                    }
-                } else {
-                    self.balances.insert(to, data);
-                }
-                Ok(())
+            } else {
+                self.balances.insert(to, data);
             }
         }
+        Ok(())
     }
 
     pub fn transfer(

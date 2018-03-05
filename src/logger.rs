@@ -5,11 +5,10 @@
 //! Event, the latest hash, and the number of hashes since the last event.
 //! The resulting stream of entries represents ordered events in time.
 
-use std::collections::HashSet;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 use log::{create_entry_mut, Entry, Sha256Hash};
-use event::{get_signature, verify_event, Event, Signature};
+use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;
 
@@ -25,22 +24,6 @@ pub struct Logger<T> {
     pub last_id: Sha256Hash,
     pub num_hashes: u64,
     pub num_ticks: u64,
-}
-
-pub fn verify_event_and_reserve_signature<T: Serialize>(
-    signatures: &mut HashSet<Signature>,
-    event: &Event<T>,
-) -> bool {
-    if !verify_event(&event) {
-        return false;
-    }
-    if let Some(sig) = get_signature(&event) {
-        if signatures.contains(&sig) {
-            return false;
-        }
-        signatures.insert(sig);
-    }
-    true
 }
 
 impl<T: Serialize + Clone + Debug> Logger<T> {
@@ -111,21 +94,7 @@ mod tests {
         let keypair = generate_keypair();
         let sig = sign_claim_data(&hash(b"hello, world"), &keypair);
         let event0 = Event::new_claim(get_pubkey(&keypair), hash(b"goodbye cruel world"), sig);
-        let mut sigs = HashSet::new();
-        assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
-        assert!(!sigs.contains(&sig));
-    }
-
-    #[test]
-    fn test_duplicate_event_signature() {
-        let keypair = generate_keypair();
-        let to = get_pubkey(&keypair);
-        let data = &hash(b"hello, world");
-        let sig = sign_claim_data(data, &keypair);
-        let event0 = Event::new_claim(to, data, sig);
-        let mut sigs = HashSet::new();
-        assert!(verify_event_and_reserve_signature(&mut sigs, &event0));
-        assert!(!verify_event_and_reserve_signature(&mut sigs, &event0));
+        assert!(!verify_event(&event0));
     }
 
     fn run_genesis(gen: Genesis) -> Vec<Entry<u64>> {
