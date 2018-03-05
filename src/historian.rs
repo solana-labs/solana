@@ -14,7 +14,7 @@ use std::fmt::Debug;
 pub struct Historian<T> {
     pub sender: SyncSender<Event<T>>,
     pub receiver: Receiver<Entry<T>>,
-    pub thread_hdl: JoinHandle<(Entry<T>, ExitReason)>,
+    pub thread_hdl: JoinHandle<ExitReason>,
     pub signatures: HashSet<Signature>,
 }
 
@@ -40,12 +40,12 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
         ms_per_tick: Option<u64>,
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
-    ) -> JoinHandle<(Entry<T>, ExitReason)> {
+    ) -> JoinHandle<ExitReason> {
         spawn(move || {
             let mut logger = Logger::new(receiver, sender, start_hash);
             let now = Instant::now();
             loop {
-                if let Err(err) = logger.log_events(now, ms_per_tick) {
+                if let Err(err) = logger.process_events(now, ms_per_tick) {
                     return err;
                 }
                 logger.last_id = hash(&logger.last_id);
@@ -90,7 +90,7 @@ mod tests {
 
         drop(hist.sender);
         assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
+            hist.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
 
@@ -104,7 +104,7 @@ mod tests {
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
         assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
+            hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
         );
     }
@@ -127,15 +127,14 @@ mod tests {
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
         hist.sender.send(Event::Tick).unwrap();
-        sleep(Duration::from_millis(15));
         drop(hist.sender);
-        assert_eq!(
-            hist.thread_hdl.join().unwrap().1,
-            ExitReason::RecvDisconnected
-        );
-
         let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
-        assert!(entries.len() > 1);
-        assert!(verify_slice(&entries, &zero));
+
+        // Ensure one entry is sent back for each tick sent in.
+        assert_eq!(entries.len(), 1);
+
+        // Ensure the ID is not the seed, which indicates another Tick
+        // was logged before the one we sent.
+        assert_ne!(entries[0].id, zero);
     }
 }

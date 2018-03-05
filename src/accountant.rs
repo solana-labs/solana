@@ -167,7 +167,7 @@ mod tests {
 
         drop(acc.historian.sender);
         assert_eq!(
-            acc.historian.thread_hdl.join().unwrap().1,
+            acc.historian.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
     }
@@ -191,7 +191,7 @@ mod tests {
 
         drop(acc.historian.sender);
         assert_eq!(
-            acc.historian.thread_hdl.join().unwrap().1,
+            acc.historian.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
     }
@@ -209,7 +209,7 @@ mod tests {
 
         drop(acc.historian.sender);
         assert_eq!(
-            acc.historian.thread_hdl.join().unwrap().1,
+            acc.historian.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
     }
