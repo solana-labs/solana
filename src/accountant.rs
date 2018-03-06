@@ -3,8 +3,8 @@
 //! transfer funds to other users.
 
 use log::{Entry, Sha256Hash};
-use event::{get_pubkey, sign_transaction_data, verify_transfer, Event, PublicKey, Signature,
-            Transfer};
+use event::{get_pubkey, sign_transaction_data, verify_transaction, Event, PublicKey, Signature,
+            Transaction};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -76,8 +76,8 @@ impl Accountant {
         allow_deposits && from == to
     }
 
-    pub fn process_transfer(self: &mut Self, tr: Transfer<i64>) -> Result<()> {
-        if !verify_transfer(&tr) {
+    pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
+        if !verify_transaction(&tr) {
             return Err(AccountingError::InvalidTransfer);
         }
 
@@ -85,7 +85,7 @@ impl Accountant {
             return Err(AccountingError::InsufficientFunds);
         }
 
-        self.process_verified_transfer(&tr, false)?;
+        self.process_verified_transaction(&tr, false)?;
         if let Err(SendError(_)) = self.historian.sender.send(Event::Transaction(tr)) {
             return Err(AccountingError::SendError);
         }
@@ -93,9 +93,9 @@ impl Accountant {
         Ok(())
     }
 
-    fn process_verified_transfer(
+    fn process_verified_transaction(
         self: &mut Self,
-        tr: &Transfer<i64>,
+        tr: &Transaction<i64>,
         allow_deposits: bool,
     ) -> Result<()> {
         if !reserve_signature(&mut self.historian.signatures, &tr.sig) {
@@ -126,7 +126,7 @@ impl Accountant {
     ) -> Result<()> {
         match *event {
             Event::Tick => Ok(()),
-            Event::Transaction(ref tr) => self.process_verified_transfer(tr, allow_deposits),
+            Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
         }
     }
 
@@ -139,14 +139,14 @@ impl Accountant {
         let from = get_pubkey(keypair);
         let last_id = self.last_id;
         let sig = sign_transaction_data(&n, keypair, &to, &last_id);
-        let tr = Transfer {
+        let tr = Transaction {
             from,
             to,
             data: n,
             last_id,
             sig,
         };
-        self.process_transfer(tr).map(|_| sig)
+        self.process_transaction(tr).map(|_| sig)
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {

@@ -1,6 +1,6 @@
 use std::io;
 use accountant::Accountant;
-use event::{Event, PublicKey, Transfer};
+use event::{PublicKey, Transaction};
 use log::{Entry, Sha256Hash};
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
@@ -11,7 +11,7 @@ pub struct AccountantSkel {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
-    Transaction(Transfer<i64>),
+    Transaction(Transaction<i64>),
     GetBalance { key: PublicKey },
     GetEntries { last_id: Sha256Hash },
     GetId { is_last: bool },
@@ -32,8 +32,8 @@ impl AccountantSkel {
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
             Request::Transaction(tr) => {
-                if let Err(err) = self.acc.process_transfer(tr) {
-                    eprintln!("Transfer error: {:?}", err);
+                if let Err(err) = self.acc.process_transaction(tr) {
+                    eprintln!("Transaction error: {:?}", err);
                 }
                 None
             }

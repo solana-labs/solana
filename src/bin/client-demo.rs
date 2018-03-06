@@ -3,7 +3,7 @@ extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
 use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event,
-                  Transfer};
+                  Transaction};
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;
@@ -48,7 +48,7 @@ fn main() {
     println!("Verify signatures...");
     let now = Instant::now();
     for &(k, s) in &sigs {
-        let e = Event::Transaction(Transfer {
+        let e = Event::Transaction(Transaction {
             from: alice_pubkey,
             to: k,
             data: one,

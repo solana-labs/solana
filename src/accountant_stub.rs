@@ -5,7 +5,7 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature, Transfer};
+use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature, Transaction};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
@@ -33,7 +33,7 @@ impl AccountantStub {
         last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
-        let req = Request::Transaction(Transfer {
+        let req = Request::Transaction(Transaction {
             from,
             to,
             data: val,

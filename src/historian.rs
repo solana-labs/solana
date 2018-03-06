@@ -114,7 +114,7 @@ mod tests {
         let data = b"hello, world";
         let zero = Sha256Hash::default();
         let sig = sign_claim_data(&data, &keypair, &zero);
-        let tr0 = Transfer::new_claim(to, &data, zero, sig);
+        let tr0 = Transaction::new_claim(to, &data, zero, sig);
         let mut sigs = HashSet::new();
         assert!(reserve_signature(&mut sigs, &tr0.sig));
         assert!(!reserve_signature(&mut sigs, &tr0.sig));
