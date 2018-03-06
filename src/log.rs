@@ -130,7 +130,7 @@ pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bo
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
-pub fn verify_slice_u64(events: &[Entry<u64>], start_hash: &Sha256Hash) -> bool {
+pub fn verify_slice_i64(events: &[Entry<i64>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
     event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))

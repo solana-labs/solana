@@ -9,11 +9,11 @@ use untrusted::Input;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Creator {
     pub pubkey: PublicKey,
-    pub tokens: u64,
+    pub tokens: i64,
 }
 
 impl Creator {
-    pub fn new(tokens: u64) -> Self {
+    pub fn new(tokens: i64) -> Self {
         Creator {
             pubkey: get_pubkey(&generate_keypair()),
             tokens,
@@ -24,12 +24,12 @@ impl Creator {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Genesis {
     pub pkcs8: Vec<u8>,
-    pub tokens: u64,
+    pub tokens: i64,
     pub creators: Vec<Creator>,
 }
 
 impl Genesis {
-    pub fn new(tokens: u64, creators: Vec<Creator>) -> Self {
+    pub fn new(tokens: i64, creators: Vec<Creator>) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
         println!("{:?}", pkcs8);
@@ -52,7 +52,7 @@ impl Genesis {
         get_pubkey(&self.get_keypair())
     }
 
-    pub fn create_transaction(&self, data: u64, to: &PublicKey) -> Event<u64> {
+    pub fn create_transaction(&self, data: i64, to: &PublicKey) -> Event<i64> {
         let last_id = self.get_seed();
         let from = self.get_pubkey();
         let sig = sign_transaction_data(&data, &self.get_keypair(), to, &last_id);
@@ -65,7 +65,7 @@ impl Genesis {
         }
     }
 
-    pub fn create_events(&self) -> Vec<Event<u64>> {
+    pub fn create_events(&self) -> Vec<Event<i64>> {
         let pubkey = self.get_pubkey();
         let event0 = Event::Tick;
         let event1 = self.create_transaction(self.tokens, &pubkey);
@@ -79,7 +79,7 @@ impl Genesis {
         events
     }
 
-    pub fn create_entries(&self) -> Vec<Entry<u64>> {
+    pub fn create_entries(&self) -> Vec<Entry<i64>> {
         create_entries(&self.get_seed(), self.create_events())
     }
 }
@@ -87,7 +87,7 @@ impl Genesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::verify_slice_u64;
+    use log::verify_slice_i64;
 
     #[test]
     fn test_create_events() {
@@ -114,12 +114,12 @@ mod tests {
     #[test]
     fn test_verify_entries() {
         let entries = Genesis::new(100, vec![]).create_entries();
-        assert!(verify_slice_u64(&entries, &entries[0].id));
+        assert!(verify_slice_i64(&entries, &entries[0].id));
     }
 
     #[test]
     fn test_verify_entries_with_transactions() {
         let entries = Genesis::new(100, vec![Creator::new(42)]).create_entries();
-        assert!(verify_slice_u64(&entries, &entries[0].id));
+        assert!(verify_slice_i64(&entries, &entries[0].id));
     }
 }

@@ -21,8 +21,8 @@ pub enum AccountingError {
 pub type Result<T> = result::Result<T, AccountingError>;
 
 pub struct Accountant {
-    pub historian: Historian<u64>,
-    pub balances: HashMap<PublicKey, u64>,
+    pub historian: Historian<i64>,
+    pub balances: HashMap<PublicKey, i64>,
     pub first_id: Sha256Hash,
     pub last_id: Sha256Hash,
 }
@@ -30,7 +30,7 @@ pub struct Accountant {
 impl Accountant {
     pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> Self
     where
-        I: IntoIterator<Item = Entry<u64>>,
+        I: IntoIterator<Item = Entry<i64>>,
     {
         let mut entries = entries.into_iter();
 
@@ -39,7 +39,7 @@ impl Accountant {
         let entry0 = entries.next().unwrap();
         let start_hash = entry0.id;
 
-        let hist = Historian::<u64>::new(&start_hash, ms_per_tick);
+        let hist = Historian::<i64>::new(&start_hash, ms_per_tick);
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
@@ -74,7 +74,7 @@ impl Accountant {
         allow_deposits && from == to
     }
 
-    pub fn process_event(self: &mut Self, event: Event<u64>) -> Result<()> {
+    pub fn process_event(self: &mut Self, event: Event<i64>) -> Result<()> {
         if !verify_event(&event) {
             return Err(AccountingError::InvalidEvent);
         }
@@ -95,7 +95,7 @@ impl Accountant {
 
     fn process_verified_event(
         self: &mut Self,
-        event: &Event<u64>,
+        event: &Event<i64>,
         allow_deposits: bool,
     ) -> Result<()> {
         if !reserve_signature(&mut self.historian.signatures, event) {
@@ -122,7 +122,7 @@ impl Accountant {
 
     pub fn transfer(
         self: &mut Self,
-        n: u64,
+        n: i64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> Result<Signature> {
@@ -139,7 +139,7 @@ impl Accountant {
         self.process_event(event).map(|_| sig)
     }
 
-    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<u64> {
+    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
         self.balances.get(pubkey).map(|x| *x)
     }
 }
