@@ -60,7 +60,7 @@ see something similar to:
 
 ```json
 {"num_hashes":27,"id":[0, "..."],"event":"Tick"}
-{"num_hashes":3,"id":[67, "..."],"event":{"Transaction":{"data":[37, "..."]}}}
+{"num_hashes":3,"id":[67, "..."],"event":{"Transaction":{"asset":42}}}
 {"num_hashes":27,"id":[0, "..."],"event":"Tick"}
 ```
 
