@@ -1,6 +1,6 @@
 use std::io;
 use accountant::Accountant;
-use event::{PublicKey, Transaction};
+use transaction::{PublicKey, Transaction};
 use log::{Entry, Sha256Hash};
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};

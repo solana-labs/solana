@@ -5,7 +5,8 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature, Transaction};
+use event::get_signature;
+use transaction::{get_pubkey, sign_transaction_data, PublicKey, Signature, Transaction};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};

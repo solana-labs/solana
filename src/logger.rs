@@ -80,6 +80,7 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
+    use transaction::*;
 
     #[test]
     fn test_bad_event_signature() {

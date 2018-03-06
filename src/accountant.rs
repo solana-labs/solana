@@ -3,8 +3,9 @@
 //! transfer funds to other users.
 
 use log::{Entry, Sha256Hash};
-use event::{get_pubkey, sign_transaction_data, verify_transaction, Event, PublicKey, Signature,
-            Transaction};
+use event::Event;
+use transaction::{get_pubkey, sign_transaction_data, verify_transaction, PublicKey, Signature,
+                  Transaction};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -157,7 +158,7 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use event::{generate_keypair, get_pubkey};
+    use transaction::{generate_keypair, get_pubkey};
     use logger::ExitReason;
     use genesis::Creator;
 

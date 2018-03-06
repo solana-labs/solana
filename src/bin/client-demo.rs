@@ -2,8 +2,8 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event,
-                  Transaction};
+use silk::event::{verify_event, Event};
+use silk::transaction::{generate_keypair, get_pubkey, sign_transaction_data, Transaction};
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;
