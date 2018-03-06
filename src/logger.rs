@@ -80,6 +80,8 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
+    use signature::*;
+    use transaction::*;
 
     #[test]
     fn test_bad_event_signature() {
@@ -92,6 +94,6 @@ mod tests {
             zero,
             sig,
         );
-        assert!(!verify_event(&event0));
+        assert!(!event0.verify());
     }
 }

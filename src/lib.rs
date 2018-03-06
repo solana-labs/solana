@@ -2,6 +2,8 @@
 pub mod log;
 pub mod logger;
 pub mod event;
+pub mod transaction;
+pub mod signature;
 pub mod genesis;
 pub mod historian;
 pub mod accountant;

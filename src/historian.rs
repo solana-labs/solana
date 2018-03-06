@@ -7,7 +7,8 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use log::{hash, Entry, Sha256Hash};
 use logger::{ExitReason, Logger};
-use event::{get_signature, Event, Signature};
+use signature::Signature;
+use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;
 
@@ -55,13 +56,11 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     }
 }
 
-pub fn reserve_signature<T>(sigs: &mut HashSet<Signature>, event: &Event<T>) -> bool {
-    if let Some(sig) = get_signature(&event) {
-        if sigs.contains(&sig) {
-            return false;
-        }
-        sigs.insert(sig);
+pub fn reserve_signature(sigs: &mut HashSet<Signature>, sig: &Signature) -> bool {
+    if sigs.contains(sig) {
+        return false;
     }
+    sigs.insert(*sig);
     true
 }
 
@@ -70,6 +69,8 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
+    use transaction::*;
+    use signature::*;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -116,10 +117,10 @@ mod tests {
         let data = b"hello, world";
         let zero = Sha256Hash::default();
         let sig = sign_claim_data(&data, &keypair, &zero);
-        let event0 = Event::new_claim(to, &data, zero, sig);
+        let tr0 = Transaction::new_claim(to, &data, zero, sig);
         let mut sigs = HashSet::new();
-        assert!(reserve_signature(&mut sigs, &event0));
-        assert!(!reserve_signature(&mut sigs, &event0));
+        assert!(reserve_signature(&mut sigs, &tr0.sig));
+        assert!(!reserve_signature(&mut sigs, &tr0.sig));
     }
 
     #[test]

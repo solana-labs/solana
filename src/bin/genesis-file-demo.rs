@@ -2,7 +2,7 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::genesis::{Creator, Genesis};
-use silk::event::{generate_keypair, get_pubkey};
+use silk::signature::{generate_keypair, get_pubkey};
 
 fn main() {
     let alice = Creator {

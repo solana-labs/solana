@@ -5,7 +5,8 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature};
+use transaction::{sign_transaction_data, Transaction};
+use signature::{get_pubkey, PublicKey, Signature};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
@@ -33,13 +34,13 @@ impl AccountantStub {
         last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
-        let req = Request::Transfer {
+        let req = Request::Transaction(Transaction {
             from,
             to,
-            val,
+            data: val,
             last_id,
             sig,
-        };
+        });
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)
     }
@@ -108,7 +109,7 @@ impl AccountantStub {
         if let Response::Entries { entries } = resp {
             for Entry { id, event, .. } in entries {
                 self.last_id = Some(id);
-                if let Some(sig) = get_signature(&event) {
+                if let Some(sig) = event.get_signature() {
                     if sig == *wait_sig {
                         return Ok(());
                     }

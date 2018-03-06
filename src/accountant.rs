@@ -3,7 +3,9 @@
 //! transfer funds to other users.
 
 use log::{Entry, Sha256Hash};
-use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature};
+use event::Event;
+use transaction::{sign_transaction_data, Transaction};
+use signature::{get_pubkey, PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -14,7 +16,8 @@ use std::result;
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
     InsufficientFunds,
-    InvalidEvent,
+    InvalidTransfer,
+    InvalidTransferSignature,
     SendError,
 }
 
@@ -74,20 +77,44 @@ impl Accountant {
         allow_deposits && from == to
     }
 
-    pub fn process_event(self: &mut Self, event: Event<i64>) -> Result<()> {
-        if !verify_event(&event) {
-            return Err(AccountingError::InvalidEvent);
+    pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
+        if !tr.verify() {
+            return Err(AccountingError::InvalidTransfer);
         }
 
-        if let Event::Transaction { from, data, .. } = event {
-            if self.get_balance(&from).unwrap_or(0) < data {
-                return Err(AccountingError::InsufficientFunds);
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.data {
+            return Err(AccountingError::InsufficientFunds);
+        }
+
+        self.process_verified_transaction(&tr, false)?;
+        if let Err(SendError(_)) = self.historian.sender.send(Event::Transaction(tr)) {
+            return Err(AccountingError::SendError);
+        }
+
+        Ok(())
+    }
+
+    fn process_verified_transaction(
+        self: &mut Self,
+        tr: &Transaction<i64>,
+        allow_deposits: bool,
+    ) -> Result<()> {
+        if !reserve_signature(&mut self.historian.signatures, &tr.sig) {
+            return Err(AccountingError::InvalidTransferSignature);
+        }
+
+        if !Self::is_deposit(allow_deposits, &tr.from, &tr.to) {
+            if let Some(x) = self.balances.get_mut(&tr.from) {
+                *x -= tr.data;
             }
         }
 
-        self.process_verified_event(&event, false)?;
-        if let Err(SendError(_)) = self.historian.sender.send(event) {
-            return Err(AccountingError::SendError);
+        if self.balances.contains_key(&tr.to) {
+            if let Some(x) = self.balances.get_mut(&tr.to) {
+                *x += tr.data;
+            }
+        } else {
+            self.balances.insert(tr.to, tr.data);
         }
 
         Ok(())
@@ -98,26 +125,10 @@ impl Accountant {
         event: &Event<i64>,
         allow_deposits: bool,
     ) -> Result<()> {
-        if !reserve_signature(&mut self.historian.signatures, event) {
-            return Err(AccountingError::InvalidEvent);
+        match *event {
+            Event::Tick => Ok(()),
+            Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
         }
-
-        if let Event::Transaction { from, to, data, .. } = *event {
-            if !Self::is_deposit(allow_deposits, &from, &to) {
-                if let Some(x) = self.balances.get_mut(&from) {
-                    *x -= data;
-                }
-            }
-
-            if self.balances.contains_key(&to) {
-                if let Some(x) = self.balances.get_mut(&to) {
-                    *x += data;
-                }
-            } else {
-                self.balances.insert(to, data);
-            }
-        }
-        Ok(())
     }
 
     pub fn transfer(
@@ -129,14 +140,14 @@ impl Accountant {
         let from = get_pubkey(keypair);
         let last_id = self.last_id;
         let sig = sign_transaction_data(&n, keypair, &to, &last_id);
-        let event = Event::Transaction {
+        let tr = Transaction {
             from,
             to,
             data: n,
             last_id,
             sig,
         };
-        self.process_event(event).map(|_| sig)
+        self.process_transaction(tr).map(|_| sig)
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
@@ -147,7 +158,7 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use event::{generate_keypair, get_pubkey};
+    use signature::{generate_keypair, get_pubkey};
     use logger::ExitReason;
     use genesis::Creator;
 
