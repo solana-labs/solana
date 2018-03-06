@@ -107,25 +107,20 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
 pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
     match *event {
         Event::Tick => None,
-        Event::Transaction(Transfer { sig, .. }) => Some(sig),
+        Event::Transaction(ref tr) => Some(tr.sig),
     }
 }
 
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
-    if let Event::Transaction(Transfer {
-        from,
-        to,
-        ref data,
-        last_id,
-        sig,
-    }) = *event
-    {
-        let sign_data = serialize(&(&from, &to, &data, &last_id)).unwrap();
-        if !verify_signature(&from, &sign_data, &sig) {
-            return false;
-        }
+    match *event {
+        Event::Tick => true,
+        Event::Transaction(ref tr) => verify_transfer(tr),
     }
-    true
+}
+
+pub fn verify_transfer<T: Serialize>(tr: &Transfer<T>) -> bool {
+    let sign_data = serialize(&(&tr.from, &tr.to, &tr.data, &tr.last_id)).unwrap();
+    verify_signature(&tr.from, &sign_data, &tr.sig)
 }
 
 #[cfg(test)]
