@@ -1,9 +1,8 @@
 //! The `event` crate provides the data structures for log events.
 
-use signature::{PublicKey, Signature};
+use signature::Signature;
 use transaction::Transaction;
 use serde::Serialize;
-use log::Sha256Hash;
 
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
@@ -17,10 +16,6 @@ pub enum Event<T> {
 }
 
 impl<T: Serialize> Event<T> {
-    pub fn new_claim(to: PublicKey, asset: T, last_id: Sha256Hash, sig: Signature) -> Self {
-        Event::Transaction(Transaction::new_claim(to, asset, last_id, sig))
-    }
-
     pub fn get_signature(&self) -> Option<Signature> {
         match *self {
             Event::Tick => None,

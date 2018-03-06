@@ -4,8 +4,8 @@
 
 use log::{Entry, Sha256Hash};
 use event::Event;
-use transaction::{sign_transaction_data, Transaction};
-use signature::{get_pubkey, PublicKey, Signature};
+use transaction::Transaction;
+use signature::{PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -137,16 +137,8 @@ impl Accountant {
         keypair: &Ed25519KeyPair,
         to: PublicKey,
     ) -> Result<Signature> {
-        let from = get_pubkey(keypair);
-        let last_id = self.last_id;
-        let sig = sign_transaction_data(&n, keypair, &to, &last_id);
-        let tr = Transaction {
-            from,
-            to,
-            asset: n,
-            last_id,
-            sig,
-        };
+        let tr = Transaction::new(keypair, to, n, self.last_id);
+        let sig = tr.sig;
         self.process_transaction(tr).map(|_| sig)
     }
 
