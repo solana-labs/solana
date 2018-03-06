@@ -54,14 +54,14 @@ impl Genesis {
         get_pubkey(&self.get_keypair())
     }
 
-    pub fn create_transaction(&self, data: i64, to: &PublicKey) -> Event<i64> {
+    pub fn create_transaction(&self, asset: i64, to: &PublicKey) -> Event<i64> {
         let last_id = self.get_seed();
         let from = self.get_pubkey();
-        let sig = sign_transaction_data(&data, &self.get_keypair(), to, &last_id);
+        let sig = sign_transaction_data(&asset, &self.get_keypair(), to, &last_id);
         Event::Transaction(Transaction {
             from,
             to: *to,
-            data,
+            asset,
             last_id,
             sig,
         })

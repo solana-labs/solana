@@ -17,8 +17,8 @@ pub enum Event<T> {
 }
 
 impl<T: Serialize> Event<T> {
-    pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
-        Event::Transaction(Transaction::new_claim(to, data, last_id, sig))
+    pub fn new_claim(to: PublicKey, asset: T, last_id: Sha256Hash, sig: Signature) -> Self {
+        Event::Transaction(Transaction::new_claim(to, asset, last_id, sig))
     }
 
     pub fn get_signature(&self) -> Option<Signature> {

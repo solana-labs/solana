@@ -245,13 +245,13 @@ mod tests {
     #[test]
     fn test_claim() {
         let keypair = generate_keypair();
-        let data = hash(b"hello, world");
+        let asset = hash(b"hello, world");
         let zero = Sha256Hash::default();
         let event0 = Event::new_claim(
             get_pubkey(&keypair),
-            data,
+            asset,
             zero,
-            sign_claim_data(&data, &keypair, &zero),
+            sign_claim_data(&asset, &keypair, &zero),
         );
         let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -277,13 +277,13 @@ mod tests {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
-        let data = hash(b"hello, world");
+        let asset = hash(b"hello, world");
         let event0 = Event::Transaction(Transaction {
             from: get_pubkey(&keypair0),
             to: pubkey1,
-            data,
+            asset,
             last_id: zero,
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
+            sig: sign_transaction_data(&asset, &keypair0, &pubkey1, &zero),
         });
         let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
@@ -294,14 +294,14 @@ mod tests {
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
-        let data = hash(b"hello, world");
+        let asset = hash(b"hello, world");
         let zero = Sha256Hash::default();
         let event0 = Event::Transaction(Transaction {
             from: get_pubkey(&keypair0),
             to: pubkey1,
-            data: hash(b"goodbye cruel world"), // <-- attack!
+            asset: hash(b"goodbye cruel world"), // <-- attack!
             last_id: zero,
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
+            sig: sign_transaction_data(&asset, &keypair0, &pubkey1, &zero),
         });
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
@@ -313,14 +313,14 @@ mod tests {
         let keypair1 = generate_keypair();
         let thief_keypair = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
-        let data = hash(b"hello, world");
+        let asset = hash(b"hello, world");
         let zero = Sha256Hash::default();
         let event0 = Event::Transaction(Transaction {
             from: get_pubkey(&keypair0),
             to: get_pubkey(&thief_keypair), // <-- attack!
-            data: hash(b"goodbye cruel world"),
+            asset: hash(b"goodbye cruel world"),
             last_id: zero,
-            sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
+            sig: sign_transaction_data(&asset, &keypair0, &pubkey1, &zero),
         });
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));

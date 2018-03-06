@@ -37,7 +37,7 @@ impl AccountantStub {
         let req = Request::Transaction(Transaction {
             from,
             to,
-            data: val,
+            asset: val,
             last_id,
             sig,
         });

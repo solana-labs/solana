@@ -52,7 +52,7 @@ fn main() {
         let e = Event::Transaction(Transaction {
             from: alice_pubkey,
             to: k,
-            data: one,
+            asset: one,
             last_id,
             sig: s,
         });
