@@ -29,7 +29,7 @@ impl AccountantStub {
         &self,
         from: PublicKey,
         to: PublicKey,
-        val: u64,
+        val: i64,
         last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
@@ -46,7 +46,7 @@ impl AccountantStub {
 
     pub fn transfer(
         &self,
-        n: u64,
+        n: i64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
         last_id: &Sha256Hash,
@@ -57,7 +57,7 @@ impl AccountantStub {
             .map(|_| sig)
     }
 
-    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<u64>> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<i64>> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket.send_to(&data, &self.addr)?;

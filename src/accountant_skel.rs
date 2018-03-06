@@ -14,7 +14,7 @@ pub enum Request {
     Transfer {
         from: PublicKey,
         to: PublicKey,
-        val: u64,
+        val: i64,
         last_id: Sha256Hash,
         sig: Signature,
     },
@@ -31,8 +31,8 @@ pub enum Request {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    Balance { key: PublicKey, val: Option<u64> },
-    Entries { entries: Vec<Entry<u64>> },
+    Balance { key: PublicKey, val: Option<i64> },
+    Entries { entries: Vec<Entry<i64>> },
     Id { id: Sha256Hash, is_last: bool },
 }
 
