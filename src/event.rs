@@ -1,6 +1,6 @@
 //! The `event` crate provides the data structures for log events.
 
-use transaction::{verify_transaction, PublicKey, Signature, Transaction};
+use transaction::{PublicKey, Signature, Transaction};
 use serde::Serialize;
 use log::Sha256Hash;
 
@@ -15,22 +15,22 @@ pub enum Event<T> {
     Transaction(Transaction<T>),
 }
 
-impl<T> Event<T> {
+impl<T: Serialize> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
         Event::Transaction(Transaction::new_claim(to, data, last_id, sig))
     }
-}
 
-pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
-    match *event {
-        Event::Tick => None,
-        Event::Transaction(ref tr) => Some(tr.sig),
+    pub fn get_signature(&self) -> Option<Signature> {
+        match *self {
+            Event::Tick => None,
+            Event::Transaction(ref tr) => Some(tr.sig),
+        }
     }
-}
 
-pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
-    match *event {
-        Event::Tick => true,
-        Event::Transaction(ref tr) => verify_transaction(tr),
+    pub fn verify(&self) -> bool {
+        match *self {
+            Event::Tick => true,
+            Event::Transaction(ref tr) => tr.verify(),
+        }
     }
 }

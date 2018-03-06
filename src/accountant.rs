@@ -4,8 +4,7 @@
 
 use log::{Entry, Sha256Hash};
 use event::Event;
-use transaction::{get_pubkey, sign_transaction_data, verify_transaction, PublicKey, Signature,
-                  Transaction};
+use transaction::{get_pubkey, sign_transaction_data, PublicKey, Signature, Transaction};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -78,7 +77,7 @@ impl Accountant {
     }
 
     pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
-        if !verify_transaction(&tr) {
+        if !tr.verify() {
             return Err(AccountingError::InvalidTransfer);
         }
 

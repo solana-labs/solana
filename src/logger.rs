@@ -93,6 +93,6 @@ mod tests {
             zero,
             sig,
         );
-        assert!(!verify_event(&event0));
+        assert!(!event0.verify());
     }
 }

@@ -5,7 +5,6 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::get_signature;
 use transaction::{get_pubkey, sign_transaction_data, PublicKey, Signature, Transaction};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
@@ -109,7 +108,7 @@ impl AccountantStub {
         if let Response::Entries { entries } = resp {
             for Entry { id, event, .. } in entries {
                 self.last_id = Some(id);
-                if let Some(sig) = get_signature(&event) {
+                if let Some(sig) = event.get_signature() {
                     if sig == *wait_sig {
                         return Ok(());
                     }

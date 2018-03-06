@@ -2,7 +2,7 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::event::{verify_event, Event};
+use silk::event::Event;
 use silk::transaction::{generate_keypair, get_pubkey, sign_transaction_data, Transaction};
 use silk::genesis::Genesis;
 use std::time::Instant;
@@ -55,7 +55,7 @@ fn main() {
             last_id,
             sig: s,
         });
-        assert!(verify_event(&e));
+        assert!(e.verify());
     }
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;

@@ -21,7 +21,7 @@ pub struct Transaction<T> {
     pub sig: Signature,
 }
 
-impl<T> Transaction<T> {
+impl<T: Serialize> Transaction<T> {
     pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
         Transaction {
             from: to,
@@ -30,6 +30,11 @@ impl<T> Transaction<T> {
             last_id,
             sig,
         }
+    }
+
+    pub fn verify(&self) -> bool {
+        let sign_data = serialize(&(&self.from, &self.to, &self.data, &self.last_id)).unwrap();
+        verify_signature(&self.from, &sign_data, &self.sig)
     }
 }
 
@@ -77,11 +82,6 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
     let msg = untrusted::Input::from(msg_bytes);
     let sig = untrusted::Input::from(sig_bytes);
     signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
-}
-
-pub fn verify_transaction<T: Serialize>(tr: &Transaction<T>) -> bool {
-    let sign_data = serialize(&(&tr.from, &tr.to, &tr.data, &tr.last_id)).unwrap();
-    verify_signature(&tr.from, &sign_data, &tr.sig)
 }
 
 #[cfg(test)]

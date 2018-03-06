@@ -16,7 +16,7 @@
 use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use serde::Serialize;
-use event::{get_signature, verify_event, Event};
+use event::Event;
 use sha2::{Digest, Sha256};
 use rayon::prelude::*;
 
@@ -64,7 +64,7 @@ pub fn next_hash<T: Serialize>(
     event: &Event<T>,
 ) -> Sha256Hash {
     let mut id = *start_hash;
-    let sig = get_signature(event);
+    let sig = event.get_signature();
     let start_index = if sig.is_some() { 1 } else { 0 };
     for _ in start_index..num_hashes {
         id = hash(&id);
@@ -81,7 +81,7 @@ pub fn create_entry<T: Serialize>(
     cur_hashes: u64,
     event: Event<T>,
 ) -> Entry<T> {
-    let sig = get_signature(&event);
+    let sig = event.get_signature();
     let num_hashes = cur_hashes + if sig.is_some() { 1 } else { 0 };
     let id = next_hash(start_hash, 0, &event);
     Entry {
@@ -116,7 +116,7 @@ pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entr
 /// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
 /// If the event is not a Tick, then hash that as well.
 pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
-    if !verify_event(&entry.event) {
+    if !entry.event.verify() {
         return false;
     }
     entry.id == next_hash(start_hash, entry.num_hashes, &entry.event)
