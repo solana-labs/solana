@@ -29,7 +29,7 @@ pub struct Entry<T> {
     pub event: Event<T>,
 }
 
-impl<T> Entry<T> {
+impl<T: Serialize> Entry<T> {
     /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
     /// and that resulting 'id'.
     pub fn new_tick(num_hashes: u64, id: &Sha256Hash) -> Self {
@@ -38,6 +38,15 @@ impl<T> Entry<T> {
             id: *id,
             event: Event::Tick,
         }
+    }
+
+    /// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
+    /// If the event is not a Tick, then hash that as well.
+    pub fn verify(&self, start_hash: &Sha256Hash) -> bool {
+        if !self.event.verify() {
+            return false;
+        }
+        self.id == next_hash(start_hash, self.num_hashes, &self.event)
     }
 }
 
@@ -113,34 +122,25 @@ pub fn next_tick<T: Serialize>(start_hash: &Sha256Hash, num_hashes: u64) -> Entr
     }
 }
 
-/// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
-/// If the event is not a Tick, then hash that as well.
-pub fn verify_entry<T: Serialize>(entry: &Entry<T>, start_hash: &Sha256Hash) -> bool {
-    if !entry.event.verify() {
-        return false;
-    }
-    entry.id == next_hash(start_hash, entry.num_hashes, &entry.event)
-}
-
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice(events: &[Entry<Sha256Hash>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
+    event_pairs.all(|(x0, x1)| x1.verify(&x0.id))
 }
 
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice_i64(events: &[Entry<i64>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
     let event_pairs = genesis.par_iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
+    event_pairs.all(|(x0, x1)| x1.verify(&x0.id))
 }
 
 /// Verifies the hashes and events serially. Exists only for reference.
 pub fn verify_slice_seq<T: Serialize>(events: &[Entry<T>], start_hash: &Sha256Hash) -> bool {
     let genesis = [Entry::new_tick(0, start_hash)];
     let mut event_pairs = genesis.iter().chain(events).zip(events);
-    event_pairs.all(|(x0, x1)| verify_entry(&x1, &x0.id))
+    event_pairs.all(|(x0, x1)| x1.verify(&x0.id))
 }
 
 pub fn create_entries<T: Serialize>(
@@ -176,10 +176,10 @@ mod tests {
     fn test_event_verify() {
         let zero = Sha256Hash::default();
         let one = hash(&zero);
-        assert!(verify_entry::<u8>(&Entry::new_tick(0, &zero), &zero)); // base case
-        assert!(!verify_entry::<u8>(&Entry::new_tick(0, &zero), &one)); // base case, bad
-        assert!(verify_entry::<u8>(&next_tick(&zero, 1), &zero)); // inductive step
-        assert!(!verify_entry::<u8>(&next_tick(&zero, 1), &one)); // inductive step, bad
+        assert!(Entry::<u8>::new_tick(0, &zero).verify(&zero)); // base case
+        assert!(!Entry::<u8>::new_tick(0, &zero).verify(&one)); // base case, bad
+        assert!(next_tick::<u8>(&zero, 1).verify(&zero)); // inductive step
+        assert!(!next_tick::<u8>(&zero, 1).verify(&one)); // inductive step, bad
     }
 
     #[test]
