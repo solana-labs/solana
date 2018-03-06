@@ -25,6 +25,15 @@ use log::Sha256Hash;
 pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Transfer<T> {
+    pub from: PublicKey,
+    pub to: PublicKey,
+    pub data: T,
+    pub last_id: Sha256Hash,
+    pub sig: Signature,
+}
+
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
 /// be generated in 'num_hashes' hashes and verified in 'num_hashes' hashes.  By logging
@@ -33,24 +42,19 @@ pub type Signature = GenericArray<u8, U64>;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event<T> {
     Tick,
-    Transaction {
-        from: PublicKey,
-        to: PublicKey,
-        data: T,
-        last_id: Sha256Hash,
-        sig: Signature,
-    },
+    Transaction(Transfer<T>),
 }
 
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
-        Event::Transaction {
+        let transfer = Transfer {
             from: to,
             to,
             data,
             last_id,
             sig,
-        }
+        };
+        Event::Transaction(transfer)
     }
 }
 
@@ -103,18 +107,18 @@ pub fn verify_signature(peer_public_key_bytes: &[u8], msg_bytes: &[u8], sig_byte
 pub fn get_signature<T>(event: &Event<T>) -> Option<Signature> {
     match *event {
         Event::Tick => None,
-        Event::Transaction { sig, .. } => Some(sig),
+        Event::Transaction(Transfer { sig, .. }) => Some(sig),
     }
 }
 
 pub fn verify_event<T: Serialize>(event: &Event<T>) -> bool {
-    if let Event::Transaction {
+    if let Event::Transaction(Transfer {
         from,
         to,
         ref data,
         last_id,
         sig,
-    } = *event
+    }) = *event
     {
         let sign_data = serialize(&(&from, &to, &data, &last_id)).unwrap();
         if !verify_signature(&from, &sign_data, &sig) {

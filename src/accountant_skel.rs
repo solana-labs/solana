@@ -1,6 +1,6 @@
 use std::io;
 use accountant::Accountant;
-use event::{Event, PublicKey, Signature};
+use event::{Event, PublicKey, Signature, Transfer};
 use log::{Entry, Sha256Hash};
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
@@ -50,13 +50,13 @@ impl AccountantSkel {
                 last_id,
                 sig,
             } => {
-                let event = Event::Transaction {
+                let event = Event::Transaction(Transfer {
                     from,
                     to,
                     data: val,
                     last_id,
                     sig,
-                };
+                });
                 if let Err(err) = self.acc.process_event(event) {
                     eprintln!("Transfer error: {:?}", err);
                 }

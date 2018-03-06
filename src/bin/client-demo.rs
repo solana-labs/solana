@@ -2,7 +2,8 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event};
+use silk::event::{generate_keypair, get_pubkey, sign_transaction_data, verify_event, Event,
+                  Transfer};
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;
@@ -47,13 +48,13 @@ fn main() {
     println!("Verify signatures...");
     let now = Instant::now();
     for &(k, s) in &sigs {
-        let e = Event::Transaction {
+        let e = Event::Transaction(Transfer {
             from: alice_pubkey,
             to: k,
             data: one,
             last_id,
             sig: s,
-        };
+        });
         assert!(verify_event(&e));
     }
     let duration = now.elapsed();

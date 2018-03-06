@@ -3,7 +3,7 @@
 //! transfer funds to other users.
 
 use log::{Entry, Sha256Hash};
-use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature};
+use event::{get_pubkey, sign_transaction_data, verify_event, Event, PublicKey, Signature, Transfer};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -79,7 +79,7 @@ impl Accountant {
             return Err(AccountingError::InvalidEvent);
         }
 
-        if let Event::Transaction { from, data, .. } = event {
+        if let Event::Transaction(Transfer { from, data, .. }) = event {
             if self.get_balance(&from).unwrap_or(0) < data {
                 return Err(AccountingError::InsufficientFunds);
             }
@@ -102,7 +102,7 @@ impl Accountant {
             return Err(AccountingError::InvalidEvent);
         }
 
-        if let Event::Transaction { from, to, data, .. } = *event {
+        if let Event::Transaction(Transfer { from, to, data, .. }) = *event {
             if !Self::is_deposit(allow_deposits, &from, &to) {
                 if let Some(x) = self.balances.get_mut(&from) {
                     *x -= data;
@@ -129,13 +129,13 @@ impl Accountant {
         let from = get_pubkey(keypair);
         let last_id = self.last_id;
         let sig = sign_transaction_data(&n, keypair, &to, &last_id);
-        let event = Event::Transaction {
+        let event = Event::Transaction(Transfer {
             from,
             to,
             data: n,
             last_id,
             sig,
-        };
+        });
         self.process_event(event).map(|_| sig)
     }
 

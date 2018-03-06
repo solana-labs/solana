@@ -169,7 +169,7 @@ pub fn next_ticks(start_hash: &Sha256Hash, num_hashes: u64, len: usize) -> Vec<E
 #[cfg(test)]
 mod tests {
     use super::*;
-    use event::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data};
+    use event::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data, Transfer};
 
     #[test]
     fn test_event_verify() {
@@ -277,13 +277,13 @@ mod tests {
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
-        let event0 = Event::Transaction {
+        let event0 = Event::Transaction(Transfer {
             from: get_pubkey(&keypair0),
             to: pubkey1,
             data,
             last_id: zero,
             sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
-        };
+        });
         let entries = create_entries(&zero, vec![event0]);
         assert!(verify_slice(&entries, &zero));
     }
@@ -295,13 +295,13 @@ mod tests {
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
         let zero = Sha256Hash::default();
-        let event0 = Event::Transaction {
+        let event0 = Event::Transaction(Transfer {
             from: get_pubkey(&keypair0),
             to: pubkey1,
             data: hash(b"goodbye cruel world"), // <-- attack!
             last_id: zero,
             sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
-        };
+        });
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
@@ -314,13 +314,13 @@ mod tests {
         let pubkey1 = get_pubkey(&keypair1);
         let data = hash(b"hello, world");
         let zero = Sha256Hash::default();
-        let event0 = Event::Transaction {
+        let event0 = Event::Transaction(Transfer {
             from: get_pubkey(&keypair0),
             to: get_pubkey(&thief_keypair), // <-- attack!
             data: hash(b"goodbye cruel world"),
             last_id: zero,
             sig: sign_transaction_data(&data, &keypair0, &pubkey1, &zero),
-        };
+        });
         let entries = create_entries(&zero, vec![event0]);
         assert!(!verify_slice(&entries, &zero));
     }
