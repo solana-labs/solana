@@ -14,13 +14,13 @@ fn create_log(
     seed: &Sha256Hash,
 ) -> Result<(), SendError<Event<Sha256Hash>>> {
     sleep(Duration::from_millis(15));
-    let data = Sha256Hash::default();
+    let asset = Sha256Hash::default();
     let keypair = generate_keypair();
     let event0 = Event::new_claim(
         get_pubkey(&keypair),
-        data,
+        asset,
         *seed,
-        sign_claim_data(&data, &keypair, seed),
+        sign_claim_data(&asset, &keypair, seed),
     );
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));

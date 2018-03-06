@@ -82,7 +82,7 @@ impl Accountant {
             return Err(AccountingError::InvalidTransfer);
         }
 
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.data {
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.asset {
             return Err(AccountingError::InsufficientFunds);
         }
 
@@ -105,16 +105,16 @@ impl Accountant {
 
         if !Self::is_deposit(allow_deposits, &tr.from, &tr.to) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
-                *x -= tr.data;
+                *x -= tr.asset;
             }
         }
 
         if self.balances.contains_key(&tr.to) {
             if let Some(x) = self.balances.get_mut(&tr.to) {
-                *x += tr.data;
+                *x += tr.asset;
             }
         } else {
-            self.balances.insert(tr.to, tr.data);
+            self.balances.insert(tr.to, tr.asset);
         }
 
         Ok(())
@@ -143,7 +143,7 @@ impl Accountant {
         let tr = Transaction {
             from,
             to,
-            data: n,
+            asset: n,
             last_id,
             sig,
         };
