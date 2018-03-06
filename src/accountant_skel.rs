@@ -11,7 +11,7 @@ pub struct AccountantSkel {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
-    Transfer {
+    Transaction {
         from: PublicKey,
         to: PublicKey,
         val: i64,
@@ -43,7 +43,7 @@ impl AccountantSkel {
 
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
-            Request::Transfer {
+            Request::Transaction {
                 from,
                 to,
                 val,

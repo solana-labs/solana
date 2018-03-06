@@ -33,7 +33,7 @@ impl AccountantStub {
         last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
-        let req = Request::Transfer {
+        let req = Request::Transaction {
             from,
             to,
             val,
