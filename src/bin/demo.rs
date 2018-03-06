@@ -3,7 +3,7 @@ extern crate silk;
 use silk::historian::Historian;
 use silk::log::{verify_slice, Entry, Sha256Hash};
 use silk::signature::{generate_keypair, get_pubkey};
-use silk::transaction::sign_claim_data;
+use silk::transaction::Transaction;
 use silk::event::Event;
 use std::thread::sleep;
 use std::time::Duration;
@@ -16,12 +16,8 @@ fn create_log(
     sleep(Duration::from_millis(15));
     let asset = Sha256Hash::default();
     let keypair = generate_keypair();
-    let event0 = Event::new_claim(
-        get_pubkey(&keypair),
-        asset,
-        *seed,
-        sign_claim_data(&asset, &keypair, seed),
-    );
+    let tr = Transaction::new(&keypair, get_pubkey(&keypair), asset, *seed);
+    let event0 = Event::Transaction(tr);
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));
     Ok(())

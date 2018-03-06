@@ -69,8 +69,6 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
-    use transaction::*;
-    use signature::*;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -112,15 +110,10 @@ mod tests {
 
     #[test]
     fn test_duplicate_event_signature() {
-        let keypair = generate_keypair();
-        let to = get_pubkey(&keypair);
-        let data = b"hello, world";
-        let zero = Sha256Hash::default();
-        let sig = sign_claim_data(&data, &keypair, &zero);
-        let tr0 = Transaction::new_claim(to, &data, zero, sig);
         let mut sigs = HashSet::new();
-        assert!(reserve_signature(&mut sigs, &tr0.sig));
-        assert!(!reserve_signature(&mut sigs, &tr0.sig));
+        let sig = Signature::default();
+        assert!(reserve_signature(&mut sigs, &sig));
+        assert!(!reserve_signature(&mut sigs, &sig));
     }
 
     #[test]

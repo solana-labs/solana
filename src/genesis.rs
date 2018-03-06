@@ -1,7 +1,7 @@
 //! A library for generating the chain's genesis block.
 
 use event::Event;
-use transaction::{sign_transaction_data, Transaction};
+use transaction::Transaction;
 use signature::{generate_keypair, get_pubkey, PublicKey};
 use log::{create_entries, hash, Entry, Sha256Hash};
 use ring::rand::SystemRandom;
@@ -55,16 +55,8 @@ impl Genesis {
     }
 
     pub fn create_transaction(&self, asset: i64, to: &PublicKey) -> Event<i64> {
-        let last_id = self.get_seed();
-        let from = self.get_pubkey();
-        let sig = sign_transaction_data(&asset, &self.get_keypair(), to, &last_id);
-        Event::Transaction(Transaction {
-            from,
-            to: *to,
-            asset,
-            last_id,
-            sig,
-        })
+        let tr = Transaction::new(&self.get_keypair(), *to, asset, self.get_seed());
+        Event::Transaction(tr)
     }
 
     pub fn create_events(&self) -> Vec<Event<i64>> {

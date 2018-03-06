@@ -74,26 +74,3 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use log::*;
-    use event::*;
-    use signature::*;
-    use transaction::*;
-
-    #[test]
-    fn test_bad_event_signature() {
-        let zero = Sha256Hash::default();
-        let keypair = generate_keypair();
-        let sig = sign_claim_data(&hash(b"hello, world"), &keypair, &zero);
-        let event0 = Event::new_claim(
-            get_pubkey(&keypair),
-            hash(b"goodbye cruel world"),
-            zero,
-            sig,
-        );
-        assert!(!event0.verify());
-    }
-}

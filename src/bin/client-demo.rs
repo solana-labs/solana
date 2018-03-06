@@ -2,9 +2,8 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::event::Event;
 use silk::signature::{generate_keypair, get_pubkey};
-use silk::transaction::{sign_transaction_data, Transaction};
+use silk::transaction::Transaction;
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;
@@ -25,15 +24,12 @@ fn main() {
     let txs = acc.get_balance(&alice_pubkey).unwrap().unwrap();
     println!("Alice's Initial Balance {}", txs);
 
-    let one = 1;
     println!("Signing transactions...");
     let now = Instant::now();
-    let sigs: Vec<(_, _)> = (0..txs)
+    let transactions: Vec<_> = (0..txs)
         .map(|_| {
-            let rando_keypair = generate_keypair();
-            let rando_pubkey = get_pubkey(&rando_keypair);
-            let sig = sign_transaction_data(&one, &alice_keypair, &rando_pubkey, &last_id);
-            (rando_pubkey, sig)
+            let rando_pubkey = get_pubkey(&generate_keypair());
+            Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
         })
         .collect();
     let duration = now.elapsed();
@@ -48,15 +44,8 @@ fn main() {
 
     println!("Verify signatures...");
     let now = Instant::now();
-    for &(k, s) in &sigs {
-        let e = Event::Transaction(Transaction {
-            from: alice_pubkey,
-            to: k,
-            asset: one,
-            last_id,
-            sig: s,
-        });
-        assert!(e.verify());
+    for tr in &transactions {
+        assert!(tr.verify());
     }
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
@@ -71,10 +60,9 @@ fn main() {
     println!("Transferring 1 unit {} times...", txs);
     let now = Instant::now();
     let mut sig = Default::default();
-    for (k, s) in sigs {
-        acc.transfer_signed(alice_pubkey, k, one, last_id, s)
-            .unwrap();
-        sig = s;
+    for tr in transactions {
+        sig = tr.sig;
+        acc.transfer_signed(tr).unwrap();
     }
     println!("Waiting for last transaction to be confirmed...",);
     acc.wait_on_signature(&sig).unwrap();

@@ -5,8 +5,8 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use transaction::{sign_transaction_data, Transaction};
-use signature::{get_pubkey, PublicKey, Signature};
+use transaction::Transaction;
+use signature::{PublicKey, Signature};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
@@ -26,21 +26,8 @@ impl AccountantStub {
         }
     }
 
-    pub fn transfer_signed(
-        &self,
-        from: PublicKey,
-        to: PublicKey,
-        val: i64,
-        last_id: Sha256Hash,
-        sig: Signature,
-    ) -> io::Result<usize> {
-        let req = Request::Transaction(Transaction {
-            from,
-            to,
-            asset: val,
-            last_id,
-            sig,
-        });
+    pub fn transfer_signed(&self, tr: Transaction<i64>) -> io::Result<usize> {
+        let req = Request::Transaction(tr);
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)
     }
@@ -52,10 +39,9 @@ impl AccountantStub {
         to: PublicKey,
         last_id: &Sha256Hash,
     ) -> io::Result<Signature> {
-        let from = get_pubkey(keypair);
-        let sig = sign_transaction_data(&n, keypair, &to, last_id);
-        self.transfer_signed(from, to, n, *last_id, sig)
-            .map(|_| sig)
+        let tr = Transaction::new(keypair, to, n, *last_id);
+        let sig = tr.sig;
+        self.transfer_signed(tr).map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<i64>> {
