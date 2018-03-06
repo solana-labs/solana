@@ -4,7 +4,8 @@
 
 use log::{Entry, Sha256Hash};
 use event::Event;
-use transaction::{get_pubkey, sign_transaction_data, PublicKey, Signature, Transaction};
+use transaction::{sign_transaction_data, Transaction};
+use signature::{get_pubkey, PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
 use ring::signature::Ed25519KeyPair;
@@ -157,7 +158,7 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use transaction::{generate_keypair, get_pubkey};
+    use signature::{generate_keypair, get_pubkey};
     use logger::ExitReason;
     use genesis::Creator;
 

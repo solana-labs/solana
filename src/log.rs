@@ -169,8 +169,8 @@ pub fn next_ticks(start_hash: &Sha256Hash, num_hashes: u64, len: usize) -> Vec<E
 #[cfg(test)]
 mod tests {
     use super::*;
-    use transaction::{generate_keypair, get_pubkey, sign_claim_data, sign_transaction_data,
-                      Transaction};
+    use signature::{generate_keypair, get_pubkey};
+    use transaction::{sign_claim_data, sign_transaction_data, Transaction};
 
     #[test]
     fn test_event_verify() {

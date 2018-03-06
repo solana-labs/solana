@@ -2,7 +2,8 @@ extern crate silk;
 
 use silk::historian::Historian;
 use silk::log::{verify_slice, Entry, Sha256Hash};
-use silk::transaction::{generate_keypair, get_pubkey, sign_claim_data};
+use silk::signature::{generate_keypair, get_pubkey};
+use silk::transaction::sign_claim_data;
 use silk::event::Event;
 use std::thread::sleep;
 use std::time::Duration;

@@ -1,6 +1,7 @@
 use std::io;
 use accountant::Accountant;
-use transaction::{PublicKey, Transaction};
+use transaction::Transaction;
+use signature::PublicKey;
 use log::{Entry, Sha256Hash};
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};

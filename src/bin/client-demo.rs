@@ -3,7 +3,8 @@ extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
 use silk::event::Event;
-use silk::transaction::{generate_keypair, get_pubkey, sign_transaction_data, Transaction};
+use silk::signature::{generate_keypair, get_pubkey};
+use silk::transaction::{sign_transaction_data, Transaction};
 use silk::genesis::Genesis;
 use std::time::Instant;
 use std::net::UdpSocket;

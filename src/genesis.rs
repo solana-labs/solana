@@ -1,7 +1,8 @@
 //! A library for generating the chain's genesis block.
 
 use event::Event;
-use transaction::{generate_keypair, get_pubkey, sign_transaction_data, PublicKey, Transaction};
+use transaction::{sign_transaction_data, Transaction};
+use signature::{generate_keypair, get_pubkey, PublicKey};
 use log::{create_entries, hash, Entry, Sha256Hash};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;

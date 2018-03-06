@@ -1,6 +1,7 @@
 //! The `event` crate provides the data structures for log events.
 
-use transaction::{PublicKey, Signature, Transaction};
+use signature::{PublicKey, Signature};
+use transaction::Transaction;
 use serde::Serialize;
 use log::Sha256Hash;
 

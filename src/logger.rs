@@ -80,6 +80,7 @@ mod tests {
     use super::*;
     use log::*;
     use event::*;
+    use signature::*;
     use transaction::*;
 
     #[test]

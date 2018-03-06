@@ -7,7 +7,7 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use log::{hash, Entry, Sha256Hash};
 use logger::{ExitReason, Logger};
-use transaction::Signature;
+use signature::Signature;
 use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;
@@ -70,6 +70,7 @@ mod tests {
     use log::*;
     use event::*;
     use transaction::*;
+    use signature::*;
     use std::thread::sleep;
     use std::time::Duration;
 
