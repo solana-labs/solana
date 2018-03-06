@@ -5,7 +5,7 @@
 use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
-use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature};
+use event::{get_pubkey, get_signature, sign_transaction_data, PublicKey, Signature, Transfer};
 use log::{Entry, Sha256Hash};
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
@@ -33,13 +33,13 @@ impl AccountantStub {
         last_id: Sha256Hash,
         sig: Signature,
     ) -> io::Result<usize> {
-        let req = Request::Transaction {
+        let req = Request::Transaction(Transfer {
             from,
             to,
-            val,
+            data: val,
             last_id,
             sig,
-        };
+        });
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)
     }
