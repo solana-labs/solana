@@ -31,9 +31,8 @@ impl AccountantSkel {
 
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
-            Request::Transaction(transfer) => {
-                let event = Event::Transaction(transfer);
-                if let Err(err) = self.acc.process_event(event) {
+            Request::Transaction(tr) => {
+                if let Err(err) = self.acc.process_transfer(tr) {
                     eprintln!("Transfer error: {:?}", err);
                 }
                 None

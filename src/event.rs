@@ -34,6 +34,18 @@ pub struct Transfer<T> {
     pub sig: Signature,
 }
 
+impl<T> Transfer<T> {
+    pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
+        Transfer {
+            from: to,
+            to,
+            data,
+            last_id,
+            sig,
+        }
+    }
+}
+
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
 /// be generated in 'num_hashes' hashes and verified in 'num_hashes' hashes.  By logging
@@ -47,14 +59,7 @@ pub enum Event<T> {
 
 impl<T> Event<T> {
     pub fn new_claim(to: PublicKey, data: T, last_id: Sha256Hash, sig: Signature) -> Self {
-        let transfer = Transfer {
-            from: to,
-            to,
-            data,
-            last_id,
-            sig,
-        };
-        Event::Transaction(transfer)
+        Event::Transaction(Transfer::new_claim(to, data, last_id, sig))
     }
 }
 
