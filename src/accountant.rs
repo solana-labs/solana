@@ -2,7 +2,8 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use log::{Entry, Sha256Hash};
+use hash::Sha256Hash;
+use log::Entry;
 use event::Event;
 use transaction::Transaction;
 use signature::{PublicKey, Signature};

@@ -7,7 +7,8 @@
 
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
-use log::{create_entry_mut, Entry, Sha256Hash};
+use hash::Sha256Hash;
+use log::{create_entry_mut, Entry};
 use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;

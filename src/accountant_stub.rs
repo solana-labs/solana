@@ -7,7 +7,8 @@ use std::io;
 use bincode::{deserialize, serialize};
 use transaction::Transaction;
 use signature::{PublicKey, Signature};
-use log::{Entry, Sha256Hash};
+use hash::Sha256Hash;
+use log::Entry;
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 

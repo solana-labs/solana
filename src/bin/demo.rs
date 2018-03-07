@@ -1,7 +1,8 @@
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::log::{verify_slice, Entry, Sha256Hash};
+use silk::hash::Sha256Hash;
+use silk::log::{verify_slice, Entry};
 use silk::signature::{generate_keypair, get_pubkey};
 use silk::transaction::Transaction;
 use silk::event::Event;

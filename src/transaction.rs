@@ -4,7 +4,7 @@ use signature::{get_pubkey, verify_signature, PublicKey, Signature};
 use ring::signature::Ed25519KeyPair;
 use serde::Serialize;
 use bincode::serialize;
-use log::Sha256Hash;
+use hash::Sha256Hash;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction<T> {
@@ -51,8 +51,8 @@ impl<T: Serialize> Transaction<T> {
 mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
-    use log::*;
     use signature::*;
+    use hash::hash;
 
     #[test]
     fn test_claim() {

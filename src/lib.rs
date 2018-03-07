@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "unstable", feature(test))]
+pub mod hash;
 pub mod log;
 pub mod logger;
 pub mod event;
