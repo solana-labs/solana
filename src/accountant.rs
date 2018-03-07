@@ -146,19 +146,18 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::{generate_keypair, get_pubkey};
+    use signature::KeyPairUtil;
     use logger::ExitReason;
 
     #[test]
     fn test_accountant() {
         let alice = Genesis::new(10_000);
-        let bob_pubkey = get_pubkey(&generate_keypair());
+        let bob_pubkey = KeyPair::new().pubkey();
         let mut acc = Accountant::new(&alice, Some(2));
-        acc.transfer(1_000, &alice.get_keypair(), bob_pubkey)
-            .unwrap();
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
-        acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
+        acc.transfer(500, &alice.keypair(), bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
 
         drop(acc.historian.sender);
@@ -172,15 +171,14 @@ mod tests {
     fn test_invalid_transfer() {
         let alice = Genesis::new(11_000);
         let mut acc = Accountant::new(&alice, Some(2));
-        let bob_pubkey = get_pubkey(&generate_keypair());
-        acc.transfer(1_000, &alice.get_keypair(), bob_pubkey)
-            .unwrap();
+        let bob_pubkey = KeyPair::new().pubkey();
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
         assert_eq!(
-            acc.transfer(10_001, &alice.get_keypair(), bob_pubkey),
+            acc.transfer(10_001, &alice.keypair(), bob_pubkey),
             Err(AccountingError::InsufficientFunds)
         );
 
-        let alice_pubkey = get_pubkey(&alice.get_keypair());
+        let alice_pubkey = alice.keypair().pubkey();
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
@@ -195,8 +193,8 @@ mod tests {
     fn test_transfer_to_newb() {
         let alice = Genesis::new(10_000);
         let mut acc = Accountant::new(&alice, Some(2));
-        let alice_keypair = alice.get_keypair();
-        let bob_pubkey = get_pubkey(&generate_keypair());
+        let alice_keypair = alice.keypair();
+        let bob_pubkey = KeyPair::new().pubkey();
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 

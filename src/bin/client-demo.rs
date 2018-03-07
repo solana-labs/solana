@@ -2,7 +2,7 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
-use silk::signature::{generate_keypair, get_pubkey};
+use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
 use silk::genesis::Genesis;
 use std::time::Instant;
@@ -14,8 +14,8 @@ fn main() {
     let send_addr = "127.0.0.1:8001";
 
     let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-    let alice_keypair = gen.get_keypair();
-    let alice_pubkey = gen.get_pubkey();
+    let alice_keypair = gen.keypair();
+    let alice_pubkey = gen.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
     let mut acc = AccountantStub::new(addr, socket);
@@ -28,7 +28,7 @@ fn main() {
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .map(|_| {
-            let rando_pubkey = get_pubkey(&generate_keypair());
+            let rando_pubkey = KeyPair::new().pubkey();
             Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
         })
         .collect();

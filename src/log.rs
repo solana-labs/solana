@@ -48,7 +48,7 @@ pub fn next_ticks(start_hash: &Hash, num_hashes: u64, len: usize) -> Vec<Entry> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::{generate_keypair, get_pubkey};
+    use signature::{KeyPair, KeyPairUtil};
     use transaction::Transaction;
     use hash::hash;
 
@@ -71,9 +71,9 @@ mod tests {
         let zero = Hash::default();
 
         // First, verify entries
-        let keypair = generate_keypair();
-        let tr0 = Transaction::new(&keypair, get_pubkey(&keypair), 0, zero);
-        let tr1 = Transaction::new(&keypair, get_pubkey(&keypair), 1, zero);
+        let keypair = KeyPair::new();
+        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        let tr1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
         let events = vec![Event::Transaction(tr0), Event::Transaction(tr1)];
         let mut entries = create_entries(&zero, events);
         assert!(verify_slice(&entries, &zero));
