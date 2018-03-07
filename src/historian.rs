@@ -10,17 +10,15 @@ use entry::Entry;
 use logger::{ExitReason, Logger};
 use signature::Signature;
 use event::Event;
-use serde::Serialize;
-use std::fmt::Debug;
 
-pub struct Historian<T> {
-    pub sender: SyncSender<Event<T>>,
-    pub receiver: Receiver<Entry<T>>,
+pub struct Historian {
+    pub sender: SyncSender<Event>,
+    pub receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
     pub signatures: HashSet<Signature>,
 }
 
-impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
+impl Historian {
     pub fn new(start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
@@ -40,8 +38,8 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     fn create_logger(
         start_hash: Hash,
         ms_per_tick: Option<u64>,
-        receiver: Receiver<Event<T>>,
-        sender: SyncSender<Entry<T>>,
+        receiver: Receiver<Event>,
+        sender: SyncSender<Entry>,
     ) -> JoinHandle<ExitReason> {
         spawn(move || {
             let mut logger = Logger::new(receiver, sender, start_hash);
@@ -100,7 +98,7 @@ mod tests {
     #[test]
     fn test_historian_closed_sender() {
         let zero = Hash::default();
-        let hist = Historian::<u8>::new(&zero, None);
+        let hist = Historian::new(&zero, None);
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
         assert_eq!(
@@ -124,7 +122,7 @@ mod tests {
         sleep(Duration::from_millis(30));
         hist.sender.send(Event::Tick).unwrap();
         drop(hist.sender);
-        let entries: Vec<Entry<Hash>> = hist.receiver.iter().collect();
+        let entries: Vec<Entry> = hist.receiver.iter().collect();
 
         // Ensure one entry is sent back for each tick sent in.
         assert_eq!(entries.len(), 1);

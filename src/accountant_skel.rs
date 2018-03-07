@@ -22,7 +22,7 @@ pub enum Request {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
-    Entries { entries: Vec<Entry<i64>> },
+    Entries { entries: Vec<Entry> },
     Id { id: Hash, is_last: bool },
 }
 
