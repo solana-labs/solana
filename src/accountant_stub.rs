@@ -6,10 +6,9 @@ use std::net::UdpSocket;
 use std::io;
 use bincode::{deserialize, serialize};
 use transaction::Transaction;
-use signature::{PublicKey, Signature};
+use signature::{KeyPair, PublicKey, Signature};
 use hash::Hash;
 use entry::Entry;
-use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 
 pub struct AccountantStub {
@@ -36,7 +35,7 @@ impl AccountantStub {
     pub fn transfer(
         &self,
         n: i64,
-        keypair: &Ed25519KeyPair,
+        keypair: &KeyPair,
         to: PublicKey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
@@ -116,16 +115,16 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use genesis::{Creator, Genesis};
+    use genesis::Genesis;
+    use signature::{generate_keypair, get_pubkey};
 
     #[test]
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        let bob = Creator::new(1_000);
-        let bob_pubkey = bob.pubkey;
-        let alice = Genesis::new(10_000, vec![bob]);
+        let alice = Genesis::new(10_000);
         let acc = Accountant::new(&alice, None);
+        let bob_pubkey = get_pubkey(&generate_keypair());
         spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
         sleep(Duration::from_millis(30));
 
@@ -135,6 +134,6 @@ mod tests {
         let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey, &last_id)
             .unwrap();
         acc.wait_on_signature(&sig).unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 1_500);
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
     }
 }

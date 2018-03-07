@@ -1,7 +1,6 @@
 //! The `transaction` crate provides functionality for creating log transactions.
 
-use signature::{get_pubkey, verify_signature, PublicKey, Signature};
-use ring::signature::Ed25519KeyPair;
+use signature::{get_pubkey, verify_signature, KeyPair, PublicKey, Signature};
 use serde::Serialize;
 use bincode::serialize;
 use hash::Hash;
@@ -16,7 +15,7 @@ pub struct Transaction<T> {
 }
 
 impl<T: Serialize> Transaction<T> {
-    pub fn new(from_keypair: &Ed25519KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
         let mut tr = Transaction {
             from: get_pubkey(&from_keypair),
             to,
@@ -32,7 +31,7 @@ impl<T: Serialize> Transaction<T> {
         serialize(&(&self.from, &self.to, &self.asset, &self.last_id)).unwrap()
     }
 
-    pub fn sign(&mut self, keypair: &Ed25519KeyPair) {
+    pub fn sign(&mut self, keypair: &KeyPair) {
         let sign_data = self.get_sign_data();
         self.sig = Signature::clone_from_slice(keypair.sign(&sign_data).as_ref());
     }
