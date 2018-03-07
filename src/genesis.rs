@@ -3,7 +3,9 @@
 use event::Event;
 use transaction::Transaction;
 use signature::{generate_keypair, get_pubkey, PublicKey};
-use log::{create_entries, hash, Entry, Sha256Hash};
+use entry::Entry;
+use log::create_entries;
+use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use untrusted::Input;
@@ -42,7 +44,7 @@ impl Genesis {
         }
     }
 
-    pub fn get_seed(&self) -> Sha256Hash {
+    pub fn get_seed(&self) -> Hash {
         hash(&self.pkcs8)
     }
 

@@ -7,14 +7,15 @@ use std::io;
 use bincode::{deserialize, serialize};
 use transaction::Transaction;
 use signature::{PublicKey, Signature};
-use log::{Entry, Sha256Hash};
+use hash::Hash;
+use entry::Entry;
 use ring::signature::Ed25519KeyPair;
 use accountant_skel::{Request, Response};
 
 pub struct AccountantStub {
     pub addr: String,
     pub socket: UdpSocket,
-    pub last_id: Option<Sha256Hash>,
+    pub last_id: Option<Hash>,
 }
 
 impl AccountantStub {
@@ -37,7 +38,7 @@ impl AccountantStub {
         n: i64,
         keypair: &Ed25519KeyPair,
         to: PublicKey,
-        last_id: &Sha256Hash,
+        last_id: &Hash,
     ) -> io::Result<Signature> {
         let tr = Transaction::new(keypair, to, n, *last_id);
         let sig = tr.sig;
@@ -58,7 +59,7 @@ impl AccountantStub {
         Ok(None)
     }
 
-    fn get_id(&self, is_last: bool) -> io::Result<Sha256Hash> {
+    fn get_id(&self, is_last: bool) -> io::Result<Hash> {
         let req = Request::GetId { is_last };
         let data = serialize(&req).expect("serialize GetId");
         self.socket.send_to(&data, &self.addr)?;
@@ -71,7 +72,7 @@ impl AccountantStub {
         Ok(Default::default())
     }
 
-    pub fn get_last_id(&self) -> io::Result<Sha256Hash> {
+    pub fn get_last_id(&self) -> io::Result<Hash> {
         self.get_id(true)
     }
 

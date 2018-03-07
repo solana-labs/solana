@@ -5,7 +5,8 @@ use std::thread::{spawn, JoinHandle};
 use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
-use log::{hash, Entry, Sha256Hash};
+use hash::{hash, Hash};
+use entry::Entry;
 use logger::{ExitReason, Logger};
 use signature::Signature;
 use event::Event;
@@ -20,7 +21,7 @@ pub struct Historian<T> {
 }
 
 impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
-    pub fn new(start_hash: &Sha256Hash, ms_per_tick: Option<u64>) -> Self {
+    pub fn new(start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
         let thread_hdl =
@@ -37,7 +38,7 @@ impl<T: 'static + Serialize + Clone + Debug + Send> Historian<T> {
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     fn create_logger(
-        start_hash: Sha256Hash,
+        start_hash: Hash,
         ms_per_tick: Option<u64>,
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
@@ -74,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_historian() {
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let hist = Historian::new(&zero, None);
 
         hist.sender.send(Event::Tick).unwrap();
@@ -98,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_historian_closed_sender() {
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let hist = Historian::<u8>::new(&zero, None);
         drop(hist.receiver);
         hist.sender.send(Event::Tick).unwrap();
@@ -118,12 +119,12 @@ mod tests {
 
     #[test]
     fn test_ticking_historian() {
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
         hist.sender.send(Event::Tick).unwrap();
         drop(hist.sender);
-        let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
+        let entries: Vec<Entry<Hash>> = hist.receiver.iter().collect();
 
         // Ensure one entry is sent back for each tick sent in.
         assert_eq!(entries.len(), 1);

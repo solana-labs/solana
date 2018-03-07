@@ -7,7 +7,8 @@
 
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
-use log::{create_entry_mut, Entry, Sha256Hash};
+use hash::Hash;
+use entry::{create_entry_mut, Entry};
 use event::Event;
 use serde::Serialize;
 use std::fmt::Debug;
@@ -22,7 +23,7 @@ pub enum ExitReason {
 pub struct Logger<T> {
     pub sender: SyncSender<Entry<T>>,
     pub receiver: Receiver<Event<T>>,
-    pub last_id: Sha256Hash,
+    pub last_id: Hash,
     pub num_hashes: u64,
     pub num_ticks: u64,
 }
@@ -31,7 +32,7 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
     pub fn new(
         receiver: Receiver<Event<T>>,
         sender: SyncSender<Entry<T>>,
-        start_hash: Sha256Hash,
+        start_hash: Hash,
     ) -> Self {
         Logger {
             receiver,
