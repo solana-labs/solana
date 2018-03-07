@@ -10,8 +10,6 @@ use std::time::{Duration, Instant};
 use hash::Hash;
 use entry::{create_entry_mut, Entry};
 use event::Event;
-use serde::Serialize;
-use std::fmt::Debug;
 use serde_json;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -20,20 +18,16 @@ pub enum ExitReason {
     SendDisconnected,
 }
 
-pub struct Logger<T> {
-    pub sender: SyncSender<Entry<T>>,
-    pub receiver: Receiver<Event<T>>,
+pub struct Logger {
+    pub sender: SyncSender<Entry>,
+    pub receiver: Receiver<Event>,
     pub last_id: Hash,
     pub num_hashes: u64,
     pub num_ticks: u64,
 }
 
-impl<T: Serialize + Clone + Debug> Logger<T> {
-    pub fn new(
-        receiver: Receiver<Event<T>>,
-        sender: SyncSender<Entry<T>>,
-        start_hash: Hash,
-    ) -> Self {
+impl Logger {
+    pub fn new(receiver: Receiver<Event>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
         Logger {
             receiver,
             sender,
@@ -43,7 +37,7 @@ impl<T: Serialize + Clone + Debug> Logger<T> {
         }
     }
 
-    pub fn log_event(&mut self, event: Event<T>) -> Result<Entry<T>, ExitReason> {
+    pub fn log_event(&mut self, event: Event) -> Result<Entry, ExitReason> {
         let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, event);
         println!("{}", serde_json::to_string(&entry).unwrap());
         Ok(entry)

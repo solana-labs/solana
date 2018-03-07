@@ -25,7 +25,7 @@ pub enum AccountingError {
 pub type Result<T> = result::Result<T, AccountingError>;
 
 pub struct Accountant {
-    pub historian: Historian<i64>,
+    pub historian: Historian,
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
@@ -34,7 +34,7 @@ pub struct Accountant {
 impl Accountant {
     pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> Self
     where
-        I: IntoIterator<Item = Entry<i64>>,
+        I: IntoIterator<Item = Entry>,
     {
         let mut entries = entries.into_iter();
 
@@ -43,7 +43,7 @@ impl Accountant {
         let entry0 = entries.next().unwrap();
         let start_hash = entry0.id;
 
-        let hist = Historian::<i64>::new(&start_hash, ms_per_tick);
+        let hist = Historian::new(&start_hash, ms_per_tick);
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
@@ -121,11 +121,7 @@ impl Accountant {
         Ok(())
     }
 
-    fn process_verified_event(
-        self: &mut Self,
-        event: &Event<i64>,
-        allow_deposits: bool,
-    ) -> Result<()> {
+    fn process_verified_event(self: &mut Self, event: &Event, allow_deposits: bool) -> Result<()> {
         match *event {
             Event::Tick => Ok(()),
             Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),

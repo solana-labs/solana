@@ -11,11 +11,10 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian<Hash>, seed: &Hash) -> Result<(), SendError<Event<Hash>>> {
+fn create_log(hist: &Historian, seed: &Hash) -> Result<(), SendError<Event>> {
     sleep(Duration::from_millis(15));
-    let asset = Hash::default();
     let keypair = generate_keypair();
-    let tr = Transaction::new(&keypair, get_pubkey(&keypair), asset, *seed);
+    let tr = Transaction::new(&keypair, get_pubkey(&keypair), 42, *seed);
     let event0 = Event::Transaction(tr);
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));
@@ -27,7 +26,7 @@ fn main() {
     let hist = Historian::new(&seed, Some(10));
     create_log(&hist, &seed).expect("send error");
     drop(hist.sender);
-    let entries: Vec<Entry<Hash>> = hist.receiver.iter().collect();
+    let entries: Vec<Entry> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }

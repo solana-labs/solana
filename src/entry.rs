@@ -1,15 +1,14 @@
 use hash::{extend_and_hash, hash, Hash};
-use serde::Serialize;
 use event::Event;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Entry<T> {
+pub struct Entry {
     pub num_hashes: u64,
     pub id: Hash,
-    pub event: Event<T>,
+    pub event: Event,
 }
 
-impl<T: Serialize> Entry<T> {
+impl Entry {
     /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
     /// and that resulting 'id'.
     pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
@@ -33,7 +32,7 @@ impl<T: Serialize> Entry<T> {
 /// Creates the hash 'num_hashes' after start_hash. If the event contains
 /// signature, the final hash will be a hash of both the previous ID and
 /// the signature.
-pub fn next_hash<T: Serialize>(start_hash: &Hash, num_hashes: u64, event: &Event<T>) -> Hash {
+pub fn next_hash(start_hash: &Hash, num_hashes: u64, event: &Event) -> Hash {
     let mut id = *start_hash;
     let sig = event.get_signature();
     let start_index = if sig.is_some() { 1 } else { 0 };
@@ -47,7 +46,7 @@ pub fn next_hash<T: Serialize>(start_hash: &Hash, num_hashes: u64, event: &Event
 }
 
 /// Creates the next Entry 'num_hashes' after 'start_hash'.
-pub fn create_entry<T: Serialize>(start_hash: &Hash, cur_hashes: u64, event: Event<T>) -> Entry<T> {
+pub fn create_entry(start_hash: &Hash, cur_hashes: u64, event: Event) -> Entry {
     let sig = event.get_signature();
     let num_hashes = cur_hashes + if sig.is_some() { 1 } else { 0 };
     let id = next_hash(start_hash, 0, &event);
@@ -59,11 +58,7 @@ pub fn create_entry<T: Serialize>(start_hash: &Hash, cur_hashes: u64, event: Eve
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn create_entry_mut<T: Serialize>(
-    start_hash: &mut Hash,
-    cur_hashes: &mut u64,
-    event: Event<T>,
-) -> Entry<T> {
+pub fn create_entry_mut(start_hash: &mut Hash, cur_hashes: &mut u64, event: Event) -> Entry {
     let entry = create_entry(start_hash, *cur_hashes, event);
     *start_hash = entry.id;
     *cur_hashes = 0;
@@ -71,7 +66,7 @@ pub fn create_entry_mut<T: Serialize>(
 }
 
 /// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
-pub fn next_tick<T: Serialize>(start_hash: &Hash, num_hashes: u64) -> Entry<T> {
+pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
     let event = Event::Tick;
     Entry {
         num_hashes,
@@ -88,15 +83,15 @@ mod tests {
     fn test_event_verify() {
         let zero = Hash::default();
         let one = hash(&zero);
-        assert!(Entry::<u8>::new_tick(0, &zero).verify(&zero)); // base case
-        assert!(!Entry::<u8>::new_tick(0, &zero).verify(&one)); // base case, bad
-        assert!(next_tick::<u8>(&zero, 1).verify(&zero)); // inductive step
-        assert!(!next_tick::<u8>(&zero, 1).verify(&one)); // inductive step, bad
+        assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
+        assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
+        assert!(next_tick(&zero, 1).verify(&zero)); // inductive step
+        assert!(!next_tick(&zero, 1).verify(&one)); // inductive step, bad
     }
 
     #[test]
     fn test_next_tick() {
         let zero = Hash::default();
-        assert_eq!(next_tick::<Hash>(&zero, 1).num_hashes, 1)
+        assert_eq!(next_tick(&zero, 1).num_hashes, 1)
     }
 }
