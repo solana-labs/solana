@@ -1,7 +1,7 @@
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::hash::Sha256Hash;
+use silk::hash::Hash;
 use silk::entry::Entry;
 use silk::log::verify_slice;
 use silk::signature::{generate_keypair, get_pubkey};
@@ -11,12 +11,9 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(
-    hist: &Historian<Sha256Hash>,
-    seed: &Sha256Hash,
-) -> Result<(), SendError<Event<Sha256Hash>>> {
+fn create_log(hist: &Historian<Hash>, seed: &Hash) -> Result<(), SendError<Event<Hash>>> {
     sleep(Duration::from_millis(15));
-    let asset = Sha256Hash::default();
+    let asset = Hash::default();
     let keypair = generate_keypair();
     let tr = Transaction::new(&keypair, get_pubkey(&keypair), asset, *seed);
     let event0 = Event::Transaction(tr);
@@ -26,11 +23,11 @@ fn create_log(
 }
 
 fn main() {
-    let seed = Sha256Hash::default();
+    let seed = Hash::default();
     let hist = Historian::new(&seed, Some(10));
     create_log(&hist, &seed).expect("send error");
     drop(hist.sender);
-    let entries: Vec<Entry<Sha256Hash>> = hist.receiver.iter().collect();
+    let entries: Vec<Entry<Hash>> = hist.receiver.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }

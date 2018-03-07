@@ -2,7 +2,7 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use hash::Sha256Hash;
+use hash::Hash;
 use entry::Entry;
 use event::Event;
 use transaction::Transaction;
@@ -27,8 +27,8 @@ pub type Result<T> = result::Result<T, AccountingError>;
 pub struct Accountant {
     pub historian: Historian<i64>,
     pub balances: HashMap<PublicKey, i64>,
-    pub first_id: Sha256Hash,
-    pub last_id: Sha256Hash,
+    pub first_id: Hash,
+    pub last_id: Hash,
 }
 
 impl Accountant {
@@ -67,7 +67,7 @@ impl Accountant {
         Self::new_from_entries(gen.create_entries(), ms_per_tick)
     }
 
-    pub fn sync(self: &mut Self) -> Sha256Hash {
+    pub fn sync(self: &mut Self) -> Hash {
         while let Ok(entry) = self.historian.receiver.try_recv() {
             self.last_id = entry.id;
         }

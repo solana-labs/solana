@@ -2,7 +2,7 @@ use std::io;
 use accountant::Accountant;
 use transaction::Transaction;
 use signature::PublicKey;
-use hash::Sha256Hash;
+use hash::Hash;
 use entry::Entry;
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
@@ -15,7 +15,7 @@ pub struct AccountantSkel {
 pub enum Request {
     Transaction(Transaction<i64>),
     GetBalance { key: PublicKey },
-    GetEntries { last_id: Sha256Hash },
+    GetEntries { last_id: Hash },
     GetId { is_last: bool },
 }
 
@@ -23,7 +23,7 @@ pub enum Request {
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     Entries { entries: Vec<Entry<i64>> },
-    Id { id: Sha256Hash, is_last: bool },
+    Id { id: Hash, is_last: bool },
 }
 
 impl AccountantSkel {

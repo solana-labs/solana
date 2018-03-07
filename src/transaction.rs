@@ -4,24 +4,19 @@ use signature::{get_pubkey, verify_signature, PublicKey, Signature};
 use ring::signature::Ed25519KeyPair;
 use serde::Serialize;
 use bincode::serialize;
-use hash::Sha256Hash;
+use hash::Hash;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction<T> {
     pub from: PublicKey,
     pub to: PublicKey,
     pub asset: T,
-    pub last_id: Sha256Hash,
+    pub last_id: Hash,
     pub sig: Signature,
 }
 
 impl<T: Serialize> Transaction<T> {
-    pub fn new(
-        from_keypair: &Ed25519KeyPair,
-        to: PublicKey,
-        asset: T,
-        last_id: Sha256Hash,
-    ) -> Self {
+    pub fn new(from_keypair: &Ed25519KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
         let mut tr = Transaction {
             from: get_pubkey(&from_keypair),
             to,
@@ -58,14 +53,14 @@ mod tests {
     fn test_claim() {
         let keypair = generate_keypair();
         let asset = hash(b"hello, world");
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let tr0 = Transaction::new(&keypair, get_pubkey(&keypair), asset, zero);
         assert!(tr0.verify());
     }
 
     #[test]
     fn test_transfer() {
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let keypair0 = generate_keypair();
         let keypair1 = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
@@ -90,7 +85,7 @@ mod tests {
 
     #[test]
     fn test_bad_event_signature() {
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let keypair = generate_keypair();
         let pubkey = get_pubkey(&keypair);
         let mut tr = Transaction::new(&keypair, pubkey, hash(b"hello, world"), zero);
@@ -105,7 +100,7 @@ mod tests {
         let keypair1 = generate_keypair();
         let thief_keypair = generate_keypair();
         let pubkey1 = get_pubkey(&keypair1);
-        let zero = Sha256Hash::default();
+        let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, hash(b"hello, world"), zero);
         tr.sign(&keypair0);
         tr.to = get_pubkey(&thief_keypair); // <-- attack!
