@@ -23,6 +23,8 @@ fn main() {
     events.push(transfer(&from, alice, seed));
     events.push(transfer(&from, bob, seed));
 
-    create_entries(&seed, events);
-    println!("{}", serde_json::to_string(&gen).unwrap());
+    let entries = create_entries(&seed, events);
+    for entry in entries {
+        println!("{}", serde_json::to_string(&entry).unwrap());
+    }
 }
