@@ -36,7 +36,6 @@ impl Genesis {
     pub fn new(tokens: i64, creators: Vec<Creator>) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
-        println!("{:?}", pkcs8);
         Genesis {
             pkcs8,
             tokens,
