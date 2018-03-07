@@ -6,10 +6,9 @@ use hash::Hash;
 use entry::Entry;
 use event::Event;
 use transaction::Transaction;
-use signature::{PublicKey, Signature};
+use signature::{KeyPair, PublicKey, Signature};
 use genesis::Genesis;
 use historian::{reserve_signature, Historian};
-use ring::signature::Ed25519KeyPair;
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
 use std::result;
@@ -131,7 +130,7 @@ impl Accountant {
     pub fn transfer(
         self: &mut Self,
         n: i64,
-        keypair: &Ed25519KeyPair,
+        keypair: &KeyPair,
         to: PublicKey,
     ) -> Result<Signature> {
         let tr = Transaction::new(keypair, to, n, self.last_id);
@@ -149,14 +148,15 @@ mod tests {
     use super::*;
     use signature::{generate_keypair, get_pubkey};
     use logger::ExitReason;
-    use genesis::Creator;
 
     #[test]
     fn test_accountant() {
-        let bob = Creator::new(1_000);
-        let bob_pubkey = bob.pubkey;
-        let alice = Genesis::new(10_000, vec![bob]);
+        let alice = Genesis::new(10_000);
+        let bob_pubkey = get_pubkey(&generate_keypair());
         let mut acc = Accountant::new(&alice, Some(2));
+        acc.transfer(1_000, &alice.get_keypair(), bob_pubkey)
+            .unwrap();
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
         acc.transfer(500, &alice.get_keypair(), bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
@@ -170,10 +170,11 @@ mod tests {
 
     #[test]
     fn test_invalid_transfer() {
-        let bob = Creator::new(1_000);
-        let bob_pubkey = bob.pubkey;
-        let alice = Genesis::new(11_000, vec![bob]);
+        let alice = Genesis::new(11_000);
         let mut acc = Accountant::new(&alice, Some(2));
+        let bob_pubkey = get_pubkey(&generate_keypair());
+        acc.transfer(1_000, &alice.get_keypair(), bob_pubkey)
+            .unwrap();
         assert_eq!(
             acc.transfer(10_001, &alice.get_keypair(), bob_pubkey),
             Err(AccountingError::InsufficientFunds)
@@ -192,11 +193,10 @@ mod tests {
 
     #[test]
     fn test_transfer_to_newb() {
-        let alice = Genesis::new(10_000, vec![]);
+        let alice = Genesis::new(10_000);
         let mut acc = Accountant::new(&alice, Some(2));
         let alice_keypair = alice.get_keypair();
-        let bob_keypair = generate_keypair();
-        let bob_pubkey = get_pubkey(&bob_keypair);
+        let bob_pubkey = get_pubkey(&generate_keypair());
         acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 

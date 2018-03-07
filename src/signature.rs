@@ -6,18 +6,19 @@ use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use untrusted;
 
+pub type KeyPair = Ed25519KeyPair;
 pub type PublicKey = GenericArray<u8, U32>;
 pub type Signature = GenericArray<u8, U64>;
 
 /// Return a new ED25519 keypair
-pub fn generate_keypair() -> Ed25519KeyPair {
+pub fn generate_keypair() -> KeyPair {
     let rng = rand::SystemRandom::new();
     let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
     signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).unwrap()
 }
 
 /// Return the public key for the given keypair
-pub fn get_pubkey(keypair: &Ed25519KeyPair) -> PublicKey {
+pub fn get_pubkey(keypair: &KeyPair) -> PublicKey {
     GenericArray::clone_from_slice(keypair.public_key_bytes())
 }
 
