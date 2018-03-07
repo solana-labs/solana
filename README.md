@@ -38,7 +38,7 @@ in two steps here because the demo-genesis.json file contains a private
 key that will be used later in this demo.
 
 ```bash
-    $ ./silk-genesis-file-demo > demo-genesis.jsoc
+    $ ./silk-genesis-file-demo > demo-genesis.json
     $ cat demo-genesis.json | ./silk-genesis-block > demo-genesis.log
 ```
 
