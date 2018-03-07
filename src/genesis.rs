@@ -3,7 +3,8 @@
 use event::Event;
 use transaction::Transaction;
 use signature::{generate_keypair, get_pubkey, PublicKey};
-use log::{create_entries, Entry};
+use entry::Entry;
+use log::create_entries;
 use hash::{hash, Sha256Hash};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;

@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use hash::{hash, Sha256Hash};
-use log::Entry;
+use entry::Entry;
 use logger::{ExitReason, Logger};
 use signature::Signature;
 use event::Event;

@@ -3,7 +3,7 @@ use accountant::Accountant;
 use transaction::Transaction;
 use signature::PublicKey;
 use hash::Sha256Hash;
-use log::Entry;
+use entry::Entry;
 use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
 

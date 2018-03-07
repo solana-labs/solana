@@ -3,7 +3,7 @@
 //! transfer funds to other users.
 
 use hash::Sha256Hash;
-use log::Entry;
+use entry::Entry;
 use event::Event;
 use transaction::Transaction;
 use signature::{PublicKey, Signature};

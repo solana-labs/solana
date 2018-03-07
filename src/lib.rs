@@ -1,11 +1,12 @@
 #![cfg_attr(feature = "unstable", feature(test))]
-pub mod hash;
-pub mod log;
-pub mod logger;
-pub mod event;
-pub mod transaction;
 pub mod signature;
+pub mod hash;
+pub mod transaction;
+pub mod event;
+pub mod entry;
+pub mod log;
 pub mod genesis;
+pub mod logger;
 pub mod historian;
 pub mod accountant;
 pub mod accountant_skel;
