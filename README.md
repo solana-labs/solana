@@ -11,9 +11,9 @@ All claims, content, designs, algorithms, estimates, roadmaps, specifications, a
 Silk, a silky smooth implementation of the Loom specification
 ===
 
-Loom&trade; is a new achitecture for a high performance blockchain. Its whitepaper boasts a theoretical
+Loom&trade; is a new architecture for a high performance blockchain. Its white paper boasts a theoretical
 throughput of 710k transactions per second on a 1 gbps network. The specification is implemented
-in two git repositories. Reserach is performed in the loom repository. That work drives the
+in two git repositories. Research is performed in the loom repository. That work drives the
 Loom specification forward. This repository, on the other hand, aims to implement the specification
 as-is.  We care a great deal about quality, clarity and short learning curve. We avoid the use
 of `unsafe` Rust and write tests for *everything*.  Optimizations are only added when
@@ -48,14 +48,14 @@ Now you can start the server:
     $ cat demo-genesis.log | ./silk-testnode > demo-entries0.log
 ```
 
-Then, in a seperate shell, let's execute some transactions. Note we pass in
+Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis log.
 
 ```bash
     $ cat demo-genesis.json | ./silk-client-demo
 ```
 
-Now kill the server with Ctrl-C and take a look at the transaction log. You should
+Now kill the server with Ctrl-C, and take a look at the transaction log. You should
 see something similar to:
 
 ```json
@@ -64,21 +64,21 @@ see something similar to:
 {"num_hashes":27,"id":[0, "..."],"event":"Tick"}
 ```
 
-Now restart the server from where we left off. Pass it both the genesis log and
+Now restart the server from where we left off. Pass it both the genesis log, and
 the transaction log.
 
 ```bash
     $ cat demo-genesis.log demo-entries0.log | ./silk-testnode > demo-entries1.log
 ```
 
-Lastly, run the client demo again and verify that all funds were spent in the
-previous round and so no additional transactions are added.
+Lastly, run the client demo again, and verify that all funds were spent in the
+previous round, and so no additional transactions are added.
 
 ```bash
     $ cat demo-genesis.json | ./silk-client-demo
 ```
 
-Stop the server again and verify there are only Tick entries and no Transaction entries.
+Stop the server again, and verify there are only Tick entries, and no Transaction entries.
 
 Developing
 ===
