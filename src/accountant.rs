@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use transaction::Transaction;
+use transaction::{Condition, Transaction};
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
@@ -101,6 +101,7 @@ impl Accountant {
         Ok(())
     }
 
+    /// Commit funds to the 'to' party.
     fn complete_transaction(self: &mut Self, tr: &Transaction<i64>) {
         if self.balances.contains_key(&tr.to) {
             if let Some(x) = self.balances.get_mut(&tr.to) {
@@ -108,6 +109,13 @@ impl Accountant {
             }
         } else {
             self.balances.insert(tr.to, tr.asset);
+        }
+    }
+
+    /// Return funds to the 'from' party.
+    fn cancel_transaction(self: &mut Self, tr: &Transaction<i64>) {
+        if let Some(x) = self.balances.get_mut(&tr.from) {
+            *x += tr.asset;
         }
     }
 
@@ -139,17 +147,32 @@ impl Accountant {
         Ok(())
     }
 
-    fn process_verified_sig(&mut self, _from: PublicKey, tx_sig: Signature) -> Result<()> {
-        if self.pending.contains_key(&tx_sig) {
-            if let Some(_tx) = self.pending.get_mut(&tx_sig) {
-                // Cancel:
-                // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
+    fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
+        let mut cancel = false;
+        if let Some(tr) = self.pending.get(&tx_sig) {
+            // Cancel:
+            // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
 
-                // Process Multisig:
-                // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
-                // to be empty, add the asset to to, and remove the tx from this map.
+            // TODO: Use find().
+            for cond in &tr.unless_any {
+                if let Condition::Signature(pubkey) = *cond {
+                    if from == pubkey {
+                        cancel = true;
+                        break;
+                    }
+                }
             }
         }
+
+        if cancel {
+            if let Some(tr) = self.pending.remove(&tx_sig) {
+                self.cancel_transaction(&tr);
+            }
+        }
+
+        // Process Multisig:
+        // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
+        // to be empty, add the asset to to, and remove the tx from this map.
         Ok(())
     }
 
@@ -164,6 +187,8 @@ impl Accountant {
             if dt > self.last_time {
                 self.last_time = dt;
             }
+        } else {
+            return Ok(());
         }
         // TODO: Lookup pending Transaction waiting on time, signed by a whitelisted PublicKey.
 
@@ -171,9 +196,31 @@ impl Accountant {
         // if a Timestamp after this DateTime is in unless_any, return funds to tx.from,
         // and remove the tx from this map.
 
-        // Process postponed:
-        // otherwise, if "Timestamp(dt) >= self.last_time" is in if_all, remove it. If that causes that list
-        // to be empty, add the asset to to, and remove the tx from this map.
+        // Check to see if any timelocked transactions can be completed.
+        let mut completed = vec![];
+        for (key, tr) in &self.pending {
+            for cond in &tr.if_all {
+                if let Condition::Timestamp(dt) = *cond {
+                    if self.last_time >= dt {
+                        if tr.if_all.len() == 1 {
+                            completed.push(*key);
+                        }
+                    }
+                }
+            }
+            // TODO: Add this in once we start removing constraints
+            //if tr.if_all.is_empty() {
+            //    // TODO: Remove tr from pending
+            //    self.complete_transaction(tr);
+            //}
+        }
+
+        for key in completed {
+            if let Some(tr) = self.pending.remove(&key) {
+                self.complete_transaction(&tr);
+            }
+        }
+
         Ok(())
     }
 
@@ -296,8 +343,35 @@ mod tests {
         // Now, acknowledge the time in the condition occurred and
         // that bob's funds are now available.
         acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
+        assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
 
-        // TODO: Uncomment this once process_verified_timestamp is implemented.
-        //assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
+        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
+        assert_ne!(acc.get_balance(&bob_pubkey), Some(2));
+    }
+
+    #[test]
+    fn test_cancel_transfer() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, Some(2));
+        let alice_keypair = alice.keypair();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let dt = Utc::now();
+        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+            .unwrap();
+
+        // Alice's balance will be zero because all funds are locked up.
+        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
+
+        // Bob's balance will be None because the funds have not been
+        // sent.
+        assert_eq!(acc.get_balance(&bob_pubkey), None);
+
+        // Now, cancel the trancaction. Alice gets her funds back, Bob never sees them.
+        acc.process_verified_sig(alice.pubkey(), sig).unwrap();
+        assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
+        assert_eq!(acc.get_balance(&bob_pubkey), None);
+
+        acc.process_verified_sig(alice.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        assert_ne!(acc.get_balance(&alice.pubkey()), Some(2));
     }
 }
