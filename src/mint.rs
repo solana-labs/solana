@@ -10,16 +10,16 @@ use ring::rand::SystemRandom;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Genesis {
+pub struct Mint {
     pub pkcs8: Vec<u8>,
     pub tokens: i64,
 }
 
-impl Genesis {
+impl Mint {
     pub fn new(tokens: i64) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
-        Genesis { pkcs8, tokens }
+        Mint { pkcs8, tokens }
     }
 
     pub fn seed(&self) -> Hash {
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn test_create_events() {
-        let mut events = Genesis::new(100).create_events().into_iter();
+        let mut events = Mint::new(100).create_events().into_iter();
         assert_eq!(events.next().unwrap(), Event::Tick);
         if let Event::Transaction(tr) = events.next().unwrap() {
             assert_eq!(tr.from, tr.to);
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_verify_entries() {
-        let entries = Genesis::new(100).create_entries();
+        let entries = Mint::new(100).create_entries();
         assert!(verify_slice(&entries, &entries[0].id));
     }
 }

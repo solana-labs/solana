@@ -3,12 +3,12 @@
 extern crate serde_json;
 extern crate silk;
 
-use silk::genesis::Genesis;
+use silk::mint::Mint;
 use std::io::stdin;
 
 fn main() {
-    let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-    for x in gen.create_entries() {
+    let mint: Mint = serde_json::from_reader(stdin()).unwrap();
+    for x in mint.create_entries() {
         println!("{}", serde_json::to_string(&x).unwrap());
     }
 }

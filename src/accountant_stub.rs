@@ -115,14 +115,14 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use genesis::Genesis;
+    use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
 
     #[test]
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        let alice = Genesis::new(10_000);
+        let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, None);
         let bob_pubkey = KeyPair::new().pubkey();
         spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());

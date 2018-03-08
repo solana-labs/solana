@@ -7,7 +7,7 @@ use entry::Entry;
 use event::Event;
 use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
-use genesis::Genesis;
+use mint::Mint;
 use historian::{reserve_signature, Historian};
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
@@ -62,8 +62,8 @@ impl Accountant {
         acc
     }
 
-    pub fn new(gen: &Genesis, ms_per_tick: Option<u64>) -> Self {
-        Self::new_from_entries(gen.create_entries(), ms_per_tick)
+    pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
+        Self::new_from_entries(mint.create_entries(), ms_per_tick)
     }
 
     pub fn sync(self: &mut Self) -> Hash {
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_accountant() {
-        let alice = Genesis::new(10_000);
+        let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut acc = Accountant::new(&alice, Some(2));
         acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_invalid_transfer() {
-        let alice = Genesis::new(11_000);
+        let alice = Mint::new(11_000);
         let mut acc = Accountant::new(&alice, Some(2));
         let bob_pubkey = KeyPair::new().pubkey();
         acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_transfer_to_newb() {
-        let alice = Genesis::new(10_000);
+        let alice = Mint::new(10_000);
         let mut acc = Accountant::new(&alice, Some(2));
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();

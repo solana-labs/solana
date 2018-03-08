@@ -1,7 +1,7 @@
 extern crate serde_json;
 extern crate silk;
 
-use silk::genesis::Genesis;
+use silk::mint::Mint;
 use silk::event::Event;
 use silk::transaction::Transaction;
 use silk::log::create_entries;
@@ -17,10 +17,10 @@ fn main() {
     let alice = (KeyPair::new().pubkey(), 200);
     let bob = (KeyPair::new().pubkey(), 100);
 
-    let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-    let from = gen.keypair();
-    let seed = gen.seed();
-    let mut events = gen.create_events();
+    let mint: Mint = serde_json::from_reader(stdin()).unwrap();
+    let from = mint.keypair();
+    let seed = mint.seed();
+    let mut events = mint.create_events();
     events.push(transfer(&from, alice, seed));
     events.push(transfer(&from, bob, seed));
 

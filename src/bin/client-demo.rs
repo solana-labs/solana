@@ -4,7 +4,7 @@ extern crate silk;
 use silk::accountant_stub::AccountantStub;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
-use silk::genesis::Genesis;
+use silk::mint::Mint;
 use std::time::Instant;
 use std::net::UdpSocket;
 use std::io::stdin;
@@ -13,23 +13,23 @@ fn main() {
     let addr = "127.0.0.1:8000";
     let send_addr = "127.0.0.1:8001";
 
-    let gen: Genesis = serde_json::from_reader(stdin()).unwrap();
-    let alice_keypair = gen.keypair();
-    let alice_pubkey = gen.pubkey();
+    let mint: Mint = serde_json::from_reader(stdin()).unwrap();
+    let mint_keypair = mint.keypair();
+    let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
     let mut acc = AccountantStub::new(addr, socket);
     let last_id = acc.get_last_id().unwrap();
 
-    let txs = acc.get_balance(&alice_pubkey).unwrap().unwrap();
-    println!("Alice's Initial Balance {}", txs);
+    let txs = acc.get_balance(&mint_pubkey).unwrap().unwrap();
+    println!("Mint's Initial Balance {}", txs);
 
     println!("Signing transactions...");
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .map(|_| {
             let rando_pubkey = KeyPair::new().pubkey();
-            Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
+            Transaction::new(&mint_keypair, rando_pubkey, 1, last_id)
         })
         .collect();
     let duration = now.elapsed();
@@ -71,7 +71,7 @@ fn main() {
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
     println!("Done. {} tps!", tps);
-    let val = acc.get_balance(&alice_pubkey).unwrap().unwrap();
-    println!("Alice's Final Balance {}", val);
+    let val = acc.get_balance(&mint_pubkey).unwrap().unwrap();
+    println!("Mint's Final Balance {}", val);
     assert_eq!(val, 0);
 }
