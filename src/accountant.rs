@@ -257,4 +257,29 @@ mod tests {
             ExitReason::RecvDisconnected
         );
     }
+
+    #[test]
+    fn test_transfer_on_date() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, Some(2));
+        let alice_keypair = alice.keypair();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let dt = Utc::now();
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+            .unwrap();
+
+        // Alice's balance will be zero because all funds are locked up.
+        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
+
+        // Bob's balance will be None because the funds have not been
+        // sent.
+        assert_eq!(acc.get_balance(&bob_pubkey), None);
+
+        // Now, acknowledge the time in the condition occurred and
+        // that bob's funds are now available.
+        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
+
+        // TODO: Uncomment this once process_verified_timestamp is implemented.
+        //assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
+    }
 }
