@@ -8,8 +8,8 @@ use chrono::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
-    DateTime(DateTime<Utc>),
-    Cancel,
+    Timestamp(DateTime<Utc>),
+    Signature(PublicKey),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -45,11 +45,12 @@ impl<T: Serialize> Transaction<T> {
         asset: T,
         last_id: Hash,
     ) -> Self {
+        let from = from_keypair.pubkey();
         let mut tr = Transaction {
-            from: from_keypair.pubkey(),
+            from,
             to,
-            if_all: vec![Condition::DateTime(dt)],
-            unless_any: vec![Condition::Cancel],
+            if_all: vec![Condition::Timestamp(dt)],
+            unless_any: vec![Condition::Signature(from)],
             asset,
             last_id,
             sig: Signature::default(),

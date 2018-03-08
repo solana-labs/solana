@@ -29,6 +29,7 @@ pub struct Accountant {
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
+    pub pending: HashMap<Signature, Transaction<i64>>,
 }
 
 impl Accountant {
@@ -49,6 +50,7 @@ impl Accountant {
             balances: HashMap::new(),
             first_id: start_hash,
             last_id: start_hash,
+            pending: HashMap::new(),
         };
 
         // The second item in the log is a special transaction where the to and from
@@ -104,10 +106,18 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
+        if !tr.unless_any.is_empty() {
+            // TODO: Check to see if the transaction is expired.
+        }
+
         if !Self::is_deposit(allow_deposits, &tr.from, &tr.to) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
                 *x -= tr.asset;
             }
+        }
+
+        if !tr.if_all.is_empty() {
+            self.pending.insert(tr.sig, tr.clone());
         }
 
         if self.balances.contains_key(&tr.to) {
@@ -121,10 +131,39 @@ impl Accountant {
         Ok(())
     }
 
+    fn process_verified_sig(&mut self, _from: PublicKey, tx_sig: Signature) -> Result<()> {
+        if self.pending.contains_key(&tx_sig) {
+            if let Some(_tx) = self.pending.get_mut(&tx_sig) {
+                // Cancel:
+                // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
+
+                // Process Multisig:
+                // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
+                // to be empty, add the asset to to, and remove the tx from this map.
+            }
+        }
+        Ok(())
+    }
+
+    fn process_verified_timestamp(&mut self, _from: PublicKey, _dt: DateTime<Utc>) -> Result<()> {
+        // TODO: Lookup pending Transaction waiting on time, signed by a whitelisted PublicKey.
+
+        // Expire:
+        // if a Timestamp after this DateTime is in unless_any, return funds to tx.from,
+        // and remove the tx from this map.
+
+        // Process postponed:
+        // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
+        // to be empty, add the asset to to, and remove the tx from this map.
+        Ok(())
+    }
+
     fn process_verified_event(self: &mut Self, event: &Event, allow_deposits: bool) -> Result<()> {
         match *event {
             Event::Tick => Ok(()),
             Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
+            Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
+            Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),
         }
     }
 

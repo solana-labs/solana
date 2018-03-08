@@ -1,7 +1,9 @@
 //! The `event` crate provides the data structures for log events.
 
-use signature::Signature;
+use signature::{PublicKey, Signature, SignatureUtil};
 use transaction::Transaction;
+use chrono::prelude::*;
+use bincode::serialize;
 
 /// When 'event' is Tick, the event represents a simple clock tick, and exists for the
 /// sole purpose of improving the performance of event log verification. A tick can
@@ -12,13 +14,26 @@ use transaction::Transaction;
 pub enum Event {
     Tick,
     Transaction(Transaction<i64>),
+    Signature {
+        from: PublicKey,
+        tx_sig: Signature,
+        sig: Signature,
+    },
+    Timestamp {
+        from: PublicKey,
+        dt: DateTime<Utc>,
+        sig: Signature,
+    },
 }
 
 impl Event {
+    // TODO: Rename this to transaction_signature().
     pub fn get_signature(&self) -> Option<Signature> {
         match *self {
             Event::Tick => None,
             Event::Transaction(ref tr) => Some(tr.sig),
+            Event::Signature { .. } => None,
+            Event::Timestamp { .. } => None,
         }
     }
 
@@ -26,6 +41,8 @@ impl Event {
         match *self {
             Event::Tick => true,
             Event::Transaction(ref tr) => tr.verify(),
+            Event::Signature { from, tx_sig, sig } => sig.verify(&from, &tx_sig),
+            Event::Timestamp { from, dt, sig } => sig.verify(&from, &serialize(&dt).unwrap()),
         }
     }
 }
