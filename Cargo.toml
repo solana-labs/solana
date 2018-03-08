@@ -12,8 +12,8 @@ authors = [
 license = "Apache-2.0"
 
 [[bin]]
-name = "silk-demo"
-path = "src/bin/demo.rs"
+name = "silk-historian-demo"
+path = "src/bin/historian-demo.rs"
 
 [[bin]]
 name = "silk-client-demo"
@@ -24,12 +24,16 @@ name = "silk-testnode"
 path = "src/bin/testnode.rs"
 
 [[bin]]
-name = "silk-genesis-block"
-path = "src/bin/genesis-block.rs"
+name = "silk-genesis"
+path = "src/bin/genesis.rs"
 
 [[bin]]
-name = "silk-genesis-file-demo"
-path = "src/bin/genesis-file-demo.rs"
+name = "silk-genesis-demo"
+path = "src/bin/genesis-demo.rs"
+
+[[bin]]
+name = "silk-mint"
+path = "src/bin/mint.rs"
 
 [badges]
 codecov = { repository = "loomprotocol/silk", branch = "master", service = "github" }

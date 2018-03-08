@@ -5,7 +5,7 @@ pub mod transaction;
 pub mod event;
 pub mod entry;
 pub mod log;
-pub mod genesis;
+pub mod mint;
 pub mod logger;
 pub mod historian;
 pub mod accountant;

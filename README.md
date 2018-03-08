@@ -32,27 +32,27 @@ First, build the demo executables in release mode (optimized for performance):
 ```
 
 The testnode server is initialized with a transaction log from stdin and
-generates a log on stdout. To create the input log, we'll need to create
-a *genesis* configuration file and then generate a log from it. It's done
-in two steps here because the demo-genesis.json file contains a private
-key that will be used later in this demo.
+generates new log entries on stdout. To create the input log, we'll need
+to create *the mint* and use it to generate a *genesis log*. It's done in
+two steps because the mint.json file contains a private key that will be
+used later in this demo.
 
 ```bash
-    $ ./silk-genesis-file-demo > demo-genesis.json
-    $ cat demo-genesis.json | ./silk-genesis-block > demo-genesis.log
+    $ echo 500 | ./silk-mint > mint.json
+    $ cat mint.json | ./silk-genesis > genesis.log
 ```
 
 Now you can start the server:
 
 ```bash
-    $ cat demo-genesis.log | ./silk-testnode > demo-entries0.log
+    $ cat genesis.log | ./silk-testnode > transactions0.log
 ```
 
 Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis log.
 
 ```bash
-    $ cat demo-genesis.json | ./silk-client-demo
+    $ cat mint.json | ./silk-client-demo
 ```
 
 Now kill the server with Ctrl-C, and take a look at the transaction log. You should
@@ -68,7 +68,7 @@ Now restart the server from where we left off. Pass it both the genesis log, and
 the transaction log.
 
 ```bash
-    $ cat demo-genesis.log demo-entries0.log | ./silk-testnode > demo-entries1.log
+    $ cat genesis.log transactions0.log | ./silk-testnode > transactions1.log
 ```
 
 Lastly, run the client demo again, and verify that all funds were spent in the

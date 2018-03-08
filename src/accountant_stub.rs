@@ -115,23 +115,23 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use std::thread::{sleep, spawn};
     use std::time::Duration;
-    use genesis::Genesis;
-    use signature::{generate_keypair, get_pubkey};
+    use mint::Mint;
+    use signature::{KeyPair, KeyPairUtil};
 
     #[test]
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
-        let alice = Genesis::new(10_000);
+        let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, None);
-        let bob_pubkey = get_pubkey(&generate_keypair());
+        let bob_pubkey = KeyPair::new().pubkey();
         spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
         let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().unwrap();
-        let sig = acc.transfer(500, &alice.get_keypair(), bob_pubkey, &last_id)
+        let sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
         acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
