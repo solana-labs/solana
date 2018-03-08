@@ -60,7 +60,14 @@ impl<T: Serialize> Transaction<T> {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.from, &self.to, &self.asset, &self.last_id)).unwrap()
+        serialize(&(
+            &self.from,
+            &self.to,
+            &self.if_all,
+            &self.unless_any,
+            &self.asset,
+            &self.last_id,
+        )).unwrap()
     }
 
     pub fn sign(&mut self, keypair: &KeyPair) {

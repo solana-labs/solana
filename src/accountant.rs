@@ -118,6 +118,7 @@ impl Accountant {
 
         if !tr.if_all.is_empty() {
             self.pending.insert(tr.sig, tr.clone());
+            return Ok(());
         }
 
         if self.balances.contains_key(&tr.to) {
