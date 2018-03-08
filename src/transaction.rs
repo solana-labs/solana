@@ -4,11 +4,20 @@ use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 use serde::Serialize;
 use bincode::serialize;
 use hash::Hash;
+use chrono::prelude::*;
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum Condition {
+    Timestamp(DateTime<Utc>),
+    Signature(PublicKey),
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction<T> {
     pub from: PublicKey,
     pub to: PublicKey,
+    pub if_all: Vec<Condition>,
+    pub unless_any: Vec<Condition>,
     pub asset: T,
     pub last_id: Hash,
     pub sig: Signature,
@@ -19,6 +28,29 @@ impl<T: Serialize> Transaction<T> {
         let mut tr = Transaction {
             from: from_keypair.pubkey(),
             to,
+            if_all: vec![],
+            unless_any: vec![],
+            asset,
+            last_id,
+            sig: Signature::default(),
+        };
+        tr.sign(from_keypair);
+        tr
+    }
+
+    pub fn new_on_date(
+        from_keypair: &KeyPair,
+        to: PublicKey,
+        dt: DateTime<Utc>,
+        asset: T,
+        last_id: Hash,
+    ) -> Self {
+        let from = from_keypair.pubkey();
+        let mut tr = Transaction {
+            from,
+            to,
+            if_all: vec![Condition::Timestamp(dt)],
+            unless_any: vec![Condition::Signature(from)],
             asset,
             last_id,
             sig: Signature::default(),
@@ -28,7 +60,14 @@ impl<T: Serialize> Transaction<T> {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.from, &self.to, &self.asset, &self.last_id)).unwrap()
+        serialize(&(
+            &self.from,
+            &self.to,
+            &self.if_all,
+            &self.unless_any,
+            &self.asset,
+            &self.last_id,
+        )).unwrap()
     }
 
     pub fn sign(&mut self, keypair: &KeyPair) {
@@ -72,6 +111,8 @@ mod tests {
         let claim0 = Transaction {
             from: Default::default(),
             to: Default::default(),
+            if_all: Default::default(),
+            unless_any: Default::default(),
             asset: 0u8,
             last_id: Default::default(),
             sig: Default::default(),

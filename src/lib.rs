@@ -12,6 +12,7 @@ pub mod accountant;
 pub mod accountant_skel;
 pub mod accountant_stub;
 extern crate bincode;
+extern crate chrono;
 extern crate generic_array;
 extern crate rayon;
 extern crate ring;
