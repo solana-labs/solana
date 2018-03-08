@@ -10,7 +10,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
 use std::sync::mpsc::SendError;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::result;
 use chrono::prelude::*;
 
@@ -29,7 +29,9 @@ pub struct Accountant {
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
-    pub pending: HashMap<Signature, Transaction<i64>>,
+    pending: HashMap<Signature, Transaction<i64>>,
+    time_sources: HashSet<PublicKey>,
+    last_time: DateTime<Utc>,
 }
 
 impl Accountant {
@@ -51,6 +53,8 @@ impl Accountant {
             first_id: start_hash,
             last_id: start_hash,
             pending: HashMap::new(),
+            time_sources: HashSet::new(),
+            last_time: Utc.timestamp(0, 0),
         };
 
         // The second item in the log is a special transaction where the to and from
@@ -97,6 +101,16 @@ impl Accountant {
         Ok(())
     }
 
+    fn complete_transaction(self: &mut Self, tr: &Transaction<i64>) {
+        if self.balances.contains_key(&tr.to) {
+            if let Some(x) = self.balances.get_mut(&tr.to) {
+                *x += tr.asset;
+            }
+        } else {
+            self.balances.insert(tr.to, tr.asset);
+        }
+    }
+
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction<i64>,
@@ -121,14 +135,7 @@ impl Accountant {
             return Ok(());
         }
 
-        if self.balances.contains_key(&tr.to) {
-            if let Some(x) = self.balances.get_mut(&tr.to) {
-                *x += tr.asset;
-            }
-        } else {
-            self.balances.insert(tr.to, tr.asset);
-        }
-
+        self.complete_transaction(tr);
         Ok(())
     }
 
@@ -146,7 +153,18 @@ impl Accountant {
         Ok(())
     }
 
-    fn process_verified_timestamp(&mut self, _from: PublicKey, _dt: DateTime<Utc>) -> Result<()> {
+    fn process_verified_timestamp(&mut self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+        // If this is the first timestamp we've seen, it probably came from the genesis block,
+        // so we'll trust it.
+        if self.last_time == Utc.timestamp(0, 0) {
+            self.time_sources.insert(from);
+        }
+
+        if self.time_sources.contains(&from) {
+            if dt > self.last_time {
+                self.last_time = dt;
+            }
+        }
         // TODO: Lookup pending Transaction waiting on time, signed by a whitelisted PublicKey.
 
         // Expire:
@@ -154,7 +172,7 @@ impl Accountant {
         // and remove the tx from this map.
 
         // Process postponed:
-        // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
+        // otherwise, if "Timestamp(dt) >= self.last_time" is in if_all, remove it. If that causes that list
         // to be empty, add the asset to to, and remove the tx from this map.
         Ok(())
     }

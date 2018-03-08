@@ -42,7 +42,8 @@ impl Mint {
     }
 
     pub fn create_events(&self) -> Vec<Event> {
-        let tr = Transaction::new(&self.keypair(), self.pubkey(), self.tokens, self.seed());
+        let keypair = self.keypair();
+        let tr = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
         vec![Event::Tick, Event::Transaction(tr)]
     }
 

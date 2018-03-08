@@ -1,6 +1,6 @@
 //! The `event` crate provides the data structures for log events.
 
-use signature::{PublicKey, Signature, SignatureUtil};
+use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 use transaction::Transaction;
 use chrono::prelude::*;
 use bincode::serialize;
@@ -27,6 +27,16 @@ pub enum Event {
 }
 
 impl Event {
+    pub fn new_timestamp(from: &KeyPair, dt: DateTime<Utc>) -> Self {
+        let sign_data = serialize(&dt).unwrap();
+        let sig = Signature::clone_from_slice(from.sign(&sign_data).as_ref());
+        Event::Timestamp {
+            from: from.pubkey(),
+            dt,
+            sig,
+        }
+    }
+
     // TODO: Rename this to transaction_signature().
     pub fn get_signature(&self) -> Option<Signature> {
         match *self {
