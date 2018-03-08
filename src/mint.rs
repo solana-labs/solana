@@ -12,6 +12,7 @@ use untrusted::Input;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Mint {
     pub pkcs8: Vec<u8>,
+    pubkey: PublicKey,
     pub tokens: i64,
 }
 
@@ -19,7 +20,13 @@ impl Mint {
     pub fn new(tokens: i64) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
-        Mint { pkcs8, tokens }
+        let keypair = KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap();
+        let pubkey = keypair.pubkey();
+        Mint {
+            pkcs8,
+            pubkey,
+            tokens,
+        }
     }
 
     pub fn seed(&self) -> Hash {
@@ -31,7 +38,7 @@ impl Mint {
     }
 
     pub fn pubkey(&self) -> PublicKey {
-        self.keypair().pubkey()
+        self.pubkey
     }
 
     pub fn create_events(&self) -> Vec<Event> {
