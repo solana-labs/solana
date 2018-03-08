@@ -12,6 +12,7 @@ use historian::{reserve_signature, Historian};
 use std::sync::mpsc::SendError;
 use std::collections::HashMap;
 use std::result;
+use chrono::prelude::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -134,6 +135,18 @@ impl Accountant {
         to: PublicKey,
     ) -> Result<Signature> {
         let tr = Transaction::new(keypair, to, n, self.last_id);
+        let sig = tr.sig;
+        self.process_transaction(tr).map(|_| sig)
+    }
+
+    pub fn transfer_on_date(
+        self: &mut Self,
+        n: i64,
+        keypair: &KeyPair,
+        to: PublicKey,
+        dt: DateTime<Utc>,
+    ) -> Result<Signature> {
+        let tr = Transaction::new_on_date(keypair, to, dt, n, self.last_id);
         let sig = tr.sig;
         self.process_transaction(tr).map(|_| sig)
     }
