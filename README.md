@@ -75,7 +75,7 @@ Lastly, run the client demo again, and verify that all funds were spent in the
 previous round, and so no additional transactions are added.
 
 ```bash
-    $ cat demo-genesis.json | ./silk-client-demo
+    $ cat mint.json | ./silk-client-demo
 ```
 
 Stop the server again, and verify there are only Tick entries, and no Transaction entries.
