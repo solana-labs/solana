@@ -119,6 +119,21 @@ impl Accountant {
         }
     }
 
+    // TODO: Move this to transaction.rs
+    fn all_satisfied(&self, conds: &[Condition]) -> bool {
+        let mut satisfied = true;
+        for cond in conds {
+            if let &Condition::Timestamp(dt) = cond {
+                if dt > self.last_time {
+                    satisfied = false;
+                }
+            } else {
+                satisfied = false;
+            }
+        }
+        satisfied
+    }
+
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction<i64>,
@@ -138,7 +153,7 @@ impl Accountant {
             }
         }
 
-        if !tr.if_all.is_empty() {
+        if !self.all_satisfied(&tr.if_all) {
             self.pending.insert(tr.sig, tr.clone());
             return Ok(());
         }
@@ -347,6 +362,23 @@ mod tests {
 
         acc.process_verified_timestamp(alice.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
         assert_ne!(acc.get_balance(&bob_pubkey), Some(2));
+    }
+
+    #[test]
+    fn test_transfer_after_date() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, Some(2));
+        let alice_keypair = alice.keypair();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let dt = Utc::now();
+        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
+
+        // It's now past now, so this transfer should be processed immediately.
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+            .unwrap();
+
+        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
+        assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
     }
 
     #[test]
