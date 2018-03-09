@@ -37,13 +37,12 @@ impl Event {
         }
     }
 
-    // TODO: Rename this to transaction_signature().
     pub fn get_signature(&self) -> Option<Signature> {
         match *self {
             Event::Tick => None,
             Event::Transaction(ref tr) => Some(tr.sig),
-            Event::Signature { .. } => None,
-            Event::Timestamp { .. } => None,
+            Event::Signature { sig, .. } => Some(sig),
+            Event::Timestamp { sig, .. } => Some(sig),
         }
     }
 

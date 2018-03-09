@@ -40,6 +40,8 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, event: &Event) -> Hash {
         id = hash(&id);
     }
     if let Some(sig) = sig {
+        // TODO: Also hash the event type. Only the signature of a single type is
+        // guaranteed to be unique.
         id = extend_and_hash(&id, &sig);
     }
     id
