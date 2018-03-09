@@ -61,10 +61,12 @@ impl Accountant {
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
         let entry1 = entries.next().unwrap();
-        acc.process_verified_event(&entry1.event, true).unwrap();
+        acc.process_verified_event(&entry1.events[0], true).unwrap();
 
         for entry in entries {
-            acc.process_verified_event(&entry.event, false).unwrap();
+            for event in entry.events {
+                acc.process_verified_event(&event, false).unwrap();
+            }
         }
         acc
     }
