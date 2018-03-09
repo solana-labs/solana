@@ -48,8 +48,10 @@ impl Historian {
                 if let Err(err) = logger.process_events(now, ms_per_tick) {
                     return err;
                 }
-                logger.last_id = hash(&logger.last_id);
-                logger.num_hashes += 1;
+                if ms_per_tick.is_some() {
+                    logger.last_id = hash(&logger.last_id);
+                    logger.num_hashes += 1;
+                }
             }
         })
     }
@@ -85,6 +87,10 @@ mod tests {
         let entry0 = hist.receiver.recv().unwrap();
         let entry1 = hist.receiver.recv().unwrap();
         let entry2 = hist.receiver.recv().unwrap();
+
+        assert_eq!(entry0.num_hashes, 0);
+        assert_eq!(entry1.num_hashes, 0);
+        assert_eq!(entry2.num_hashes, 0);
 
         drop(hist.sender);
         assert_eq!(
