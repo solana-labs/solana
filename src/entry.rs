@@ -87,15 +87,37 @@ pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hash::hash;
+    use signature::{KeyPair, KeyPairUtil};
+    use transaction::Transaction;
+    use event::Event;
+    use entry::create_entry;
 
     #[test]
-    fn test_event_verify() {
+    fn test_entry_verify() {
         let zero = Hash::default();
         let one = hash(&zero);
         assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
         assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
         assert!(next_tick(&zero, 1).verify(&zero)); // inductive step
         assert!(!next_tick(&zero, 1).verify(&one)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_event_reorder_attack() {
+        let zero = Hash::default();
+
+        // First, verify entries
+        let keypair = KeyPair::new();
+        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 0, zero));
+        let tr1 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, zero));
+        let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        assert!(e0.verify(&zero));
+
+        // Next, swap two events and ensure verification fails.
+        e0.events[0] = tr1; // <-- attack
+        e0.events[1] = tr0;
+        assert!(!e0.verify(&zero));
     }
 
     #[test]
