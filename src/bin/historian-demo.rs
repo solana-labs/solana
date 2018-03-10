@@ -4,6 +4,7 @@ use silk::historian::Historian;
 use silk::hash::Hash;
 use silk::entry::Entry;
 use silk::log::verify_slice;
+use silk::logger::Signal;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
 use silk::event::Event;
@@ -11,12 +12,12 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian, seed: &Hash) -> Result<(), SendError<Event>> {
+fn create_log(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>> {
     sleep(Duration::from_millis(15));
     let keypair = KeyPair::new();
     let tr = Transaction::new(&keypair, keypair.pubkey(), 42, *seed);
-    let event0 = Event::Transaction(tr);
-    hist.sender.send(event0)?;
+    let signal0 = Signal::Event(Event::Transaction(tr));
+    hist.sender.send(signal0)?;
     sleep(Duration::from_millis(10));
     Ok(())
 }

@@ -9,6 +9,7 @@ use transaction::{Condition, Transaction};
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
+use logger::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -96,7 +97,10 @@ impl Accountant {
         }
 
         self.process_verified_transaction(&tr, false)?;
-        if let Err(SendError(_)) = self.historian.sender.send(Event::Transaction(tr)) {
+        if let Err(SendError(_)) = self.historian
+            .sender
+            .send(Signal::Event(Event::Transaction(tr)))
+        {
             return Err(AccountingError::SendError);
         }
 
@@ -243,7 +247,6 @@ impl Accountant {
 
     fn process_verified_event(self: &mut Self, event: &Event, allow_deposits: bool) -> Result<()> {
         match *event {
-            Event::Tick => Ok(()),
             Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
             Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
             Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),

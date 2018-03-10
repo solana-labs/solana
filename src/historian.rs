@@ -7,12 +7,11 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use hash::{hash, Hash};
 use entry::Entry;
-use logger::{ExitReason, Logger};
+use logger::{ExitReason, Logger, Signal};
 use signature::Signature;
-use event::Event;
 
 pub struct Historian {
-    pub sender: SyncSender<Event>,
+    pub sender: SyncSender<Signal>,
     pub receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
     pub signatures: HashSet<Signature>,
@@ -38,7 +37,7 @@ impl Historian {
     fn create_logger(
         start_hash: Hash,
         ms_per_tick: Option<u64>,
-        receiver: Receiver<Event>,
+        receiver: Receiver<Signal>,
         sender: SyncSender<Entry>,
     ) -> JoinHandle<ExitReason> {
         spawn(move || {
@@ -69,7 +68,6 @@ pub fn reserve_signature(sigs: &mut HashSet<Signature>, sig: &Signature) -> bool
 mod tests {
     use super::*;
     use log::*;
-    use event::*;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -78,11 +76,11 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, None);
 
-        hist.sender.send(Event::Tick).unwrap();
+        hist.sender.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::Tick).unwrap();
+        hist.sender.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Event::Tick).unwrap();
+        hist.sender.send(Signal::Tick).unwrap();
 
         let entry0 = hist.receiver.recv().unwrap();
         let entry1 = hist.receiver.recv().unwrap();
@@ -106,7 +104,7 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, None);
         drop(hist.receiver);
-        hist.sender.send(Event::Tick).unwrap();
+        hist.sender.send(Signal::Tick).unwrap();
         assert_eq!(
             hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
@@ -126,7 +124,7 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(30));
-        hist.sender.send(Event::Tick).unwrap();
+        hist.sender.send(Signal::Tick).unwrap();
         drop(hist.sender);
         let entries: Vec<Entry> = hist.receiver.iter().collect();
 

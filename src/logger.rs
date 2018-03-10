@@ -13,6 +13,11 @@ use entry::{create_entry_mut, Entry};
 use event::Event;
 use serde_json;
 
+pub enum Signal {
+    Tick,
+    Event(Event),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExitReason {
     RecvDisconnected,
@@ -21,7 +26,7 @@ pub enum ExitReason {
 
 pub struct Logger {
     pub sender: SyncSender<Entry>,
-    pub receiver: Receiver<Event>,
+    pub receiver: Receiver<Signal>,
     pub last_id: Hash,
     pub events: Vec<Event>,
     pub num_hashes: u64,
@@ -29,7 +34,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(receiver: Receiver<Event>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
+    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
         Logger {
             receiver,
             sender,
@@ -61,16 +66,17 @@ impl Logger {
             }
 
             match self.receiver.try_recv() {
-                Ok(event) => {
-                    if let Event::Tick = event {
+                Ok(signal) => match signal {
+                    Signal::Tick => {
                         let entry = self.log_entry()?;
                         self.sender
                             .send(entry)
                             .or(Err(ExitReason::SendDisconnected))?;
-                    } else {
+                    }
+                    Signal::Event(event) => {
                         self.events.push(event);
                     }
-                }
+                },
                 Err(TryRecvError::Empty) => return Ok(()),
                 Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
             };
