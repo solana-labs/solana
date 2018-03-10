@@ -109,12 +109,12 @@ impl Accountant {
 
     /// Commit funds to the 'to' party.
     fn complete_transaction(self: &mut Self, tr: &Transaction<i64>) {
-        if self.balances.contains_key(&tr.to) {
-            if let Some(x) = self.balances.get_mut(&tr.to) {
+        if self.balances.contains_key(&tr.plan.to) {
+            if let Some(x) = self.balances.get_mut(&tr.plan.to) {
                 *x += tr.asset;
             }
         } else {
-            self.balances.insert(tr.to, tr.asset);
+            self.balances.insert(tr.plan.to, tr.asset);
         }
     }
 
@@ -149,17 +149,17 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if !tr.unless_any.is_empty() {
+        if !tr.plan.unless_any.is_empty() {
             // TODO: Check to see if the transaction is expired.
         }
 
-        if !Self::is_deposit(allow_deposits, &tr.from, &tr.to) {
+        if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan.to) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
                 *x -= tr.asset;
             }
         }
 
-        if !self.all_satisfied(&tr.if_all) {
+        if !self.all_satisfied(&tr.plan.if_all) {
             self.pending.insert(tr.sig, tr.clone());
             return Ok(());
         }
@@ -175,7 +175,7 @@ impl Accountant {
             // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
 
             // TODO: Use find().
-            for cond in &tr.unless_any {
+            for cond in &tr.plan.unless_any {
                 if let Condition::Signature(pubkey) = *cond {
                     if from == pubkey {
                         cancel = true;
@@ -220,17 +220,17 @@ impl Accountant {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
         for (key, tr) in &self.pending {
-            for cond in &tr.if_all {
+            for cond in &tr.plan.if_all {
                 if let Condition::Timestamp(dt) = *cond {
                     if self.last_time >= dt {
-                        if tr.if_all.len() == 1 {
+                        if tr.plan.if_all.len() == 1 {
                             completed.push(*key);
                         }
                     }
                 }
             }
             // TODO: Add this in once we start removing constraints
-            //if tr.if_all.is_empty() {
+            //if tr.plan.if_all.is_empty() {
             //    // TODO: Remove tr from pending
             //    self.complete_transaction(tr);
             //}

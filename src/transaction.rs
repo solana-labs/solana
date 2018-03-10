@@ -13,11 +13,16 @@ pub enum Condition {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Transaction<T> {
-    pub from: PublicKey,
+pub struct SpendingPlan {
     pub to: PublicKey,
     pub if_all: Vec<Condition>,
     pub unless_any: Vec<Condition>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Transaction<T> {
+    pub from: PublicKey,
+    pub plan: SpendingPlan,
     pub asset: T,
     pub last_id: Hash,
     pub sig: Signature,
@@ -25,11 +30,14 @@ pub struct Transaction<T> {
 
 impl<T: Serialize> Transaction<T> {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
-        let mut tr = Transaction {
-            from: from_keypair.pubkey(),
+        let plan = SpendingPlan {
             to,
             if_all: vec![],
             unless_any: vec![],
+        };
+        let mut tr = Transaction {
+            from: from_keypair.pubkey(),
+            plan,
             asset,
             last_id,
             sig: Signature::default(),
@@ -46,11 +54,14 @@ impl<T: Serialize> Transaction<T> {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let mut tr = Transaction {
-            from,
+        let plan = SpendingPlan {
             to,
             if_all: vec![Condition::Timestamp(dt)],
             unless_any: vec![Condition::Signature(from)],
+        };
+        let mut tr = Transaction {
+            from,
+            plan,
             asset,
             last_id,
             sig: Signature::default(),
@@ -60,11 +71,12 @@ impl<T: Serialize> Transaction<T> {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
+        let plan = &self.plan;
         serialize(&(
             &self.from,
-            &self.to,
-            &self.if_all,
-            &self.unless_any,
+            &plan.to,
+            &plan.if_all,
+            &plan.unless_any,
             &self.asset,
             &self.last_id,
         )).unwrap()
@@ -108,11 +120,14 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let claim0 = Transaction {
-            from: Default::default(),
+        let plan = SpendingPlan {
             to: Default::default(),
             if_all: Default::default(),
             unless_any: Default::default(),
+        };
+        let claim0 = Transaction {
+            from: Default::default(),
+            plan,
             asset: 0u8,
             last_id: Default::default(),
             sig: Default::default(),
@@ -142,7 +157,7 @@ mod tests {
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, hash(b"hello, world"), zero);
         tr.sign(&keypair0);
-        tr.to = thief_keypair.pubkey(); // <-- attack!
+        tr.plan.to = thief_keypair.pubkey(); // <-- attack!
         assert!(!tr.verify());
     }
 }
