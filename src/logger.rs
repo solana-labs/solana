@@ -7,10 +7,16 @@
 
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
+use std::mem;
 use hash::Hash;
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use serde_json;
+
+pub enum Signal {
+    Tick,
+    Event(Event),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExitReason {
@@ -20,25 +26,28 @@ pub enum ExitReason {
 
 pub struct Logger {
     pub sender: SyncSender<Entry>,
-    pub receiver: Receiver<Event>,
+    pub receiver: Receiver<Signal>,
     pub last_id: Hash,
+    pub events: Vec<Event>,
     pub num_hashes: u64,
     pub num_ticks: u64,
 }
 
 impl Logger {
-    pub fn new(receiver: Receiver<Event>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
+    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
         Logger {
             receiver,
             sender,
             last_id: start_hash,
+            events: vec![],
             num_hashes: 0,
             num_ticks: 0,
         }
     }
 
-    pub fn log_event(&mut self, event: Event) -> Result<Entry, ExitReason> {
-        let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, event);
+    pub fn log_entry(&mut self) -> Result<Entry, ExitReason> {
+        let events = mem::replace(&mut self.events, vec![]);
+        let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, events);
         println!("{}", serde_json::to_string(&entry).unwrap());
         Ok(entry)
     }
@@ -51,18 +60,23 @@ impl Logger {
         loop {
             if let Some(ms) = ms_per_tick {
                 if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
-                    self.log_event(Event::Tick)?;
+                    self.log_entry()?;
                     self.num_ticks += 1;
                 }
             }
 
             match self.receiver.try_recv() {
-                Ok(event) => {
-                    let entry = self.log_event(event)?;
-                    self.sender
-                        .send(entry)
-                        .or(Err(ExitReason::SendDisconnected))?;
-                }
+                Ok(signal) => match signal {
+                    Signal::Tick => {
+                        let entry = self.log_entry()?;
+                        self.sender
+                            .send(entry)
+                            .or(Err(ExitReason::SendDisconnected))?;
+                    }
+                    Signal::Event(event) => {
+                        self.events.push(event);
+                    }
+                },
                 Err(TryRecvError::Empty) => return Ok(()),
                 Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
             };

@@ -4,7 +4,7 @@ use event::Event;
 use transaction::Transaction;
 use signature::{KeyPair, KeyPairUtil, PublicKey};
 use entry::Entry;
-use log::create_entries;
+use entry::create_entry;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use untrusted::Input;
@@ -44,11 +44,13 @@ impl Mint {
     pub fn create_events(&self) -> Vec<Event> {
         let keypair = self.keypair();
         let tr = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
-        vec![Event::Tick, Event::Transaction(tr)]
+        vec![Event::Transaction(tr)]
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
-        create_entries(&self.seed(), self.create_events())
+        let e0 = create_entry(&self.seed(), 0, vec![]);
+        let e1 = create_entry(&e0.id, 0, self.create_events());
+        vec![e0, e1]
     }
 }
 
@@ -60,11 +62,8 @@ mod tests {
     #[test]
     fn test_create_events() {
         let mut events = Mint::new(100).create_events().into_iter();
-        assert_eq!(events.next().unwrap(), Event::Tick);
         if let Event::Transaction(tr) = events.next().unwrap() {
             assert_eq!(tr.from, tr.to);
-        } else {
-            assert!(false);
         }
         assert_eq!(events.next(), None);
     }

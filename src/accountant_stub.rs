@@ -93,11 +93,13 @@ impl AccountantStub {
         self.socket.recv_from(&mut buf)?;
         let resp = deserialize(&buf).expect("deserialize signature");
         if let Response::Entries { entries } = resp {
-            for Entry { id, event, .. } in entries {
+            for Entry { id, events, .. } in entries {
                 self.last_id = Some(id);
-                if let Some(sig) = event.get_signature() {
-                    if sig == *wait_sig {
-                        return Ok(());
+                for event in events {
+                    if let Some(sig) = event.get_signature() {
+                        if sig == *wait_sig {
+                            return Ok(());
+                        }
                     }
                 }
             }
