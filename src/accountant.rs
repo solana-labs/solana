@@ -288,10 +288,19 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
-            payment.asset = 2; // <-- Attack!
+            payment.asset = 2; // <-- attack!
         }
         assert_eq!(
-            acc.process_transaction(tr),
+            acc.process_transaction(tr.clone()),
+            Err(AccountingError::InvalidTransfer)
+        );
+
+        // Also, ensure all branchs of the plan spend all assets
+        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+            payment.asset = 0; // <-- whoops!
+        }
+        assert_eq!(
+            acc.process_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
     }

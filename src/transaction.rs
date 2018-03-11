@@ -6,7 +6,6 @@ use bincode::serialize;
 use hash::Hash;
 use chrono::prelude::*;
 use std::mem;
-use std::cmp;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
@@ -20,7 +19,7 @@ pub enum Action<T> {
 }
 
 impl<T: Clone> Action<T> {
-    pub fn max_spendable(&self) -> T {
+    pub fn spendable(&self) -> T {
         match *self {
             Action::Pay(ref payment) => payment.asset.clone(),
         }
@@ -40,19 +39,15 @@ pub enum Plan<T> {
     Race(Box<Plan<T>>, Box<Plan<T>>),
 }
 
-impl<T: Clone + Ord> Plan<T> {
-    pub fn max_spendable(&self) -> T {
-        match *self {
-            Plan::Action(ref action) => action.max_spendable(),
-            Plan::Race(ref plan_a, ref plan_b) => {
-                cmp::max(plan_a.max_spendable(), plan_b.max_spendable())
-            }
-            Plan::After(_, ref action) => action.max_spendable(),
-        }
-    }
-
+impl<T: Clone + Eq> Plan<T> {
     pub fn verify(&self, spendable_assets: &T) -> bool {
-        self.max_spendable() <= *spendable_assets
+        match *self {
+            Plan::Action(ref action) => action.spendable() == *spendable_assets,
+            Plan::Race(ref plan_a, ref plan_b) => {
+                plan_a.verify(spendable_assets) && plan_b.verify(spendable_assets)
+            }
+            Plan::After(_, ref action) => action.spendable() == *spendable_assets,
+        }
     }
 
     pub fn run_race(&mut self) -> bool {
@@ -140,7 +135,7 @@ pub struct Transaction<T> {
     pub sig: Signature,
 }
 
-impl<T: Serialize + Clone + Ord> Transaction<T> {
+impl<T: Serialize + Clone + Eq> Transaction<T> {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Action(Action::Pay(Payment {
