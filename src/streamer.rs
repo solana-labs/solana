@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc;
 use std::time::Duration;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::thread::{spawn, JoinHandle};
 use result::{Error, Result};
 
 const BLOCK_SIZE: usize = 1024 * 8;
-const PACKET_SIZE: usize = 256;
+pub const PACKET_SIZE: usize = 256;
 
 #[derive(Clone)]
 pub struct Packet {
@@ -76,8 +76,10 @@ pub struct PacketData {
     pub packets: Vec<Packet>,
 }
 
-type SharedPacketData = Arc<RwLock<PacketData>>;
-type Recycler = Arc<Mutex<Vec<SharedPacketData>>>;
+pub type SharedPacketData = Arc<RwLock<PacketData>>;
+pub type Recycler = Arc<Mutex<Vec<SharedPacketData>>>;
+pub type Receiver = mpsc::Receiver<SharedPacketData>;
+pub type Sender = mpsc::Sender<SharedPacketData>;
 
 impl PacketData {
     pub fn new() -> PacketData {
@@ -92,6 +94,7 @@ impl PacketData {
             p.size = 0;
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
+                    trace!("got {:?} messages", i);
                     break;
                 }
                 Err(e) => {
@@ -126,13 +129,13 @@ impl PacketData {
     }
 }
 
-fn allocate(recycler: Recycler) -> SharedPacketData {
+pub fn allocate(recycler: Recycler) -> SharedPacketData {
     let mut gc = recycler.lock().expect("lock");
     gc.pop()
         .unwrap_or_else(|| Arc::new(RwLock::new(PacketData::new())))
 }
 
-fn recycle(recycler: Recycler, msgs: SharedPacketData) {
+pub fn recycle(recycler: Recycler, msgs: SharedPacketData) {
     let mut gc = recycler.lock().expect("lock");
     gc.push(msgs);
 }
@@ -141,7 +144,7 @@ fn recv_loop(
     sock: &UdpSocket,
     exit: Arc<Mutex<bool>>,
     recycler: Recycler,
-    channel: Sender<SharedPacketData>,
+    channel: Sender,
 ) -> Result<()> {
     loop {
         let msgs = allocate(recycler.clone());
@@ -167,7 +170,7 @@ pub fn receiver(
     sock: UdpSocket,
     exit: Arc<Mutex<bool>>,
     recycler: Recycler,
-    channel: Sender<SharedPacketData>,
+    channel: Sender,
 ) -> Result<JoinHandle<()>> {
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))?;
@@ -177,7 +180,7 @@ pub fn receiver(
     }))
 }
 
-fn recv_send(sock: &UdpSocket, recycler: Recycler, r: &Receiver<SharedPacketData>) -> Result<()> {
+fn recv_send(sock: &UdpSocket, recycler: Recycler, r: &Receiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
     let msgs_ = msgs.clone();
@@ -191,7 +194,7 @@ pub fn sender(
     sock: UdpSocket,
     exit: Arc<Mutex<bool>>,
     recycler: Recycler,
-    r: Receiver<SharedPacketData>,
+    r: Receiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
         if recv_send(&sock, recycler.clone(), &r).is_err() && *exit.lock().unwrap() {
@@ -208,10 +211,9 @@ mod test {
     use std::time::Duration;
     use std::time::SystemTime;
     use std::thread::{spawn, JoinHandle};
-    use std::sync::mpsc::{channel, Receiver};
+    use std::sync::mpsc::channel;
     use result::Result;
-    use streamer::{allocate, receiver, recycle, sender, Packet, Recycler, SharedPacketData,
-                   PACKET_SIZE};
+    use streamer::{allocate, receiver, recycle, sender, Packet, Receiver, Recycler, PACKET_SIZE};
 
     fn producer(addr: &SocketAddr, recycler: Recycler, exit: Arc<Mutex<bool>>) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -235,7 +237,7 @@ mod test {
         recycler: Recycler,
         exit: Arc<Mutex<bool>>,
         rvs: Arc<Mutex<usize>>,
-        r: Receiver<SharedPacketData>,
+        r: Receiver,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             if *exit.lock().unwrap() {
@@ -289,9 +291,8 @@ mod test {
         run_streamer_bench().unwrap();
     }
 
-    fn get_msgs(r: Receiver<SharedPacketData>, num: &mut usize) {
-        let mut tries = 0;
-        loop {
+    fn get_msgs(r: Receiver, num: &mut usize) {
+        for _ in [0..5].iter() {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(m) => *num += m.read().unwrap().packets.len(),
@@ -300,10 +301,6 @@ mod test {
             if *num == 10 {
                 break;
             }
-            if tries == 5 {
-                break;
-            }
-            tries += 1;
         }
     }
     #[cfg(ipv6)]

@@ -1,6 +1,7 @@
 use serde_json;
 use std;
 use std::any::Any;
+use bincode;
 
 #[derive(Debug)]
 pub enum Error {
@@ -10,6 +11,7 @@ pub enum Error {
     JoinError(Box<Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
+    Serialize(std::boxed::Box<bincode::ErrorKind>),
     SendError,
 }
 
@@ -49,6 +51,11 @@ impl std::convert::From<serde_json::Error> for Error {
 impl std::convert::From<std::net::AddrParseError> for Error {
     fn from(e: std::net::AddrParseError) -> Error {
         Error::AddrParse(e)
+    }
+}
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
+    fn from(e: std::boxed::Box<bincode::ErrorKind>) -> Error {
+        Error::Serialize(e)
     }
 }
 

@@ -115,10 +115,11 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
-    use std::thread::{sleep, spawn};
+    use std::thread::sleep;
     use std::time::Duration;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn test_accountant_stub() {
@@ -127,7 +128,9 @@ mod tests {
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, None);
         let bob_pubkey = KeyPair::new().pubkey();
-        spawn(move || AccountantSkel::new(acc).serve(addr).unwrap());
+        let exit = Arc::new(Mutex::new(false));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc)));
+        let threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
@@ -137,5 +140,12 @@ mod tests {
             .unwrap();
         acc.wait_on_signature(&sig).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
+        *exit.lock().unwrap() = true;
+        for t in threads.iter() {
+            match Arc::try_unwrap((*t).clone()) {
+                Ok(j) => j.join().expect("join"),
+                _ => (),
+            }
+        }
     }
 }
