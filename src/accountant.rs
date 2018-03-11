@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use transaction::{Condition, Transaction};
+use transaction::{Action, Plan, Transaction};
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
@@ -30,7 +30,7 @@ pub struct Accountant {
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
-    pending: HashMap<Signature, Transaction<i64>>,
+    pending: HashMap<Signature, Plan<i64>>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
 }
@@ -83,8 +83,12 @@ impl Accountant {
         self.last_id
     }
 
-    fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
-        allow_deposits && from == to
+    fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan<i64>) -> bool {
+        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+            allow_deposits && *from == payment.to
+        } else {
+            false
+        }
     }
 
     pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
@@ -108,36 +112,16 @@ impl Accountant {
     }
 
     /// Commit funds to the 'to' party.
-    fn complete_transaction(self: &mut Self, tr: &Transaction<i64>) {
-        if self.balances.contains_key(&tr.to) {
-            if let Some(x) = self.balances.get_mut(&tr.to) {
-                *x += tr.asset;
-            }
-        } else {
-            self.balances.insert(tr.to, tr.asset);
-        }
-    }
-
-    /// Return funds to the 'from' party.
-    fn cancel_transaction(self: &mut Self, tr: &Transaction<i64>) {
-        if let Some(x) = self.balances.get_mut(&tr.from) {
-            *x += tr.asset;
-        }
-    }
-
-    // TODO: Move this to transaction.rs
-    fn all_satisfied(&self, conds: &[Condition]) -> bool {
-        let mut satisfied = true;
-        for cond in conds {
-            if let &Condition::Timestamp(dt) = cond {
-                if dt > self.last_time {
-                    satisfied = false;
+    fn complete_transaction(self: &mut Self, plan: &Plan<i64>) {
+        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+            if self.balances.contains_key(&payment.to) {
+                if let Some(x) = self.balances.get_mut(&payment.to) {
+                    *x += payment.asset;
                 }
             } else {
-                satisfied = false;
+                self.balances.insert(payment.to, payment.asset);
             }
         }
-        satisfied
     }
 
     fn process_verified_transaction(
@@ -149,51 +133,37 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if !tr.unless_any.is_empty() {
-            // TODO: Check to see if the transaction is expired.
-        }
-
-        if !Self::is_deposit(allow_deposits, &tr.from, &tr.to) {
+        if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
                 *x -= tr.asset;
             }
         }
 
-        if !self.all_satisfied(&tr.if_all) {
-            self.pending.insert(tr.sig, tr.clone());
+        let mut plan = tr.plan.clone();
+        let actionable = plan.process_verified_timestamp(self.last_time);
+
+        if !actionable {
+            self.pending.insert(tr.sig, plan);
             return Ok(());
         }
 
-        self.complete_transaction(tr);
+        self.complete_transaction(&plan);
         Ok(())
     }
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        let mut cancel = false;
-        if let Some(tr) = self.pending.get(&tx_sig) {
-            // Cancel:
-            // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
+        let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
+            plan.process_verified_sig(from)
+        } else {
+            false
+        };
 
-            // TODO: Use find().
-            for cond in &tr.unless_any {
-                if let Condition::Signature(pubkey) = *cond {
-                    if from == pubkey {
-                        cancel = true;
-                        break;
-                    }
-                }
+        if actionable {
+            if let Some(plan) = self.pending.remove(&tx_sig) {
+                self.complete_transaction(&plan);
             }
         }
 
-        if cancel {
-            if let Some(tr) = self.pending.remove(&tx_sig) {
-                self.cancel_transaction(&tr);
-            }
-        }
-
-        // Process Multisig:
-        // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
-        // to be empty, add the asset to to, and remove the tx from this map.
         Ok(())
     }
 
@@ -211,34 +181,18 @@ impl Accountant {
         } else {
             return Ok(());
         }
-        // TODO: Lookup pending Transaction waiting on time, signed by a whitelisted PublicKey.
-
-        // Expire:
-        // if a Timestamp after this DateTime is in unless_any, return funds to tx.from,
-        // and remove the tx from this map.
 
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
-        for (key, tr) in &self.pending {
-            for cond in &tr.if_all {
-                if let Condition::Timestamp(dt) = *cond {
-                    if self.last_time >= dt {
-                        if tr.if_all.len() == 1 {
-                            completed.push(*key);
-                        }
-                    }
-                }
+        for (key, plan) in &mut self.pending {
+            if plan.process_verified_timestamp(self.last_time) {
+                completed.push(key.clone());
             }
-            // TODO: Add this in once we start removing constraints
-            //if tr.if_all.is_empty() {
-            //    // TODO: Remove tr from pending
-            //    self.complete_transaction(tr);
-            //}
         }
 
         for key in completed {
-            if let Some(tr) = self.pending.remove(&key) {
-                self.complete_transaction(&tr);
+            if let Some(plan) = self.pending.remove(&key) {
+                self.complete_transaction(&plan);
             }
         }
 
@@ -324,6 +278,30 @@ mod tests {
         assert_eq!(
             acc.historian.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
+        );
+    }
+
+    #[test]
+    fn test_overspend_attack() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, None);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
+        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+            payment.asset = 2; // <-- attack!
+        }
+        assert_eq!(
+            acc.process_transaction(tr.clone()),
+            Err(AccountingError::InvalidTransfer)
+        );
+
+        // Also, ensure all branchs of the plan spend all assets
+        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+            payment.asset = 0; // <-- whoops!
+        }
+        assert_eq!(
+            acc.process_transaction(tr.clone()),
+            Err(AccountingError::InvalidTransfer)
         );
     }
 
