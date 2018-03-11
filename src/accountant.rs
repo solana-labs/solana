@@ -83,8 +83,12 @@ impl Accountant {
         self.last_id
     }
 
-    fn is_deposit(allow_deposits: bool, from: &PublicKey, to: &PublicKey) -> bool {
-        allow_deposits && from == to
+    fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan<i64>) -> bool {
+        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+            allow_deposits && *from == payment.to
+        } else {
+            false
+        }
     }
 
     pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
@@ -109,38 +113,49 @@ impl Accountant {
 
     /// Commit funds to the 'to' party.
     fn complete_transaction(self: &mut Self, plan: &Plan<i64>) {
-        let Action::Pay(ref payment) = plan.if_all.1;
-        let to = payment.to;
-        if self.balances.contains_key(&to) {
-            if let Some(x) = self.balances.get_mut(&to) {
-                *x += payment.asset;
+        let payment = match *plan {
+            Plan::Action(Action::Pay(ref payment)) => Some(payment),
+            Plan::After(_, Action::Pay(ref payment)) => Some(payment),
+            Plan::Race(ref plan_a, _) => {
+                if let Plan::After(_, Action::Pay(ref payment)) = **plan_a {
+                    Some(payment)
+                } else {
+                    None
+                }
             }
-        } else {
-            self.balances.insert(to, payment.asset);
+        };
+        if let Some(payment) = payment {
+            if self.balances.contains_key(&payment.to) {
+                if let Some(x) = self.balances.get_mut(&payment.to) {
+                    *x += payment.asset;
+                }
+            } else {
+                self.balances.insert(payment.to, payment.asset);
+            }
         }
     }
 
     /// Return funds to the 'from' party.
     fn cancel_transaction(self: &mut Self, plan: &Plan<i64>) {
-        let Action::Pay(ref payment) = plan.unless_any.1;
-        if let Some(x) = self.balances.get_mut(&payment.to) {
-            *x += payment.asset;
+        if let Plan::Race(_, ref cancel_plan) = *plan {
+            if let Plan::After(_, Action::Pay(ref payment)) = **cancel_plan {
+                if let Some(x) = self.balances.get_mut(&payment.to) {
+                    *x += payment.asset;
+                }
+            }
         }
     }
 
     // TODO: Move this to transaction.rs
-    fn all_satisfied(&self, conds: &[Condition]) -> bool {
-        let mut satisfied = true;
-        for cond in conds {
-            if let &Condition::Timestamp(dt) = cond {
-                if dt > self.last_time {
-                    satisfied = false;
-                }
-            } else {
-                satisfied = false;
+    fn all_satisfied(&self, plan: &Plan<i64>) -> bool {
+        match *plan {
+            Plan::Action(_) => true,
+            Plan::After(Condition::Timestamp(dt), _) => dt <= self.last_time,
+            Plan::After(Condition::Signature(_), _) => false,
+            Plan::Race(ref plan_a, ref plan_b) => {
+                self.all_satisfied(plan_a) || self.all_satisfied(plan_b)
             }
         }
-        satisfied
     }
 
     fn process_verified_transaction(
@@ -152,17 +167,13 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if !tr.plan.unless_any.0.is_empty() {
-            // TODO: Check to see if the transaction is expired.
-        }
-
-        if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan.to()) {
+        if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
                 *x -= tr.asset;
             }
         }
 
-        if !self.all_satisfied(&tr.plan.if_all.0) {
+        if !self.all_satisfied(&tr.plan) {
             self.pending.insert(tr.sig, tr.plan.clone());
             return Ok(());
         }
@@ -178,11 +189,10 @@ impl Accountant {
             // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
 
             // TODO: Use find().
-            for cond in &plan.unless_any.0 {
-                if let Condition::Signature(pubkey) = *cond {
+            if let Plan::Race(_, ref plan_b) = *plan {
+                if let Plan::After(Condition::Signature(pubkey), _) = **plan_b {
                     if from == pubkey {
                         cancel = true;
-                        break;
                     }
                 }
             }
@@ -223,12 +233,14 @@ impl Accountant {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
         for (key, plan) in &self.pending {
-            for cond in &plan.if_all.0 {
-                if let Condition::Timestamp(dt) = *cond {
+            if let Plan::After(Condition::Timestamp(dt), _) = *plan {
+                if self.last_time >= dt {
+                    completed.push(*key);
+                }
+            } else if let Plan::Race(ref plan_a, _) = *plan {
+                if let Plan::After(Condition::Timestamp(dt), _) = **plan_a {
                     if self.last_time >= dt {
-                        if plan.if_all.0.len() == 1 {
-                            completed.push(*key);
-                        }
+                        completed.push(*key);
                     }
                 }
             }

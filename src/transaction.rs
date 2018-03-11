@@ -24,16 +24,10 @@ pub struct Payment<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Plan<T> {
-    pub if_all: (Vec<Condition>, Action<T>),
-    pub unless_any: (Vec<Condition>, Action<T>),
-}
-
-impl<T> Plan<T> {
-    pub fn to(&self) -> PublicKey {
-        let Action::Pay(ref payment) = self.if_all.1;
-        payment.to
-    }
+pub enum Plan<T> {
+    Action(Action<T>),
+    After(Condition, Action<T>),
+    Race(Box<Plan<T>>, Box<Plan<T>>),
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -48,22 +42,10 @@ pub struct Transaction<T> {
 impl<T: Serialize + Clone> Transaction<T> {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan {
-            if_all: (
-                vec![],
-                Action::Pay(Payment {
-                    asset: asset.clone(),
-                    to,
-                }),
-            ),
-            unless_any: (
-                vec![Condition::Signature(from)],
-                Action::Pay(Payment {
-                    asset: asset.clone(),
-                    to: from,
-                }),
-            ),
-        };
+        let plan = Plan::Action(Action::Pay(Payment {
+            asset: asset.clone(),
+            to,
+        }));
         let mut tr = Transaction {
             from,
             plan,
@@ -83,22 +65,22 @@ impl<T: Serialize + Clone> Transaction<T> {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan {
-            if_all: (
-                vec![Condition::Timestamp(dt)],
+        let plan = Plan::Race(
+            Box::new(Plan::After(
+                Condition::Timestamp(dt),
                 Action::Pay(Payment {
                     asset: asset.clone(),
                     to,
                 }),
-            ),
-            unless_any: (
-                vec![Condition::Signature(from)],
+            )),
+            Box::new(Plan::After(
+                Condition::Signature(from),
                 Action::Pay(Payment {
                     asset: asset.clone(),
                     to: from,
                 }),
-            ),
-        };
+            )),
+        );
         let mut tr = Transaction {
             from,
             plan,
@@ -111,14 +93,7 @@ impl<T: Serialize + Clone> Transaction<T> {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        let plan = &self.plan;
-        serialize(&(
-            &self.from,
-            &plan.if_all,
-            &plan.unless_any,
-            &self.asset,
-            &self.last_id,
-        )).unwrap()
+        serialize(&(&self.from, &self.plan, &self.asset, &self.last_id)).unwrap()
     }
 
     pub fn sign(&mut self, keypair: &KeyPair) {
@@ -159,22 +134,10 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let plan = Plan {
-            if_all: (
-                Default::default(),
-                Action::Pay(Payment {
-                    asset: 0,
-                    to: Default::default(),
-                }),
-            ),
-            unless_any: (
-                Default::default(),
-                Action::Pay(Payment {
-                    asset: 0,
-                    to: Default::default(),
-                }),
-            ),
-        };
+        let plan = Plan::Action(Action::Pay(Payment {
+            asset: 0,
+            to: Default::default(),
+        }));
         let claim0 = Transaction {
             from: Default::default(),
             plan,
@@ -208,10 +171,9 @@ mod tests {
         let asset = hash(b"hello, world");
         let mut tr = Transaction::new(&keypair0, pubkey1, asset, zero);
         tr.sign(&keypair0);
-        tr.plan.if_all.1 = Action::Pay(Payment {
-            asset,
-            to: thief_keypair.pubkey(),
-        }); // <-- attack!
+        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+            payment.to = thief_keypair.pubkey(); // <-- attack!
+        };
         assert!(!tr.verify());
     }
 }

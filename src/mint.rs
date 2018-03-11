@@ -58,12 +58,15 @@ impl Mint {
 mod tests {
     use super::*;
     use log::verify_slice;
+    use transaction::{Action, Plan};
 
     #[test]
     fn test_create_events() {
         let mut events = Mint::new(100).create_events().into_iter();
         if let Event::Transaction(tr) = events.next().unwrap() {
-            assert_eq!(tr.from, tr.plan.to());
+            if let Plan::Action(Action::Pay(payment)) = tr.plan {
+                assert_eq!(tr.from, payment.to);
+            }
         }
         assert_eq!(events.next(), None);
     }
