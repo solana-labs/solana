@@ -56,12 +56,40 @@ impl<T: Clone> Plan<T> {
     pub fn process_verified_sig(&mut self, from: PublicKey) -> bool {
         let mut new_plan = None;
         match *self {
+            Plan::Action(_) => return true,
             Plan::Race(ref mut plan_a, ref mut plan_b) => {
                 plan_a.process_verified_sig(from);
                 plan_b.process_verified_sig(from);
             }
             Plan::After(Condition::Signature(pubkey), ref action) => {
                 if from == pubkey {
+                    new_plan = Some(Plan::Action(action.clone()));
+                }
+            }
+            _ => (),
+        }
+        if self.run_race() {
+            return true;
+        }
+
+        if let Some(plan) = new_plan {
+            mem::replace(self, plan);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn process_verified_timestamp(&mut self, last_time: DateTime<Utc>) -> bool {
+        let mut new_plan = None;
+        match *self {
+            Plan::Action(_) => return true,
+            Plan::Race(ref mut plan_a, ref mut plan_b) => {
+                plan_a.process_verified_timestamp(last_time);
+                plan_b.process_verified_timestamp(last_time);
+            }
+            Plan::After(Condition::Timestamp(dt), ref action) => {
+                if dt <= last_time {
                     new_plan = Some(Plan::Action(action.clone()));
                 }
             }

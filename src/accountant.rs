@@ -113,36 +113,13 @@ impl Accountant {
 
     /// Commit funds to the 'to' party.
     fn complete_transaction(self: &mut Self, plan: &Plan<i64>) {
-        let payment = match *plan {
-            Plan::Action(Action::Pay(ref payment)) => Some(payment),
-            Plan::After(_, Action::Pay(ref payment)) => Some(payment),
-            Plan::Race(ref plan_a, _) => {
-                if let Plan::After(_, Action::Pay(ref payment)) = **plan_a {
-                    Some(payment)
-                } else {
-                    None
-                }
-            }
-        };
-        if let Some(payment) = payment {
+        if let Plan::Action(Action::Pay(ref payment)) = *plan {
             if self.balances.contains_key(&payment.to) {
                 if let Some(x) = self.balances.get_mut(&payment.to) {
                     *x += payment.asset;
                 }
             } else {
                 self.balances.insert(payment.to, payment.asset);
-            }
-        }
-    }
-
-    // TODO: Move this to transaction.rs
-    fn all_satisfied(&self, plan: &Plan<i64>) -> bool {
-        match *plan {
-            Plan::Action(_) => true,
-            Plan::After(Condition::Timestamp(dt), _) => dt <= self.last_time,
-            Plan::After(Condition::Signature(_), _) => false,
-            Plan::Race(ref plan_a, ref plan_b) => {
-                self.all_satisfied(plan_a) || self.all_satisfied(plan_b)
             }
         }
     }
@@ -162,12 +139,15 @@ impl Accountant {
             }
         }
 
-        if !self.all_satisfied(&tr.plan) {
-            self.pending.insert(tr.sig, tr.plan.clone());
+        let mut plan = tr.plan.clone();
+        let actionable = plan.process_verified_timestamp(self.last_time);
+
+        if !actionable {
+            self.pending.insert(tr.sig, plan);
             return Ok(());
         }
 
-        self.complete_transaction(&tr.plan);
+        self.complete_transaction(&plan);
         Ok(())
     }
 
@@ -204,17 +184,9 @@ impl Accountant {
 
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
-        for (key, plan) in &self.pending {
-            if let Plan::After(Condition::Timestamp(dt), _) = *plan {
-                if self.last_time >= dt {
-                    completed.push(*key);
-                }
-            } else if let Plan::Race(ref plan_a, _) = *plan {
-                if let Plan::After(Condition::Timestamp(dt), _) = **plan_a {
-                    if self.last_time >= dt {
-                        completed.push(*key);
-                    }
-                }
+        for (key, plan) in &mut self.pending {
+            if plan.process_verified_timestamp(self.last_time) {
+                completed.push(key.clone());
             }
         }
 
