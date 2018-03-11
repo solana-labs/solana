@@ -306,12 +306,40 @@ mod test {
             tries += 1;
         }
     }
-
+    #[cfg(ipv6)]
     #[test]
-    pub fn streamer_send_test() {
+    pub fn streamer_send_test_ipv6() {
         let read = UdpSocket::bind("[::1]:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("[::1]:0").expect("bind");
+        let exit = Arc::new(Mutex::new(false));
+        let recycler = Arc::new(Mutex::new(Vec::new()));
+        let (s_reader, r_reader) = channel();
+        let t_receiver = receiver(read, exit.clone(), recycler.clone(), s_reader).unwrap();
+        let (s_sender, r_sender) = channel();
+        let t_sender = sender(send, exit.clone(), recycler.clone(), r_sender);
+        let msgs = allocate(recycler.clone());
+        msgs.write().unwrap().packets.resize(10, Packet::default());
+        for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
+            w.data[0] = i as u8;
+            w.size = PACKET_SIZE;
+            w.set_addr(&addr);
+            assert_eq!(w.get_addr(), addr);
+        }
+        s_sender.send(msgs).expect("send");
+        let mut num = 0;
+        get_msgs(r_reader, &mut num);
+        assert_eq!(num, 10);
+        *exit.lock().unwrap() = true;
+        t_receiver.join().expect("join");
+        t_sender.join().expect("join");
+    }
+
+    #[test]
+    pub fn streamer_send_test() {
+        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let addr = read.local_addr().unwrap();
+        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(Mutex::new(false));
         let recycler = Arc::new(Mutex::new(Vec::new()));
         let (s_reader, r_reader) = channel();
