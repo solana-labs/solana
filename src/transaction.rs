@@ -24,12 +24,12 @@ pub struct Payment<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct SpendingPlan<T> {
+pub struct Plan<T> {
     pub if_all: (Vec<Condition>, Action<T>),
     pub unless_any: (Vec<Condition>, Action<T>),
 }
 
-impl<T> SpendingPlan<T> {
+impl<T> Plan<T> {
     pub fn to(&self) -> PublicKey {
         let Action::Pay(ref payment) = self.if_all.1;
         payment.to
@@ -39,7 +39,7 @@ impl<T> SpendingPlan<T> {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction<T> {
     pub from: PublicKey,
-    pub plan: SpendingPlan<T>,
+    pub plan: Plan<T>,
     pub asset: T,
     pub last_id: Hash,
     pub sig: Signature,
@@ -48,7 +48,7 @@ pub struct Transaction<T> {
 impl<T: Serialize + Clone> Transaction<T> {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
-        let plan = SpendingPlan {
+        let plan = Plan {
             if_all: (
                 vec![],
                 Action::Pay(Payment {
@@ -83,7 +83,7 @@ impl<T: Serialize + Clone> Transaction<T> {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let plan = SpendingPlan {
+        let plan = Plan {
             if_all: (
                 vec![Condition::Timestamp(dt)],
                 Action::Pay(Payment {
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let plan = SpendingPlan {
+        let plan = Plan {
             if_all: (
                 Default::default(),
                 Action::Pay(Payment {

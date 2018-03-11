@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use transaction::{Condition, Transaction};
+use transaction::{Action, Condition, Plan, Transaction};
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
@@ -30,7 +30,7 @@ pub struct Accountant {
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
-    pending: HashMap<Signature, Transaction<i64>>,
+    pending: HashMap<Signature, Plan<i64>>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
 }
@@ -108,21 +108,23 @@ impl Accountant {
     }
 
     /// Commit funds to the 'to' party.
-    fn complete_transaction(self: &mut Self, tr: &Transaction<i64>) {
-        let to = tr.plan.to();
+    fn complete_transaction(self: &mut Self, plan: &Plan<i64>) {
+        let Action::Pay(ref payment) = plan.if_all.1;
+        let to = payment.to;
         if self.balances.contains_key(&to) {
             if let Some(x) = self.balances.get_mut(&to) {
-                *x += tr.asset;
+                *x += payment.asset;
             }
         } else {
-            self.balances.insert(to, tr.asset);
+            self.balances.insert(to, payment.asset);
         }
     }
 
     /// Return funds to the 'from' party.
-    fn cancel_transaction(self: &mut Self, tr: &Transaction<i64>) {
-        if let Some(x) = self.balances.get_mut(&tr.from) {
-            *x += tr.asset;
+    fn cancel_transaction(self: &mut Self, plan: &Plan<i64>) {
+        let Action::Pay(ref payment) = plan.unless_any.1;
+        if let Some(x) = self.balances.get_mut(&payment.to) {
+            *x += payment.asset;
         }
     }
 
@@ -161,22 +163,22 @@ impl Accountant {
         }
 
         if !self.all_satisfied(&tr.plan.if_all.0) {
-            self.pending.insert(tr.sig, tr.clone());
+            self.pending.insert(tr.sig, tr.plan.clone());
             return Ok(());
         }
 
-        self.complete_transaction(tr);
+        self.complete_transaction(&tr.plan);
         Ok(())
     }
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         let mut cancel = false;
-        if let Some(tr) = self.pending.get(&tx_sig) {
+        if let Some(plan) = self.pending.get(&tx_sig) {
             // Cancel:
             // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
 
             // TODO: Use find().
-            for cond in &tr.plan.unless_any.0 {
+            for cond in &plan.unless_any.0 {
                 if let Condition::Signature(pubkey) = *cond {
                     if from == pubkey {
                         cancel = true;
@@ -187,8 +189,8 @@ impl Accountant {
         }
 
         if cancel {
-            if let Some(tr) = self.pending.remove(&tx_sig) {
-                self.cancel_transaction(&tr);
+            if let Some(plan) = self.pending.remove(&tx_sig) {
+                self.cancel_transaction(&plan);
             }
         }
 
@@ -220,11 +222,11 @@ impl Accountant {
 
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
-        for (key, tr) in &self.pending {
-            for cond in &tr.plan.if_all.0 {
+        for (key, plan) in &self.pending {
+            for cond in &plan.if_all.0 {
                 if let Condition::Timestamp(dt) = *cond {
                     if self.last_time >= dt {
-                        if tr.plan.if_all.0.len() == 1 {
+                        if plan.if_all.0.len() == 1 {
                             completed.push(*key);
                         }
                     }
@@ -233,13 +235,13 @@ impl Accountant {
             // TODO: Add this in once we start removing constraints
             //if tr.plan.if_all.0.is_empty() {
             //    // TODO: Remove tr from pending
-            //    self.complete_transaction(tr);
+            //    self.complete_transaction(plan);
             //}
         }
 
         for key in completed {
-            if let Some(tr) = self.pending.remove(&key) {
-                self.complete_transaction(&tr);
+            if let Some(plan) = self.pending.remove(&key) {
+                self.complete_transaction(&plan);
             }
         }
 
