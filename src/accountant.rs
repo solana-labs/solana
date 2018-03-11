@@ -135,17 +135,6 @@ impl Accountant {
         }
     }
 
-    /// Return funds to the 'from' party.
-    fn cancel_transaction(self: &mut Self, plan: &Plan<i64>) {
-        if let Plan::Race(_, ref cancel_plan) = *plan {
-            if let Plan::After(_, Action::Pay(ref payment)) = **cancel_plan {
-                if let Some(x) = self.balances.get_mut(&payment.to) {
-                    *x += payment.asset;
-                }
-            }
-        }
-    }
-
     // TODO: Move this to transaction.rs
     fn all_satisfied(&self, plan: &Plan<i64>) -> bool {
         match *plan {
@@ -183,30 +172,18 @@ impl Accountant {
     }
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        let mut cancel = false;
-        if let Some(plan) = self.pending.get(&tx_sig) {
-            // Cancel:
-            // if Signature(from) is in unless_any, return funds to tx.from, and remove the tx from this map.
+        let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
+            plan.process_verified_sig(from)
+        } else {
+            false
+        };
 
-            // TODO: Use find().
-            if let Plan::Race(_, ref plan_b) = *plan {
-                if let Plan::After(Condition::Signature(pubkey), _) = **plan_b {
-                    if from == pubkey {
-                        cancel = true;
-                    }
-                }
-            }
-        }
-
-        if cancel {
+        if actionable {
             if let Some(plan) = self.pending.remove(&tx_sig) {
-                self.cancel_transaction(&plan);
+                self.complete_transaction(&plan);
             }
         }
 
-        // Process Multisig:
-        // otherwise, if "Signature(from) is in if_all, remove it. If that causes that list
-        // to be empty, add the asset to to, and remove the tx from this map.
         Ok(())
     }
 
@@ -224,11 +201,6 @@ impl Accountant {
         } else {
             return Ok(());
         }
-        // TODO: Lookup pending Transaction waiting on time, signed by a whitelisted PublicKey.
-
-        // Expire:
-        // if a Timestamp after this DateTime is in unless_any, return funds to tx.from,
-        // and remove the tx from this map.
 
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
@@ -244,11 +216,6 @@ impl Accountant {
                     }
                 }
             }
-            // TODO: Add this in once we start removing constraints
-            //if tr.plan.if_all.0.is_empty() {
-            //    // TODO: Remove tr from pending
-            //    self.complete_transaction(plan);
-            //}
         }
 
         for key in completed {

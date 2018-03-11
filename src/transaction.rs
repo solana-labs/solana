@@ -5,6 +5,7 @@ use serde::Serialize;
 use bincode::serialize;
 use hash::Hash;
 use chrono::prelude::*;
+use std::mem;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
@@ -28,6 +29,55 @@ pub enum Plan<T> {
     Action(Action<T>),
     After(Condition, Action<T>),
     Race(Box<Plan<T>>, Box<Plan<T>>),
+}
+
+impl<T: Clone> Plan<T> {
+    pub fn run_race(&mut self) -> bool {
+        let new_plan = if let Plan::Race(ref a, ref b) = *self {
+            if let Plan::Action(_) = **a {
+                Some((**a).clone())
+            } else if let Plan::Action(_) = **b {
+                Some((**b).clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(plan) = new_plan {
+            mem::replace(self, plan);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn process_verified_sig(&mut self, from: PublicKey) -> bool {
+        let mut new_plan = None;
+        match *self {
+            Plan::Race(ref mut plan_a, ref mut plan_b) => {
+                plan_a.process_verified_sig(from);
+                plan_b.process_verified_sig(from);
+            }
+            Plan::After(Condition::Signature(pubkey), ref action) => {
+                if from == pubkey {
+                    new_plan = Some(Plan::Action(action.clone()));
+                }
+            }
+            _ => (),
+        }
+        if self.run_race() {
+            return true;
+        }
+
+        if let Some(plan) = new_plan {
+            mem::replace(self, plan);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
