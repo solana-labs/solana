@@ -13,30 +13,59 @@ pub enum Condition {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct SpendingPlan {
+pub enum Action<T> {
+    Pay(Payment<T>),
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Payment<T> {
+    pub asset: T,
     pub to: PublicKey,
-    pub if_all: Vec<Condition>,
-    pub unless_any: Vec<Condition>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct SpendingPlan<T> {
+    pub if_all: (Vec<Condition>, Action<T>),
+    pub unless_any: (Vec<Condition>, Action<T>),
+}
+
+impl<T> SpendingPlan<T> {
+    pub fn to(&self) -> PublicKey {
+        let Action::Pay(ref payment) = self.if_all.1;
+        payment.to
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction<T> {
     pub from: PublicKey,
-    pub plan: SpendingPlan,
+    pub plan: SpendingPlan<T>,
     pub asset: T,
     pub last_id: Hash,
     pub sig: Signature,
 }
 
-impl<T: Serialize> Transaction<T> {
+impl<T: Serialize + Clone> Transaction<T> {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
+        let from = from_keypair.pubkey();
         let plan = SpendingPlan {
-            to,
-            if_all: vec![],
-            unless_any: vec![],
+            if_all: (
+                vec![],
+                Action::Pay(Payment {
+                    asset: asset.clone(),
+                    to,
+                }),
+            ),
+            unless_any: (
+                vec![],
+                Action::Pay(Payment {
+                    asset: asset.clone(),
+                    to: from,
+                }),
+            ),
         };
         let mut tr = Transaction {
-            from: from_keypair.pubkey(),
+            from,
             plan,
             asset,
             last_id,
@@ -55,9 +84,20 @@ impl<T: Serialize> Transaction<T> {
     ) -> Self {
         let from = from_keypair.pubkey();
         let plan = SpendingPlan {
-            to,
-            if_all: vec![Condition::Timestamp(dt)],
-            unless_any: vec![Condition::Signature(from)],
+            if_all: (
+                vec![Condition::Timestamp(dt)],
+                Action::Pay(Payment {
+                    asset: asset.clone(),
+                    to,
+                }),
+            ),
+            unless_any: (
+                vec![Condition::Signature(from)],
+                Action::Pay(Payment {
+                    asset: asset.clone(),
+                    to: from,
+                }),
+            ),
         };
         let mut tr = Transaction {
             from,
@@ -74,7 +114,6 @@ impl<T: Serialize> Transaction<T> {
         let plan = &self.plan;
         serialize(&(
             &self.from,
-            &plan.to,
             &plan.if_all,
             &plan.unless_any,
             &self.asset,
@@ -121,9 +160,20 @@ mod tests {
     #[test]
     fn test_serialize_claim() {
         let plan = SpendingPlan {
-            to: Default::default(),
-            if_all: Default::default(),
-            unless_any: Default::default(),
+            if_all: (
+                Default::default(),
+                Action::Pay(Payment {
+                    asset: 0,
+                    to: Default::default(),
+                }),
+            ),
+            unless_any: (
+                Default::default(),
+                Action::Pay(Payment {
+                    asset: 0,
+                    to: Default::default(),
+                }),
+            ),
         };
         let claim0 = Transaction {
             from: Default::default(),
@@ -155,9 +205,13 @@ mod tests {
         let thief_keypair = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
-        let mut tr = Transaction::new(&keypair0, pubkey1, hash(b"hello, world"), zero);
+        let asset = hash(b"hello, world");
+        let mut tr = Transaction::new(&keypair0, pubkey1, asset, zero);
         tr.sign(&keypair0);
-        tr.plan.to = thief_keypair.pubkey(); // <-- attack!
+        tr.plan.if_all.1 = Action::Pay(Payment {
+            asset,
+            to: thief_keypair.pubkey(),
+        }); // <-- attack!
         assert!(!tr.verify());
     }
 }
