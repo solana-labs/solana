@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use transaction::{Action, Condition, Plan, Transaction};
+use transaction::{Action, Plan, Transaction};
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
@@ -278,6 +278,21 @@ mod tests {
         assert_eq!(
             acc.historian.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
+        );
+    }
+
+    #[test]
+    fn test_overspend_attack() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, None);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
+        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+            payment.asset = 2; // <-- Attack!
+        }
+        assert_eq!(
+            acc.process_transaction(tr),
+            Err(AccountingError::InvalidTransfer)
         );
     }
 
