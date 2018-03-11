@@ -108,12 +108,12 @@ impl PacketData {
             }
             i += 1;
         }
-        return Ok(i);
+        Ok(i)
     }
     fn read_from(&mut self, socket: &UdpSocket) -> Result<()> {
         let sz = self.run_read_from(socket)?;
         self.packets.resize(sz, Packet::default());
-        return Ok(());
+        Ok(())
     }
     fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
         for p in self.packets.iter() {
@@ -122,7 +122,7 @@ impl PacketData {
             //TODO(anatoly): wtf do we do about errors?
             *num += 1;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
