@@ -57,7 +57,7 @@ impl<T: Serialize + Clone> Transaction<T> {
                 }),
             ),
             unless_any: (
-                vec![],
+                vec![Condition::Signature(from)],
                 Action::Pay(Payment {
                     asset: asset.clone(),
                     to: from,
