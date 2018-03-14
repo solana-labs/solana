@@ -19,7 +19,12 @@ pub struct Packet {
 }
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Packet {{ size: {:?}, addr: {:?} }}", self.size, self.get_addr())
+        write!(
+            f,
+            "Packet {{ size: {:?}, addr: {:?} }}",
+            self.size,
+            self.get_addr()
+        )
     }
 }
 impl Default for Packet {
