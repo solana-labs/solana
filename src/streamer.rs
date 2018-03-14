@@ -224,6 +224,8 @@ mod test {
     use std::thread::{spawn, JoinHandle};
     use std::sync::mpsc::channel;
     use result::Result;
+    use std::io::Write;
+    use std::io;
     use streamer::{allocate, receiver, recycle, sender, Packet, Receiver, Recycler, PACKET_SIZE};
 
     fn producer(addr: &SocketAddr, recycler: Recycler, exit: Arc<Mutex<bool>>) -> JoinHandle<()> {
@@ -342,7 +344,10 @@ mod test {
         t_receiver.join().expect("join");
         t_sender.join().expect("join");
     }
-
+    #[test]
+    pub fn streamer_debug() {
+        write!(io::sink(), "{:?}", Packet::default()).unwrap();
+    }
     #[test]
     pub fn streamer_send_test() {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
