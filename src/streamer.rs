@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc;
+use std::fmt;
 use std::time::Duration;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::thread::{spawn, JoinHandle};
@@ -16,7 +17,11 @@ pub struct Packet {
     pub port: u16,
     pub v6: bool,
 }
-
+impl fmt::Debug for Packet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Packet {{ size: {:?}, addr: {:?} }}", self.size, self.get_addr())
+    }
+}
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
@@ -72,6 +77,7 @@ impl Packet {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct PacketData {
     pub packets: Vec<Packet>,
 }
@@ -292,11 +298,11 @@ mod test {
     }
 
     fn get_msgs(r: Receiver, num: &mut usize) {
-        for _ in [0..5].iter() {
+        for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(m) => *num += m.read().unwrap().packets.len(),
-                _ => (),
+                e => println!("error {:?}", e),
             }
             if *num == 10 {
                 break;
