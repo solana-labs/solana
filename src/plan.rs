@@ -10,6 +10,23 @@ pub enum Condition {
     Signature(PublicKey),
 }
 
+pub enum PlanEvent {
+    Timestamp(DateTime<Utc>),
+    Signature(PublicKey),
+}
+
+impl Condition {
+    pub fn is_satisfied(&self, event: &PlanEvent) -> bool {
+        match (self, event) {
+            (&Condition::Signature(ref pubkey), &PlanEvent::Signature(ref from)) => pubkey == from,
+            (&Condition::Timestamp(ref dt), &PlanEvent::Timestamp(ref last_time)) => {
+                dt <= last_time
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Action {
     Pay(Payment),
@@ -18,7 +35,7 @@ pub enum Action {
 impl Action {
     pub fn spendable(&self) -> i64 {
         match *self {
-            Action::Pay(ref payment) => payment.asset.clone(),
+            Action::Pay(ref payment) => payment.asset,
         }
     }
 }
@@ -32,90 +49,41 @@ pub struct Payment {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
     Action(Action),
-    After(Condition, Box<Plan>),
-    Race(Box<Plan>, Box<Plan>),
+    After(Condition, Action),
+    Race((Condition, Action), (Condition, Action)),
 }
 
 impl Plan {
     pub fn verify(&self, spendable_assets: i64) -> bool {
         match *self {
             Plan::Action(ref action) => action.spendable() == spendable_assets,
-            Plan::Race(ref plan_a, ref plan_b) => {
-                plan_a.verify(spendable_assets) && plan_b.verify(spendable_assets)
+            Plan::After(_, ref action) => action.spendable() == spendable_assets,
+            Plan::Race(ref a, ref b) => {
+                a.1.spendable() == spendable_assets && b.1.spendable() == spendable_assets
             }
-            Plan::After(_, ref plan) => plan.verify(spendable_assets),
         }
     }
 
-    pub fn run_race(&mut self) -> bool {
-        let new_plan = if let Plan::Race(ref a, ref b) = *self {
-            if let Plan::Action(_) = **a {
-                Some((**a).clone())
-            } else if let Plan::Action(_) = **b {
-                Some((**b).clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        if let Some(plan) = new_plan {
-            mem::replace(self, plan);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn process_verified_sig(&mut self, from: PublicKey) -> bool {
-        let mut new_plan = None;
+    pub fn process_event(&mut self, event: PlanEvent) -> bool {
+        let mut new_action = None;
         match *self {
             Plan::Action(_) => return true,
-            Plan::Race(ref mut plan_a, ref mut plan_b) => {
-                plan_a.process_verified_sig(from);
-                plan_b.process_verified_sig(from);
-            }
-            Plan::After(Condition::Signature(pubkey), ref plan) => {
-                if from == pubkey {
-                    new_plan = Some((**plan).clone());
+            Plan::After(ref cond, ref action) => {
+                if cond.is_satisfied(&event) {
+                    new_action = Some(action.clone());
                 }
             }
-            _ => (),
-        }
-        if self.run_race() {
-            return true;
-        }
-
-        if let Some(plan) = new_plan {
-            mem::replace(self, plan);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn process_verified_timestamp(&mut self, last_time: DateTime<Utc>) -> bool {
-        let mut new_plan = None;
-        match *self {
-            Plan::Action(_) => return true,
-            Plan::Race(ref mut plan_a, ref mut plan_b) => {
-                plan_a.process_verified_timestamp(last_time);
-                plan_b.process_verified_timestamp(last_time);
-            }
-            Plan::After(Condition::Timestamp(dt), ref plan) => {
-                if dt <= last_time {
-                    new_plan = Some((**plan).clone());
+            Plan::Race(ref a, ref b) => {
+                if a.0.is_satisfied(&event) {
+                    new_action = Some(a.1.clone());
+                } else if b.0.is_satisfied(&event) {
+                    new_action = Some(b.1.clone());
                 }
             }
-            _ => (),
-        }
-        if self.run_race() {
-            return true;
         }
 
-        if let Some(plan) = new_plan {
-            mem::replace(self, plan);
+        if let Some(action) = new_action {
+            mem::replace(self, Plan::Action(action));
             true
         } else {
             false

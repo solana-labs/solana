@@ -18,10 +18,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan::Action(Action::Pay(Payment {
-            asset: asset.clone(),
-            to,
-        }));
+        let plan = Plan::Action(Action::Pay(Payment { asset, to }));
         let mut tr = Transaction {
             from,
             plan,
@@ -42,20 +39,11 @@ impl Transaction {
     ) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Race(
-            Box::new(Plan::After(
-                Condition::Timestamp(dt),
-                Box::new(Plan::Action(Action::Pay(Payment {
-                    asset: asset.clone(),
-                    to,
-                }))),
-            )),
-            Box::new(Plan::After(
+            (Condition::Timestamp(dt), Action::Pay(Payment { asset, to })),
+            (
                 Condition::Signature(from),
-                Box::new(Plan::Action(Action::Pay(Payment {
-                    asset: asset.clone(),
-                    to: from,
-                }))),
-            )),
+                Action::Pay(Payment { asset, to: from }),
+            ),
         );
         let mut tr = Transaction {
             from,
