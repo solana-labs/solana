@@ -26,7 +26,7 @@ impl AccountantStub {
         }
     }
 
-    pub fn transfer_signed(&self, tr: Transaction<i64>) -> io::Result<usize> {
+    pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let req = Request::Transaction(tr);
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)

@@ -1,23 +1,22 @@
 //! The `transaction` crate provides functionality for creating log transactions.
 
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
-use serde::Serialize;
 use bincode::serialize;
 use hash::Hash;
 use chrono::prelude::*;
 use plan::{Action, Condition, Payment, Plan};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Transaction<T> {
+pub struct Transaction {
     pub from: PublicKey,
-    pub plan: Plan<T>,
-    pub asset: T,
+    pub plan: Plan,
+    pub asset: i64,
     pub last_id: Hash,
     pub sig: Signature,
 }
 
-impl<T: Serialize + Clone + Eq> Transaction<T> {
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: T, last_id: Hash) -> Self {
+impl Transaction {
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Action(Action::Pay(Payment {
             asset: asset.clone(),
@@ -38,7 +37,7 @@ impl<T: Serialize + Clone + Eq> Transaction<T> {
         from_keypair: &KeyPair,
         to: PublicKey,
         dt: DateTime<Utc>,
-        asset: T,
+        asset: i64,
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
@@ -79,7 +78,7 @@ impl<T: Serialize + Clone + Eq> Transaction<T> {
     }
 
     pub fn verify(&self) -> bool {
-        self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(&self.asset)
+        self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.asset)
     }
 }
 
@@ -87,14 +86,12 @@ impl<T: Serialize + Clone + Eq> Transaction<T> {
 mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
-    use hash::hash;
 
     #[test]
     fn test_claim() {
         let keypair = KeyPair::new();
-        let asset = hash(b"hello, world");
         let zero = Hash::default();
-        let tr0 = Transaction::new(&keypair, keypair.pubkey(), asset, zero);
+        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
         assert!(tr0.verify());
     }
 
@@ -104,8 +101,7 @@ mod tests {
         let keypair0 = KeyPair::new();
         let keypair1 = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
-        let asset = hash(b"hello, world");
-        let tr0 = Transaction::new(&keypair0, pubkey1, asset, zero);
+        let tr0 = Transaction::new(&keypair0, pubkey1, 42, zero);
         assert!(tr0.verify());
     }
 
@@ -118,12 +114,12 @@ mod tests {
         let claim0 = Transaction {
             from: Default::default(),
             plan,
-            asset: 0u8,
+            asset: 0,
             last_id: Default::default(),
             sig: Default::default(),
         };
         let buf = serialize(&claim0).unwrap();
-        let claim1: Transaction<u8> = deserialize(&buf).unwrap();
+        let claim1: Transaction = deserialize(&buf).unwrap();
         assert_eq!(claim1, claim0);
     }
 
@@ -132,9 +128,9 @@ mod tests {
         let zero = Hash::default();
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
-        let mut tr = Transaction::new(&keypair, pubkey, hash(b"hello, world"), zero);
+        let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
         tr.sign(&keypair);
-        tr.asset = hash(b"goodbye cruel world"); // <-- attack!
+        tr.asset = 1_000_000; // <-- attack!
         assert!(!tr.verify());
     }
 
@@ -145,8 +141,7 @@ mod tests {
         let thief_keypair = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
-        let asset = hash(b"hello, world");
-        let mut tr = Transaction::new(&keypair0, pubkey1, asset, zero);
+        let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
         tr.sign(&keypair0);
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
             payment.to = thief_keypair.pubkey(); // <-- attack!

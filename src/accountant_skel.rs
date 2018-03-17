@@ -19,7 +19,7 @@ pub struct AccountantSkel {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
-    Transaction(Transaction<i64>),
+    Transaction(Transaction),
     GetBalance { key: PublicKey },
     GetEntries { last_id: Hash },
     GetId { is_last: bool },

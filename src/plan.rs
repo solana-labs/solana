@@ -11,12 +11,12 @@ pub enum Condition {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Action<T> {
-    Pay(Payment<T>),
+pub enum Action {
+    Pay(Payment),
 }
 
-impl<T: Clone> Action<T> {
-    pub fn spendable(&self) -> T {
+impl Action {
+    pub fn spendable(&self) -> i64 {
         match *self {
             Action::Pay(ref payment) => payment.asset.clone(),
         }
@@ -24,22 +24,22 @@ impl<T: Clone> Action<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Payment<T> {
-    pub asset: T,
+pub struct Payment {
+    pub asset: i64,
     pub to: PublicKey,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Plan<T> {
-    Action(Action<T>),
-    After(Condition, Box<Plan<T>>),
-    Race(Box<Plan<T>>, Box<Plan<T>>),
+pub enum Plan {
+    Action(Action),
+    After(Condition, Box<Plan>),
+    Race(Box<Plan>, Box<Plan>),
 }
 
-impl<T: Clone + Eq> Plan<T> {
-    pub fn verify(&self, spendable_assets: &T) -> bool {
+impl Plan {
+    pub fn verify(&self, spendable_assets: i64) -> bool {
         match *self {
-            Plan::Action(ref action) => action.spendable() == *spendable_assets,
+            Plan::Action(ref action) => action.spendable() == spendable_assets,
             Plan::Race(ref plan_a, ref plan_b) => {
                 plan_a.verify(spendable_assets) && plan_b.verify(spendable_assets)
             }

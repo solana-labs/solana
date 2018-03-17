@@ -31,7 +31,7 @@ pub struct Accountant {
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
     pub last_id: Hash,
-    pending: HashMap<Signature, Plan<i64>>,
+    pending: HashMap<Signature, Plan>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
 }
@@ -84,7 +84,7 @@ impl Accountant {
         self.last_id
     }
 
-    fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan<i64>) -> bool {
+    fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
         if let Plan::Action(Action::Pay(ref payment)) = *plan {
             allow_deposits && *from == payment.to
         } else {
@@ -92,7 +92,7 @@ impl Accountant {
         }
     }
 
-    pub fn process_transaction(self: &mut Self, tr: Transaction<i64>) -> Result<()> {
+    pub fn process_transaction(self: &mut Self, tr: Transaction) -> Result<()> {
         if !tr.verify() {
             return Err(AccountingError::InvalidTransfer);
         }
@@ -113,7 +113,7 @@ impl Accountant {
     }
 
     /// Commit funds to the 'to' party.
-    fn complete_transaction(self: &mut Self, plan: &Plan<i64>) {
+    fn complete_transaction(self: &mut Self, plan: &Plan) {
         if let Plan::Action(Action::Pay(ref payment)) = *plan {
             if self.balances.contains_key(&payment.to) {
                 if let Some(x) = self.balances.get_mut(&payment.to) {
@@ -127,7 +127,7 @@ impl Accountant {
 
     fn process_verified_transaction(
         self: &mut Self,
-        tr: &Transaction<i64>,
+        tr: &Transaction,
         allow_deposits: bool,
     ) -> Result<()> {
         if !reserve_signature(&mut self.historian.signatures, &tr.sig) {
