@@ -35,7 +35,7 @@ pub struct Payment<T> {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan<T> {
     Action(Action<T>),
-    After(Condition, Action<T>),
+    After(Condition, Box<Plan<T>>),
     Race(Box<Plan<T>>, Box<Plan<T>>),
 }
 
@@ -46,7 +46,7 @@ impl<T: Clone + Eq> Plan<T> {
             Plan::Race(ref plan_a, ref plan_b) => {
                 plan_a.verify(spendable_assets) && plan_b.verify(spendable_assets)
             }
-            Plan::After(_, ref action) => action.spendable() == *spendable_assets,
+            Plan::After(_, ref plan) => plan.verify(spendable_assets),
         }
     }
 
@@ -79,9 +79,9 @@ impl<T: Clone + Eq> Plan<T> {
                 plan_a.process_verified_sig(from);
                 plan_b.process_verified_sig(from);
             }
-            Plan::After(Condition::Signature(pubkey), ref action) => {
+            Plan::After(Condition::Signature(pubkey), ref plan) => {
                 if from == pubkey {
-                    new_plan = Some(Plan::Action(action.clone()));
+                    new_plan = Some((**plan).clone());
                 }
             }
             _ => (),
@@ -106,9 +106,9 @@ impl<T: Clone + Eq> Plan<T> {
                 plan_a.process_verified_timestamp(last_time);
                 plan_b.process_verified_timestamp(last_time);
             }
-            Plan::After(Condition::Timestamp(dt), ref action) => {
+            Plan::After(Condition::Timestamp(dt), ref plan) => {
                 if dt <= last_time {
-                    new_plan = Some(Plan::Action(action.clone()));
+                    new_plan = Some((**plan).clone());
                 }
             }
             _ => (),
@@ -164,17 +164,17 @@ impl<T: Serialize + Clone + Eq> Transaction<T> {
         let plan = Plan::Race(
             Box::new(Plan::After(
                 Condition::Timestamp(dt),
-                Action::Pay(Payment {
+                Box::new(Plan::Action(Action::Pay(Payment {
                     asset: asset.clone(),
                     to,
-                }),
+                }))),
             )),
             Box::new(Plan::After(
                 Condition::Signature(from),
-                Action::Pay(Payment {
+                Box::new(Plan::Action(Action::Pay(Payment {
                     asset: asset.clone(),
                     to: from,
-                }),
+                }))),
             )),
         );
         let mut tr = Transaction {
