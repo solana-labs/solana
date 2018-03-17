@@ -58,7 +58,7 @@ impl Mint {
 mod tests {
     use super::*;
     use log::verify_slice;
-    use transaction::{Action, Plan};
+    use plan::{Action, Plan};
 
     #[test]
     fn test_create_events() {

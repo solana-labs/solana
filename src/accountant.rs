@@ -5,7 +5,8 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use transaction::{Action, Plan, Transaction};
+use plan::{Action, Plan};
+use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};

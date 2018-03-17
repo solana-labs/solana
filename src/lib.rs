@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod signature;
 pub mod hash;
+pub mod plan;
 pub mod transaction;
 pub mod event;
 pub mod entry;
