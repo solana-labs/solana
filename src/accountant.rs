@@ -97,7 +97,7 @@ impl Accountant {
             return Err(AccountingError::InvalidTransfer);
         }
 
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.asset {
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
 
@@ -117,10 +117,10 @@ impl Accountant {
         if let Plan::Action(Action::Pay(ref payment)) = *plan {
             if self.balances.contains_key(&payment.to) {
                 if let Some(x) = self.balances.get_mut(&payment.to) {
-                    *x += payment.asset;
+                    *x += payment.tokens;
                 }
             } else {
-                self.balances.insert(payment.to, payment.asset);
+                self.balances.insert(payment.to, payment.tokens);
             }
         }
     }
@@ -136,7 +136,7 @@ impl Accountant {
 
         if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
-                *x -= tr.asset;
+                *x -= tr.tokens;
             }
         }
 
@@ -289,16 +289,16 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
-            payment.asset = 2; // <-- attack!
+            payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
             acc.process_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
 
-        // Also, ensure all branchs of the plan spend all assets
+        // Also, ensure all branchs of the plan spend all tokens
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
-            payment.asset = 0; // <-- whoops!
+            payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(
             acc.process_transaction(tr.clone()),
