@@ -67,7 +67,7 @@ pub fn reserve_signature(sigs: &mut HashSet<Signature>, sig: &Signature) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::*;
+    use ledger::*;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
 
         // Ensure the ID is not the seed, which indicates another Tick
-        // was logged before the one we sent.
+        // was recorded before the one we sent.
         assert_ne!(entries[0].id, zero);
     }
 }

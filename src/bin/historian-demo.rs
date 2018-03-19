@@ -3,7 +3,7 @@ extern crate silk;
 use silk::historian::Historian;
 use silk::hash::Hash;
 use silk::entry::Entry;
-use silk::log::verify_slice;
+use silk::ledger::verify_slice;
 use silk::logger::Signal;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
@@ -12,7 +12,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>> {
+fn create_ledger(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>> {
     sleep(Duration::from_millis(15));
     let keypair = KeyPair::new();
     let tr = Transaction::new(&keypair, keypair.pubkey(), 42, *seed);
@@ -25,7 +25,7 @@ fn create_log(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>> {
 fn main() {
     let seed = Hash::default();
     let hist = Historian::new(&seed, Some(10));
-    create_log(&hist, &seed).expect("send error");
+    create_ledger(&hist, &seed).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry> = hist.receiver.iter().collect();
     for entry in &entries {
