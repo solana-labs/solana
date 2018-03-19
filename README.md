@@ -128,5 +128,5 @@ $ rustup install nightly
 Run the benchmarks:
 
 ```bash
-$ cargo +nightly bench --features="asm,unstable"
+$ cargo +nightly bench --features="unstable"
 ```
