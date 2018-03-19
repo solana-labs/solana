@@ -1,5 +1,5 @@
-//! The `logger` crate provides an object for generating a Proof-of-History.
-//! It logs Event items on behalf of its users. It continuously generates
+//! The `recorder` crate provides an object for generating a Proof-of-History.
+//! It records Event items on behalf of its users. It continuously generates
 //! new hashes, only stopping to check if it has been sent an Event item. It
 //! tags each Event with an Entry and sends it back. The Entry includes the
 //! Event, the latest hash, and the number of hashes since the last event.
@@ -24,7 +24,7 @@ pub enum ExitReason {
     SendDisconnected,
 }
 
-pub struct Logger {
+pub struct Recorder {
     pub sender: SyncSender<Entry>,
     pub receiver: Receiver<Signal>,
     pub last_id: Hash,
@@ -33,9 +33,9 @@ pub struct Logger {
     pub num_ticks: u64,
 }
 
-impl Logger {
+impl Recorder {
     pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
-        Logger {
+        Recorder {
             receiver,
             sender,
             last_id: start_hash,
@@ -45,7 +45,7 @@ impl Logger {
         }
     }
 
-    pub fn log_entry(&mut self) -> Result<Entry, ExitReason> {
+    pub fn record_entry(&mut self) -> Result<Entry, ExitReason> {
         let events = mem::replace(&mut self.events, vec![]);
         let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, events);
         println!("{}", serde_json::to_string(&entry).unwrap());
@@ -60,7 +60,7 @@ impl Logger {
         loop {
             if let Some(ms) = ms_per_tick {
                 if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
-                    self.log_entry()?;
+                    self.record_entry()?;
                     self.num_ticks += 1;
                 }
             }
@@ -68,7 +68,7 @@ impl Logger {
             match self.receiver.try_recv() {
                 Ok(signal) => match signal {
                     Signal::Tick => {
-                        let entry = self.log_entry()?;
+                        let entry = self.record_entry()?;
                         self.sender
                             .send(entry)
                             .or(Err(ExitReason::SendDisconnected))?;

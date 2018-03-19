@@ -10,19 +10,19 @@ use plan::{Action, Condition, Payment, Plan};
 pub struct Transaction {
     pub from: PublicKey,
     pub plan: Plan,
-    pub asset: i64,
+    pub tokens: i64,
     pub last_id: Hash,
     pub sig: Signature,
 }
 
 impl Transaction {
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, asset: i64, last_id: Hash) -> Self {
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan::Action(Action::Pay(Payment { asset, to }));
+        let plan = Plan::Action(Action::Pay(Payment { tokens, to }));
         let mut tr = Transaction {
             from,
             plan,
-            asset,
+            tokens,
             last_id,
             sig: Signature::default(),
         };
@@ -34,21 +34,24 @@ impl Transaction {
         from_keypair: &KeyPair,
         to: PublicKey,
         dt: DateTime<Utc>,
-        asset: i64,
+        tokens: i64,
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Race(
-            (Condition::Timestamp(dt), Action::Pay(Payment { asset, to })),
+            (
+                Condition::Timestamp(dt),
+                Action::Pay(Payment { tokens, to }),
+            ),
             (
                 Condition::Signature(from),
-                Action::Pay(Payment { asset, to: from }),
+                Action::Pay(Payment { tokens, to: from }),
             ),
         );
         let mut tr = Transaction {
             from,
             plan,
-            asset,
+            tokens,
             last_id,
             sig: Signature::default(),
         };
@@ -57,7 +60,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.from, &self.plan, &self.asset, &self.last_id)).unwrap()
+        serialize(&(&self.from, &self.plan, &self.tokens, &self.last_id)).unwrap()
     }
 
     pub fn sign(&mut self, keypair: &KeyPair) {
@@ -66,7 +69,7 @@ impl Transaction {
     }
 
     pub fn verify(&self) -> bool {
-        self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.asset)
+        self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.tokens)
     }
 }
 
@@ -96,13 +99,13 @@ mod tests {
     #[test]
     fn test_serialize_claim() {
         let plan = Plan::Action(Action::Pay(Payment {
-            asset: 0,
+            tokens: 0,
             to: Default::default(),
         }));
         let claim0 = Transaction {
             from: Default::default(),
             plan,
-            asset: 0,
+            tokens: 0,
             last_id: Default::default(),
             sig: Default::default(),
         };
@@ -118,7 +121,7 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
         tr.sign(&keypair);
-        tr.asset = 1_000_000; // <-- attack!
+        tr.tokens = 1_000_000; // <-- attack!
         assert!(!tr.verify());
     }
 

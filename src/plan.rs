@@ -35,14 +35,14 @@ pub enum Action {
 impl Action {
     pub fn spendable(&self) -> i64 {
         match *self {
-            Action::Pay(ref payment) => payment.asset,
+            Action::Pay(ref payment) => payment.tokens,
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
-    pub asset: i64,
+    pub tokens: i64,
     pub to: PublicKey,
 }
 
@@ -54,42 +54,48 @@ pub enum Plan {
 }
 
 impl Plan {
-    pub fn new_payment(asset: i64, to: PublicKey) -> Self {
-        Plan::Action(Action::Pay(Payment { asset, to }))
+    pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
+        Plan::Action(Action::Pay(Payment { tokens, to }))
     }
 
-    pub fn new_authorized_payment(from: PublicKey, asset: i64, to: PublicKey) -> Self {
+    pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
         Plan::After(
             Condition::Signature(from),
-            Action::Pay(Payment { asset, to }),
+            Action::Pay(Payment { tokens, to }),
         )
     }
 
-    pub fn new_future_payment(dt: DateTime<Utc>, asset: i64, to: PublicKey) -> Self {
-        Plan::After(Condition::Timestamp(dt), Action::Pay(Payment { asset, to }))
+    pub fn new_future_payment(dt: DateTime<Utc>, tokens: i64, to: PublicKey) -> Self {
+        Plan::After(
+            Condition::Timestamp(dt),
+            Action::Pay(Payment { tokens, to }),
+        )
     }
 
     pub fn new_cancelable_future_payment(
         dt: DateTime<Utc>,
         from: PublicKey,
-        asset: i64,
+        tokens: i64,
         to: PublicKey,
     ) -> Self {
         Plan::Race(
-            (Condition::Timestamp(dt), Action::Pay(Payment { asset, to })),
+            (
+                Condition::Timestamp(dt),
+                Action::Pay(Payment { tokens, to }),
+            ),
             (
                 Condition::Signature(from),
-                Action::Pay(Payment { asset, to: from }),
+                Action::Pay(Payment { tokens, to: from }),
             ),
         )
     }
 
-    pub fn verify(&self, spendable_assets: i64) -> bool {
+    pub fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
-            Plan::Action(ref action) => action.spendable() == spendable_assets,
-            Plan::After(_, ref action) => action.spendable() == spendable_assets,
+            Plan::Action(ref action) => action.spendable() == spendable_tokens,
+            Plan::After(_, ref action) => action.spendable() == spendable_tokens,
             Plan::Race(ref a, ref b) => {
-                a.1.spendable() == spendable_assets && b.1.spendable() == spendable_assets
+                a.1.spendable() == spendable_tokens && b.1.spendable() == spendable_tokens
             }
         }
     }

@@ -1,7 +1,7 @@
 The Historian
 ===
 
-Create a *Historian* and send it *events* to generate an *event log*, where each log *entry*
+Create a *Historian* and send it *events* to generate an *event log*, where each *entry*
 is tagged with the historian's latest *hash*. Then ensure the order of events was not tampered
 with by verifying each entry's hash can be generated from the hash in the previous entry:
 
@@ -11,17 +11,17 @@ with by verifying each entry's hash can be generated from the hash in the previo
 extern crate silk;
 
 use silk::historian::Historian;
-use silk::log::{verify_slice, Entry, Hash};
+use silk::ledger::{verify_slice, Entry, Hash};
 use silk::event::{generate_keypair, get_pubkey, sign_claim_data, Event};
 use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;
 
-fn create_log(hist: &Historian<Hash>) -> Result<(), SendError<Event<Hash>>> {
+fn create_ledger(hist: &Historian<Hash>) -> Result<(), SendError<Event<Hash>>> {
     sleep(Duration::from_millis(15));
-    let asset = Hash::default();
+    let tokens = 42;
     let keypair = generate_keypair();
-    let event0 = Event::new_claim(get_pubkey(&keypair), asset, sign_claim_data(&asset, &keypair));
+    let event0 = Event::new_claim(get_pubkey(&keypair), tokens, sign_claim_data(&tokens, &keypair));
     hist.sender.send(event0)?;
     sleep(Duration::from_millis(10));
     Ok(())
@@ -30,7 +30,7 @@ fn create_log(hist: &Historian<Hash>) -> Result<(), SendError<Event<Hash>>> {
 fn main() {
     let seed = Hash::default();
     let hist = Historian::new(&seed, Some(10));
-    create_log(&hist).expect("send error");
+    create_ledger(&hist).expect("send error");
     drop(hist.sender);
     let entries: Vec<Entry<Hash>> = hist.receiver.iter().collect();
     for entry in &entries {
@@ -42,11 +42,11 @@ fn main() {
 }
 ```
 
-Running the program should produce a log similar to:
+Running the program should produce a ledger similar to:
 
 ```rust
 Entry { num_hashes: 0, id: [0, ...], event: Tick }
-Entry { num_hashes: 3, id: [67, ...], event: Transaction { asset: [37, ...] } }
+Entry { num_hashes: 3, id: [67, ...], event: Transaction { tokens: 42 } }
 Entry { num_hashes: 3, id: [123, ...], event: Tick }
 ```
 

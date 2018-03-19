@@ -10,7 +10,7 @@ use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
-use logger::Signal;
+use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -43,8 +43,8 @@ impl Accountant {
     {
         let mut entries = entries.into_iter();
 
-        // The first item in the log is required to be an entry with zero num_hashes,
-        // which implies its id can be used as the log's seed.
+        // The first item in the ledger is required to be an entry with zero num_hashes,
+        // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().unwrap();
         let start_hash = entry0.id;
 
@@ -59,7 +59,7 @@ impl Accountant {
             last_time: Utc.timestamp(0, 0),
         };
 
-        // The second item in the log is a special transaction where the to and from
+        // The second item in the ledger is a special transaction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
         let entry1 = entries.next().unwrap();
@@ -97,7 +97,7 @@ impl Accountant {
             return Err(AccountingError::InvalidTransfer);
         }
 
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.asset {
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
 
@@ -117,10 +117,10 @@ impl Accountant {
         if let Plan::Action(Action::Pay(ref payment)) = *plan {
             if self.balances.contains_key(&payment.to) {
                 if let Some(x) = self.balances.get_mut(&payment.to) {
-                    *x += payment.asset;
+                    *x += payment.tokens;
                 }
             } else {
-                self.balances.insert(payment.to, payment.asset);
+                self.balances.insert(payment.to, payment.tokens);
             }
         }
     }
@@ -136,7 +136,7 @@ impl Accountant {
 
         if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan) {
             if let Some(x) = self.balances.get_mut(&tr.from) {
-                *x -= tr.asset;
+                *x -= tr.tokens;
             }
         }
 
@@ -240,7 +240,7 @@ impl Accountant {
 mod tests {
     use super::*;
     use signature::KeyPairUtil;
-    use logger::ExitReason;
+    use recorder::ExitReason;
 
     #[test]
     fn test_accountant() {
@@ -289,16 +289,16 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
-            payment.asset = 2; // <-- attack!
+            payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
             acc.process_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
 
-        // Also, ensure all branchs of the plan spend all assets
+        // Also, ensure all branchs of the plan spend all tokens
         if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
-            payment.asset = 0; // <-- whoops!
+            payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(
             acc.process_transaction(tr.clone()),

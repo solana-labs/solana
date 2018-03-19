@@ -57,7 +57,7 @@ impl Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::verify_slice;
+    use ledger::verify_slice;
     use plan::{Action, Plan};
 
     #[test]
