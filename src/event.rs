@@ -7,7 +7,7 @@ use bincode::serialize;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Event {
-    Transaction(Transaction<i64>),
+    Transaction(Transaction),
     Signature {
         from: PublicKey,
         tx_sig: Signature,
