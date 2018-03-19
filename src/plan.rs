@@ -54,6 +54,36 @@ pub enum Plan {
 }
 
 impl Plan {
+    pub fn new_payment(asset: i64, to: PublicKey) -> Self {
+        Plan::Action(Action::Pay(Payment { asset, to }))
+    }
+
+    pub fn new_authorized_payment(from: PublicKey, asset: i64, to: PublicKey) -> Self {
+        Plan::After(
+            Condition::Signature(from),
+            Action::Pay(Payment { asset, to }),
+        )
+    }
+
+    pub fn new_future_payment(dt: DateTime<Utc>, asset: i64, to: PublicKey) -> Self {
+        Plan::After(Condition::Timestamp(dt), Action::Pay(Payment { asset, to }))
+    }
+
+    pub fn new_cancelable_future_payment(
+        dt: DateTime<Utc>,
+        from: PublicKey,
+        asset: i64,
+        to: PublicKey,
+    ) -> Self {
+        Plan::Race(
+            (Condition::Timestamp(dt), Action::Pay(Payment { asset, to })),
+            (
+                Condition::Signature(from),
+                Action::Pay(Payment { asset, to: from }),
+            ),
+        )
+    }
+
     pub fn verify(&self, spendable_assets: i64) -> bool {
         match *self {
             Plan::Action(ref action) => action.spendable() == spendable_assets,
@@ -88,5 +118,71 @@ impl Plan {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_signature_satisfied() {
+        let sig = PublicKey::default();
+        assert!(Condition::Signature(sig).is_satisfied(&PlanEvent::Signature(sig)));
+    }
+
+    #[test]
+    fn test_timestamp_satisfied() {
+        let dt1 = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
+        let dt2 = Utc.ymd(2014, 11, 14).and_hms(10, 9, 8);
+        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt1)));
+        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt2)));
+        assert!(!Condition::Timestamp(dt2).is_satisfied(&PlanEvent::Timestamp(dt1)));
+    }
+
+    #[test]
+    fn test_verify_plan() {
+        let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
+        let from = PublicKey::default();
+        let to = PublicKey::default();
+        assert!(Plan::new_payment(42, to).verify(42));
+        assert!(Plan::new_authorized_payment(from, 42, to).verify(42));
+        assert!(Plan::new_future_payment(dt, 42, to).verify(42));
+        assert!(Plan::new_cancelable_future_payment(dt, from, 42, to).verify(42));
+    }
+
+    #[test]
+    fn test_authorized_payment() {
+        let from = PublicKey::default();
+        let to = PublicKey::default();
+
+        let mut plan = Plan::new_authorized_payment(from, 42, to);
+        assert!(plan.process_event(PlanEvent::Signature(from)));
+        assert_eq!(plan, Plan::new_payment(42, to));
+    }
+
+    #[test]
+    fn test_future_payment() {
+        let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
+        let to = PublicKey::default();
+
+        let mut plan = Plan::new_future_payment(dt, 42, to);
+        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        assert_eq!(plan, Plan::new_payment(42, to));
+    }
+
+    #[test]
+    fn test_cancelable_future_payment() {
+        let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
+        let from = PublicKey::default();
+        let to = PublicKey::default();
+
+        let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
+        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        assert_eq!(plan, Plan::new_payment(42, to));
+
+        let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
+        assert!(plan.process_event(PlanEvent::Signature(from)));
+        assert_eq!(plan, Plan::new_payment(42, from));
     }
 }
