@@ -214,8 +214,10 @@ pub fn sender(
     })
 }
 
-#[cfg(test)]
-mod test {
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
     use std::thread::sleep;
     use std::sync::{Arc, Mutex};
     use std::net::{SocketAddr, UdpSocket};
@@ -224,9 +226,7 @@ mod test {
     use std::thread::{spawn, JoinHandle};
     use std::sync::mpsc::channel;
     use result::Result;
-    use std::io::Write;
-    use std::io;
-    use streamer::{allocate, receiver, recycle, sender, Packet, Receiver, Recycler, PACKET_SIZE};
+    use streamer::{allocate, receiver, recycle, Packet, Receiver, Recycler, PACKET_SIZE};
 
     fn producer(addr: &SocketAddr, recycler: Recycler, exit: Arc<Mutex<bool>>) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -299,10 +299,21 @@ mod test {
         t_sinc.join()?;
         Ok(())
     }
-    #[test]
-    pub fn streamer_bench() {
+    #[bench]
+    pub fn streamer_bench(_bench: &mut Bencher) {
         run_streamer_bench().unwrap();
     }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc, Mutex};
+    use std::net::UdpSocket;
+    use std::time::Duration;
+    use std::sync::mpsc::channel;
+    use std::io::Write;
+    use std::io;
+    use streamer::{allocate, receiver, sender, Packet, Receiver, PACKET_SIZE};
 
     fn get_msgs(r: Receiver, num: &mut usize) {
         for _t in 0..5 {
