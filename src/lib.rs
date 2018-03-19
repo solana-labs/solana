@@ -18,7 +18,7 @@ extern crate bincode;
 extern crate chrono;
 extern crate generic_array;
 #[macro_use]
-extern crate log as logging;
+extern crate log;
 extern crate rayon;
 extern crate ring;
 extern crate serde;
