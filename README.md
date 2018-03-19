@@ -37,9 +37,9 @@ Install the silk executables:
     $ cargo install silk
 ```
 
-The testnode server is initialized with a transaction log from stdin and
-generates new log entries on stdout. To create the input log, we'll need
-to create *the mint* and use it to generate a *genesis log*. It's done in
+The testnode server is initialized with a ledger from stdin and
+generates new ledger entries on stdout. To create the input ledger, we'll need
+to create *the mint* and use it to generate a *genesis ledger*. It's done in
 two steps because the mint.json file contains a private key that will be
 used later in this demo.
 
@@ -55,23 +55,23 @@ Now you can start the server:
 ```
 
 Then, in a separate shell, let's execute some transactions. Note we pass in
-the JSON configuration file here, not the genesis log.
+the JSON configuration file here, not the genesis ledger.
 
 ```bash
     $ cat mint.json | silk-client-demo
 ```
 
-Now kill the server with Ctrl-C, and take a look at the transaction log. You should
+Now kill the server with Ctrl-C, and take a look at the ledger. You should
 see something similar to:
 
 ```json
 {"num_hashes":27,"id":[0, "..."],"event":"Tick"}
-{"num_hashes":3,"id":[67, "..."],"event":{"Transaction":{"asset":42}}}
+{"num_hashes":3,"id":[67, "..."],"event":{"Transaction":{"tokens":42}}}
 {"num_hashes":27,"id":[0, "..."],"event":"Tick"}
 ```
 
-Now restart the server from where we left off. Pass it both the genesis log, and
-the transaction log.
+Now restart the server from where we left off. Pass it both the genesis ledger, and
+the transaction ledger.
 
 ```bash
     $ cat genesis.log transactions0.log | silk-testnode > transactions1.log
