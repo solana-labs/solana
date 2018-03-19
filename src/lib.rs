@@ -7,7 +7,7 @@ pub mod event;
 pub mod entry;
 pub mod ledger;
 pub mod mint;
-pub mod logger;
+pub mod recorder;
 pub mod historian;
 pub mod streamer;
 pub mod accountant;

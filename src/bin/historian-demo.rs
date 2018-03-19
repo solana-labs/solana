@@ -4,7 +4,7 @@ use silk::historian::Historian;
 use silk::hash::Hash;
 use silk::entry::Entry;
 use silk::ledger::verify_slice;
-use silk::logger::Signal;
+use silk::recorder::Signal;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
 use silk::event::Event;

@@ -7,7 +7,7 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
 use hash::{hash, Hash};
 use entry::Entry;
-use logger::{ExitReason, Logger, Signal};
+use recorder::{ExitReason, Recorder, Signal};
 use signature::Signature;
 
 pub struct Historian {
@@ -22,7 +22,7 @@ impl Historian {
         let (sender, event_receiver) = sync_channel(1000);
         let (entry_sender, receiver) = sync_channel(1000);
         let thread_hdl =
-            Historian::create_logger(*start_hash, ms_per_tick, event_receiver, entry_sender);
+            Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
         let signatures = HashSet::new();
         Historian {
             sender,
@@ -34,22 +34,22 @@ impl Historian {
 
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
-    fn create_logger(
+    fn create_recorder(
         start_hash: Hash,
         ms_per_tick: Option<u64>,
         receiver: Receiver<Signal>,
         sender: SyncSender<Entry>,
     ) -> JoinHandle<ExitReason> {
         spawn(move || {
-            let mut logger = Logger::new(receiver, sender, start_hash);
+            let mut recorder = Recorder::new(receiver, sender, start_hash);
             let now = Instant::now();
             loop {
-                if let Err(err) = logger.process_events(now, ms_per_tick) {
+                if let Err(err) = recorder.process_events(now, ms_per_tick) {
                     return err;
                 }
                 if ms_per_tick.is_some() {
-                    logger.last_id = hash(&logger.last_id);
-                    logger.num_hashes += 1;
+                    recorder.last_id = hash(&recorder.last_id);
+                    recorder.num_hashes += 1;
                 }
             }
         })

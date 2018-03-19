@@ -10,7 +10,7 @@ use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
 use historian::{reserve_signature, Historian};
-use logger::Signal;
+use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -43,8 +43,8 @@ impl Accountant {
     {
         let mut entries = entries.into_iter();
 
-        // The first item in the log is required to be an entry with zero num_hashes,
-        // which implies its id can be used as the log's seed.
+        // The first item in the ledger is required to be an entry with zero num_hashes,
+        // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().unwrap();
         let start_hash = entry0.id;
 
@@ -59,7 +59,7 @@ impl Accountant {
             last_time: Utc.timestamp(0, 0),
         };
 
-        // The second item in the log is a special transaction where the to and from
+        // The second item in the ledger is a special transaction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
         let entry1 = entries.next().unwrap();
@@ -240,7 +240,7 @@ impl Accountant {
 mod tests {
     use super::*;
     use signature::KeyPairUtil;
-    use logger::ExitReason;
+    use recorder::ExitReason;
 
     #[test]
     fn test_accountant() {
