@@ -141,7 +141,7 @@ impl Accountant {
         }
 
         let mut plan = tr.plan.clone();
-        plan.process_witness(Witness::Timestamp(self.last_time));
+        plan.apply_witness(Witness::Timestamp(self.last_time));
 
         if plan.is_complete() {
             self.complete_transaction(&plan);
@@ -154,7 +154,7 @@ impl Accountant {
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
-            plan.process_witness(Witness::Signature(from));
+            plan.apply_witness(Witness::Signature(from));
             plan.is_complete()
         } else {
             false
@@ -187,7 +187,7 @@ impl Accountant {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
         for (key, plan) in &mut self.pending {
-            plan.process_witness(Witness::Timestamp(self.last_time));
+            plan.apply_witness(Witness::Timestamp(self.last_time));
             if plan.is_complete() {
                 completed.push(key.clone());
             }

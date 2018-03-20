@@ -19,8 +19,8 @@ pub enum Condition {
 }
 
 impl Condition {
-    pub fn is_satisfied(&self, event: &Witness) -> bool {
-        match (self, event) {
+    pub fn is_satisfied(&self, witness: &Witness) -> bool {
+        match (self, witness) {
             (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
             (&Condition::Timestamp(ref dt), &Witness::Timestamp(ref last_time)) => dt <= last_time,
             _ => false,
@@ -83,19 +83,19 @@ impl Plan {
         }
     }
 
-    pub fn process_witness(&mut self, event: Witness) {
+    pub fn apply_witness(&mut self, witness: Witness) {
         let mut new_payment = None;
         match *self {
             Plan::Pay(_) => (),
             Plan::After(ref cond, ref payment) => {
-                if cond.is_satisfied(&event) {
+                if cond.is_satisfied(&witness) {
                     new_payment = Some(payment.clone());
                 }
             }
             Plan::Race(ref a, ref b) => {
-                if a.0.is_satisfied(&event) {
+                if a.0.is_satisfied(&witness) {
                     new_payment = Some(a.1.clone());
-                } else if b.0.is_satisfied(&event) {
+                } else if b.0.is_satisfied(&witness) {
                     new_payment = Some(b.1.clone());
                 }
             }
@@ -143,7 +143,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_authorized_payment(from, 42, to);
-        plan.process_witness(Witness::Signature(from));
+        plan.apply_witness(Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -153,7 +153,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_future_payment(dt, 42, to);
-        plan.process_witness(Witness::Timestamp(dt));
+        plan.apply_witness(Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -164,11 +164,11 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        plan.process_witness(Witness::Timestamp(dt));
+        plan.apply_witness(Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        plan.process_witness(Witness::Signature(from));
+        plan.apply_witness(Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, from));
     }
 }
