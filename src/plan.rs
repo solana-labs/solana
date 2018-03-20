@@ -10,18 +10,16 @@ pub enum Condition {
     Signature(PublicKey),
 }
 
-pub enum PlanEvent {
+pub enum Witness {
     Timestamp(DateTime<Utc>),
     Signature(PublicKey),
 }
 
 impl Condition {
-    pub fn is_satisfied(&self, event: &PlanEvent) -> bool {
+    pub fn is_satisfied(&self, event: &Witness) -> bool {
         match (self, event) {
-            (&Condition::Signature(ref pubkey), &PlanEvent::Signature(ref from)) => pubkey == from,
-            (&Condition::Timestamp(ref dt), &PlanEvent::Timestamp(ref last_time)) => {
-                dt <= last_time
-            }
+            (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
+            (&Condition::Timestamp(ref dt), &Witness::Timestamp(ref last_time)) => dt <= last_time,
             _ => false,
         }
     }
@@ -100,7 +98,7 @@ impl Plan {
         }
     }
 
-    pub fn process_event(&mut self, event: PlanEvent) -> bool {
+    pub fn process_witness(&mut self, event: Witness) -> bool {
         let mut new_action = None;
         match *self {
             Plan::Action(_) => return true,
@@ -134,16 +132,16 @@ mod tests {
     #[test]
     fn test_signature_satisfied() {
         let sig = PublicKey::default();
-        assert!(Condition::Signature(sig).is_satisfied(&PlanEvent::Signature(sig)));
+        assert!(Condition::Signature(sig).is_satisfied(&Witness::Signature(sig)));
     }
 
     #[test]
     fn test_timestamp_satisfied() {
         let dt1 = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let dt2 = Utc.ymd(2014, 11, 14).and_hms(10, 9, 8);
-        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt1)));
-        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt2)));
-        assert!(!Condition::Timestamp(dt2).is_satisfied(&PlanEvent::Timestamp(dt1)));
+        assert!(Condition::Timestamp(dt1).is_satisfied(&Witness::Timestamp(dt1)));
+        assert!(Condition::Timestamp(dt1).is_satisfied(&Witness::Timestamp(dt2)));
+        assert!(!Condition::Timestamp(dt2).is_satisfied(&Witness::Timestamp(dt1)));
     }
 
     #[test]
@@ -163,7 +161,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_authorized_payment(from, 42, to);
-        assert!(plan.process_event(PlanEvent::Signature(from)));
+        assert!(plan.process_witness(Witness::Signature(from)));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -173,7 +171,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_future_payment(dt, 42, to);
-        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        assert!(plan.process_witness(Witness::Timestamp(dt)));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -184,11 +182,11 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        assert!(plan.process_witness(Witness::Timestamp(dt)));
         assert_eq!(plan, Plan::new_payment(42, to));
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        assert!(plan.process_event(PlanEvent::Signature(from)));
+        assert!(plan.process_witness(Witness::Signature(from)));
         assert_eq!(plan, Plan::new_payment(42, from));
     }
 }
