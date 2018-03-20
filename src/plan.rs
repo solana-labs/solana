@@ -83,6 +83,8 @@ impl Plan {
         }
     }
 
+    /// Apply a witness to the spending plan to see if the plan can be reduced.
+    /// If so, modify the plan in-place.
     pub fn apply_witness(&mut self, witness: Witness) {
         let mut new_payment = None;
         match *self {
