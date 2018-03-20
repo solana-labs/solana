@@ -86,22 +86,12 @@ impl Plan {
     /// Apply a witness to the spending plan to see if the plan can be reduced.
     /// If so, modify the plan in-place.
     pub fn apply_witness(&mut self, witness: Witness) {
-        let mut new_payment = None;
-        match *self {
-            Plan::Pay(_) => (),
-            Plan::After(ref cond, ref payment) => {
-                if cond.is_satisfied(&witness) {
-                    new_payment = Some(payment.clone());
-                }
-            }
-            Plan::Race(ref a, ref b) => {
-                if a.0.is_satisfied(&witness) {
-                    new_payment = Some(a.1.clone());
-                } else if b.0.is_satisfied(&witness) {
-                    new_payment = Some(b.1.clone());
-                }
-            }
-        }
+        let new_payment = match *self {
+            Plan::After(ref cond, ref payment) if cond.is_satisfied(&witness) => Some(payment),
+            Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(&witness) => Some(payment),
+            Plan::Race(_, (ref cond, ref payment)) if cond.is_satisfied(&witness) => Some(payment),
+            _ => None,
+        }.map(|x| x.clone());
 
         if let Some(payment) = new_payment {
             mem::replace(self, Plan::Pay(payment));
