@@ -26,6 +26,19 @@ pub enum AccountingError {
 
 pub type Result<T> = result::Result<T, AccountingError>;
 
+/// Commit funds to the 'to' party.
+fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
+    if let Plan::Pay(ref payment) = *plan {
+        if balances.contains_key(&payment.to) {
+            if let Some(x) = balances.get_mut(&payment.to) {
+                *x += payment.tokens;
+            }
+        } else {
+            balances.insert(payment.to, payment.tokens);
+        }
+    }
+}
+
 pub struct Accountant {
     pub historian: Historian,
     pub balances: HashMap<PublicKey, i64>,
@@ -112,19 +125,6 @@ impl Accountant {
         Ok(())
     }
 
-    /// Commit funds to the 'to' party.
-    fn complete_transaction(self: &mut Self, plan: &Plan) {
-        if let Plan::Pay(ref payment) = *plan {
-            if self.balances.contains_key(&payment.to) {
-                if let Some(x) = self.balances.get_mut(&payment.to) {
-                    *x += payment.tokens;
-                }
-            } else {
-                self.balances.insert(payment.to, payment.tokens);
-            }
-        }
-    }
-
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
@@ -144,7 +144,7 @@ impl Accountant {
         plan.apply_witness(Witness::Timestamp(self.last_time));
 
         if plan.is_complete() {
-            self.complete_transaction(&plan);
+            complete_transaction(&mut self.balances, &plan);
         } else {
             self.pending.insert(tr.sig, plan);
         }
@@ -155,15 +155,16 @@ impl Accountant {
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
             plan.apply_witness(Witness::Signature(from));
+            if plan.is_complete() {
+                complete_transaction(&mut self.balances, &plan);
+            }
             plan.is_complete()
         } else {
             false
         };
 
         if actionable {
-            if let Some(plan) = self.pending.remove(&tx_sig) {
-                self.complete_transaction(&plan);
-            }
+            self.pending.remove(&tx_sig);
         }
 
         Ok(())
@@ -189,14 +190,13 @@ impl Accountant {
         for (key, plan) in &mut self.pending {
             plan.apply_witness(Witness::Timestamp(self.last_time));
             if plan.is_complete() {
+                complete_transaction(&mut self.balances, &plan);
                 completed.push(key.clone());
             }
         }
 
         for key in completed {
-            if let Some(plan) = self.pending.remove(&key) {
-                self.complete_transaction(&plan);
-            }
+            self.pending.remove(&key);
         }
 
         Ok(())
