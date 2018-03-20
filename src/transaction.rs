@@ -4,7 +4,7 @@ use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 use bincode::serialize;
 use hash::Hash;
 use chrono::prelude::*;
-use plan::{Action, Condition, Payment, Plan};
+use plan::{Condition, Payment, Plan};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
@@ -18,7 +18,7 @@ pub struct Transaction {
 impl Transaction {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan::Action(Action::Pay(Payment { tokens, to }));
+        let plan = Plan::Pay(Payment { tokens, to });
         let mut tr = Transaction {
             from,
             plan,
@@ -39,14 +39,8 @@ impl Transaction {
     ) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Race(
-            (
-                Condition::Timestamp(dt),
-                Action::Pay(Payment { tokens, to }),
-            ),
-            (
-                Condition::Signature(from),
-                Action::Pay(Payment { tokens, to: from }),
-            ),
+            (Condition::Timestamp(dt), Payment { tokens, to }),
+            (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let mut tr = Transaction {
             from,
@@ -98,10 +92,10 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let plan = Plan::Action(Action::Pay(Payment {
+        let plan = Plan::Pay(Payment {
             tokens: 0,
             to: Default::default(),
-        }));
+        });
         let claim0 = Transaction {
             from: Default::default(),
             plan,
@@ -134,7 +128,7 @@ mod tests {
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
         tr.sign(&keypair0);
-        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.plan {
             payment.to = thief_keypair.pubkey(); // <-- attack!
         };
         assert!(!tr.verify());

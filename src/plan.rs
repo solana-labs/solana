@@ -26,19 +26,6 @@ impl Condition {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Action {
-    Pay(Payment),
-}
-
-impl Action {
-    pub fn spendable(&self) -> i64 {
-        match *self {
-            Action::Pay(ref payment) => payment.tokens,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
     pub tokens: i64,
     pub to: PublicKey,
@@ -46,28 +33,22 @@ pub struct Payment {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
-    Action(Action),
-    After(Condition, Action),
-    Race((Condition, Action), (Condition, Action)),
+    Pay(Payment),
+    After(Condition, Payment),
+    Race((Condition, Payment), (Condition, Payment)),
 }
 
 impl Plan {
     pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
-        Plan::Action(Action::Pay(Payment { tokens, to }))
+        Plan::Pay(Payment { tokens, to })
     }
 
     pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(
-            Condition::Signature(from),
-            Action::Pay(Payment { tokens, to }),
-        )
+        Plan::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     pub fn new_future_payment(dt: DateTime<Utc>, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(
-            Condition::Timestamp(dt),
-            Action::Pay(Payment { tokens, to }),
-        )
+        Plan::After(Condition::Timestamp(dt), Payment { tokens, to })
     }
 
     pub fn new_cancelable_future_payment(
@@ -77,47 +58,41 @@ impl Plan {
         to: PublicKey,
     ) -> Self {
         Plan::Race(
-            (
-                Condition::Timestamp(dt),
-                Action::Pay(Payment { tokens, to }),
-            ),
-            (
-                Condition::Signature(from),
-                Action::Pay(Payment { tokens, to: from }),
-            ),
+            (Condition::Timestamp(dt), Payment { tokens, to }),
+            (Condition::Signature(from), Payment { tokens, to: from }),
         )
     }
 
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
-            Plan::Action(ref action) => action.spendable() == spendable_tokens,
-            Plan::After(_, ref action) => action.spendable() == spendable_tokens,
+            Plan::Pay(ref payment) => payment.tokens == spendable_tokens,
+            Plan::After(_, ref payment) => payment.tokens == spendable_tokens,
             Plan::Race(ref a, ref b) => {
-                a.1.spendable() == spendable_tokens && b.1.spendable() == spendable_tokens
+                a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
             }
         }
     }
 
     pub fn process_witness(&mut self, event: Witness) -> bool {
-        let mut new_action = None;
+        let mut new_payment = None;
         match *self {
-            Plan::Action(_) => return true,
-            Plan::After(ref cond, ref action) => {
+            Plan::Pay(_) => return true,
+            Plan::After(ref cond, ref payment) => {
                 if cond.is_satisfied(&event) {
-                    new_action = Some(action.clone());
+                    new_payment = Some(payment.clone());
                 }
             }
             Plan::Race(ref a, ref b) => {
                 if a.0.is_satisfied(&event) {
-                    new_action = Some(a.1.clone());
+                    new_payment = Some(a.1.clone());
                 } else if b.0.is_satisfied(&event) {
-                    new_action = Some(b.1.clone());
+                    new_payment = Some(b.1.clone());
                 }
             }
         }
 
-        if let Some(action) = new_action {
-            mem::replace(self, Plan::Action(action));
+        if let Some(payment) = new_payment {
+            mem::replace(self, Plan::Pay(payment));
             true
         } else {
             false

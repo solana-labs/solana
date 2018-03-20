@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use plan::{Action, Plan, Witness};
+use plan::{Plan, Witness};
 use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
@@ -85,7 +85,7 @@ impl Accountant {
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
-        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+        if let Plan::Pay(ref payment) = *plan {
             allow_deposits && *from == payment.to
         } else {
             false
@@ -114,7 +114,7 @@ impl Accountant {
 
     /// Commit funds to the 'to' party.
     fn complete_transaction(self: &mut Self, plan: &Plan) {
-        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+        if let Plan::Pay(ref payment) = *plan {
             if self.balances.contains_key(&payment.to) {
                 if let Some(x) = self.balances.get_mut(&payment.to) {
                     *x += payment.tokens;
@@ -288,7 +288,7 @@ mod tests {
         let mut acc = Accountant::new(&alice, None);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
-        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
@@ -297,7 +297,7 @@ mod tests {
         );
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(
