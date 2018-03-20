@@ -4,13 +4,13 @@ use signature::PublicKey;
 use chrono::prelude::*;
 use std::mem;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Condition {
+pub enum Witness {
     Timestamp(DateTime<Utc>),
     Signature(PublicKey),
 }
 
-pub enum Witness {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum Condition {
     Timestamp(DateTime<Utc>),
     Signature(PublicKey),
 }
