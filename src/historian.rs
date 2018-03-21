@@ -5,7 +5,7 @@ use std::thread::{spawn, JoinHandle};
 use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::time::Instant;
-use hash::{hash, Hash};
+use hash::Hash;
 use entry::Entry;
 use recorder::{ExitReason, Recorder, Signal};
 use signature::Signature;
@@ -48,8 +48,7 @@ impl Historian {
                     return err;
                 }
                 if ms_per_tick.is_some() {
-                    recorder.last_id = hash(&recorder.last_id);
-                    recorder.num_hashes += 1;
+                    recorder.hash();
                 }
             }
         })
@@ -127,12 +126,9 @@ mod tests {
         hist.sender.send(Signal::Tick).unwrap();
         drop(hist.sender);
         let entries: Vec<Entry> = hist.receiver.iter().collect();
+        assert!(entries.len() > 1);
 
-        // Ensure one entry is sent back for each tick sent in.
-        assert_eq!(entries.len(), 1);
-
-        // Ensure the ID is not the seed, which indicates another Tick
-        // was recorded before the one we sent.
+        // Ensure the ID is not the seed.
         assert_ne!(entries[0].id, zero);
     }
 }

@@ -12,9 +12,11 @@ use std::time::Duration;
 use std::sync::mpsc::channel;
 use std::thread::{spawn, JoinHandle};
 use std::default::Default;
+use serde_json;
 
 pub struct AccountantSkel {
     pub acc: Accountant,
+    pub last_id: Hash,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,7 +36,16 @@ pub enum Response {
 
 impl AccountantSkel {
     pub fn new(acc: Accountant) -> Self {
-        AccountantSkel { acc }
+        let last_id = acc.first_id;
+        AccountantSkel { acc, last_id }
+    }
+
+    pub fn sync(self: &mut Self) -> Hash {
+        while let Ok(entry) = self.acc.historian.receiver.try_recv() {
+            self.last_id = entry.id;
+            println!("{}", serde_json::to_string(&entry).unwrap());
+        }
+        self.last_id
     }
 
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
@@ -52,8 +63,8 @@ impl AccountantSkel {
             Request::GetEntries { .. } => Some(Response::Entries { entries: vec![] }),
             Request::GetId { is_last } => Some(Response::Id {
                 id: if is_last {
-                    self.acc.sync();
-                    self.acc.last_id
+                    self.sync();
+                    self.last_id
                 } else {
                     self.acc.first_id
                 },

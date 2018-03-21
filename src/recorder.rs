@@ -8,10 +8,9 @@
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 use std::mem;
-use hash::Hash;
+use hash::{hash, Hash};
 use entry::{create_entry_mut, Entry};
 use event::Event;
-use serde_json;
 
 pub enum Signal {
     Tick,
@@ -25,12 +24,12 @@ pub enum ExitReason {
 }
 
 pub struct Recorder {
-    pub sender: SyncSender<Entry>,
-    pub receiver: Receiver<Signal>,
-    pub last_id: Hash,
-    pub events: Vec<Event>,
-    pub num_hashes: u64,
-    pub num_ticks: u64,
+    sender: SyncSender<Entry>,
+    receiver: Receiver<Signal>,
+    last_hash: Hash,
+    events: Vec<Event>,
+    num_hashes: u64,
+    num_ticks: u64,
 }
 
 impl Recorder {
@@ -38,18 +37,25 @@ impl Recorder {
         Recorder {
             receiver,
             sender,
-            last_id: start_hash,
+            last_hash: start_hash,
             events: vec![],
             num_hashes: 0,
             num_ticks: 0,
         }
     }
 
-    pub fn record_entry(&mut self) -> Result<Entry, ExitReason> {
+    pub fn hash(&mut self) {
+        self.last_hash = hash(&self.last_hash);
+        self.num_hashes += 1;
+    }
+
+    pub fn record_entry(&mut self) -> Result<(), ExitReason> {
         let events = mem::replace(&mut self.events, vec![]);
-        let entry = create_entry_mut(&mut self.last_id, &mut self.num_hashes, events);
-        println!("{}", serde_json::to_string(&entry).unwrap());
-        Ok(entry)
+        let entry = create_entry_mut(&mut self.last_hash, &mut self.num_hashes, events);
+        self.sender
+            .send(entry)
+            .or(Err(ExitReason::SendDisconnected))?;
+        Ok(())
     }
 
     pub fn process_events(
@@ -68,10 +74,7 @@ impl Recorder {
             match self.receiver.try_recv() {
                 Ok(signal) => match signal {
                     Signal::Tick => {
-                        let entry = self.record_entry()?;
-                        self.sender
-                            .send(entry)
-                            .or(Err(ExitReason::SendDisconnected))?;
+                        self.record_entry()?;
                     }
                     Signal::Event(event) => {
                         self.events.push(event);
