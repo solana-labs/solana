@@ -7,7 +7,7 @@ use std::thread::{spawn, JoinHandle};
 use result::{Error, Result};
 
 const BLOCK_SIZE: usize = 1024 * 8;
-pub const PACKET_SIZE: usize = 256;
+pub const PACKET_SIZE: usize = 1024;
 
 #[derive(Clone)]
 pub struct Packet {

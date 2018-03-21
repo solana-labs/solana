@@ -73,29 +73,46 @@ impl AccountantStub {
         self.get_id(true)
     }
 
-    pub fn wait_on_signature(&mut self, wait_sig: &Signature, last_id: &Hash) -> io::Result<Hash> {
+    pub fn check_on_signature(
+        &mut self,
+        wait_sig: &Signature,
+        last_id: &Hash,
+    ) -> io::Result<(bool, Hash)> {
         let mut last_id = *last_id;
         let req = Request::GetEntries { last_id };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr).map(|_| ())?;
 
-        let mut buf = vec![0u8; 1024];
+        let mut buf = vec![0u8; 65_535];
         self.socket.recv_from(&mut buf)?;
         let resp = deserialize(&buf).expect("deserialize signature");
+        let mut found = false;
         if let Response::Entries { entries } = resp {
             for Entry { id, events, .. } in entries {
                 last_id = id;
-                for event in events {
-                    if let Some(sig) = event.get_signature() {
-                        if sig == *wait_sig {
-                            return Ok(last_id);
+                if !found {
+                    for event in events {
+                        if let Some(sig) = event.get_signature() {
+                            if sig == *wait_sig {
+                                found = true;
+                            }
                         }
                     }
                 }
             }
         }
 
-        // TODO: Loop until we found it.
+        Ok((found, last_id))
+    }
+
+    pub fn wait_on_signature(&mut self, wait_sig: &Signature, last_id: &Hash) -> io::Result<Hash> {
+        let mut found = false;
+        let mut last_id = *last_id;
+        while !found {
+            let ret = self.check_on_signature(wait_sig, &last_id)?;
+            found = ret.0;
+            last_id = ret.1;
+        }
         Ok(last_id)
     }
 }
@@ -116,7 +133,7 @@ mod tests {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
         let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice, None);
+        let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(Mutex::new(false));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(acc)));
