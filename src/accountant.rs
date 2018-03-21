@@ -44,7 +44,6 @@ pub struct Accountant {
     pub historian: Historian,
     pub balances: HashMap<PublicKey, i64>,
     pub first_id: Hash,
-    pub last_id: Hash,
     pending: HashMap<Signature, Plan>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
@@ -67,7 +66,6 @@ impl Accountant {
             historian: hist,
             balances: HashMap::new(),
             first_id: start_hash,
-            last_id: start_hash,
             pending: HashMap::new(),
             time_sources: HashSet::new(),
             last_time: Utc.timestamp(0, 0),
@@ -89,13 +87,6 @@ impl Accountant {
 
     pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
         Self::new_from_entries(mint.create_entries(), ms_per_tick)
-    }
-
-    pub fn sync(self: &mut Self) -> Hash {
-        while let Ok(entry) = self.historian.receiver.try_recv() {
-            self.last_id = entry.id;
-        }
-        self.last_id
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
@@ -210,8 +201,9 @@ impl Accountant {
         n: i64,
         keypair: &KeyPair,
         to: PublicKey,
+        last_id: Hash,
     ) -> Result<Signature> {
-        let tr = Transaction::new(keypair, to, n, self.last_id);
+        let tr = Transaction::new(keypair, to, n, last_id);
         let sig = tr.sig;
         self.process_transaction(tr).map(|_| sig)
     }
@@ -222,8 +214,9 @@ impl Accountant {
         keypair: &KeyPair,
         to: PublicKey,
         dt: DateTime<Utc>,
+        last_id: Hash,
     ) -> Result<Signature> {
-        let tr = Transaction::new_on_date(keypair, to, dt, n, self.last_id);
+        let tr = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tr.sig;
         self.process_transaction(tr).map(|_| sig)
     }
@@ -244,10 +237,12 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut acc = Accountant::new(&alice, Some(2));
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
+            .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
-        acc.transfer(500, &alice.keypair(), bob_pubkey).unwrap();
+        acc.transfer(500, &alice.keypair(), bob_pubkey, alice.seed())
+            .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
 
         drop(acc.historian.sender);
@@ -262,9 +257,10 @@ mod tests {
         let alice = Mint::new(11_000);
         let mut acc = Accountant::new(&alice, Some(2));
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey).unwrap();
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
+            .unwrap();
         assert_eq!(
-            acc.transfer(10_001, &alice.keypair(), bob_pubkey),
+            acc.transfer(10_001, &alice.keypair(), bob_pubkey, alice.seed()),
             Err(AccountingError::InsufficientFunds)
         );
 
@@ -309,7 +305,8 @@ mod tests {
         let mut acc = Accountant::new(&alice, Some(2));
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(500, &alice_keypair, bob_pubkey).unwrap();
+        acc.transfer(500, &alice_keypair, bob_pubkey, alice.seed())
+            .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
 
         drop(acc.historian.sender);
@@ -326,7 +323,7 @@ mod tests {
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.
@@ -355,7 +352,7 @@ mod tests {
         acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
 
         // It's now past now, so this transfer should be processed immediately.
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
             .unwrap();
 
         assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
@@ -369,7 +366,7 @@ mod tests {
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt)
+        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.

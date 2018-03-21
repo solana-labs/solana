@@ -12,9 +12,12 @@ use std::time::Duration;
 use std::sync::mpsc::channel;
 use std::thread::{spawn, JoinHandle};
 use std::default::Default;
+use serde_json;
 
 pub struct AccountantSkel {
     pub acc: Accountant,
+    pub last_id: Hash,
+    pub ledger: Vec<Entry>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,7 +37,21 @@ pub enum Response {
 
 impl AccountantSkel {
     pub fn new(acc: Accountant) -> Self {
-        AccountantSkel { acc }
+        let last_id = acc.first_id;
+        AccountantSkel {
+            acc,
+            last_id,
+            ledger: vec![],
+        }
+    }
+
+    pub fn sync(self: &mut Self) -> Hash {
+        while let Ok(entry) = self.acc.historian.receiver.try_recv() {
+            self.last_id = entry.id;
+            println!("{}", serde_json::to_string(&entry).unwrap());
+            self.ledger.push(entry);
+        }
+        self.last_id
     }
 
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
@@ -49,11 +66,20 @@ impl AccountantSkel {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
-            Request::GetEntries { .. } => Some(Response::Entries { entries: vec![] }),
+            Request::GetEntries { last_id } => {
+                self.sync();
+                let entries = self.ledger
+                    .iter()
+                    .skip_while(|x| x.id != last_id) // log(n) way to find Entry with id == last_id.
+                    .skip(1) // Skip the entry with last_id.
+                    .take(256) // TODO: Take while the serialized entries fit into a 64k UDP packet.
+                    .cloned()
+                    .collect();
+                Some(Response::Entries { entries })
+            }
             Request::GetId { is_last } => Some(Response::Id {
                 id: if is_last {
-                    self.acc.sync();
-                    self.acc.last_id
+                    self.sync()
                 } else {
                     self.acc.first_id
                 },

@@ -65,7 +65,7 @@ fn main() {
         acc.transfer_signed(tr).unwrap();
     }
     println!("Waiting for last transaction to be confirmed...",);
-    acc.wait_on_signature(&sig).unwrap();
+    acc.wait_on_signature(&sig, &last_id).unwrap();
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
