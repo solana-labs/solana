@@ -14,7 +14,6 @@ use accountant_skel::{Request, Response};
 pub struct AccountantStub {
     pub addr: String,
     pub socket: UdpSocket,
-    pub last_id: Option<Hash>,
 }
 
 impl AccountantStub {
@@ -22,7 +21,6 @@ impl AccountantStub {
         AccountantStub {
             addr: addr.to_string(),
             socket,
-            last_id: None,
         }
     }
 
@@ -75,16 +73,8 @@ impl AccountantStub {
         self.get_id(true)
     }
 
-    pub fn wait_on_signature(&mut self, wait_sig: &Signature) -> io::Result<()> {
-        let last_id = match self.last_id {
-            None => {
-                let first_id = self.get_id(false)?;
-                self.last_id = Some(first_id);
-                first_id
-            }
-            Some(last_id) => last_id,
-        };
-
+    pub fn wait_on_signature(&mut self, wait_sig: &Signature, last_id: &Hash) -> io::Result<Hash> {
+        let mut last_id = *last_id;
         let req = Request::GetEntries { last_id };
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr).map(|_| ())?;
@@ -94,11 +84,11 @@ impl AccountantStub {
         let resp = deserialize(&buf).expect("deserialize signature");
         if let Response::Entries { entries } = resp {
             for Entry { id, events, .. } in entries {
-                self.last_id = Some(id);
+                last_id = id;
                 for event in events {
                     if let Some(sig) = event.get_signature() {
                         if sig == *wait_sig {
-                            return Ok(());
+                            return Ok(last_id);
                         }
                     }
                 }
@@ -106,7 +96,7 @@ impl AccountantStub {
         }
 
         // TODO: Loop until we found it.
-        Ok(())
+        Ok(last_id)
     }
 }
 
@@ -138,7 +128,7 @@ mod tests {
         let last_id = acc.get_last_id().unwrap();
         let sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        acc.wait_on_signature(&sig).unwrap();
+        acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
         *exit.lock().unwrap() = true;
         for t in threads.iter() {
