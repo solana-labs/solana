@@ -13,6 +13,7 @@ use historian::{reserve_signature, Historian};
 use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry::Occupied;
 use std::result;
 use chrono::prelude::*;
 
@@ -153,19 +154,13 @@ impl Accountant {
     }
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
-            plan.apply_witness(Witness::Signature(from));
-            if plan.is_complete() {
-                complete_transaction(&mut self.balances, &plan);
+        if let Occupied(mut e) = self.pending.entry(tx_sig) {
+            e.get_mut().apply_witness(Witness::Signature(from));
+            if e.get().is_complete() {
+                complete_transaction(&mut self.balances, e.get());
+                e.remove_entry();
             }
-            plan.is_complete()
-        } else {
-            false
         };
-
-        if actionable {
-            self.pending.remove(&tx_sig);
-        }
 
         Ok(())
     }
