@@ -5,7 +5,7 @@
 use hash::Hash;
 use entry::Entry;
 use event::Event;
-use plan::{Action, Plan, PlanEvent};
+use plan::{Plan, Witness};
 use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
@@ -13,6 +13,7 @@ use historian::{reserve_signature, Historian};
 use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry::Occupied;
 use std::result;
 use chrono::prelude::*;
 
@@ -25,6 +26,19 @@ pub enum AccountingError {
 }
 
 pub type Result<T> = result::Result<T, AccountingError>;
+
+/// Commit funds to the 'to' party.
+fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
+    if let Plan::Pay(ref payment) = *plan {
+        if balances.contains_key(&payment.to) {
+            if let Some(x) = balances.get_mut(&payment.to) {
+                *x += payment.tokens;
+            }
+        } else {
+            balances.insert(payment.to, payment.tokens);
+        }
+    }
+}
 
 pub struct Accountant {
     pub historian: Historian,
@@ -85,7 +99,7 @@ impl Accountant {
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
-        if let Plan::Action(Action::Pay(ref payment)) = *plan {
+        if let Plan::Pay(ref payment) = *plan {
             allow_deposits && *from == payment.to
         } else {
             false
@@ -112,19 +126,6 @@ impl Accountant {
         Ok(())
     }
 
-    /// Commit funds to the 'to' party.
-    fn complete_transaction(self: &mut Self, plan: &Plan) {
-        if let Plan::Action(Action::Pay(ref payment)) = *plan {
-            if self.balances.contains_key(&payment.to) {
-                if let Some(x) = self.balances.get_mut(&payment.to) {
-                    *x += payment.tokens;
-                }
-            } else {
-                self.balances.insert(payment.to, payment.tokens);
-            }
-        }
-    }
-
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
@@ -141,29 +142,25 @@ impl Accountant {
         }
 
         let mut plan = tr.plan.clone();
-        let actionable = plan.process_event(PlanEvent::Timestamp(self.last_time));
+        plan.apply_witness(Witness::Timestamp(self.last_time));
 
-        if !actionable {
+        if plan.is_complete() {
+            complete_transaction(&mut self.balances, &plan);
+        } else {
             self.pending.insert(tr.sig, plan);
-            return Ok(());
         }
 
-        self.complete_transaction(&plan);
         Ok(())
     }
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        let actionable = if let Some(plan) = self.pending.get_mut(&tx_sig) {
-            plan.process_event(PlanEvent::Signature(from))
-        } else {
-            false
-        };
-
-        if actionable {
-            if let Some(plan) = self.pending.remove(&tx_sig) {
-                self.complete_transaction(&plan);
+        if let Occupied(mut e) = self.pending.entry(tx_sig) {
+            e.get_mut().apply_witness(Witness::Signature(from));
+            if e.get().is_complete() {
+                complete_transaction(&mut self.balances, e.get());
+                e.remove_entry();
             }
-        }
+        };
 
         Ok(())
     }
@@ -186,15 +183,15 @@ impl Accountant {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
         for (key, plan) in &mut self.pending {
-            if plan.process_event(PlanEvent::Timestamp(self.last_time)) {
+            plan.apply_witness(Witness::Timestamp(self.last_time));
+            if plan.is_complete() {
+                complete_transaction(&mut self.balances, &plan);
                 completed.push(key.clone());
             }
         }
 
         for key in completed {
-            if let Some(plan) = self.pending.remove(&key) {
-                self.complete_transaction(&plan);
-            }
+            self.pending.remove(&key);
         }
 
         Ok(())
@@ -288,7 +285,7 @@ mod tests {
         let mut acc = Accountant::new(&alice, None);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
-        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
@@ -297,7 +294,7 @@ mod tests {
         );
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Action(Action::Pay(ref mut payment)) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(

@@ -1,8 +1,16 @@
-//! The `plan` crate provides functionality for creating spending plans.
+//! A domain-specific language for payment plans. Users create Plan objects that
+//! are given to an interpreter. The interpreter listens for `Witness` events,
+//! which it uses to reduce the payment plan. When the plan is reduced to a
+//! `Payment`, the payment is executed.
 
 use signature::PublicKey;
 use chrono::prelude::*;
 use std::mem;
+
+pub enum Witness {
+    Timestamp(DateTime<Utc>),
+    Signature(PublicKey),
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
@@ -10,32 +18,12 @@ pub enum Condition {
     Signature(PublicKey),
 }
 
-pub enum PlanEvent {
-    Timestamp(DateTime<Utc>),
-    Signature(PublicKey),
-}
-
 impl Condition {
-    pub fn is_satisfied(&self, event: &PlanEvent) -> bool {
-        match (self, event) {
-            (&Condition::Signature(ref pubkey), &PlanEvent::Signature(ref from)) => pubkey == from,
-            (&Condition::Timestamp(ref dt), &PlanEvent::Timestamp(ref last_time)) => {
-                dt <= last_time
-            }
+    pub fn is_satisfied(&self, witness: &Witness) -> bool {
+        match (self, witness) {
+            (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
+            (&Condition::Timestamp(ref dt), &Witness::Timestamp(ref last_time)) => dt <= last_time,
             _ => false,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Action {
-    Pay(Payment),
-}
-
-impl Action {
-    pub fn spendable(&self) -> i64 {
-        match *self {
-            Action::Pay(ref payment) => payment.tokens,
         }
     }
 }
@@ -48,28 +36,22 @@ pub struct Payment {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
-    Action(Action),
-    After(Condition, Action),
-    Race((Condition, Action), (Condition, Action)),
+    Pay(Payment),
+    After(Condition, Payment),
+    Race((Condition, Payment), (Condition, Payment)),
 }
 
 impl Plan {
     pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
-        Plan::Action(Action::Pay(Payment { tokens, to }))
+        Plan::Pay(Payment { tokens, to })
     }
 
     pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(
-            Condition::Signature(from),
-            Action::Pay(Payment { tokens, to }),
-        )
+        Plan::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     pub fn new_future_payment(dt: DateTime<Utc>, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(
-            Condition::Timestamp(dt),
-            Action::Pay(Payment { tokens, to }),
-        )
+        Plan::After(Condition::Timestamp(dt), Payment { tokens, to })
     }
 
     pub fn new_cancelable_future_payment(
@@ -79,50 +61,40 @@ impl Plan {
         to: PublicKey,
     ) -> Self {
         Plan::Race(
-            (
-                Condition::Timestamp(dt),
-                Action::Pay(Payment { tokens, to }),
-            ),
-            (
-                Condition::Signature(from),
-                Action::Pay(Payment { tokens, to: from }),
-            ),
+            (Condition::Timestamp(dt), Payment { tokens, to }),
+            (Condition::Signature(from), Payment { tokens, to: from }),
         )
+    }
+
+    pub fn is_complete(&self) -> bool {
+        match *self {
+            Plan::Pay(_) => true,
+            _ => false,
+        }
     }
 
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
-            Plan::Action(ref action) => action.spendable() == spendable_tokens,
-            Plan::After(_, ref action) => action.spendable() == spendable_tokens,
+            Plan::Pay(ref payment) => payment.tokens == spendable_tokens,
+            Plan::After(_, ref payment) => payment.tokens == spendable_tokens,
             Plan::Race(ref a, ref b) => {
-                a.1.spendable() == spendable_tokens && b.1.spendable() == spendable_tokens
+                a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
             }
         }
     }
 
-    pub fn process_event(&mut self, event: PlanEvent) -> bool {
-        let mut new_action = None;
-        match *self {
-            Plan::Action(_) => return true,
-            Plan::After(ref cond, ref action) => {
-                if cond.is_satisfied(&event) {
-                    new_action = Some(action.clone());
-                }
-            }
-            Plan::Race(ref a, ref b) => {
-                if a.0.is_satisfied(&event) {
-                    new_action = Some(a.1.clone());
-                } else if b.0.is_satisfied(&event) {
-                    new_action = Some(b.1.clone());
-                }
-            }
-        }
+    /// Apply a witness to the spending plan to see if the plan can be reduced.
+    /// If so, modify the plan in-place.
+    pub fn apply_witness(&mut self, witness: Witness) {
+        let new_payment = match *self {
+            Plan::After(ref cond, ref payment) if cond.is_satisfied(&witness) => Some(payment),
+            Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(&witness) => Some(payment),
+            Plan::Race(_, (ref cond, ref payment)) if cond.is_satisfied(&witness) => Some(payment),
+            _ => None,
+        }.map(|x| x.clone());
 
-        if let Some(action) = new_action {
-            mem::replace(self, Plan::Action(action));
-            true
-        } else {
-            false
+        if let Some(payment) = new_payment {
+            mem::replace(self, Plan::Pay(payment));
         }
     }
 }
@@ -134,16 +106,16 @@ mod tests {
     #[test]
     fn test_signature_satisfied() {
         let sig = PublicKey::default();
-        assert!(Condition::Signature(sig).is_satisfied(&PlanEvent::Signature(sig)));
+        assert!(Condition::Signature(sig).is_satisfied(&Witness::Signature(sig)));
     }
 
     #[test]
     fn test_timestamp_satisfied() {
         let dt1 = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let dt2 = Utc.ymd(2014, 11, 14).and_hms(10, 9, 8);
-        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt1)));
-        assert!(Condition::Timestamp(dt1).is_satisfied(&PlanEvent::Timestamp(dt2)));
-        assert!(!Condition::Timestamp(dt2).is_satisfied(&PlanEvent::Timestamp(dt1)));
+        assert!(Condition::Timestamp(dt1).is_satisfied(&Witness::Timestamp(dt1)));
+        assert!(Condition::Timestamp(dt1).is_satisfied(&Witness::Timestamp(dt2)));
+        assert!(!Condition::Timestamp(dt2).is_satisfied(&Witness::Timestamp(dt1)));
     }
 
     #[test]
@@ -163,7 +135,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_authorized_payment(from, 42, to);
-        assert!(plan.process_event(PlanEvent::Signature(from)));
+        plan.apply_witness(Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -173,7 +145,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_future_payment(dt, 42, to);
-        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        plan.apply_witness(Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -184,11 +156,11 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        assert!(plan.process_event(PlanEvent::Timestamp(dt)));
+        plan.apply_witness(Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        assert!(plan.process_event(PlanEvent::Signature(from)));
+        plan.apply_witness(Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, from));
     }
 }
