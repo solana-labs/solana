@@ -75,8 +75,9 @@ impl Plan {
 
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
-            Plan::Pay(ref payment) => payment.tokens == spendable_tokens,
-            Plan::After(_, ref payment) => payment.tokens == spendable_tokens,
+            Plan::Pay(ref payment) | Plan::After(_, ref payment) => {
+                payment.tokens == spendable_tokens
+            }
             Plan::Race(ref a, ref b) => {
                 a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
             }
@@ -85,13 +86,13 @@ impl Plan {
 
     /// Apply a witness to the spending plan to see if the plan can be reduced.
     /// If so, modify the plan in-place.
-    pub fn apply_witness(&mut self, witness: Witness) {
+    pub fn apply_witness(&mut self, witness: &Witness) {
         let new_payment = match *self {
-            Plan::After(ref cond, ref payment) if cond.is_satisfied(&witness) => Some(payment),
-            Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(&witness) => Some(payment),
-            Plan::Race(_, (ref cond, ref payment)) if cond.is_satisfied(&witness) => Some(payment),
+            Plan::After(ref cond, ref payment) if cond.is_satisfied(witness) => Some(payment),
+            Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(witness) => Some(payment),
+            Plan::Race(_, (ref cond, ref payment)) if cond.is_satisfied(witness) => Some(payment),
             _ => None,
-        }.map(|x| x.clone());
+        }.cloned();
 
         if let Some(payment) = new_payment {
             mem::replace(self, Plan::Pay(payment));
@@ -135,7 +136,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_authorized_payment(from, 42, to);
-        plan.apply_witness(Witness::Signature(from));
+        plan.apply_witness(&Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -145,7 +146,7 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_future_payment(dt, 42, to);
-        plan.apply_witness(Witness::Timestamp(dt));
+        plan.apply_witness(&Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
     }
 
@@ -156,11 +157,11 @@ mod tests {
         let to = PublicKey::default();
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        plan.apply_witness(Witness::Timestamp(dt));
+        plan.apply_witness(&Witness::Timestamp(dt));
         assert_eq!(plan, Plan::new_payment(42, to));
 
         let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
-        plan.apply_witness(Witness::Signature(from));
+        plan.apply_witness(&Witness::Signature(from));
         assert_eq!(plan, Plan::new_payment(42, from));
     }
 }

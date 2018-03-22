@@ -92,13 +92,13 @@ impl AccountantSkel {
         &mut self,
         r_reader: &streamer::Receiver,
         s_sender: &streamer::Sender,
-        recycler: streamer::Recycler,
+        recycler: &streamer::Recycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
         let msgs_ = msgs.clone();
         let msgs__ = msgs.clone();
-        let rsps = streamer::allocate(&recycler);
+        let rsps = streamer::allocate(recycler);
         let rsps_ = rsps.clone();
         let l = msgs__.read().unwrap().packets.len();
         rsps.write()
@@ -124,7 +124,7 @@ impl AccountantSkel {
             ursps.packets.resize(num, streamer::Packet::default());
         }
         s_sender.send(rsps_)?;
-        streamer::recycle(&recycler, msgs_);
+        streamer::recycle(recycler, msgs_);
         Ok(())
     }
 
@@ -150,9 +150,7 @@ impl AccountantSkel {
         let t_server = spawn(move || {
             if let Ok(me) = Arc::try_unwrap(obj) {
                 loop {
-                    let e = me.lock()
-                        .unwrap()
-                        .process(&r_reader, &s_sender, recycler.clone());
+                    let e = me.lock().unwrap().process(&r_reader, &s_sender, &recycler);
                     if e.is_err() && exit.load(Ordering::Relaxed) {
                         break;
                     }
