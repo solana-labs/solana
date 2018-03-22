@@ -12,6 +12,7 @@ use hash::{hash, Hash};
 use entry::{create_entry_mut, Entry};
 use event::Event;
 
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
     Event(Event),

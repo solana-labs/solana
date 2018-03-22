@@ -21,6 +21,7 @@ pub struct AccountantSkel {
     pub ledger: Vec<Entry>,
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
     Transaction(Transaction),
