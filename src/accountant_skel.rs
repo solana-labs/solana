@@ -98,7 +98,7 @@ impl AccountantSkel {
         let msgs = r_reader.recv_timeout(timer)?;
         let msgs_ = msgs.clone();
         let msgs__ = msgs.clone();
-        let rsps = streamer::allocate(recycler.clone());
+        let rsps = streamer::allocate(&recycler);
         let rsps_ = rsps.clone();
         let l = msgs__.read().unwrap().packets.len();
         rsps.write()
@@ -124,7 +124,7 @@ impl AccountantSkel {
             ursps.packets.resize(num, streamer::Packet::default());
         }
         s_sender.send(rsps_)?;
-        streamer::recycle(recycler, msgs_);
+        streamer::recycle(&recycler, msgs_);
         Ok(())
     }
 
