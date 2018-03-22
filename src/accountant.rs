@@ -9,7 +9,7 @@ use plan::{Plan, Witness};
 use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
-use historian::{reserve_signature, Historian};
+use historian::Historian;
 use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
@@ -116,7 +116,7 @@ impl Accountant {
         tr: &Transaction,
         allow_deposits: bool,
     ) -> Result<()> {
-        if !reserve_signature(&mut self.historian.signatures, &tr.sig) {
+        if !self.historian.reserve_signature(&tr.sig) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 

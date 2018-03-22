@@ -32,6 +32,14 @@ impl Historian {
         }
     }
 
+    pub fn reserve_signature(&mut self, sig: &Signature) -> bool {
+        if self.signatures.contains(sig) {
+            return false;
+        }
+        self.signatures.insert(*sig);
+        true
+    }
+
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     fn create_recorder(
@@ -53,14 +61,6 @@ impl Historian {
             }
         })
     }
-}
-
-pub fn reserve_signature(sigs: &mut HashSet<Signature>, sig: &Signature) -> bool {
-    if sigs.contains(sig) {
-        return false;
-    }
-    sigs.insert(*sig);
-    true
 }
 
 #[cfg(test)]
@@ -112,10 +112,11 @@ mod tests {
 
     #[test]
     fn test_duplicate_event_signature() {
-        let mut sigs = HashSet::new();
+        let zero = Hash::default();
+        let mut hist = Historian::new(&zero, None);
         let sig = Signature::default();
-        assert!(reserve_signature(&mut sigs, &sig));
-        assert!(!reserve_signature(&mut sigs, &sig));
+        assert!(hist.reserve_signature(&sig));
+        assert!(!hist.reserve_signature(&sig));
     }
 
     #[test]

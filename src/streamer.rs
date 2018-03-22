@@ -68,10 +68,10 @@ impl Packet {
         match *a {
             SocketAddr::V4(v4) => {
                 let ip = v4.ip().octets();
-                self.addr[0] = ip[0] as u16;
-                self.addr[1] = ip[1] as u16;
-                self.addr[2] = ip[2] as u16;
-                self.addr[3] = ip[3] as u16;
+                self.addr[0] = u16::from(ip[0]);
+                self.addr[1] = u16::from(ip[1]);
+                self.addr[2] = u16::from(ip[2]);
+                self.addr[3] = u16::from(ip[3]);
                 self.port = a.port();
             }
             SocketAddr::V6(v6) => {
@@ -83,7 +83,7 @@ impl Packet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PacketData {
     pub packets: Vec<Packet>,
 }

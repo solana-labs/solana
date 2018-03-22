@@ -35,8 +35,7 @@ impl Event {
     pub fn get_signature(&self) -> Option<Signature> {
         match *self {
             Event::Transaction(ref tr) => Some(tr.sig),
-            Event::Signature { .. } => None,
-            Event::Timestamp { .. } => None,
+            Event::Signature { .. } | Event::Timestamp { .. } => None,
         }
     }
 
