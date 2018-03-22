@@ -108,11 +108,11 @@ impl AccountantSkel {
         {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
-            for packet in msgs.read().unwrap().packets.iter() {
+            for packet in &msgs.read().unwrap().packets {
                 let sz = packet.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = self.process_request(req) {
-                    let rsp = ursps.packets.get_mut(num).unwrap();
+                    let rsp = &mut ursps.packets[num];
                     let v = serialize(&resp)?;
                     let len = v.len();
                     rsp.data[0..len].copy_from_slice(&v);
@@ -148,17 +148,16 @@ impl AccountantSkel {
         let t_sender = streamer::sender(write, exit.clone(), recycler.clone(), r_sender);
 
         let t_server = spawn(move || {
-            match Arc::try_unwrap(obj) {
-                Ok(me) => loop {
+            if let Ok(me) = Arc::try_unwrap(obj) {
+                loop {
                     let e = me.lock()
                         .unwrap()
                         .process(&r_reader, &s_sender, recycler.clone());
                     if e.is_err() && exit.load(Ordering::Relaxed) {
                         break;
                     }
-                },
-                _ => (),
-            };
+                }
+            }
         });
         Ok([Arc::new(t_receiver), Arc::new(t_sender), Arc::new(t_server)])
     }

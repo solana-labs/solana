@@ -33,7 +33,7 @@ fn main() {
         })
         .collect();
     let duration = now.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
+    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
     println!(
@@ -48,7 +48,7 @@ fn main() {
         assert!(tr.verify());
     }
     let duration = now.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
+    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsvps = txs as f64 / ns as f64;
     let nspsv = ns as f64 / txs as f64;
     println!(
@@ -68,7 +68,7 @@ fn main() {
     acc.wait_on_signature(&sig, &last_id).unwrap();
 
     let duration = now.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64;
+    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
     println!("Done. {} tps!", tps);
     let val = acc.get_balance(&mint_pubkey).unwrap().unwrap();

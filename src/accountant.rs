@@ -30,13 +30,7 @@ pub type Result<T> = result::Result<T, AccountingError>;
 /// Commit funds to the 'to' party.
 fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
     if let Plan::Pay(ref payment) = *plan {
-        if balances.contains_key(&payment.to) {
-            if let Some(x) = balances.get_mut(&payment.to) {
-                *x += payment.tokens;
-            }
-        } else {
-            balances.insert(payment.to, payment.tokens);
-        }
+        *balances.entry(payment.to).or_insert(0) += payment.tokens;
     }
 }
 
@@ -176,7 +170,7 @@ impl Accountant {
         for (key, plan) in &mut self.pending {
             plan.apply_witness(Witness::Timestamp(self.last_time));
             if plan.is_complete() {
-                complete_transaction(&mut self.balances, &plan);
+                complete_transaction(&mut self.balances, plan);
                 completed.push(key.clone());
             }
         }
@@ -222,7 +216,7 @@ impl Accountant {
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
-        self.balances.get(pubkey).map(|x| *x)
+        self.balances.get(pubkey).cloned()
     }
 }
 
