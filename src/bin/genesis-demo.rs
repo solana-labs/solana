@@ -10,7 +10,7 @@ use silk::hash::Hash;
 use std::io::stdin;
 
 fn transfer(from: &KeyPair, (to, tokens): (PublicKey, i64), last_id: Hash) -> Event {
-    Event::Transaction(Transaction::new(&from, to, tokens, last_id))
+    Event::Transaction(Transaction::new(from, to, tokens, last_id))
 }
 
 fn main() {

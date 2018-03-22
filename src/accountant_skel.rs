@@ -9,6 +9,7 @@ use result::Result;
 use streamer;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::thread::{spawn, JoinHandle};
 use std::default::Default;
@@ -131,7 +132,7 @@ impl AccountantSkel {
     pub fn serve(
         obj: Arc<Mutex<AccountantSkel>>,
         addr: &str,
-        exit: Arc<Mutex<bool>>,
+        exit: Arc<AtomicBool>,
     ) -> Result<[Arc<JoinHandle<()>>; 3]> {
         let read = UdpSocket::bind(addr)?;
         // make sure we are on the same interface
@@ -152,7 +153,7 @@ impl AccountantSkel {
                     let e = me.lock()
                         .unwrap()
                         .process(&r_reader, &s_sender, recycler.clone());
-                    if e.is_err() && *exit.lock().unwrap() {
+                    if e.is_err() && exit.load(Ordering::Relaxed) {
                         break;
                     }
                 },

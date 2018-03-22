@@ -5,6 +5,7 @@ use silk::accountant_skel::AccountantSkel;
 use silk::accountant::Accountant;
 use std::io::{self, BufRead};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicBool;
 
 fn main() {
     let addr = "127.0.0.1:8000";
@@ -14,7 +15,7 @@ fn main() {
         .lines()
         .map(|line| serde_json::from_str(&line.unwrap()).unwrap());
     let acc = Accountant::new_from_entries(entries, Some(1000));
-    let exit = Arc::new(Mutex::new(false));
+    let exit = Arc::new(AtomicBool::new(false));
     let skel = Arc::new(Mutex::new(AccountantSkel::new(acc)));
     eprintln!("Listening on {}", addr);
     let _threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
