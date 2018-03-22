@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::fmt;
 use std::time::Duration;
@@ -64,16 +65,16 @@ impl Packet {
     }
 
     pub fn set_addr(&mut self, a: &SocketAddr) {
-        match a {
-            &SocketAddr::V4(v4) => {
+        match *a {
+            SocketAddr::V4(v4) => {
                 let ip = v4.ip().octets();
-                self.addr[0] = ip[0] as u16;
-                self.addr[1] = ip[1] as u16;
-                self.addr[2] = ip[2] as u16;
-                self.addr[3] = ip[3] as u16;
+                self.addr[0] = u16::from(ip[0]);
+                self.addr[1] = u16::from(ip[1]);
+                self.addr[2] = u16::from(ip[2]);
+                self.addr[3] = u16::from(ip[3]);
                 self.port = a.port();
             }
-            &SocketAddr::V6(v6) => {
+            SocketAddr::V6(v6) => {
                 self.addr = v6.ip().segments();
                 self.port = a.port();
                 self.v6 = true;
@@ -82,7 +83,7 @@ impl Packet {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PacketData {
     pub packets: Vec<Packet>,
 }
@@ -101,7 +102,7 @@ impl PacketData {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
         self.packets.resize(BLOCK_SIZE, Packet::default());
         let mut i = 0;
-        for p in self.packets.iter_mut() {
+        for p in &mut self.packets {
             p.size = 0;
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
@@ -130,7 +131,7 @@ impl PacketData {
         Ok(())
     }
     fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
-        for p in self.packets.iter() {
+        for p in &self.packets {
             let a = p.get_addr();
             socket.send_to(&p.data[0..p.size], &a)?;
             //TODO(anatoly): wtf do we do about errors?
@@ -140,35 +141,35 @@ impl PacketData {
     }
 }
 
-pub fn allocate(recycler: Recycler) -> SharedPacketData {
+pub fn allocate(recycler: &Recycler) -> SharedPacketData {
     let mut gc = recycler.lock().expect("lock");
     gc.pop()
         .unwrap_or_else(|| Arc::new(RwLock::new(PacketData::new())))
 }
 
-pub fn recycle(recycler: Recycler, msgs: SharedPacketData) {
+pub fn recycle(recycler: &Recycler, msgs: SharedPacketData) {
     let mut gc = recycler.lock().expect("lock");
     gc.push(msgs);
 }
 
 fn recv_loop(
     sock: &UdpSocket,
-    exit: Arc<Mutex<bool>>,
-    recycler: Recycler,
-    channel: Sender,
+    exit: &Arc<AtomicBool>,
+    recycler: &Recycler,
+    channel: &Sender,
 ) -> Result<()> {
     loop {
-        let msgs = allocate(recycler.clone());
+        let msgs = allocate(recycler);
         let msgs_ = msgs.clone();
         loop {
-            match msgs.write().unwrap().read_from(&sock) {
+            match msgs.write().unwrap().read_from(sock) {
                 Ok(()) => {
                     channel.send(msgs_)?;
                     break;
                 }
                 Err(_) => {
-                    if *exit.lock().unwrap() {
-                        recycle(recycler.clone(), msgs_);
+                    if exit.load(Ordering::Relaxed) {
+                        recycle(recycler, msgs_);
                         return Ok(());
                     }
                 }
@@ -179,19 +180,19 @@ fn recv_loop(
 
 pub fn receiver(
     sock: UdpSocket,
-    exit: Arc<Mutex<bool>>,
+    exit: Arc<AtomicBool>,
     recycler: Recycler,
     channel: Sender,
 ) -> Result<JoinHandle<()>> {
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))?;
     Ok(spawn(move || {
-        let _ = recv_loop(&sock, exit, recycler, channel);
+        let _ = recv_loop(&sock, &exit, &recycler, &channel);
         ()
     }))
 }
 
-fn recv_send(sock: &UdpSocket, recycler: Recycler, r: &Receiver) -> Result<()> {
+fn recv_send(sock: &UdpSocket, recycler: &Recycler, r: &Receiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
     let msgs_ = msgs.clone();
@@ -203,12 +204,12 @@ fn recv_send(sock: &UdpSocket, recycler: Recycler, r: &Receiver) -> Result<()> {
 
 pub fn sender(
     sock: UdpSocket,
-    exit: Arc<Mutex<bool>>,
+    exit: Arc<AtomicBool>,
     recycler: Recycler,
     r: Receiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, recycler.clone(), &r).is_err() && *exit.lock().unwrap() {
+        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
             break;
         }
     })
@@ -228,16 +229,16 @@ mod bench {
     use result::Result;
     use streamer::{allocate, receiver, recycle, Packet, Receiver, Recycler, PACKET_SIZE};
 
-    fn producer(addr: &SocketAddr, recycler: Recycler, exit: Arc<Mutex<bool>>) -> JoinHandle<()> {
+    fn producer(addr: &SocketAddr, recycler: &Recycler, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let msgs = allocate(recycler.clone());
+        let msgs = allocate(recycler);
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for w in msgs.write().unwrap().packets.iter_mut() {
             w.size = PACKET_SIZE;
             w.set_addr(&addr);
         }
         spawn(move || loop {
-            if *exit.lock().unwrap() {
+            if exit.load(Ordering::Relaxed) {
                 return;
             }
             let mut num = 0;
@@ -247,13 +248,13 @@ mod bench {
     }
 
     fn sinc(
-        recycler: Recycler,
-        exit: Arc<Mutex<bool>>,
+        recycler: &Recycler,
+        exit: Arc<AtomicBool>,
         rvs: Arc<Mutex<usize>>,
         r: Receiver,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            if *exit.lock().unwrap() {
+            if exit.load(Ordering::Relaxed) {
                 return;
             }
             let timer = Duration::new(1, 0);
@@ -261,7 +262,7 @@ mod bench {
                 Ok(msgs) => {
                     let msgs_ = msgs.clone();
                     *rvs.lock().unwrap() += msgs.read().unwrap().packets.len();
-                    recycle(recycler.clone(), msgs_);
+                    recycle(recycler, msgs_);
                 }
                 _ => (),
             }
@@ -270,14 +271,14 @@ mod bench {
     fn run_streamer_bench() -> Result<()> {
         let read = UdpSocket::bind("127.0.0.1:0")?;
         let addr = read.local_addr()?;
-        let exit = Arc::new(Mutex::new(false));
+        let exit = Arc::new(AtomicBool::new(false));
         let recycler = Arc::new(Mutex::new(Vec::new()));
 
         let (s_reader, r_reader) = channel();
-        let t_reader = receiver(read, exit.clone(), recycler.clone(), s_reader)?;
-        let t_producer1 = producer(&addr, recycler.clone(), exit.clone());
-        let t_producer2 = producer(&addr, recycler.clone(), exit.clone());
-        let t_producer3 = producer(&addr, recycler.clone(), exit.clone());
+        let t_reader = receiver(read, exit.clone(), &recycler, s_reader)?;
+        let t_producer1 = producer(&addr, &recycler, exit.clone());
+        let t_producer2 = producer(&addr, &recycler, exit.clone());
+        let t_producer3 = producer(&addr, &recycler, exit.clone());
 
         let rvs = Arc::new(Mutex::new(0));
         let t_sinc = sinc(recycler.clone(), exit.clone(), rvs.clone(), r_reader);
@@ -291,7 +292,7 @@ mod bench {
         let ftime = (time as f64) / 10000000000f64;
         let fcount = (end_val - start_val) as f64;
         println!("performance: {:?}", fcount / ftime);
-        *exit.lock().unwrap() = true;
+        exit.store(true, Ordering::Relaxed);
         t_reader.join()?;
         t_producer1.join()?;
         t_producer2.join()?;
@@ -310,6 +311,7 @@ mod test {
     use std::sync::{Arc, Mutex};
     use std::net::UdpSocket;
     use std::time::Duration;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::io::Write;
     use std::io;
@@ -339,7 +341,7 @@ mod test {
         let t_receiver = receiver(read, exit.clone(), recycler.clone(), s_reader).unwrap();
         let (s_sender, r_sender) = channel();
         let t_sender = sender(send, exit.clone(), recycler.clone(), r_sender);
-        let msgs = allocate(recycler.clone());
+        let msgs = allocate(&recycler);
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
             w.data[0] = i as u8;
@@ -351,7 +353,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        *exit.lock().unwrap() = true;
+        exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_sender.join().expect("join");
     }
@@ -364,13 +366,13 @@ mod test {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let exit = Arc::new(Mutex::new(false));
+        let exit = Arc::new(AtomicBool::new(false));
         let recycler = Arc::new(Mutex::new(Vec::new()));
         let (s_reader, r_reader) = channel();
         let t_receiver = receiver(read, exit.clone(), recycler.clone(), s_reader).unwrap();
         let (s_sender, r_sender) = channel();
         let t_sender = sender(send, exit.clone(), recycler.clone(), r_sender);
-        let msgs = allocate(recycler.clone());
+        let msgs = allocate(&recycler);
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
             w.data[0] = i as u8;
@@ -382,7 +384,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        *exit.lock().unwrap() = true;
+        exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_sender.join().expect("join");
     }

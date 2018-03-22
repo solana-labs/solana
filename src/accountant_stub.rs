@@ -127,6 +127,7 @@ mod tests {
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::{Arc, Mutex};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
     fn test_accountant_stub() {
@@ -135,7 +136,7 @@ mod tests {
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
-        let exit = Arc::new(Mutex::new(false));
+        let exit = Arc::new(AtomicBool::new(false));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(acc)));
         let threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(30));
@@ -147,7 +148,7 @@ mod tests {
             .unwrap();
         acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
-        *exit.lock().unwrap() = true;
+        exit.store(true, Ordering::Relaxed);
         for t in threads.iter() {
             match Arc::try_unwrap((*t).clone()) {
                 Ok(j) => j.join().expect("join"),

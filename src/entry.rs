@@ -9,8 +9,8 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// Creates a Entry from the number of hashes 'num_hashes' since the previous event
-    /// and that resulting 'id'.
+    /// Creates a Entry from the number of hashes `num_hashes` since the previous event
+    /// and that resulting `id`.
     pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
         Entry {
             num_hashes,
@@ -19,7 +19,7 @@ impl Entry {
         }
     }
 
-    /// Verifies self.id is the result of hashing a 'start_hash' 'self.num_hashes' times.
+    /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the event is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
         for event in &self.events {
@@ -31,7 +31,7 @@ impl Entry {
     }
 }
 
-/// Creates the hash 'num_hashes' after start_hash. If the event contains
+/// Creates the hash `num_hashes` after `start_hash`. If the event contains
 /// signature, the final hash will be a hash of both the previous ID and
 /// the signature.
 pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
@@ -56,7 +56,7 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
     id
 }
 
-/// Creates the next Entry 'num_hashes' after 'start_hash'.
+/// Creates the next Entry `num_hashes` after `start_hash`.
 pub fn create_entry(start_hash: &Hash, cur_hashes: u64, events: Vec<Event>) -> Entry {
     let num_hashes = cur_hashes + if events.is_empty() { 0 } else { 1 };
     let id = next_hash(start_hash, 0, &events);
@@ -67,7 +67,7 @@ pub fn create_entry(start_hash: &Hash, cur_hashes: u64, events: Vec<Event>) -> E
     }
 }
 
-/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+/// Creates the next Tick Entry `num_hashes` after `start_hash`.
 pub fn create_entry_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Event>) -> Entry {
     let entry = create_entry(start_hash, *cur_hashes, events);
     *start_hash = entry.id;
@@ -75,7 +75,7 @@ pub fn create_entry_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec
     entry
 }
 
-/// Creates the next Tick Entry 'num_hashes' after 'start_hash'.
+/// Creates the next Tick Entry `num_hashes` after `start_hash`.
 pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
     Entry {
         num_hashes,

@@ -9,7 +9,7 @@ use plan::{Plan, Witness};
 use transaction::Transaction;
 use signature::{KeyPair, PublicKey, Signature};
 use mint::Mint;
-use historian::{reserve_signature, Historian};
+use historian::Historian;
 use recorder::Signal;
 use std::sync::mpsc::SendError;
 use std::collections::{HashMap, HashSet};
@@ -30,13 +30,7 @@ pub type Result<T> = result::Result<T, AccountingError>;
 /// Commit funds to the 'to' party.
 fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
     if let Plan::Pay(ref payment) = *plan {
-        if balances.contains_key(&payment.to) {
-            if let Some(x) = balances.get_mut(&payment.to) {
-                *x += payment.tokens;
-            }
-        } else {
-            balances.insert(payment.to, payment.tokens);
-        }
+        *balances.entry(payment.to).or_insert(0) += payment.tokens;
     }
 }
 
@@ -122,7 +116,7 @@ impl Accountant {
         tr: &Transaction,
         allow_deposits: bool,
     ) -> Result<()> {
-        if !reserve_signature(&mut self.historian.signatures, &tr.sig) {
+        if !self.historian.reserve_signature(&tr.sig) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
@@ -133,7 +127,7 @@ impl Accountant {
         }
 
         let mut plan = tr.plan.clone();
-        plan.apply_witness(Witness::Timestamp(self.last_time));
+        plan.apply_witness(&Witness::Timestamp(self.last_time));
 
         if plan.is_complete() {
             complete_transaction(&mut self.balances, &plan);
@@ -146,7 +140,7 @@ impl Accountant {
 
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending.entry(tx_sig) {
-            e.get_mut().apply_witness(Witness::Signature(from));
+            e.get_mut().apply_witness(&Witness::Signature(from));
             if e.get().is_complete() {
                 complete_transaction(&mut self.balances, e.get());
                 e.remove_entry();
@@ -174,9 +168,9 @@ impl Accountant {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
         for (key, plan) in &mut self.pending {
-            plan.apply_witness(Witness::Timestamp(self.last_time));
+            plan.apply_witness(&Witness::Timestamp(self.last_time));
             if plan.is_complete() {
-                complete_transaction(&mut self.balances, &plan);
+                complete_transaction(&mut self.balances, plan);
                 completed.push(key.clone());
             }
         }
@@ -222,7 +216,7 @@ impl Accountant {
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
-        self.balances.get(pubkey).map(|x| *x)
+        self.balances.get(pubkey).cloned()
     }
 }
 

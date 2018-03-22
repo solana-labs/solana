@@ -9,6 +9,7 @@ use result::Result;
 use streamer;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::thread::{spawn, JoinHandle};
 use std::default::Default;
@@ -20,6 +21,7 @@ pub struct AccountantSkel {
     pub ledger: Vec<Entry>,
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Request {
     Transaction(Transaction),
@@ -91,13 +93,13 @@ impl AccountantSkel {
         &mut self,
         r_reader: &streamer::Receiver,
         s_sender: &streamer::Sender,
-        recycler: streamer::Recycler,
+        recycler: &streamer::Recycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
         let msgs_ = msgs.clone();
         let msgs__ = msgs.clone();
-        let rsps = streamer::allocate(recycler.clone());
+        let rsps = streamer::allocate(recycler);
         let rsps_ = rsps.clone();
         let l = msgs__.read().unwrap().packets.len();
         rsps.write()
@@ -107,11 +109,11 @@ impl AccountantSkel {
         {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
-            for packet in msgs.read().unwrap().packets.iter() {
+            for packet in &msgs.read().unwrap().packets {
                 let sz = packet.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = self.process_request(req) {
-                    let rsp = ursps.packets.get_mut(num).unwrap();
+                    let rsp = &mut ursps.packets[num];
                     let v = serialize(&resp)?;
                     let len = v.len();
                     rsp.data[0..len].copy_from_slice(&v);
@@ -131,7 +133,7 @@ impl AccountantSkel {
     pub fn serve(
         obj: Arc<Mutex<AccountantSkel>>,
         addr: &str,
-        exit: Arc<Mutex<bool>>,
+        exit: Arc<AtomicBool>,
     ) -> Result<[Arc<JoinHandle<()>>; 3]> {
         let read = UdpSocket::bind(addr)?;
         // make sure we are on the same interface
@@ -147,17 +149,14 @@ impl AccountantSkel {
         let t_sender = streamer::sender(write, exit.clone(), recycler.clone(), r_sender);
 
         let t_server = spawn(move || {
-            match Arc::try_unwrap(obj) {
-                Ok(me) => loop {
-                    let e = me.lock()
-                        .unwrap()
-                        .process(&r_reader, &s_sender, recycler.clone());
-                    if e.is_err() && *exit.lock().unwrap() {
+            if let Ok(me) = Arc::try_unwrap(obj) {
+                loop {
+                    let e = me.lock().unwrap().process(&r_reader, &s_sender, &recycler);
+                    if e.is_err() && exit.load(Ordering::Relaxed) {
                         break;
                     }
-                },
-                _ => (),
-            };
+                }
+            }
         });
         Ok([Arc::new(t_receiver), Arc::new(t_sender), Arc::new(t_server)])
     }
