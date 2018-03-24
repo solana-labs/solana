@@ -18,5 +18,8 @@ fn main() {
     let exit = Arc::new(AtomicBool::new(false));
     let skel = Arc::new(Mutex::new(AccountantSkel::new(acc)));
     eprintln!("Listening on {}", addr);
-    let _threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
+    let threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
+    for t in threads {
+        t.join().expect("join");
+    }
 }
