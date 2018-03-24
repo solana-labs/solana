@@ -134,7 +134,7 @@ impl AccountantSkel {
         obj: Arc<Mutex<AccountantSkel>>,
         addr: &str,
         exit: Arc<AtomicBool>,
-    ) -> Result<[Arc<JoinHandle<()>>; 3]> {
+    ) -> Result<Vec<JoinHandle<()>>> {
         let read = UdpSocket::bind(addr)?;
         // make sure we are on the same interface
         let mut local = read.local_addr()?;
@@ -158,6 +158,6 @@ impl AccountantSkel {
                 }
             }
         });
-        Ok([Arc::new(t_receiver), Arc::new(t_sender), Arc::new(t_server)])
+        Ok(vec![t_receiver, t_sender, t_server])
     }
 }

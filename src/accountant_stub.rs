@@ -149,11 +149,8 @@ mod tests {
         acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in threads.iter() {
-            match Arc::try_unwrap((*t).clone()) {
-                Ok(j) => j.join().expect("join"),
-                _ => (),
-            }
+        for t in threads {
+            t.join().expect("join");
         }
     }
 }
