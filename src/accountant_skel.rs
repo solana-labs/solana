@@ -126,7 +126,7 @@ impl AccountantSkel {
             ursps.packets.resize(num, streamer::Packet::default());
         }
         s_responder.send(rsps_)?;
-        streamer::recycle(recycler, msgs_);
+        streamer::recycle(packet_recycler, msgs_);
         Ok(())
     }
 

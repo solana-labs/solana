@@ -90,6 +90,7 @@ impl Meta {
     }
 }
 
+#[derive(Debug)]
 pub struct Packets {
     pub packets: Vec<Packet>,
 }
@@ -128,6 +129,7 @@ impl Default for Response {
     }
 }
 
+#[derive(Debug)]
 pub struct Responses {
     pub responses: Vec<Response>,
 }
@@ -153,6 +155,7 @@ impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
         self.packets.resize(BLOCK_SIZE, Packet::default());
         let mut i = 0;
+        socket.set_nonblocking(false)?;
         for p in &mut self.packets {
             p.meta.size = 0;
             match socket.recv_from(&mut p.data) {
@@ -183,6 +186,18 @@ impl Packets {
     }
     fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
         for p in &self.packets {
+            let a = p.meta.get_addr();
+            socket.send_to(&p.data[..p.meta.size], &a)?;
+            //TODO(anatoly): wtf do we do about errors?
+            *num += 1;
+        }
+        Ok(())
+    }
+}
+
+impl Responses {
+    fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
+        for p in &self.responses {
             let a = p.meta.get_addr();
             socket.send_to(&p.data[..p.meta.size], &a)?;
             //TODO(anatoly): wtf do we do about errors?
@@ -372,7 +387,7 @@ mod test {
     use std::sync::mpsc::channel;
     use std::io::Write;
     use std::io;
-    use streamer::{allocate, receiver, responder, Packet, Receiver, Responses, PACKET_SIZE};
+    use streamer::{allocate, receiver, responder, Packet, Receiver, Response, PACKET_SIZE};
 
     fn get_msgs(r: Receiver, num: &mut usize) {
         for _t in 0..5 {
@@ -434,7 +449,7 @@ mod test {
         msgs.write()
             .unwrap()
             .responses
-            .resize(10, Responses::default());
+            .resize(10, Response::default());
         for (i, w) in msgs.write().unwrap().responses.iter_mut().enumerate() {
             w.data[0] = i as u8;
             w.meta.size = PACKET_SIZE;
