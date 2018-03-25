@@ -378,7 +378,8 @@ mod test {
     use std::sync::mpsc::channel;
     use std::io::Write;
     use std::io;
-    use streamer::{allocate, receiver, responder, Packet, Receiver, Response, PACKET_SIZE};
+    use streamer::{allocate, receiver, responder, Packet, Packets, Receiver, Response, Responses,
+                   PACKET_SIZE};
 
     fn get_msgs(r: Receiver, num: &mut usize) {
         for _t in 0..5 {
@@ -423,6 +424,9 @@ mod test {
     #[test]
     pub fn streamer_debug() {
         write!(io::sink(), "{:?}", Packet::default()).unwrap();
+        write!(io::sink(), "{:?}", Packets::default()).unwrap();
+        write!(io::sink(), "{:?}", Response::default()).unwrap();
+        write!(io::sink(), "{:?}", Responses::default()).unwrap();
     }
     #[test]
     pub fn streamer_send_test() {
