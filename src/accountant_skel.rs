@@ -110,7 +110,9 @@ impl AccountantSkel {
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = self.process_request(req) {
                     if ursps.len() <= num {
-                        ursps.responses.resize(num * 2, streamer::Response::default());
+                        ursps
+                            .responses
+                            .resize(num * 2, streamer::Response::default());
                     }
                     let rsp = &mut ursps.responses[num];
                     let v = serialize(&resp)?;
@@ -146,12 +148,18 @@ impl AccountantSkel {
         let t_receiver = streamer::receiver(read, exit.clone(), packet_recycler.clone(), s_reader)?;
 
         let (s_responder, r_responder) = channel();
-        let t_responder = streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
+        let t_responder =
+            streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
 
         let t_server = spawn(move || {
             if let Ok(me) = Arc::try_unwrap(obj) {
                 loop {
-                    let e = me.lock().unwrap().process(&r_reader, &s_responder, &packet_recycler, &response_recycler);
+                    let e = me.lock().unwrap().process(
+                        &r_reader,
+                        &s_responder,
+                        &packet_recycler,
+                        &response_recycler,
+                    );
                     if e.is_err() && exit.load(Ordering::Relaxed) {
                         break;
                     }
