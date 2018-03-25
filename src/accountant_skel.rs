@@ -111,7 +111,7 @@ impl AccountantSkel {
                     if ursps.responses.len() <= num {
                         ursps
                             .responses
-                            .resize(num * 2, streamer::Response::default());
+                            .resize((num + 1) * 2, streamer::Response::default());
                     }
                     let rsp = &mut ursps.responses[num];
                     let v = serialize(&resp)?;
