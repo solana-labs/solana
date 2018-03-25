@@ -99,7 +99,6 @@ impl AccountantSkel {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
         let msgs_ = msgs.clone();
-        let msgs__ = msgs.clone();
         let rsps = streamer::allocate(response_recycler);
         let rsps_ = rsps.clone();
         {
@@ -109,7 +108,7 @@ impl AccountantSkel {
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = self.process_request(req) {
-                    if ursps.len() <= num {
+                    if ursps.responses.len() <= num {
                         ursps
                             .responses
                             .resize(num * 2, streamer::Response::default());
@@ -123,7 +122,7 @@ impl AccountantSkel {
                     num += 1;
                 }
             }
-            ursps.packets.resize(num, streamer::Packet::default());
+            ursps.responses.resize(num, streamer::Response::default());
         }
         s_responder.send(rsps_)?;
         streamer::recycle(packet_recycler, msgs_);

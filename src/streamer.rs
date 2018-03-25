@@ -184,15 +184,6 @@ impl Packets {
         self.packets.resize(sz, Packet::default());
         Ok(())
     }
-    fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
-        for p in &self.packets {
-            let a = p.meta.get_addr();
-            socket.send_to(&p.data[..p.meta.size], &a)?;
-            //TODO(anatoly): wtf do we do about errors?
-            *num += 1;
-        }
-        Ok(())
-    }
 }
 
 impl Responses {
