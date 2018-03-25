@@ -8,23 +8,27 @@ use std::thread::{spawn, JoinHandle};
 use result::{Error, Result};
 
 const BLOCK_SIZE: usize = 1024 * 8;
-pub const PACKET_SIZE: usize = 1024;
-
-#[derive(Clone)]
-pub struct Packet {
-    pub data: [u8; PACKET_SIZE],
+pub const PACKET_SIZE: usize = 256;
+#[derive(Clone, Default)]
+pub struct Meta {
     pub size: usize,
     pub addr: [u16; 8],
     pub port: u16,
     pub v6: bool,
+}
+
+#[derive(Clone)]
+pub struct Packet {
+    pub data: [u8; PACKET_SIZE],
+    pub meta: Meta,
 }
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "Packet {{ size: {:?}, addr: {:?} }}",
-            self.size,
-            self.get_addr()
+            self.meta.size,
+            self.meta.get_addr()
         )
     }
 }
@@ -32,14 +36,11 @@ impl Default for Packet {
     fn default() -> Packet {
         Packet {
             data: [0u8; PACKET_SIZE],
-            size: 0,
-            addr: [0u16; 8],
-            port: 0,
-            v6: false,
+            meta: Meta::default(),
         }
     }
 }
-impl Packet {
+impl Meta {
     pub fn get_addr(&self) -> SocketAddr {
         if !self.v6 {
             let ipv4 = Ipv4Addr::new(
@@ -103,7 +104,7 @@ impl PacketData {
         self.packets.resize(BLOCK_SIZE, Packet::default());
         let mut i = 0;
         for p in &mut self.packets {
-            p.size = 0;
+            p.meta.size = 0;
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
                     trace!("got {:?} messages", i);
@@ -114,8 +115,8 @@ impl PacketData {
                     return Err(Error::IO(e));
                 }
                 Ok((nrecv, from)) => {
-                    p.size = nrecv;
-                    p.set_addr(&from);
+                    p.meta.size = nrecv;
+                    p.meta.set_addr(&from);
                     if i == 0 {
                         socket.set_nonblocking(true)?;
                     }
@@ -132,8 +133,8 @@ impl PacketData {
     }
     fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
         for p in &self.packets {
-            let a = p.get_addr();
-            socket.send_to(&p.data[0..p.size], &a)?;
+            let a = p.meta.get_addr();
+            socket.send_to(&p.data[..p.meta.size], &a)?;
             //TODO(anatoly): wtf do we do about errors?
             *num += 1;
         }
@@ -376,9 +377,9 @@ mod test {
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
             w.data[0] = i as u8;
-            w.size = PACKET_SIZE;
-            w.set_addr(&addr);
-            assert_eq!(w.get_addr(), addr);
+            w.meta.size = PACKET_SIZE;
+            w.meta.set_addr(&addr);
+            assert_eq!(w.meta.get_addr(), addr);
         }
         s_sender.send(msgs).expect("send");
         let mut num = 0;

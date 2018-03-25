@@ -110,15 +110,15 @@ impl AccountantSkel {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
             for packet in &msgs.read().unwrap().packets {
-                let sz = packet.size;
+                let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = self.process_request(req) {
                     let rsp = &mut ursps.packets[num];
                     let v = serialize(&resp)?;
                     let len = v.len();
                     rsp.data[0..len].copy_from_slice(&v);
-                    rsp.size = len;
-                    rsp.set_addr(&packet.get_addr());
+                    rsp.meta.size = len;
+                    rsp.meta.set_addr(&packet.meta.get_addr());
                     num += 1;
                 }
             }

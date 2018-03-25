@@ -13,6 +13,7 @@ pub enum Error {
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     SendError,
+    Services,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
