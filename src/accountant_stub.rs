@@ -143,6 +143,9 @@ mod tests {
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
+        //make sure we fail and don't hang
+        let timer = Duration::new(30, 0);
+        socket.set_read_timeout(Some(timer)).unwrap();
         let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().unwrap();
         let sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
