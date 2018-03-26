@@ -127,28 +127,33 @@ mod tests {
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::{Arc, Mutex};
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::io::sink;
+    use env_logger;
 
     #[test]
     fn test_accountant_stub() {
+        env_logger::init();
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc)));
+        let exit = Arc::new(Mutex::new(false));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, sink())));
         let threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(30));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
+        //make sure we fail and don't hang
+        let timer = Duration::new(30, 0);
+        socket.set_read_timeout(Some(timer)).unwrap();
         let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().unwrap();
         let sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
         acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
-        exit.store(true, Ordering::Relaxed);
+        *exit.lock().unwrap() = true;
         for t in threads {
             t.join().expect("join");
         }

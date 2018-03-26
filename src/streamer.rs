@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex, RwLock};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::fmt;
 use std::time::Duration;
@@ -57,16 +56,7 @@ impl Meta {
             );
             SocketAddr::new(IpAddr::V4(ipv4), self.port)
         } else {
-            let ipv6 = Ipv6Addr::new(
-                self.addr[0],
-                self.addr[1],
-                self.addr[2],
-                self.addr[3],
-                self.addr[4],
-                self.addr[5],
-                self.addr[6],
-                self.addr[7],
-            );
+            let ipv6 = Ipv6Addr::from(self.addr);
             SocketAddr::new(IpAddr::V6(ipv6), self.port)
         }
     }
@@ -217,7 +207,7 @@ where
 
 fn recv_loop(
     sock: &UdpSocket,
-    exit: &Arc<AtomicBool>,
+    exit: &Arc<Mutex<bool>>,
     recycler: &PacketRecycler,
     channel: &Sender,
 ) -> Result<()> {
@@ -231,7 +221,8 @@ fn recv_loop(
                     break;
                 }
                 Err(_) => {
-                    if exit.load(Ordering::Relaxed) {
+                    if *exit.lock().unwrap() {
+                        info!("reciever exiting");
                         recycle(recycler, msgs_);
                         return Ok(());
                     }
@@ -243,7 +234,7 @@ fn recv_loop(
 
 pub fn receiver(
     sock: UdpSocket,
-    exit: Arc<AtomicBool>,
+    exit: Arc<Mutex<bool>>,
     recycler: PacketRecycler,
     channel: Sender,
 ) -> Result<JoinHandle<()>> {
@@ -267,12 +258,13 @@ fn recv_send(sock: &UdpSocket, recycler: &ResponseRecycler, r: &ResponseReceiver
 
 pub fn responder(
     sock: UdpSocket,
-    exit: Arc<AtomicBool>,
+    exit: Arc<Mutex<bool>>,
     recycler: ResponseRecycler,
     r: ResponseReceiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
+        if recv_send(&sock, &recycler, &r).is_err() && *exit.lock().unwrap() {
+            info!("responder exiting");
             break;
         }
     })
@@ -289,14 +281,13 @@ mod bench {
     use std::time::SystemTime;
     use std::thread::{spawn, JoinHandle};
     use std::sync::mpsc::channel;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use result::Result;
     use streamer::{allocate, receiver, recycle, Packet, PacketRecycler, Receiver, PACKET_SIZE};
 
     fn producer(
         addr: &SocketAddr,
         recycler: PacketRecycler,
-        exit: Arc<AtomicBool>,
+        exit: Arc<Mutex<bool>>,
     ) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let msgs = allocate(&recycler);
@@ -307,7 +298,7 @@ mod bench {
             w.meta.set_addr(&addr);
         }
         spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
+            if *exit.lock().unwrap() {
                 return;
             }
             let mut num = 0;
@@ -320,14 +311,14 @@ mod bench {
         })
     }
 
-    fn sinc(
+    fn sink(
         recycler: PacketRecycler,
-        exit: Arc<AtomicBool>,
+        exit: Arc<Mutex<bool>>,
         rvs: Arc<Mutex<usize>>,
         r: Receiver,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
+            if *exit.lock().unwrap() {
                 return;
             }
             let timer = Duration::new(1, 0);
@@ -344,7 +335,7 @@ mod bench {
     fn run_streamer_bench() -> Result<()> {
         let read = UdpSocket::bind("127.0.0.1:0")?;
         let addr = read.local_addr()?;
-        let exit = Arc::new(AtomicBool::new(false));
+        let exit = Arc::new(Mutex::new(false));
         let recycler = Arc::new(Mutex::new(Vec::new()));
 
         let (s_reader, r_reader) = channel();
@@ -354,7 +345,7 @@ mod bench {
         let t_producer3 = producer(&addr, recycler.clone(), exit.clone());
 
         let rvs = Arc::new(Mutex::new(0));
-        let t_sinc = sinc(recycler.clone(), exit.clone(), rvs.clone(), r_reader);
+        let t_sink = sink(recycler.clone(), exit.clone(), rvs.clone(), r_reader);
 
         let start = SystemTime::now();
         let start_val = *rvs.lock().unwrap();
@@ -365,12 +356,12 @@ mod bench {
         let ftime = (time as f64) / 10000000000f64;
         let fcount = (end_val - start_val) as f64;
         println!("performance: {:?}", fcount / ftime);
-        exit.store(true, Ordering::Relaxed);
+        *exit.lock().unwrap() = true;
         t_reader.join()?;
         t_producer1.join()?;
         t_producer2.join()?;
         t_producer3.join()?;
-        t_sinc.join()?;
+        t_sink.join()?;
         Ok(())
     }
     #[bench]
@@ -384,7 +375,6 @@ mod test {
     use std::sync::{Arc, Mutex};
     use std::net::UdpSocket;
     use std::time::Duration;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::io::Write;
     use std::io;
@@ -427,7 +417,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        exit.store(true, Ordering::Relaxed);
+        *exit.lock().unwrap() = true;
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }
@@ -443,7 +433,7 @@ mod test {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let exit = Arc::new(AtomicBool::new(false));
+        let exit = Arc::new(Mutex::new(false));
         let packet_recycler = Arc::new(Mutex::new(Vec::new()));
         let resp_recycler = Arc::new(Mutex::new(Vec::new()));
         let (s_reader, r_reader) = channel();
@@ -465,7 +455,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        exit.store(true, Ordering::Relaxed);
+        *exit.lock().unwrap() = true;
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }

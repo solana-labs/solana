@@ -55,3 +55,5 @@ bincode = "1.0.0"
 chrono = { version = "0.4.0", features = ["serde"] }
 log = "^0.4.1"
 matches = "^0.1.6"
+env_logger = "^0.5.6"
+
