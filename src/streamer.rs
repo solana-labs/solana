@@ -57,16 +57,7 @@ impl Meta {
             );
             SocketAddr::new(IpAddr::V4(ipv4), self.port)
         } else {
-            let ipv6 = Ipv6Addr::new(
-                self.addr[0],
-                self.addr[1],
-                self.addr[2],
-                self.addr[3],
-                self.addr[4],
-                self.addr[5],
-                self.addr[6],
-                self.addr[7],
-            );
+            let ipv6 = Ipv6Addr::from(self.addr);
             SocketAddr::new(IpAddr::V6(ipv6), self.port)
         }
     }
