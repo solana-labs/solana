@@ -3,7 +3,7 @@ extern crate silk;
 
 use silk::accountant_skel::AccountantSkel;
 use silk::accountant::Accountant;
-use std::io::{self, BufRead};
+use std::io::{self, stdout, BufRead};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;
 
@@ -16,7 +16,7 @@ fn main() {
         .map(|line| serde_json::from_str(&line.unwrap()).unwrap());
     let acc = Accountant::new_from_entries(entries, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(Mutex::new(AccountantSkel::new(acc)));
+    let skel = Arc::new(Mutex::new(AccountantSkel::new(acc, stdout())));
     eprintln!("Listening on {}", addr);
     let threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
     for t in threads {

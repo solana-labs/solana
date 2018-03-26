@@ -128,6 +128,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::{Arc, Mutex};
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::io::sink;
 
     #[test]
     fn test_accountant_stub() {
@@ -137,7 +138,7 @@ mod tests {
         let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc)));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, sink())));
         let threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(30));
 
