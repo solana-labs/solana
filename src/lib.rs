@@ -16,10 +16,10 @@ pub mod accountant_stub;
 pub mod result;
 extern crate bincode;
 extern crate chrono;
+extern crate env_logger;
 extern crate generic_array;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
 extern crate rayon;
 extern crate ring;
 extern crate serde;
