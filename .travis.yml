@@ -12,11 +12,12 @@ matrix:
     - FEATURES='unstable'
 before_script: |
   export PATH="$PATH:$HOME/.cargo/bin"
+  export RUST_LOG=silk=info
   rustup component add rustfmt-preview
 script:
 - cargo fmt -- --write-mode=diff
 - cargo build --verbose --features "$FEATURES"
-- cargo test --verbose --features "$FEATURES"
+- cargo test --verbose --features "$FEATURES" -- --nocapture
 after_success: |
   docker run -it --rm --security-opt seccomp=unconfined --volume "$PWD:/volume" elmtai/docker-rust-kcov
   bash <(curl -s https://codecov.io/bash) -s target/cov

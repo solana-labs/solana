@@ -156,13 +156,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_server = spawn(move || {
             if let Ok(me) = Arc::try_unwrap(obj) {
                 loop {
-                    let e = me.lock().unwrap().process(
+                    let _e = me.lock().unwrap().process(
                         &r_reader,
                         &s_responder,
                         &packet_recycler,
                         &response_recycler,
                     );
-                    if e.is_err() || exit.load(Ordering::Relaxed) {
+                    if exit.load(Ordering::Relaxed) {
+                        info!("serve exiting");
                         break;
                     }
                 }

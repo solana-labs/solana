@@ -232,6 +232,7 @@ fn recv_loop(
                 }
                 Err(_) => {
                     if exit.load(Ordering::Relaxed) {
+                        info!("reciever exiting");
                         recycle(recycler, msgs_);
                         return Ok(());
                     }
@@ -272,7 +273,8 @@ pub fn responder(
     r: ResponseReceiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, &recycler, &r).is_err() || exit.load(Ordering::Relaxed) {
+        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
+            info!("responder exiting");
             break;
         }
     })

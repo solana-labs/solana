@@ -19,6 +19,7 @@ extern crate chrono;
 extern crate generic_array;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 extern crate rayon;
 extern crate ring;
 extern crate serde;

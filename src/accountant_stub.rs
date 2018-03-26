@@ -129,9 +129,12 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::io::sink;
+    use log::Level;
+    use env_logger;
 
     #[test]
     fn test_accountant_stub() {
+        env_logger::init();
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
         let alice = Mint::new(10_000);
