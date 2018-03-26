@@ -162,6 +162,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                         &packet_recycler,
                         &response_recycler,
                     );
+                    debug!("exit {:?}", exit.load(Ordering::Relaxed));
                     if exit.load(Ordering::Relaxed) {
                         info!("serve exiting");
                         break;

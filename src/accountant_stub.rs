@@ -129,7 +129,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::io::sink;
-    use log::Level;
     use env_logger;
 
     #[test]

@@ -12,7 +12,7 @@ matrix:
     - FEATURES='unstable'
 before_script: |
   export PATH="$PATH:$HOME/.cargo/bin"
-  export RUST_LOG=silk=info
+  export RUST_LOG=silk=debug
   rustup component add rustfmt-preview
 script:
 - cargo fmt -- --write-mode=diff
