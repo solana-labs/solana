@@ -9,7 +9,6 @@ use result::Result;
 use streamer;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::thread::{spawn, JoinHandle};
 use std::default::Default;
@@ -136,7 +135,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn serve(
         obj: Arc<Mutex<AccountantSkel<W>>>,
         addr: &str,
-        exit: Arc<AtomicBool>,
+        exit: Arc<Mutex<bool>>,
     ) -> Result<Vec<JoinHandle<()>>> {
         let read = UdpSocket::bind(addr)?;
         // make sure we are on the same interface
@@ -162,8 +161,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                         &packet_recycler,
                         &response_recycler,
                     );
-                    debug!("exit {:?}", exit.load(Ordering::SeqCst));
-                    if exit.load(Ordering::SeqCst) {
+                    debug!("exit {:?}", *exit.lock().unwrap());
+                    if *exit.lock().unwrap() {
                         info!("serve exiting");
                         break;
                     }

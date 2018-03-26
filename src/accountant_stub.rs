@@ -127,7 +127,6 @@ mod tests {
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::{Arc, Mutex};
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::io::sink;
     use env_logger;
 
@@ -139,7 +138,7 @@ mod tests {
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
+        let exit = Arc::new(Mutex::new(false));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, sink())));
         let threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(30));
@@ -154,7 +153,7 @@ mod tests {
             .unwrap();
         acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
-        exit.store(true, Ordering::SeqCst);
+        *exit.lock().unwrap() = true;
         for t in threads {
             t.join().expect("join");
         }
