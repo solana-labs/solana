@@ -162,7 +162,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                         &packet_recycler,
                         &response_recycler,
                     );
-                    if e.is_err() && exit.load(Ordering::Relaxed) {
+                    if e.is_err() || exit.load(Ordering::Relaxed) {
                         break;
                     }
                 }
