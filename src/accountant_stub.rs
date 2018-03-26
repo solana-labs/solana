@@ -154,7 +154,7 @@ mod tests {
             .unwrap();
         acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
-        exit.store(true, Ordering::Relaxed);
+        exit.store(true, Ordering::SeqCst);
         for t in threads {
             t.join().expect("join");
         }

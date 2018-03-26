@@ -231,7 +231,7 @@ fn recv_loop(
                     break;
                 }
                 Err(_) => {
-                    if exit.load(Ordering::Relaxed) {
+                    if exit.load(Ordering::SeqCst) {
                         info!("reciever exiting");
                         recycle(recycler, msgs_);
                         return Ok(());
@@ -273,7 +273,7 @@ pub fn responder(
     r: ResponseReceiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
+        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::SeqCst) {
             info!("responder exiting");
             break;
         }
@@ -309,7 +309,7 @@ mod bench {
             w.meta.set_addr(&addr);
         }
         spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
+            if exit.load(Ordering::SeqCst) {
                 return;
             }
             let mut num = 0;
@@ -329,7 +329,7 @@ mod bench {
         r: Receiver,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            if exit.load(Ordering::Relaxed) {
+            if exit.load(Ordering::SeqCst) {
                 return;
             }
             let timer = Duration::new(1, 0);
@@ -367,7 +367,7 @@ mod bench {
         let ftime = (time as f64) / 10000000000f64;
         let fcount = (end_val - start_val) as f64;
         println!("performance: {:?}", fcount / ftime);
-        exit.store(true, Ordering::Relaxed);
+        exit.store(true, Ordering::SeqCst);
         t_reader.join()?;
         t_producer1.join()?;
         t_producer2.join()?;
@@ -429,7 +429,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        exit.store(true, Ordering::Relaxed);
+        exit.store(true, Ordering::SeqCst);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }
@@ -467,7 +467,7 @@ mod test {
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
-        exit.store(true, Ordering::Relaxed);
+        exit.store(true, Ordering::SeqCst);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }
