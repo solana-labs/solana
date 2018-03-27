@@ -6,7 +6,7 @@ use silk::mint::Mint;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
 use std::io::stdin;
-use std::net::UdpSocket;
+use std::net::{TcpStream, UdpSocket};
 use std::time::Instant;
 
 fn main() {
@@ -18,7 +18,8 @@ fn main() {
     let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
-    let mut acc = AccountantStub::new(addr, socket);
+    let stream = TcpStream::connect(send_addr).unwrap();
+    let mut acc = AccountantStub::new(addr, socket, stream);
     let last_id = acc.get_last_id().unwrap();
 
     let txs = acc.get_balance(&mint_pubkey).unwrap().unwrap();

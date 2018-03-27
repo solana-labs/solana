@@ -1,5 +1,5 @@
 use accountant::Accountant;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialize_into};
 use entry::Entry;
 use hash::Hash;
 use result::Result;
@@ -7,7 +7,7 @@ use serde_json;
 use signature::PublicKey;
 use std::default::Default;
 use std::io::Write;
-use std::net::UdpSocket;
+use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -21,6 +21,7 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
     pub last_id: Hash,
     pub ledger: Vec<Entry>,
     writer: W,
+    subscribers: Vec<TcpStream>,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -47,6 +48,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             last_id,
             ledger: vec![],
             writer: w,
+            subscribers: vec![],
         }
     }
 
@@ -54,6 +56,12 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         while let Ok(entry) = self.acc.historian.receiver.try_recv() {
             self.last_id = entry.id;
             write!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+
+            for mut subscriber in &self.subscribers {
+                // TODO: Handle errors. If TCP stream is closed, remove it.
+                serialize_into(subscriber, &entry).unwrap();
+            }
+
             self.ledger.push(entry);
         }
         self.last_id
@@ -92,8 +100,9 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }),
         }
     }
+
     fn process(
-        &mut self,
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
         r_reader: &streamer::Receiver,
         s_responder: &streamer::Responder,
         packet_recycler: &streamer::PacketRecycler,
@@ -110,7 +119,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             for packet in &msgs.read().unwrap().packets {
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
-                if let Some(resp) = self.process_request(req) {
+                if let Some(resp) = obj.lock().unwrap().process_request(req) {
                     if ursps.responses.len() <= num {
                         ursps
                             .responses
@@ -153,21 +162,30 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_responder =
             streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
 
-        let t_server = spawn(move || {
-            if let Ok(me) = Arc::try_unwrap(obj) {
-                loop {
-                    let e = me.lock().unwrap().process(
-                        &r_reader,
-                        &s_responder,
-                        &packet_recycler,
-                        &response_recycler,
-                    );
-                    if e.is_err() && exit.load(Ordering::Relaxed) {
-                        break;
-                    }
+        let skel = obj.clone();
+        let t_server = spawn(move || loop {
+            let e = AccountantSkel::process(
+                &skel,
+                &r_reader,
+                &s_responder,
+                &packet_recycler,
+                &response_recycler,
+            );
+            if e.is_err() && exit.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+
+        let listener = TcpListener::bind(addr)?;
+        let t_listener = spawn(move || {
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(stream) => obj.lock().unwrap().subscribers.push(stream),
+                    Err(_) => break,
                 }
             }
         });
-        Ok(vec![t_receiver, t_responder, t_server])
+
+        Ok(vec![t_receiver, t_responder, t_server, t_listener])
     }
 }
