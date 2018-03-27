@@ -1,10 +1,10 @@
 extern crate serde_json;
-extern crate silk;
+extern crate solana;
 
-use silk::accountant_stub::AccountantStub;
-use silk::mint::Mint;
-use silk::signature::{KeyPair, KeyPairUtil};
-use silk::transaction::Transaction;
+use solana::accountant_stub::AccountantStub;
+use solana::mint::Mint;
+use solana::signature::{KeyPair, KeyPairUtil};
+use solana::transaction::Transaction;
 use std::io::stdin;
 use std::net::UdpSocket;
 use std::time::Instant;

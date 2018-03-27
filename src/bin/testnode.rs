@@ -1,8 +1,8 @@
 extern crate serde_json;
-extern crate silk;
+extern crate solana;
 
-use silk::accountant::Accountant;
-use silk::accountant_skel::AccountantSkel;
+use solana::accountant::Accountant;
+use solana::accountant_skel::AccountantSkel;
 use std::io::{self, stdout, BufRead};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

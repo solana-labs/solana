@@ -8,11 +8,11 @@ with by verifying each entry's hash can be generated from the hash in the previo
 ![historian](https://user-images.githubusercontent.com/55449/36950845-459bdb58-1fb9-11e8-850e-894586f3729b.png)
 
 ```rust
-extern crate silk;
+extern crate solana;
 
-use silk::historian::Historian;
-use silk::ledger::{verify_slice, Entry, Hash};
-use silk::event::{generate_keypair, get_pubkey, sign_claim_data, Event};
+use solana::historian::Historian;
+use solana::ledger::{verify_slice, Entry, Hash};
+use solana::event::{generate_keypair, get_pubkey, sign_claim_data, Event};
 use std::thread::sleep;
 use std::time::Duration;
 use std::sync::mpsc::SendError;

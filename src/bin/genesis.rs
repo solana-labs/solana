@@ -1,9 +1,9 @@
 //! A command-line executable for generating the chain's genesis block.
 
 extern crate serde_json;
-extern crate silk;
+extern crate solana;
 
-use silk::mint::Mint;
+use solana::mint::Mint;
 use std::io::stdin;
 
 fn main() {
