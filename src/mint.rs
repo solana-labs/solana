@@ -1,12 +1,12 @@
 //! A library for generating the chain's genesis block.
 
-use event::Event;
-use transaction::Transaction;
-use signature::{KeyPair, KeyPairUtil, PublicKey};
 use entry::Entry;
 use entry::create_entry;
+use event::Event;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
+use signature::{KeyPair, KeyPairUtil, PublicKey};
+use transaction::Transaction;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]

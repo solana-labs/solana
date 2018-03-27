@@ -1,12 +1,12 @@
 extern crate serde_json;
 extern crate silk;
 
-use silk::mint::Mint;
-use silk::event::Event;
-use silk::transaction::Transaction;
 use silk::entry::create_entry;
-use silk::signature::{KeyPair, KeyPairUtil, PublicKey};
+use silk::event::Event;
 use silk::hash::Hash;
+use silk::mint::Mint;
+use silk::signature::{KeyPair, KeyPairUtil, PublicKey};
+use silk::transaction::Transaction;
 use std::io::stdin;
 
 fn transfer(from: &KeyPair, (to, tokens): (PublicKey, i64), last_id: Hash) -> Event {

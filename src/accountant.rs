@@ -2,20 +2,20 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use hash::Hash;
+use chrono::prelude::*;
 use entry::Entry;
 use event::Event;
-use plan::{Plan, Witness};
-use transaction::Transaction;
-use signature::{KeyPair, PublicKey, Signature};
-use mint::Mint;
+use hash::Hash;
 use historian::Historian;
+use mint::Mint;
+use plan::{Plan, Witness};
 use recorder::Signal;
-use std::sync::mpsc::SendError;
-use std::collections::{HashMap, HashSet};
+use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
+use std::collections::{HashMap, HashSet};
 use std::result;
-use chrono::prelude::*;
+use std::sync::mpsc::SendError;
+use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -223,8 +223,8 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::KeyPairUtil;
     use recorder::ExitReason;
+    use signature::KeyPairUtil;
 
     #[test]
     fn test_accountant() {

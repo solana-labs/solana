@@ -1,7 +1,7 @@
+use bincode;
 use serde_json;
 use std;
 use std::any::Any;
-use bincode;
 
 #[derive(Debug)]
 pub enum Error {
@@ -62,16 +62,16 @@ impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
 
 #[cfg(test)]
 mod tests {
-    use result::Result;
     use result::Error;
+    use result::Result;
+    use serde_json;
+    use std::io;
+    use std::io::Write;
     use std::net::SocketAddr;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
-    use std::thread;
-    use std::io;
-    use std::io::Write;
-    use serde_json;
     use std::sync::mpsc::channel;
+    use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {
         let r = "12fdfasfsafsadfs".parse()?;

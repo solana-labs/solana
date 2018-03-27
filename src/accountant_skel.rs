@@ -1,24 +1,26 @@
 use accountant::Accountant;
-use transaction::Transaction;
-use signature::PublicKey;
-use hash::Hash;
-use entry::Entry;
-use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
+use entry::Entry;
+use hash::Hash;
 use result::Result;
-use streamer;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use serde_json;
+use signature::PublicKey;
+use std::default::Default;
+use std::io::Write;
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
-use std::default::Default;
-use serde_json;
+use std::time::Duration;
+use streamer;
+use transaction::Transaction;
 
-pub struct AccountantSkel {
+pub struct AccountantSkel<W: Write + Send + 'static> {
     pub acc: Accountant,
     pub last_id: Hash,
     pub ledger: Vec<Entry>,
+    writer: W,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -37,20 +39,21 @@ pub enum Response {
     Id { id: Hash, is_last: bool },
 }
 
-impl AccountantSkel {
-    pub fn new(acc: Accountant) -> Self {
+impl<W: Write + Send + 'static> AccountantSkel<W> {
+    pub fn new(acc: Accountant, w: W) -> Self {
         let last_id = acc.first_id;
         AccountantSkel {
             acc,
             last_id,
             ledger: vec![],
+            writer: w,
         }
     }
 
-    pub fn sync(self: &mut Self) -> Hash {
+    pub fn sync(&mut self) -> Hash {
         while let Ok(entry) = self.acc.historian.receiver.try_recv() {
             self.last_id = entry.id;
-            println!("{}", serde_json::to_string(&entry).unwrap());
+            write!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
             self.ledger.push(entry);
         }
         self.last_id
@@ -131,7 +134,7 @@ impl AccountantSkel {
 
     /// UDP Server that forwards messages to Accountant methods.
     pub fn serve(
-        obj: Arc<Mutex<AccountantSkel>>,
+        obj: Arc<Mutex<AccountantSkel<W>>>,
         addr: &str,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {

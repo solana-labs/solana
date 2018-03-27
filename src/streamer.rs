@@ -1,11 +1,11 @@
-use std::sync::{Arc, Mutex, RwLock};
+use result::{Error, Result};
+use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::fmt;
-use std::time::Duration;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
-use result::{Error, Result};
+use std::time::Duration;
 
 const BLOCK_SIZE: usize = 1024 * 8;
 pub const PACKET_SIZE: usize = 256;
@@ -282,15 +282,15 @@ pub fn responder(
 mod bench {
     extern crate test;
     use self::test::Bencher;
-    use std::thread::sleep;
-    use std::sync::{Arc, Mutex};
+    use result::Result;
     use std::net::{SocketAddr, UdpSocket};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::channel;
+    use std::sync::{Arc, Mutex};
+    use std::thread::sleep;
+    use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use std::time::SystemTime;
-    use std::thread::{spawn, JoinHandle};
-    use std::sync::mpsc::channel;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use result::Result;
     use streamer::{allocate, receiver, recycle, Packet, PacketRecycler, Receiver, PACKET_SIZE};
 
     fn producer(
@@ -381,13 +381,13 @@ mod bench {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{Arc, Mutex};
+    use std::io;
+    use std::io::Write;
     use std::net::UdpSocket;
-    use std::time::Duration;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::io::Write;
-    use std::io;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
     use streamer::{allocate, receiver, responder, Packet, Packets, Receiver, Response, Responses,
                    PACKET_SIZE};
 
