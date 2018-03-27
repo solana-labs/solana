@@ -19,7 +19,6 @@ use transaction::Transaction;
 pub struct AccountantSkel<W: Write + Send + 'static> {
     pub acc: Accountant,
     pub last_id: Hash,
-    pub ledger: Vec<Entry>,
     writer: W,
     subscribers: Vec<TcpStream>,
 }
@@ -29,7 +28,6 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
 pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
-    GetEntries { last_id: Hash },
     GetId { is_last: bool },
 }
 
@@ -46,7 +44,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         AccountantSkel {
             acc,
             last_id,
-            ledger: vec![],
             writer: w,
             subscribers: vec![],
         }
@@ -61,8 +58,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 // TODO: Handle errors. If TCP stream is closed, remove it.
                 serialize_into(subscriber, &entry).unwrap();
             }
-
-            self.ledger.push(entry);
         }
         self.last_id
     }
@@ -78,17 +73,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             Request::GetBalance { key } => {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
-            }
-            Request::GetEntries { last_id } => {
-                self.sync();
-                let entries = self.ledger
-                    .iter()
-                    .skip_while(|x| x.id != last_id) // log(n) way to find Entry with id == last_id.
-                    .skip(1) // Skip the entry with last_id.
-                    .take(256) // TODO: Take while the serialized entries fit into a 64k UDP packet.
-                    .cloned()
-                    .collect();
-                Some(Response::Entries { entries })
             }
             Request::GetId { is_last } => Some(Response::Id {
                 id: if is_last {
