@@ -35,6 +35,7 @@ pub struct Payment {
     pub to: PublicKey,
 }
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
     Pay(Payment),

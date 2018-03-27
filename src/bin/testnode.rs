@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 fn main() {
-    let addr = "127.0.0.1:8000";
+    let addr = "127.0.0.1:9000";
     let stdin = io::stdin();
     let mut entries = stdin
         .lock()
@@ -27,7 +27,7 @@ fn main() {
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
     let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
-        tr.plan.final_payment()
+        tr.data.plan.final_payment()
     } else {
         None
     };
