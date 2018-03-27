@@ -3,6 +3,8 @@
 //! on behalf of the caller, and a private low-level API for when they have
 //! already been signed and verified.
 
+extern crate libc;
+
 use chrono::prelude::*;
 use event::Event;
 use hash::Hash;
@@ -104,19 +106,19 @@ impl Accountant {
 
     /// Process a Transaction that has already been verified.
     pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.data.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
 
-        if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
+        if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
         if let Some(x) = self.balances.read().unwrap().get(&tr.from) {
-            *x.write().unwrap() -= tr.tokens;
+            *x.write().unwrap() -= tr.data.tokens;
         }
 
-        let mut plan = tr.plan.clone();
+        let mut plan = tr.data.plan.clone();
         plan.apply_witness(&Witness::Timestamp(*self.last_time.read().unwrap()));
 
         if let Some(ref payment) = plan.final_payment() {
