@@ -1,25 +1,18 @@
-[![Silk crate](https://img.shields.io/crates/v/silk.svg)](https://crates.io/crates/silk)
-[![Silk documentation](https://docs.rs/silk/badge.svg)](https://docs.rs/silk)
-[![Build Status](https://travis-ci.org/loomprotocol/silk.svg?branch=master)](https://travis-ci.org/loomprotocol/silk)
-[![codecov](https://codecov.io/gh/loomprotocol/silk/branch/master/graph/badge.svg)](https://codecov.io/gh/loomprotocol/silk)
+[![Solana crate](https://img.shields.io/crates/v/solana.svg)](https://crates.io/crates/solana)
+[![Solana documentation](https://docs.rs/solana/badge.svg)](https://docs.rs/solana)
+[![Build Status](https://travis-ci.org/solana-labs/solana.svg?branch=master)](https://travis-ci.org/solana-labs/solana)
+[![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
 Disclaimer
 ===
 
 All claims, content, designs, algorithms, estimates, roadmaps, specifications, and performance measurements described in this project are done with the author's best effort.  It is up to the reader to check and validate their accuracy and truthfulness.  Furthermore nothing in this project constitutes a solicitation for investment.
 
-Silk, a silky smooth implementation of the Loom specification
+Solana: High-Performance Blockchain
 ===
 
-Loom&trade; is a new architecture for a high performance blockchain. Its white paper boasts a theoretical
-throughput of 710k transactions per second on a 1 gbps network. The specification is implemented
-in two git repositories. Research is performed in the loom repository. That work drives the
-Loom specification forward. This repository, on the other hand, aims to implement the specification
-as-is.  We care a great deal about quality, clarity and short learning curve. We avoid the use
-of `unsafe` Rust and write tests for *everything*.  Optimizations are only added when
-corresponding benchmarks are also added that demonstrate real performance boosts. We expect the
-feature set here will always be a ways behind the loom repo, but that this is an implementation
-you can take to the bank, literally.
+Solana&trade; is a new architecture for a high performance blockchain. It aims to support
+over 710 thousand transactions per second on a gigabit network.
 
 Running the demo
 ===
@@ -31,10 +24,10 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
 ```
 
-Install the silk executables:
+Install the solana executables:
 
 ```bash
-    $ cargo install silk
+    $ cargo install solana
 ```
 
 The testnode server is initialized with a ledger from stdin and
@@ -44,21 +37,21 @@ two steps because the mint.json file contains a private key that will be
 used later in this demo.
 
 ```bash
-    $ echo 500 | silk-mint > mint.json
-    $ cat mint.json | silk-genesis > genesis.log
+    $ echo 500 | solana-mint > mint.json
+    $ cat mint.json | solana-genesis > genesis.log
 ```
 
 Now you can start the server:
 
 ```bash
-    $ cat genesis.log | silk-testnode > transactions0.log
+    $ cat genesis.log | solana-testnode > transactions0.log
 ```
 
 Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
-    $ cat mint.json | silk-client-demo
+    $ cat mint.json | solana-client-demo
 ```
 
 Now kill the server with Ctrl-C, and take a look at the ledger. You should
@@ -74,14 +67,14 @@ Now restart the server from where we left off. Pass it both the genesis ledger, 
 the transaction ledger.
 
 ```bash
-    $ cat genesis.log transactions0.log | silk-testnode > transactions1.log
+    $ cat genesis.log transactions0.log | solana-testnode > transactions1.log
 ```
 
 Lastly, run the client demo again, and verify that all funds were spent in the
 previous round, and so no additional transactions are added.
 
 ```bash
-    $ cat mint.json | silk-client-demo
+    $ cat mint.json | solana-client-demo
 ```
 
 Stop the server again, and verify there are only Tick entries, and no Transaction entries.
@@ -103,8 +96,8 @@ $ rustup component add rustfmt-preview
 Download the source code:
 
 ```bash
-$ git clone https://github.com/loomprotocol/silk.git
-$ cd silk
+$ git clone https://github.com/solana-labs/solana.git
+$ cd solana
 ```
 
 Testing
