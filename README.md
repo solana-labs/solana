@@ -12,7 +12,7 @@ Solana: High-Performance Blockchain
 ===
 
 Solana&trade; is a new architecture for a high performance blockchain. It aims to support
-over 710 thousand transactions per second on a gigabit network.
+over 700 thousand transactions per second on a gigabit network.
 
 Running the demo
 ===
