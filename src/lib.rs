@@ -4,6 +4,7 @@ pub mod accountant_skel;
 pub mod accountant_stub;
 pub mod entry;
 pub mod event;
+pub mod gpu;
 pub mod hash;
 pub mod ledger;
 pub mod mint;
@@ -19,6 +20,7 @@ extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
 extern crate generic_array;
+extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate rayon;

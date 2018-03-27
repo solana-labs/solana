@@ -163,7 +163,7 @@ mod bench {
         let msgs_ = msgs.clone();
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for w in msgs.write().unwrap().packets.iter_mut() {
-            w.meta.size = PACKET_SIZE;
+            w.meta.size = PACKET_DATA_SIZE;
             w.meta.set_addr(&addr);
         }
         spawn(move || loop {

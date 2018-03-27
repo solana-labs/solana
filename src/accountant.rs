@@ -3,6 +3,8 @@
 //! on behalf of the caller, and a private low-level API for when they have
 //! already been signed and verified.
 
+extern crate libc;
+
 use chrono::prelude::*;
 use event::Event;
 use hash::Hash;
@@ -80,7 +82,7 @@ impl Accountant {
             *x -= tr.tokens;
         }
 
-        let mut plan = tr.plan.clone();
+        let mut plan = tr.data.plan.clone();
         plan.apply_witness(&Witness::Timestamp(self.last_time));
 
         if let Some(ref payment) = plan.final_payment() {

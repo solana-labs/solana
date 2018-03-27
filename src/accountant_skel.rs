@@ -6,6 +6,7 @@ use accountant::Accountant;
 use bincode::{deserialize, serialize};
 use entry::Entry;
 use event::Event;
+use gpu;
 use hash::Hash;
 use historian::Historian;
 use rayon::prelude::*;
@@ -17,6 +18,8 @@ use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, SendError};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
@@ -85,6 +88,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Process Request items sent by clients.
     pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
         match msg {
+            Request::Transaction(_) if verify == 0 => {
+                eprintln!("Transaction falid sigverify");
+                None
+            }
             Request::Transaction(tr) => {
                 if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     eprintln!("Transaction error: {:?}", err);
@@ -104,9 +111,47 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         }
     }
 
+    fn verifier(
+        recvr: &streamer::PacketReceiver,
+        sendr: &Sender<(Vec<streamer::SharedPackets>, Vec<Vec<u8>>)>,
+    ) -> Result<()> {
+        let timer = Duration::new(1, 0);
+        let msgs = recvr.recv_timeout(timer)?;
+        //println!("got msgs");
+        let mut v = Vec::new();
+        v.push(msgs);
+        while let Ok(more) = recvr.try_recv() {
+            //println!("got more msgs");
+            v.push(more);
+        }
+        //println!("verifying");
+        let rvs = gpu::ecdsa_verify(&v);
+        //println!("verified!");
+        let mut len = 0;
+        let mut sv = Vec::new();
+        let mut sr = Vec::new();
+        for (v, r) in v.iter().zip(rvs.iter()) {
+            if len + r.len() >= 256 {
+                println!("sending {}", len);
+                sendr.send((sv, sr))?;
+                sv = Vec::new();
+                sr = Vec::new();
+                len = 0;
+            }
+            sv.push(v.clone());
+            sr.push(r.clone());
+            len += r.len();
+            assert!(len < 256);
+        }
+        if !sv.is_empty() {
+            sendr.send((sv, sr))?;
+        }
+        Ok(())
+    }
+
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        packet_receiver: &streamer::PacketReceiver,
+        packet_receiver: &Receiver<(Vec<SharedPacket>, Vec<Vec<u8>>)>,
         blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
@@ -137,6 +182,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                     }
                     rsps.push_back(blob);
                 }
+                ursps.responses.resize(num, streamer::Response::default());
             }
         }
         if !rsps.is_empty() {
@@ -168,11 +214,21 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (blob_sender, blob_receiver) = channel();
         let t_responder =
             streamer::responder(write, exit.clone(), blob_recycler.clone(), blob_receiver);
+        let (verified_sender, verified_receiver) = channel();
+
+        let exit_ = exit.clone();
+        let t_verifier = spawn(move || loop {
+            let e = Self::verifier(&packet_receiver, &verified_sender);
+            if e.is_err() && exit_.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = AccountantSkel::process(
                 &skel,
-                &packet_receiver,
+                &verified_receiver,
                 &blob_sender,
                 &packet_recycler,
                 &blob_recycler,
@@ -181,6 +237,21 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 break;
             }
         });
-        Ok(vec![t_receiver, t_responder, t_server])
+        Ok(vec![t_receiver, t_responder, t_server, t_verifier])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use accountant_skel::Request;
+    use bincode::serialize;
+    use gpu;
+    use transaction::{memfind, test_tx};
+    #[test]
+    fn test_layout() {
+        let tr = test_tx();
+        let tx = serialize(&tr).unwrap();
+        let packet = serialize(&Request::Transaction(tr)).unwrap();
+        assert_matches!(memfind(&packet, &tx), Some(gpu::TX_OFFSET));
     }
 }

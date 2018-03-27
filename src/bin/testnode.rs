@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 fn main() {
-    let addr = "127.0.0.1:8000";
+    let addr = "127.0.0.1:9000";
     let stdin = io::stdin();
     let mut entries = stdin
         .lock()
