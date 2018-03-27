@@ -1,11 +1,11 @@
 extern crate serde_json;
 extern crate silk;
 
-use silk::accountant_skel::AccountantSkel;
 use silk::accountant::Accountant;
+use silk::accountant_skel::AccountantSkel;
 use std::io::{self, stdout, BufRead};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 fn main() {
     let addr = "127.0.0.1:8000";

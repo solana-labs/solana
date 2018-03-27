@@ -1,10 +1,10 @@
 //! The `transaction` crate provides functionality for creating log transactions.
 
-use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 use bincode::serialize;
-use hash::Hash;
 use chrono::prelude::*;
+use hash::Hash;
 use plan::{Condition, Payment, Plan};
+use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {

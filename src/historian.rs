@@ -1,14 +1,14 @@
 //! The `historian` crate provides a microservice for generating a Proof-of-History.
 //! It manages a thread containing a Proof-of-History Logger.
 
-use std::thread::{spawn, JoinHandle};
-use std::collections::HashSet;
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
-use std::time::Instant;
-use hash::Hash;
 use entry::Entry;
+use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
 use signature::Signature;
+use std::collections::HashSet;
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::thread::{spawn, JoinHandle};
+use std::time::Instant;
 
 pub struct Historian {
     pub sender: SyncSender<Signal>,

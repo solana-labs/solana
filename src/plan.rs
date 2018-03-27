@@ -3,8 +3,8 @@
 //! which it uses to reduce the payment plan. When the plan is reduced to a
 //! `Payment`, the payment is executed.
 
-use signature::PublicKey;
 use chrono::prelude::*;
+use signature::PublicKey;
 use std::mem;
 
 pub enum Witness {

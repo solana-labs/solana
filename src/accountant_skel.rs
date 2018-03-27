@@ -1,20 +1,20 @@
 use accountant::Accountant;
-use transaction::Transaction;
-use signature::PublicKey;
-use hash::Hash;
-use entry::Entry;
-use std::net::UdpSocket;
 use bincode::{deserialize, serialize};
+use entry::Entry;
+use hash::Hash;
 use result::Result;
-use streamer;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::thread::{spawn, JoinHandle};
+use serde_json;
+use signature::PublicKey;
 use std::default::Default;
 use std::io::Write;
-use serde_json;
+use std::net::UdpSocket;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
+use std::thread::{spawn, JoinHandle};
+use std::time::Duration;
+use streamer;
+use transaction::Transaction;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     pub acc: Accountant,

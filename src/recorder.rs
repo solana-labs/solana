@@ -5,12 +5,12 @@
 //! Event, the latest hash, and the number of hashes since the last event.
 //! The resulting stream of entries represents ordered events in time.
 
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
-use std::time::{Duration, Instant};
-use std::mem;
-use hash::{hash, Hash};
 use entry::{create_entry_mut, Entry};
 use event::Event;
+use hash::{hash, Hash};
+use std::mem;
+use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
+use std::time::{Duration, Instant};
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {

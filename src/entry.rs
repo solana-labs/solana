@@ -1,5 +1,5 @@
-use hash::{extend_and_hash, hash, Hash};
 use event::Event;
+use hash::{extend_and_hash, hash, Hash};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
@@ -87,11 +87,11 @@ pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use entry::create_entry;
+    use event::Event;
     use hash::hash;
     use signature::{KeyPair, KeyPairUtil};
     use transaction::Transaction;
-    use event::Event;
-    use entry::create_entry;
 
     #[test]
     fn test_entry_verify() {

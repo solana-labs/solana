@@ -1,16 +1,16 @@
 extern crate silk;
 
-use silk::historian::Historian;
-use silk::hash::Hash;
 use silk::entry::Entry;
+use silk::event::Event;
+use silk::hash::Hash;
+use silk::historian::Historian;
 use silk::ledger::verify_slice;
 use silk::recorder::Signal;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
-use silk::event::Event;
+use std::sync::mpsc::SendError;
 use std::thread::sleep;
 use std::time::Duration;
-use std::sync::mpsc::SendError;
 
 fn create_ledger(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>> {
     sleep(Duration::from_millis(15));

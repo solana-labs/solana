@@ -2,12 +2,12 @@ extern crate serde_json;
 extern crate silk;
 
 use silk::accountant_stub::AccountantStub;
+use silk::mint::Mint;
 use silk::signature::{KeyPair, KeyPairUtil};
 use silk::transaction::Transaction;
-use silk::mint::Mint;
-use std::time::Instant;
-use std::net::UdpSocket;
 use std::io::stdin;
+use std::net::UdpSocket;
+use std::time::Instant;
 
 fn main() {
     let addr = "127.0.0.1:8000";

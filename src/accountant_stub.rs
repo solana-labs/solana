@@ -2,14 +2,14 @@
 //! event log to record transactions. Its users can deposit funds and
 //! transfer funds to other users.
 
-use std::net::UdpSocket;
-use std::io;
-use bincode::{deserialize, serialize};
-use transaction::Transaction;
-use signature::{KeyPair, PublicKey, Signature};
-use hash::Hash;
-use entry::Entry;
 use accountant_skel::{Request, Response};
+use bincode::{deserialize, serialize};
+use entry::Entry;
+use hash::Hash;
+use signature::{KeyPair, PublicKey, Signature};
+use std::io;
+use std::net::UdpSocket;
+use transaction::Transaction;
 
 pub struct AccountantStub {
     pub addr: String,
@@ -122,13 +122,13 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
-    use std::thread::sleep;
-    use std::time::Duration;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
-    use std::sync::{Arc, Mutex};
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::io::sink;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_accountant_stub() {
