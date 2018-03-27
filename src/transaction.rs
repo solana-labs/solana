@@ -6,6 +6,7 @@ use hash::Hash;
 use chrono::prelude::*;
 use plan::{Condition, Payment, Plan};
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     pub from: PublicKey,

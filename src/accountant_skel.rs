@@ -104,6 +104,19 @@ impl AccountantSkel {
         {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
+            let mut transactions = Vec::new();
+            println!("here!");
+            for packet in msgs.read().unwrap().packets.iter() {
+                let sz = packet.meta.size;
+                let req = deserialize(&packet.data[0..sz])?;
+                match req {
+                    Request::Transaction(tr) => {
+                        transactions.push(tr);
+                    }
+                    _ => { }
+                }
+            }
+            self.acc.process_packets(&transactions);
             for packet in &msgs.read().unwrap().packets {
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
