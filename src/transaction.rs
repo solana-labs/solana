@@ -6,6 +6,7 @@ use hash::Hash;
 use plan::{Condition, Payment, Plan};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     pub from: PublicKey,
