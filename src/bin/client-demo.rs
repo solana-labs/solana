@@ -18,14 +18,17 @@ fn main() {
     let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
-    let stream = TcpStream::connect(send_addr).unwrap();
+    let stream = TcpStream::connect(addr).unwrap();
+    stream.set_nonblocking(true).expect("nonblocking");
+
     let mut acc = AccountantStub::new(addr, socket, stream);
     let last_id = acc.get_last_id().unwrap();
 
-    let txs = acc.get_balance(&mint_pubkey).unwrap().unwrap();
-    println!("Mint's Initial Balance {}", txs);
+    let mint_balance = acc.get_balance(&mint_pubkey).unwrap().unwrap();
+    println!("Mint's Initial Balance {}", mint_balance);
 
     println!("Signing transactions...");
+    let txs = mint_balance;
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .map(|_| {
@@ -66,7 +69,9 @@ fn main() {
         acc.transfer_signed(tr).unwrap();
     }
     println!("Waiting for last transaction to be confirmed...",);
-    acc.wait_on_signature(&sig, &last_id).unwrap();
+    if txs > 0 {
+        acc.wait_on_signature(&sig, &last_id).unwrap();
+    }
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -74,5 +79,5 @@ fn main() {
     println!("Done. {} tps!", tps);
     let val = acc.get_balance(&mint_pubkey).unwrap().unwrap();
     println!("Mint's Final Balance {}", val);
-    assert_eq!(val, 0);
+    assert_eq!(val, mint_balance - txs);
 }

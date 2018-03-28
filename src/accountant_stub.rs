@@ -84,7 +84,7 @@ impl AccountantStub {
         let mut buf = vec![0u8; 65_535];
         let mut buf_offset = 0;
         let mut found = false;
-        if let Ok(bytes) = self.stream.read(&mut buf) {
+        if let Ok(_bytes) = self.stream.read(&mut buf) {
             loop {
                 match deserialize::<Entry>(&buf[buf_offset..]) {
                     Ok(entry) => {
@@ -100,10 +100,7 @@ impl AccountantStub {
                             }
                         }
                     }
-                    Err(_) => {
-                        println!("read {} of {} in buf", buf_offset, bytes);
-                        break;
-                    }
+                    Err(_) => break,
                 }
             }
         }
