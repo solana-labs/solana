@@ -1,12 +1,12 @@
 use accountant::Accountant;
-use bincode::{deserialize, serialize, serialize_into};
+use bincode::{deserialize, serialize};
 use entry::Entry;
 use hash::Hash;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
 use std::default::Default;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -52,12 +52,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn sync(&mut self) -> Hash {
         while let Ok(entry) = self.acc.historian.receiver.try_recv() {
             self.last_id = entry.id;
-            write!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+            writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
 
-            for mut subscriber in &self.subscribers {
-                // TODO: Handle errors. If TCP stream is closed, remove it.
-                serialize_into(subscriber, &entry).unwrap();
-            }
+            let buf = serialize(&entry).expect("serialize");
+            self.subscribers
+                .retain(|ref mut subscriber| match subscriber.write(&buf) {
+                    Err(err) => err.kind() != ErrorKind::BrokenPipe,
+                    _ => true,
+                });
         }
         self.last_id
     }
