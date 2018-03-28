@@ -141,7 +141,6 @@ mod tests {
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
-    #[ignore]
     fn test_accountant_stub() {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
@@ -157,11 +156,12 @@ mod tests {
         let stream = TcpStream::connect(addr).expect("tcp connect");
         stream.set_nonblocking(true).expect("nonblocking");
 
-        let mut acc = AccountantStub::new(addr, socket, stream);
+        //let mut acc = AccountantStub::new(addr, socket, stream);
+        let acc = AccountantStub::new(addr, socket, stream);
         let last_id = acc.get_last_id().unwrap();
-        let sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
+        let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        acc.wait_on_signature(&sig, &last_id).unwrap();
+        //acc.wait_on_signature(&sig, &last_id).unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
     }
