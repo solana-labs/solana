@@ -7,7 +7,7 @@ use solana::mint::Mint;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::io::stdin;
-use std::net::{TcpStream, UdpSocket};
+use std::net::UdpSocket;
 use std::time::Instant;
 use rayon::prelude::*;
 
@@ -20,10 +20,7 @@ fn main() {
     let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
-    let stream = TcpStream::connect(addr).unwrap();
-    stream.set_nonblocking(true).expect("nonblocking");
-
-    let acc = AccountantStub::new(addr, socket, stream);
+    let acc = AccountantStub::new(addr, socket);
     let last_id = acc.get_last_id().unwrap();
 
     let mint_balance = acc.get_balance(&mint_pubkey).unwrap().unwrap();
@@ -74,9 +71,6 @@ fn main() {
     while val > mint_balance - txs {
         val = acc.get_balance(&mint_pubkey).unwrap().unwrap();
     }
-    //if txs > 0 {
-    //    acc.wait_on_signature(&sig, &last_id).unwrap();
-    //}
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());

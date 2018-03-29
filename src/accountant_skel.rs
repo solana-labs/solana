@@ -7,7 +7,7 @@ use serde_json;
 use signature::PublicKey;
 use std::default::Default;
 use std::io::{ErrorKind, Write};
-use std::net::{TcpListener, TcpStream, UdpSocket};
+use std::net::{TcpStream, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -162,16 +162,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
         });
 
-        let listener = TcpListener::bind(addr)?;
-        let t_listener = spawn(move || {
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(stream) => obj.lock().unwrap().subscribers.push(stream),
-                    Err(_) => break,
-                }
-            }
-        });
-
-        Ok(vec![t_receiver, t_responder, t_server, t_listener])
+        Ok(vec![t_receiver, t_responder, t_server])
     }
 }
