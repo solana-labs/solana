@@ -32,7 +32,7 @@ used later in this demo.
 
 ```bash
     $ echo 1000000000 | cargo run --release --bin solana-mint | tee mint.json
-    $ cat mint.json | solana-genesis > genesis.log
+    $ cat mint.json | cargo run --release --bin solana-genesis | tee genesis.log
 ```
 
 Now you can start the server:
@@ -61,7 +61,7 @@ Now restart the server from where we left off. Pass it both the genesis ledger, 
 the transaction ledger.
 
 ```bash
-    $ cat genesis.log transactions0.log | cargo run --release --bin solana-testnode > transactions1.log
+    $ cat genesis.log transactions0.log | cargo run --release --bin solana-testnode | tee transactions1.log
 ```
 
 Lastly, run the client demo again, and verify that all funds were spent in the
