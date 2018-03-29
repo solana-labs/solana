@@ -4,7 +4,6 @@
 
 use accountant_skel::{Request, Response};
 use bincode::{deserialize, serialize};
-use entry::Entry;
 use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
 use std::io;
