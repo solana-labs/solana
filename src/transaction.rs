@@ -1,4 +1,4 @@
-//! The `transaction` crate provides functionality for creating log transactions.
+//! The `transaction` module provides functionality for creating log transactions.
 
 use bincode::serialize;
 use chrono::prelude::*;
@@ -17,6 +17,7 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    /// Create and sign a new Transaction. Used for unit-testing.
     pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Pay(Payment { tokens, to });
@@ -31,6 +32,7 @@ impl Transaction {
         tr
     }
 
+    /// Create and sign a postdated Transaction. Used for unit-testing.
     pub fn new_on_date(
         from_keypair: &KeyPair,
         to: PublicKey,
@@ -58,11 +60,13 @@ impl Transaction {
         serialize(&(&self.from, &self.plan, &self.tokens, &self.last_id)).unwrap()
     }
 
+    /// Sign this transaction.
     pub fn sign(&mut self, keypair: &KeyPair) {
         let sign_data = self.get_sign_data();
         self.sig = Signature::clone_from_slice(keypair.sign(&sign_data).as_ref());
     }
 
+    /// Verify this transaction's signature and its spending plan.
     pub fn verify(&self) -> bool {
         self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.tokens)
     }

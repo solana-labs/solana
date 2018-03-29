@@ -1,6 +1,7 @@
-//! The `accountant` is a client of the `historian`. It uses the historian's
-//! event log to record transactions. Its users can deposit funds and
-//! transfer funds to other users.
+//! The Accountant tracks client balances and the progress of pending
+//! transactions. It offers a high-level public API that signs transactions
+//! on behalf of the caller and a private low-level API for when they have
+//! already been signed and verified.
 
 use chrono::prelude::*;
 use entry::Entry;
@@ -44,6 +45,7 @@ pub struct Accountant {
 }
 
 impl Accountant {
+    /// Create an Accountant using an existing ledger.
     pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> Self
     where
         I: IntoIterator<Item = Entry>,
@@ -79,6 +81,7 @@ impl Accountant {
         acc
     }
 
+    /// Create an Accountant with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
         Self::new_from_entries(mint.create_entries(), ms_per_tick)
     }
@@ -91,6 +94,7 @@ impl Accountant {
         }
     }
 
+    /// Verify and process the given Transaction.
     pub fn process_transaction(self: &mut Self, tr: Transaction) -> Result<()> {
         if !tr.verify() {
             return Err(AccountingError::InvalidTransfer);
@@ -111,6 +115,7 @@ impl Accountant {
         Ok(())
     }
 
+    /// Process a Transaction that has already been verified.
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
@@ -138,6 +143,7 @@ impl Accountant {
         Ok(())
     }
 
+    /// Process a Witness Signature that has already been verified.
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending.entry(tx_sig) {
             e.get_mut().apply_witness(&Witness::Signature(from));
@@ -150,6 +156,7 @@ impl Accountant {
         Ok(())
     }
 
+    /// Process a Witness Timestamp that has already been verified.
     fn process_verified_timestamp(&mut self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // If this is the first timestamp we've seen, it probably came from the genesis block,
         // so we'll trust it.
@@ -182,6 +189,7 @@ impl Accountant {
         Ok(())
     }
 
+    /// Process an Transaction or Witness that has already been verified.
     fn process_verified_event(self: &mut Self, event: &Event, allow_deposits: bool) -> Result<()> {
         match *event {
             Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
@@ -190,6 +198,8 @@ impl Accountant {
         }
     }
 
+    /// Create, sign, and process a Transaction from `keypair` to `to` of
+    /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
         self: &mut Self,
         n: i64,
@@ -202,6 +212,9 @@ impl Accountant {
         self.process_transaction(tr).map(|_| sig)
     }
 
+    /// Create, sign, and process a postdated Transaction from `keypair`
+    /// to `to` of `n` tokens on `dt` where `last_id` is the last Entry ID
+    /// observed by the client.
     pub fn transfer_on_date(
         self: &mut Self,
         n: i64,

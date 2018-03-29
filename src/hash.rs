@@ -1,3 +1,5 @@
+//! A module for creating SHA-256 hashes.
+
 use generic_array::GenericArray;
 use generic_array::typenum::U32;
 use sha2::{Digest, Sha256};

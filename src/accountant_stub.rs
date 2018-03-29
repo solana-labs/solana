@@ -1,6 +1,7 @@
-//! The `accountant` is a client of the `historian`. It uses the historian's
-//! event log to record transactions. Its users can deposit funds and
-//! transfer funds to other users.
+//! A AccountantStub is client-side object that interfaces with a server-side Accountant
+//! object via the network interface exposed by AccountantSkel. Client code should use
+//! this object instead of writing messages to the network directly. The binary
+//! encoding of its messages are unstable and may change in future releases.
 
 use accountant_skel::{Request, Response};
 use bincode::{deserialize, serialize};
@@ -16,6 +17,9 @@ pub struct AccountantStub {
 }
 
 impl AccountantStub {
+    /// Create a new AccountantStub that will interface with AccountantSkel
+    /// over `socket`. To receive responses, the caller must bind `socket`
+    /// to a public address before invoking AccountantStub methods.
     pub fn new(addr: &str, socket: UdpSocket) -> Self {
         AccountantStub {
             addr: addr.to_string(),
@@ -23,12 +27,15 @@ impl AccountantStub {
         }
     }
 
+    /// Send a signed Transaction to the server for processing. This method
+    /// does not wait for a response.
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let req = Request::Transaction(tr);
         let data = serialize(&req).unwrap();
         self.socket.send_to(&data, &self.addr)
     }
 
+    /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
         n: i64,
@@ -41,6 +48,9 @@ impl AccountantStub {
         self.transfer_signed(tr).map(|_| sig)
     }
 
+    /// Request the balance of the user holding `pubkey`. This method blocks
+    /// until the server sends a response. If the response packet is dropped
+    /// by the network, this method will hang indefinitely.
     pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<i64>> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
@@ -55,6 +65,7 @@ impl AccountantStub {
         Ok(None)
     }
 
+    /// Request the first or last Entry ID from the server.
     fn get_id(&self, is_last: bool) -> io::Result<Hash> {
         let req = Request::GetId { is_last };
         let data = serialize(&req).expect("serialize GetId");
@@ -68,6 +79,10 @@ impl AccountantStub {
         Ok(Default::default())
     }
 
+    /// Request the last Entry ID from the server. This method blocks
+    /// until the server sends a response. At the time of this writing,
+    /// it also has the side-effect of causing the server to log any
+    /// entries that have been published by the Historian.
     pub fn get_last_id(&self) -> io::Result<Hash> {
         self.get_id(true)
     }
