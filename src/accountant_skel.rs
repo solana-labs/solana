@@ -78,10 +78,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Process Request items sent by clients.
-    pub fn process_verified_request(self: &mut Self, msg: Request) -> Option<Response> {
+    pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
         match msg {
             Request::Transaction(tr) => {
-                if let Err(err) = self.acc.process_verified_transaction(&tr, false) {
+                if let Err(err) = self.acc.log_verified_transaction(tr) {
                     eprintln!("Transaction error: {:?}", err);
                 }
                 None
@@ -126,7 +126,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
             for (req, rsp_addr) in reqs {
-                if let Some(resp) = obj.lock().unwrap().process_verified_request(req) {
+                if let Some(resp) = obj.lock().unwrap().log_verified_request(req) {
                     if ursps.responses.len() <= num {
                         ursps
                             .responses
