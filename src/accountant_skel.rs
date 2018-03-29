@@ -1,3 +1,7 @@
+//! The AccountantSkel is a microservice that exposes the high-level
+//! Accountant API to the network. Its message encoding is currently
+//! in flux. Clients should AccountantStub to interact with it.
+
 use accountant::Accountant;
 use bincode::{deserialize, serialize};
 use entry::Entry;
@@ -7,7 +11,7 @@ use serde_json;
 use signature::PublicKey;
 use std::default::Default;
 use std::io::{ErrorKind, Write};
-use std::net::{TcpStream, UdpSocket};
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -20,7 +24,6 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
     pub acc: Accountant,
     pub last_id: Hash,
     writer: W,
-    subscribers: Vec<TcpStream>,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -39,31 +42,26 @@ pub enum Response {
 }
 
 impl<W: Write + Send + 'static> AccountantSkel<W> {
+    /// Create a new AccountantSkel that wraps the given Accountant.
     pub fn new(acc: Accountant, w: W) -> Self {
         let last_id = acc.first_id;
         AccountantSkel {
             acc,
             last_id,
             writer: w,
-            subscribers: vec![],
         }
     }
 
+    /// Process any Entry items that have been published by the Historian.
     pub fn sync(&mut self) -> Hash {
         while let Ok(entry) = self.acc.historian.receiver.try_recv() {
             self.last_id = entry.id;
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-
-            let buf = serialize(&entry).expect("serialize");
-            self.subscribers
-                .retain(|ref mut subscriber| match subscriber.write(&buf) {
-                    Err(err) => err.kind() != ErrorKind::BrokenPipe,
-                    _ => true,
-                });
         }
         self.last_id
     }
 
+    /// Process Request items sent by clients.
     pub fn process_request(self: &mut Self, msg: Request) -> Option<Response> {
         match msg {
             Request::Transaction(tr) => {
@@ -127,7 +125,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         Ok(())
     }
 
-    /// UDP Server that forwards messages to Accountant methods.
+    /// Create a UDP microservice that forwards messages the given AccountantSkel.
+    /// Set `exit` to shutdown its threads.
     pub fn serve(
         obj: Arc<Mutex<AccountantSkel<W>>>,
         addr: &str,

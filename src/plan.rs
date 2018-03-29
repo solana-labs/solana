@@ -19,6 +19,7 @@ pub enum Condition {
 }
 
 impl Condition {
+    /// Return true if the given Witness satisfies this Condition.
     pub fn is_satisfied(&self, witness: &Witness) -> bool {
         match (self, witness) {
             (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
@@ -42,18 +43,23 @@ pub enum Plan {
 }
 
 impl Plan {
+    /// Create the simplest spending plan - one that pays `tokens` to PublicKey.
     pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
         Plan::Pay(Payment { tokens, to })
     }
 
+    /// Create a spending plan that pays `tokens` to `to` after being witnessed by `from`.
     pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
         Plan::After(Condition::Signature(from), Payment { tokens, to })
     }
 
+    /// Create a spending plan that pays `tokens` to `to` after the given DateTime.
     pub fn new_future_payment(dt: DateTime<Utc>, tokens: i64, to: PublicKey) -> Self {
         Plan::After(Condition::Timestamp(dt), Payment { tokens, to })
     }
 
+    /// Create a spending plan that pays `tokens` to `to` after the given DateTime
+    /// unless cancelled by `from`.
     pub fn new_cancelable_future_payment(
         dt: DateTime<Utc>,
         from: PublicKey,
@@ -66,6 +72,7 @@ impl Plan {
         )
     }
 
+    /// Return true if the spending plan requires no additional Witnesses.
     pub fn is_complete(&self) -> bool {
         match *self {
             Plan::Pay(_) => true,
@@ -73,6 +80,7 @@ impl Plan {
         }
     }
 
+    /// Return true if the plan spends exactly `spendable_tokens`.
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
             Plan::Pay(ref payment) | Plan::After(_, ref payment) => {

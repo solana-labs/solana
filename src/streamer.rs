@@ -1,3 +1,5 @@
+//! A module for efficient batch processing of UDP packets.
+
 use result::{Error, Result};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
@@ -320,7 +322,7 @@ mod bench {
         })
     }
 
-    fn sinc(
+    fn sink(
         recycler: PacketRecycler,
         exit: Arc<AtomicBool>,
         rvs: Arc<Mutex<usize>>,
@@ -354,7 +356,7 @@ mod bench {
         let t_producer3 = producer(&addr, recycler.clone(), exit.clone());
 
         let rvs = Arc::new(Mutex::new(0));
-        let t_sinc = sinc(recycler.clone(), exit.clone(), rvs.clone(), r_reader);
+        let t_sink = sink(recycler.clone(), exit.clone(), rvs.clone(), r_reader);
 
         let start = SystemTime::now();
         let start_val = *rvs.lock().unwrap();
@@ -370,7 +372,7 @@ mod bench {
         t_producer1.join()?;
         t_producer2.join()?;
         t_producer3.join()?;
-        t_sinc.join()?;
+        t_sink.join()?;
         Ok(())
     }
     #[bench]
