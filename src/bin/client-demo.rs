@@ -46,19 +46,6 @@ fn main() {
         nsps / 1_000_f64
     );
 
-    println!("Verify signatures...");
-    let now = Instant::now();
-    transactions.par_iter().for_each(|tr| assert!(tr.verify()));
-    let duration = now.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsvps = txs as f64 / ns as f64;
-    let nspsv = ns as f64 / txs as f64;
-    println!(
-        "Done. {} thousand signature verifications per second, {}us per signature verification",
-        bsvps * 1_000_000_f64,
-        nspsv / 1_000_f64
-    );
-
     println!("Transferring 1 unit {} times...", txs);
     let now = Instant::now();
     let mut _sig = Default::default();

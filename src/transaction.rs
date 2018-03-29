@@ -2,6 +2,7 @@
 
 use bincode::serialize;
 use chrono::prelude::*;
+use rayon::prelude::*;
 use hash::Hash;
 use plan::{Condition, Payment, Plan};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
@@ -65,6 +66,21 @@ impl Transaction {
     pub fn verify(&self) -> bool {
         self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.tokens)
     }
+}
+
+/// Verify a batch of signatures.
+pub fn verify_signatures(transactions: &[Transaction]) -> bool {
+    transactions.par_iter().all(|tr| tr.verify())
+}
+
+/// Verify a batch of spending plans.
+pub fn verify_plans(transactions: &[Transaction]) -> bool {
+    transactions.par_iter().all(|tr| tr.plan.verify(tr.tokens))
+}
+
+/// Verify a batch of transactions.
+pub fn verify_transactions(transactions: &[Transaction]) -> bool {
+    verify_signatures(transactions) && verify_plans(transactions)
 }
 
 #[cfg(test)]
@@ -132,5 +148,40 @@ mod tests {
             payment.to = thief_keypair.pubkey(); // <-- attack!
         };
         assert!(!tr.verify());
+    }
+
+    #[test]
+    fn test_verify_transactions() {
+        let alice_keypair = KeyPair::new();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let carol_pubkey = KeyPair::new().pubkey();
+        let last_id = Hash::default();
+        let tr0 = Transaction::new(&alice_keypair, bob_pubkey, 1, last_id);
+        let tr1 = Transaction::new(&alice_keypair, carol_pubkey, 1, last_id);
+        let transactions = vec![tr0, tr1];
+        assert!(verify_transactions(&transactions));
+    }
+}
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
+    use transaction::*;
+
+    #[bench]
+    fn verify_signatures_bench(bencher: &mut Bencher) {
+        let alice_keypair = KeyPair::new();
+        let last_id = Hash::default();
+        let transactions: Vec<_> = (0..64)
+            .into_par_iter()
+            .map(|_| {
+                let rando_pubkey = KeyPair::new().pubkey();
+                Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
+            })
+            .collect();
+        bencher.iter(|| {
+            assert!(verify_signatures(&transactions));
+        });
     }
 }

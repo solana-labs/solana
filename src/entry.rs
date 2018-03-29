@@ -1,5 +1,6 @@
 use event::Event;
 use hash::{extend_and_hash, hash, Hash};
+use rayon::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
@@ -22,12 +23,8 @@ impl Entry {
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the event is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
-        for event in &self.events {
-            if !event.verify() {
-                return false;
-            }
-        }
-        self.id == next_hash(start_hash, self.num_hashes, &self.events)
+        self.events.par_iter().all(|event| event.verify())
+            && self.id == next_hash(start_hash, self.num_hashes, &self.events)
     }
 }
 
