@@ -10,7 +10,7 @@ use result::Result;
 use serde_json;
 use signature::PublicKey;
 use std::default::Default;
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
