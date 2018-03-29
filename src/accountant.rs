@@ -116,7 +116,7 @@ impl Accountant {
     }
 
     /// Process a Transaction that has already been verified.
-    fn process_verified_transaction(
+    pub fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
         allow_deposits: bool,
