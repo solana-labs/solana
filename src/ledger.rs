@@ -19,8 +19,8 @@ use rayon::prelude::*;
 /// Verifies the hashes and counts of a slice of events are all consistent.
 pub fn verify_slice(entries: &[Entry], start_hash: &Hash) -> bool {
     let genesis = [Entry::new_tick(Default::default(), start_hash)];
-    let event_pairs = genesis.par_iter().chain(entries).zip(entries);
-    event_pairs.all(|(x0, x1)| x1.verify(&x0.id))
+    let entry_pairs = genesis.par_iter().chain(entries).zip(entries);
+    entry_pairs.all(|(x0, x1)| x1.verify(&x0.id))
 }
 
 /// Create a vector of Ticks of length `len` from `start_hash` hash and `num_hashes`.
