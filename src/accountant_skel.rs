@@ -101,6 +101,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let mut num = 0;
             let mut ursps = rsps.write().unwrap();
             for packet in &msgs.read().unwrap().packets {
+                let rsp_addr = packet.meta.get_addr();
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 if let Some(resp) = obj.lock().unwrap().process_request(req) {
@@ -114,7 +115,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                     let len = v.len();
                     rsp.data[..len].copy_from_slice(&v);
                     rsp.meta.size = len;
-                    rsp.meta.set_addr(&packet.meta.get_addr());
+                    rsp.meta.set_addr(&rsp_addr);
                     num += 1;
                 }
             }
