@@ -11,7 +11,7 @@ use serde_json;
 use signature::PublicKey;
 use std::default::Default;
 use std::io::Write;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -32,6 +32,10 @@ pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
     GetId { is_last: bool },
+}
+
+fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, SocketAddr)> {
+    reqs
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -98,12 +102,18 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let rsps = streamer::allocate(response_recycler);
         let rsps_ = rsps.clone();
         {
-            let mut num = 0;
-            let mut ursps = rsps.write().unwrap();
+            let mut reqs = vec![];
             for packet in &msgs.read().unwrap().packets {
                 let rsp_addr = packet.meta.get_addr();
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
+                reqs.push((req, rsp_addr));
+            }
+            let reqs = filter_valid_requests(reqs);
+
+            let mut num = 0;
+            let mut ursps = rsps.write().unwrap();
+            for (req, rsp_addr) in reqs {
                 if let Some(resp) = obj.lock().unwrap().process_request(req) {
                     if ursps.responses.len() <= num {
                         ursps
