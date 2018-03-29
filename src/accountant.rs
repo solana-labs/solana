@@ -94,12 +94,8 @@ impl Accountant {
         }
     }
 
-    /// Verify and process the given Transaction.
-    pub fn process_transaction(self: &mut Self, tr: Transaction) -> Result<()> {
-        if !tr.verify() {
-            return Err(AccountingError::InvalidTransfer);
-        }
-
+    /// Process and log the given Transaction.
+    pub fn log_verified_transaction(&mut self, tr: Transaction) -> Result<()> {
         if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
@@ -115,8 +111,17 @@ impl Accountant {
         Ok(())
     }
 
+    /// Verify and process the given Transaction.
+    pub fn log_transaction(&mut self, tr: Transaction) -> Result<()> {
+        if !tr.verify() {
+            return Err(AccountingError::InvalidTransfer);
+        }
+
+        self.log_verified_transaction(tr)
+    }
+
     /// Process a Transaction that has already been verified.
-    pub fn process_verified_transaction(
+    fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
         allow_deposits: bool,
@@ -209,7 +214,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new(keypair, to, n, last_id);
         let sig = tr.sig;
-        self.process_transaction(tr).map(|_| sig)
+        self.log_transaction(tr).map(|_| sig)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -225,7 +230,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tr.sig;
-        self.process_transaction(tr).map(|_| sig)
+        self.log_transaction(tr).map(|_| sig)
     }
 
     pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
@@ -292,7 +297,7 @@ mod tests {
             payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
-            acc.process_transaction(tr.clone()),
+            acc.log_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
 
@@ -301,7 +306,7 @@ mod tests {
             payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(
-            acc.process_transaction(tr.clone()),
+            acc.log_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
     }

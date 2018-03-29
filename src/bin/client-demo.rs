@@ -8,7 +8,8 @@ use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::io::stdin;
 use std::net::UdpSocket;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use std::thread::sleep;
 use rayon::prelude::*;
 
 fn main() {
@@ -27,7 +28,7 @@ fn main() {
     println!("Mint's Initial Balance {}", mint_balance);
 
     println!("Signing transactions...");
-    let txs = 10_000;
+    let txs = 100_000;
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .into_par_iter()
@@ -55,17 +56,18 @@ fn main() {
     }
     println!("Waiting for last transaction to be confirmed...",);
     let mut val = mint_balance;
-    while val > mint_balance - txs {
+    let mut prev = 0;
+    while val != prev {
+        sleep(Duration::from_millis(20));
+        prev = val;
         val = acc.get_balance(&mint_pubkey).unwrap().unwrap();
     }
+    println!("Mint's Final Balance {}", val);
+    let txs = mint_balance - val;
+    println!("Successful transactions {}", txs);
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
     println!("Done. {} tps!", tps);
-    println!("Mint's Final Balance {}", val);
-    assert_eq!(val, mint_balance - txs);
-
-    // Force the ledger to print on the server.
-    acc.get_last_id().unwrap();
 }
