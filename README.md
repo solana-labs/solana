@@ -24,12 +24,6 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
 ```
 
-Install the solana executables:
-
-```bash
-    $ cargo install solana
-```
-
 The testnode server is initialized with a ledger from stdin and
 generates new ledger entries on stdout. To create the input ledger, we'll need
 to create *the mint* and use it to generate a *genesis ledger*. It's done in
@@ -37,21 +31,21 @@ two steps because the mint.json file contains a private key that will be
 used later in this demo.
 
 ```bash
-    $ echo 500 | solana-mint > mint.json
+    $ echo 1000000000 | cargo run --release --bin solana-mint | tee mint.json
     $ cat mint.json | solana-genesis > genesis.log
 ```
 
 Now you can start the server:
 
 ```bash
-    $ cat genesis.log | solana-testnode > transactions0.log
+    $ cat genesis.log | cargo run --release --bin solana-testnode | tee transactions0.log
 ```
 
 Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
-    $ cat mint.json | solana-client-demo
+    $ cat mint.json | cargo run --release --bin solana-client-demo
 ```
 
 Now kill the server with Ctrl-C, and take a look at the ledger. You should
@@ -67,14 +61,14 @@ Now restart the server from where we left off. Pass it both the genesis ledger, 
 the transaction ledger.
 
 ```bash
-    $ cat genesis.log transactions0.log | solana-testnode > transactions1.log
+    $ cat genesis.log transactions0.log | cargo run --release --bin solana-testnode > transactions1.log
 ```
 
 Lastly, run the client demo again, and verify that all funds were spent in the
 previous round, and so no additional transactions are added.
 
 ```bash
-    $ cat mint.json | solana-client-demo
+    $ cat mint.json | cargo run --release --bin solana-client-demo
 ```
 
 Stop the server again, and verify there are only Tick entries, and no Transaction entries.
