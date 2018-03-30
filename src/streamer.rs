@@ -5,7 +5,7 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
@@ -144,12 +144,10 @@ impl Default for Responses {
     }
 }
 
-pub type SharedPackets = Arc<RwLock<Packets>>;
-pub type Receiver = mpsc::Receiver<SharedPackets>;
-pub type Sender = mpsc::Sender<SharedPackets>;
-pub type SharedResponses = Arc<RwLock<Responses>>;
-pub type Responder = mpsc::Sender<SharedResponses>;
-pub type ResponseReceiver = mpsc::Receiver<SharedResponses>;
+pub type Receiver = mpsc::Receiver<Packets>;
+pub type Sender = mpsc::Sender<Packets>;
+pub type Responder = mpsc::Sender<Responses>;
+pub type ResponseReceiver = mpsc::Receiver<Responses>;
 
 impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
@@ -198,18 +196,11 @@ impl Responses {
     }
 }
 
-pub fn allocate<T>() -> Arc<RwLock<T>>
-where
-    T: Default,
-{
-    Arc::new(RwLock::new(Default::default()))
-}
-
 fn recv_loop(sock: &UdpSocket, exit: &Arc<AtomicBool>, channel: &Sender) -> Result<()> {
     loop {
-        let msgs: SharedPackets = allocate();
+        let mut msgs = Packets::default();
         loop {
-            let ret = msgs.write().unwrap().read_from(sock);
+            let ret = msgs.read_from(sock);
             match ret {
                 Ok(()) => {
                     channel.send(msgs)?;
@@ -238,7 +229,7 @@ fn recv_send(sock: &UdpSocket, r: &ResponseReceiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
     let mut num = 0;
-    msgs.read().unwrap().send_to(sock, &mut num)?;
+    msgs.send_to(sock, &mut num)?;
     Ok(())
 }
 
@@ -263,13 +254,13 @@ mod bench {
     use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use std::time::SystemTime;
-    use streamer::{allocate, receiver, Packet, Receiver, SharedPackets, PACKET_SIZE};
+    use streamer::{receiver, Packet, Packets, Receiver, PACKET_SIZE};
 
     fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let msgs: SharedPackets = allocate();
-        msgs.write().unwrap().packets.resize(10, Packet::default());
-        for w in &mut msgs.write().unwrap().packets {
+        let mut msgs = Packets::default();
+        msgs.packets.resize(10, Packet::default());
+        for w in &mut msgs.packets {
             w.meta.size = PACKET_SIZE;
             w.meta.set_addr(&addr);
         }
@@ -278,7 +269,7 @@ mod bench {
                 return;
             }
             let mut num = 0;
-            for p in &msgs.read().unwrap().packets {
+            for p in &msgs.packets {
                 let a = p.meta.get_addr();
                 send.send_to(&p.data[..p.meta.size], &a).unwrap();
                 num += 1;
@@ -295,7 +286,7 @@ mod bench {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(msgs) => {
-                    *rvs.lock().unwrap() += msgs.read().unwrap().packets.len();
+                    *rvs.lock().unwrap() += msgs.packets.len();
                 }
                 _ => (),
             }
@@ -347,14 +338,14 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
-    use streamer::{allocate, receiver, responder, Packet, Packets, Receiver, Response, Responses,
-                   SharedResponses, PACKET_SIZE};
+    use streamer::{receiver, responder, Packet, Packets, Receiver, Response, Responses,
+                   PACKET_SIZE};
 
     fn get_msgs(r: Receiver, num: &mut usize) {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
+                Ok(m) => *num += m.packets.len(),
                 e => println!("error {:?}", e),
             }
             if *num == 10 {
@@ -373,9 +364,9 @@ mod test {
         let t_receiver = receiver(read, exit.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
         let t_responder = responder(send, exit.clone(), r_responder);
-        let msgs = allocate();
-        msgs.write().unwrap().packets.resize(10, Packet::default());
-        for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
+        let msgs = Pakcets::default();
+        msgs.packets.resize(10, Packet::default());
+        for (i, w) in msgs.packets.iter_mut().enumerate() {
             w.data[0] = i as u8;
             w.size = PACKET_SIZE;
             w.set_addr(&addr);
@@ -406,12 +397,9 @@ mod test {
         let t_receiver = receiver(read, exit.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
         let t_responder = responder(send, exit.clone(), r_responder);
-        let msgs: SharedResponses = allocate();
-        msgs.write()
-            .unwrap()
-            .responses
-            .resize(10, Response::default());
-        for (i, w) in msgs.write().unwrap().responses.iter_mut().enumerate() {
+        let mut msgs = Responses::default();
+        msgs.responses.resize(10, Response::default());
+        for (i, w) in msgs.responses.iter_mut().enumerate() {
             w.data[0] = i as u8;
             w.meta.size = PACKET_SIZE;
             w.meta.set_addr(&addr);

@@ -108,10 +108,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
-        let rsps: streamer::SharedResponses = streamer::allocate();
+        let mut rsps = streamer::Responses::default();
         {
             let mut reqs = vec![];
-            for packet in &msgs.read().unwrap().packets {
+            for packet in &msgs.packets {
                 let rsp_addr = packet.meta.get_addr();
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
@@ -120,15 +120,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let reqs = filter_valid_requests(reqs);
 
             let mut num = 0;
-            let mut ursps = rsps.write().unwrap();
             for (req, rsp_addr) in reqs {
                 if let Some(resp) = obj.lock().unwrap().log_verified_request(req) {
-                    if ursps.responses.len() <= num {
-                        ursps
-                            .responses
+                    if rsps.responses.len() <= num {
+                        rsps.responses
                             .resize((num + 1) * 2, streamer::Response::default());
                     }
-                    let rsp = &mut ursps.responses[num];
+                    let rsp = &mut rsps.responses[num];
                     let v = serialize(&resp)?;
                     let len = v.len();
                     rsp.data[..len].copy_from_slice(&v);
@@ -137,7 +135,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                     num += 1;
                 }
             }
-            ursps.responses.resize(num, streamer::Response::default());
+            rsps.responses.resize(num, streamer::Response::default());
         }
         s_responder.send(rsps)?;
         Ok(())
