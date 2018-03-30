@@ -1,4 +1,4 @@
-//! Exposes a Result type that propagates one of many different Error types.
+//! The `result` module exposes a Result type that propagates one of many different Error types.
 
 use bincode;
 use serde_json;

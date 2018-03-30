@@ -1,4 +1,4 @@
-//! A module for efficient batch processing of UDP packets.
+//! The 'streamer` module allows for efficient batch processing of UDP packets.
 
 use result::{Error, Result};
 use std::fmt;

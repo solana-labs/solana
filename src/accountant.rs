@@ -1,6 +1,6 @@
-//! The Accountant tracks client balances and the progress of pending
+//! The `accountant` module tracks client balances, and the progress of pending
 //! transactions. It offers a high-level public API that signs transactions
-//! on behalf of the caller and a private low-level API for when they have
+//! on behalf of the caller, and a private low-level API for when they have
 //! already been signed and verified.
 
 use chrono::prelude::*;

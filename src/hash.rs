@@ -1,4 +1,4 @@
-//! A module for creating SHA-256 hashes.
+//! The `hash` module provides functions for creating SHA-256 hashes.
 
 use generic_array::GenericArray;
 use generic_array::typenum::U32;

@@ -1,4 +1,4 @@
-//! The `ledger` module provides the functions for parallel verification of the
+//! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
 use entry::{next_tick, Entry};

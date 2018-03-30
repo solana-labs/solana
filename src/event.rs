@@ -1,4 +1,4 @@
-//! An Event may be a Transaction or a Witness used to process a pending
+//! The `event` module handles events, which may be a `Transaction`, or a `Witness` used to process a pending
 //! Transaction.
 
 use bincode::serialize;
