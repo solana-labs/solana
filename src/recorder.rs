@@ -1,7 +1,7 @@
 //! The `recorder` module provides an object for generating a Proof of History.
 //! It records Event items on behalf of its users. It continuously generates
 //! new hashes, only stopping to check if it has been sent an Event item. It
-//! tags each Event with an Entry and sends it back. The Entry includes the
+//! tags each Event with an Entry, and sends it back. The Entry includes the
 //! Event, the latest hash, and the number of hashes since the last event.
 //! The resulting stream of entries represents ordered events in time.
 

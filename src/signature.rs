@@ -1,4 +1,4 @@
-//! The `signature` module provides functionality for public and private keys
+//! The `signature` module provides functionality for public, and private keys.
 
 use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};

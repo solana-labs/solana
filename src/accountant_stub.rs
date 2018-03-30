@@ -1,4 +1,4 @@
-//! A AccountantStub is client-side object that interfaces with a server-side Accountant
+//! The `accountantStub` module is a client-side object that interfaces with a server-side Accountant
 //! object via the network interface exposed by AccountantSkel. Client code should use
 //! this object instead of writing messages to the network directly. The binary
 //! encoding of its messages are unstable and may change in future releases.

@@ -1,4 +1,4 @@
-//! A domain-specific language for payment plans. Users create Plan objects that
+//! The `plan` module provides a domain-specific language for payment plans. Users create Plan objects that
 //! are given to an interpreter. The interpreter listens for `Witness` events,
 //! which it uses to reduce the payment plan. When the plan is reduced to a
 //! `Payment`, the payment is executed.

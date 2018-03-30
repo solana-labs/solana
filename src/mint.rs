@@ -1,4 +1,4 @@
-//! A library for generating the chain's genesis block.
+//! The `mint` module is a library for generating the chain's genesis block.
 
 use entry::Entry;
 use entry::create_entry;

@@ -1,6 +1,6 @@
-//! The AccountantSkel is a microservice that exposes the high-level
+//! The `accountantSkel` module is a microservice that exposes the high-level
 //! Accountant API to the network. Its message encoding is currently
-//! in flux. Clients should AccountantStub to interact with it.
+//! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
 use bincode::{deserialize, serialize};

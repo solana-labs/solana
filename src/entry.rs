@@ -1,6 +1,6 @@
-//! An Entry is a fundamental building block of Proof of History. It contains a
-//! unqiue ID that is the hash of the Entry before it plus the hash of the
-//! transactins within it. Entries cannot be reordered and its field `num_hashes`
+//! The `entry` module is a fundamental building block of Proof of History. It contains a
+//! unique ID that is the hash of the Entry before it, plus the hash of the
+//! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use event::Event;
 use hash::{extend_and_hash, hash, Hash};

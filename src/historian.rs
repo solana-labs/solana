@@ -1,4 +1,4 @@
-//! The Historian provides a microservice for generating a Proof of History.
+//! The `historian` module provides a microservice for generating a Proof of History.
 //! It manages a thread containing a Proof of History Recorder.
 
 use entry::Entry;
