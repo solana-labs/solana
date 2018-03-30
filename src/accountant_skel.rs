@@ -105,12 +105,11 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         r_reader: &streamer::Receiver,
         s_responder: &streamer::Responder,
-        packet_recycler: &streamer::PacketRecycler,
+        _packet_recycler: &streamer::PacketRecycler,
         response_recycler: &streamer::ResponseRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
-        let msgs_ = msgs.clone();
         let rsps = streamer::allocate(response_recycler);
         let rsps_ = rsps.clone();
         {
@@ -144,7 +143,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             ursps.responses.resize(num, streamer::Response::default());
         }
         s_responder.send(rsps_)?;
-        streamer::recycle(packet_recycler, msgs_);
         Ok(())
     }
 
@@ -167,8 +165,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_receiver = streamer::receiver(read, exit.clone(), packet_recycler.clone(), s_reader)?;
 
         let (s_responder, r_responder) = channel();
-        let t_responder =
-            streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
+        let t_responder = streamer::responder(write, exit.clone(), r_responder);
 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
