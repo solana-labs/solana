@@ -105,13 +105,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         r_reader: &streamer::Receiver,
         s_responder: &streamer::Responder,
-        _packet_recycler: &streamer::PacketRecycler,
-        response_recycler: &streamer::ResponseRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = r_reader.recv_timeout(timer)?;
-        let rsps = streamer::allocate(response_recycler);
-        let rsps_ = rsps.clone();
+        let rsps: streamer::SharedResponses = streamer::allocate();
         {
             let mut reqs = vec![];
             for packet in &msgs.read().unwrap().packets {
@@ -142,7 +139,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
             ursps.responses.resize(num, streamer::Response::default());
         }
-        s_responder.send(rsps_)?;
+        s_responder.send(rsps)?;
         Ok(())
     }
 
@@ -159,23 +156,15 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
 
-        let packet_recycler = Arc::new(Mutex::new(Vec::new()));
-        let response_recycler = Arc::new(Mutex::new(Vec::new()));
         let (s_reader, r_reader) = channel();
-        let t_receiver = streamer::receiver(read, exit.clone(), packet_recycler.clone(), s_reader)?;
+        let t_receiver = streamer::receiver(read, exit.clone(), s_reader)?;
 
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(write, exit.clone(), r_responder);
 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = AccountantSkel::process(
-                &skel,
-                &r_reader,
-                &s_responder,
-                &packet_recycler,
-                &response_recycler,
-            );
+            let e = AccountantSkel::process(&skel, &r_reader, &s_responder);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }

@@ -5,7 +5,7 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
@@ -145,11 +145,9 @@ impl Default for Responses {
 }
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
-pub type PacketRecycler = Arc<Mutex<Vec<SharedPackets>>>;
 pub type Receiver = mpsc::Receiver<SharedPackets>;
 pub type Sender = mpsc::Sender<SharedPackets>;
 pub type SharedResponses = Arc<RwLock<Responses>>;
-pub type ResponseRecycler = Arc<Mutex<Vec<SharedResponses>>>;
 pub type Responder = mpsc::Sender<SharedResponses>;
 pub type ResponseReceiver = mpsc::Receiver<SharedResponses>;
 
@@ -200,23 +198,16 @@ impl Responses {
     }
 }
 
-pub fn allocate<T>(recycler: &Arc<Mutex<Vec<Arc<RwLock<T>>>>>) -> Arc<RwLock<T>>
+pub fn allocate<T>() -> Arc<RwLock<T>>
 where
     T: Default,
 {
-    let mut gc = recycler.lock().expect("lock");
-    gc.pop()
-        .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+    Arc::new(RwLock::new(Default::default()))
 }
 
-fn recv_loop(
-    sock: &UdpSocket,
-    exit: &Arc<AtomicBool>,
-    recycler: &PacketRecycler,
-    channel: &Sender,
-) -> Result<()> {
+fn recv_loop(sock: &UdpSocket, exit: &Arc<AtomicBool>, channel: &Sender) -> Result<()> {
     loop {
-        let msgs = allocate(recycler);
+        let msgs: SharedPackets = allocate();
         loop {
             let ret = msgs.write().unwrap().read_from(sock);
             match ret {
@@ -234,16 +225,11 @@ fn recv_loop(
     }
 }
 
-pub fn receiver(
-    sock: UdpSocket,
-    exit: Arc<AtomicBool>,
-    recycler: PacketRecycler,
-    channel: Sender,
-) -> Result<JoinHandle<()>> {
+pub fn receiver(sock: UdpSocket, exit: Arc<AtomicBool>, channel: Sender) -> Result<JoinHandle<()>> {
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))?;
     Ok(spawn(move || {
-        let _ = recv_loop(&sock, &exit, &recycler, &channel);
+        let _ = recv_loop(&sock, &exit, &channel);
         ()
     }))
 }
@@ -277,18 +263,13 @@ mod bench {
     use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use std::time::SystemTime;
-    use streamer::{allocate, receiver, Packet, PacketRecycler, Receiver, PACKET_SIZE};
+    use streamer::{allocate, receiver, Packet, Receiver, SharedPackets, PACKET_SIZE};
 
-    fn producer(
-        addr: &SocketAddr,
-        recycler: PacketRecycler,
-        exit: Arc<AtomicBool>,
-    ) -> JoinHandle<()> {
+    fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let msgs = allocate(&recycler);
-        let msgs_ = msgs.clone();
+        let msgs: SharedPackets = allocate();
         msgs.write().unwrap().packets.resize(10, Packet::default());
-        for w in msgs.write().unwrap().packets.iter_mut() {
+        for w in &mut msgs.write().unwrap().packets {
             w.meta.size = PACKET_SIZE;
             w.meta.set_addr(&addr);
         }
@@ -297,7 +278,7 @@ mod bench {
                 return;
             }
             let mut num = 0;
-            for p in msgs_.read().unwrap().packets.iter() {
+            for p in &msgs.read().unwrap().packets {
                 let a = p.meta.get_addr();
                 send.send_to(&p.data[..p.meta.size], &a).unwrap();
                 num += 1;
@@ -324,13 +305,12 @@ mod bench {
         let read = UdpSocket::bind("127.0.0.1:0")?;
         let addr = read.local_addr()?;
         let exit = Arc::new(AtomicBool::new(false));
-        let recycler = Arc::new(Mutex::new(Vec::new()));
 
         let (s_reader, r_reader) = channel();
-        let t_reader = receiver(read, exit.clone(), recycler.clone(), s_reader)?;
-        let t_producer1 = producer(&addr, recycler.clone(), exit.clone());
-        let t_producer2 = producer(&addr, recycler.clone(), exit.clone());
-        let t_producer3 = producer(&addr, recycler.clone(), exit.clone());
+        let t_reader = receiver(read, exit.clone(), s_reader)?;
+        let t_producer1 = producer(&addr, exit.clone());
+        let t_producer2 = producer(&addr, exit.clone());
+        let t_producer3 = producer(&addr, exit.clone());
 
         let rvs = Arc::new(Mutex::new(0));
         let t_sink = sink(exit.clone(), rvs.clone(), r_reader);
@@ -365,10 +345,10 @@ mod test {
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
-    use streamer::{allocate, receiver, responder, Packet, Packets, Receiver, Response,
-                   ResponseRecycler, Responses, PACKET_SIZE};
+    use streamer::{allocate, receiver, responder, Packet, Packets, Receiver, Response, Responses,
+                   SharedResponses, PACKET_SIZE};
 
     fn get_msgs(r: Receiver, num: &mut usize) {
         for _t in 0..5 {
@@ -388,13 +368,12 @@ mod test {
         let read = UdpSocket::bind("[::1]:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("[::1]:0").expect("bind");
-        let exit = Arc::new(Mutex::new(false));
-        let recycler = Arc::new(Mutex::new(Vec::new()));
+        let exit = Arc::new(AtomicBool::new(false));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(read, exit.clone(), recycler.clone(), s_reader).unwrap();
+        let t_receiver = receiver(read, exit.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
-        let t_responder = responder(send, exit.clone(), recycler.clone(), r_responder);
-        let msgs = allocate(&recycler);
+        let t_responder = responder(send, exit.clone(), r_responder);
+        let msgs = allocate();
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for (i, w) in msgs.write().unwrap().packets.iter_mut().enumerate() {
             w.data[0] = i as u8;
@@ -423,13 +402,11 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let packet_recycler = Arc::new(Mutex::new(Vec::new()));
-        let resp_recycler: ResponseRecycler = Arc::new(Mutex::new(Vec::new()));
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(read, exit.clone(), packet_recycler.clone(), s_reader).unwrap();
+        let t_receiver = receiver(read, exit.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
         let t_responder = responder(send, exit.clone(), r_responder);
-        let msgs = allocate(&resp_recycler);
+        let msgs: SharedResponses = allocate();
         msgs.write()
             .unwrap()
             .responses
