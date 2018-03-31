@@ -13,10 +13,8 @@ use std::default::Default;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
-use std::time::Duration;
 use streamer;
 use transaction::Transaction;
 use rayon::prelude::*;
@@ -103,19 +101,15 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        r_reader: &streamer::Receiver,
-        s_responder: &streamer::Responder,
-        packet_recycler: &streamer::PacketRecycler,
-        response_recycler: &streamer::ResponseRecycler,
+        read: &UdpSocket,
+        write: &UdpSocket,
+        msgs: &mut streamer::Packets,
+        rsps: &mut streamer::Responses,
     ) -> Result<()> {
-        let timer = Duration::new(1, 0);
-        let msgs = r_reader.recv_timeout(timer)?;
-        let msgs_ = msgs.clone();
-        let rsps = streamer::allocate(response_recycler);
-        let rsps_ = rsps.clone();
+        msgs.read_from(read)?;
         {
             let mut reqs = vec![];
-            for packet in &msgs.read().unwrap().packets {
+            for packet in &msgs.packets {
                 let rsp_addr = packet.meta.get_addr();
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
@@ -124,15 +118,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let reqs = filter_valid_requests(reqs);
 
             let mut num = 0;
-            let mut ursps = rsps.write().unwrap();
             for (req, rsp_addr) in reqs {
                 if let Some(resp) = obj.lock().unwrap().log_verified_request(req) {
-                    if ursps.responses.len() <= num {
-                        ursps
-                            .responses
+                    if rsps.responses.len() <= num {
+                        rsps.responses
                             .resize((num + 1) * 2, streamer::Response::default());
                     }
-                    let rsp = &mut ursps.responses[num];
+                    let rsp = &mut rsps.responses[num];
                     let v = serialize(&resp)?;
                     let len = v.len();
                     rsp.data[..len].copy_from_slice(&v);
@@ -141,10 +133,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                     num += 1;
                 }
             }
-            ursps.responses.resize(num, streamer::Response::default());
+            rsps.responses.resize(num, streamer::Response::default());
         }
-        s_responder.send(rsps_)?;
-        streamer::recycle(packet_recycler, msgs_);
+        let mut num = 0;
+        rsps.send_to(write, &mut num)?;
         Ok(())
     }
 
@@ -160,30 +152,16 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let mut local = read.local_addr()?;
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
+        let mut msgs = streamer::Packets::default();
+        let mut rsps = streamer::Responses::default();
 
-        let packet_recycler = Arc::new(Mutex::new(Vec::new()));
-        let response_recycler = Arc::new(Mutex::new(Vec::new()));
-        let (s_reader, r_reader) = channel();
-        let t_receiver = streamer::receiver(read, exit.clone(), packet_recycler.clone(), s_reader)?;
-
-        let (s_responder, r_responder) = channel();
-        let t_responder =
-            streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
-
-        let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = AccountantSkel::process(
-                &skel,
-                &r_reader,
-                &s_responder,
-                &packet_recycler,
-                &response_recycler,
-            );
+            let e = AccountantSkel::process(&obj, &read, &write, &mut msgs, &mut rsps);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
         });
 
-        Ok(vec![t_receiver, t_responder, t_server])
+        Ok(vec![t_server])
     }
 }
