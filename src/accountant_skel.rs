@@ -13,10 +13,8 @@ use std::default::Default;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
-use std::time::Duration;
 use streamer;
 use transaction::Transaction;
 use rayon::prelude::*;
@@ -103,12 +101,12 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        r_reader: &streamer::Receiver,
-        s_responder: &streamer::Responder,
+        read: &UdpSocket,
+        write: &UdpSocket,
+        msgs: &mut streamer::Packets,
+        rsps: &mut streamer::Responses,
     ) -> Result<()> {
-        let timer = Duration::new(1, 0);
-        let msgs = r_reader.recv_timeout(timer)?;
-        let mut rsps = streamer::Responses::default();
+        msgs.read_from(read)?;
         {
             let mut reqs = vec![];
             for packet in &msgs.packets {
@@ -137,7 +135,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
             rsps.responses.resize(num, streamer::Response::default());
         }
-        s_responder.send(rsps)?;
+        let mut num = 0;
+        rsps.send_to(write, &mut num)?;
         Ok(())
     }
 
@@ -153,21 +152,16 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let mut local = read.local_addr()?;
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
+        let mut msgs = streamer::Packets::default();
+        let mut rsps = streamer::Responses::default();
 
-        let (s_reader, r_reader) = channel();
-        let t_receiver = streamer::receiver(read, exit.clone(), s_reader)?;
-
-        let (s_responder, r_responder) = channel();
-        let t_responder = streamer::responder(write, exit.clone(), r_responder);
-
-        let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = AccountantSkel::process(&skel, &r_reader, &s_responder);
+            let e = AccountantSkel::process(&obj, &read, &write, &mut msgs, &mut rsps);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
         });
 
-        Ok(vec![t_receiver, t_responder, t_server])
+        Ok(vec![t_server])
     }
 }

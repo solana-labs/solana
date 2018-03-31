@@ -177,7 +177,7 @@ impl Packets {
         }
         Ok(i)
     }
-    fn read_from(&mut self, socket: &UdpSocket) -> Result<()> {
+    pub fn read_from(&mut self, socket: &UdpSocket) -> Result<()> {
         let sz = self.run_read_from(socket)?;
         self.packets.resize(sz, Packet::default());
         Ok(())
@@ -185,7 +185,7 @@ impl Packets {
 }
 
 impl Responses {
-    fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
+    pub fn send_to(&self, socket: &UdpSocket, num: &mut usize) -> Result<()> {
         for p in &self.responses {
             let a = p.meta.get_addr();
             socket.send_to(&p.data[..p.meta.size], &a)?;
