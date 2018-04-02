@@ -4,8 +4,6 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use signature::Signature;
-use std::collections::HashSet;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
@@ -14,7 +12,6 @@ pub struct Historian {
     pub sender: SyncSender<Signal>,
     pub receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
-    pub signatures: HashSet<Signature>,
 }
 
 impl Historian {
@@ -23,21 +20,11 @@ impl Historian {
         let (entry_sender, receiver) = sync_channel(1000);
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
-        let signatures = HashSet::new();
         Historian {
             sender,
             receiver,
             thread_hdl,
-            signatures,
         }
-    }
-
-    pub fn reserve_signature(&mut self, sig: &Signature) -> bool {
-        if self.signatures.contains(sig) {
-            return false;
-        }
-        self.signatures.insert(*sig);
-        true
     }
 
     /// A background thread that will continue tagging received Event messages and
@@ -66,7 +53,7 @@ impl Historian {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ledger::*;
+    use ledger::Block;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -95,7 +82,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        assert!(verify_slice(&[entry0, entry1, entry2], &zero));
+        assert!([entry0, entry1, entry2].verify(&zero));
     }
 
     #[test]
@@ -108,15 +95,6 @@ mod tests {
             hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
         );
-    }
-
-    #[test]
-    fn test_duplicate_event_signature() {
-        let zero = Hash::default();
-        let mut hist = Historian::new(&zero, None);
-        let sig = Signature::default();
-        assert!(hist.reserve_signature(&sig));
-        assert!(!hist.reserve_signature(&sig));
     }
 
     #[test]

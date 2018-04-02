@@ -3,8 +3,11 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
+use historian::Historian;
+use recorder::Signal;
 use bincode::{deserialize, serialize};
 use entry::Entry;
+use event::Event;
 use hash::Hash;
 use result::Result;
 use serde_json;
@@ -13,7 +16,7 @@ use std::default::Default;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, SendError};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -22,9 +25,10 @@ use transaction::Transaction;
 use rayon::prelude::*;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
-    pub acc: Accountant,
-    pub last_id: Hash,
+    acc: Accountant,
+    last_id: Hash,
     writer: W,
+    historian: Historian,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -32,7 +36,7 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
 pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
-    GetId { is_last: bool },
+    GetLastId,
 }
 
 impl Request {
@@ -54,23 +58,23 @@ fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, Sock
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     Entries { entries: Vec<Entry> },
-    Id { id: Hash, is_last: bool },
+    LastId { id: Hash },
 }
 
 impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, w: W) -> Self {
-        let last_id = acc.first_id;
+    pub fn new(acc: Accountant, last_id: Hash, writer: W, historian: Historian) -> Self {
         AccountantSkel {
             acc,
             last_id,
-            writer: w,
+            writer,
+            historian,
         }
     }
 
     /// Process any Entry items that have been published by the Historian.
     pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.acc.historian.receiver.try_recv() {
+        while let Ok(entry) = self.historian.receiver.try_recv() {
             self.last_id = entry.id;
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         }
@@ -81,8 +85,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
         match msg {
             Request::Transaction(tr) => {
-                if let Err(err) = self.acc.log_verified_transaction(tr) {
+                if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     eprintln!("Transaction error: {:?}", err);
+                } else if let Err(SendError(_)) = self.historian
+                    .sender
+                    .send(Signal::Event(Event::Transaction(tr)))
+                {
+                    eprintln!("Channel send error");
                 }
                 None
             }
@@ -90,14 +99,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
-            Request::GetId { is_last } => Some(Response::Id {
-                id: if is_last {
-                    self.sync()
-                } else {
-                    self.acc.first_id
-                },
-                is_last,
-            }),
+            Request::GetLastId => Some(Response::LastId { id: self.sync() }),
         }
     }
 

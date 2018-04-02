@@ -11,7 +11,7 @@ with by verifying each entry's hash can be generated from the hash in the previo
 extern crate solana;
 
 use solana::historian::Historian;
-use solana::ledger::{verify_slice, Entry, Hash};
+use solana::ledger::{Block, Entry, Hash};
 use solana::event::{generate_keypair, get_pubkey, sign_claim_data, Event};
 use std::thread::sleep;
 use std::time::Duration;
@@ -38,7 +38,7 @@ fn main() {
     }
     // Proof-of-History: Verify the historian learned about the events
     // in the same order they appear in the vector.
-    assert!(verify_slice(&entries, &seed));
+    assert!(entries[..].verify(&seed));
 }
 ```
 
@@ -56,7 +56,7 @@ Proof-of-History
 Take note of the last line:
 
 ```rust
-assert!(verify_slice(&entries, &seed));
+assert!(entries[..].verify(&seed));
 ```
 
 [It's a proof!](https://en.wikipedia.org/wiki/Curry–Howard_correspondence) For each entry returned by the

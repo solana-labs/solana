@@ -34,11 +34,11 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, start_hash: Hash) -> Self {
+    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, last_hash: Hash) -> Self {
         Recorder {
             receiver,
             sender,
-            last_hash: start_hash,
+            last_hash,
             events: vec![],
             num_hashes: 0,
             num_ticks: 0,

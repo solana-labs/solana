@@ -14,5 +14,5 @@ msc {
   recorder=>historian [ label = "e2 = Entry{id: h6, n: 3, event: Tick}" ] ;
   client=>historian [ label = "collect()" ] ;
   historian=>client [ label = "entries = [e0, e1, e2]" ] ;
-  client=>client [ label = "verify_slice(entries, h0)" ] ;
+  client=>client [ label = "entries.verify(h0)" ] ;
 }

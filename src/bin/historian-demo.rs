@@ -4,7 +4,7 @@ use solana::entry::Entry;
 use solana::event::Event;
 use solana::hash::Hash;
 use solana::historian::Historian;
-use solana::ledger::verify_slice;
+use solana::ledger::Block;
 use solana::recorder::Signal;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
@@ -33,5 +33,5 @@ fn main() {
     }
     // Proof-of-History: Verify the historian learned about the events
     // in the same order they appear in the vector.
-    assert!(verify_slice(&entries, &seed));
+    assert!(entries[..].verify(&seed));
 }

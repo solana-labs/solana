@@ -33,6 +33,10 @@ impl Mint {
         hash(&self.pkcs8)
     }
 
+    pub fn last_id(&self) -> Hash {
+        self.create_entries()[1].id
+    }
+
     pub fn keypair(&self) -> KeyPair {
         KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap()
     }
@@ -57,7 +61,7 @@ impl Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ledger::verify_slice;
+    use ledger::Block;
     use plan::Plan;
 
     #[test]
@@ -74,6 +78,6 @@ mod tests {
     #[test]
     fn test_verify_entries() {
         let entries = Mint::new(100).create_entries();
-        assert!(verify_slice(&entries, &entries[0].id));
+        assert!(entries[..].verify(&entries[0].id));
     }
 }
