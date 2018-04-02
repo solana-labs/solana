@@ -111,10 +111,6 @@ impl Accountant {
 
     /// Process and log the given Transaction.
     pub fn log_verified_transaction(&mut self, tr: Transaction) -> Result<()> {
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
-            return Err(AccountingError::InsufficientFunds);
-        }
-
         self.process_verified_transaction(&tr)?;
         if let Err(SendError(_)) = self.historian
             .sender
@@ -144,7 +140,11 @@ impl Accountant {
     }
 
     /// Process a Transaction that has already been verified.
-    fn process_verified_transaction(&mut self, tr: &Transaction) -> Result<()> {
+    pub fn process_verified_transaction(&mut self, tr: &Transaction) -> Result<()> {
+        if self.get_balance(&tr.from).unwrap_or(0) < tr.tokens {
+            return Err(AccountingError::InsufficientFunds);
+        }
+
         if !self.reserve_signature(&tr.sig) {
             return Err(AccountingError::InvalidTransferSignature);
         }
