@@ -9,7 +9,7 @@ use event::Event;
 use hash::Hash;
 use historian::Historian;
 use mint::Mint;
-use plan::{Plan, Witness};
+use plan::{Payment, Plan, Witness};
 use recorder::Signal;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
@@ -29,10 +29,8 @@ pub enum AccountingError {
 pub type Result<T> = result::Result<T, AccountingError>;
 
 /// Commit funds to the 'to' party.
-fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
-    if let Plan::Pay(ref payment) = *plan {
-        *balances.entry(payment.to).or_insert(0) += payment.tokens;
-    }
+fn apply_payment(balances: &mut HashMap<PublicKey, i64>, payment: &Payment) {
+    *balances.entry(payment.to).or_insert(0) += payment.tokens;
 }
 
 pub struct Accountant {
@@ -45,6 +43,34 @@ pub struct Accountant {
 }
 
 impl Accountant {
+    /// Create an Accountant using a deposit.
+    pub fn new_from_deposit(
+        start_hash: &Hash,
+        deposit: &Payment,
+        ms_per_tick: Option<u64>,
+    ) -> Self {
+        let mut balances = HashMap::new();
+        apply_payment(&mut balances, &deposit);
+        let historian = Historian::new(&start_hash, ms_per_tick);
+        Accountant {
+            historian,
+            balances,
+            pending: HashMap::new(),
+            signatures: HashSet::new(),
+            time_sources: HashSet::new(),
+            last_time: Utc.timestamp(0, 0),
+        }
+    }
+
+    /// Create an Accountant with only a Mint. Typically used by unit tests.
+    pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
+        let deposit = Payment {
+            to: mint.pubkey(),
+            tokens: mint.tokens,
+        };
+        Self::new_from_deposit(&mint.seed(), &deposit, ms_per_tick)
+    }
+
     /// Create an Accountant using an existing ledger.
     pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> (Self, Hash)
     where
@@ -57,21 +83,17 @@ impl Accountant {
         let entry0 = entries.next().unwrap();
         let start_hash = entry0.id;
 
-        let hist = Historian::new(&start_hash, ms_per_tick);
-        let mut acc = Accountant {
-            historian: hist,
-            balances: HashMap::new(),
-            pending: HashMap::new(),
-            signatures: HashSet::new(),
-            time_sources: HashSet::new(),
-            last_time: Utc.timestamp(0, 0),
-        };
-
         // The second item in the ledger is a special transaction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
         let entry1 = entries.next().unwrap();
-        acc.process_verified_event(&entry1.events[0], true).unwrap();
+        let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
+            tr.plan.final_payment()
+        } else {
+            None
+        };
+
+        let mut acc = Self::new_from_deposit(&start_hash, &deposit.unwrap(), ms_per_tick);
 
         let mut last_id = entry1.id;
         for entry in entries {
@@ -81,11 +103,6 @@ impl Accountant {
             }
         }
         (acc, last_id)
-    }
-
-    /// Create an Accountant with only a Mint. Typically used by unit tests.
-    pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
-        Self::new_from_entries(mint.create_entries(), ms_per_tick).0
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
@@ -153,8 +170,8 @@ impl Accountant {
         let mut plan = tr.plan.clone();
         plan.apply_witness(&Witness::Timestamp(self.last_time));
 
-        if plan.is_complete() {
-            complete_transaction(&mut self.balances, &plan);
+        if let Some(ref payment) = plan.final_payment() {
+            apply_payment(&mut self.balances, payment);
         } else {
             self.pending.insert(tr.sig, plan);
         }
@@ -166,8 +183,8 @@ impl Accountant {
     fn process_verified_sig(&mut self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending.entry(tx_sig) {
             e.get_mut().apply_witness(&Witness::Signature(from));
-            if e.get().is_complete() {
-                complete_transaction(&mut self.balances, e.get());
+            if let Some(ref payment) = e.get().final_payment() {
+                apply_payment(&mut self.balances, payment);
                 e.remove_entry();
             }
         };
@@ -195,8 +212,8 @@ impl Accountant {
         let mut completed = vec![];
         for (key, plan) in &mut self.pending {
             plan.apply_witness(&Witness::Timestamp(self.last_time));
-            if plan.is_complete() {
-                complete_transaction(&mut self.balances, plan);
+            if let Some(ref payment) = plan.final_payment() {
+                apply_payment(&mut self.balances, payment);
                 completed.push(key.clone());
             }
         }

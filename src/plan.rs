@@ -72,11 +72,11 @@ impl Plan {
         )
     }
 
-    /// Return true if the spending plan requires no additional Witnesses.
-    pub fn is_complete(&self) -> bool {
+    /// Return Payment if the spending plan requires no additional Witnesses.
+    pub fn final_payment(&self) -> Option<Payment> {
         match *self {
-            Plan::Pay(_) => true,
-            _ => false,
+            Plan::Pay(ref payment) => Some(payment.clone()),
+            _ => None,
         }
     }
 
