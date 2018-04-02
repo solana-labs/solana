@@ -106,10 +106,10 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let historian = Historian::new(&alice.seed(), Some(30));
+        let historian = Historian::new(&alice.last_id(), Some(30));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
-            alice.seed(),
+            alice.last_id(),
             sink(),
             historian,
         )));

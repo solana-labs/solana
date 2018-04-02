@@ -202,11 +202,11 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut acc = Accountant::new(&alice);
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
 
-        acc.transfer(500, &alice.keypair(), bob_pubkey, alice.seed())
+        acc.transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
     }
@@ -216,10 +216,10 @@ mod tests {
         let alice = Mint::new(11_000);
         let mut acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
+        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(
-            acc.transfer(10_001, &alice.keypair(), bob_pubkey, alice.seed()),
+            acc.transfer(10_001, &alice.keypair(), bob_pubkey, alice.last_id()),
             Err(AccountingError::InsufficientFunds)
         );
 
@@ -233,7 +233,7 @@ mod tests {
         let alice = Mint::new(1);
         let mut acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
-        let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
+        let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.last_id());
         if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 2; // <-- attack!
         }
@@ -258,7 +258,7 @@ mod tests {
         let mut acc = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(500, &alice_keypair, bob_pubkey, alice.seed())
+        acc.transfer(500, &alice_keypair, bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
     }
@@ -270,7 +270,7 @@ mod tests {
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.
@@ -299,7 +299,7 @@ mod tests {
         acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
 
         // It's now past now, so this transfer should be processed immediately.
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
+        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
         assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
@@ -313,7 +313,7 @@ mod tests {
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.seed())
+        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.

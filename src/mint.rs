@@ -33,6 +33,10 @@ impl Mint {
         hash(&self.pkcs8)
     }
 
+    pub fn last_id(&self) -> Hash {
+        self.create_entries()[1].id
+    }
+
     pub fn keypair(&self) -> KeyPair {
         KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap()
     }
