@@ -4,7 +4,6 @@
 //! already been signed and verified.
 
 use chrono::prelude::*;
-use entry::Entry;
 use event::Event;
 use hash::Hash;
 use mint::Mint;
@@ -58,39 +57,6 @@ impl Accountant {
             tokens: mint.tokens,
         };
         Self::new_from_deposit(&deposit)
-    }
-
-    /// Create an Accountant using an existing ledger.
-    pub fn new_from_entries<I>(entries: I) -> (Self, Hash)
-    where
-        I: IntoIterator<Item = Entry>,
-    {
-        let mut entries = entries.into_iter();
-
-        // The first item in the ledger is required to be an entry with zero num_hashes,
-        // which implies its id can be used as the ledger's seed.
-        entries.next().unwrap();
-
-        // The second item in the ledger is a special transaction where the to and from
-        // fields are the same. That entry should be treated as a deposit, not a
-        // transfer to oneself.
-        let entry1 = entries.next().unwrap();
-        let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
-            tr.plan.final_payment()
-        } else {
-            None
-        };
-
-        let mut acc = Self::new_from_deposit(&deposit.unwrap());
-
-        let mut last_id = entry1.id;
-        for entry in entries {
-            last_id = entry.id;
-            for event in entry.events {
-                acc.process_verified_event(&event).unwrap();
-            }
-        }
-        (acc, last_id)
     }
 
     /// Verify and process the given Transaction.
@@ -183,7 +149,7 @@ impl Accountant {
     }
 
     /// Process an Transaction or Witness that has already been verified.
-    fn process_verified_event(&mut self, event: &Event) -> Result<()> {
+    pub fn process_verified_event(&mut self, event: &Event) -> Result<()> {
         match *event {
             Event::Transaction(ref tr) => self.process_verified_transaction(tr),
             Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
