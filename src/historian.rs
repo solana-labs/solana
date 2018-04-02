@@ -53,7 +53,7 @@ impl Historian {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ledger::*;
+    use ledger::Block;
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -82,7 +82,7 @@ mod tests {
             ExitReason::RecvDisconnected
         );
 
-        assert!(verify_slice(&[entry0, entry1, entry2], &zero));
+        assert!([entry0, entry1, entry2].verify(&zero));
     }
 
     #[test]
