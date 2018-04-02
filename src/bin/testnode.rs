@@ -14,9 +14,9 @@ fn main() {
         .lock()
         .lines()
         .map(|line| serde_json::from_str(&line.unwrap()).unwrap());
-    let acc = Accountant::new_from_entries(entries, Some(1000));
+    let (acc, last_id) = Accountant::new_from_entries(entries, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(Mutex::new(AccountantSkel::new(acc, stdout())));
+    let skel = Arc::new(Mutex::new(AccountantSkel::new(acc, last_id, stdout())));
     eprintln!("Listening on {}", addr);
     let threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
     for t in threads {

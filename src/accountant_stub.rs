@@ -65,26 +65,21 @@ impl AccountantStub {
         Ok(None)
     }
 
-    /// Request the first or last Entry ID from the server.
-    fn get_id(&self, is_last: bool) -> io::Result<Hash> {
-        let req = Request::GetId { is_last };
-        let data = serialize(&req).expect("serialize GetId");
-        self.socket.send_to(&data, &self.addr)?;
-        let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf)?;
-        let resp = deserialize(&buf).expect("deserialize Id");
-        if let Response::Id { id, .. } = resp {
-            return Ok(id);
-        }
-        Ok(Default::default())
-    }
-
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response. At the time of this writing,
     /// it also has the side-effect of causing the server to log any
     /// entries that have been published by the Historian.
     pub fn get_last_id(&self) -> io::Result<Hash> {
-        self.get_id(true)
+        let req = Request::GetLastId;
+        let data = serialize(&req).expect("serialize GetId");
+        self.socket.send_to(&data, &self.addr)?;
+        let mut buf = vec![0u8; 1024];
+        self.socket.recv_from(&mut buf)?;
+        let resp = deserialize(&buf).expect("deserialize Id");
+        if let Response::LastId { id } = resp {
+            return Ok(id);
+        }
+        Ok(Default::default())
     }
 }
 
@@ -110,7 +105,7 @@ mod tests {
         let acc = Accountant::new(&alice, Some(30));
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, sink())));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, alice.seed(), sink())));
         let _threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(300));
 

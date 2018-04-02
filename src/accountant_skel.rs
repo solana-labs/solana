@@ -22,8 +22,8 @@ use transaction::Transaction;
 use rayon::prelude::*;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
-    pub acc: Accountant,
-    pub last_id: Hash,
+    acc: Accountant,
+    last_id: Hash,
     writer: W,
 }
 
@@ -32,7 +32,7 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
 pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
-    GetId { is_last: bool },
+    GetLastId,
 }
 
 impl Request {
@@ -54,23 +54,22 @@ fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, Sock
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     Entries { entries: Vec<Entry> },
-    Id { id: Hash, is_last: bool },
+    LastId { id: Hash },
 }
 
 impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, w: W) -> Self {
-        let last_id = acc.first_id;
+    pub fn new(acc: Accountant, last_id: Hash, writer: W) -> Self {
         AccountantSkel {
             acc,
             last_id,
-            writer: w,
+            writer,
         }
     }
 
     /// Process any Entry items that have been published by the Historian.
     pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.acc.historian.receiver.try_recv() {
+        while let Ok(entry) = self.acc.receiver().try_recv() {
             self.last_id = entry.id;
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         }
@@ -90,14 +89,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
-            Request::GetId { is_last } => Some(Response::Id {
-                id: if is_last {
-                    self.sync()
-                } else {
-                    self.acc.first_id
-                },
-                is_last,
-            }),
+            Request::GetLastId => Some(Response::LastId { id: self.sync() }),
         }
     }
 

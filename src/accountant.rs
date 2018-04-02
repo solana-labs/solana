@@ -15,7 +15,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet};
 use std::result;
-use std::sync::mpsc::SendError;
+use std::sync::mpsc::{Receiver, SendError};
 use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,9 +36,8 @@ fn complete_transaction(balances: &mut HashMap<PublicKey, i64>, plan: &Plan) {
 }
 
 pub struct Accountant {
-    pub historian: Historian,
-    pub balances: HashMap<PublicKey, i64>,
-    pub first_id: Hash,
+    historian: Historian,
+    balances: HashMap<PublicKey, i64>,
     pending: HashMap<Signature, Plan>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
@@ -46,7 +45,7 @@ pub struct Accountant {
 
 impl Accountant {
     /// Create an Accountant using an existing ledger.
-    pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> Self
+    pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> (Self, Hash)
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -61,7 +60,6 @@ impl Accountant {
         let mut acc = Accountant {
             historian: hist,
             balances: HashMap::new(),
-            first_id: start_hash,
             pending: HashMap::new(),
             time_sources: HashSet::new(),
             last_time: Utc.timestamp(0, 0),
@@ -73,17 +71,19 @@ impl Accountant {
         let entry1 = entries.next().unwrap();
         acc.process_verified_event(&entry1.events[0], true).unwrap();
 
+        let mut last_id = entry1.id;
         for entry in entries {
+            last_id = entry.id;
             for event in entry.events {
                 acc.process_verified_event(&event, false).unwrap();
             }
         }
-        acc
+        (acc, last_id)
     }
 
     /// Create an Accountant with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
-        Self::new_from_entries(mint.create_entries(), ms_per_tick)
+        Self::new_from_entries(mint.create_entries(), ms_per_tick).0
     }
 
     fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
@@ -92,6 +92,10 @@ impl Accountant {
         } else {
             false
         }
+    }
+
+    pub fn receiver(&self) -> &Receiver<Entry> {
+        &self.historian.receiver
     }
 
     /// Process and log the given Transaction.
