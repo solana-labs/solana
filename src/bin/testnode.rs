@@ -2,6 +2,7 @@ extern crate serde_json;
 extern crate solana;
 
 use solana::accountant::Accountant;
+use solana::historian::Historian;
 use solana::accountant_skel::AccountantSkel;
 use std::io::{self, stdout, BufRead};
 use std::sync::atomic::AtomicBool;
@@ -14,9 +15,15 @@ fn main() {
         .lock()
         .lines()
         .map(|line| serde_json::from_str(&line.unwrap()).unwrap());
-    let (acc, last_id) = Accountant::new_from_entries(entries, Some(1000));
+    let (acc, last_id) = Accountant::new_from_entries(entries);
+    let historian = Historian::new(&last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(Mutex::new(AccountantSkel::new(acc, last_id, stdout())));
+    let skel = Arc::new(Mutex::new(AccountantSkel::new(
+        acc,
+        last_id,
+        stdout(),
+        historian,
+    )));
     eprintln!("Listening on {}", addr);
     let threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
     for t in threads {

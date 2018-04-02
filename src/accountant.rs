@@ -7,15 +7,12 @@ use chrono::prelude::*;
 use entry::Entry;
 use event::Event;
 use hash::Hash;
-use historian::Historian;
 use mint::Mint;
 use plan::{Payment, Plan, Witness};
-use recorder::Signal;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet};
 use std::result;
-use std::sync::mpsc::{Receiver, SendError};
 use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -23,7 +20,6 @@ pub enum AccountingError {
     InsufficientFunds,
     InvalidTransfer,
     InvalidTransferSignature,
-    SendError,
 }
 
 pub type Result<T> = result::Result<T, AccountingError>;
@@ -34,7 +30,6 @@ fn apply_payment(balances: &mut HashMap<PublicKey, i64>, payment: &Payment) {
 }
 
 pub struct Accountant {
-    historian: Historian,
     balances: HashMap<PublicKey, i64>,
     pending: HashMap<Signature, Plan>,
     signatures: HashSet<Signature>,
@@ -44,16 +39,10 @@ pub struct Accountant {
 
 impl Accountant {
     /// Create an Accountant using a deposit.
-    pub fn new_from_deposit(
-        start_hash: &Hash,
-        deposit: &Payment,
-        ms_per_tick: Option<u64>,
-    ) -> Self {
+    pub fn new_from_deposit(deposit: &Payment) -> Self {
         let mut balances = HashMap::new();
         apply_payment(&mut balances, &deposit);
-        let historian = Historian::new(&start_hash, ms_per_tick);
         Accountant {
-            historian,
             balances,
             pending: HashMap::new(),
             signatures: HashSet::new(),
@@ -63,16 +52,16 @@ impl Accountant {
     }
 
     /// Create an Accountant with only a Mint. Typically used by unit tests.
-    pub fn new(mint: &Mint, ms_per_tick: Option<u64>) -> Self {
+    pub fn new(mint: &Mint) -> Self {
         let deposit = Payment {
             to: mint.pubkey(),
             tokens: mint.tokens,
         };
-        Self::new_from_deposit(&mint.seed(), &deposit, ms_per_tick)
+        Self::new_from_deposit(&deposit)
     }
 
     /// Create an Accountant using an existing ledger.
-    pub fn new_from_entries<I>(entries: I, ms_per_tick: Option<u64>) -> (Self, Hash)
+    pub fn new_from_entries<I>(entries: I) -> (Self, Hash)
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -80,8 +69,7 @@ impl Accountant {
 
         // The first item in the ledger is required to be an entry with zero num_hashes,
         // which implies its id can be used as the ledger's seed.
-        let entry0 = entries.next().unwrap();
-        let start_hash = entry0.id;
+        entries.next().unwrap();
 
         // The second item in the ledger is a special transaction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
@@ -93,7 +81,7 @@ impl Accountant {
             None
         };
 
-        let mut acc = Self::new_from_deposit(&start_hash, &deposit.unwrap(), ms_per_tick);
+        let mut acc = Self::new_from_deposit(&deposit.unwrap());
 
         let mut last_id = entry1.id;
         for entry in entries {
@@ -105,30 +93,13 @@ impl Accountant {
         (acc, last_id)
     }
 
-    pub fn receiver(&self) -> &Receiver<Entry> {
-        &self.historian.receiver
-    }
-
-    /// Process and log the given Transaction.
-    pub fn log_verified_transaction(&mut self, tr: Transaction) -> Result<()> {
-        self.process_verified_transaction(&tr)?;
-        if let Err(SendError(_)) = self.historian
-            .sender
-            .send(Signal::Event(Event::Transaction(tr)))
-        {
-            return Err(AccountingError::SendError);
-        }
-
-        Ok(())
-    }
-
     /// Verify and process the given Transaction.
-    pub fn log_transaction(&mut self, tr: Transaction) -> Result<()> {
+    pub fn process_transaction(&mut self, tr: Transaction) -> Result<()> {
         if !tr.verify() {
             return Err(AccountingError::InvalidTransfer);
         }
 
-        self.log_verified_transaction(tr)
+        self.process_verified_transaction(&tr)
     }
 
     fn reserve_signature(&mut self, sig: &Signature) -> bool {
@@ -231,7 +202,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new(keypair, to, n, last_id);
         let sig = tr.sig;
-        self.log_transaction(tr).map(|_| sig)
+        self.process_transaction(tr).map(|_| sig)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -247,7 +218,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tr.sig;
-        self.log_transaction(tr).map(|_| sig)
+        self.process_transaction(tr).map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
@@ -258,14 +229,13 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use recorder::ExitReason;
     use signature::KeyPairUtil;
 
     #[test]
     fn test_accountant() {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
@@ -273,18 +243,12 @@ mod tests {
         acc.transfer(500, &alice.keypair(), bob_pubkey, alice.seed())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
-
-        drop(acc.historian.sender);
-        assert_eq!(
-            acc.historian.thread_hdl.join().unwrap(),
-            ExitReason::RecvDisconnected
-        );
     }
 
     #[test]
     fn test_invalid_transfer() {
         let alice = Mint::new(11_000);
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.seed())
             .unwrap();
@@ -296,25 +260,19 @@ mod tests {
         let alice_pubkey = alice.keypair().pubkey();
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
-
-        drop(acc.historian.sender);
-        assert_eq!(
-            acc.historian.thread_hdl.join().unwrap(),
-            ExitReason::RecvDisconnected
-        );
     }
 
     #[test]
     fn test_overspend_attack() {
         let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice, None);
+        let mut acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.seed());
         if let Plan::Pay(ref mut payment) = tr.plan {
             payment.tokens = 2; // <-- attack!
         }
         assert_eq!(
-            acc.log_transaction(tr.clone()),
+            acc.process_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
 
@@ -323,7 +281,7 @@ mod tests {
             payment.tokens = 0; // <-- whoops!
         }
         assert_eq!(
-            acc.log_transaction(tr.clone()),
+            acc.process_transaction(tr.clone()),
             Err(AccountingError::InvalidTransfer)
         );
     }
@@ -331,24 +289,18 @@ mod tests {
     #[test]
     fn test_transfer_to_newb() {
         let alice = Mint::new(10_000);
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         acc.transfer(500, &alice_keypair, bob_pubkey, alice.seed())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
-
-        drop(acc.historian.sender);
-        assert_eq!(
-            acc.historian.thread_hdl.join().unwrap(),
-            ExitReason::RecvDisconnected
-        );
     }
 
     #[test]
     fn test_transfer_on_date() {
         let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
@@ -374,7 +326,7 @@ mod tests {
     #[test]
     fn test_transfer_after_date() {
         let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
@@ -391,7 +343,7 @@ mod tests {
     #[test]
     fn test_cancel_transfer() {
         let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice, Some(2));
+        let mut acc = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
@@ -417,7 +369,7 @@ mod tests {
     #[test]
     fn test_duplicate_event_signature() {
         let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice, None);
+        let mut acc = Accountant::new(&alice);
         let sig = Signature::default();
         assert!(acc.reserve_signature(&sig));
         assert!(!acc.reserve_signature(&sig));

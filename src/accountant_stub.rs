@@ -87,6 +87,7 @@ impl AccountantStub {
 mod tests {
     use super::*;
     use accountant::Accountant;
+    use historian::Historian;
     use accountant_skel::AccountantSkel;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
@@ -102,10 +103,16 @@ mod tests {
         let addr = "127.0.0.1:9000";
         let send_addr = "127.0.0.1:9001";
         let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice, Some(30));
+        let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(acc, alice.seed(), sink())));
+        let historian = Historian::new(&alice.seed(), Some(30));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+            acc,
+            alice.seed(),
+            sink(),
+            historian,
+        )));
         let _threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(300));
 

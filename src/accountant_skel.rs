@@ -3,8 +3,11 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
+use historian::Historian;
+use recorder::Signal;
 use bincode::{deserialize, serialize};
 use entry::Entry;
+use event::Event;
 use hash::Hash;
 use result::Result;
 use serde_json;
@@ -13,7 +16,7 @@ use std::default::Default;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, SendError};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -25,6 +28,7 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
     last_id: Hash,
     writer: W,
+    historian: Historian,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -59,17 +63,18 @@ pub enum Response {
 
 impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, last_id: Hash, writer: W) -> Self {
+    pub fn new(acc: Accountant, last_id: Hash, writer: W, historian: Historian) -> Self {
         AccountantSkel {
             acc,
             last_id,
             writer,
+            historian,
         }
     }
 
     /// Process any Entry items that have been published by the Historian.
     pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.acc.receiver().try_recv() {
+        while let Ok(entry) = self.historian.receiver.try_recv() {
             self.last_id = entry.id;
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         }
@@ -80,8 +85,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
         match msg {
             Request::Transaction(tr) => {
-                if let Err(err) = self.acc.log_verified_transaction(tr) {
+                if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     eprintln!("Transaction error: {:?}", err);
+                } else if let Err(SendError(_)) = self.historian
+                    .sender
+                    .send(Signal::Event(Event::Transaction(tr)))
+                {
+                    eprintln!("Channel send error");
                 }
                 None
             }
