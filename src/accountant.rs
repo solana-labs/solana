@@ -99,18 +99,10 @@ impl Accountant {
         for entry in entries {
             last_id = entry.id;
             for event in entry.events {
-                acc.process_verified_event(&event, false).unwrap();
+                acc.process_verified_event(&event).unwrap();
             }
         }
         (acc, last_id)
-    }
-
-    fn is_deposit(allow_deposits: bool, from: &PublicKey, plan: &Plan) -> bool {
-        if let Plan::Pay(ref payment) = *plan {
-            allow_deposits && *from == payment.to
-        } else {
-            false
-        }
     }
 
     pub fn receiver(&self) -> &Receiver<Entry> {
@@ -123,7 +115,7 @@ impl Accountant {
             return Err(AccountingError::InsufficientFunds);
         }
 
-        self.process_verified_transaction(&tr, false)?;
+        self.process_verified_transaction(&tr)?;
         if let Err(SendError(_)) = self.historian
             .sender
             .send(Signal::Event(Event::Transaction(tr)))
@@ -152,19 +144,13 @@ impl Accountant {
     }
 
     /// Process a Transaction that has already been verified.
-    fn process_verified_transaction(
-        self: &mut Self,
-        tr: &Transaction,
-        allow_deposits: bool,
-    ) -> Result<()> {
+    fn process_verified_transaction(&mut self, tr: &Transaction) -> Result<()> {
         if !self.reserve_signature(&tr.sig) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if !Self::is_deposit(allow_deposits, &tr.from, &tr.plan) {
-            if let Some(x) = self.balances.get_mut(&tr.from) {
-                *x -= tr.tokens;
-            }
+        if let Some(x) = self.balances.get_mut(&tr.from) {
+            *x -= tr.tokens;
         }
 
         let mut plan = tr.plan.clone();
@@ -226,9 +212,9 @@ impl Accountant {
     }
 
     /// Process an Transaction or Witness that has already been verified.
-    fn process_verified_event(self: &mut Self, event: &Event, allow_deposits: bool) -> Result<()> {
+    fn process_verified_event(&mut self, event: &Event) -> Result<()> {
         match *event {
-            Event::Transaction(ref tr) => self.process_verified_transaction(tr, allow_deposits),
+            Event::Transaction(ref tr) => self.process_verified_transaction(tr),
             Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
             Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),
         }
@@ -237,7 +223,7 @@ impl Accountant {
     /// Create, sign, and process a Transaction from `keypair` to `to` of
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
-        self: &mut Self,
+        &mut self,
         n: i64,
         keypair: &KeyPair,
         to: PublicKey,
@@ -252,7 +238,7 @@ impl Accountant {
     /// to `to` of `n` tokens on `dt` where `last_id` is the last Entry ID
     /// observed by the client.
     pub fn transfer_on_date(
-        self: &mut Self,
+        &mut self,
         n: i64,
         keypair: &KeyPair,
         to: PublicKey,
@@ -264,7 +250,7 @@ impl Accountant {
         self.log_transaction(tr).map(|_| sig)
     }
 
-    pub fn get_balance(self: &Self, pubkey: &PublicKey) -> Option<i64> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
         self.balances.get(pubkey).cloned()
     }
 }
