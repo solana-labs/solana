@@ -39,6 +39,7 @@ pub struct Accountant {
     historian: Historian,
     balances: HashMap<PublicKey, i64>,
     pending: HashMap<Signature, Plan>,
+    signatures: HashSet<Signature>,
     time_sources: HashSet<PublicKey>,
     last_time: DateTime<Utc>,
 }
@@ -61,6 +62,7 @@ impl Accountant {
             historian: hist,
             balances: HashMap::new(),
             pending: HashMap::new(),
+            signatures: HashSet::new(),
             time_sources: HashSet::new(),
             last_time: Utc.timestamp(0, 0),
         };
@@ -124,13 +126,21 @@ impl Accountant {
         self.log_verified_transaction(tr)
     }
 
+    fn reserve_signature(&mut self, sig: &Signature) -> bool {
+        if self.signatures.contains(sig) {
+            return false;
+        }
+        self.signatures.insert(*sig);
+        true
+    }
+
     /// Process a Transaction that has already been verified.
     fn process_verified_transaction(
         self: &mut Self,
         tr: &Transaction,
         allow_deposits: bool,
     ) -> Result<()> {
-        if !self.historian.reserve_signature(&tr.sig) {
+        if !self.reserve_signature(&tr.sig) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
@@ -399,5 +409,14 @@ mod tests {
 
         acc.process_verified_sig(alice.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
         assert_ne!(acc.get_balance(&alice.pubkey()), Some(2));
+    }
+
+    #[test]
+    fn test_duplicate_event_signature() {
+        let alice = Mint::new(1);
+        let mut acc = Accountant::new(&alice, None);
+        let sig = Signature::default();
+        assert!(acc.reserve_signature(&sig));
+        assert!(!acc.reserve_signature(&sig));
     }
 }
