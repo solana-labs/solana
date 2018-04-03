@@ -17,7 +17,6 @@ use transaction::Transaction;
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
     InsufficientFunds,
-    InvalidTransfer,
     InvalidTransferSignature,
 }
 
@@ -57,15 +56,6 @@ impl Accountant {
             tokens: mint.tokens,
         };
         Self::new_from_deposit(&deposit)
-    }
-
-    /// Verify and process the given Transaction.
-    pub fn process_transaction(&mut self, tr: Transaction) -> Result<()> {
-        if !tr.verify() {
-            return Err(AccountingError::InvalidTransfer);
-        }
-
-        self.process_verified_transaction(&tr)
     }
 
     fn reserve_signature(&mut self, sig: &Signature) -> bool {
@@ -168,7 +158,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new(keypair, to, n, last_id);
         let sig = tr.sig;
-        self.process_transaction(tr).map(|_| sig)
+        self.process_verified_transaction(&tr).map(|_| sig)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -184,7 +174,7 @@ impl Accountant {
     ) -> Result<Signature> {
         let tr = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tr.sig;
-        self.process_transaction(tr).map(|_| sig)
+        self.process_verified_transaction(&tr).map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
@@ -226,30 +216,6 @@ mod tests {
         let alice_pubkey = alice.keypair().pubkey();
         assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
-    }
-
-    #[test]
-    fn test_overspend_attack() {
-        let alice = Mint::new(1);
-        let mut acc = Accountant::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
-        let mut tr = Transaction::new(&alice.keypair(), bob_pubkey, 1, alice.last_id());
-        if let Plan::Pay(ref mut payment) = tr.plan {
-            payment.tokens = 2; // <-- attack!
-        }
-        assert_eq!(
-            acc.process_transaction(tr.clone()),
-            Err(AccountingError::InvalidTransfer)
-        );
-
-        // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Pay(ref mut payment) = tr.plan {
-            payment.tokens = 0; // <-- whoops!
-        }
-        assert_eq!(
-            acc.process_transaction(tr.clone()),
-            Err(AccountingError::InvalidTransfer)
-        );
     }
 
     #[test]
