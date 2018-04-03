@@ -3,12 +3,13 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
-use historian::Historian;
-use recorder::Signal;
 use bincode::{deserialize, serialize};
 use entry::Entry;
 use event::Event;
 use hash::Hash;
+use historian::Historian;
+use rayon::prelude::*;
+use recorder::Signal;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
@@ -22,7 +23,6 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
 use transaction::Transaction;
-use rayon::prelude::*;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,

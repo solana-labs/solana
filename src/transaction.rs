@@ -2,9 +2,9 @@
 
 use bincode::serialize;
 use chrono::prelude::*;
-use rayon::prelude::*;
 use hash::Hash;
 use plan::{Condition, Payment, Plan};
+use rayon::prelude::*;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

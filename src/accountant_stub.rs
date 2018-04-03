@@ -87,8 +87,8 @@ impl AccountantStub {
 mod tests {
     use super::*;
     use accountant::Accountant;
-    use historian::Historian;
     use accountant_skel::AccountantSkel;
+    use historian::Historian;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;

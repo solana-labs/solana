@@ -2,10 +2,10 @@ extern crate serde_json;
 extern crate solana;
 
 use solana::accountant::Accountant;
-use solana::event::Event;
-use solana::entry::Entry;
-use solana::historian::Historian;
 use solana::accountant_skel::AccountantSkel;
+use solana::entry::Entry;
+use solana::event::Event;
+use solana::historian::Historian;
 use std::io::{self, stdout, BufRead};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

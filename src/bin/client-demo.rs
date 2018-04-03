@@ -2,15 +2,15 @@ extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
+use rayon::prelude::*;
 use solana::accountant_stub::AccountantStub;
 use solana::mint::Mint;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::io::stdin;
 use std::net::UdpSocket;
-use std::time::{Duration, Instant};
 use std::thread::sleep;
-use rayon::prelude::*;
+use std::time::{Duration, Instant};
 
 fn main() {
     let addr = "127.0.0.1:8000";
