@@ -113,6 +113,7 @@ pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::prelude::*;
     use entry::create_entry;
     use event::Event;
     use hash::hash;
@@ -141,6 +142,23 @@ mod tests {
         assert!(e0.verify(&zero));
 
         // Next, swap two events and ensure verification fails.
+        e0.events[0] = tr1; // <-- attack
+        e0.events[1] = tr0;
+        assert!(!e0.verify(&zero));
+    }
+
+    #[test]
+    fn test_witness_reorder_attack() {
+        let zero = Hash::default();
+
+        // First, verify entries
+        let keypair = KeyPair::new();
+        let tr0 = Event::new_timestamp(&keypair, Utc::now());
+        let tr1 = Event::new_signature(&keypair, Default::default());
+        let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        assert!(e0.verify(&zero));
+
+        // Next, swap two witness events and ensure verification fails.
         e0.events[0] = tr1; // <-- attack
         e0.events[1] = tr0;
         assert!(!e0.verify(&zero));
