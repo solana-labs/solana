@@ -172,10 +172,9 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_responder =
             streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
 
-        let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = AccountantSkel::process(
-                &skel,
+                &obj,
                 &r_reader,
                 &s_responder,
                 &packet_recycler,
