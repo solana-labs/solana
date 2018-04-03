@@ -155,6 +155,24 @@ mod tests {
     }
 
     #[test]
+    fn test_overspend_attack() {
+        let keypair0 = KeyPair::new();
+        let keypair1 = KeyPair::new();
+        let zero = Hash::default();
+        let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
+        if let Plan::Pay(ref mut payment) = tr.plan {
+            payment.tokens = 2; // <-- attack!
+        }
+        assert!(!tr.verify());
+
+        // Also, ensure all branchs of the plan spend all tokens
+        if let Plan::Pay(ref mut payment) = tr.plan {
+            payment.tokens = 0; // <-- whoops!
+        }
+        assert!(!tr.verify());
+    }
+
+    #[test]
     fn test_verify_transactions() {
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
