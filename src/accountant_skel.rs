@@ -13,16 +13,17 @@ use recorder::Signal;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
-use std::default::Default;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, SendError};
-use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
+use packet;
+use std::sync::{Arc, Mutex};
 use transaction::Transaction;
+use std::collections::VecDeque;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -105,55 +106,51 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        r_reader: &streamer::Receiver,
-        s_responder: &streamer::Responder,
-        packet_recycler: &streamer::PacketRecycler,
-        response_recycler: &streamer::ResponseRecycler,
+        packet_receiver: &streamer::PacketReceiver,
+        blob_sender: &streamer::BlobSender,
+        packet_recycler: &packet::PacketRecycler,
+        blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let msgs = r_reader.recv_timeout(timer)?;
+        let msgs = packet_receiver.recv_timeout(timer)?;
         let msgs_ = msgs.clone();
-        let rsps = streamer::allocate(response_recycler);
-        let rsps_ = rsps.clone();
+        let mut rsps = VecDeque::new();
         {
             let mut reqs = vec![];
             for packet in &msgs.read().unwrap().packets {
-                let rsp_addr = packet.meta.get_addr();
+                let rsp_addr = packet.meta.addr();
                 let sz = packet.meta.size;
                 let req = deserialize(&packet.data[0..sz])?;
                 reqs.push((req, rsp_addr));
             }
             let reqs = filter_valid_requests(reqs);
-
-            let mut num = 0;
-            let mut ursps = rsps.write().unwrap();
             for (req, rsp_addr) in reqs {
                 if let Some(resp) = obj.lock().unwrap().log_verified_request(req) {
-                    if ursps.responses.len() <= num {
-                        ursps
-                            .responses
-                            .resize((num + 1) * 2, streamer::Response::default());
+                    let blob = blob_recycler.allocate();
+                    {
+                        let mut b = blob.write().unwrap();
+                        let v = serialize(&resp)?;
+                        let len = v.len();
+                        b.data[..len].copy_from_slice(&v);
+                        b.meta.size = len;
+                        b.meta.set_addr(&rsp_addr);
                     }
-                    let rsp = &mut ursps.responses[num];
-                    let v = serialize(&resp)?;
-                    let len = v.len();
-                    rsp.data[..len].copy_from_slice(&v);
-                    rsp.meta.size = len;
-                    rsp.meta.set_addr(&rsp_addr);
-                    num += 1;
+                    rsps.push_back(blob);
                 }
             }
-            ursps.responses.resize(num, streamer::Response::default());
         }
-        s_responder.send(rsps_)?;
-        streamer::recycle(packet_recycler, msgs_);
+        if !rsps.is_empty() {
+            //don't wake up the other side if there is nothing
+            blob_sender.send(rsps)?;
+        }
+        packet_recycler.recycle(msgs_);
         Ok(())
     }
 
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
     /// Set `exit` to shutdown its threads.
     pub fn serve(
-        obj: Arc<Mutex<AccountantSkel<W>>>,
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
         addr: &str,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
@@ -163,28 +160,27 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
 
-        let packet_recycler = Arc::new(Mutex::new(Vec::new()));
-        let response_recycler = Arc::new(Mutex::new(Vec::new()));
-        let (s_reader, r_reader) = channel();
-        let t_receiver = streamer::receiver(read, exit.clone(), packet_recycler.clone(), s_reader)?;
-
-        let (s_responder, r_responder) = channel();
+        let packet_recycler = packet::PacketRecycler::default();
+        let blob_recycler = packet::BlobRecycler::default();
+        let (packet_sender, packet_receiver) = channel();
+        let t_receiver =
+            streamer::receiver(read, exit.clone(), packet_recycler.clone(), packet_sender)?;
+        let (blob_sender, blob_receiver) = channel();
         let t_responder =
-            streamer::responder(write, exit.clone(), response_recycler.clone(), r_responder);
-
+            streamer::responder(write, exit.clone(), blob_recycler.clone(), blob_receiver);
+        let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = AccountantSkel::process(
-                &obj,
-                &r_reader,
-                &s_responder,
+                &skel,
+                &packet_receiver,
+                &blob_sender,
                 &packet_recycler,
-                &response_recycler,
+                &blob_recycler,
             );
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
         });
-
         Ok(vec![t_receiver, t_responder, t_server])
     }
 }

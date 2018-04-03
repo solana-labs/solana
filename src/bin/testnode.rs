@@ -51,7 +51,7 @@ fn main() {
         historian,
     )));
     eprintln!("Listening on {}", addr);
-    let threads = AccountantSkel::serve(skel, addr, exit.clone()).unwrap();
+    let threads = AccountantSkel::serve(&skel, addr, exit.clone()).unwrap();
     for t in threads {
         t.join().expect("join");
     }

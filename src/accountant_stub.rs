@@ -113,10 +113,11 @@ mod tests {
             sink(),
             historian,
         )));
-        let _threads = AccountantSkel::serve(acc, addr, exit.clone()).unwrap();
+        let _threads = AccountantSkel::serve(&acc, addr, exit.clone()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
+        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().unwrap();
