@@ -33,12 +33,13 @@ impl Event {
         }
     }
 
-    // TODO: Rename this to transaction_signature().
-    /// If the Event is a Transaction, return its Signature.
-    pub fn get_signature(&self) -> Option<Signature> {
-        match *self {
-            Event::Transaction(ref tr) => Some(tr.sig),
-            Event::Signature { .. } | Event::Timestamp { .. } => None,
+    /// Create and sign a new Witness Signature. Used for unit-testing.
+    pub fn new_signature(from: &KeyPair, tx_sig: Signature) -> Self {
+        let sig = Signature::clone_from_slice(from.sign(&tx_sig).as_ref());
+        Event::Signature {
+            from: from.pubkey(),
+            tx_sig,
+            sig,
         }
     }
 
@@ -50,5 +51,17 @@ impl Event {
             Event::Signature { from, tx_sig, sig } => sig.verify(&from, &tx_sig),
             Event::Timestamp { from, dt, sig } => sig.verify(&from, &serialize(&dt).unwrap()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signature::{KeyPair, KeyPairUtil};
+
+    #[test]
+    fn test_event_verify() {
+        assert!(Event::new_timestamp(&KeyPair::new(), Utc::now()).verify());
+        assert!(Event::new_signature(&KeyPair::new(), Signature::default()).verify());
     }
 }

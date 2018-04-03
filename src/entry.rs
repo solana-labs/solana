@@ -43,6 +43,23 @@ impl Entry {
     }
 }
 
+fn add_event_data(hash_data: &mut Vec<u8>, event: &Event) {
+    match *event {
+        Event::Transaction(ref tr) => {
+            hash_data.push(0u8);
+            hash_data.extend_from_slice(&tr.sig);
+        }
+        Event::Signature { ref sig, .. } => {
+            hash_data.push(1u8);
+            hash_data.extend_from_slice(sig);
+        }
+        Event::Timestamp { ref sig, .. } => {
+            hash_data.push(2u8);
+            hash_data.extend_from_slice(sig);
+        }
+    }
+}
+
 /// Creates the hash `num_hashes` after `start_hash`. If the event contains
 /// signature, the final hash will be a hash of both the previous ID and
 /// the signature.
@@ -55,10 +72,7 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
     // Hash all the event data
     let mut hash_data = vec![];
     for event in events {
-        let sig = event.get_signature();
-        if let Some(sig) = sig {
-            hash_data.extend_from_slice(&sig);
-        }
+        add_event_data(&mut hash_data, event);
     }
 
     if !hash_data.is_empty() {
@@ -99,6 +113,7 @@ pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::prelude::*;
     use entry::create_entry;
     use event::Event;
     use hash::hash;
@@ -127,6 +142,23 @@ mod tests {
         assert!(e0.verify(&zero));
 
         // Next, swap two events and ensure verification fails.
+        e0.events[0] = tr1; // <-- attack
+        e0.events[1] = tr0;
+        assert!(!e0.verify(&zero));
+    }
+
+    #[test]
+    fn test_witness_reorder_attack() {
+        let zero = Hash::default();
+
+        // First, verify entries
+        let keypair = KeyPair::new();
+        let tr0 = Event::new_timestamp(&keypair, Utc::now());
+        let tr1 = Event::new_signature(&keypair, Default::default());
+        let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        assert!(e0.verify(&zero));
+
+        // Next, swap two witness events and ensure verification fails.
         e0.events[0] = tr1; // <-- attack
         e0.events[1] = tr0;
         assert!(!e0.verify(&zero));

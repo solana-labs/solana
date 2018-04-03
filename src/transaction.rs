@@ -2,9 +2,9 @@
 
 use bincode::serialize;
 use chrono::prelude::*;
-use rayon::prelude::*;
 use hash::Hash;
 use plan::{Condition, Payment, Plan};
+use rayon::prelude::*;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -57,7 +57,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.from, &self.plan, &self.tokens, &self.last_id)).unwrap()
+        serialize(&(&self.plan, &self.tokens, &self.last_id)).unwrap()
     }
 
     /// Sign this transaction.
