@@ -39,7 +39,7 @@ impl Accountant {
     /// Create an Accountant using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let mut balances = HashMap::new();
-        apply_payment(&mut balances, &deposit);
+        apply_payment(&mut balances, deposit);
         Accountant {
             balances,
             pending: HashMap::new(),

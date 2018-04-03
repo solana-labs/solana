@@ -39,8 +39,8 @@ fn main() {
         .collect();
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = txs as f64 / ns as f64;
-    let nsps = ns as f64 / txs as f64;
+    let bsps = f64::from(txs) / ns as f64;
+    let nsps = ns as f64 / f64::from(txs);
     println!(
         "Done. {} thousand signatures per second, {}us per signature",
         bsps * 1_000_000_f64,
