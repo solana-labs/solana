@@ -57,7 +57,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.from, &self.plan, &self.tokens, &self.last_id)).unwrap()
+        serialize(&(&self.plan, &self.tokens, &self.last_id)).unwrap()
     }
 
     /// Sign this transaction.
