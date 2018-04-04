@@ -85,13 +85,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Process Request items sent by clients.
-    pub fn log_verified_request(&mut self, msg: &Request, verify: u8) -> Option<Response> {
+    pub fn log_verified_request(&mut self, msg: Request, verify: u8) -> Option<Response> {
         match msg {
-            &Request::Transaction(_) if verify == 0 => {
+            Request::Transaction(_) if verify == 0 => {
                 eprintln!("Transaction falid sigverify");
                 None
             }
-            &Request::Transaction(ref tr) => {
+            Request::Transaction(tr) => {
                 if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     eprintln!("Transaction error: {:?}", err);
                 } else if let Err(SendError(_)) = self.historian
@@ -102,11 +102,11 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 }
                 None
             }
-            &Request::GetBalance { key } => {
+            Request::GetBalance { key } => {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
-            &Request::GetLastId => Some(Response::LastId { id: self.sync() }),
+            Request::GetLastId => Some(Response::LastId { id: self.sync() }),
         }
     }
 
@@ -148,6 +148,21 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         Ok(())
     }
 
+    pub fn deserialize_packets(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
+        //deserealize in parallel
+        let mut r = vec![];
+        for x in &p.packets {
+            let rsp_addr = x.meta.addr();
+            let sz = x.meta.size;
+            if let Ok(req) = deserialize(&x.data[0..sz]) {
+                r.push(Some((req, rsp_addr)));
+            } else {
+                r.push(None);
+            }
+        }
+        r
+    }
+
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &Receiver<(Vec<SharedPackets>, Vec<Vec<u8>>)>,
@@ -157,33 +172,17 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let (mms, vvs) = verified_receiver.recv_timeout(timer)?;
-        for (msgs, vers) in mms.iter().zip(vvs.iter()) {
+        for (msgs, vers) in mms.into_iter().zip(vvs.into_iter()) {
             let msgs_ = msgs.clone();
-            let msgs__ = msgs.clone();
             let mut rsps = VecDeque::new();
             {
-                //deserealize in parallel
-                let mut reqs: Vec<Option<(Request, SocketAddr)>> = msgs__
-                    .read()
-                    .unwrap()
-                    .packets
-                    .into_par_iter()
-                    .map(|x| {
-                        let rsp_addr = x.meta.addr();
-                        let sz = x.meta.size;
-                        if let Ok(req) = deserialize(&x.data[0..sz]) {
-                            Some((req, rsp_addr))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                for (data, v) in reqs.iter().zip(vers.iter()) {
-                    if let &Some((ref req, rsp_addr)) = data {
+                let reqs = Self::deserialize_packets(&((*msgs).read().unwrap()));
+                for (data, v) in reqs.into_iter().zip(vers.into_iter()) {
+                    if let Some((req, rsp_addr)) = data {
                         if !req.verify() {
                             continue;
                         }
-                        if let Some(resp) = obj.lock().unwrap().log_verified_request(req, *v) {
+                        if let Some(resp) = obj.lock().unwrap().log_verified_request(req, v) {
                             let blob = blob_recycler.allocate();
                             {
                                 let mut b = blob.write().unwrap();

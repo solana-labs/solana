@@ -17,6 +17,7 @@ pub const PACKET_DATA_SIZE: usize = 256;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default)]
+#[repr(C)]
 pub struct Meta {
     pub size: usize,
     pub addr: [u16; 8],
@@ -25,6 +26,7 @@ pub struct Meta {
 }
 
 #[derive(Clone)]
+#[repr(C)]
 pub struct Packet {
     pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
