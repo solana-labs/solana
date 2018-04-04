@@ -264,12 +264,12 @@ mod test {
             }
         }
     }
-    #[test]
-    pub fn streamer_debug() {
-        write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::default()).unwrap();
-        write!(io::sink(), "{:?}", Blob::default()).unwrap();
-    }
+    //#[test]
+    //pub fn streamer_debug() {
+    //    write!(io::sink(), "{:?}", Packet::default()).unwrap();
+    //    write!(io::sink(), "{:?}", Packets::default()).unwrap();
+    //    write!(io::sink(), "{:?}", Blob::default()).unwrap();
+    //}
     #[test]
     pub fn streamer_send_test() {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
