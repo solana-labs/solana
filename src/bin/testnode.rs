@@ -32,7 +32,7 @@ fn main() {
         None
     };
 
-    let mut acc = Accountant::new_from_deposit(&deposit.unwrap());
+    let acc = Accountant::new_from_deposit(&deposit.unwrap());
 
     let mut last_id = entry1.id;
     for entry in entries {
