@@ -312,3 +312,32 @@ mod tests {
         assert!(!acc.reserve_signature(&sig));
     }
 }
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
+    use accountant::*;
+    use rayon::prelude::*;
+    use signature::KeyPairUtil;
+
+    #[bench]
+    fn process_verified_event_bench(bencher: &mut Bencher) {
+        let alice = Mint::new(100_000_000);
+        let alice_keypair = alice.keypair();
+        let last_id = Hash::default();
+        let transactions: Vec<_> = (0..4096)
+            .into_par_iter()
+            .map(|_| {
+                let rando_pubkey = KeyPair::new().pubkey();
+                Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
+            })
+            .collect();
+        bencher.iter(|| {
+            let acc = Accountant::new(&alice);
+            transactions.par_iter().for_each(move |tr| {
+                acc.process_verified_transaction(tr).unwrap();
+            });
+        });
+    }
+}
