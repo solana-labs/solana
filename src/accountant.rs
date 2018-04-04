@@ -323,19 +323,22 @@ mod bench {
 
     #[bench]
     fn process_verified_event_bench(bencher: &mut Bencher) {
-        let alice = Mint::new(100_000_000);
-        let alice_keypair = alice.keypair();
-        let last_id = Hash::default();
+        let mint = Mint::new(100_000_000);
+        let acc = Accountant::new(&mint);
+        // Create transactions between unrelated parties.
         let transactions: Vec<_> = (0..4096)
             .into_par_iter()
             .map(|_| {
-                let rando_pubkey = KeyPair::new().pubkey();
-                Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
+                let rando0 = KeyPair::new();
+                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
+                acc.process_verified_transaction(&tr).unwrap();
+                let rando1 = KeyPair::new();
+                Transaction::new(&rando0, rando1.pubkey(), 1, mint.last_id())
             })
             .collect();
         bencher.iter(|| {
-            let acc = Accountant::new(&alice);
-            transactions.par_iter().for_each(move |tr| {
+            acc.signatures.write().unwrap().clear();
+            transactions.par_iter().for_each(|tr| {
                 acc.process_verified_transaction(tr).unwrap();
             });
         });
