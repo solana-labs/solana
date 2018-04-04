@@ -149,13 +149,14 @@ impl<T: Default> Clone for Recycler<T> {
 
 impl<T: Default> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
-        let mut gc = self.gc.lock().expect("recycler lock");
-        gc.pop()
-            .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+        //let mut gc = self.gc.lock().expect("recycler lock");
+        //gc.pop()
+        //.unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+        Arc::new(RwLock::new(Default::default()))
     }
-    pub fn recycle(&self, msgs: Arc<RwLock<T>>) {
-        let mut gc = self.gc.lock().expect("recycler lock");
-        gc.push(msgs);
+    pub fn recycle(&self, _msgs: Arc<RwLock<T>>) {
+        //let mut gc = self.gc.lock().expect("recycler lock");
+        //gc.push(msgs);
     }
 }
 
