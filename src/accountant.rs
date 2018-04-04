@@ -10,7 +10,7 @@ use mint::Mint;
 use plan::{Payment, Plan, Witness};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::RwLock;
 use transaction::Transaction;
@@ -37,7 +37,7 @@ fn apply_payment(balances: &RwLock<HashMap<PublicKey, RwLock<i64>>>, payment: &P
 pub struct Accountant {
     balances: RwLock<HashMap<PublicKey, RwLock<i64>>>,
     pending: RwLock<HashMap<Signature, Plan>>,
-    signatures: RwLock<HashSet<Signature>>,
+    last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
     last_time: RwLock<DateTime<Utc>>,
 }
@@ -50,7 +50,7 @@ impl Accountant {
         Accountant {
             balances,
             pending: RwLock::new(HashMap::new()),
-            signatures: RwLock::new(HashSet::new()),
+            last_ids: RwLock::new(VecDeque::new()),
             time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
         }
@@ -65,11 +65,27 @@ impl Accountant {
         Self::new_from_deposit(&deposit)
     }
 
-    fn reserve_signature(&self, sig: &Signature) -> bool {
-        if self.signatures.read().unwrap().contains(sig) {
+    fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
+        if signatures.read().unwrap().contains(sig) {
             return false;
         }
-        self.signatures.write().unwrap().insert(*sig);
+        signatures.write().unwrap().insert(*sig);
+        true
+    }
+
+    fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
+        if let Some(entry) = self.last_ids
+            .read()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|x| x.0 == *last_id)
+        {
+            return Self::reserve_signature(&entry.1, sig);
+        }
+        let sigs = RwLock::new(HashSet::new());
+        Self::reserve_signature(&sigs, sig);
+        self.last_ids.write().unwrap().push_back((*last_id, sigs));
         true
     }
 
@@ -79,7 +95,7 @@ impl Accountant {
             return Err(AccountingError::InsufficientFunds);
         }
 
-        if !self.reserve_signature(&tr.sig) {
+        if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
@@ -315,8 +331,9 @@ mod tests {
         let alice = Mint::new(1);
         let acc = Accountant::new(&alice);
         let sig = Signature::default();
-        assert!(acc.reserve_signature(&sig));
-        assert!(!acc.reserve_signature(&sig));
+        let last_id = Hash::default();
+        assert!(acc.reserve_signature_with_last_id(&sig, &last_id));
+        assert!(!acc.reserve_signature_with_last_id(&sig, &last_id));
     }
 }
 
@@ -352,7 +369,7 @@ mod bench {
             .collect();
         bencher.iter(|| {
             // Since benchmarker runs this multiple times, we need to clear the signatures.
-            acc.signatures.write().unwrap().clear();
+            acc.last_ids.write().unwrap().clear();
 
             transactions.par_iter().for_each(|tr| {
                 acc.process_verified_transaction(tr).unwrap();
