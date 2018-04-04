@@ -9,24 +9,23 @@ use event::Event;
 use gpu;
 use hash::Hash;
 use historian::Historian;
+use packet;
+use packet::SharedPackets;
 use rayon::prelude::*;
 use recorder::Signal;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
+use std::collections::VecDeque;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, SendError};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, SendError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
-use packet;
-use std::sync::{Arc, Mutex};
 use transaction::Transaction;
-use std::collections::VecDeque;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -47,14 +46,14 @@ impl Request {
     /// Verify the request is valid.
     pub fn verify(&self) -> bool {
         match *self {
-            Request::Transaction(ref tr) => tr.verify(),
+            Request::Transaction(ref tr) => tr.plan_verify(),
             _ => true,
         }
     }
 }
 
 /// Parallel verfication of a batch of requests.
-fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, SocketAddr)> {
+pub fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, SocketAddr)> {
     reqs.into_par_iter().filter({ |x| x.0.verify() }).collect()
 }
 
@@ -86,34 +85,34 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Process Request items sent by clients.
-    pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
+    pub fn log_verified_request(&mut self, msg: &Request, verify: u8) -> Option<Response> {
         match msg {
-            Request::Transaction(_) if verify == 0 => {
+            &Request::Transaction(_) if verify == 0 => {
                 eprintln!("Transaction falid sigverify");
                 None
             }
-            Request::Transaction(tr) => {
+            &Request::Transaction(ref tr) => {
                 if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     eprintln!("Transaction error: {:?}", err);
                 } else if let Err(SendError(_)) = self.historian
                     .sender
-                    .send(Signal::Event(Event::Transaction(tr)))
+                    .send(Signal::Event(Event::Transaction(tr.clone())))
                 {
                     eprintln!("Channel send error");
                 }
                 None
             }
-            Request::GetBalance { key } => {
+            &Request::GetBalance { key } => {
                 let val = self.acc.get_balance(&key);
                 Some(Response::Balance { key, val })
             }
-            Request::GetLastId => Some(Response::LastId { id: self.sync() }),
+            &Request::GetLastId => Some(Response::LastId { id: self.sync() }),
         }
     }
 
     fn verifier(
         recvr: &streamer::PacketReceiver,
-        sendr: &Sender<(Vec<streamer::SharedPackets>, Vec<Vec<u8>>)>,
+        sendr: &Sender<(Vec<SharedPackets>, Vec<Vec<u8>>)>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = recvr.recv_timeout(timer)?;
@@ -151,45 +150,60 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        packet_receiver: &Receiver<(Vec<SharedPacket>, Vec<Vec<u8>>)>,
+        verified_receiver: &Receiver<(Vec<SharedPackets>, Vec<Vec<u8>>)>,
         blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let msgs = packet_receiver.recv_timeout(timer)?;
-        let msgs_ = msgs.clone();
-        let mut rsps = VecDeque::new();
-        {
-            let mut reqs = vec![];
-            for packet in &msgs.read().unwrap().packets {
-                let rsp_addr = packet.meta.addr();
-                let sz = packet.meta.size;
-                let req = deserialize(&packet.data[0..sz])?;
-                reqs.push((req, rsp_addr));
-            }
-            let reqs = filter_valid_requests(reqs);
-            for (req, rsp_addr) in reqs {
-                if let Some(resp) = obj.lock().unwrap().log_verified_request(req) {
-                    let blob = blob_recycler.allocate();
-                    {
-                        let mut b = blob.write().unwrap();
-                        let v = serialize(&resp)?;
-                        let len = v.len();
-                        b.data[..len].copy_from_slice(&v);
-                        b.meta.size = len;
-                        b.meta.set_addr(&rsp_addr);
+        let (mms, vvs) = verified_receiver.recv_timeout(timer)?;
+        for (msgs, vers) in mms.iter().zip(vvs.iter()) {
+            let msgs_ = msgs.clone();
+            let msgs__ = msgs.clone();
+            let mut rsps = VecDeque::new();
+            {
+                //deserealize in parallel
+                let mut reqs: Vec<Option<(Request, SocketAddr)>> = msgs__
+                    .read()
+                    .unwrap()
+                    .packets
+                    .into_par_iter()
+                    .map(|x| {
+                        let rsp_addr = x.meta.addr();
+                        let sz = x.meta.size;
+                        if let Ok(req) = deserialize(&x.data[0..sz]) {
+                            Some((req, rsp_addr))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                for (data, v) in reqs.iter().zip(vers.iter()) {
+                    if let &Some((ref req, rsp_addr)) = data {
+                        if !req.verify() {
+                            continue;
+                        }
+                        if let Some(resp) = obj.lock().unwrap().log_verified_request(req, *v) {
+                            let blob = blob_recycler.allocate();
+                            {
+                                let mut b = blob.write().unwrap();
+                                let v = serialize(&resp)?;
+                                let len = v.len();
+                                b.data[..len].copy_from_slice(&v);
+                                b.meta.size = len;
+                                b.meta.set_addr(&rsp_addr);
+                            }
+                            rsps.push_back(blob);
+                        }
                     }
-                    rsps.push_back(blob);
                 }
-                ursps.responses.resize(num, streamer::Response::default());
             }
+            if !rsps.is_empty() {
+                //don't wake up the other side if there is nothing
+                blob_sender.send(rsps)?;
+            }
+            packet_recycler.recycle(msgs_);
         }
-        if !rsps.is_empty() {
-            //don't wake up the other side if there is nothing
-            blob_sender.send(rsps)?;
-        }
-        packet_recycler.recycle(msgs_);
         Ok(())
     }
 

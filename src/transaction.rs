@@ -107,12 +107,12 @@ pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
 
 /// Verify a batch of signatures.
 pub fn verify_signatures(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.verify())
+    transactions.par_iter().all(|tr| tr.sig_verify())
 }
 
 /// Verify a batch of spending plans.
 pub fn verify_plans(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.plan.verify(tr.tokens))
+    transactions.par_iter().all(|tr| tr.plan_verify())
 }
 
 /// Verify a batch of transactions.
@@ -206,16 +206,16 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Plan::Pay(ref mut payment) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
             payment.tokens = 2; // <-- attack!
         }
-        assert!(!tr.verify());
+        assert!(!tr.plan_verify());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Pay(ref mut payment) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
             payment.tokens = 0; // <-- whoops!
         }
-        assert!(!tr.verify());
+        assert!(!tr.plan_verify());
     }
 
     #[test]

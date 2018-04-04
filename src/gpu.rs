@@ -1,6 +1,6 @@
+use packet::SharedPackets;
+use packet::{Packet, PACKET_DATA_SIZE};
 use std::mem::size_of;
-use streamer::SharedPackets;
-use streamer::{Packet, PACKET_DATA_SIZE};
 
 pub const TX_OFFSET: usize = 4;
 pub const SIGNED_DATA_OFFSET: usize = 72;

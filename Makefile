@@ -1,12 +1,12 @@
 export RUST_LOG=packet=TRACE
 #export RUST_BACKTRACE=1
 
-all: htest libcuda_verify_ed25519.a
+all: htest
 
 htest:wfmt
 	#cargo test accountant_skel::tests::test_layout -- --nocapture 2>&1 | head -n 30
 	#cargo test accountant_skel::tests::test_layout -- --nocapture
-	cargo test accountant_stub -- --nocapture
+	cargo test accountant_stub -- --nocapture 2>&1 | head -n 30
 
 ci: test bench release clippy ipv6
 

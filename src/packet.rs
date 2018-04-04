@@ -1,10 +1,10 @@
-use std::sync::{Arc, Mutex, RwLock};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use result::{Error, Result};
+use std::collections::VecDeque;
 use std::fmt;
 use std::io;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
-use std::collections::VecDeque;
-use result::{Error, Result};
+use std::sync::{Arc, Mutex, RwLock};
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -13,8 +13,8 @@ pub type BlobRecycler = Recycler<Blob>;
 
 const NUM_PACKETS: usize = 1024 * 8;
 const BLOB_SIZE: usize = 64 * 1024;
-pub const PACKET_SIZE: usize = 256;
-pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_SIZE) / BLOB_SIZE;
+pub const PACKET_DATA_SIZE: usize = 256;
+pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default)]
 pub struct Meta {
@@ -26,7 +26,7 @@ pub struct Meta {
 
 #[derive(Clone)]
 pub struct Packet {
-    pub data: [u8; PACKET_SIZE],
+    pub data: [u8; PACKET_DATA_SIZE],
     pub meta: Meta,
 }
 
@@ -44,7 +44,7 @@ impl fmt::Debug for Packet {
 impl Default for Packet {
     fn default() -> Packet {
         Packet {
-            data: [0u8; PACKET_SIZE],
+            data: [0u8; PACKET_DATA_SIZE],
             meta: Meta::default(),
         }
     }
@@ -279,11 +279,11 @@ impl Blob {
 
 #[cfg(test)]
 mod test {
-    use std::net::UdpSocket;
-    use std::io::Write;
-    use std::io;
-    use std::collections::VecDeque;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets};
+    use std::collections::VecDeque;
+    use std::io;
+    use std::io::Write;
+    use std::net::UdpSocket;
     #[test]
     pub fn packet_recycler_test() {
         let r = PacketRecycler::default();
