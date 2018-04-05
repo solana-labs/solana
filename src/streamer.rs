@@ -67,7 +67,7 @@ pub fn responder(
     r: BlobReceiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, &recycler, &r).is_err() || exit.load(Ordering::Relaxed) {
+        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
             break;
         }
     })

@@ -88,17 +88,17 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn log_verified_request(&mut self, msg: Request, verify: u8) -> Option<Response> {
         match msg {
             Request::Transaction(_) if verify == 0 => {
-                eprintln!("Transaction falid sigverify");
+                trace!("Transaction falid sigverify");
                 None
             }
             Request::Transaction(tr) => {
                 if let Err(err) = self.acc.process_verified_transaction(&tr) {
-                    eprintln!("Transaction error: {:?}", err);
+                    trace!("Transaction error: {:?}", err);
                 } else if let Err(SendError(_)) = self.historian
                     .sender
                     .send(Signal::Event(Event::Transaction(tr.clone())))
                 {
-                    eprintln!("Channel send error");
+                    error!("Channel send error");
                 }
                 None
             }
@@ -125,25 +125,9 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         }
         trace!("verifying");
         let rvs = gpu::ecdsa_verify(&v);
-        trace!("verified!");
-        let mut len = 0;
-        let mut sv = Vec::new();
-        let mut sr = Vec::new();
-        for (v, r) in v.iter().zip(rvs.iter()) {
-            if len + r.len() >= 256 {
-                trace!("sending {}", len);
-                sendr.send((sv, sr))?;
-                sv = Vec::new();
-                sr = Vec::new();
-                len = 0;
-            }
-            sv.push(v.clone());
-            sr.push(r.clone());
-            len += r.len();
-            assert!(len < 256);
-        }
-        if !sv.is_empty() {
-            sendr.send((sv, sr))?;
+        info!("verified batches {}", rvs.len());
+        if !rvs.is_empty() {
+            sendr.send((v, rvs))?;
         }
         Ok(())
     }

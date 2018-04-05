@@ -31,7 +31,7 @@ fn main() {
     println!("Mint's Initial Balance {}", mint_balance);
 
     println!("Signing transactions...");
-    let txs = 100_000;
+    let txs = 10_000_000;
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .into_par_iter()
