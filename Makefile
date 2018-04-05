@@ -1,4 +1,4 @@
-export RUST_LOG=packet=TRACE
+export RUST_LOG=solana::gpu=TRACE
 #export RUST_BACKTRACE=1
 
 all: htest
