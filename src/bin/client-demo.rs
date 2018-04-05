@@ -21,9 +21,12 @@ fn main() {
     let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
+    println!("Stub new");
     let acc = AccountantStub::new(addr, socket);
+    println!("Get last id");
     let last_id = acc.get_last_id().unwrap();
 
+    println!("Get Balance");
     let mint_balance = acc.get_balance(&mint_pubkey).unwrap().unwrap();
     println!("Mint's Initial Balance {}", mint_balance);
 

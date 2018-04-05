@@ -47,13 +47,13 @@ pub fn ecdsa_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
         num += p.packets.len();
     }
     out.resize(num, 0);
-    //println!("Starting verify num packets: {}", num);
-    //println!("elem len: {}", elems.len() as u32);
-    //println!("packet sizeof: {}", size_of::<Packet>() as u32);
-    //println!("pub key: {}", (TX_OFFSET + PUB_KEY_OFFSET) as u32);
-    //println!("sig offset: {}", (TX_OFFSET + SIG_OFFSET) as u32);
-    //println!("sign data: {}", (TX_OFFSET + SIGNED_DATA_OFFSET) as u32);
-    //println!("len offset: {}", PACKET_DATA_SIZE as u32);
+    trace!("Starting verify num packets: {}", num);
+    trace!("elem len: {}", elems.len() as u32);
+    trace!("packet sizeof: {}", size_of::<Packet>() as u32);
+    trace!("pub key: {}", (TX_OFFSET + PUB_KEY_OFFSET) as u32);
+    trace!("sig offset: {}", (TX_OFFSET + SIG_OFFSET) as u32);
+    trace!("sign data: {}", (TX_OFFSET + SIGNED_DATA_OFFSET) as u32);
+    trace!("len offset: {}", PACKET_DATA_SIZE as u32);
     unsafe {
         let res = ed25519_verify_many(
             elems.as_ptr(),
@@ -66,16 +66,16 @@ pub fn ecdsa_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
             out.as_mut_ptr(),
         );
         if res != 0 {
-            //    println!("RETURN!!!: {}", res);
+            trace!("RETURN!!!: {}", res);
         }
     }
-    //println!("done verify");
+    trace!("done verify");
     let mut num = 0;
     for vs in rvs.iter_mut() {
         for mut v in vs.iter_mut() {
             *v = out[num];
             if *v != 0 {
-                //    println!("VERIFIED PACKET!!!!!");
+                trace!("VERIFIED PACKET!!!!!");
             }
             num += 1;
         }

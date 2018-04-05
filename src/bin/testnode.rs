@@ -1,3 +1,4 @@
+extern crate env_logger;
 extern crate serde_json;
 extern crate solana;
 
@@ -11,6 +12,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 fn main() {
+    env_logger::init().unwrap();
     let addr = "127.0.0.1:9000";
     let stdin = io::stdin();
     let mut entries = stdin
