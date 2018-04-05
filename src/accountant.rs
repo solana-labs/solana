@@ -15,6 +15,8 @@ use std::result;
 use std::sync::RwLock;
 use transaction::Transaction;
 
+const MAX_ENTRY_IDS: usize = 1024 * 4;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
     InsufficientFunds,
@@ -93,8 +95,11 @@ impl Accountant {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// accountant will reject transactions using that `last_id`.
     pub fn register_entry_id(&self, last_id: &Hash) {
-        let sigs = RwLock::new(HashSet::new());
-        self.last_ids.write().unwrap().push_back((*last_id, sigs));
+        let mut last_ids = self.last_ids.write().unwrap();
+        if last_ids.len() >= MAX_ENTRY_IDS {
+            last_ids.pop_front();
+        }
+        last_ids.push_back((*last_id, RwLock::new(HashSet::new())));
     }
 
     /// Process a Transaction that has already been verified.
@@ -222,6 +227,8 @@ impl Accountant {
 mod tests {
     use super::*;
     use signature::KeyPairUtil;
+    use hash::hash;
+    use bincode::serialize;
 
     #[test]
     fn test_accountant() {
@@ -340,6 +347,19 @@ mod tests {
         let acc = Accountant::new(&alice);
         let sig = Signature::default();
         assert!(acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+    }
+
+    #[test]
+    fn test_max_entry_ids() {
+        let alice = Mint::new(1);
+        let acc = Accountant::new(&alice);
+        let sig = Signature::default();
+        for i in 0..MAX_ENTRY_IDS {
+            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+            acc.register_entry_id(&last_id);
+        }
+        // Assert we're no longer able to use the oldest entry ID.
         assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
     }
 }
