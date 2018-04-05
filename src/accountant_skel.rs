@@ -125,7 +125,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             v.push(more);
         }
         info!("batch {}", v.len());
-        let chunk = max(1, (v.len() + 2) / 4);
+        let chunk = max(1, (v.len() + 3) / 4);
         let chunks: Vec<_> = v.chunks(chunk).collect();
         let rvs: Vec<_> = chunks
             .into_par_iter()
