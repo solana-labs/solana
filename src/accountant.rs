@@ -62,7 +62,9 @@ impl Accountant {
             to: mint.pubkey(),
             tokens: mint.tokens,
         };
-        Self::new_from_deposit(&deposit)
+        let acc = Self::new_from_deposit(&deposit);
+        acc.register_entry_id(&mint.last_id());
+        acc
     }
 
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
@@ -83,10 +85,16 @@ impl Accountant {
         {
             return Self::reserve_signature(&entry.1, sig);
         }
+        false
+    }
+
+    /// Tell the accountant which Entry IDs exist on the ledger. This function
+    /// assumes subsequent calls correspond to later entries, and will boot
+    /// the oldest ones once its internal cache is full. Once boot, the
+    /// accountant will reject transactions using that `last_id`.
+    pub fn register_entry_id(&self, last_id: &Hash) {
         let sigs = RwLock::new(HashSet::new());
-        Self::reserve_signature(&sigs, sig);
         self.last_ids.write().unwrap().push_back((*last_id, sigs));
-        true
     }
 
     /// Process a Transaction that has already been verified.
@@ -331,9 +339,8 @@ mod tests {
         let alice = Mint::new(1);
         let acc = Accountant::new(&alice);
         let sig = Signature::default();
-        let last_id = Hash::default();
-        assert!(acc.reserve_signature_with_last_id(&sig, &last_id));
-        assert!(!acc.reserve_signature_with_last_id(&sig, &last_id));
+        assert!(acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
     }
 }
 
@@ -362,6 +369,8 @@ mod bench {
 
                 // Seed the 'to' account and a cell for its signature.
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+                acc.register_entry_id(&last_id);
+
                 let rando1 = KeyPair::new();
                 let tr = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
                 acc.process_verified_transaction(&tr).unwrap();

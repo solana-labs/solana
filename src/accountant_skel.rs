@@ -77,6 +77,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn sync(&mut self) -> Hash {
         while let Ok(entry) = self.historian.receiver.try_recv() {
             self.last_id = entry.id;
+            self.acc.register_entry_id(&self.last_id);
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         }
         self.last_id
