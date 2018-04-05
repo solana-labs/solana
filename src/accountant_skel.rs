@@ -116,22 +116,22 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let msgs = recvr.recv_timeout(timer)?;
-        //println!("got msgs");
+        trace!("got msgs");
         let mut v = Vec::new();
         v.push(msgs);
         while let Ok(more) = recvr.try_recv() {
-            //println!("got more msgs");
+            trace!("got more msgs");
             v.push(more);
         }
-        //println!("verifying");
+        trace!("verifying");
         let rvs = gpu::ecdsa_verify(&v);
-        //println!("verified!");
+        trace!("verified!");
         let mut len = 0;
         let mut sv = Vec::new();
         let mut sr = Vec::new();
         for (v, r) in v.iter().zip(rvs.iter()) {
             if len + r.len() >= 256 {
-                println!("sending {}", len);
+                trace!("sending {}", len);
                 sendr.send((sv, sr))?;
                 sv = Vec::new();
                 sr = Vec::new();
