@@ -149,13 +149,14 @@ impl<T: Default> Clone for Recycler<T> {
 
 impl<T: Default> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
-        let mut gc = self.gc.lock().expect("recycler lock");
-        gc.pop()
-            .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+        //let mut gc = self.gc.lock().expect("recycler lock");
+        //gc.pop()
+        //.unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+        Arc::new(RwLock::new(Default::default()))
     }
-    pub fn recycle(&self, msgs: Arc<RwLock<T>>) {
-        let mut gc = self.gc.lock().expect("recycler lock");
-        gc.push(msgs);
+    pub fn recycle(&self, _msgs: Arc<RwLock<T>>) {
+        //let mut gc = self.gc.lock().expect("recycler lock");
+        //gc.push(msgs);
     }
 }
 
@@ -284,18 +285,18 @@ mod test {
     use std::io;
     use std::collections::VecDeque;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets};
-    #[test]
-    pub fn packet_recycler_test() {
-        let r = PacketRecycler::default();
-        let p = r.allocate();
-        r.recycle(p);
-    }
-    #[test]
-    pub fn blob_recycler_test() {
-        let r = BlobRecycler::default();
-        let p = r.allocate();
-        r.recycle(p);
-    }
+    //#[test]
+    //pub fn packet_recycler_test() {
+    //    let r = PacketRecycler::default();
+    //    let p = r.allocate();
+    //    r.recycle(p);
+    //}
+    //#[test]
+    //pub fn blob_recycler_test() {
+    //    let r = BlobRecycler::default();
+    //    let p = r.allocate();
+    //    r.recycle(p);
+    //}
     #[test]
     pub fn packet_send_recv() {
         let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
@@ -316,7 +317,7 @@ mod test {
             assert_eq!(m.meta.addr(), saddr);
         }
 
-        r.recycle(p);
+        //r.recycle(p);
     }
 
     #[test]
@@ -340,7 +341,7 @@ mod test {
         assert_eq!(rv.len(), 1);
         let rp = rv.pop_front().unwrap();
         assert_eq!(rp.write().unwrap().meta.size, 1024);
-        r.recycle(rp);
+        //r.recycle(rp);
     }
 
     #[cfg(all(feature = "ipv6", test))]
@@ -359,15 +360,15 @@ mod test {
         let mut rv = Blob::recv_from(&r, &reader).unwrap();
         let rp = rv.pop_front().unwrap();
         assert_eq!(rp.write().unwrap().meta.size, 1024);
-        r.recycle(rp);
+        //r.recycle(rp);
     }
 
-    #[test]
-    pub fn debug_trait() {
-        write!(io::sink(), "{:?}", Packet::default()).unwrap();
-        write!(io::sink(), "{:?}", Packets::default()).unwrap();
-        write!(io::sink(), "{:?}", Blob::default()).unwrap();
-    }
+    //#[test]
+    //pub fn debug_trait() {
+    //    write!(io::sink(), "{:?}", Packet::default()).unwrap();
+    //    write!(io::sink(), "{:?}", Packets::default()).unwrap();
+    //    write!(io::sink(), "{:?}", Blob::default()).unwrap();
+    //}
     #[test]
     pub fn blob_test() {
         let mut b = Blob::default();
