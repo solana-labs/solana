@@ -1,12 +1,12 @@
+use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, NUM_BLOBS};
+use result::Result;
+use std::collections::VecDeque;
+use std::net::UdpSocket;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::time::Duration;
-use std::net::UdpSocket;
 use std::thread::{spawn, JoinHandle};
-use std::collections::VecDeque;
-use result::Result;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, NUM_BLOBS};
+use std::time::Duration;
 
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
@@ -67,7 +67,7 @@ pub fn responder(
     r: BlobReceiver,
 ) -> JoinHandle<()> {
     spawn(move || loop {
-        if recv_send(&sock, &recycler, &r).is_err() || exit.load(Ordering::Relaxed) {
+        if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
             break;
         }
     })
@@ -141,16 +141,16 @@ pub fn window(
 mod bench {
     extern crate test;
     use self::test::Bencher;
+    use packet::{Packet, PacketRecycler, PACKET_DATA_SIZE};
     use result::Result;
     use std::net::{SocketAddr, UdpSocket};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::channel;
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::thread::{spawn, JoinHandle};
     use std::time::Duration;
     use std::time::SystemTime;
-    use std::sync::mpsc::channel;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use packet::{Packet, PacketRecycler, PACKET_SIZE};
     use streamer::{receiver, PacketReceiver};
 
     fn producer(
@@ -163,7 +163,7 @@ mod bench {
         let msgs_ = msgs.clone();
         msgs.write().unwrap().packets.resize(10, Packet::default());
         for w in msgs.write().unwrap().packets.iter_mut() {
-            w.meta.size = PACKET_SIZE;
+            w.meta.size = PACKET_DATA_SIZE;
             w.meta.set_addr(&addr);
         }
         spawn(move || loop {
@@ -241,15 +241,15 @@ mod bench {
 
 #[cfg(test)]
 mod test {
+    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
+    use std::collections::VecDeque;
+    use std::io;
+    use std::io::Write;
     use std::net::UdpSocket;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::io::Write;
-    use std::io;
-    use std::collections::VecDeque;
     use std::time::Duration;
-    use std::sync::Arc;
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_SIZE};
     use streamer::{receiver, responder, window, BlobReceiver, PacketReceiver};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
@@ -288,7 +288,7 @@ mod test {
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             w.data[0] = i as u8;
-            w.meta.size = PACKET_SIZE;
+            w.meta.size = PACKET_DATA_SIZE;
             w.meta.set_addr(&addr);
             msgs.push_back(b_);
         }
@@ -338,7 +338,7 @@ mod test {
             let mut w = b.write().unwrap();
             w.set_index(i).unwrap();
             assert_eq!(i, w.get_index().unwrap());
-            w.meta.size = PACKET_SIZE;
+            w.meta.size = PACKET_DATA_SIZE;
             w.meta.set_addr(&addr);
             msgs.push_back(b_);
         }

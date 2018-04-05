@@ -8,12 +8,17 @@ use rayon::prelude::*;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Transaction {
+pub struct Signed {
     pub from: PublicKey,
-    pub plan: Plan,
     pub tokens: i64,
     pub last_id: Hash,
+    pub plan: Plan,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Transaction {
     pub sig: Signature,
+    pub data: Signed,
 }
 
 impl Transaction {
@@ -22,11 +27,13 @@ impl Transaction {
         let from = from_keypair.pubkey();
         let plan = Plan::Pay(Payment { tokens, to });
         let mut tr = Transaction {
-            from,
-            plan,
-            tokens,
-            last_id,
             sig: Signature::default(),
+            data: Signed {
+                from,
+                plan,
+                tokens,
+                last_id,
+            },
         };
         tr.sign(from_keypair);
         tr
@@ -46,10 +53,12 @@ impl Transaction {
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let mut tr = Transaction {
-            from,
-            plan,
-            tokens,
-            last_id,
+            data: Signed {
+                from,
+                plan,
+                tokens,
+                last_id,
+            },
             sig: Signature::default(),
         };
         tr.sign(from_keypair);
@@ -57,7 +66,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.plan, &self.tokens, &self.last_id)).unwrap()
+        serialize(&(&self.data)).unwrap()
     }
 
     /// Sign this transaction.
@@ -66,20 +75,44 @@ impl Transaction {
         self.sig = Signature::clone_from_slice(keypair.sign(&sign_data).as_ref());
     }
 
-    /// Verify this transaction's signature and its spending plan.
-    pub fn verify(&self) -> bool {
-        self.sig.verify(&self.from, &self.get_sign_data()) && self.plan.verify(self.tokens)
+    pub fn sig_verify(&self) -> bool {
+        self.sig.verify(&self.data.from, &self.get_sign_data())
     }
+    pub fn plan_verify(&self) -> bool {
+        self.data.plan.verify(self.data.tokens)
+    }
+}
+
+#[cfg(test)]
+pub fn test_tx() -> Transaction {
+    let keypair1 = KeyPair::new();
+    let pubkey1 = keypair1.pubkey();
+    let zero = Hash::default();
+    let mut tr = Transaction::new(&keypair1, pubkey1, 42, zero);
+    tr.sign(&keypair1);
+    return tr;
+}
+
+#[cfg(test)]
+pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
+    assert!(a.len() >= b.len());
+    let end = a.len() - b.len() + 1;
+    for i in 0..end {
+        if a[i..i + b.len()] == b[..] {
+            return Some(i);
+        }
+    }
+    None
 }
 
 /// Verify a batch of signatures.
 pub fn verify_signatures(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.verify())
+    transactions.par_iter().all(|tr| tr.sig_verify())
 }
 
 /// Verify a batch of spending plans.
 pub fn verify_plans(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.plan.verify(tr.tokens))
+    transactions.par_iter().all(|tr| tr.plan_verify())
 }
 
 /// Verify a batch of transactions.
@@ -91,13 +124,14 @@ pub fn verify_transactions(transactions: &[Transaction]) -> bool {
 mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
+    use gpu;
 
     #[test]
     fn test_claim() {
         let keypair = KeyPair::new();
         let zero = Hash::default();
         let tr0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
-        assert!(tr0.verify());
+        assert!(tr0.plan_verify());
     }
 
     #[test]
@@ -107,7 +141,7 @@ mod tests {
         let keypair1 = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
         let tr0 = Transaction::new(&keypair0, pubkey1, 42, zero);
-        assert!(tr0.verify());
+        assert!(tr0.plan_verify());
     }
 
     #[test]
@@ -117,10 +151,12 @@ mod tests {
             to: Default::default(),
         });
         let claim0 = Transaction {
-            from: Default::default(),
-            plan,
-            tokens: 0,
-            last_id: Default::default(),
+            data: Signed {
+                from: Default::default(),
+                plan,
+                tokens: 0,
+                last_id: Default::default(),
+            },
             sig: Default::default(),
         };
         let buf = serialize(&claim0).unwrap();
@@ -135,8 +171,8 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
         tr.sign(&keypair);
-        tr.tokens = 1_000_000; // <-- attack!
-        assert!(!tr.verify());
+        tr.data.tokens = 1_000_000; // <-- attack!
+        assert!(!tr.plan_verify());
     }
 
     #[test]
@@ -148,10 +184,20 @@ mod tests {
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
         tr.sign(&keypair0);
-        if let Plan::Pay(ref mut payment) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
             payment.to = thief_keypair.pubkey(); // <-- attack!
         };
-        assert!(!tr.verify());
+        assert!(tr.plan_verify());
+        assert!(!tr.sig_verify());
+    }
+    #[test]
+    fn test_layout() {
+        let tr = test_tx();
+        let sign_data = tr.get_sign_data();
+        let tx = serialize(&tr).unwrap();
+        assert_matches!(memfind(&tx, &sign_data), Some(gpu::SIGNED_DATA_OFFSET));
+        assert_matches!(memfind(&tx, &tr.sig), Some(gpu::SIG_OFFSET));
+        assert_matches!(memfind(&tx, &tr.data.from), Some(gpu::PUB_KEY_OFFSET));
     }
 
     #[test]
@@ -160,16 +206,16 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Plan::Pay(ref mut payment) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
             payment.tokens = 2; // <-- attack!
         }
-        assert!(!tr.verify());
+        assert!(!tr.plan_verify());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Pay(ref mut payment) = tr.plan {
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
             payment.tokens = 0; // <-- whoops!
         }
-        assert!(!tr.verify());
+        assert!(!tr.plan_verify());
     }
 
     #[test]

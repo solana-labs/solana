@@ -13,22 +13,25 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 fn main() {
-    let addr = "127.0.0.1:8000";
-    let send_addr = "127.0.0.1:8001";
+    let addr = "127.0.0.1:9000";
+    let send_addr = "127.0.0.1:9001";
 
     let mint: Mint = serde_json::from_reader(stdin()).unwrap();
     let mint_keypair = mint.keypair();
     let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(send_addr).unwrap();
+    println!("Stub new");
     let acc = AccountantStub::new(addr, socket);
+    println!("Get last id");
     let last_id = acc.get_last_id().unwrap();
 
+    println!("Get Balance");
     let mint_balance = acc.get_balance(&mint_pubkey).unwrap().unwrap();
     println!("Mint's Initial Balance {}", mint_balance);
 
     println!("Signing transactions...");
-    let txs = 100_000;
+    let txs = 1_000_000;
     let now = Instant::now();
     let transactions: Vec<_> = (0..txs)
         .into_par_iter()
