@@ -16,6 +16,7 @@ use recorder::Signal;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
@@ -123,11 +124,15 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             trace!("got more msgs");
             v.push(more);
         }
-        trace!("verifying");
-        let rvs = gpu::ecdsa_verify(&v);
-        info!("verified batches {}", rvs.len());
-        if !rvs.is_empty() {
-            sendr.send((v, rvs))?;
+        info!("batch {}", v.len());
+        let chunk = max(1, (v.len() + 2) / 4);
+        let chunks: Vec<_> = v.chunks(chunk).collect();
+        let rvs: Vec<_> = chunks
+            .into_par_iter()
+            .map(|x| gpu::ecdsa_verify(&x.to_vec()))
+            .collect();
+        for (v, r) in v.chunks(chunk).zip(rvs) {
+            sendr.send((v.to_vec(), r))?;
         }
         Ok(())
     }
