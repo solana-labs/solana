@@ -41,6 +41,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 [features]
 unstable = []
 ipv6 = []
+cuda = []
 
 [dependencies]
 rayon = "1.0.0"
@@ -54,5 +55,7 @@ untrusted = "0.5.1"
 bincode = "1.0.0"
 chrono = { version = "0.4.0", features = ["serde"] }
 log = "^0.4.1"
+env_logger = "^0.4.1"
 matches = "^0.1.6"
 byteorder = "^1.2.1"
+libc = "^0.2.1"
