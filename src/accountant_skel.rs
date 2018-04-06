@@ -139,18 +139,61 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     pub fn deserialize_packets(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
-        // TODO: deserealize in parallel
-        let mut r = vec![];
-        for x in &p.packets {
-            let rsp_addr = x.meta.addr();
-            let sz = x.meta.size;
-            if let Ok(req) = deserialize(&x.data[0..sz]) {
-                r.push(Some((req, rsp_addr)));
-            } else {
-                r.push(None);
+        p.packets
+            .par_iter()
+            .map(|x| {
+                deserialize(&x.data[0..x.meta.size])
+                    .map(|req| (req, x.meta.addr()))
+                    .ok()
+            })
+            .collect()
+    }
+
+    fn process_packets(
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        reqs: Vec<Option<(Request, SocketAddr)>>,
+        vers: Vec<u8>,
+    ) -> Vec<(Response, SocketAddr)> {
+        let mut rsps = Vec::new();
+        for (data, v) in reqs.into_iter().zip(vers.into_iter()) {
+            if let Some((req, rsp_addr)) = data {
+                if !req.verify() {
+                    continue;
+                }
+                if let Some(resp) = obj.lock().unwrap().log_verified_request(req, v) {
+                    rsps.push((resp, rsp_addr));
+                }
             }
         }
-        r
+        rsps
+    }
+
+    fn serialize_response(
+        resp: Response,
+        rsp_addr: SocketAddr,
+        blob_recycler: &packet::BlobRecycler,
+    ) -> Result<packet::SharedBlob> {
+        let blob = blob_recycler.allocate();
+        {
+            let mut b = blob.write().unwrap();
+            let v = serialize(&resp)?;
+            let len = v.len();
+            b.data[..len].copy_from_slice(&v);
+            b.meta.size = len;
+            b.meta.set_addr(&rsp_addr);
+        }
+        Ok(blob)
+    }
+
+    fn serialize_responses(
+        rsps: Vec<(Response, SocketAddr)>,
+        blob_recycler: &packet::BlobRecycler,
+    ) -> Result<VecDeque<packet::SharedBlob>> {
+        let mut blobs = VecDeque::new();
+        for (resp, rsp_addr) in rsps {
+            blobs.push_back(Self::serialize_response(resp, rsp_addr, blob_recycler)?);
+        }
+        Ok(blobs)
     }
 
     fn process(
@@ -163,35 +206,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let timer = Duration::new(1, 0);
         let (mms, vvs) = verified_receiver.recv_timeout(timer)?;
         for (msgs, vers) in mms.into_iter().zip(vvs.into_iter()) {
-            let msgs_ = msgs.clone();
-            let mut rsps = VecDeque::new();
-            {
-                let reqs = Self::deserialize_packets(&((*msgs).read().unwrap()));
-                for (data, v) in reqs.into_iter().zip(vers.into_iter()) {
-                    if let Some((req, rsp_addr)) = data {
-                        if !req.verify() {
-                            continue;
-                        }
-                        if let Some(resp) = obj.lock().unwrap().log_verified_request(req, v) {
-                            let blob = blob_recycler.allocate();
-                            {
-                                let mut b = blob.write().unwrap();
-                                let v = serialize(&resp)?;
-                                let len = v.len();
-                                b.data[..len].copy_from_slice(&v);
-                                b.meta.size = len;
-                                b.meta.set_addr(&rsp_addr);
-                            }
-                            rsps.push_back(blob);
-                        }
-                    }
-                }
-            }
-            if !rsps.is_empty() {
+            let reqs = Self::deserialize_packets(&msgs.read().unwrap());
+            let rsps = Self::process_packets(obj, reqs, vers);
+            let blobs = Self::serialize_responses(rsps, blob_recycler)?;
+            if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
-                blob_sender.send(rsps)?;
+                blob_sender.send(blobs)?;
             }
-            packet_recycler.recycle(msgs_);
+            packet_recycler.recycle(msgs);
         }
         Ok(())
     }

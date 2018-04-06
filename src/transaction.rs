@@ -7,6 +7,10 @@ use plan::{Condition, Payment, Plan};
 use rayon::prelude::*;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
+pub const SIGNED_DATA_OFFSET: usize = 112;
+pub const SIG_OFFSET: usize = 8;
+pub const PUB_KEY_OFFSET: usize = 80;
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TransactionData {
     pub tokens: i64,
@@ -125,7 +129,6 @@ pub fn verify_transactions(transactions: &[Transaction]) -> bool {
 mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
-    use ecdsa;
 
     #[test]
     fn test_claim() {
@@ -196,9 +199,9 @@ mod tests {
         let tr = test_tx();
         let sign_data = tr.get_sign_data();
         let tx = serialize(&tr).unwrap();
-        assert_matches!(memfind(&tx, &sign_data), Some(ecdsa::SIGNED_DATA_OFFSET));
-        assert_matches!(memfind(&tx, &tr.sig), Some(ecdsa::SIG_OFFSET));
-        assert_matches!(memfind(&tx, &tr.from), Some(ecdsa::PUB_KEY_OFFSET));
+        assert_matches!(memfind(&tx, &sign_data), Some(SIGNED_DATA_OFFSET));
+        assert_matches!(memfind(&tx, &tr.sig), Some(SIG_OFFSET));
+        assert_matches!(memfind(&tx, &tr.from), Some(PUB_KEY_OFFSET));
     }
 
     #[test]

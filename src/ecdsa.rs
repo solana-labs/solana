@@ -1,27 +1,8 @@
-// Cuda-only imports
-#[cfg(feature = "cuda")]
-use packet::PACKET_DATA_SIZE;
-#[cfg(feature = "cuda")]
+use packet::{Packet, SharedPackets};
+use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 use std::mem::size_of;
 
-// Non-cuda imports
-#[cfg(not(feature = "cuda"))]
-use rayon::prelude::*;
-#[cfg(not(feature = "cuda"))]
-use ring::signature;
-#[cfg(not(feature = "cuda"))]
-use untrusted;
-
-// Shared imports
-use packet::{Packet, SharedPackets};
-
 pub const TX_OFFSET: usize = 4;
-pub const SIGNED_DATA_OFFSET: usize = 112;
-pub const SIG_OFFSET: usize = 8;
-pub const PUB_KEY_OFFSET: usize = 80;
-
-pub const SIG_SIZE: usize = 64;
-pub const PUB_KEY_SIZE: usize = 32;
 
 #[cfg(feature = "cuda")]
 #[repr(C)]
@@ -47,49 +28,50 @@ extern "C" {
 
 #[cfg(not(feature = "cuda"))]
 fn verify_packet(packet: &Packet) -> u8 {
+    use ring::signature;
+    use untrusted;
+    use signature::{PublicKey, Signature};
+
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;
     let sig_start = TX_OFFSET + SIG_OFFSET;
-    let sig_end = sig_start + SIG_SIZE;
+    let sig_end = sig_start + size_of::<Signature>();
     let pub_key_start = TX_OFFSET + PUB_KEY_OFFSET;
-    let pub_key_end = pub_key_start + PUB_KEY_SIZE;
+    let pub_key_end = pub_key_start + size_of::<PublicKey>();
 
-    if packet.meta.size > msg_start {
-        let msg_end = packet.meta.size;
-        return if signature::verify(
-            &signature::ED25519,
-            untrusted::Input::from(&packet.data[pub_key_start..pub_key_end]),
-            untrusted::Input::from(&packet.data[msg_start..msg_end]),
-            untrusted::Input::from(&packet.data[sig_start..sig_end]),
-        ).is_ok()
-        {
-            1
-        } else {
-            0
-        };
-    } else {
+    if packet.meta.size <= msg_start {
         return 0;
     }
+
+    let msg_end = packet.meta.size;
+    signature::verify(
+        &signature::ED25519,
+        untrusted::Input::from(&packet.data[pub_key_start..pub_key_end]),
+        untrusted::Input::from(&packet.data[msg_start..msg_end]),
+        untrusted::Input::from(&packet.data[sig_start..sig_end]),
+    ).is_ok() as u8
 }
 
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
-    let mut locks = Vec::new();
-    let mut rvs = Vec::new();
-    for packets in batches {
-        locks.push(packets.read().unwrap());
-    }
+    use rayon::prelude::*;
 
-    for p in locks {
-        let mut v = Vec::new();
-        v.resize(p.packets.len(), 0);
-        v = p.packets.par_iter().map(|x| verify_packet(x)).collect();
-        rvs.push(v);
-    }
-    rvs
+    batches
+        .into_par_iter()
+        .map(|p| {
+            p.read()
+                .unwrap()
+                .packets
+                .par_iter()
+                .map(verify_packet)
+                .collect()
+        })
+        .collect()
 }
 
 #[cfg(feature = "cuda")]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+    use packet::PACKET_DATA_SIZE;
+
     let mut out = Vec::new();
     let mut elems = Vec::new();
     let mut locks = Vec::new();
