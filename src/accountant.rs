@@ -21,6 +21,7 @@ const MAX_ENTRY_IDS: usize = 1024 * 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
+    AccountNotFound,
     InsufficientFunds,
     InvalidTransferSignature,
 }
@@ -107,7 +108,17 @@ impl Accountant {
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.data.tokens {
+        let bals = self.balances.read().unwrap();
+
+        // Hold a write lock before the condition check, so that a debit can't occur
+        // between checking the balance and the withdraw.
+        let option = bals.get(&tr.from);
+        if option.is_none() {
+            return Err(AccountingError::AccountNotFound);
+        }
+        let mut bal = option.unwrap().write().unwrap();
+
+        if *bal < tr.data.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
 
@@ -115,8 +126,6 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        let bals = self.balances.read().unwrap();
-        let mut bal = bals[&tr.from].write().unwrap();
         *bal -= tr.data.tokens;
 
         Ok(())
@@ -255,6 +264,16 @@ mod tests {
         acc.transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+    }
+
+    #[test]
+    fn test_account_not_found() {
+        let mint = Mint::new(1);
+        let acc = Accountant::new(&mint);
+        assert_eq!(
+            acc.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
+            Err(AccountingError::AccountNotFound)
+        );
     }
 
     #[test]
