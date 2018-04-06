@@ -2,9 +2,9 @@
 pub mod accountant;
 pub mod accountant_skel;
 pub mod accountant_stub;
+pub mod ecdsa;
 pub mod entry;
 pub mod event;
-pub mod ecdsa;
 pub mod hash;
 pub mod historian;
 pub mod ledger;

@@ -10,6 +10,7 @@ use event::Event;
 use hash::Hash;
 use mint::Mint;
 use plan::{Payment, Plan, Witness};
+use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -21,6 +22,7 @@ const MAX_ENTRY_IDS: usize = 1024 * 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
+    AccountNotFound,
     InsufficientFunds,
     InvalidTransferSignature,
 }
@@ -104,9 +106,20 @@ impl Accountant {
         last_ids.push_back((*last_id, RwLock::new(HashSet::new())));
     }
 
-    /// Process a Transaction that has already been verified.
-    pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
-        if self.get_balance(&tr.from).unwrap_or(0) < tr.data.tokens {
+    /// Deduct tokens from the 'from' address the account has sufficient
+    /// funds and isn't a duplicate.
+    pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
+        let bals = self.balances.read().unwrap();
+
+        // Hold a write lock before the condition check, so that a debit can't occur
+        // between checking the balance and the withdraw.
+        let option = bals.get(&tr.from);
+        if option.is_none() {
+            return Err(AccountingError::AccountNotFound);
+        }
+        let mut bal = option.unwrap().write().unwrap();
+
+        if *bal < tr.data.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
 
@@ -114,20 +127,38 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if let Some(x) = self.balances.read().unwrap().get(&tr.from) {
-            *x.write().unwrap() -= tr.data.tokens;
-        }
+        *bal -= tr.data.tokens;
 
+        Ok(())
+    }
+
+    pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
         let mut plan = tr.data.plan.clone();
         plan.apply_witness(&Witness::Timestamp(*self.last_time.read().unwrap()));
 
         if let Some(ref payment) = plan.final_payment() {
             apply_payment(&self.balances, payment);
         } else {
-            self.pending.write().unwrap().insert(tr.sig, plan);
+            let mut pending = self.pending.write().unwrap();
+            pending.insert(tr.sig, plan);
         }
+    }
 
+    /// Process a Transaction that has already been verified.
+    pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
+        self.process_verified_transaction_debits(tr)?;
+        self.process_verified_transaction_credits(tr);
         Ok(())
+    }
+
+    /// Process a batch of verified transactions.
+    pub fn process_verified_transactions(&self, trs: &[Transaction]) -> Vec<Result<()>> {
+        // Run all debits first to filter out any transactions that can't be processed
+        // in parallel deterministically.
+        trs.par_iter()
+            .map(|tr| self.process_verified_transaction_debits(tr).map(|_| tr))
+            .map(|result| result.map(|tr| self.process_verified_transaction_credits(tr)))
+            .collect()
     }
 
     /// Process a Witness Signature that has already been verified.
@@ -228,9 +259,9 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::KeyPairUtil;
-    use hash::hash;
     use bincode::serialize;
+    use hash::hash;
+    use signature::KeyPairUtil;
 
     #[test]
     fn test_accountant() {
@@ -244,6 +275,16 @@ mod tests {
         acc.transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+    }
+
+    #[test]
+    fn test_account_not_found() {
+        let mint = Mint::new(1);
+        let acc = Accountant::new(&mint);
+        assert_eq!(
+            acc.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
+            Err(AccountingError::AccountNotFound)
+        );
     }
 
     #[test]
@@ -371,10 +412,9 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::*;
-    use rayon::prelude::*;
-    use signature::KeyPairUtil;
-    use hash::hash;
     use bincode::serialize;
+    use hash::hash;
+    use signature::KeyPairUtil;
 
     #[bench]
     fn process_verified_event_bench(bencher: &mut Bencher) {
@@ -407,9 +447,11 @@ mod bench {
                 sigs.write().unwrap().clear();
             }
 
-            transactions.par_iter().for_each(|tr| {
-                acc.process_verified_transaction(tr).unwrap();
-            });
+            assert!(
+                acc.process_verified_transactions(&transactions)
+                    .iter()
+                    .all(|x| x.is_ok())
+            );
         });
     }
 }

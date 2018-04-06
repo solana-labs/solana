@@ -8,9 +8,9 @@ use std::mem::size_of;
 #[cfg(not(feature = "cuda"))]
 use rayon::prelude::*;
 #[cfg(not(feature = "cuda"))]
-use untrusted;
-#[cfg(not(feature = "cuda"))]
 use ring::signature;
+#[cfg(not(feature = "cuda"))]
+use untrusted;
 
 // Shared imports
 use packet::{Packet, SharedPackets};
