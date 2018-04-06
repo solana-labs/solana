@@ -4,9 +4,9 @@
 
 use accountant::Accountant;
 use bincode::{deserialize, serialize};
+use ecdsa;
 use entry::Entry;
 use event::Event;
-use ecdsa;
 use hash::Hash;
 use historian::Historian;
 use packet;

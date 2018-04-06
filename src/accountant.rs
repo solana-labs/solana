@@ -259,9 +259,9 @@ impl Accountant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::KeyPairUtil;
-    use hash::hash;
     use bincode::serialize;
+    use hash::hash;
+    use signature::KeyPairUtil;
 
     #[test]
     fn test_accountant() {
@@ -412,9 +412,9 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::*;
-    use signature::KeyPairUtil;
-    use hash::hash;
     use bincode::serialize;
+    use hash::hash;
+    use signature::KeyPairUtil;
 
     #[bench]
     fn process_verified_event_bench(bencher: &mut Bencher) {
