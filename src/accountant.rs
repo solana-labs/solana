@@ -104,8 +104,9 @@ impl Accountant {
         last_ids.push_back((*last_id, RwLock::new(HashSet::new())));
     }
 
-    /// Process a Transaction that has already been verified.
-    pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
+    /// Deduct tokens from the 'from' address the account has sufficient
+    /// funds and isn't a duplicate.
+    pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
         if self.get_balance(&tr.from).unwrap_or(0) < tr.data.tokens {
             return Err(AccountingError::InsufficientFunds);
         }
@@ -114,19 +115,29 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if let Some(x) = self.balances.read().unwrap().get(&tr.from) {
-            *x.write().unwrap() -= tr.data.tokens;
-        }
+        let bals = self.balances.read().unwrap();
+        let mut bal = bals[&tr.from].write().unwrap();
+        *bal -= tr.data.tokens;
 
+        Ok(())
+    }
+
+    pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
         let mut plan = tr.data.plan.clone();
         plan.apply_witness(&Witness::Timestamp(*self.last_time.read().unwrap()));
 
         if let Some(ref payment) = plan.final_payment() {
             apply_payment(&self.balances, payment);
         } else {
-            self.pending.write().unwrap().insert(tr.sig, plan);
+            let mut pending = self.pending.write().unwrap();
+            pending.insert(tr.sig, plan);
         }
+    }
 
+    /// Process a Transaction that has already been verified.
+    pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
+        self.process_verified_transaction_debits(tr)?;
+        self.process_verified_transaction_credits(tr);
         Ok(())
     }
 
