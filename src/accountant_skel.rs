@@ -149,6 +149,23 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             .collect()
     }
 
+    fn create_blob_from_response(
+        blob_recycler: &packet::BlobRecycler,
+        resp: Response,
+        rsp_addr: SocketAddr,
+    ) -> Result<packet::SharedBlob> {
+        let blob = blob_recycler.allocate();
+        {
+            let mut b = blob.write().unwrap();
+            let v = serialize(&resp)?;
+            let len = v.len();
+            b.data[..len].copy_from_slice(&v);
+            b.meta.size = len;
+            b.meta.set_addr(&rsp_addr);
+        }
+        Ok(blob)
+    }
+
     fn process_packets(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         reqs: Vec<Option<(Request, SocketAddr)>>,
@@ -162,15 +179,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                     continue;
                 }
                 if let Some(resp) = obj.lock().unwrap().log_verified_request(req, v) {
-                    let blob = blob_recycler.allocate();
-                    {
-                        let mut b = blob.write().unwrap();
-                        let v = serialize(&resp)?;
-                        let len = v.len();
-                        b.data[..len].copy_from_slice(&v);
-                        b.meta.size = len;
-                        b.meta.set_addr(&rsp_addr);
-                    }
+                    let blob = Self::create_blob_from_response(blob_recycler, resp, rsp_addr)?;
                     rsps.push_back(blob);
                 }
             }
@@ -189,10 +198,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (mms, vvs) = verified_receiver.recv_timeout(timer)?;
         for (msgs, vers) in mms.into_iter().zip(vvs.into_iter()) {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
-            let rsps = Self::process_packets(obj, reqs, vers, blob_recycler)?;
-            if !rsps.is_empty() {
+            let blobs = Self::process_packets(obj, reqs, vers, blob_recycler)?;
+            if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
-                blob_sender.send(rsps)?;
+                blob_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
         }
