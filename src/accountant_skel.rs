@@ -139,18 +139,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     pub fn deserialize_packets(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
-        // TODO: deserealize in parallel
-        let mut r = vec![];
-        for x in &p.packets {
-            let rsp_addr = x.meta.addr();
-            let sz = x.meta.size;
-            if let Ok(req) = deserialize(&x.data[0..sz]) {
-                r.push(Some((req, rsp_addr)));
-            } else {
-                r.push(None);
-            }
-        }
-        r
+        p.packets
+            .par_iter()
+            .map(|x| {
+                deserialize(&x.data[0..x.meta.size])
+                    .map(|req| (req, x.meta.addr()))
+                    .ok()
+            })
+            .collect()
     }
 
     fn process(
