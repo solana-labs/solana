@@ -73,19 +73,17 @@ fn verify_packet(packet: &Packet) -> u8 {
 
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
-    let mut locks = Vec::new();
-    let mut rvs = Vec::new();
-    for packets in batches {
-        locks.push(packets.read().unwrap());
-    }
-
-    for p in locks {
-        let mut v = Vec::new();
-        v.resize(p.packets.len(), 0);
-        v = p.packets.par_iter().map(|x| verify_packet(x)).collect();
-        rvs.push(v);
-    }
-    rvs
+    batches
+        .into_par_iter()
+        .map(|p| {
+            p.read()
+                .unwrap()
+                .packets
+                .par_iter()
+                .map(verify_packet)
+                .collect()
+        })
+        .collect()
 }
 
 #[cfg(feature = "cuda")]
