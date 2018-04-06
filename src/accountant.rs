@@ -10,6 +10,7 @@ use event::Event;
 use hash::Hash;
 use mint::Mint;
 use plan::{Payment, Plan, Witness};
+use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -148,6 +149,16 @@ impl Accountant {
         self.process_verified_transaction_debits(tr)?;
         self.process_verified_transaction_credits(tr);
         Ok(())
+    }
+
+    /// Process a batch of verified transactions.
+    pub fn process_verified_transactions(&self, trs: &[Transaction]) -> Vec<Result<()>> {
+        // Run all debits first to filter out any transactions that can't be processed
+        // in parallel deterministically.
+        trs.par_iter()
+            .map(|tr| self.process_verified_transaction_debits(tr).map(|_| tr))
+            .map(|result| result.map(|tr| self.process_verified_transaction_credits(tr)))
+            .collect()
     }
 
     /// Process a Witness Signature that has already been verified.
@@ -401,7 +412,6 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::*;
-    use rayon::prelude::*;
     use signature::KeyPairUtil;
     use hash::hash;
     use bincode::serialize;
@@ -437,9 +447,11 @@ mod bench {
                 sigs.write().unwrap().clear();
             }
 
-            transactions.par_iter().for_each(|tr| {
-                acc.process_verified_transaction(tr).unwrap();
-            });
+            assert!(
+                acc.process_verified_transactions(&transactions)
+                    .iter()
+                    .all(|x| x.is_ok())
+            );
         });
     }
 }
