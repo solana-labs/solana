@@ -159,7 +159,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let timer = Duration::new(1, 0);
         let (mms, vvs) = verified_receiver.recv_timeout(timer)?;
         for (msgs, vers) in mms.into_iter().zip(vvs.into_iter()) {
-            let msgs_ = msgs.clone();
             let mut rsps = VecDeque::new();
             {
                 let reqs = Self::deserialize_packets(&((*msgs).read().unwrap()));
@@ -187,7 +186,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 //don't wake up the other side if there is nothing
                 blob_sender.send(rsps)?;
             }
-            packet_recycler.recycle(msgs_);
+            packet_recycler.recycle(msgs);
         }
         Ok(())
     }
