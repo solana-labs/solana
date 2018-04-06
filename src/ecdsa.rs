@@ -53,22 +53,17 @@ fn verify_packet(packet: &Packet) -> u8 {
     let pub_key_start = TX_OFFSET + PUB_KEY_OFFSET;
     let pub_key_end = pub_key_start + PUB_KEY_SIZE;
 
-    if packet.meta.size > msg_start {
-        let msg_end = packet.meta.size;
-        return if signature::verify(
-            &signature::ED25519,
-            untrusted::Input::from(&packet.data[pub_key_start..pub_key_end]),
-            untrusted::Input::from(&packet.data[msg_start..msg_end]),
-            untrusted::Input::from(&packet.data[sig_start..sig_end]),
-        ).is_ok()
-        {
-            1
-        } else {
-            0
-        };
-    } else {
+    if packet.meta.size <= msg_start {
         return 0;
     }
+
+    let msg_end = packet.meta.size;
+    signature::verify(
+        &signature::ED25519,
+        untrusted::Input::from(&packet.data[pub_key_start..pub_key_end]),
+        untrusted::Input::from(&packet.data[msg_start..msg_end]),
+        untrusted::Input::from(&packet.data[sig_start..sig_end]),
+    ).is_ok() as u8
 }
 
 #[cfg(not(feature = "cuda"))]
