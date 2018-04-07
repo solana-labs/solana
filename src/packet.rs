@@ -291,12 +291,18 @@ mod test {
         let r = PacketRecycler::default();
         let p = r.allocate();
         r.recycle(p);
+        assert_eq!(r.gc.lock().unwrap().len(), 1);
+        let _ = r.allocate();
+        assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
     #[test]
     pub fn blob_recycler_test() {
         let r = BlobRecycler::default();
         let p = r.allocate();
         r.recycle(p);
+        assert_eq!(r.gc.lock().unwrap().len(), 1);
+        let _ = r.allocate();
+        assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
     #[test]
     pub fn packet_send_recv() {
