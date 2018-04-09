@@ -1,4 +1,5 @@
 extern crate env_logger;
+extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
@@ -10,10 +11,23 @@ use solana::historian::Historian;
 use std::io::{self, stdout, BufRead};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::env;
+use getopts::Options;
 
 fn main() {
     env_logger::init().unwrap();
-    let addr = "127.0.0.1:8000";
+    let mut port = 8000u16;
+    let mut opts = Options::new();
+    opts.optopt("p", "", "port", "port");
+    let args: Vec<String> = env::args().collect();
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => panic!(f.to_string()),
+    };
+    if matches.opt_present("p") {
+        port = matches.opt_str("p").unwrap().parse().expect("port");
+    }
+    let addr = format!("0.0.0.0:{}", port);
     let stdin = io::stdin();
     let mut entries = stdin
         .lock()
@@ -53,7 +67,7 @@ fn main() {
         historian,
     )));
     eprintln!("Listening on {}", addr);
-    let threads = AccountantSkel::serve(&skel, addr, exit.clone()).unwrap();
+    let threads = AccountantSkel::serve(&skel, &addr, exit.clone()).unwrap();
     for t in threads {
         t.join().expect("join");
     }
