@@ -82,12 +82,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Process Request items sent by clients.
-    pub fn log_verified_request(&mut self, msg: Request, verify: u8) -> Option<Response> {
+    pub fn log_verified_request(&mut self, msg: Request) -> Option<Response> {
         match msg {
-            Request::Transaction(_) if verify == 0 => {
-                trace!("Transaction failed sigverify");
-                None
-            }
             Request::Transaction(tr) => {
                 if let Err(err) = self.acc.process_verified_transaction(&tr) {
                     trace!("Transaction error: {:?}", err);
@@ -120,21 +116,22 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         Ok(batch)
     }
 
-    fn verify_batch(batch: Vec<SharedPackets>) -> Vec<Vec<(SharedPackets, Vec<u8>)>> {
+    fn verify_batch(batch: Vec<SharedPackets>) -> Vec<Vec<SharedPackets>> {
         let chunk_size = max(1, (batch.len() + 3) / 4);
         let batches: Vec<_> = batch.chunks(chunk_size).map(|x| x.to_vec()).collect();
         batches
             .into_par_iter()
             .map(|batch| {
-                let r = ecdsa::ed25519_verify(&batch);
-                batch.into_iter().zip(r).collect()
+                let _r = ecdsa::ed25519_verify(&batch);
+                //batch.into_iter().zip(r).collect();
+                batch
             })
             .collect()
     }
 
     fn verifier(
         recvr: &streamer::PacketReceiver,
-        sendr: &Sender<Vec<(SharedPackets, Vec<u8>)>>,
+        sendr: &Sender<Vec<SharedPackets>>,
     ) -> Result<()> {
         let batch = Self::recv_batch(recvr)?;
         let verified_batches = Self::verify_batch(batch);
@@ -157,14 +154,12 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process_packets(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        req_vers: Vec<(Request, SocketAddr, u8)>,
+        reqs: Vec<(Request, SocketAddr)>,
     ) -> Vec<(Response, SocketAddr)> {
-        req_vers
-            .into_iter()
-            .filter_map(|(req, rsp_addr, v)| {
+        reqs.into_iter()
+            .filter_map(|(req, rsp_addr)| {
                 let mut skel = obj.lock().unwrap();
-                skel.log_verified_request(req, v)
-                    .map(|resp| (resp, rsp_addr))
+                skel.log_verified_request(req).map(|resp| (resp, rsp_addr))
             })
             .collect()
     }
@@ -199,21 +194,20 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+        verified_receiver: &Receiver<Vec<SharedPackets>>,
         blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let mms = verified_receiver.recv_timeout(timer)?;
-        for (msgs, vers) in mms {
+        for msgs in mms {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
-            let req_vers = reqs.into_iter()
-                .zip(vers)
-                .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
+            let reqs = reqs.into_iter()
+                .filter_map(|req| req)
                 .filter(|x| x.0.verify())
                 .collect();
-            let rsps = Self::process_packets(obj, req_vers);
+            let rsps = Self::process_packets(obj, reqs);
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
