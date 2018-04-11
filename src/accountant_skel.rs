@@ -152,21 +152,16 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     fn process_packets(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        reqs: Vec<Option<(Request, SocketAddr)>>,
-        vers: Vec<u8>,
+        req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Vec<(Response, SocketAddr)> {
-        let mut rsps = Vec::new();
-        for (data, v) in reqs.into_iter().zip(vers) {
-            if let Some((req, rsp_addr)) = data {
-                if !req.verify() {
-                    continue;
-                }
-                if let Some(resp) = obj.lock().unwrap().log_verified_request(req, v) {
-                    rsps.push((resp, rsp_addr));
-                }
-            }
-        }
-        rsps
+        req_vers
+            .into_iter()
+            .filter_map(|(req, rsp_addr, v)| {
+                let mut skel = obj.lock().unwrap();
+                skel.log_verified_request(req, v)
+                    .map(|resp| (resp, rsp_addr))
+            })
+            .collect()
     }
 
     fn serialize_response(
@@ -208,7 +203,12 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let mms = verified_receiver.recv_timeout(timer)?;
         for (msgs, vers) in mms {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
-            let rsps = Self::process_packets(obj, reqs, vers);
+            let req_vers = reqs.into_iter()
+                .zip(vers)
+                .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
+                .filter(|x| x.0.verify())
+                .collect();
+            let rsps = Self::process_packets(obj, req_vers);
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
