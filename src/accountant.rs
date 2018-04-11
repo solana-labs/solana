@@ -18,7 +18,7 @@ use std::result;
 use std::sync::RwLock;
 use transaction::Transaction;
 
-const MAX_ENTRY_IDS: usize = 1024 * 4;
+pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -453,7 +453,7 @@ mod bench {
             }
 
             assert!(
-                acc.process_verified_transactions(&transactions)
+                acc.process_verified_transactions(transactions.clone())
                     .iter()
                     .all(|x| x.is_ok())
             );

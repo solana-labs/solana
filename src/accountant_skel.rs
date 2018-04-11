@@ -304,3 +304,79 @@ mod tests {
         assert_matches!(memfind(&packet, &tx), Some(ecdsa::TX_OFFSET));
     }
 }
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
+    use accountant_skel::*;
+    use accountant::{Accountant, MAX_ENTRY_IDS};
+    use signature::{KeyPair, KeyPairUtil};
+    use mint::Mint;
+    use transaction::Transaction;
+    use std::collections::HashSet;
+    use std::io::sink;
+    use std::time::Instant;
+    use bincode::serialize;
+    use hash::hash;
+
+    #[bench]
+    fn process_packets_bench(_bencher: &mut Bencher) {
+        let mint = Mint::new(100_000_000);
+        let acc = Accountant::new(&mint);
+        let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
+        // Create transactions between unrelated parties.
+        let txs = 100_000;
+        let last_ids: Mutex<HashSet<Hash>> = Mutex::new(HashSet::new());
+        let transactions: Vec<_> = (0..txs)
+            .into_par_iter()
+            .map(|i| {
+                // Seed the 'to' account and a cell for its signature.
+                let dummy_id = i % (MAX_ENTRY_IDS as i32);
+                let last_id = hash(&serialize(&dummy_id).unwrap()); // Semi-unique hash
+                {
+                    let mut last_ids = last_ids.lock().unwrap();
+                    if !last_ids.contains(&last_id) {
+                        last_ids.insert(last_id);
+                        acc.register_entry_id(&last_id);
+                    }
+                }
+
+                // Seed the 'from' account.
+                let rando0 = KeyPair::new();
+                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
+                acc.process_verified_transaction(&tr).unwrap();
+
+                let rando1 = KeyPair::new();
+                let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
+                acc.process_verified_transaction(&tr).unwrap();
+
+                // Finally, return a transaction that's unique
+                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
+            })
+            .collect();
+
+        let req_vers = transactions
+            .into_iter()
+            .map(|tr| (Request::Transaction(tr), rsp_addr, 1_u8))
+            .collect();
+
+        let historian = Historian::new(&mint.last_id(), None);
+        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), historian);
+
+        let now = Instant::now();
+        assert!(skel.process_packets(req_vers).is_ok());
+        let duration = now.elapsed();
+        let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
+        let tps = txs as f64 / sec;
+
+        // Ensure that all transactions were successfully logged.
+        skel.historian.sender.send(Signal::Tick).unwrap();
+        drop(skel.historian.sender);
+        let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].events.len(), txs as usize);
+
+        println!("{} tps", tps);
+    }
+}
