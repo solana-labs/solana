@@ -53,11 +53,6 @@ impl Request {
     }
 }
 
-/// Parallel verfication of a batch of requests.
-pub fn filter_valid_requests(reqs: Vec<(Request, SocketAddr)>) -> Vec<(Request, SocketAddr)> {
-    reqs.into_par_iter().filter({ |x| x.0.verify() }).collect()
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
