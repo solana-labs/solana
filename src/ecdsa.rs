@@ -127,3 +127,68 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     }
     rvs
 }
+
+#[cfg(test)]
+mod tests {
+    use transaction::test_tx;
+    use accountant_skel::Request;
+    use bincode::serialize;
+    use ecdsa;
+    use std::sync::RwLock;
+    use packet::{Packet, Packets, SharedPackets};
+    use transaction::Transaction;
+
+    fn make_packet_from_transaction(tr: Transaction) -> Packet {
+        let tx = serialize(&Request::Transaction(tr)).unwrap();
+        let mut packet = Packet::default();
+        packet.meta.size = tx.len();
+        packet.data[..packet.meta.size].copy_from_slice(&tx);
+        return packet;
+    }
+
+    fn test_verify_n(n: usize, modify_data: bool) {
+        let tr = test_tx();
+        let mut packet = make_packet_from_transaction(tr);
+
+        // jumble some data to test failure
+        if modify_data {
+            packet.data[20] = 10;
+        }
+
+        // generate packet vector
+        let mut packets = Packets::default();
+        packets.packets = Vec::new();
+        for _ in 0..n {
+            packets.packets.push(packet.clone());
+        }
+        let shared_packets = SharedPackets::new(RwLock::new(packets));
+        let batches = vec![shared_packets.clone(), shared_packets.clone()];
+
+        // verify packets
+        let ans = ecdsa::ed25519_verify(&batches);
+
+        // check result
+        let ref_ans = if modify_data { 0u8 } else { 1u8 };
+        assert_eq!(ans, vec![vec![ref_ans; n], vec![ref_ans; n]]);
+    }
+
+    #[test]
+    fn test_verify_zero() {
+        test_verify_n(0, false);
+    }
+
+    #[test]
+    fn test_verify_one() {
+        test_verify_n(1, false);
+    }
+
+    #[test]
+    fn test_verify_seventy_one() {
+        test_verify_n(71, false);
+    }
+
+    #[test]
+    fn test_verify_fail() {
+        test_verify_n(5, true);
+    }
+}
