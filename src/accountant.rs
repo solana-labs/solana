@@ -152,12 +152,17 @@ impl Accountant {
     }
 
     /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
-        trs.par_iter()
-            .map(|tr| self.process_verified_transaction_debits(tr).map(|_| tr))
-            .map(|result| result.map(|tr| self.process_verified_transaction_credits(tr)))
+        trs.into_par_iter()
+            .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .map(|result| {
+                result.map(|tr| {
+                    self.process_verified_transaction_credits(&tr);
+                    tr
+                })
+            })
             .collect()
     }
 
