@@ -318,20 +318,20 @@ mod tests {
     use packet::{PacketRecycler, NUM_PACKETS};
     use transaction::{memfind, test_tx};
 
-    use mint::Mint;
-    use std::thread::sleep;
     use accountant::Accountant;
-    use std::sync::{Arc, Mutex};
-    use signature::{KeyPair, KeyPairUtil};
-    use historian::Historian;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use accountant_skel::AccountantSkel;
-    use std::time::Duration;
-    use std::net::UdpSocket;
     use accountant_stub::AccountantStub;
-    use transaction::Transaction;
-    use std::io::sink;
+    use historian::Historian;
+    use mint::Mint;
     use plan::Plan;
+    use signature::{KeyPair, KeyPairUtil};
+    use std::io::sink;
+    use std::net::UdpSocket;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::thread::sleep;
+    use std::time::Duration;
+    use transaction::Transaction;
 
     #[test]
     fn test_layout() {
