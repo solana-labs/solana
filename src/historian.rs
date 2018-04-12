@@ -101,7 +101,7 @@ mod tests {
     fn test_ticking_historian() {
         let zero = Hash::default();
         let hist = Historian::new(&zero, Some(20));
-        sleep(Duration::from_millis(30));
+        sleep(Duration::from_millis(300));
         hist.sender.send(Signal::Tick).unwrap();
         drop(hist.sender);
         let entries: Vec<Entry> = hist.receiver.iter().collect();

@@ -11,7 +11,7 @@ pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
-const NUM_PACKETS: usize = 1024 * 8;
+pub const NUM_PACKETS: usize = 1024 * 8;
 const BLOB_SIZE: usize = 64 * 1024;
 pub const PACKET_DATA_SIZE: usize = 256;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
