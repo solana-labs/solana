@@ -1,7 +1,7 @@
 //! The `signature` module provides functionality for public, and private keys.
 
-use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};
+use generic_array::GenericArray;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use untrusted;

@@ -309,16 +309,16 @@ mod tests {
 mod bench {
     extern crate test;
     use self::test::Bencher;
-    use accountant_skel::*;
     use accountant::{Accountant, MAX_ENTRY_IDS};
-    use signature::{KeyPair, KeyPairUtil};
+    use accountant_skel::*;
+    use bincode::serialize;
+    use hash::hash;
     use mint::Mint;
-    use transaction::Transaction;
+    use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
     use std::io::sink;
     use std::time::Instant;
-    use bincode::serialize;
-    use hash::hash;
+    use transaction::Transaction;
 
     #[bench]
     fn process_packets_bench(_bencher: &mut Bencher) {
