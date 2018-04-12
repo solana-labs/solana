@@ -18,7 +18,7 @@ use std::result;
 use std::sync::RwLock;
 use transaction::Transaction;
 
-const MAX_ENTRY_IDS: usize = 1024 * 4;
+pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
@@ -152,12 +152,17 @@ impl Accountant {
     }
 
     /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
-        trs.par_iter()
-            .map(|tr| self.process_verified_transaction_debits(tr).map(|_| tr))
-            .map(|result| result.map(|tr| self.process_verified_transaction_credits(tr)))
+        trs.into_par_iter()
+            .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .map(|result| {
+                result.map(|tr| {
+                    self.process_verified_transaction_credits(&tr);
+                    tr
+                })
+            })
             .collect()
     }
 
@@ -448,7 +453,7 @@ mod bench {
             }
 
             assert!(
-                acc.process_verified_transactions(&transactions)
+                acc.process_verified_transactions(transactions.clone())
                     .iter()
                     .all(|x| x.is_ok())
             );
