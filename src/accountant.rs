@@ -443,8 +443,8 @@ mod bench {
             .collect();
         bencher.iter(|| {
             // Since benchmarker runs this multiple times, we need to clear the signatures.
-            for (_, sigs) in acc.last_ids.read().unwrap().iter() {
-                sigs.write().unwrap().clear();
+            for sigs in acc.last_ids.read().unwrap().iter() {
+                sigs.1.write().unwrap().clear();
             }
 
             assert!(
