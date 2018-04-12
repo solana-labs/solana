@@ -3,17 +3,17 @@ extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
+use getopts::Options;
 use rayon::prelude::*;
 use solana::accountant_stub::AccountantStub;
 use solana::mint::Mint;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
+use std::env;
 use std::io::stdin;
 use std::net::UdpSocket;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::env;
-use getopts::Options;
 
 fn main() {
     let mut threads = 4usize;

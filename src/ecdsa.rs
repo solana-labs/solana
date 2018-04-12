@@ -1,6 +1,6 @@
 use packet::{Packet, SharedPackets};
-use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 use std::mem::size_of;
+use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 
 pub const TX_OFFSET: usize = 4;
 
@@ -29,8 +29,8 @@ extern "C" {
 #[cfg(not(feature = "cuda"))]
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
-    use untrusted;
     use signature::{PublicKey, Signature};
+    use untrusted;
 
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;
     let sig_start = TX_OFFSET + SIG_OFFSET;
@@ -130,12 +130,12 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use transaction::test_tx;
     use accountant_skel::Request;
     use bincode::serialize;
     use ecdsa;
-    use std::sync::RwLock;
     use packet::{Packet, Packets, SharedPackets};
+    use std::sync::RwLock;
+    use transaction::test_tx;
     use transaction::Transaction;
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {

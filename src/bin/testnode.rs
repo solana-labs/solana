@@ -3,16 +3,16 @@ extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
+use getopts::Options;
 use solana::accountant::Accountant;
 use solana::accountant_skel::AccountantSkel;
 use solana::entry::Entry;
 use solana::event::Event;
 use solana::historian::Historian;
+use std::env;
 use std::io::{self, stdout, BufRead};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::env;
-use getopts::Options;
 
 fn main() {
     env_logger::init().unwrap();

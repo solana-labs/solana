@@ -2,9 +2,9 @@ use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, NUM_
 use result::Result;
 use std::collections::VecDeque;
 use std::net::UdpSocket;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
@@ -246,9 +246,9 @@ mod test {
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use std::time::Duration;
     use streamer::{receiver, responder, window, BlobReceiver, PacketReceiver};
 
