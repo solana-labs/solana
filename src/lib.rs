@@ -15,6 +15,7 @@ pub mod recorder;
 pub mod result;
 pub mod signature;
 pub mod streamer;
+pub mod subscribers;
 pub mod transaction;
 extern crate bincode;
 extern crate byteorder;
