@@ -167,13 +167,17 @@ mod tests {
     }
 
     #[test]
-    fn test_bad_event_signature() {
+    fn test_token_attack() {
         let zero = Hash::default();
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
         let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
-        tr.data.tokens = 1_000_000; // <-- attack!
-        assert!(!tr.verify_plan());
+        tr.data.tokens = 1_000_000; // <-- attack, part 1!
+        if let Plan::Pay(ref mut payment) = tr.data.plan {
+            payment.tokens = tr.data.tokens; // <-- attack, part 2!
+        };
+        assert!(tr.verify_plan());
+        assert!(!tr.verify_sig());
     }
 
     #[test]
