@@ -317,6 +317,22 @@ mod tests {
     use ecdsa;
     use packet::{PacketRecycler, NUM_PACKETS};
     use transaction::{memfind, test_tx};
+
+    use mint::Mint;
+    use std::thread::sleep;
+    use accountant::Accountant;
+    use std::sync::{Arc, Mutex};
+    use signature::{KeyPair, KeyPairUtil};
+    use historian::Historian;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use accountant_skel::AccountantSkel;
+    use std::time::Duration;
+    use std::net::UdpSocket;
+    use accountant_stub::AccountantStub;
+    use transaction::Transaction;
+    use std::io::sink;
+    use plan::Plan;
+
     #[test]
     fn test_layout() {
         let tr = test_tx();
@@ -342,6 +358,48 @@ mod tests {
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);
     }
+
+    #[test]
+    fn test_accountant_bad_sig() {
+        let serve_port = 9002;
+        let send_port = 9003;
+        let addr = format!("127.0.0.1:{}", serve_port);
+        let send_addr = format!("127.0.0.1:{}", send_port);
+        let alice = Mint::new(10_000);
+        let acc = Accountant::new(&alice);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+        let historian = Historian::new(&alice.last_id(), Some(30));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+            acc,
+            alice.last_id(),
+            sink(),
+            historian,
+        )));
+        let _threads = AccountantSkel::serve(&acc, &addr, exit.clone()).unwrap();
+        sleep(Duration::from_millis(300));
+
+        let socket = UdpSocket::bind(send_addr).unwrap();
+        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
+
+        let acc = AccountantStub::new(&addr, socket);
+        let last_id = acc.get_last_id().unwrap();
+
+        let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
+
+        let _sig = acc.transfer_signed(tr).unwrap();
+
+        let last_id = acc.get_last_id().unwrap();
+
+        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
+        tr2.data.tokens = 502;
+        tr2.data.plan = Plan::new_payment(502, bob_pubkey);
+        let _sig = acc.transfer_signed(tr2).unwrap();
+
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
+        exit.store(true, Ordering::Relaxed);
+    }
+
 }
 
 #[cfg(all(feature = "unstable", test))]
