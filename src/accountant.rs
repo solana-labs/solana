@@ -155,8 +155,12 @@ impl Accountant {
     pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
-        trs.into_par_iter()
+        let results: Vec<_> = trs.into_par_iter()
             .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .collect(); // Calling collect() here forces all debits to complete before moving on.
+
+        results
+            .into_par_iter()
             .map(|result| {
                 result.map(|tr| {
                     self.process_verified_transaction_credits(&tr);
@@ -164,6 +168,27 @@ impl Accountant {
                 })
             })
             .collect()
+    }
+
+    fn partition_events(events: Vec<Event>) -> (Vec<Transaction>, Vec<Event>) {
+        let mut trs = vec![];
+        let mut rest = vec![];
+        for event in events {
+            match event {
+                Event::Transaction(tr) => trs.push(tr),
+                _ => rest.push(event),
+            }
+        }
+        (trs, rest)
+    }
+
+    pub fn process_verified_events(&self, events: Vec<Event>) -> Result<()> {
+        let (trs, rest) = Self::partition_events(events);
+        self.process_verified_transactions(trs);
+        for event in rest {
+            self.process_verified_event(&event)?;
+        }
+        Ok(())
     }
 
     /// Process a Witness Signature that has already been verified.
@@ -409,6 +434,17 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+    }
+
+    #[test]
+    fn test_debits_before_credits() {
+        let mint = Mint::new(2);
+        let acc = Accountant::new(&mint);
+        let alice = KeyPair::new();
+        let tr0 = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+        let tr1 = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+        let trs = vec![tr0, tr1];
+        assert!(acc.process_verified_transactions(trs)[1].is_err());
     }
 }
 

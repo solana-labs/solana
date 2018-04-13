@@ -53,9 +53,7 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        for event in entry.events {
-            acc.process_verified_event(&event).unwrap();
-        }
+        acc.process_verified_events(entry.events).unwrap();
     }
 
     let historian = Historian::new(&last_id, Some(1000));

@@ -179,6 +179,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
         }
 
+        // Let validators know they should not attempt to process additional
+        // transactions in parallel.
+        self.historian.sender.send(Signal::Tick)?;
+
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
             .filter_map(|(req, rsp_addr)| self.process_request(req, rsp_addr))
@@ -321,12 +325,14 @@ mod tests {
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
     use accountant_stub::AccountantStub;
+    use entry::Entry;
     use historian::Historian;
     use mint::Mint;
     use plan::Plan;
+    use recorder::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
-    use std::net::UdpSocket;
+    use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
@@ -357,6 +363,43 @@ mod tests {
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);
+    }
+
+    #[test]
+    fn test_accounting_sequential_consistency() {
+        // In this attack we'll demonstrate that a verifier can interpret the ledger
+        // differently if either the server doesn't signal the ledger to add an
+        // Entry OR if the verifier tries to parallelize across multiple Entries.
+        let mint = Mint::new(2);
+        let acc = Accountant::new(&mint);
+        let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
+        let historian = Historian::new(&mint.last_id(), None);
+        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), historian);
+
+        // Process a batch that includes a transaction that receives two tokens.
+        let alice = KeyPair::new();
+        let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+        let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
+        assert!(skel.process_packets(req_vers).is_ok());
+
+        // Process a second batch that spends one of those tokens.
+        let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+        let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
+        assert!(skel.process_packets(req_vers).is_ok());
+
+        // Collect the ledger and feed it to a new accountant.
+        skel.historian.sender.send(Signal::Tick).unwrap();
+        drop(skel.historian.sender);
+        let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
+
+        // Assert the user holds one token, not two. If the server only output one
+        // entry, then the second transaction will be rejected, because it drives
+        // the account balance below zero before the credit is added.
+        let acc = Accountant::new(&mint);
+        for entry in entries {
+            acc.process_verified_events(entry.events).unwrap();
+        }
+        assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
     }
 
     #[test]
