@@ -511,7 +511,6 @@ mod bench {
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        skel.historian.sender.send(Signal::Tick).unwrap();
         drop(skel.historian.sender);
         let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
         assert_eq!(entries.len(), 1);
