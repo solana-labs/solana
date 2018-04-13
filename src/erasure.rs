@@ -29,10 +29,13 @@ pub fn recover(re: BlobRecycler, window: &mut Vec<Option<SharedBlob>>, consumed:
             valid.push(0u8);
         }
         //lock everything
-        for b in window.iter() {
-            let l = b.unwrap().read().unwrap();
+        for b in window.clone().into_iter() {
+            for x in b.into_iter() {
+                locks.push(x.read().unwrap());
+            }
+        }
+        for l in locks.iter() {
             elems.push(l.data.as_ptr());
-            locks.push(l);
         }
         //TODO: call out to erasure with elems
     }
