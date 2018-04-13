@@ -1,16 +1,16 @@
 //TODO(sakridge) pick these values
-const NUM_CODED: usize = 10
-const MAX_MISSING: usize = 1
+use packet::{SharedBlob, BlobRecycler};
+use result::Result;
 
-fn recover(re: BlobRecycler, window: &mut Vec<Option<SharedBlob>>, consumed: usize) -> Result<()> {
+const NUM_CODED: usize = 10;
+const MAX_MISSING: usize = 1;
+
+pub fn recover(re: BlobRecycler, window: &mut Vec<Option<SharedBlob>>, consumed: usize) -> Result<()> {
     //recover with erasure coding
-    let mut available = 0;
     let mut missing = 0;
     for i in consumed .. (consumed + NUM_CODED) {
         let n = i % window.len();
-        if window[n].is_some() {
-            available += 1;
-        } else {
+        if window[n].is_none() {
             missing += 1;
         }
     }
@@ -20,20 +20,21 @@ fn recover(re: BlobRecycler, window: &mut Vec<Option<SharedBlob>>, consumed: usi
         let mut valid = Vec::new();
         for b in window.iter_mut() {
             if b.is_some() {
-                valid.push(1);
+                valid.push(1u8);
                 continue;
             }
             let n = re.allocate();
             *b = Some(n);
             //mark the missing memory
-            valid.push(0);
+            valid.push(0u8);
         }
         //lock everything
-        for b in window.iter_mut() {
+        for b in window.iter() {
             let l = b.unwrap().read().unwrap();
+            elems.push(l.data.as_ptr());
             locks.push(l);
-            elems.push(Some(l.dat).as_ptr()));
         }
         //TODO: call out to erasure with elems
     }
+    Ok(())
 }
