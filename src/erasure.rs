@@ -16,28 +16,29 @@ pub fn recover(re: BlobRecycler, window: &mut Vec<Option<SharedBlob>>, consumed:
     }
     if missing > 0 && missing < MAX_MISSING {
         let mut locks = Vec::new();
-        let mut elems = Vec::new();
+        let mut ptrs = Vec::new();
+        let mut blobs: Vec<SharedBlob> = Vec::new();
         let mut valid = Vec::new();
         for b in window.iter_mut() {
             if b.is_some() {
                 valid.push(1u8);
+                blobs.push(b.unwrap().clone());
                 continue;
             }
             let n = re.allocate();
-            *b = Some(n);
+            *b = Some(n.clone());
             //mark the missing memory
             valid.push(0u8);
+            blobs.push(n);
         }
         //lock everything
-        for b in window.clone().into_iter() {
-            for x in b.into_iter() {
-                locks.push(x.read().unwrap());
-            }
+        for b in blobs.into_iter() {
+            locks.push(b.read().unwrap());
         }
         for l in locks.iter() {
-            elems.push(l.data.as_ptr());
+            ptrs.push(l.data.as_ptr());
         }
-        //TODO: call out to erasure with elems
+        //TODO: call out to erasure with ptrs
     }
     Ok(())
 }
