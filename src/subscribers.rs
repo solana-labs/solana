@@ -13,7 +13,11 @@ pub struct Node {
 //sockaddr doesn't implement default
 impl Default for Node {
     fn default() -> Node {
-        Node { id: [0; 8], weight: 0, addr: "0.0.0.0:0".parse().unwrap(), }
+        Node {
+            id: [0; 8],
+            weight: 0,
+            addr: "0.0.0.0:0".parse().unwrap(),
+        }
     }
 }
 

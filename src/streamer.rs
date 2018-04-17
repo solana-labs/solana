@@ -493,14 +493,21 @@ mod test {
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
         let saddr = send.local_addr().unwrap();
-        let t_retransmit = retransmitter(send, exit.clone(), subs, blob_recycler.clone(), r_retransmit);
+        let t_retransmit = retransmitter(
+            send,
+            exit.clone(),
+            subs,
+            blob_recycler.clone(),
+            r_retransmit,
+        );
         let mut bq = VecDeque::new();
         let b = blob_recycler.allocate();
         b.write().unwrap().meta.size = 10;
         bq.push_back(b);
         s_retransmit.send(bq).unwrap();
         let (s_blob_receiver, r_blob_receiver) = channel();
-        let t_receiver = blob_receiver(exit.clone(), blob_recycler.clone(), read, s_blob_receiver).unwrap();
+        let t_receiver =
+            blob_receiver(exit.clone(), blob_recycler.clone(), read, s_blob_receiver).unwrap();
         let mut oq = r_blob_receiver.recv().unwrap();
         assert_eq!(oq.len(), 1);
         let o = oq.pop_front().unwrap();
