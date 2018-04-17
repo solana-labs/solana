@@ -3,11 +3,12 @@
 //! this object instead of writing messages to the network directly. The binary
 //! encoding of its messages are unstable and may change in future releases.
 
-use accountant_skel::{Request, Response};
+use accountant_skel::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
 use futures::future::{err, ok, FutureResult};
 use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
+use std::collections::HashMap;
 use std::io;
 use std::net::UdpSocket;
 use transaction::Transaction;
@@ -15,6 +16,9 @@ use transaction::Transaction;
 pub struct AccountantStub {
     pub addr: String,
     pub socket: UdpSocket,
+    last_id: Option<Hash>,
+    num_events: u64,
+    balances: HashMap<PublicKey, i64>,
 }
 
 impl AccountantStub {
@@ -25,6 +29,40 @@ impl AccountantStub {
         AccountantStub {
             addr: addr.to_string(),
             socket,
+            last_id: None,
+            num_events: 0,
+            balances: HashMap::new(),
+        }
+    }
+
+    pub fn init(&self) {
+        let subscriptions = vec![Subscription::EntryInfo];
+        let req = Request::Subscribe { subscriptions };
+        let data = serialize(&req).expect("serialize GetBalance");
+        let _res = self.socket.send_to(&data, &self.addr);
+    }
+
+    pub fn recv_response(&self) -> io::Result<Response> {
+        let mut buf = vec![0u8; 1024];
+        self.socket.recv_from(&mut buf)?;
+        let resp = deserialize(&buf).expect("deserialize balance");
+        Ok(resp)
+    }
+
+    pub fn process_response(&mut self, resp: Response) {
+        match resp {
+            Response::Balance { key, val } => {
+                if let Some(val) = val {
+                    self.balances.insert(key, val);
+                }
+            }
+            Response::LastId { id } => {
+                self.last_id = Some(id);
+            }
+            Response::EntryInfo(entry_info) => {
+                self.last_id = Some(entry_info.id);
+                self.num_events += entry_info.num_events;
+            }
         }
     }
 
@@ -88,6 +126,12 @@ impl AccountantStub {
             return ok(id);
         }
         ok(Default::default())
+    }
+
+    /// Return the number of transactions the server processed since creating
+    /// this stub instance.
+    pub fn get_transaction_count(&self) -> u64 {
+        self.num_events
     }
 }
 

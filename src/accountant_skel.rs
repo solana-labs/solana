@@ -52,9 +52,9 @@ pub enum Subscription {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EntryInfo {
-    id: Hash,
-    num_hashes: u64,
-    num_events: u64,
+    pub id: Hash,
+    pub num_hashes: u64,
+    pub num_events: u64,
 }
 
 impl Request {
@@ -70,7 +70,7 @@ impl Request {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
-    Entries { entries: Vec<Entry> },
+    EntryInfo(EntryInfo),
     LastId { id: Hash },
 }
 
@@ -96,7 +96,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 num_hashes: entry.num_hashes,
                 num_events: entry.events.len() as u64,
             };
-            let data = serialize(&entry_info).expect("serialize EntryInfo");
+            let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
             let _res = socket.send_to(&data, addr);
         }
     }
