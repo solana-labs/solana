@@ -429,14 +429,14 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
-            Node::default(),
+            Node::new([0;8], 0, send.local_addr().unwrap()),
         )));
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver =
             blob_receiver(exit.clone(), resp_recycler.clone(), read, s_reader).unwrap();
         let (s_window, r_window) = channel();
-        let (s_cast, _r_cast) = channel();
+        let (s_cast, r_cast) = channel();
         let t_window = window(
             exit.clone(),
             subs,
@@ -463,6 +463,11 @@ mod test {
         let mut num = 0;
         get_blobs(r_window, &mut num);
         assert_eq!(num, 10);
+        let mut q = r_cast.recv().unwrap();
+        while let Ok(mut nq) = r_cast.try_recv() {
+            q.append(&mut nq);
+        }
+        assert_eq!(q.len(), 10);
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
