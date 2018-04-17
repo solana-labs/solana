@@ -26,19 +26,21 @@ impl AccountantStub {
     /// over `socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking AccountantStub methods.
     pub fn new(addr: &str, socket: UdpSocket) -> Self {
-        AccountantStub {
+        let stub = AccountantStub {
             addr: addr.to_string(),
             socket,
             last_id: None,
             num_events: 0,
             balances: HashMap::new(),
-        }
+        };
+        stub.init();
+        stub
     }
 
     pub fn init(&self) {
         let subscriptions = vec![Subscription::EntryInfo];
         let req = Request::Subscribe { subscriptions };
-        let data = serialize(&req).expect("serialize GetBalance");
+        let data = serialize(&req).expect("serialize Subscribe");
         let _res = self.socket.send_to(&data, &self.addr);
     }
 
@@ -94,8 +96,14 @@ impl AccountantStub {
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let resp = self.recv_response().expect("recv response");
-        self.process_response(resp);
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::Balance { ref key, .. } = &resp {
+                done = key == pubkey;
+            }
+            self.process_response(resp);
+        }
         ok(self.balances[pubkey].unwrap())
     }
 
@@ -116,7 +124,7 @@ impl AccountantStub {
 
     /// Return the number of transactions the server processed since creating
     /// this stub instance.
-    pub fn get_transaction_count(&self) -> u64 {
+    pub fn transaction_count(&self) -> u64 {
         self.num_events
     }
 }
