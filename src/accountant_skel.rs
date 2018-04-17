@@ -468,7 +468,7 @@ mod tests {
         let socket = UdpSocket::bind(send_addr).unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
-        let acc = AccountantStub::new(&addr, socket);
+        let mut acc = AccountantStub::new(&addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);

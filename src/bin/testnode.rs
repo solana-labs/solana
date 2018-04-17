@@ -64,7 +64,7 @@ fn main() {
 
     eprintln!("Initializing...");
     let mut entries = buffer.lines().map(|line| {
-        serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
+        serde_json::from_str(&line).unwrap_or_else(|e| {
             eprintln!("failed to parse json: {}", e);
             exit(1);
         })

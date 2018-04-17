@@ -83,7 +83,7 @@ fn main() {
     });
 
     let socket = UdpSocket::bind(&send_addr).unwrap();
-    let acc = AccountantStub::new(&addr, socket);
+    let mut acc = AccountantStub::new(&addr, socket);
     println!("Get last id");
     let last_id = acc.get_last_id().wait().unwrap();
 

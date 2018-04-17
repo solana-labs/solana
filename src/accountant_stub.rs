@@ -5,7 +5,7 @@
 
 use accountant_skel::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
-use futures::future::{err, ok, FutureResult};
+use futures::future::{ok, FutureResult};
 use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ pub struct AccountantStub {
     pub socket: UdpSocket,
     last_id: Option<Hash>,
     num_events: u64,
-    balances: HashMap<PublicKey, i64>,
+    balances: HashMap<PublicKey, Option<i64>>,
 }
 
 impl AccountantStub {
@@ -52,9 +52,7 @@ impl AccountantStub {
     pub fn process_response(&mut self, resp: Response) {
         match resp {
             Response::Balance { key, val } => {
-                if let Some(val) = val {
-                    self.balances.insert(key, val);
-                }
+                self.balances.insert(key, val);
             }
             Response::LastId { id } => {
                 self.last_id = Some(id);
@@ -90,42 +88,30 @@ impl AccountantStub {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
+    pub fn get_balance(&mut self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf).expect("buffer error");
-        let resp = deserialize(&buf).expect("deserialize balance");
-        if let Response::Balance { key, val } = resp {
-            assert_eq!(key, *pubkey);
-            return match val {
-                Some(x) => ok(x),
-                _ => err(0),
-            };
-        }
-        err(0)
+        let resp = self.recv_response().expect("recv response");
+        self.process_response(resp);
+        ok(self.balances[pubkey].unwrap())
     }
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response. At the time of this writing,
     /// it also has the side-effect of causing the server to log any
     /// entries that have been published by the Historian.
-    pub fn get_last_id(&self) -> FutureResult<Hash, ()> {
+    pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetId");
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf).expect("buffer error");
-        let resp = deserialize(&buf).expect("deserialize Id");
-        if let Response::LastId { id } = resp {
-            return ok(id);
-        }
-        ok(Default::default())
+        let resp = self.recv_response().expect("recv response");
+        self.process_response(resp);
+        ok(self.last_id.unwrap_or(Hash::default()))
     }
 
     /// Return the number of transactions the server processed since creating
@@ -172,7 +158,7 @@ mod tests {
         let socket = UdpSocket::bind(send_addr).unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
-        let acc = AccountantStub::new(addr, socket);
+        let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
