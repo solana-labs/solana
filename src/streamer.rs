@@ -429,7 +429,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
-            Node::new([0;8], 0, send.local_addr().unwrap()),
+            Node::new([0; 8], 0, send.local_addr().unwrap()),
         )));
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
