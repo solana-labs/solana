@@ -13,11 +13,7 @@ pub struct Node {
 //sockaddr doesn't implement default
 impl Default for Node {
     fn default() -> Node {
-        Node {
-            id: [0; 8],
-            weight: 0,
-            addr: "0.0.0.0:0".parse().unwrap(),
-        }
+        Node { id: [0; 8], weight: 0, addr: "0.0.0.0:0".parse().unwrap(), }
     }
 }
 
@@ -34,9 +30,13 @@ impl Node {
     }
 }
 
+//Subscriber data structure
+//layer 0, leader
+//layer 1, as many nodes as we can fit to quickly get reliable 2/3+1 finality
+//layer 2, everyone else, if layer 1 is 2**10, layer 2 should be 2**20 number of nodes
 pub struct Subscribers {
-    pub data: Vec<Node>,
-    pub me: Node,
+    data: Vec<Node>,
+    me: Node,
     pub leader: Node,
 }
 
@@ -50,6 +50,8 @@ impl Subscribers {
         h.insert(&[me, leader]);
         h
     }
+
+    //retransmit messages from the leader to layer 1 nodes
     pub fn retransmit(&self, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
         let errs: Vec<_> = self.data
             .par_iter()
