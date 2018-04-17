@@ -23,11 +23,7 @@ impl Default for Node {
 
 impl Node {
     pub fn new(id: [u64; 8], weight: u64, addr: SocketAddr) -> Node {
-        Node {
-            id: id,
-            weight: weight,
-            addr: addr,
-        }
+        Node { id, weight, addr }
     }
     fn key(&self) -> i64 {
         (self.weight as i64).checked_neg().unwrap()
@@ -80,9 +76,7 @@ impl Subscribers {
         Ok(())
     }
     pub fn insert(&mut self, ns: &[Node]) {
-        for n in ns.into_iter() {
-            self.data.push(n.clone());
-        }
+        self.data.extend_from_slice(ns);
         self.data.sort_by_key(Node::key);
     }
 }
