@@ -123,6 +123,8 @@ fn recv_window(
         let rsubs = subs.read().unwrap();
         for b in &dq {
             let p = b.read().unwrap();
+            //TODO this check isn't safe against adverserial packets
+            //we need to maintain a sequence window
             if p.meta.addr() == rsubs.leader.addr {
                 //TODO
                 //need to copy the retransmited blob
