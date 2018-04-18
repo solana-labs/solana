@@ -300,7 +300,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     pub fn replicate(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         rsubs: Subscribers,
-        addr: &str,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
         let read = UdpSocket::bind(rsubs.me.addr)?;
@@ -314,28 +313,27 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_blob_receiver =
             streamer::blob_receiver(exit.clone(), blob_recycler.clone(), read, blob_sender)?;
         let (window_sender, window_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = channel();
 
         let subs = Arc::new(RwLock::new(rsubs));
+        let t_retransmit = retransmitter(
+            write,
+            exit.clone(),
+            subs,
+            blob_recycler.clone(),
+            retransmit_receiver,
+        );
+
 
         let t_window =
-            streamer::window(exit.clone(), blob_recycler.clone(), blob_receiver);
-        let (verified_sender, verified_receiver) = channel();
-
-        let exit_ = exit.clone();
-        let t_verifier = spawn(move || loop {
-            let e = Self::verifier(&packet_receiver, &verified_sender);
-            if e.is_err() && exit_.load(Ordering::Relaxed) {
-                break;
-            }
-        });
+            streamer::window(exit.clone(), blob_recycler.clone(), blob_receiver, window_sender, retransmit_sender);
 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = AccountantSkel::process(
+            let e = AccountantSkel::replicate(
                 &skel,
                 &verified_receiver,
                 &blob_sender,
-                &packet_recycler,
                 &blob_recycler,
             );
             if e.is_err() && exit.load(Ordering::Relaxed) {
