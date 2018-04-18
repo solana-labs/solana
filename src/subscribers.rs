@@ -40,18 +40,19 @@ impl Node {
 
 pub struct Subscribers {
     data: Vec<Node>,
-    me: Node,
+    pub me: Node,
     pub leader: Node,
 }
 
 impl Subscribers {
-    pub fn new(me: Node, leader: Node) -> Subscribers {
+    pub fn new(me: Node, leader: Node, network: &[Node]) -> Subscribers {
         let mut h = Subscribers {
             data: vec![],
             me: me.clone(),
             leader: leader.clone(),
         };
         h.insert(&[me, leader]);
+        h.insert(network);
         h
     }
 
