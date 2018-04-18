@@ -247,6 +247,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
+    /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
@@ -267,6 +268,57 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (blob_sender, blob_receiver) = channel();
         let t_responder =
             streamer::responder(write, exit.clone(), blob_recycler.clone(), blob_receiver);
+        let (verified_sender, verified_receiver) = channel();
+
+        let exit_ = exit.clone();
+        let t_verifier = spawn(move || loop {
+            let e = Self::blob_verifier(&blob_receiver, &verified_sender);
+            if e.is_err() && exit_.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+
+        let skel = obj.clone();
+        let t_server = spawn(move || loop {
+            let e = AccountantSkel::process(
+                &skel,
+                &verified_receiver,
+                &blob_sender,
+                &packet_recycler,
+                &blob_recycler,
+            );
+            if e.is_err() && exit.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+        Ok(vec![t_receiver, t_responder, t_server, t_verifier])
+    }
+
+    /// Create a UDP microservice that forwards messages the given AccountantSkel.
+    /// This service receives messages from a leader in the network
+    /// Set `exit` to shutdown its threads.
+    pub fn replicate(
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        rsubs: Subscribers,
+        addr: &str,
+        exit: Arc<AtomicBool>,
+    ) -> Result<Vec<JoinHandle<()>>> {
+        let read = UdpSocket::bind(rsubs.me.addr)?;
+        // make sure we are on the same interface
+        let mut local = read.local_addr()?;
+        local.set_port(0);
+        let write = UdpSocket::bind(local)?;
+
+        let blob_recycler = packet::BlobRecycler::default();
+        let (blob_sender, blob_receiver) = channel();
+        let t_blob_receiver =
+            streamer::blob_receiver(exit.clone(), blob_recycler.clone(), read, blob_sender)?;
+        let (window_sender, window_receiver) = channel();
+
+        let subs = Arc::new(RwLock::new(rsubs));
+
+        let t_window =
+            streamer::window(exit.clone(), blob_recycler.clone(), blob_receiver);
         let (verified_sender, verified_receiver) = channel();
 
         let exit_ = exit.clone();
@@ -292,6 +344,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         });
         Ok(vec![t_receiver, t_responder, t_server, t_verifier])
     }
+
 }
 
 #[cfg(test)]
