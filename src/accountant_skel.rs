@@ -303,11 +303,12 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// # Remarks
     /// The pipeline is constructed as follows
     /// 1. receive blobs from the network, these are out of order
-    /// 2. verify blobs, PoH, signatures
-    /// 3. reconstruct consequitive window
+    /// 2. verify blobs, PoH, signatures (TODO)
+    /// 3. reconstruct contiguous window
     ///     a. order the blobs
     ///     b. use erasure coding to reconstruct missing blobs
     ///     c. ask the network for missing blobs
+    ///     d. make sure that the blobs PoH sequences connect (TODO)
     /// 4. process the transaction state machine
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
