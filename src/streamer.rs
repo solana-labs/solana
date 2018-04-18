@@ -1,3 +1,4 @@
+//! The `streamer` module defines a set of services for effecently pulling data from udp sockets.
 use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, NUM_BLOBS};
 use result::Result;
 use std::collections::VecDeque;
@@ -224,11 +225,15 @@ fn retransmit(
     Ok(())
 }
 
-//service to retransmit messages from the leader to layer 1 nodes
-//see subscriber.rs for network layer definitions
-//window receives blobs from the network
-//for any blobs that originated from the leader, we broadcast
-//to the rest of the network
+/// Service to retransmit messages from the leader to layer 1 nodes.
+/// See `subscribers` for network layer definitions.
+/// # Arguments
+/// * `sock` - Socket to read from.  Read timeout is set to 1.
+/// * `exit` - Boolean to signal system exit.
+/// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
+/// the accountant.
+/// * `recycler` - Blob recycler.
+/// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,

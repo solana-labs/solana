@@ -1,3 +1,9 @@
+//! The `subscribers` module defines data structures to keep track of nodes on the network.
+//! The network is arranged in layers:
+//! * layer 0, leader
+//! * layer 1, as many nodes as we can fit to quickly get reliable 2/3+1 finality
+//! * layer 2, everyone else, if layer 1 is 2**10, layer 2 should be 2**20 number of nodes
+//! It's up to the external state machine to keep this updated.
 use packet::Blob;
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -30,10 +36,6 @@ impl Node {
     }
 }
 
-//Subscriber data structure
-//layer 0, leader
-//layer 1, as many nodes as we can fit to quickly get reliable 2/3+1 finality
-//layer 2, everyone else, if layer 1 is 2**10, layer 2 should be 2**20 number of nodes
 pub struct Subscribers {
     data: Vec<Node>,
     me: Node,
@@ -51,7 +53,7 @@ impl Subscribers {
         h
     }
 
-    //retransmit messages from the leader to layer 1 nodes
+    /// retransmit messages from the leader to layer 1 nodes
     pub fn retransmit(&self, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
         let errs: Vec<_> = self.data
             .par_iter()

@@ -1,3 +1,4 @@
+//! The `packet` module defines data structures and methods to pull data from the network.
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use result::{Error, Result};
 use std::collections::VecDeque;
