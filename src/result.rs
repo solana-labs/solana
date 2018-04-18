@@ -4,6 +4,7 @@ use bincode;
 use serde_json;
 use std;
 use std::any::Any;
+use accountant;
 
 #[derive(Debug)]
 pub enum Error {
@@ -14,6 +15,7 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
+    AccountingError(accountant::AccountingError),
     SendError,
     Services,
 }
@@ -28,6 +30,11 @@ impl std::convert::From<std::sync::mpsc::RecvError> for Error {
 impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
     fn from(e: std::sync::mpsc::RecvTimeoutError) -> Error {
         Error::RecvTimeoutError(e)
+    }
+}
+impl std::convert::From<accountant::AccountingError> for Error {
+    fn from(e: accountant::AccountingError) -> Error {
+        Error::AccountingError(e)
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {
