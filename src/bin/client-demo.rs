@@ -12,6 +12,7 @@ use solana::transaction::Transaction;
 use std::env;
 use std::io::stdin;
 use std::net::UdpSocket;
+use std::process::exit;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -27,7 +28,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(e) => {
+            eprintln!("{}", e);
+            exit(1);
+        }
     };
 
     if matches.opt_present("s") {
