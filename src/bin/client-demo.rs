@@ -43,7 +43,10 @@ fn main() {
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
-    let mint: Mint = serde_json::from_reader(stdin()).unwrap();
+    let mint: Mint = serde_json::from_reader(stdin()).unwrap_or_else(|e| {
+        eprintln!("failed to parse json: {}", e);
+        exit(1);
+    });
     let mint_keypair = mint.keypair();
     let mint_pubkey = mint.pubkey();
 

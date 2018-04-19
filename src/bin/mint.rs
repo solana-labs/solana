@@ -3,6 +3,7 @@ extern crate solana;
 
 use solana::mint::Mint;
 use std::io;
+use std::process::exit;
 
 fn main() {
     let mut input_text = String::new();
@@ -11,5 +12,9 @@ fn main() {
     let tokens = trimmed.parse::<i64>().unwrap();
 
     let mint = Mint::new(tokens);
-    println!("{}", serde_json::to_string(&mint).unwrap());
+    let serialized = serde_json::to_string(&mint).unwrap_or_else(|e| {
+        eprintln!("failed to serialize: {}", e);
+        exit(1);
+    });
+    println!("{}", serialized);
 }
