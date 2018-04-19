@@ -16,8 +16,8 @@ pub struct Historian {
 
 impl Historian {
     pub fn new(start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
-        let (sender, event_receiver) = sync_channel(1000);
-        let (entry_sender, receiver) = sync_channel(1000);
+        let (sender, event_receiver) = sync_channel(10_000);
+        let (entry_sender, receiver) = sync_channel(10_000);
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
         Historian {
