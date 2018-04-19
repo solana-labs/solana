@@ -256,20 +256,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
         for msgs in blobs {
-            let entries = b.read().unwrap().data.deserialize();
-            let req_vers = reqs.into_iter()
-                .zip(vers)
-                .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
-                .filter(|x| x.0.verify())
-                .collect();
-            let rsps = obj.lock().unwrap().process_packets(req_vers)?;
-            let blobs = Self::serialize_responses(rsps, blob_recycler)?;
-            if !blobs.is_empty() {
-                //don't wake up the other side if there is nothing
-                blob_sender.send(blobs)?;
+            let entries:Vec<Entry> = b.read().unwrap().data.deserialize()?;
+            for e in entries {
+                obj.lock().unwrap().acc.process_verified_events(e.events)?;
             }
-            packet_recycler.recycle(msgs);
+            //TODO respond back to leader with hash of the state
         }
+        blob_recycler.recycle(msgs);
         Ok(())
     }
 
@@ -325,11 +318,11 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the accountant state.
     /// # Arguments
-    /// * `obj` - The accoutnant state.
+    /// * `obj` - The accountant state.
     /// * `rsubs` - The subscribers.
     /// * `exit` - The exit signal.
     /// # Remarks
-    /// The pipeline is constructed as follows
+    /// The pipeline is constructed as follows:
     /// 1. receive blobs from the network, these are out of order
     /// 2. verify blobs, PoH, signatures (TODO)
     /// 3. reconstruct contiguous window
@@ -370,6 +363,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         //then sent to the window, which does the erasure coding reconstruction
         let t_window = streamer::window(
             exit.clone(),
+            subs,
             blob_recycler.clone(),
             blob_receiver,
             window_sender,

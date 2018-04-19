@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use subscribers;
+use subscribers::Subscribers;
 
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
@@ -106,12 +106,12 @@ pub fn blob_receiver(
 
 fn recv_window(
     window: &mut Vec<Option<SharedBlob>>,
-    subs: &Arc<RwLock<subscribers::Subscribers>>,
+    subs: &Arc<RwLock<Subscribers>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
     r: &BlobReceiver,
     s: &BlobSender,
-    cast: &BlobSender,
+    retransmit: &BlobSender,
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
@@ -120,7 +120,7 @@ fn recv_window(
     }
     {
         //retransmit all leader blocks
-        let mut castq = VecDeque::new();
+        let mut retransmitq = VecDeque::new();
         let rsubs = subs.read().unwrap();
         for b in &dq {
             let p = b.read().unwrap();
@@ -141,11 +141,11 @@ fn recv_window(
                     mnv.meta.size = sz;
                     mnv.data[..sz].copy_from_slice(&p.data[..sz]);
                 }
-                castq.push_back(nv);
+                retransmitq.push_back(nv);
             }
         }
-        if !castq.is_empty() {
-            cast.send(castq)?;
+        if !retransmitq.is_empty() {
+            retransmit.send(retransmitq)?;
         }
     }
     //send a contiguous set of blocks
@@ -183,11 +183,11 @@ fn recv_window(
 
 pub fn window(
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<subscribers::Subscribers>>,
+    subs: Arc<RwLock<Subscribers>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
-    cast: BlobSender,
+    retransmit: BlobSender,
 ) -> JoinHandle<()> {
     spawn(move || {
         let mut window = vec![None; NUM_BLOBS];
@@ -196,13 +196,13 @@ pub fn window(
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_window(&mut window, &subs, &recycler, &mut consumed, &r, &s, &cast);
+            let _ = recv_window(&mut window, &subs, &recycler, &mut consumed, &r, &s, &retransmit);
         }
     })
 }
 
 fn retransmit(
-    subs: &Arc<RwLock<subscribers::Subscribers>>,
+    subs: &Arc<RwLock<Subscribers>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -237,7 +237,7 @@ fn retransmit(
 pub fn retransmitter(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<subscribers::Subscribers>>,
+    subs: Arc<RwLock<Subscribers>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -442,20 +442,21 @@ mod test {
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
             Node::new([0; 8], 0, send.local_addr().unwrap()),
+            &[],
         )));
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver =
             blob_receiver(exit.clone(), resp_recycler.clone(), read, s_reader).unwrap();
         let (s_window, r_window) = channel();
-        let (s_cast, r_cast) = channel();
+        let (s_retransmit, r_retransmit) = channel();
         let t_window = window(
             exit.clone(),
             subs,
             resp_recycler.clone(),
             r_reader,
             s_window,
-            s_cast,
+            s_retransmit,
         );
         let (s_responder, r_responder) = channel();
         let t_responder = responder(send, exit.clone(), resp_recycler.clone(), r_responder);
@@ -475,8 +476,8 @@ mod test {
         let mut num = 0;
         get_blobs(r_window, &mut num);
         assert_eq!(num, 10);
-        let mut q = r_cast.recv().unwrap();
-        while let Ok(mut nq) = r_cast.try_recv() {
+        let mut q = r_retransmit.recv().unwrap();
+        while let Ok(mut nq) = r_retransmit.try_recv() {
             q.append(&mut nq);
         }
         assert_eq!(q.len(), 10);
@@ -494,9 +495,8 @@ mod test {
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
             Node::default(),
+            &[Node::new([0; 8], 1, read.local_addr().unwrap())]
         )));
-        let n3 = Node::new([0; 8], 1, read.local_addr().unwrap());
-        subs.write().unwrap().insert(&[n3]);
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
         let saddr = send.local_addr().unwrap();
