@@ -11,6 +11,7 @@ use solana::event::Event;
 use solana::historian::Historian;
 use std::env;
 use std::io::{self, stdout, BufRead};
+use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -22,7 +23,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(e) => {
+            eprintln!("{}", e);
+            exit(1);
+        }
     };
     if matches.opt_present("p") {
         port = matches.opt_str("p").unwrap().parse().expect("port");
