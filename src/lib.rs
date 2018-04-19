@@ -17,6 +17,8 @@ pub mod signature;
 pub mod streamer;
 pub mod subscribers;
 pub mod transaction;
+#[cfg(feature = "erasure")]
+pub mod erasure;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;

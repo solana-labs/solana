@@ -6,8 +6,9 @@ documentation = "https://docs.rs/solana"
 homepage = "http://loomprotocol.com/"
 repository = "https://github.com/solana-labs/solana"
 authors = [
-    "Anatoly Yakovenko <anatoly@solana.co>",
-    "Greg Fitzgerald <greg@solana.co>",
+    "Anatoly Yakovenko <anatoly@solana.io>",
+    "Greg Fitzgerald <greg@solana.io>",
+    "Stephen Akridge <stephen@solana.io>",
 ]
 license = "Apache-2.0"
 
@@ -42,6 +43,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 unstable = []
 ipv6 = []
 cuda = []
+erasure = []
 
 [dependencies]
 rayon = "1.0.0"
