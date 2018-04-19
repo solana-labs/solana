@@ -152,7 +152,7 @@ fn recv_window(
     let mut contq = VecDeque::new();
     while let Some(b) = dq.pop_front() {
         let b_ = b.clone();
-        let mut p = b.write().unwrap();
+        let p = b.write().unwrap();
         let pix = p.get_index()? as usize;
         let w = pix % NUM_BLOBS;
         //TODO, after the block are authenticated
