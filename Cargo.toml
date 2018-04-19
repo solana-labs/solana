@@ -3,7 +3,7 @@ name = "solana"
 description = "High Performance Blockchain"
 version = "0.4.0"
 documentation = "https://docs.rs/solana"
-homepage = "http://loomprotocol.com/"
+homepage = "http://solana.io/"
 repository = "https://github.com/solana-labs/solana"
 authors = [
     "Anatoly Yakovenko <anatoly@solana.io>",
