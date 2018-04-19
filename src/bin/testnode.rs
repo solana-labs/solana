@@ -33,10 +33,12 @@ fn main() {
     }
     let addr = format!("0.0.0.0:{}", port);
     let stdin = io::stdin();
-    let mut entries = stdin
-        .lock()
-        .lines()
-        .map(|line| serde_json::from_str(&line.unwrap()).unwrap());
+    let mut entries = stdin.lock().lines().map(|line| {
+        serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
+            eprintln!("failed to parse json: {}", e);
+            exit(1);
+        })
+    });
 
     // The first item in the ledger is required to be an entry with zero num_hashes,
     // which implies its id can be used as the ledger's seed.
