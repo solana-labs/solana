@@ -16,6 +16,15 @@ use std::process::exit;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+fn print_usage(program: &str, opts: Options) {
+    let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
+    brief += "  Solana client demo creates a number of transactions and\n";
+    brief += "  sends them to a target node.";
+    brief += "  Takes json formatted mint file to stdin.";
+
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() {
     let mut threads = 4usize;
     let mut addr: String = "127.0.0.1:8000".to_string();
@@ -25,6 +34,7 @@ fn main() {
     opts.optopt("s", "", "server address", "host:port");
     opts.optopt("c", "", "client address", "host:port");
     opts.optopt("t", "", "number of threads", "4");
+    opts.optflag("h", "help", "print help");
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -34,6 +44,11 @@ fn main() {
         }
     };
 
+    if matches.opt_present("h") {
+        let program = args[0].clone();
+        print_usage(&program, opts);
+        return;
+    }
     if matches.opt_present("s") {
         addr = matches.opt_str("s").unwrap();
     }

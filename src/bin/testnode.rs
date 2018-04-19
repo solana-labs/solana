@@ -15,11 +15,21 @@ use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+fn print_usage(program: &str, opts: Options) {
+    let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
+    brief += "  Run a Solana node to handle transactions and\n";
+    brief += "  write a new transaction log to stdout.\n";
+    brief += "  Takes existing transaction log from stdin.";
+
+    print!("{}", opts.usage(&brief));
+}
+
 fn main() {
     env_logger::init().unwrap();
     let mut port = 8000u16;
     let mut opts = Options::new();
     opts.optopt("p", "", "port", "port");
+    opts.optflag("h", "help", "print help");
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -28,6 +38,11 @@ fn main() {
             exit(1);
         }
     };
+    if matches.opt_present("h") {
+        let program = args[0].clone();
+        print_usage(&program, opts);
+        return;
+    }
     if matches.opt_present("p") {
         port = matches.opt_str("p").unwrap().parse().expect("port");
     }
