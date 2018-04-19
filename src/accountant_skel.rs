@@ -27,6 +27,7 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
 use transaction::Transaction;
+use subscribers::Subscribers;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -293,7 +294,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
         let exit_ = exit.clone();
         let t_verifier = spawn(move || loop {
-            let e = Self::blob_verifier(&blob_receiver, &verified_sender);
+            let e = Self::verifier(&packet_receiver, &verified_sender);
             if e.is_err() && exit_.load(Ordering::Relaxed) {
                 break;
             }
@@ -351,7 +352,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let subs = Arc::new(RwLock::new(rsubs));
-        let t_retransmit = retransmitter(
+        let t_retransmit = streamer::retransmitter(
             write,
             exit.clone(),
             subs,
