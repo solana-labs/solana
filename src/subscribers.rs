@@ -100,7 +100,7 @@ mod test {
         me.weight = 10;
         let mut leader = Node::default();
         leader.weight = 11;
-        let mut s = Subscribers::new(me, leader);
+        let mut s = Subscribers::new(me, leader, &[]);
         assert_eq!(s.data.len(), 2);
         assert_eq!(s.data[0].weight, 11);
         assert_eq!(s.data[1].weight, 10);
@@ -117,7 +117,7 @@ mod test {
         let s3 = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
         let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
-        let mut s = Subscribers::new(n1.clone(), n2.clone());
+        let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
         let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
         s.insert(&[n3]);
         let mut b = Blob::default();
