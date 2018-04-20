@@ -29,6 +29,13 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
 ```
 
+Now checkout the code from github:
+
+```bash
+$ git clone https://github.com/solana-labs/solana.git 
+$ cd solana
+```
+
 The testnode server is initialized with a ledger from stdin and
 generates new ledger entries on stdout. To create the input ledger, we'll need
 to create *the mint* and use it to generate a *genesis ledger*. It's done in
