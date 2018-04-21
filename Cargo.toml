@@ -62,4 +62,4 @@ matches = "^0.1.6"
 byteorder = "^1.2.1"
 libc = "^0.2.1"
 getopts = "^0.2"
-
+isatty = "0.1"

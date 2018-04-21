@@ -1,16 +1,18 @@
 extern crate env_logger;
 extern crate getopts;
+extern crate isatty;
 extern crate serde_json;
 extern crate solana;
 
 use getopts::Options;
+use isatty::stdin_isatty;
 use solana::accountant::Accountant;
 use solana::accountant_skel::AccountantSkel;
 use solana::entry::Entry;
 use solana::event::Event;
 use solana::historian::Historian;
 use std::env;
-use std::io::{self, stdout, BufRead};
+use std::io::{stdin, stdout, Read};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -47,9 +49,21 @@ fn main() {
         port = matches.opt_str("p").unwrap().parse().expect("port");
     }
     let addr = format!("0.0.0.0:{}", port);
-    let stdin = io::stdin();
-    let mut entries = stdin.lock().lines().map(|line| {
-        serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
+
+    if stdin_isatty() {
+        eprintln!("nothing found on stdin, expected a log file");
+        exit(1);
+    }
+
+    let mut buffer = String::new();
+    let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
+    if num_bytes == 0 {
+        eprintln!("empty file on stdin, expected a log file");
+        exit(1);
+    }
+
+    let mut entries = buffer.lines().map(|line| {
+        serde_json::from_str(&line).unwrap_or_else(|e| {
             eprintln!("failed to parse json: {}", e);
             exit(1);
         })
