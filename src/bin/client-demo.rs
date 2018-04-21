@@ -1,16 +1,18 @@
 extern crate getopts;
+extern crate isatty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
 use getopts::Options;
+use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::accountant_stub::AccountantStub;
 use solana::mint::Mint;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::env;
-use std::io::stdin;
+use std::io::{stdin, Read};
 use std::net::UdpSocket;
 use std::process::exit;
 use std::thread::sleep;
@@ -58,7 +60,20 @@ fn main() {
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
-    let mint: Mint = serde_json::from_reader(stdin()).unwrap_or_else(|e| {
+
+    if stdin_isatty() {
+        eprintln!("nothing found on stdin, expected a json file");
+        exit(1);
+    }
+
+    let mut buffer = String::new();
+    let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
+    if num_bytes == 0 {
+        eprintln!("empty file on stdin, expected a json file");
+        exit(1);
+    }
+
+    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
