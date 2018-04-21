@@ -2,6 +2,7 @@
 pub mod accountant;
 pub mod accountant_skel;
 pub mod accountant_stub;
+pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
 #[cfg(feature = "erasure")]
