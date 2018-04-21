@@ -77,6 +77,7 @@ fn main() {
         exit(1);
     }
 
+    println!("Parsing stdin...");
     let demo: MintDemo = serde_json::from_reader(stdin()).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
@@ -84,9 +85,11 @@ fn main() {
 
     let socket = UdpSocket::bind(&send_addr).unwrap();
     let mut acc = AccountantStub::new(&addr, socket);
-    println!("Get last id");
+
+    println!("Get last ID...");
     let last_id = acc.get_last_id().wait().unwrap();
 
+    println!("Creating keypairs...");
     let txs = demo.users.len() / 2;
     let keypairs: Vec<_> = demo.users
         .into_par_iter()
@@ -127,7 +130,6 @@ fn main() {
     });
 
     let mut tx_count = acc.transaction_count();
-    println!("tx count {}", tx_count);
     let mut prev_tx_count = tx_count + 1;
 
     println!("Waiting for the server to go idle...",);
@@ -142,5 +144,5 @@ fn main() {
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-    println!("Done. If no packets dropped, {} tps", tps);
+    println!("Done. {} tps", tps);
 }

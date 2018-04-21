@@ -117,14 +117,28 @@ impl AccountantStub {
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let resp = self.recv_response().expect("recv response");
-        self.process_response(resp);
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::LastId { .. } = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
         ok(self.last_id.unwrap_or(Hash::default()))
     }
 
     /// Return the number of transactions the server processed since creating
     /// this stub instance.
-    pub fn transaction_count(&self) -> u64 {
+    pub fn transaction_count(&mut self) -> u64 {
+        self.socket.set_nonblocking(true).expect("set nonblocking");
+        loop {
+            match self.recv_response() {
+                Err(_) => break,
+                Ok(resp) => self.process_response(resp),
+            }
+        }
+        self.socket.set_nonblocking(false).expect("set blocking");
         self.num_events
     }
 }

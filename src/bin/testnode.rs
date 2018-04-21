@@ -72,7 +72,7 @@ fn main() {
 
     // The first item in the ledger is required to be an entry with zero num_hashes,
     // which implies its id can be used as the ledger's seed.
-    entries.next().unwrap();
+    let entry0 = entries.next().unwrap();
 
     // The second item in the ledger is a special transaction where the to and from
     // fields are the same. That entry should be treated as a deposit, not a
@@ -85,11 +85,14 @@ fn main() {
     };
 
     let acc = Accountant::new_from_deposit(&deposit.unwrap());
+    acc.register_entry_id(&entry0.id);
+    acc.register_entry_id(&entry1.id);
 
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
         acc.process_verified_events(entry.events).unwrap();
+        acc.register_entry_id(&last_id);
     }
 
     let historian = Historian::new(&last_id, Some(1000));
