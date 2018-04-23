@@ -234,6 +234,10 @@ mod test {
     use std::thread::sleep;
     use std::time::Duration;
 
+    /// Test that the network converges.
+    /// Create a ring a -> b -> c -> d -> e -> a of size num.
+    /// Run until every node in the network has a full data set.
+    /// Check that nodes stop sending updates after all the data has been shared.
     #[test]
     fn gossip_test() {
         let num: usize = 5;
@@ -288,4 +292,19 @@ mod test {
         }
         assert!(done);
     }
+    /// Test that insert drops messages that are older
+    #[test]
+    fn insert_test() {
+        let mut d = Data::new(KeyPair::new().pubkey(), "127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d.version, 0);
+        let mut crdt = Crdt::new(d.clone());
+        assert_eq!(crdt.table[&d.key].version, 0);
+        d.version = 2;
+        crdt.insert(&d);
+        assert_eq!(crdt.table[&d.key].version, 2);
+        d.version = 1;
+        crdt.insert(&d);
+        assert_eq!(crdt.table[&d.key].version, 2);
+    }
+
 }
