@@ -287,7 +287,12 @@ mod test {
         for j in gossip {
             j.join().unwrap();
         }
-        for (_, j) in listen.into_iter() {
+        for (c, j) in listen.into_iter() {
+            // make it clear what failed
+            // protocol is to chatty, updates should stop after everyone receives `num`
+            assert!(c.read().unwrap().update_index <= num as u64);
+            // protocol is not chatty enough, everyone should get `num` entries
+            assert_eq!(c.read().unwrap().table.len(), num);
             j.join().unwrap();
         }
         assert!(done);
