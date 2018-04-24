@@ -55,10 +55,6 @@ impl ReplicatedData {
             last_verified_count: 0,
         }
     }
-    fn verify_sig(&self) -> bool {
-        //TODO implement this
-        true
-    }
 }
 
 /// `Crdt` structure keeps a table of `ReplicatedData` structs
@@ -183,9 +179,6 @@ impl Crdt {
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
-            if !v.verify_sig() {
-                continue;
-            }
             // TODO probably an error or attack
             if v.id == self.me {
                 continue;
