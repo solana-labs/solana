@@ -81,6 +81,12 @@ impl Accountant {
         true
     }
 
+    // fn forget_signature_with_last_id(&self, last_id: &Hash) -> bool {
+    //     let mut last_ids = self.last_ids.write().unwrap();
+    //     last_ids.pop_back();
+    //     true
+    // }
+
     fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
         if let Some(entry) = self.last_ids
             .read()
