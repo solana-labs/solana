@@ -135,8 +135,8 @@ mod tests {
     use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
     use std::sync::RwLock;
-    use transaction::test_tx;
     use transaction::Transaction;
+    use transaction::test_tx;
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {
         let tx = serialize(&Request::Transaction(tr)).unwrap();

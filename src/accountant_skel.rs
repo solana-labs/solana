@@ -25,12 +25,9 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use streamer;
-use transaction::Transaction;
+use streamer::{BlobReceiver, BlobSender};
 use subscribers::Subscribers;
-
-use subscribers;
-use std::mem::size_of;
+use transaction::Transaction;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -226,7 +223,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        blob_sender: &streamer::BlobSender,
+        blob_sender: &BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -254,22 +251,25 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     fn replicate_state(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &BlobReceiver,
-        blob_sender: &streamer::BlobSender,
+        blob_sender: &BlobSender,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
         for msgs in blobs {
-            let entries:Vec<Entry> = b.read().unwrap().data.deserialize()?;
+            let entries: Vec<Entry> = {
+                let m = msgs.read().unwrap();
+                let v = deserialize(m.data[..m.meta.len])?;
+                v
+            }
             for e in entries {
                 obj.lock().unwrap().acc.process_verified_events(e.events)?;
             }
             //TODO respond back to leader with hash of the state
+            blob_recycler.recycle(msgs);
         }
-        blob_recycler.recycle(msgs);
         Ok(())
     }
-
 
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
     /// This service is the network leader
@@ -383,72 +383,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         });
         Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
     }
-
-    /// This service receives messages from a leader in the network and processes the transactions
-    /// on the accountant state.
-    /// # Arguments
-    /// * `obj` - The accountant state.
-    /// * `rsubs` - The subscribers.
-    /// * `exit` - The exit signal.
-    /// # Remarks
-    /// The pipeline is constructed as follows:
-    /// 1. receive blobs from the network, these are out of order
-    /// 2. verify blobs, PoH, signatures (TODO)
-    /// 3. reconstruct contiguous window
-    ///     a. order the blobs
-    ///     b. use erasure coding to reconstruct missing blobs
-    ///     c. ask the network for missing blobs, if erasure coding is insufficient
-    ///     d. make sure that the blobs PoH sequences connect (TODO)
-    /// 4. process the transaction state machine
-    /// 5. respond with the hash of the state back to the leader
-    pub fn replicate(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
-        rsubs: subscribers::Subscribers,
-        exit: Arc<AtomicBool>,
-    ) -> Result<Vec<JoinHandle<()>>> {
-        let read = UdpSocket::bind(rsubs.me.addr)?;
-        // make sure we are on the same interface
-        let mut local = read.local_addr()?;
-        local.set_port(0);
-        let write = UdpSocket::bind(local)?;
-
-        let blob_recycler = packet::BlobRecycler::default();
-        let (blob_sender, blob_receiver) = channel();
-        let t_blob_receiver =
-            streamer::blob_receiver(exit.clone(), blob_recycler.clone(), read, blob_sender.clone())?;
-        let (window_sender, window_receiver) = channel();
-        let (retransmit_sender, retransmit_receiver) = channel();
-
-        let subs = Arc::new(RwLock::new(rsubs));
-        let t_retransmit = streamer::retransmitter(
-            write,
-            exit.clone(),
-            subs.clone(),
-            blob_recycler.clone(),
-            retransmit_receiver,
-        );
-        //TODO
-        //the packets comming out of blob_receiver need to be sent to the GPU and verified
-        //then sent to the window, which does the erasure coding reconstruction
-        let t_window = streamer::window(
-            exit.clone(),
-            subs,
-            blob_recycler.clone(),
-            blob_receiver,
-            window_sender,
-            retransmit_sender,
-        );
-
-        let skel = obj.clone();
-        let t_server = spawn(move || loop {
-            let e = Self::replicate_state(&skel, &window_receiver,
-                                          &blob_sender, &blob_recycler);
-            if e.is_err() && exit.load(Ordering::Relaxed) {
-                break;
-            }
-        });
-        Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
-    }
 }
 
 #[cfg(test)]
@@ -496,11 +430,11 @@ mod tests {
     use std::time::Duration;
     use transaction::Transaction;
 
-    use subscribers::{Node, Subscribers};
-    use streamer;
-    use std::sync::mpsc::channel;
+    use packet::PACKET_DATA_SIZE;
     use std::collections::VecDeque;
-    use packet::{PACKET_DATA_SIZE};
+    use std::sync::mpsc::channel;
+    use streamer;
+    use subscribers::{Node, Subscribers};
 
     #[test]
     fn test_layout() {
@@ -620,9 +554,11 @@ mod tests {
         let recv_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = streamer::receiver(read, exit.clone(), recv_recycler.clone(), s_reader).unwrap();
+        let t_receiver =
+            streamer::receiver(read, exit.clone(), recv_recycler.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
-        let t_responder = streamer::responder(send, exit.clone(), resp_recycler.clone(), r_responder);
+        let t_responder =
+            streamer::responder(send, exit.clone(), resp_recycler.clone(), r_responder);
 
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
@@ -634,7 +570,7 @@ mod tests {
             sink(),
             historian,
         )));
- 
+
         let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
 
         let mut msgs = VecDeque::new();

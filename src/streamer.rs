@@ -196,7 +196,15 @@ pub fn window(
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_window(&mut window, &subs, &recycler, &mut consumed, &r, &s, &retransmit);
+            let _ = recv_window(
+                &mut window,
+                &subs,
+                &recycler,
+                &mut consumed,
+                &r,
+                &s,
+                &retransmit,
+            );
         }
     })
 }
@@ -495,7 +503,7 @@ mod test {
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
             Node::default(),
-            &[Node::new([0; 8], 1, read.local_addr().unwrap())]
+            &[Node::new([0; 8], 1, read.local_addr().unwrap())],
         )));
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();

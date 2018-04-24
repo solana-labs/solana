@@ -1,10 +1,10 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
+use accountant;
 use bincode;
 use serde_json;
 use std;
 use std::any::Any;
-use accountant;
 
 #[derive(Debug)]
 pub enum Error {
@@ -77,9 +77,9 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
-    use std::sync::mpsc::channel;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
+    use std::sync::mpsc::channel;
     use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {
