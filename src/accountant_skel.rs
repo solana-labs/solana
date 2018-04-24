@@ -25,9 +25,9 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use streamer::{BlobReceiver, BlobSender};
-use subscribers::Subscribers;
+use streamer;
 use transaction::Transaction;
+use subscribers::Subscribers;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -223,7 +223,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        blob_sender: &BlobSender,
+        blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -251,25 +251,24 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     fn replicate_state(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &BlobReceiver,
-        blob_sender: &BlobSender,
+        blob_sender: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
         for msgs in blobs {
-            let entries: Vec<Entry> = {
-                let m = msgs.read().unwrap();
-                let v = deserialize(m.data[..m.meta.len])?;
-                v
-            }
+            let entries:Vec<Entry> = b.read().unwrap().data.deserialize()?;
             for e in entries {
                 obj.lock().unwrap().acc.process_verified_events(e.events)?;
             }
             //TODO respond back to leader with hash of the state
-            blob_recycler.recycle(msgs);
+        }
+        for blob in blobs {
+            blob_recycler.recycle(blob);
         }
         Ok(())
     }
+
 
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
     /// This service is the network leader
@@ -430,11 +429,11 @@ mod tests {
     use std::time::Duration;
     use transaction::Transaction;
 
-    use packet::PACKET_DATA_SIZE;
-    use std::collections::VecDeque;
-    use std::sync::mpsc::channel;
-    use streamer;
     use subscribers::{Node, Subscribers};
+    use streamer;
+    use std::sync::mpsc::channel;
+    use std::collections::VecDeque;
+    use packet::{PACKET_DATA_SIZE};
 
     #[test]
     fn test_layout() {
@@ -554,11 +553,9 @@ mod tests {
         let recv_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            streamer::receiver(read, exit.clone(), recv_recycler.clone(), s_reader).unwrap();
+        let t_receiver = streamer::receiver(read, exit.clone(), recv_recycler.clone(), s_reader).unwrap();
         let (s_responder, r_responder) = channel();
-        let t_responder =
-            streamer::responder(send, exit.clone(), resp_recycler.clone(), r_responder);
+        let t_responder = streamer::responder(send, exit.clone(), resp_recycler.clone(), r_responder);
 
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
@@ -570,7 +567,7 @@ mod tests {
             sink(),
             historian,
         )));
-
+ 
         let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
 
         let mut msgs = VecDeque::new();
