@@ -1,9 +1,11 @@
+extern crate futures;
 extern crate getopts;
 extern crate isatty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
+use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
@@ -84,10 +86,10 @@ fn main() {
     println!("Stub new");
     let acc = AccountantStub::new(&addr, socket);
     println!("Get last id");
-    let last_id = acc.get_last_id().unwrap();
+    let last_id = acc.get_last_id().wait().unwrap();
 
     println!("Get Balance");
-    let mint_balance = acc.get_balance(&mint_pubkey).unwrap().unwrap();
+    let mint_balance = acc.get_balance(&mint_pubkey).wait().unwrap();
     println!("Mint's Initial Balance {}", mint_balance);
 
     println!("Signing transactions...");
@@ -133,7 +135,7 @@ fn main() {
     while val != prev {
         sleep(Duration::from_millis(20));
         prev = val;
-        val = acc.get_balance(&mint_pubkey).unwrap().unwrap();
+        val = acc.get_balance(&mint_pubkey).wait().unwrap();
     }
     println!("Mint's Final Balance {}", val);
     let txs = mint_balance - val;

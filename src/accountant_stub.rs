@@ -5,6 +5,7 @@
 
 use accountant_skel::{Request, Response};
 use bincode::{deserialize, serialize};
+use futures::future::{err, ok, FutureResult};
 use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
 use std::io;
@@ -51,35 +52,42 @@ impl AccountantStub {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&self, pubkey: &PublicKey) -> io::Result<Option<i64>> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
-        self.socket.send_to(&data, &self.addr)?;
+        self.socket
+            .send_to(&data, &self.addr)
+            .expect("buffer error");
         let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf)?;
+        self.socket.recv_from(&mut buf).expect("buffer error");
         let resp = deserialize(&buf).expect("deserialize balance");
         if let Response::Balance { key, val } = resp {
             assert_eq!(key, *pubkey);
-            return Ok(val);
+            return match val {
+                Some(x) => ok(x),
+                _ => err(0),
+            };
         }
-        Ok(None)
+        err(0)
     }
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response. At the time of this writing,
     /// it also has the side-effect of causing the server to log any
     /// entries that have been published by the Historian.
-    pub fn get_last_id(&self) -> io::Result<Hash> {
+    pub fn get_last_id(&self) -> FutureResult<Hash, ()> {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetId");
-        self.socket.send_to(&data, &self.addr)?;
+        self.socket
+            .send_to(&data, &self.addr)
+            .expect("buffer error");
         let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf)?;
+        self.socket.recv_from(&mut buf).expect("buffer error");
         let resp = deserialize(&buf).expect("deserialize Id");
         if let Response::LastId { id } = resp {
-            return Ok(id);
+            return ok(id);
         }
-        Ok(Default::default())
+        ok(Default::default())
     }
 }
 
@@ -88,6 +96,7 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
+    use futures::Future;
     use historian::Historian;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
@@ -120,10 +129,10 @@ mod tests {
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let acc = AccountantStub::new(addr, socket);
-        let last_id = acc.get_last_id().unwrap();
+        let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
+        assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
     }
 }
