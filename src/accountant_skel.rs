@@ -250,21 +250,21 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Respond with a signed hash of the state
     fn replicate_state(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        verified_receiver: &BlobReceiver,
-        blob_sender: &streamer::BlobSender,
+        verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
         for msgs in blobs {
-            let entries:Vec<Entry> = b.read().unwrap().data.deserialize()?;
+            let entries:Vec<Entry> = {
+                let m = msgs.read().unwrap();
+                let r = deserialize(&m.data[..m.meta.size])?;
+                r
+            };
             for e in entries {
                 obj.lock().unwrap().acc.process_verified_events(e.events)?;
             }
-            //TODO respond back to leader with hash of the state
-        }
-        for blob in blobs {
-            blob_recycler.recycle(blob);
+            blob_recycler.recycle(msgs);
         }
         Ok(())
     }
@@ -357,7 +357,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_retransmit = streamer::retransmitter(
             write,
             exit.clone(),
-            subs,
+            subs.clone(),
             blob_recycler.clone(),
             retransmit_receiver,
         );
@@ -375,7 +375,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = Self::replicate_state(&skel, &window_receiver, &blob_sender, &blob_recycler);
+            let e = Self::replicate_state(&skel, &window_receiver, &blob_recycler);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -559,7 +559,6 @@ mod tests {
 
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
         let historian = Historian::new(&alice.last_id(), Some(30));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
@@ -568,7 +567,7 @@ mod tests {
             historian,
         )));
  
-        let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
+        let threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
 
         let mut msgs = VecDeque::new();
         for i in 0..10 {
@@ -585,6 +584,9 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        for t in threads {
+            t.join().expect("join");
+        }
     }
 
 }
