@@ -449,8 +449,6 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         });
         Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
     }
-=======
->>>>>>> d620ce5... update
 }
 
 #[cfg(test)]
