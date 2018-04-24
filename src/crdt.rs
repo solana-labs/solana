@@ -1,6 +1,8 @@
 //! The `crdt` module defines a data structure that is shared by all the nodes in the network over
 //! a gossip control plane.  The goal is to share small bits of of-chain information and detect and
 //! repair partitions.
+//!
+//!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
 //! The last version is always picked durring an update.
 
