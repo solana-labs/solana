@@ -1,16 +1,25 @@
+extern crate isatty;
 extern crate serde_json;
 extern crate solana;
 
+use isatty::stdin_isatty;
 use solana::mint::Mint;
 use std::io;
 use std::process::exit;
 
 fn main() {
     let mut input_text = String::new();
+    if stdin_isatty() {
+        eprintln!("nothing found on stdin, expected a token number");
+        exit(1);
+    }
+
     io::stdin().read_line(&mut input_text).unwrap();
     let trimmed = input_text.trim();
-    let tokens = trimmed.parse::<i64>().unwrap();
-
+    let tokens = trimmed.parse::<i64>().unwrap_or_else(|e| {
+        eprintln!("{}", e);
+        exit(1);
+    });
     let mint = Mint::new(tokens);
     let serialized = serde_json::to_string(&mint).unwrap_or_else(|e| {
         eprintln!("failed to serialize: {}", e);

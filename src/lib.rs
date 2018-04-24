@@ -4,6 +4,8 @@ pub mod accountant_skel;
 pub mod accountant_stub;
 pub mod ecdsa;
 pub mod entry;
+#[cfg(feature = "erasure")]
+pub mod erasure;
 pub mod event;
 pub mod hash;
 pub mod historian;
@@ -17,8 +19,6 @@ pub mod signature;
 pub mod streamer;
 pub mod subscribers;
 pub mod transaction;
-#[cfg(feature = "erasure")]
-pub mod erasure;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
