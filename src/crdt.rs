@@ -23,7 +23,7 @@ use std::time::Duration;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Data {
     key: PublicKey,
-    sig: Signature,
+afasfds   sig: Signature,
     /// should always be increasing
     version: u64,
     /// address to connect to for gossip
