@@ -81,6 +81,23 @@ impl Accountant {
         true
     }
 
+    fn forget_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
+        signatures.write().unwrap().remove(sig)
+    }
+
+    fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
+        if let Some(entry) = self.last_ids
+            .read()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|x| x.0 == *last_id)
+        {
+            return Self::forget_signature(&entry.1, sig);
+        }
+        return false;
+    }
+
     fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
         if let Some(entry) = self.last_ids
             .read()
@@ -119,12 +136,13 @@ impl Accountant {
         }
         let mut bal = option.unwrap().write().unwrap();
 
-        if *bal < tr.data.tokens {
-            return Err(AccountingError::InsufficientFunds);
-        }
-
         if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
             return Err(AccountingError::InvalidTransferSignature);
+        }
+
+        if *bal < tr.data.tokens {
+            self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
+            return Err(AccountingError::InsufficientFunds);
         }
 
         *bal -= tr.data.tokens;
@@ -421,6 +439,16 @@ mod tests {
         let sig = Signature::default();
         assert!(acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
         assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+    }
+
+    #[test]
+    fn test_forget_signature() {
+        let alice = Mint::new(1);
+        let acc = Accountant::new(&alice);
+        let sig = Signature::default();
+        acc.reserve_signature_with_last_id(&sig, &alice.last_id());
+        assert!(acc.forget_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!acc.forget_signature_with_last_id(&sig, &alice.last_id()));
     }
 
     #[test]
