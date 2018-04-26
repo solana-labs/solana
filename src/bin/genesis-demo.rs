@@ -31,7 +31,7 @@ fn main() {
         exit(1);
     }
 
-    let demo: MintDemo = serde_json::from_reader(stdin()).unwrap_or_else(|e| {
+    let demo: MintDemo = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
