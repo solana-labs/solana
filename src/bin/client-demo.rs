@@ -18,8 +18,7 @@ use std::env;
 use std::io::{stdin, Read};
 use std::net::UdpSocket;
 use std::process::exit;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use untrusted::Input;
 
 fn print_usage(program: &str, opts: Options) {
@@ -129,17 +128,13 @@ fn main() {
         }
     });
 
+    println!("Waiting for half the transactions to complete...",);
     let mut tx_count = acc.transaction_count();
-    let mut prev_tx_count = tx_count + 1;
-
-    println!("Waiting for the server to go idle...",);
-    while tx_count != prev_tx_count {
-        sleep(Duration::from_millis(20));
-        prev_tx_count = tx_count;
+    while tx_count < transactions.len() as u64 / 2 {
         tx_count = acc.transaction_count();
     }
     let txs = tx_count - initial_tx_count;
-    println!("Sent transactions {}", txs);
+    println!("Transactions processed {}", txs);
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());

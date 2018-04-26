@@ -53,6 +53,9 @@ Now you can start the server:
     $ cat genesis.log | cargo run --release --bin solana-testnode > transactions0.log
 ```
 
+Wait a few seconds for the server to initialize. It will print "Ready." when it's safe
+to start sending it transactions.
+
 Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis ledger.
 

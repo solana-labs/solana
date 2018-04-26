@@ -285,6 +285,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             // Write new entries to the ledger and notify subscribers.
             obj.lock().unwrap().sync();
         }
+
         Ok(())
     }
 
@@ -328,8 +329,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 &packet_recycler,
                 &blob_recycler,
             );
-            if e.is_err() && exit.load(Ordering::Relaxed) {
-                break;
+            if e.is_err() {
+                // Assume this was a timeout, so sync any empty entries.
+                skel.lock().unwrap().sync();
+
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
             }
         });
         Ok(vec![t_receiver, t_responder, t_server, t_verifier])

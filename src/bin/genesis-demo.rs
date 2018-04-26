@@ -6,15 +6,15 @@ extern crate solana;
 extern crate untrusted;
 
 use isatty::stdin_isatty;
+use rayon::prelude::*;
+use solana::accountant::MAX_ENTRY_IDS;
 use solana::entry::{create_entry, next_tick};
 use solana::event::Event;
-use solana::accountant::MAX_ENTRY_IDS;
 use solana::mint::MintDemo;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::io::{stdin, Read};
 use std::process::exit;
-use rayon::prelude::*;
 use untrusted::Input;
 
 // Generate a ledger with lots and lots of accounts.

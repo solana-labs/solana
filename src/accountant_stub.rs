@@ -131,6 +131,17 @@ impl AccountantStub {
     /// Return the number of transactions the server processed since creating
     /// this stub instance.
     pub fn transaction_count(&mut self) -> u64 {
+        // Wait for at least one EntryInfo.
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::EntryInfo(_) = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
+
+        // Then take the rest.
         self.socket.set_nonblocking(true).expect("set nonblocking");
         loop {
             match self.recv_response() {

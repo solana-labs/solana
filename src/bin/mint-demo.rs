@@ -3,11 +3,11 @@ extern crate ring;
 extern crate serde_json;
 extern crate solana;
 
+use rayon::prelude::*;
+use ring::rand::SystemRandom;
 use solana::mint::{Mint, MintDemo};
 use solana::signature::KeyPair;
 use std::io;
-use rayon::prelude::*;
-use ring::rand::SystemRandom;
 
 fn main() {
     let mut input_text = String::new();
