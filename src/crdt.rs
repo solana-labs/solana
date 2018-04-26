@@ -168,9 +168,7 @@ impl Crdt {
         // Lock the object only to do this operation and not for any longer
         // especially not when doing the `sock.send_to`
         let (remote_gossip_addr, req) = obj.read().unwrap().gossip_request();
-        let mut req_addr = remote_gossip_addr;
-        req_addr.set_port(0);
-        let sock = UdpSocket::bind(req_addr)?;
+        let sock = UdpSocket::bind("0.0.0.0:0")?;
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
         let r = serialize(&req)?;
