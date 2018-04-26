@@ -326,6 +326,7 @@ mod tests {
     use accountant_skel::AccountantSkel;
     use accountant_stub::AccountantStub;
     use entry::Entry;
+    use futures::Future;
     use historian::Historian;
     use mint::Mint;
     use plan::Plan;
@@ -426,20 +427,20 @@ mod tests {
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let acc = AccountantStub::new(&addr, socket);
-        let last_id = acc.get_last_id().unwrap();
+        let last_id = acc.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
         let _sig = acc.transfer_signed(tr).unwrap();
 
-        let last_id = acc.get_last_id().unwrap();
+        let last_id = acc.get_last_id().wait().unwrap();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         tr2.data.tokens = 502;
         tr2.data.plan = Plan::new_payment(502, bob_pubkey);
         let _sig = acc.transfer_signed(tr2).unwrap();
 
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap().unwrap(), 500);
+        assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
     }
 
