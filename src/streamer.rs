@@ -99,7 +99,10 @@ pub fn blob_receiver(
         if exit.load(Ordering::Relaxed) {
             break;
         }
-        let _ = recv_blobs(&recycler, &sock, &s);
+        let ret = recv_blobs(&recycler, &sock, &s);
+        if ret.is_err() {
+            break;
+        }
     });
     Ok(t)
 }
@@ -126,6 +129,12 @@ fn recv_window(
             let p = b.read().unwrap();
             //TODO this check isn't safe against adverserial packets
             //we need to maintain a sequence window
+            trace!(
+                "idx: {} addr: {:?} leader: {:?}",
+                p.get_index().unwrap(),
+                p.meta.addr(),
+                rsubs.leader.addr
+            );
             if p.meta.addr() == rsubs.leader.addr {
                 //TODO
                 //need to copy the retransmited blob
@@ -158,6 +167,7 @@ fn recv_window(
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
         //that is a network failure/attack
+        trace!("window w: {} size: {}", w, p.meta.size);
         {
             if window[w].is_none() {
                 window[w] = Some(b_);
@@ -166,6 +176,7 @@ fn recv_window(
             }
             loop {
                 let k = *consumed % NUM_BLOBS;
+                trace!("k: {} consumed: {}", k, *consumed);
                 if window[k].is_none() {
                     break;
                 }
@@ -175,6 +186,7 @@ fn recv_window(
             }
         }
     }
+    trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
         s.send(contq)?;
     }
@@ -196,7 +208,15 @@ pub fn window(
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_window(&mut window, &subs, &recycler, &mut consumed, &r, &s, &retransmit);
+            let _ = recv_window(
+                &mut window,
+                &subs,
+                &recycler,
+                &mut consumed,
+                &r,
+                &s,
+                &retransmit,
+            );
         }
     })
 }
@@ -495,7 +515,7 @@ mod test {
         let subs = Arc::new(RwLock::new(Subscribers::new(
             Node::default(),
             Node::default(),
-            &[Node::new([0; 8], 1, read.local_addr().unwrap())]
+            &[Node::new([0; 8], 1, read.local_addr().unwrap())],
         )));
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();

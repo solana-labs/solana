@@ -11,6 +11,8 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use std::net::{SocketAddr, UdpSocket};
 
+use std::fmt;
+
 #[derive(Clone, PartialEq)]
 pub struct Node {
     pub id: [u64; 8],
@@ -35,6 +37,12 @@ impl Node {
     }
     fn key(&self) -> i64 {
         (self.weight as i64).checked_neg().unwrap()
+    }
+}
+
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Node {{ weight: {} addr: {} }}", self.weight, self.addr)
     }
 }
 
