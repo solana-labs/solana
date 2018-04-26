@@ -1,5 +1,6 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
+use accountant;
 use bincode;
 use serde_json;
 use std;
@@ -14,6 +15,7 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
+    AccountingError(accountant::AccountingError),
     SendError,
     Services,
 }
@@ -28,6 +30,11 @@ impl std::convert::From<std::sync::mpsc::RecvError> for Error {
 impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
     fn from(e: std::sync::mpsc::RecvTimeoutError) -> Error {
         Error::RecvTimeoutError(e)
+    }
+}
+impl std::convert::From<accountant::AccountingError> for Error {
+    fn from(e: accountant::AccountingError) -> Error {
+        Error::AccountingError(e)
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {
@@ -70,9 +77,9 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
-    use std::sync::mpsc::channel;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
+    use std::sync::mpsc::channel;
     use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {
