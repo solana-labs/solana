@@ -6,6 +6,7 @@ use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, RwLock};
+use std::mem::size_of;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -210,23 +211,28 @@ impl Packets {
     }
 }
 
+const BLOB_INDEX_SIZE: usize = size_of::<u64>();
+
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[0..8]);
+        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_SIZE]);
         let r = rdr.read_u64::<LittleEndian>()?;
         Ok(r)
     }
     pub fn set_index(&mut self, ix: u64) -> Result<()> {
         let mut wtr = vec![];
         wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[..8].clone_from_slice(&wtr);
+        self.data[..BLOB_INDEX_SIZE].clone_from_slice(&wtr);
         Ok(())
     }
     pub fn data(&self) -> &[u8] {
-        &self.data[8..]
+        &self.data[BLOB_INDEX_SIZE..]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[8..]
+        &mut self.data[BLOB_INDEX_SIZE..]
+    }
+    pub fn set_size(&mut self, size: usize) {
+        self.meta.size = size + BLOB_INDEX_SIZE;
     }
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<VecDeque<SharedBlob>> {
         let mut v = VecDeque::new();

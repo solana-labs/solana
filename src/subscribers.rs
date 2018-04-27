@@ -11,6 +11,8 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use std::net::{SocketAddr, UdpSocket};
 
+use std::fmt;
+
 #[derive(Clone, PartialEq)]
 pub struct Node {
     pub id: [u64; 8],
@@ -38,20 +40,27 @@ impl Node {
     }
 }
 
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Node {{ weight: {} addr: {} }}", self.weight, self.addr)
+    }
+}
+
 pub struct Subscribers {
     data: Vec<Node>,
-    me: Node,
+    pub me: Node,
     pub leader: Node,
 }
 
 impl Subscribers {
-    pub fn new(me: Node, leader: Node) -> Subscribers {
+    pub fn new(me: Node, leader: Node, network: &[Node]) -> Subscribers {
         let mut h = Subscribers {
             data: vec![],
             me: me.clone(),
             leader: leader.clone(),
         };
         h.insert(&[me, leader]);
+        h.insert(network);
         h
     }
 
@@ -99,7 +108,7 @@ mod test {
         me.weight = 10;
         let mut leader = Node::default();
         leader.weight = 11;
-        let mut s = Subscribers::new(me, leader);
+        let mut s = Subscribers::new(me, leader, &[]);
         assert_eq!(s.data.len(), 2);
         assert_eq!(s.data[0].weight, 11);
         assert_eq!(s.data[1].weight, 10);
@@ -116,7 +125,7 @@ mod test {
         let s3 = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
         let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
-        let mut s = Subscribers::new(n1.clone(), n2.clone());
+        let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
         let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
         s.insert(&[n3]);
         let mut b = Blob::default();

@@ -22,11 +22,13 @@ use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
 use transaction::Transaction;
+
+use subscribers;
 
 pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
@@ -288,8 +290,36 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
         Ok(())
     }
+    /// Process verified blobs, already in order
+    /// Respond with a signed hash of the state
+    fn replicate_state(
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        verified_receiver: &streamer::BlobReceiver,
+        blob_recycler: &packet::BlobRecycler,
+    ) -> Result<()> {
+        let timer = Duration::new(1, 0);
+        let blobs = verified_receiver.recv_timeout(timer)?;
+        for msgs in &blobs {
+            let blob = msgs.read().unwrap();
+            let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
+            for entry in entries {
+                obj.lock().unwrap().acc.register_entry_id(&entry.id);
+
+                obj.lock()
+                    .unwrap()
+                    .acc
+                    .process_verified_events(entry.events)?;
+            }
+            //TODO respond back to leader with hash of the state
+        }
+        for blob in blobs {
+            blob_recycler.recycle(blob);
+        }
+        Ok(())
+    }
 
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
+    /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
@@ -322,7 +352,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
-            let e = AccountantSkel::process(
+            let e = Self::process(
                 &skel,
                 &verified_receiver,
                 &blob_sender,
@@ -339,6 +369,75 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
         });
         Ok(vec![t_receiver, t_responder, t_server, t_verifier])
+    }
+
+    /// This service receives messages from a leader in the network and processes the transactions
+    /// on the accountant state.
+    /// # Arguments
+    /// * `obj` - The accountant state.
+    /// * `rsubs` - The subscribers.
+    /// * `exit` - The exit signal.
+    /// # Remarks
+    /// The pipeline is constructed as follows:
+    /// 1. receive blobs from the network, these are out of order
+    /// 2. verify blobs, PoH, signatures (TODO)
+    /// 3. reconstruct contiguous window
+    ///     a. order the blobs
+    ///     b. use erasure coding to reconstruct missing blobs
+    ///     c. ask the network for missing blobs, if erasure coding is insufficient
+    ///     d. make sure that the blobs PoH sequences connect (TODO)
+    /// 4. process the transaction state machine
+    /// 5. respond with the hash of the state back to the leader
+    pub fn replicate(
+        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        rsubs: subscribers::Subscribers,
+        exit: Arc<AtomicBool>,
+    ) -> Result<Vec<JoinHandle<()>>> {
+        let read = UdpSocket::bind(rsubs.me.addr)?;
+        // make sure we are on the same interface
+        let mut local = read.local_addr()?;
+        local.set_port(0);
+        let write = UdpSocket::bind(local)?;
+
+        let blob_recycler = packet::BlobRecycler::default();
+        let (blob_sender, blob_receiver) = channel();
+        let t_blob_receiver = streamer::blob_receiver(
+            exit.clone(),
+            blob_recycler.clone(),
+            read,
+            blob_sender.clone(),
+        )?;
+        let (window_sender, window_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = channel();
+
+        let subs = Arc::new(RwLock::new(rsubs));
+        let t_retransmit = streamer::retransmitter(
+            write,
+            exit.clone(),
+            subs.clone(),
+            blob_recycler.clone(),
+            retransmit_receiver,
+        );
+        //TODO
+        //the packets coming out of blob_receiver need to be sent to the GPU and verified
+        //then sent to the window, which does the erasure coding reconstruction
+        let t_window = streamer::window(
+            exit.clone(),
+            subs,
+            blob_recycler.clone(),
+            blob_receiver,
+            window_sender,
+            retransmit_sender,
+        );
+
+        let skel = obj.clone();
+        let t_server = spawn(move || loop {
+            let e = Self::replicate_state(&skel, &window_receiver, &blob_recycler);
+            if e.is_err() && exit.load(Ordering::Relaxed) {
+                break;
+            }
+        });
+        Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
     }
 }
 
@@ -367,7 +466,7 @@ mod tests {
     use accountant_skel::{to_packets, Request};
     use bincode::serialize;
     use ecdsa;
-    use packet::{PacketRecycler, NUM_PACKETS};
+    use packet::{BlobRecycler, PacketRecycler, NUM_PACKETS};
     use transaction::{memfind, test_tx};
 
     use accountant::Accountant;
@@ -387,6 +486,15 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
+
+    use subscribers::{Node, Subscribers};
+    use streamer;
+    use std::sync::mpsc::channel;
+    use std::collections::VecDeque;
+    use hash::{hash, Hash};
+    use event::Event;
+    use entry;
+    use chrono::prelude::*;
 
     #[test]
     fn test_layout() {
@@ -490,6 +598,138 @@ mod tests {
 
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
+    }
+
+    use std::sync::{Once, ONCE_INIT};
+    extern crate env_logger;
+
+    static INIT: Once = ONCE_INIT;
+
+    /// Setup function that is only run once, even if called multiple times.
+    fn setup() {
+        INIT.call_once(|| {
+            env_logger::init().unwrap();
+        });
+    }
+
+    #[test]
+    fn test_replicate() {
+        setup();
+        let leader_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let leader_addr = leader_sock.local_addr().unwrap();
+        let me_addr = "127.0.0.1:9010".parse().unwrap();
+        let target_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let target_peer_addr = target_peer_sock.local_addr().unwrap();
+        let source_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let node_me = Node::new([0, 0, 0, 0, 0, 0, 0, 1], 10, me_addr);
+        let node_subs = vec![Node::new([0, 0, 0, 0, 0, 0, 0, 2], 8, target_peer_addr); 1];
+        let node_leader = Node::new([0, 0, 0, 0, 0, 0, 0, 3], 20, leader_addr);
+        let subs = Subscribers::new(node_me, node_leader, &node_subs);
+
+        // setup some blob services to send blobs into the socket
+        // to simulate the source peer and get blobs out of the socket to
+        // simulate target peer
+        let recv_recycler = BlobRecycler::default();
+        let resp_recycler = BlobRecycler::default();
+        let (s_reader, r_reader) = channel();
+        let t_receiver = streamer::blob_receiver(
+            exit.clone(),
+            recv_recycler.clone(),
+            target_peer_sock,
+            s_reader,
+        ).unwrap();
+        let (s_responder, r_responder) = channel();
+        let t_responder = streamer::responder(
+            source_peer_sock,
+            exit.clone(),
+            resp_recycler.clone(),
+            r_responder,
+        );
+
+        let starting_balance = 10_000;
+        let alice = Mint::new(starting_balance);
+        let acc = Accountant::new(&alice);
+        let historian = Historian::new(&alice.last_id(), Some(30));
+        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+            acc,
+            alice.last_id(),
+            sink(),
+            historian,
+        )));
+
+        let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
+
+        let mut alice_ref_balance = starting_balance;
+        let mut msgs = VecDeque::new();
+        let mut cur_hash = Hash::default();
+        let num_blobs = 10;
+        let transfer_amount = 501;
+        let bob_keypair = KeyPair::new();
+        for i in 0..num_blobs {
+            let b = resp_recycler.allocate();
+            let b_ = b.clone();
+            let mut w = b.write().unwrap();
+            w.set_index(i).unwrap();
+
+            let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
+            let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
+            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            cur_hash = hash(&cur_hash);
+
+            let tr1 = Transaction::new(
+                &alice.keypair(),
+                bob_keypair.pubkey(),
+                transfer_amount,
+                cur_hash,
+            );
+            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            cur_hash = hash(&cur_hash);
+            let entry1 =
+                entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
+            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            cur_hash = hash(&cur_hash);
+
+            alice_ref_balance -= transfer_amount;
+
+            let serialized_entry = serialize(&vec![entry0, entry1]).unwrap();
+
+            w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
+            w.set_size(serialized_entry.len());
+            w.meta.set_addr(&me_addr);
+            drop(w);
+            msgs.push_back(b_);
+        }
+
+        // send the blobs into the socket
+        s_responder.send(msgs).expect("send");
+
+        // receive retransmitted messages
+        let timer = Duration::new(1, 0);
+        let mut msgs: Vec<_> = Vec::new();
+        while let Ok(msg) = r_reader.recv_timeout(timer) {
+            trace!("msg: {:?}", msg);
+            msgs.push(msg);
+        }
+
+        let alice_balance = acc.lock()
+            .unwrap()
+            .acc
+            .get_balance(&alice.keypair().pubkey())
+            .unwrap();
+        assert_eq!(alice_balance, alice_ref_balance);
+
+        let bob_balance = acc.lock()
+            .unwrap()
+            .acc
+            .get_balance(&bob_keypair.pubkey())
+            .unwrap();
+        assert_eq!(bob_balance, starting_balance - alice_ref_balance);
+
+        exit.store(true, Ordering::Relaxed);
+        t_receiver.join().expect("join");
+        t_responder.join().expect("join");
     }
 
 }
