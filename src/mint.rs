@@ -58,6 +58,12 @@ impl Mint {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MintDemo {
+    pub mint: Mint,
+    pub users: Vec<(Vec<u8>, i64)>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

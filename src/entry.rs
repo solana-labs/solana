@@ -61,7 +61,7 @@ fn add_event_data(hash_data: &mut Vec<u8>, event: &Event) {
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the event contains
-/// signature, the final hash will be a hash of both the previous ID and
+/// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.
 pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
     let mut id = *start_hash;
@@ -76,10 +76,12 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
     }
 
     if !hash_data.is_empty() {
-        return extend_and_hash(&id, &hash_data);
+        extend_and_hash(&id, &hash_data)
+    } else if num_hashes != 0 {
+        hash(&id)
+    } else {
+        id
     }
-
-    id
 }
 
 /// Creates the next Entry `num_hashes` after `start_hash`.
@@ -167,6 +169,8 @@ mod tests {
     #[test]
     fn test_next_tick() {
         let zero = Hash::default();
-        assert_eq!(next_tick(&zero, 1).num_hashes, 1)
+        let tick = next_tick(&zero, 1);
+        assert_eq!(tick.num_hashes, 1);
+        assert_ne!(tick.id, zero);
     }
 }

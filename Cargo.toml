@@ -36,6 +36,10 @@ path = "src/bin/genesis-demo.rs"
 name = "solana-mint"
 path = "src/bin/mint.rs"
 
+[[bin]]
+name = "solana-mint-demo"
+path = "src/bin/mint-demo.rs"
+
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 

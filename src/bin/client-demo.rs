@@ -4,21 +4,22 @@ extern crate isatty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
+extern crate untrusted;
 
 use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::accountant_stub::AccountantStub;
-use solana::mint::Mint;
+use solana::mint::MintDemo;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::env;
 use std::io::{stdin, Read};
 use std::net::UdpSocket;
 use std::process::exit;
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+use untrusted::Input;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
@@ -75,74 +76,68 @@ fn main() {
         exit(1);
     }
 
-    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+    println!("Parsing stdin...");
+    let demo: MintDemo = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
-    let mint_keypair = mint.keypair();
-    let mint_pubkey = mint.pubkey();
 
     let socket = UdpSocket::bind(&send_addr).unwrap();
-    println!("Stub new");
-    let acc = AccountantStub::new(&addr, socket);
-    println!("Get last id");
+    let mut acc = AccountantStub::new(&addr, socket);
+
+    println!("Get last ID...");
     let last_id = acc.get_last_id().wait().unwrap();
 
-    println!("Get Balance");
-    let mint_balance = acc.get_balance(&mint_pubkey).wait().unwrap();
-    println!("Mint's Initial Balance {}", mint_balance);
+    println!("Creating keypairs...");
+    let txs = demo.users.len() / 2;
+    let keypairs: Vec<_> = demo.users
+        .into_par_iter()
+        .map(|(pkcs8, _)| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
+        .collect();
+    let keypair_pairs: Vec<_> = keypairs.chunks(2).collect();
 
     println!("Signing transactions...");
-    let txs = 1_000_000;
     let now = Instant::now();
-    let transactions: Vec<_> = (0..txs)
+    let transactions: Vec<_> = keypair_pairs
         .into_par_iter()
-        .map(|_| {
-            let rando_pubkey = KeyPair::new().pubkey();
-            Transaction::new(&mint_keypair, rando_pubkey, 1, last_id)
-        })
+        .map(|chunk| Transaction::new(&chunk[0], chunk[1].pubkey(), 1, last_id))
         .collect();
     let duration = now.elapsed();
-    let ns = duration.as_secs() * 2_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = f64::from(txs) / ns as f64;
-    let nsps = ns as f64 / f64::from(txs);
+    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+    let bsps = txs as f64 / ns as f64;
+    let nsps = ns as f64 / txs as f64;
     println!(
         "Done. {} thousand signatures per second, {}us per signature",
         bsps * 1_000_000_f64,
         nsps / 1_000_f64
     );
 
+    let initial_tx_count = acc.transaction_count();
+
     println!("Transfering {} transactions in {} batches", txs, threads);
     let now = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
-    let _: Vec<_> = chunks
-        .into_par_iter()
-        .map(|trs| {
-            println!("Transferring 1 unit {} times...", trs.len());
-            let send_addr = "0.0.0.0:0";
-            let socket = UdpSocket::bind(send_addr).unwrap();
-            let acc = AccountantStub::new(&addr, socket);
-            for tr in trs {
-                acc.transfer_signed(tr.clone()).unwrap();
-            }
-            ()
-        })
-        .collect();
-    println!("Waiting for last transaction to be confirmed...",);
-    let mut val = mint_balance;
-    let mut prev = 0;
-    while val != prev {
-        sleep(Duration::from_millis(20));
-        prev = val;
-        val = acc.get_balance(&mint_pubkey).wait().unwrap();
+    chunks.into_par_iter().for_each(|trs| {
+        println!("Transferring 1 unit {} times...", trs.len());
+        let send_addr = "0.0.0.0:0";
+        let socket = UdpSocket::bind(send_addr).unwrap();
+        let acc = AccountantStub::new(&addr, socket);
+        for tr in trs {
+            acc.transfer_signed(tr.clone()).unwrap();
+        }
+    });
+
+    println!("Waiting for half the transactions to complete...",);
+    let mut tx_count = acc.transaction_count();
+    while tx_count < transactions.len() as u64 / 2 {
+        tx_count = acc.transaction_count();
     }
-    println!("Mint's Final Balance {}", val);
-    let txs = mint_balance - val;
-    println!("Successful transactions {}", txs);
+    let txs = tx_count - initial_tx_count;
+    println!("Transactions processed {}", txs);
 
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-    println!("Done. {} tps!", tps);
+    println!("Done. {} tps", tps);
 }

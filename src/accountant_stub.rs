@@ -3,11 +3,12 @@
 //! this object instead of writing messages to the network directly. The binary
 //! encoding of its messages are unstable and may change in future releases.
 
-use accountant_skel::{Request, Response};
+use accountant_skel::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
-use futures::future::{err, ok, FutureResult};
+use futures::future::{ok, FutureResult};
 use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
+use std::collections::HashMap;
 use std::io;
 use std::net::UdpSocket;
 use transaction::Transaction;
@@ -15,6 +16,9 @@ use transaction::Transaction;
 pub struct AccountantStub {
     pub addr: String,
     pub socket: UdpSocket,
+    last_id: Option<Hash>,
+    num_events: u64,
+    balances: HashMap<PublicKey, Option<i64>>,
 }
 
 impl AccountantStub {
@@ -22,9 +26,43 @@ impl AccountantStub {
     /// over `socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking AccountantStub methods.
     pub fn new(addr: &str, socket: UdpSocket) -> Self {
-        AccountantStub {
+        let stub = AccountantStub {
             addr: addr.to_string(),
             socket,
+            last_id: None,
+            num_events: 0,
+            balances: HashMap::new(),
+        };
+        stub.init();
+        stub
+    }
+
+    pub fn init(&self) {
+        let subscriptions = vec![Subscription::EntryInfo];
+        let req = Request::Subscribe { subscriptions };
+        let data = serialize(&req).expect("serialize Subscribe");
+        let _res = self.socket.send_to(&data, &self.addr);
+    }
+
+    pub fn recv_response(&self) -> io::Result<Response> {
+        let mut buf = vec![0u8; 1024];
+        self.socket.recv_from(&mut buf)?;
+        let resp = deserialize(&buf).expect("deserialize balance");
+        Ok(resp)
+    }
+
+    pub fn process_response(&mut self, resp: Response) {
+        match resp {
+            Response::Balance { key, val } => {
+                self.balances.insert(key, val);
+            }
+            Response::LastId { id } => {
+                self.last_id = Some(id);
+            }
+            Response::EntryInfo(entry_info) => {
+                self.last_id = Some(entry_info.id);
+                self.num_events += entry_info.num_events;
+            }
         }
     }
 
@@ -52,42 +90,67 @@ impl AccountantStub {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
+    pub fn get_balance(&mut self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf).expect("buffer error");
-        let resp = deserialize(&buf).expect("deserialize balance");
-        if let Response::Balance { key, val } = resp {
-            assert_eq!(key, *pubkey);
-            return match val {
-                Some(x) => ok(x),
-                _ => err(0),
-            };
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::Balance { ref key, .. } = &resp {
+                done = key == pubkey;
+            }
+            self.process_response(resp);
         }
-        err(0)
+        ok(self.balances[pubkey].unwrap())
     }
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response. At the time of this writing,
     /// it also has the side-effect of causing the server to log any
     /// entries that have been published by the Historian.
-    pub fn get_last_id(&self) -> FutureResult<Hash, ()> {
+    pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetId");
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
-        let mut buf = vec![0u8; 1024];
-        self.socket.recv_from(&mut buf).expect("buffer error");
-        let resp = deserialize(&buf).expect("deserialize Id");
-        if let Response::LastId { id } = resp {
-            return ok(id);
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::LastId { .. } = &resp {
+                done = true;
+            }
+            self.process_response(resp);
         }
-        ok(Default::default())
+        ok(self.last_id.unwrap_or(Hash::default()))
+    }
+
+    /// Return the number of transactions the server processed since creating
+    /// this stub instance.
+    pub fn transaction_count(&mut self) -> u64 {
+        // Wait for at least one EntryInfo.
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("recv response");
+            if let &Response::EntryInfo(_) = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
+
+        // Then take the rest.
+        self.socket.set_nonblocking(true).expect("set nonblocking");
+        loop {
+            match self.recv_response() {
+                Err(_) => break,
+                Ok(resp) => self.process_response(resp),
+            }
+        }
+        self.socket.set_nonblocking(false).expect("set blocking");
+        self.num_events
     }
 }
 
@@ -128,7 +191,7 @@ mod tests {
         let socket = UdpSocket::bind(send_addr).unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
-        let acc = AccountantStub::new(addr, socket);
+        let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
