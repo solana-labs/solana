@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
+use streamer;
 
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone)]
@@ -126,6 +127,68 @@ impl Crdt {
             trace!("INSERT FAILED {}", v.version);
         }
     }
+
+    /// broadcast messages from the leader to layer 1 nodes
+    pub fn broadcast(obj: Arc<RwLock<Self>>, blobs: &Vec<Blob>, s: &UdpSocket, transmit_index: &mut u64) -> Result<()> {
+        // dont block the lock while sending
+        let (me,table) = {
+            let robj = obj.read().unwrap()
+            (robj.table[robj.me], robj.table.clone())
+        }
+        let errs: Vec<_> = table
+            .enumerate()
+            .cycle()
+            .zip(blobs.iter())
+            .par_iter()
+            .map(|((i,v),b)| {
+                if me.id == v.id {
+                    return Ok(0);
+                }
+                // only leader should be broadcasting
+                assert_neq!(me.current_leader_id, v.id);
+                let blob = b.write().unwrap();
+                blob.set_index(*transmit_index + i);
+                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+            })
+            .collect()
+        for e in errs {
+            trace!("retransmit result {:?}", e);
+            match e {
+                Err(e) => return Err(Error::IO(e)),
+                _ => (),
+            }
+            *transmit_index += 1;
+        }
+        Ok(())
+    }
+
+    /// retransmit messages from the leader to layer 1 nodes
+    pub fn retransmit(&self, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
+        let me = self.table[self.me];
+        let errs: Vec<_> = self.table
+            .par_iter()
+            .map(|i| {
+                if me.id == v.id {
+                    return Ok(0);
+                }
+                if me.current_leader_id == v.id {
+                    trace!("skip retransmit to leader{:?}", v.id);
+                    return Ok(0);
+                }
+                trace!("retransmit blob to {}", i.addr);
+                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+            })
+            .collect();
+        for e in errs {
+            trace!("retransmit result {:?}", e);
+            match e {
+                Err(e) => return Err(Error::IO(e)),
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+
     fn random() -> u64 {
         let rnd = SystemRandom::new();
         let mut buf = [0u8; 8];

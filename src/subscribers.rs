@@ -48,6 +48,8 @@ impl fmt::Debug for Node {
 
 pub struct Subscribers {
     data: Vec<Node>,
+    /// TODO derive this somehow from the historians counter
+    /// this is the window index
     pub index: u64;
     pub me: Node,
     pub leader: Node,
@@ -66,7 +68,7 @@ impl Subscribers {
     }
 
     /// broadcast messages from the leader to layer 1 nodes
-    pub fn broadcast(&self, re: &BlobRecycler, blobs: &Vec<Blob>, s: &UdpSocket) -> Result<()> {
+    pub fn broadcast(&mut self, blobs: &Vec<Blob>, s: &UdpSocket) -> Result<()> {
         let errs: Vec<_> = self.subs
             .enumerate()
             .cycle()
@@ -79,6 +81,8 @@ impl Subscribers {
                 if self.leader == *i {
                     return Ok(0);
                 }
+                let blob = b.write().unwrap();
+                blob.set_index(self.index + i);
                 s.send_to(&blob.data[..blob.meta.size], &i.addr)
             })
             .collect()
@@ -88,6 +92,7 @@ impl Subscribers {
                 Err(e) => return Err(Error::IO(e)),
                 _ => (),
             }
+            self.index += 1;
         }
         Ok(())
     }

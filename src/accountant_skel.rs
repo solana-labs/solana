@@ -105,10 +105,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    pub fn sync(&mut self) -> Hash {
+    pub fn sync(&mut self, broadcast: &streamer::BlobSender, blob_recycler: &streamer::BlobRecycler) -> Hash {
         let mut retry = true;
         while retry = true {
-            let mut b = self.blob_recycler.allocate();
+            let mut b = blob_recycler.allocate();
             let mut out = Cursor::new(b.data_mut());
             let mut ser = bincode::Serializer::new(out);
             let seq = ser.serialize_seq(None);
@@ -126,7 +126,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
             seq.end();
             b.set_size(out.len());
-            self.broadcast.send(b)?;
+            broadcast.send(b)?;
         }
         self.last_id
     }

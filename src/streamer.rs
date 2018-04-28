@@ -9,6 +9,8 @@ use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use subscribers::Subscribers;
+#[cfg(feature = "erasure")]
+use erasure;
 
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
@@ -233,16 +235,43 @@ fn broadcast(
         dq.append(&mut nq);
     }
     {
-        let wsubs = subs.read().unwrap();
+        let wsubs = subs.write().unwrap();
         let blobs = dq.into();
+        /// appends codes to the list of blobs allowing us to reconstruct the stream
+        #[cfg(feature = "erasure")]
         erasure::generate_codes(blobs);
         wsubs.broadcast(&r, &blobs, sock)?;
     }
-    while let Some(b) = blobs.pop() {
+    while let Some(b) = dq.pop_front() {
         recycler.recycle(b);
     }
     Ok(())
 }
+
+/// Service to broadcast messages from the leader to layer 1 nodes.
+/// See `subscribers` for network layer definitions.
+/// # Arguments
+/// * `sock` - Socket to send from.
+/// * `exit` - Boolean to signal system exit.
+/// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
+/// the accountant and crdt.
+/// * `recycler` - Blob recycler.
+/// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
+pub fn broadcaster(
+    sock: UdpSocket,
+    exit: Arc<AtomicBool>,
+    subs: Arc<RwLock<Subscribers>>,
+    recycler: BlobRecycler,
+    r: BlobReceiver,
+) -> JoinHandle<()> {
+    spawn(move || loop {
+        if exit.load(Ordering::Relaxed) {
+            break;
+        }
+        let _ = broadcast(&subs, &recycler, &r, &sock);
+    })
+}
+
 
 
 fn retransmit(
@@ -275,7 +304,7 @@ fn retransmit(
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
 /// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
-/// the accountant.
+/// the accountant and crdt.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
