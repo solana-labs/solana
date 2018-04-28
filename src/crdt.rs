@@ -4,6 +4,14 @@
 //!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
 //! The last version is always picked durring an update.
+//!
+//! The network is arranged in layers:
+//!
+//! * layer 0 - Leader.
+//! * layer 1 - As many nodes as we can fit
+//! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
+//!
+//! Accountant needs to provide an interface for us to query the stake weight
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -110,15 +118,11 @@ impl Crdt {
         g.table.insert(me.id, me);
         g
     }
-    pub fn import(&mut self, v: &ReplicatedData) {
-        // TODO check that last_verified types are always increasing
-        // TODO probably an error or attack
-        if self.me != v.id {
-            self.insert(v);
-        }
-    }
     pub fn insert(&mut self, v: &ReplicatedData) {
+        // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
+            //somehow we signed a message for our own identity with a higher version that we have storred ourselves
+            assert_neq!(self.me, v.id);
             trace!("insert! {}", v.version);
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
@@ -249,7 +253,7 @@ impl Crdt {
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
-            self.import(&v);
+            self.insert(&v);
         }
         *self.remote.entry(from).or_insert(update_index) = update_index;
     }
@@ -285,7 +289,7 @@ impl Crdt {
                 let rsp = serialize(&Protocol::ReceiveUpdates(from, ups, data))?;
                 trace!("send_to {}", addr);
                 //TODO verify reqdata belongs to sender
-                obj.write().unwrap().import(&reqdata);
+                obj.write().unwrap().insert(&reqdata);
                 sock.send_to(&rsp, addr).unwrap();
                 trace!("send_to done!");
             }

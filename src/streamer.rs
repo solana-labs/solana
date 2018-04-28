@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use subscribers::Subscribers;
+use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
 
@@ -111,7 +111,7 @@ pub fn blob_receiver(
 
 fn recv_window(
     window: &mut Vec<Option<SharedBlob>>,
-    subs: &Arc<RwLock<Subscribers>>,
+    subs: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
     r: &BlobReceiver,
@@ -197,7 +197,7 @@ fn recv_window(
 
 pub fn window(
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Subscribers>>,
+    subs: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
@@ -224,7 +224,7 @@ pub fn window(
 }
 
 fn broadcast(
-    subs: &Arc<RwLock<Subscribers>>,
+    subs: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -249,7 +249,7 @@ fn broadcast(
 }
 
 /// Service to broadcast messages from the leader to layer 1 nodes.
-/// See `subscribers` for network layer definitions.
+/// See `crdt` for network layer definitions.
 /// # Arguments
 /// * `sock` - Socket to send from.
 /// * `exit` - Boolean to signal system exit.
@@ -260,7 +260,7 @@ fn broadcast(
 pub fn broadcaster(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Subscribers>>,
+    subs: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -275,7 +275,7 @@ pub fn broadcaster(
 
 
 fn retransmit(
-    subs: &Arc<RwLock<Subscribers>>,
+    subs: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -299,7 +299,7 @@ fn retransmit(
 }
 
 /// Service to retransmit messages from the leader to layer 1 nodes.
-/// See `subscribers` for network layer definitions.
+/// See `crdt` for network layer definitions.
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
@@ -310,7 +310,7 @@ fn retransmit(
 pub fn retransmitter(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Subscribers>>,
+    subs: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -437,7 +437,7 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
                    PacketReceiver};
-    use subscribers::{Node, Subscribers};
+    use Crdt::Crdt;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -512,7 +512,7 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Subscribers::new(
+        let subs = Arc::new(RwLock::new(Crdt::new(
             Node::default(),
             Node::new([0; 8], 0, send.local_addr().unwrap()),
             &[],
@@ -565,7 +565,7 @@ mod test {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Subscribers::new(
+        let subs = Arc::new(RwLock::new(Crdt::new(
             Node::default(),
             Node::default(),
             &[Node::new([0; 8], 1, read.local_addr().unwrap())],
