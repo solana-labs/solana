@@ -4,12 +4,13 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
 pub struct Historian {
-    pub output: Receiver<Entry>,
+    pub output: Arc<Mutex<Receiver<Entry>>>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
@@ -22,7 +23,11 @@ impl Historian {
         let (entry_sender, output) = sync_channel(10_000);
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
-        Historian { output, thread_hdl }
+        let loutput = Arc::new(Mutex::new(output));
+        Historian {
+            output: loutput,
+            thread_hdl,
+        }
     }
 
     /// A background thread that will continue tagging received Event messages and
@@ -46,6 +51,10 @@ impl Historian {
             }
         })
     }
+
+    pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
+        self.output.lock().unwrap().try_recv()
+    }
 }
 
 #[cfg(test)]
@@ -67,9 +76,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         input.send(Signal::Tick).unwrap();
 
-        let entry0 = hist.output.recv().unwrap();
-        let entry1 = hist.output.recv().unwrap();
-        let entry2 = hist.output.recv().unwrap();
+        let entry0 = hist.output.lock().unwrap().recv().unwrap();
+        let entry1 = hist.output.lock().unwrap().recv().unwrap();
+        let entry2 = hist.output.lock().unwrap().recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -105,7 +114,7 @@ mod tests {
         sleep(Duration::from_millis(300));
         input.send(Signal::Tick).unwrap();
         drop(input);
-        let entries: Vec<Entry> = hist.output.iter().collect();
+        let entries: Vec<Entry> = hist.output.lock().unwrap().iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

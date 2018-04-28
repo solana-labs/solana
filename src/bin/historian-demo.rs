@@ -28,7 +28,7 @@ fn main() {
     let hist = Historian::new(event_receiver, &seed, Some(10));
     create_ledger(&input, &seed).expect("send error");
     drop(input);
-    let entries: Vec<Entry> = hist.output.iter().collect();
+    let entries: Vec<Entry> = hist.output.lock().unwrap().iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }
