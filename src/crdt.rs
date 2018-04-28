@@ -37,9 +37,9 @@ pub struct ReplicatedData {
     /// should always be increasing
     version: u64,
     /// address to connect to for gossip
-    gossip_addr: SocketAddr,
+    pub gossip_addr: SocketAddr,
     /// address to connect to for replication
-    replicate_addr: SocketAddr,
+    pub replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
     serve_addr: SocketAddr,
     /// current leader identity

@@ -234,7 +234,7 @@ impl Blob {
         Ok(e)
     }
     pub fn set_id(&mut self, id: PublicKey) -> Result<()> {
-        let wtr = serialize(&id)?;
+        let wrt = serialize(&id)?;
         self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
         Ok(())
     }

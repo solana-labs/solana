@@ -433,7 +433,6 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
                    PacketReceiver};
-
     use crdt::{Crdt, ReplicatedData};
     use subscribers::Node;
     use signature::KeyPair;
@@ -514,16 +513,11 @@ mod test {
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-
         let rep_data = ReplicatedData::new(pubkey_me,
                                            read.local_addr().unwrap(),
                                            send.local_addr().unwrap(),
                                            serve.local_addr().unwrap());
         let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
-            /*
-            Node::default(),
-            Node::new([0; 8], 0, send.local_addr().unwrap()),
-            &[],*/
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
