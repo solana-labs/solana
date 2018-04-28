@@ -221,6 +221,30 @@ pub fn window(
     })
 }
 
+fn broadcast(
+    subs: &Arc<RwLock<Subscribers>>,
+    recycler: &BlobRecycler,
+    r: &BlobReceiver,
+    sock: &UdpSocket,
+) -> Result<()> {
+    let timer = Duration::new(1, 0);
+    let mut dq = r.recv_timeout(timer)?;
+    while let Ok(mut nq) = r.try_recv() {
+        dq.append(&mut nq);
+    }
+    {
+        let wsubs = subs.read().unwrap();
+        let blobs = dq.into();
+        erasure::generate_codes(blobs);
+        wsubs.broadcast(&r, &blobs, sock)?;
+    }
+    while let Some(b) = blobs.pop() {
+        recycler.recycle(b);
+    }
+    Ok(())
+}
+
+
 fn retransmit(
     subs: &Arc<RwLock<Subscribers>>,
     recycler: &BlobRecycler,

@@ -3,7 +3,7 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, Serializer};
 use ecdsa;
 use entry::Entry;
 use event::Event;
@@ -104,12 +104,29 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     /// Process any Entry items that have been published by the Historian.
+    /// continuosly broadcast blobs of entries out
     pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.historian.receiver.try_recv() {
-            self.last_id = entry.id;
-            self.acc.register_entry_id(&self.last_id);
-            writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-            self.notify_entry_info_subscribers(&entry);
+        let mut retry = true;
+        while retry = true {
+            let mut b = self.blob_recycler.allocate();
+            let mut out = Cursor::new(b.data_mut());
+            let mut ser = bincode::Serializer::new(out);
+            let seq = ser.serialize_seq(None);
+            retry = false;
+            while let Ok(entry) = self.historian.receiver.try_recv() {
+                if let Err(e) = seq.serialize(entry) {
+                    trace!("got error {}", e);
+                    retry = true;
+                    break;
+                }
+                self.last_id = entry.id;
+                self.acc.register_entry_id(&self.last_id);
+                writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+                self.notify_entry_info_subscribers(&entry);
+            }
+            seq.end();
+            b.set_size(out.len());
+            self.broadcast.send(b)?;
         }
         self.last_id
     }

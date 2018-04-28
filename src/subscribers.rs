@@ -48,6 +48,7 @@ impl fmt::Debug for Node {
 
 pub struct Subscribers {
     data: Vec<Node>,
+    pub index: u64;
     pub me: Node,
     pub leader: Node,
 }
@@ -62,6 +63,33 @@ impl Subscribers {
         h.insert(&[me, leader]);
         h.insert(network);
         h
+    }
+
+    /// broadcast messages from the leader to layer 1 nodes
+    pub fn broadcast(&self, re: &BlobRecycler, blobs: &Vec<Blob>, s: &UdpSocket) -> Result<()> {
+        let errs: Vec<_> = self.subs
+            .enumerate()
+            .cycle()
+            .zip(blobs.iter())
+            .par_iter()
+            .map(|((i,v),b)| {
+                if self.me == *i {
+                    return Ok(0);
+                }
+                if self.leader == *i {
+                    return Ok(0);
+                }
+                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+            })
+            .collect()
+        for e in errs {
+            trace!("retransmit result {:?}", e);
+            match e {
+                Err(e) => return Err(Error::IO(e)),
+                _ => (),
+            }
+        }
+        Ok(())
     }
 
     /// retransmit messages from the leader to layer 1 nodes
