@@ -197,7 +197,7 @@ fn recv_window(
 
 pub fn window(
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Crdt>>,
+    crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
@@ -212,7 +212,7 @@ pub fn window(
             }
             let _ = recv_window(
                 &mut window,
-                &subs,
+                &crdt,
                 &recycler,
                 &mut consumed,
                 &r,
@@ -224,7 +224,7 @@ pub fn window(
 }
 
 fn broadcast(
-    subs: &Arc<RwLock<Crdt>>,
+    crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -235,12 +235,12 @@ fn broadcast(
         dq.append(&mut nq);
     }
     {
-        let wsubs = subs.write().unwrap();
+        let wcrdt = crdt.write().unwrap();
         let blobs = dq.into();
         /// appends codes to the list of blobs allowing us to reconstruct the stream
         #[cfg(feature = "erasure")]
         erasure::generate_codes(blobs);
-        wsubs.broadcast(&r, &blobs, sock)?;
+        wcrdt.broadcast(&r, &blobs, sock)?;
     }
     while let Some(b) = dq.pop_front() {
         recycler.recycle(b);
@@ -253,14 +253,13 @@ fn broadcast(
 /// # Arguments
 /// * `sock` - Socket to send from.
 /// * `exit` - Boolean to signal system exit.
-/// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
-/// the accountant and crdt.
+/// * `crdt` - CRDT structure
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn broadcaster(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Crdt>>,
+    crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -268,14 +267,12 @@ pub fn broadcaster(
         if exit.load(Ordering::Relaxed) {
             break;
         }
-        let _ = broadcast(&subs, &recycler, &r, &sock);
+        let _ = broadcast(&crdt, &recycler, &r, &sock);
     })
 }
 
-
-
 fn retransmit(
-    subs: &Arc<RwLock<Crdt>>,
+    crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -286,10 +283,9 @@ fn retransmit(
         dq.append(&mut nq);
     }
     {
-        let wsubs = subs.read().unwrap();
         for b in &dq {
             let mut mb = b.write().unwrap();
-            wsubs.retransmit(&mut mb, sock)?;
+            Crdt::retransmit(&crdt, &mut mb, sock)?;
         }
     }
     while let Some(b) = dq.pop_front() {

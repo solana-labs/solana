@@ -340,10 +340,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Set `exit` to shutdown its threads.
     pub fn serve(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        addr: &str,
+        me: ReplicatedData
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let read = UdpSocket::bind(addr)?;
+        let gossip = UdpSocket::bind(me.gossip_addr)?;
+        let read = UdpSocket::bind(me.serve_addr)?;
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+
         // make sure we are on the same interface
         let mut local = read.local_addr()?;
         local.set_port(0);
@@ -392,7 +395,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// on the accountant state.
     /// # Arguments
     /// * `obj` - The accountant state.
-    /// * `rsubs` - The subscribers.
+    /// * `me` - my configuration
+    /// * `leader` - leader configuration
     /// * `exit` - The exit signal.
     /// # Remarks
     /// The pipeline is constructed as follows:
@@ -407,10 +411,18 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
-        rsubs: subscribers::Subscribers,
+        me: ReplicatedData,
+        leader: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let read = UdpSocket::bind(rsubs.me.addr)?;
+        let gossip = UdpSocket::bind(me.gossip_addr)?;
+        let read = UdpSocket::bind(me.replicate_addr)?;
+
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        crdt.write().unwrap().insert(&leader);
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone()));
+        let t_listen = Crdt::listen(crdt.clone(), exit.clone()));
+
         // make sure we are on the same interface
         let mut local = read.local_addr()?;
         local.set_port(0);
@@ -427,11 +439,10 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (window_sender, window_receiver) = channel();
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let subs = Arc::new(RwLock::new(rsubs));
         let t_retransmit = streamer::retransmitter(
             write,
             exit.clone(),
-            subs.clone(),
+            crdt.clone(),
             blob_recycler.clone(),
             retransmit_receiver,
         );
@@ -440,7 +451,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         //then sent to the window, which does the erasure coding reconstruction
         let t_window = streamer::window(
             exit.clone(),
-            subs,
+            crdt,
             blob_recycler.clone(),
             blob_receiver,
             window_sender,
@@ -504,7 +515,7 @@ mod tests {
     use std::time::Duration;
     use transaction::Transaction;
 
-    use subscribers::{Node, Subscribers};
+    use crdt::{ReplicatedData, Crdt};
     use streamer;
     use std::sync::mpsc::channel;
     use std::collections::VecDeque;
@@ -640,10 +651,10 @@ mod tests {
         let source_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
 
-        let node_me = Node::new([0, 0, 0, 0, 0, 0, 0, 1], 10, me_addr);
-        let node_subs = vec![Node::new([0, 0, 0, 0, 0, 0, 0, 2], 8, target_peer_addr); 1];
-        let node_leader = Node::new([0, 0, 0, 0, 0, 0, 0, 3], 20, leader_addr);
-        let subs = Subscribers::new(node_me, node_leader, &node_subs);
+        let node_me = ReplicateData::new(KeyPair::new().pubkey(), me_addr);
+        let node_target = ReplicateData::new(KeyPair::new().pubkey(), target_peer_addr);
+        let node_leader = ReplicateData::new(KeyPair::new().pubkey(), leader_addr);
+        let crdt_me = Crdt::new(node_me, node_leader, &node_subs);
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to

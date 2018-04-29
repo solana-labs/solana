@@ -40,7 +40,7 @@ pub struct ReplicatedData {
     /// address to connect to for replication
     replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
-    lead_addr: SocketAddr,
+    serve_addr: SocketAddr,
     /// current leader identity
     current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -50,15 +50,18 @@ pub struct ReplicatedData {
 }
 
 impl ReplicatedData {
-    pub fn new(id: PublicKey, gossip_addr: SocketAddr) -> ReplicatedData {
+    pub fn new(id: PublicKey,
+               gossip_addr: SocketAddr,
+               replicate_addr: SocketAddr,
+               serve_addr: SocketAddr) -> ReplicatedData {
         let daddr = "0.0.0.0:0".parse().unwrap();
         ReplicatedData {
             id,
             sig: Signature::default(),
             version: 0,
             gossip_addr,
-            replicate_addr: daddr,
-            lead_addr: daddr,
+            replicate_addr,
+            serve_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -133,9 +136,11 @@ impl Crdt {
     }
 
     /// broadcast messages from the leader to layer 1 nodes
-    pub fn broadcast(obj: Arc<RwLock<Self>>, blobs: &Vec<Blob>, s: &UdpSocket, transmit_index: &mut u64) -> Result<()> {
-        // dont block the lock while sending
+    /// # Remarks
+    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    pub fn broadcast(obj: &Arc<RwLock<Self>>, blobs: &Vec<Blob>, s: &UdpSocket, transmit_index: &mut u64) -> Result<()> {
         let (me,table) = {
+            // copy to avoid locking durring IO
             let robj = obj.read().unwrap()
             (robj.table[robj.me], robj.table.clone())
         }
@@ -167,9 +172,15 @@ impl Crdt {
     }
 
     /// retransmit messages from the leader to layer 1 nodes
-    pub fn retransmit(&self, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
-        let me = self.table[self.me];
-        let errs: Vec<_> = self.table
+    /// # Remarks
+    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    pub fn retransmit(obj: Arc<RwLock<Self>>, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
+        let (me, table) = {
+            // copy to avoid locking durring IO
+            let s = obj.read().unwrap();
+            (self.table[self.me].clone(), self.table.clone())
+        }
+        let errs: Vec<_> = table
             .par_iter()
             .map(|i| {
                 if me.id == v.id {
@@ -179,8 +190,8 @@ impl Crdt {
                     trace!("skip retransmit to leader{:?}", v.id);
                     return Ok(0);
                 }
-                trace!("retransmit blob to {}", i.addr);
-                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+                trace!("retransmit blob to {}", i.replicate_addr);
+                s.send_to(&blob.data[..blob.meta.size], &i.replicate_addr)
             })
             .collect();
         for e in errs {
