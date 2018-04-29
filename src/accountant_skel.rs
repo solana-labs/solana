@@ -30,11 +30,9 @@ use transaction::Transaction;
 
 use subscribers;
 
-pub struct AccountantSkel<W: Write + Send + 'static> {
+pub struct AccountantSkel {
     acc: Accountant,
     last_id: Hash,
-    writer: W,
-    historian: Historian,
     entry_info_subscribers: Vec<SocketAddr>,
 }
 
@@ -76,13 +74,12 @@ pub enum Response {
     LastId { id: Hash },
 }
 
-impl<W: Write + Send + 'static> AccountantSkel<W> {
+impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, last_id: Hash, writer: W, historian: Historian) -> Self {
+    pub fn new(acc: Accountant, last_id: Hash, historian: Historian) -> Self {
         AccountantSkel {
             acc,
             last_id,
-            writer,
             historian,
             entry_info_subscribers: vec![],
         }
@@ -105,10 +102,11 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    fn run_sync(
+    fn run_sync<W: Write>(
         obj: Arc<RwLock<Self>>,
         broadcast: &streamer::BlobSender,
         blob_recycler: &streamer::BlobRecycler
+        writer: W
         historian: Receiver<Entry>,
     ) -> Result<()> {
         //TODO clean this mess up
@@ -136,7 +134,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
             self.last_id = entry.id;
             self.acc.register_entry_id(&self.last_id);
-            writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+            writeln!(writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
             self.notify_entry_info_subscribers(&entry);
         }
         seq.end();
@@ -145,15 +143,16 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         Ok(())
     }
 
-    pub fn sync_service(
+    pub fn sync_service<W: Write + Send + 'static>(
         obj: Arc<RwLock<Self>>,
         exit: AtomicBool,
         broadcast: &streamer::BlobSender,
         blob_recycler: &streamer::BlobRecycler
+        writer: W,
         historian: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move|| {
-            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, &historian);
+            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, writer, &historian);
             if e.is_err() && exit_.load(Ordering::Relaxed) {
                 break;
             }
