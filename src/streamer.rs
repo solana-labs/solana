@@ -299,14 +299,13 @@ fn retransmit(
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
-/// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
-/// the accountant and crdt.
+/// * `crdt` - This structure needs to be updated and populated by the accountant and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Crdt>>,
+    crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -314,7 +313,7 @@ pub fn retransmitter(
         if exit.load(Ordering::Relaxed) {
             break;
         }
-        let _ = retransmit(&subs, &recycler, &r, &sock);
+        let _ = retransmit(&crdt, &recycler, &r, &sock);
     })
 }
 

@@ -105,32 +105,61 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    pub fn sync(&mut self, broadcast: &streamer::BlobSender, blob_recycler: &streamer::BlobRecycler) -> Hash {
-        let mut retry = true;
-        while retry = true {
-            let mut b = blob_recycler.allocate();
-            let mut out = Cursor::new(b.data_mut());
-            let mut ser = bincode::Serializer::new(out);
-            let seq = ser.serialize_seq(None);
-            retry = false;
-            while let Ok(entry) = self.historian.receiver.try_recv() {
-                if let Err(e) = seq.serialize(entry) {
-                    trace!("got error {}", e);
-                    retry = true;
-                    break;
-                }
-                self.last_id = entry.id;
-                self.acc.register_entry_id(&self.last_id);
-                writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-                self.notify_entry_info_subscribers(&entry);
+    fn run_sync(
+        obj: Arc<RwLock<Self>>,
+        broadcast: &streamer::BlobSender,
+        blob_recycler: &streamer::BlobRecycler
+        historian: Receiver<Entry>,
+    ) -> Result<()> {
+        //TODO clean this mess up
+        let entry = historian.recv(Duration::new(1, 0))?;
+        let mut b = blob_recycler.allocate();
+        let mut out = Cursor::new(b.data_mut());
+        let mut ser = bincode::Serializer::new(out);
+        let mut seq = ser.serialize_seq(None);
+        seq.serialize(entry).expect("serialize failed on first entry!");
+        obj.write().unwrap().notify_entry_info_subscribers(&entry);
+
+        while let Ok(entry) = historian.try_recv() {
+            //UNLOCK skel in this scope
+            let mut robj = obj.write().unwrap();
+            if let Err(e) = seq.serialize(entry) {
+                seq.end();
+                b.set_size(out.len());
+                broadcast.send(b)?;
+
+                //NEW SEQUENCE
+                b = blob_recycler.allocate();
+                out = Cursor::new(b.data_mut());
+                seq = ser.serialize_seq(None);
+                seq.serialize(entry).expect("serialize failed on first entry!");
             }
-            seq.end();
-            b.set_size(out.len());
-            broadcast.send(b)?;
+            self.last_id = entry.id;
+            self.acc.register_entry_id(&self.last_id);
+            writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+            self.notify_entry_info_subscribers(&entry);
         }
-        self.last_id
+        seq.end();
+        b.set_size(out.len());
+        broadcast.send(b)?;
+        Ok(())
     }
 
+    pub fn sync_service(
+        obj: Arc<RwLock<Self>>,
+        exit: AtomicBool,
+        broadcast: &streamer::BlobSender,
+        blob_recycler: &streamer::BlobRecycler
+        historian: Receiver<Entry>,
+    ) -> JoinHandle<()> {
+        spawn(move|| {
+            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, &historian);
+            if e.is_err() && exit_.load(Ordering::Relaxed) {
+                break;
+            }
+        })
+    }
+ 
     /// Process Request items sent by clients.
     pub fn process_request(
         &mut self,
@@ -280,7 +309,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     fn process(
         obj: &Arc<Mutex<AccountantSkel<W>>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        blob_sender: &streamer::BlobSender,
+        broadcast_sender: &streamer::BlobSender,
+        responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -297,7 +327,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
-                blob_sender.send(blobs)?;
+                responder_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
 
@@ -357,9 +387,13 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let (packet_sender, packet_receiver) = channel();
         let t_receiver =
             streamer::receiver(read, exit.clone(), packet_recycler.clone(), packet_sender)?;
-        let (blob_sender, blob_receiver) = channel();
-        let t_responder =
-            streamer::responder(write, exit.clone(), blob_recycler.clone(), blob_receiver);
+        let (responder_sender, responder_receiver) = channel();
+        let t_responder = streamer::responder(
+            write, 
+            exit.clone(),
+            blob_recycler.clone(),
+            responder_receiver
+        );
         let (verified_sender, verified_receiver) = channel();
 
         let exit_ = exit.clone();
@@ -370,12 +404,23 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
         });
 
+        let (broadcast_sender, broadcast_receiver) = channel();
+
+        let t_broadcast = streamer::broadcaster(
+            write,
+            exit.clone(),
+            crdt.clone(),
+            blob_recycler.clone(),
+            broadcast_receiver,
+        );
+ 
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
                 &skel,
                 &verified_receiver,
-                &blob_sender,
+                &broadcast_sender,
+                &responder_sender,
                 &packet_recycler,
                 &blob_recycler,
             );
@@ -446,7 +491,8 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             blob_recycler.clone(),
             retransmit_receiver,
         );
-        //TODO
+
+       //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let t_window = streamer::window(
@@ -465,7 +511,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 break;
             }
         });
-        Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
+        Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server, t_gossip, t_listen])
     }
 }
 
