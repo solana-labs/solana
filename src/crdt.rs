@@ -32,7 +32,7 @@ use packet::SharedBlob;
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ReplicatedData {
-    id: PublicKey,
+    pub id: PublicKey,
     sig: Signature,
     /// should always be increasing
     version: u64,

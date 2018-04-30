@@ -111,7 +111,7 @@ pub fn blob_receiver(
 
 fn recv_window(
     window: &mut Vec<Option<SharedBlob>>,
-    subs: &Arc<RwLock<Crdt>>,
+    crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
     r: &BlobReceiver,
@@ -127,7 +127,6 @@ fn recv_window(
     {
         //retransmit all leader blocks
         let mut retransmitq = VecDeque::new();
-        let rsubs = subs.read().unwrap();
         for b in &dq {
             let p = b.read().unwrap();
             //TODO this check isn't safe against adverserial packets
@@ -137,9 +136,9 @@ fn recv_window(
                 p.get_index().unwrap(),
                 p.get_id().unwrap(),
                 p.meta.addr(),
-                rsubs.leader.addr
+                leader_id
             );
-            if p.get_id() == Ok(leader_id) {
+            if p.get_id().unwrap() == leader_id {
                 //TODO
                 //need to copy the retransmited blob
                 //otherwise we get into races with which thread
