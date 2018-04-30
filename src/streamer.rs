@@ -241,7 +241,7 @@ fn broadcast(
     #[cfg(feature = "erasure")]
     erasure::generate_codes(blobs);
     Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
-    while let Some(b) = dq.pop_front() {
+    while let Some(b) = blobs.pop() {
         recycler.recycle(b);
     }
     Ok(())

@@ -55,7 +55,7 @@ impl ReplicatedData {
                gossip_addr: SocketAddr,
                replicate_addr: SocketAddr,
                serve_addr: SocketAddr) -> ReplicatedData {
-        let daddr = "0.0.0.0:0".parse().unwrap();
+        let daddr:SocketAddr = "0.0.0.0:0".parse().unwrap();
         ReplicatedData {
             id,
             sig: Signature::default(),
@@ -122,11 +122,11 @@ impl Crdt {
         g.table.insert(me.id, me);
         g
     }
-    pub fn my_data(&self) -> ReplicatedData {
-        self.table[&self.me]
+    pub fn my_data(&self) -> &ReplicatedData {
+        &self.table[&self.me]
     }
-    pub fn leader_data(&self) -> ReplicatedData {
-        self.table[&self.table[&self.me].current_leader_id]
+    pub fn leader_data(&self) -> &ReplicatedData {
+        &self.table[&self.table[&self.me].current_leader_id]
     }
     pub fn insert(&mut self, v: &ReplicatedData) {
         // TODO check that last_verified types are always increasing
@@ -151,10 +151,11 @@ impl Crdt {
         s: &UdpSocket,
         transmit_index: &mut u64
     ) -> Result<()> {
-        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
+        let (me, table): (&ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
             let robj = obj.read().unwrap();
-            (robj.table[&robj.me], robj.table.values().cloned().collect())
+            let cloned_table:Vec<ReplicatedData> = robj.table.values().cloned().collect();
+            (&cloned_table[&robj.me], cloned_table)
         };
         let errs: Vec<_> = table.iter()
             .enumerate()
