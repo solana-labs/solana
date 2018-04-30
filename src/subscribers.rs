@@ -50,7 +50,7 @@ pub struct Subscribers {
     data: Vec<Node>,
     /// TODO derive this somehow from the historians counter
     /// this is the window index
-    pub index: u64;
+    pub index: u64,
     pub me: Node,
     pub leader: Node,
 }
@@ -59,6 +59,7 @@ impl Subscribers {
     pub fn new(me: Node, leader: Node, network: &[Node]) -> Subscribers {
         let mut h = Subscribers {
             data: vec![],
+            index: 0,
             me: me.clone(),
             leader: leader.clone(),
         };
@@ -68,24 +69,26 @@ impl Subscribers {
     }
 
     /// broadcast messages from the leader to layer 1 nodes
-    pub fn broadcast(&mut self, blobs: &Vec<Blob>, s: &UdpSocket) -> Result<()> {
-        let errs: Vec<_> = self.subs
+    pub fn broadcast(&mut self, blobs: &mut Vec<Blob>, s: &UdpSocket) -> Result<()> {
+        let errs: Vec<_> = self.data
+            .iter()
             .enumerate()
             .cycle()
-            .zip(blobs.iter())
-            .par_iter()
+            .zip(blobs.iter_mut())
+            //.par_iter() TODO: restore this
             .map(|((i,v),b)| {
-                if self.me == *i {
+                if self.me.id == v.id {
                     return Ok(0);
                 }
-                if self.leader == *i {
+                if self.leader.id == v.id {
                     return Ok(0);
                 }
-                let blob = b.write().unwrap();
-                blob.set_index(self.index + i);
-                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+                //let blob = b.write().unwrap(); TODO: should it be in write-lock here?
+                let blob = b;
+                blob.set_index(self.index + i as u64);
+                s.send_to(&blob.data[..blob.meta.size], &v.addr)
             })
-            .collect()
+            .collect();
         for e in errs {
             trace!("retransmit result {:?}", e);
             match e {
@@ -150,33 +153,5 @@ mod test {
         s.insert(&[n]);
         assert_eq!(s.data.len(), 3);
         assert_eq!(s.data[0].weight, 12);
-    }
-    #[test]
-    pub fn retransmit() {
-        let s1 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let s2 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let s3 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
-        let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
-        let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
-        let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
-        s.insert(&[n3]);
-        let mut b = Blob::default();
-        b.meta.size = 10;
-        let s4 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        s.retransmit(&mut b, &s4).unwrap();
-        let res: Vec<_> = [s1, s2, s3]
-            .into_par_iter()
-            .map(|s| {
-                let mut b = Blob::default();
-                s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-                s.recv_from(&mut b.data).is_err()
-            })
-            .collect();
-        assert_eq!(res, [true, true, false]);
-        let mut n4 = Node::default();
-        n4.addr = "255.255.255.255:1".parse().unwrap();
-        s.insert(&[n4]);
-        assert!(s.retransmit(&mut b, &s4).is_err());
     }
 }

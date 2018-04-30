@@ -151,11 +151,11 @@ impl Crdt {
         s: &UdpSocket,
         transmit_index: &mut u64
     ) -> Result<()> {
-        let (me, table): (&ReplicatedData, Vec<ReplicatedData>) = {
+        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
             let robj = obj.read().unwrap();
             let cloned_table:Vec<ReplicatedData> = robj.table.values().cloned().collect();
-            (&cloned_table[&robj.me], cloned_table)
+            (robj.table[&robj.me].clone(), cloned_table)
         };
         let errs: Vec<_> = table.iter()
             .enumerate()
@@ -167,7 +167,7 @@ impl Crdt {
                 }
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
-                let blob = b.write().unwrap();
+                let mut blob = b.write().unwrap();
                 blob.set_index(*transmit_index + i as u64);
                 s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
             })
@@ -354,6 +354,13 @@ mod test {
     use std::thread::{sleep, JoinHandle};
     use std::time::Duration;
 
+    use rayon::iter::*;
+    use streamer::{blob_receiver, retransmitter};
+    use std::sync::mpsc::channel;
+    use subscribers::{Node, Subscribers};
+    use packet::{Blob, BlobRecycler};
+    use std::collections::VecDeque;
+
     /// Test that the network converges.
     /// Run until every node in the network has a full ReplicatedData set.
     /// Check that nodes stop sending updates after all the ReplicatedData has been shared.
@@ -366,12 +373,18 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let listen: Vec<_> = (0..num)
             .map(|_| {
-                let listener = UdpSocket::bind("0.0.0.0:0").unwrap();
+                let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+                let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+                let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
                 let pubkey = KeyPair::new().pubkey();
-                let d = ReplicatedData::new(pubkey, listener.local_addr().unwrap());
+                let d = ReplicatedData::new(pubkey,
+                                            gossip.local_addr().unwrap(),
+                                            replicate.local_addr().unwrap(),
+                                            serve.local_addr().unwrap(),
+                                            );
                 let crdt = Crdt::new(d);
                 let c = Arc::new(RwLock::new(crdt));
-                let l = Crdt::listen(c.clone(), listener, exit.clone());
+                let l = Crdt::listen(c.clone(), gossip, exit.clone());
                 (c, l)
             })
             .collect();
@@ -452,7 +465,11 @@ mod test {
     /// Test that insert drops messages that are older
     #[test]
     fn insert_test() {
-        let mut d = ReplicatedData::new(KeyPair::new().pubkey(), "127.0.0.1:1234".parse().unwrap());
+        let mut d = ReplicatedData::new(KeyPair::new().pubkey(),
+                                        "127.0.0.1:1234".parse().unwrap(),
+                                        "127.0.0.1:1235".parse().unwrap(),
+                                        "127.0.0.1:1236".parse().unwrap(),
+                                        );
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
@@ -464,4 +481,32 @@ mod test {
         assert_eq!(crdt.table[&d.id].version, 2);
     }
 
+    #[test]
+    pub fn test_crdt_retransmit() {
+        let s1 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let s2 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let s3 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
+        let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
+        let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
+        let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
+        s.insert(&[n3]);
+        let mut b = Blob::default();
+        b.meta.size = 10;
+        let s4 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        s.retransmit(&mut b, &s4).unwrap();
+        let res: Vec<_> = [s1, s2, s3]
+            .into_par_iter()
+            .map(|s| {
+                let mut b = Blob::default();
+                s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+                s.recv_from(&mut b.data).is_err()
+            })
+            .collect();
+        assert_eq!(res, [true, true, false]);
+        let mut n4 = Node::default();
+        n4.addr = "255.255.255.255:1".parse().unwrap();
+        s.insert(&[n4]);
+        assert!(s.retransmit(&mut b, &s4).is_err());
+    }
 }

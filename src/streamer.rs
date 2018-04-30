@@ -433,7 +433,11 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
                    PacketReceiver};
-    use Crdt::Crdt;
+
+    use crdt::{Crdt, ReplicatedData};
+    use subscribers::Node;
+    use signature::KeyPair;
+    use signature::KeyPairUtil;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -504,15 +508,23 @@ mod test {
 
     #[test]
     pub fn window_send_test() {
+        let pubkey_me = KeyPair::new().pubkey();
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Crdt::new(
+
+        let rep_data = ReplicatedData::new(pubkey_me,
+                                           read.local_addr().unwrap(),
+                                           send.local_addr().unwrap(),
+                                           serve.local_addr().unwrap());
+        let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
+            /*
             Node::default(),
             Node::new([0; 8], 0, send.local_addr().unwrap()),
-            &[],
-        )));
+            &[],*/
+
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver =
@@ -558,14 +570,18 @@ mod test {
 
     #[test]
     pub fn retransmit() {
+        let pubkey_me = KeyPair::new().pubkey();
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Crdt::new(
-            Node::default(),
-            Node::default(),
-            &[Node::new([0; 8], 1, read.local_addr().unwrap())],
-        )));
+
+        let rep_data = ReplicatedData::new(pubkey_me,
+                                           read.local_addr().unwrap(),
+                                           send.local_addr().unwrap(),
+                                           serve.local_addr().unwrap());
+        let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
+
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
         let saddr = send.local_addr().unwrap();

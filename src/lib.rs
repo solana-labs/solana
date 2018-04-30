@@ -3,7 +3,7 @@ pub mod accountant;
 //pub mod accountant_skel;
 //pub mod accountant_stub;
 pub mod crdt;
-pub mod ecdsa;
+//pub mod ecdsa;
 pub mod entry;
 #[cfg(feature = "erasure")]
 pub mod erasure;
@@ -19,6 +19,7 @@ pub mod result;
 pub mod signature;
 pub mod streamer;
 pub mod transaction;
+pub mod subscribers;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
