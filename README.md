@@ -133,6 +133,12 @@ Run the benchmarks:
 $ cargo +nightly bench --features="unstable"
 ```
 
+To run the benchmarks on Linux with GPU optimizations enabled:
+
+```bash
+$ cargo +nightly bench --features="unstable,cuda"
+```
+
 Code coverage
 ---
 
