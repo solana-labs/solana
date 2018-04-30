@@ -120,6 +120,7 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
+    let leader_id = crdt.read().unwrap().leader_data().id;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
@@ -132,12 +133,13 @@ fn recv_window(
             //TODO this check isn't safe against adverserial packets
             //we need to maintain a sequence window
             trace!(
-                "idx: {} addr: {:?} leader: {:?}",
+                "idx: {} addr: {:?} id: {:?} leader: {:?}",
                 p.get_index().unwrap(),
+                p.get_id().unwrap(),
                 p.meta.addr(),
                 rsubs.leader.addr
             );
-            if p.meta.addr() == rsubs.leader.addr {
+            if p.get_id() == Ok(leader_id) {
                 //TODO
                 //need to copy the retransmited blob
                 //otherwise we get into races with which thread
@@ -261,15 +263,15 @@ pub fn broadcaster(
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
-    spawn(move || 
-        let mut index = 0;
+    spawn(move || {
+        let mut transmit_index = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = broadcast(&crdt, &recycler, &r, &sock, &mut index);
+            let _ = broadcast(&crdt, &recycler, &r, &sock, &mut transmit_index);
         }
-    )
+    })
 }
 
 fn retransmit(
@@ -285,8 +287,7 @@ fn retransmit(
     }
     {
         for b in &dq {
-            let mut mb = b.write().unwrap();
-            Crdt::retransmit(&crdt, &mut mb, sock)?;
+            Crdt::retransmit(&crdt, b, sock)?;
         }
     }
     while let Some(b) = dq.pop_front() {

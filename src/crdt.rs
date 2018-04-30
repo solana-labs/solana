@@ -122,6 +122,12 @@ impl Crdt {
         g.table.insert(me.id, me);
         g
     }
+    pub fn my_data(&self) -> ReplicatedData {
+        self.table[&self.me]
+    }
+    pub fn leader_data(&self) -> ReplicatedData {
+        self.table[&self.table[&self.me].current_leader_id]
+    }
     pub fn insert(&mut self, v: &ReplicatedData) {
         // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
@@ -181,7 +187,7 @@ impl Crdt {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit(
         obj: &Arc<RwLock<Self>>,
-        blob: SharedBlob,
+        blob: &SharedBlob,
         s: &UdpSocket
     ) -> Result<()> {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
