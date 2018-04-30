@@ -3,7 +3,8 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
-use bincode::{deserialize, serialize, Serializer};
+use bincode::{deserialize, serialize};
+use serde::Serializer;
 use ecdsa;
 use entry::Entry;
 use event::Event;
@@ -18,7 +19,7 @@ use serde_json;
 use signature::PublicKey;
 use std::cmp::max;
 use std::collections::VecDeque;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -27,8 +28,7 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
 use transaction::Transaction;
-
-use subscribers;
+use crdt::{ReplicatedData, Crdt};
 
 pub struct AccountantSkel {
     acc: Accountant,
@@ -151,7 +151,7 @@ impl AccountantSkel {
         writer: W,
         historian: Receiver<Entry>,
     ) -> JoinHandle<()> {
-        spawn(move|| {
+        spawn(move|| loop {
             let e = Self::run_sync(&obj, &broadcast, &blob_recycler, writer, &historian);
             if e.is_err() && exit_.load(Ordering::Relaxed) {
                 break;
@@ -306,7 +306,7 @@ impl AccountantSkel {
     }
 
     fn process(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &Arc<Mutex<Self>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         broadcast_sender: &streamer::BlobSender,
         responder_sender: &streamer::BlobSender,
@@ -339,7 +339,7 @@ impl AccountantSkel {
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &Arc<Mutex<Self>>,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -368,7 +368,7 @@ impl AccountantSkel {
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &Arc<Mutex<Self>>,
         me: ReplicatedData
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
@@ -454,7 +454,7 @@ impl AccountantSkel {
     /// 4. process the transaction state machine
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &Arc<Mutex<Self>>,
         me: ReplicatedData,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
@@ -464,8 +464,8 @@ impl AccountantSkel {
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         crdt.write().unwrap().insert(&leader);
-        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone()));
-        let t_listen = Crdt::listen(crdt.clone(), exit.clone()));
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let t_listen = Crdt::listen(crdt.clone(), exit.clone());
 
         // make sure we are on the same interface
         let mut local = read.local_addr()?;
@@ -559,8 +559,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
-
-    use crdt::{ReplicatedData, Crdt};
+    use crdt::Crdt;
     use streamer;
     use std::sync::mpsc::channel;
     use std::collections::VecDeque;

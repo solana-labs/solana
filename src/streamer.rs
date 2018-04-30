@@ -228,20 +228,18 @@ fn broadcast(
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
+    transmit_index: &mut u64
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq);
     }
-    {
-        let wcrdt = crdt.write().unwrap();
-        let blobs = dq.into();
-        /// appends codes to the list of blobs allowing us to reconstruct the stream
-        #[cfg(feature = "erasure")]
-        erasure::generate_codes(blobs);
-        wcrdt.broadcast(&r, &blobs, sock)?;
-    }
+    let mut blobs = dq.into_iter().collect();
+    /// appends codes to the list of blobs allowing us to reconstruct the stream
+    #[cfg(feature = "erasure")]
+    erasure::generate_codes(blobs);
+    Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
     while let Some(b) = dq.pop_front() {
         recycler.recycle(b);
     }
@@ -263,12 +261,15 @@ pub fn broadcaster(
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
-    spawn(move || loop {
-        if exit.load(Ordering::Relaxed) {
-            break;
+    spawn(move || 
+        let mut index = 0;
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+            let _ = broadcast(&crdt, &recycler, &r, &sock, &mut index);
         }
-        let _ = broadcast(&crdt, &recycler, &r, &sock);
-    })
+    )
 }
 
 fn retransmit(

@@ -16,8 +16,9 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hash::Hash;
-use result::Result;
+use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
+use rayon::prelude::*;
 use signature::{PublicKey, Signature};
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -26,7 +27,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
-use streamer;
+use packet::SharedBlob;
 
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone)]
@@ -125,7 +126,7 @@ impl Crdt {
         // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
             //somehow we signed a message for our own identity with a higher version that we have storred ourselves
-            assert_neq!(self.me, v.id);
+            assert!(self.me != v.id);
             trace!("insert! {}", v.version);
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
@@ -138,28 +139,32 @@ impl Crdt {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn broadcast(obj: &Arc<RwLock<Self>>, blobs: &Vec<Blob>, s: &UdpSocket, transmit_index: &mut u64) -> Result<()> {
-        let (me,table) = {
+    pub fn broadcast(
+        obj: &Arc<RwLock<Self>>,
+        blobs: &Vec<SharedBlob>,
+        s: &UdpSocket,
+        transmit_index: &mut u64
+    ) -> Result<()> {
+        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
-            let robj = obj.read().unwrap()
-            (robj.table[robj.me], robj.table.clone())
-        }
-        let errs: Vec<_> = table
+            let robj = obj.read().unwrap();
+            (robj.table[&robj.me], robj.table.values().cloned().collect())
+        };
+        let errs: Vec<_> = table.iter()
             .enumerate()
             .cycle()
             .zip(blobs.iter())
-            .par_iter()
             .map(|((i,v),b)| {
                 if me.id == v.id {
                     return Ok(0);
                 }
                 // only leader should be broadcasting
-                assert_neq!(me.current_leader_id, v.id);
+                assert!(me.current_leader_id != v.id);
                 let blob = b.write().unwrap();
-                blob.set_index(*transmit_index + i);
-                s.send_to(&blob.data[..blob.meta.size], &i.addr)
+                blob.set_index(*transmit_index + i as u64);
+                s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
             })
-            .collect()
+            .collect();
         for e in errs {
             trace!("retransmit result {:?}", e);
             match e {
@@ -174,15 +179,20 @@ impl Crdt {
     /// retransmit messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn retransmit(obj: Arc<RwLock<Self>>, blob: &mut Blob, s: &UdpSocket) -> Result<()> {
-        let (me, table) = {
+    pub fn retransmit(
+        obj: &Arc<RwLock<Self>>,
+        blob: SharedBlob,
+        s: &UdpSocket
+    ) -> Result<()> {
+        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
             let s = obj.read().unwrap();
-            (self.table[self.me].clone(), self.table.clone())
-        }
+            (s.table[&s.me].clone(), s.table.values().cloned().collect())
+        };
+        let rblob = blob.read().unwrap();
         let errs: Vec<_> = table
             .par_iter()
-            .map(|i| {
+            .map(|v| {
                 if me.id == v.id {
                     return Ok(0);
                 }
@@ -190,8 +200,8 @@ impl Crdt {
                     trace!("skip retransmit to leader{:?}", v.id);
                     return Ok(0);
                 }
-                trace!("retransmit blob to {}", i.replicate_addr);
-                s.send_to(&blob.data[..blob.meta.size], &i.replicate_addr)
+                trace!("retransmit blob to {}", v.replicate_addr);
+                s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
             .collect();
         for e in errs {
