@@ -259,7 +259,7 @@ impl AccountantSkel {
     fn process_packets(
         &mut self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
-        historian: &Historian,
+        historian: &Sender<Entry>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
         let (trs, reqs) = Self::partition_requests(req_vers);
 
@@ -272,7 +272,7 @@ impl AccountantSkel {
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        self.historian.sender.send(Signal::Tick)?;
+        historian.send(Signal::Tick)?;
 
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
