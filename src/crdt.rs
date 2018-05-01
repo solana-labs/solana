@@ -1,5 +1,5 @@
 //! The `crdt` module defines a data structure that is shared by all the nodes in the network over
-//! a gossip control plane.  The goal is to share small bits of of-chain information and detect and
+//! a gossip control plane.  The goal is to share small bits of off-chain information and detect and
 //! repair partitions.
 //!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
@@ -139,8 +139,10 @@ impl Crdt {
     pub fn insert(&mut self, v: ReplicatedData) {
         // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
-            //somehow we signed a message for our own identity with a higher version that we have storred ourselves
-            assert!(self.me != v.id);
+            //somehow we signed a message for our own identity with a higher version that
+            // we have stored ourselves
+            println!("me: {:?} v.id: {:?}", self.me, v.id);
+            //assert!(self.me != v.id);
             trace!("insert! {}", v.version);
             self.update_index += 1;
             let _ = self.table.insert(v.id, v);
