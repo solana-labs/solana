@@ -14,6 +14,7 @@ use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::result;
 use std::sync::RwLock;
 use transaction::Transaction;
@@ -23,6 +24,7 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
     AccountNotFound,
+    BalanceUpdatedBeforeTransactionCompleted,
     InsufficientFunds,
     InvalidTransferSignature,
 }
@@ -30,18 +32,18 @@ pub enum AccountingError {
 pub type Result<T> = result::Result<T, AccountingError>;
 
 /// Commit funds to the 'to' party.
-fn apply_payment(balances: &RwLock<HashMap<PublicKey, RwLock<i64>>>, payment: &Payment) {
+fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
     if balances.read().unwrap().contains_key(&payment.to) {
         let bals = balances.read().unwrap();
-        *bals[&payment.to].write().unwrap() += payment.tokens;
+        bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
     } else {
         let mut bals = balances.write().unwrap();
-        bals.insert(payment.to, RwLock::new(payment.tokens));
+        bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
     }
 }
 
 pub struct Accountant {
-    balances: RwLock<HashMap<PublicKey, RwLock<i64>>>,
+    balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
     pending: RwLock<HashMap<Signature, Plan>>,
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
@@ -131,23 +133,34 @@ impl Accountant {
         // Hold a write lock before the condition check, so that a debit can't occur
         // between checking the balance and the withdraw.
         let option = bals.get(&tr.from);
+
         if option.is_none() {
             return Err(AccountingError::AccountNotFound);
         }
-        let mut bal = option.unwrap().write().unwrap();
 
         if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if *bal < tr.data.tokens {
+        let bal = option.unwrap();
+        let current = bal.load(Ordering::Relaxed) as i64;
+
+        if current < tr.data.tokens {
             self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
             return Err(AccountingError::InsufficientFunds);
         }
 
-        *bal -= tr.data.tokens;
+        let result = bal.compare_exchange(
+            current as isize,
+            (current - tr.data.tokens) as isize,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
 
-        Ok(())
+        return match result {
+            Ok(_) => Ok(()),
+            Err(_) => Err(AccountingError::BalanceUpdatedBeforeTransactionCompleted),
+        }
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
@@ -164,9 +177,15 @@ impl Accountant {
 
     /// Process a Transaction that has already been verified.
     pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
-        self.process_verified_transaction_debits(tr)?;
-        self.process_verified_transaction_credits(tr);
-        Ok(())
+        return match self.process_verified_transaction_debits(tr) {
+            Ok(_) => {
+                self.process_verified_transaction_credits(tr);
+                Ok(())
+            },
+            Err(err) => {
+                Err(err)
+            }
+        };
     }
 
     /// Process a batch of verified transactions.
@@ -174,7 +193,11 @@ impl Accountant {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         let results: Vec<_> = trs.into_par_iter()
-            .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .filter_map(|tr| match self.process_verified_transaction_debits(&tr) {
+                Ok(_x) => Some(Ok(tr)),
+                Err(_e) => None,
+            })
+            // .flat_map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         results
@@ -300,7 +323,7 @@ impl Accountant {
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
         let bals = self.balances.read().unwrap();
-        bals.get(pubkey).map(|x| *x.read().unwrap())
+        bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
     }
 }
 
