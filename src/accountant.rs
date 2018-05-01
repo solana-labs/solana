@@ -160,7 +160,7 @@ impl Accountant {
         return match result {
             Ok(_) => Ok(()),
             Err(_) => Err(AccountingError::BalanceUpdatedBeforeTransactionCompleted),
-        }
+        };
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
@@ -181,10 +181,8 @@ impl Accountant {
             Ok(_) => {
                 self.process_verified_transaction_credits(tr);
                 Ok(())
-            },
-            Err(err) => {
-                Err(err)
             }
+            Err(err) => Err(err),
         };
     }
 
