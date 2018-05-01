@@ -1,5 +1,5 @@
 //! The `crdt` module defines a data structure that is shared by all the nodes in the network over
-//! a gossip control plane.  The goal is to share small bits of of-chain information and detect and
+//! a gossip control plane.  The goal is to share small bits of off-chain information and detect and
 //! repair partitions.
 //!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
@@ -131,8 +131,10 @@ impl Crdt {
     pub fn insert(&mut self, v: &ReplicatedData) {
         // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
-            //somehow we signed a message for our own identity with a higher version that we have storred ourselves
-            assert!(self.me != v.id);
+            //somehow we signed a message for our own identity with a higher version that
+            // we have stored ourselves
+            println!("me: {:?} v.id: {:?}", self.me, v.id);
+            //assert!(self.me != v.id);
             trace!("insert! {}", v.version);
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
@@ -357,7 +359,6 @@ mod test {
     use rayon::iter::*;
     use streamer::{blob_receiver, retransmitter};
     use std::sync::mpsc::channel;
-    use subscribers::{Node, Subscribers};
     use packet::{Blob, BlobRecycler};
     use std::collections::VecDeque;
 
@@ -483,19 +484,29 @@ mod test {
 
     #[test]
     pub fn test_crdt_retransmit() {
-        let s1 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let s2 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let s3 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
-        let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
-        let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
-        let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
-        s.insert(&[n3]);
-        let mut b = Blob::default();
-        b.meta.size = 10;
+        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        //let n1 = Node::new([0; 8], 0, s1.local_addr().unwrap());
+        //let n2 = Node::new([0; 8], 0, s2.local_addr().unwrap());
+        //let mut s = Subscribers::new(n1.clone(), n2.clone(), &[]);
+        //let n3 = Node::new([0; 8], 0, s3.local_addr().unwrap());
+        let pubkey_me = KeyPair::new().pubkey();
+
+        let rep_data = ReplicatedData::new(pubkey_me,
+                                           read.local_addr().unwrap(),
+                                           send.local_addr().unwrap(),
+                                           serve.local_addr().unwrap());
+        let n4 = rep_data.clone();
+        let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
+
+        //s.insert(&[n3]);
+        let mut b = Arc::new(RwLock::new(Blob::default()));
+        b.write().unwrap().meta.size = 10;
         let s4 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        s.retransmit(&mut b, &s4).unwrap();
-        let res: Vec<_> = [s1, s2, s3]
+        Crdt::retransmit(&subs, &mut b, &s4).unwrap();
+
+        let res: Vec<_> = [read, send, serve]
             .into_par_iter()
             .map(|s| {
                 let mut b = Blob::default();
@@ -504,9 +515,7 @@ mod test {
             })
             .collect();
         assert_eq!(res, [true, true, false]);
-        let mut n4 = Node::default();
-        n4.addr = "255.255.255.255:1".parse().unwrap();
-        s.insert(&[n4]);
-        assert!(s.retransmit(&mut b, &s4).is_err());
+        subs.write().unwrap().insert(&n4);
+        assert!(Crdt::retransmit(&subs, &mut b, &s4).is_err());
     }
 }

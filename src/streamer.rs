@@ -435,7 +435,6 @@ mod test {
                    PacketReceiver};
 
     use crdt::{Crdt, ReplicatedData};
-    use subscribers::Node;
     use signature::KeyPair;
     use signature::KeyPairUtil;
 
