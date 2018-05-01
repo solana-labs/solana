@@ -16,13 +16,13 @@ license = "Apache-2.0"
 name = "solana-historian-demo"
 path = "src/bin/historian-demo.rs"
 
-[[bin]]
-name = "solana-client-demo"
-path = "src/bin/client-demo.rs"
+#[[bin]]
+#name = "solana-client-demo"
+#path = "src/bin/client-demo.rs"
 
-[[bin]]
-name = "solana-testnode"
-path = "src/bin/testnode.rs"
+#[[bin]]
+#name = "solana-testnode"
+#path = "src/bin/testnode.rs"
 
 [[bin]]
 name = "solana-genesis"
