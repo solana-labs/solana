@@ -463,11 +463,12 @@ impl AccountantSkel {
     pub fn replicate(
         obj: &Arc<Mutex<Self>>,
         me: ReplicatedData,
+        gossip: UdpSocket,
+        replicate: UdpSocket,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let gossip = UdpSocket::bind(me.gossip_addr)?;
-        let read = UdpSocket::bind(me.replicate_addr)?;
+        let replicate = UdpSocket::bind(me.replicate_addr)?;
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         crdt.write().unwrap().insert(&leader);
@@ -475,7 +476,7 @@ impl AccountantSkel {
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
-        let mut local = read.local_addr()?;
+        let mut local = replicate.local_addr()?;
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
 
@@ -484,7 +485,7 @@ impl AccountantSkel {
         let t_blob_receiver = streamer::blob_receiver(
             exit.clone(),
             blob_recycler.clone(),
-            read,
+            replicate,
             blob_sender.clone(),
         )?;
         let (window_sender, window_receiver) = channel();
@@ -566,7 +567,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
-    use crdt::Crdt;
+    use crdt::{Crdt, ReplicatedData};
     use streamer;
     use std::sync::mpsc::channel;
     use std::collections::VecDeque;
@@ -691,21 +692,27 @@ mod tests {
         });
     }
 
+    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(pubkey,
+                                    gossip.local_addr().unwrap(),
+                                    replicate.local_addr().unwrap(),
+                                    serve.local_addr().unwrap(),
+                                    );
+        (d, gossip, replicate, serve)
+    }
+
+    /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
         setup();
-        let leader_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let leader_addr = leader_sock.local_addr().unwrap();
-        let me_addr = "127.0.0.1:9010".parse().unwrap();
-        let target_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let target_peer_addr = target_peer_sock.local_addr().unwrap();
-        let source_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let (leader_data, leader_gossip, leader_replicate, leader_serve) = test_node();
+        let (target1_data, target1_gossip, target1_replicate, _) = test_node();
+        let (target2_data, target2_gossip, target2_replicate, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
-
-        let node_me = ReplicateData::new(KeyPair::new().pubkey(), me_addr);
-        let node_target = ReplicateData::new(KeyPair::new().pubkey(), target_peer_addr);
-        let node_leader = ReplicateData::new(KeyPair::new().pubkey(), leader_addr);
-        let crdt_me = Crdt::new(node_me, node_leader, &node_subs);
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -716,12 +723,14 @@ mod tests {
         let t_receiver = streamer::blob_receiver(
             exit.clone(),
             recv_recycler.clone(),
-            target_peer_sock,
+            target2_replicate,
             s_reader,
         ).unwrap();
+
+        // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
-            source_peer_sock,
+            leader_serve,
             exit.clone(),
             resp_recycler.clone(),
             r_responder,
@@ -734,11 +743,9 @@ mod tests {
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
-            sink(),
-            historian,
         )));
 
-        let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
+        let _threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, exit.clone()).unwrap();
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
