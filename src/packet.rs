@@ -4,9 +4,11 @@ use result::{Error, Result};
 use std::collections::VecDeque;
 use std::fmt;
 use std::io;
+use bincode::{deserialize, serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, RwLock};
 use std::mem::size_of;
+use signature::PublicKey;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -211,28 +213,40 @@ impl Packets {
     }
 }
 
-const BLOB_INDEX_SIZE: usize = size_of::<u64>();
+const BLOB_INDEX_END: usize = size_of::<u64>();
+const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<PublicKey>();
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_SIZE]);
+        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_END]);
         let r = rdr.read_u64::<LittleEndian>()?;
         Ok(r)
     }
     pub fn set_index(&mut self, ix: u64) -> Result<()> {
         let mut wtr = vec![];
         wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[..BLOB_INDEX_SIZE].clone_from_slice(&wtr);
+        self.data[..BLOB_INDEX_END].clone_from_slice(&wtr);
         Ok(())
     }
+
+    pub fn get_id(&self) -> Result<PublicKey> {
+        let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
+        Ok(e)
+    }
+    pub fn set_id(&mut self, id: PublicKey) -> Result<()> {
+        let wtr = serialize(&id)?;
+        self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
+        Ok(())
+    }
+
     pub fn data(&self) -> &[u8] {
-        &self.data[BLOB_INDEX_SIZE..]
+        &self.data[BLOB_ID_END..]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[BLOB_INDEX_SIZE..]
+        &mut self.data[BLOB_ID_END..]
     }
     pub fn set_size(&mut self, size: usize) {
-        self.meta.size = size + BLOB_INDEX_SIZE;
+        self.meta.size = size + BLOB_ID_END;
     }
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<VecDeque<SharedBlob>> {
         let mut v = VecDeque::new();
