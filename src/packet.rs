@@ -214,7 +214,7 @@ impl Packets {
 }
 
 const BLOB_INDEX_END: usize = size_of::<u64>();
-const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<PublicKey>();
+const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
