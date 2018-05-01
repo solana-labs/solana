@@ -250,10 +250,9 @@ impl Crdt {
 
     /// Create a random gossip request
     /// # Returns
-    /// (A,B,C)
-    /// * A - Remote gossip address
-    /// * B - My gossip address
-    /// * C - Remote update index to request updates since
+    /// (A,B)
+    /// * A - Address to send to
+    /// * B - RequestUpdates protocol message
     fn gossip_request(&self) -> (SocketAddr, Protocol) {
         let n = (Self::random() as usize) % self.table.len();
         trace!("random {:?} {}", &self.me[0..1], n);
@@ -495,7 +494,7 @@ mod test {
 
     #[test]
     pub fn test_crdt_retransmit() {
-        let (c1,s1,r1,_) = test_node();
+        let (c1,s1,r1,s1) = test_node();
         let (c2,s2,r2,_) = test_node();
         let (c3,s3,r3,_) = test_node();
         c1.set_leader(c1.my_data().id);
@@ -518,7 +517,7 @@ mod test {
         for _ 0 .. 10 {
             done = a1.read().unwrap().table.len() == 3 &&
                    a2.read().unwrap().table.len() == 3 &&
-                   a3.read().unwrap().table.len() == 3
+                   a3.read().unwrap().table.len() == 3;
             if done {
                 break;
             }
@@ -527,8 +526,7 @@ mod test {
         assert!(done);
         let mut b = Blob::default();
         b.meta.size = 10;
-        let s4 = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        Crdt::retransmit(c1, &mut b, &s4).unwrap();
+        Crdt::retransmit(c1, &mut b, &s1).unwrap();
         let res: Vec<_> = [r1, r2, r3]
             .into_par_iter()
             .map(|s| {
