@@ -18,6 +18,7 @@ pub enum Error {
     AccountingError(accountant::AccountingError),
     SendError,
     Services,
+    Timeout,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

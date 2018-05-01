@@ -3,8 +3,7 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
-use bincode::{deserialize, serialize};
-use serde::Serializer;
+use bincode::{deserialize, serialize, serialize_into};
 use ecdsa;
 use entry::Entry;
 use event::Event;
@@ -14,8 +13,7 @@ use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
 use recorder::Signal;
-use result::Result;
-use serde_json;
+use result::{Error, Result};
 use signature::PublicKey;
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -29,6 +27,7 @@ use std::time::Duration;
 use streamer;
 use transaction::Transaction;
 use crdt::{ReplicatedData, Crdt};
+use std::collections::LinkedList;
 
 pub struct AccountantSkel {
     acc: Accountant,
@@ -99,6 +98,19 @@ impl AccountantSkel {
         }
     }
 
+    fn receive_to_list<T>(chan: Receiver<T>) -> Result<LinkedList<T>> {
+        //TODO implement a serialize for channel that does this without allocations
+        let mut l = LinkedList::new();
+        while let Ok(entry) = chan.recv_timeout(Duration::new(1, 0)) {
+            l.push_back(entry);
+        }
+        if l.is_empty() {
+            Err(Error::Timeout)
+        } else {
+            Ok(l)
+        }
+    }
+
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync<W: Write>(
@@ -108,37 +120,15 @@ impl AccountantSkel {
         writer: W,
         historian: Receiver<Entry>,
     ) -> Result<()> {
-        //TODO clean this mess up
-        let entry = historian.recv(Duration::new(1, 0))?;
-        let mut b = blob_recycler.allocate();
-        let mut out = Cursor::new(b.data_mut());
-        let mut ser = Serializer::new(out);
-        let mut seq = ser.serialize_seq(None).expect("serialize end");
-        seq.serialize(entry).expect("serialize failed on first entry!");
-        obj.write().unwrap().notify_entry_info_subscribers(&entry);
-
-        while let Ok(entry) = historian.try_recv() {
-            //UNLOCK skel in this scope
-            let mut wobj = obj.write().unwrap();
-            if let Err(e) = seq.serialize(entry) {
-                seq.end().expect("serialize end");
-                b.set_size(out.len());
-                broadcast.send(b)?;
-
-                //NEW SEQUENCE
-                b = blob_recycler.allocate();
-                out = Cursor::new(b.data_mut());
-                seq = ser.serialize_seq(None);
-                seq.serialize(entry).expect("serialize failed on first entry!");
-            }
-            wobj.last_id = entry.id;
-            wobj.acc.register_entry_id(&wobj.last_id);
-            writeln!(writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-            wobj.notify_entry_info_subscribers(&entry);
-        }
-        seq.end();
-        b.set_size(out.len());
+        let list = Self::receive_to_list(historian)?;
+        let b = blob_recycler.allocate();
+        let mut bd = b.write().unwrap();
+        let mut out = Cursor::new(bd.data_mut());
+        serialize_into(out, &list)?;
+        bd.set_size(out.len());
         broadcast.send(b)?;
+        drop(bd);
+        blob_recycler.recycle(b);
         Ok(())
     }
 
@@ -567,7 +557,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
-    use crdt::{Crdt, ReplicatedData};
+    use crdt::{ReplicatedData};
     use streamer;
     use std::sync::mpsc::channel;
     use std::collections::VecDeque;
@@ -783,7 +773,7 @@ mod tests {
 
             w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
             w.set_size(serialized_entry.len());
-            w.meta.set_addr(&me_addr);
+            w.meta.set_addr(&target1_data.replicate_addr);
             drop(w);
             msgs.push_back(b_);
         }
