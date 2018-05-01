@@ -288,7 +288,7 @@ impl Crdt {
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
-            self.insert(&v);
+            self.insert(v.clone());
         }
         *self.remote.entry(from).or_insert(update_index) = update_index;
     }
@@ -324,7 +324,7 @@ impl Crdt {
                 let rsp = serialize(&Protocol::ReceiveUpdates(from, ups, data))?;
                 trace!("send_to {}", addr);
                 //TODO verify reqdata belongs to sender
-                obj.write().unwrap().insert(&reqdata);
+                obj.write().unwrap().insert(reqdata);
                 sock.send_to(&rsp, addr).unwrap();
                 trace!("send_to done!");
             }
@@ -360,14 +360,10 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::{sleep, JoinHandle};
     use std::time::Duration;
-
     use rayon::iter::*;
-    use streamer::{blob_receiver, retransmitter};
-    use std::sync::mpsc::channel;
-    use packet::{Blob, BlobRecycler};
-    use std::collections::VecDeque;
+    use packet::Blob;
 
-    fn test_node() -> (Crdt, UdpSocket) {
+    fn test_node() -> (Crdt, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -451,7 +447,7 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(&d);
+                xv.insert(d);
             }
         });
     }
@@ -468,7 +464,7 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(&d);
+                xv.insert(d);
             }
         });
     }
@@ -485,21 +481,21 @@ mod test {
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
         d.version = 2;
-        crdt.insert(&d);
+        crdt.insert(d.clone());
         assert_eq!(crdt.table[&d.id].version, 2);
         d.version = 1;
-        crdt.insert(&d);
+        crdt.insert(d);
         assert_eq!(crdt.table[&d.id].version, 2);
     }
 
     #[test]
     pub fn test_crdt_retransmit() {
-        let (c1,s1,r1,s1) = test_node();
+        let (c1,s1,r1,e1) = test_node();
         let (c2,s2,r2,_) = test_node();
         let (c3,s3,r3,_) = test_node();
         c1.set_leader(c1.my_data().id);
-        c2.insert(c1.my_data());
-        c3.insert(c1.my_data());
+        c2.insert(c1.my_data().clone());
+        c3.insert(c1.my_data().clone());
         c2.set_leader(c1.my_data().id);
         c3.set_leader(c1.my_data().id);
 
@@ -514,7 +510,7 @@ mod test {
         let t3 = Crdt::listen(a3.clone(), s2, exit.clone());
         //wait to converge
         let mut done = false;
-        for _ 0 .. 10 {
+        for _ in 0 .. 10 {
             done = a1.read().unwrap().table.len() == 3 &&
                    a2.read().unwrap().table.len() == 3 &&
                    a3.read().unwrap().table.len() == 3;
@@ -526,7 +522,7 @@ mod test {
         assert!(done);
         let mut b = Blob::default();
         b.meta.size = 10;
-        Crdt::retransmit(c1, &mut b, &s1).unwrap();
+        Crdt::retransmit(&a1, &Arc::new(RwLock::new(b)), &e1).unwrap();
         let res: Vec<_> = [r1, r2, r3]
             .into_par_iter()
             .map(|s| {
@@ -534,7 +530,7 @@ mod test {
                 s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
                 s.recv_from(&mut b.data).is_err()
             })
-            .collegct();
+            .collect();
         assert_eq!(res, [false, true, true]);
     }
 }
