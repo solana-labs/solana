@@ -10,10 +10,11 @@ use event::Event;
 use hash::Hash;
 use historian::Historian;
 use packet;
-use packet::SharedPackets;
+use serde_json;
+use packet::{SharedPackets, BLOB_SIZE};
 use rayon::prelude::*;
 use recorder::Signal;
-use result::{Error, Result};
+use result::Result;
 use signature::PublicKey;
 use std::cmp::max;
 use std::collections::VecDeque;
@@ -28,6 +29,7 @@ use streamer;
 use transaction::Transaction;
 use crdt::{ReplicatedData, Crdt};
 use std::collections::LinkedList;
+use std::mem::size_of;
 
 pub struct AccountantSkel {
     acc: Accountant,
@@ -98,35 +100,50 @@ impl AccountantSkel {
         }
     }
 
-    fn receive_to_list<T>(chan: Receiver<T>) -> Result<LinkedList<T>> {
+    fn update_entry<W: Write>(&mut self, writer: &W, entry: &Entry) {
+        self.last_id = entry.id;
+        self.acc.register_entry_id(&self.last_id);
+        writeln!(writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+        self.notify_entry_info_subscribers(&entry);
+    }
+
+    fn receive_to_list<W: Write>(&mut self, writer: &W, chan: &Receiver<Entry>, max: usize) -> Result<LinkedList<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
+        let mut num = 0;
         let mut l = LinkedList::new();
-        while let Ok(entry) = chan.recv_timeout(Duration::new(1, 0)) {
+        let entry = chan.recv_timeout(Duration::new(1, 0))?;
+        self.update_entry(writer, &entry);
+        l.push_back(entry);
+        while let Ok(entry) = chan.try_recv() {
+            self.update_entry(writer, &entry);
             l.push_back(entry);
+            num += 1;
+            if num == max {
+                break;
+            }
         }
-        if l.is_empty() {
-            Err(Error::Timeout)
-        } else {
-            Ok(l)
-        }
+        Ok(l)
     }
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync<W: Write>(
-        obj: Arc<RwLock<Self>>,
+        obj: &Arc<RwLock<Self>>,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
-        writer: W,
-        historian: Receiver<Entry>,
+        writer: &W,
+        historian: &Receiver<Entry>,
     ) -> Result<()> {
-        let list = Self::receive_to_list(historian)?;
+        let max = BLOB_SIZE / size_of::<Entry>();
+        let list = obj.write().unwrap().receive_to_list(writer, historian, max)?;
         let b = blob_recycler.allocate();
         let mut bd = b.write().unwrap();
         let mut out = Cursor::new(bd.data_mut());
         serialize_into(out, &list)?;
-        bd.set_size(out.len());
-        broadcast.send(b)?;
+        bd.set_size(out.position() as usize);
+        let mut q = VecDeque::new();
+        q.push_back(b);
+        broadcast.send(q)?;
         drop(bd);
         blob_recycler.recycle(b);
         Ok(())
@@ -141,7 +158,7 @@ impl AccountantSkel {
         historian: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move|| loop {
-            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, writer, &historian);
+            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, &writer, &historian);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -159,7 +176,7 @@ impl AccountantSkel {
                 let val = self.acc.get_balance(&key);
                 Some((Response::Balance { key, val }, rsp_addr))
             }
-            Request::GetLastId => Some((Response::LastId { id: self.sync() }, rsp_addr)),
+            Request::GetLastId => Some((Response::LastId { id: self.last_id }, rsp_addr)),
             Request::Transaction(_) => unreachable!(),
             Request::Subscribe { subscriptions } => {
                 for subscription in subscriptions {
@@ -242,15 +259,14 @@ impl AccountantSkel {
     fn process_packets(
         &mut self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
+        historian: &Historian,
     ) -> Result<Vec<(Response, SocketAddr)>> {
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
         for result in self.acc.process_verified_transactions(trs) {
             if let Ok(tr) = result {
-                self.historian
-                    .sender
-                    .send(Signal::Event(Event::Transaction(tr)))?;
+                historian.sender.send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
