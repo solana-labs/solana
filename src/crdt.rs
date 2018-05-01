@@ -357,7 +357,6 @@ mod test {
     use rayon::iter::*;
     use streamer::{blob_receiver, retransmitter};
     use std::sync::mpsc::channel;
-    use subscribers::{Node, Subscribers};
     use packet::{Blob, BlobRecycler};
     use std::collections::VecDeque;
 

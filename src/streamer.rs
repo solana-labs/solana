@@ -434,7 +434,6 @@ mod test {
     use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
                    PacketReceiver};
     use crdt::{Crdt, ReplicatedData};
-    use subscribers::Node;
     use signature::KeyPair;
     use signature::KeyPairUtil;
 

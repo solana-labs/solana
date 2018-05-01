@@ -19,7 +19,6 @@ pub mod result;
 pub mod signature;
 pub mod streamer;
 pub mod transaction;
-pub mod subscribers;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
