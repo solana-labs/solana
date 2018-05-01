@@ -34,6 +34,7 @@ use std::mem::size_of;
 pub struct AccountantSkel {
     acc: Accountant,
     last_id: Hash,
+    historian: Historian,
     entry_info_subscribers: Vec<SocketAddr>,
 }
 
@@ -77,11 +78,12 @@ pub enum Response {
 
 impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, last_id: Hash) -> Self {
+    pub fn new(acc: Accountant, last_id: Hash, historian: Historian) -> Self {
         AccountantSkel {
             acc,
             last_id,
             entry_info_subscribers: vec![],
+            historian,
         }
     }
 
@@ -107,14 +109,14 @@ impl AccountantSkel {
         self.notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_to_list<W: Write>(&mut self, writer: &W, chan: &Receiver<Entry>, max: usize) -> Result<LinkedList<Entry>> {
+    fn receive_to_list<W: Write>(&mut self, writer: &W, max: usize) -> Result<LinkedList<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
-        let entry = chan.recv_timeout(Duration::new(1, 0))?;
+        let entry = self.historian.receiver.recv_timeout(Duration::new(1, 0))?;
         self.update_entry(writer, &entry);
         l.push_back(entry);
-        while let Ok(entry) = chan.try_recv() {
+        while let Ok(entry) = self.historian.receiver.try_recv() {
             self.update_entry(writer, &entry);
             l.push_back(entry);
             num += 1;
@@ -128,14 +130,13 @@ impl AccountantSkel {
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync<W: Write>(
-        obj: &Arc<RwLock<Self>>,
+        obj: Arc<Mutex<Self>>,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
         writer: &W,
-        historian: &Receiver<Entry>,
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
-        let list = obj.write().unwrap().receive_to_list(writer, historian, max)?;
+        let list = obj.lock().unwrap().receive_to_list(writer, max)?;
         let b = blob_recycler.allocate();
         let mut bd = b.write().unwrap();
         let mut out = Cursor::new(bd.data_mut());
@@ -150,15 +151,14 @@ impl AccountantSkel {
     }
 
     pub fn sync_service<W: Write + Send + 'static>(
-        obj: Arc<RwLock<Self>>,
-        exit: AtomicBool,
+        obj: Arc<Mutex<Self>>,
+        exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
         writer: W,
-        historian: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move|| loop {
-            let e = Self::run_sync(&obj, &broadcast, &blob_recycler, &writer, &historian);
+            let e = Self::run_sync(obj, &broadcast, &blob_recycler, &writer);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -259,20 +259,19 @@ impl AccountantSkel {
     fn process_packets(
         &mut self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
-        historian: &Sender<Entry>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
         for result in self.acc.process_verified_transactions(trs) {
             if let Ok(tr) = result {
-                historian.sender.send(Signal::Event(Event::Transaction(tr)))?;
+                self.historian.sender.send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        historian.send(Signal::Tick)?;
+        self.historian.sender.send(Signal::Tick)?;
 
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
@@ -311,7 +310,7 @@ impl AccountantSkel {
     }
 
     fn process(
-        obj: &Arc<Mutex<Self>>,
+        obj: Arc<Mutex<Self>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         broadcast_sender: &streamer::BlobSender,
         responder_sender: &streamer::BlobSender,
@@ -334,11 +333,7 @@ impl AccountantSkel {
                 responder_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
-
-            // Write new entries to the ledger and notify subscribers.
-            obj.lock().unwrap().sync();
         }
-
         Ok(())
     }
     /// Process verified blobs, already in order
@@ -377,7 +372,6 @@ impl AccountantSkel {
         me: ReplicatedData,
         exit: Arc<AtomicBool>,
         writer: W,
-        historian: Historian,
     ) -> Result<Vec<JoinHandle<()>>> {
         let gossip = UdpSocket::bind(me.gossip_addr)?;
         let read = UdpSocket::bind(me.serve_addr)?;
@@ -426,13 +420,12 @@ impl AccountantSkel {
             broadcast_sender,
             blob_recycler.clone(),
             writer,
-            historian
         );
  
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
-                &obj.clone(),
+                skel.clone(),
                 &verified_receiver,
                 &broadcast_sender,
                 &responder_sender,
@@ -477,7 +470,7 @@ impl AccountantSkel {
         let replicate = UdpSocket::bind(me.replicate_addr)?;
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        crdt.write().unwrap().insert(&leader);
+        crdt.write().unwrap().insert(leader);
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 
@@ -617,7 +610,7 @@ mod tests {
         let acc = Accountant::new(&mint);
         let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
         let historian = Historian::new(&mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), historian);
+        let mut skel = AccountantSkel::new(acc, mint.last_id(), historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -659,10 +652,9 @@ mod tests {
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
-            sink(),
             historian,
         )));
-        let _threads = AccountantSkel::serve(&acc, &addr, exit.clone()).unwrap();
+        let _threads = AccountantSkel::serve(&acc, &addr, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind(send_addr).unwrap();

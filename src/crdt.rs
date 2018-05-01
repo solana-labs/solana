@@ -41,7 +41,7 @@ pub struct ReplicatedData {
     /// address to connect to for replication
     pub replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
-    serve_addr: SocketAddr,
+    pub serve_addr: SocketAddr,
     /// current leader identity
     current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
