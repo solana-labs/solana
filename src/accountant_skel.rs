@@ -777,8 +777,8 @@ mod bench {
                 let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
                 // some of these will fail because balance updates before transaction completes
                 match acc.process_verified_transaction(&tr) {
-                        Ok(_) => (),
-                        Err(_) => *errors.lock().unwrap() += 1,
+                    Ok(_) => (),
+                    Err(_) => *errors.lock().unwrap() += 1,
                 };
 
                 let rando1 = KeyPair::new();
@@ -810,7 +810,10 @@ mod bench {
         drop(skel.historian.sender);
         let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].events.len() + *errors.lock().unwrap(), txs as usize);
+        assert_eq!(
+            entries[0].events.len() + *errors.lock().unwrap(),
+            txs as usize
+        );
 
         println!("{} tps", tps);
     }
