@@ -745,7 +745,7 @@ mod tests {
             historian,
         )));
 
-        let _threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, exit.clone()).unwrap();
+        let _threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, leader_data.clone(), exit.clone()).unwrap();
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
