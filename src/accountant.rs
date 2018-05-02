@@ -128,9 +128,6 @@ impl Accountant {
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
         let bals = self.balances.read().unwrap();
-
-        // Hold a write lock before the condition check, so that a debit can't occur
-        // between checking the balance and the withdraw.
         let option = bals.get(&tr.from);
 
         if option.is_none() {
@@ -178,13 +175,9 @@ impl Accountant {
 
     /// Process a Transaction that has already been verified.
     pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
-        return match self.process_verified_transaction_debits(tr) {
-            Ok(_) => {
-                self.process_verified_transaction_credits(tr);
-                Ok(())
-            }
-            Err(err) => Err(err),
-        };
+        self.process_verified_transaction_debits(tr)?;
+        self.process_verified_transaction_credits(tr);
+        Ok(())
     }
 
     /// Process a batch of verified transactions.
@@ -192,11 +185,7 @@ impl Accountant {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         let results: Vec<_> = trs.into_par_iter()
-            .filter_map(|tr| match self.process_verified_transaction_debits(&tr) {
-                Ok(_x) => Some(Ok(tr)),
-                Err(_e) => None,
-            })
-            // .flat_map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         results
