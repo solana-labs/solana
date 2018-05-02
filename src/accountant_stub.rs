@@ -168,12 +168,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
+    use crdt::ReplicatedData;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
     fn test_accountant_stub() {
-        let addr = "127.0.0.1:9000";
-        let send_addr = "127.0.0.1:9001";
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(pubkey,
+                                    gossip.local_addr().unwrap(),
+                                    "0.0.0.0:0".parse().unwrap(),
+                                    serve.local_addr().unwrap(),
+                                    );
+        let send = UdpSocket::bind("0.0.0.0:0").unwrap();
+
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -182,10 +191,9 @@ mod tests {
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
-            sink(),
             historian,
         )));
-        let _threads = AccountantSkel::serve(&acc, addr, exit.clone()).unwrap();
+        let threads = AccountantSkel::serve(&acc, d, gossip, serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
@@ -197,5 +205,8 @@ mod tests {
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }

@@ -377,13 +377,13 @@ impl AccountantSkel {
         writer: W,
     ) -> Result<Vec<JoinHandle<()>>> {
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        let t_gossip = Crdt::gossip(crdt, exit.clone());
-        let t_listen = Crdt::listen(crdt, gossip, exit.clone());
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
         let mut local = serve.local_addr()?;
         local.set_port(0);
-        let write = UdpSocket::bind(local)?;
+        let respond_socket = UdpSocket::bind(local.clone())?;
 
         let packet_recycler = packet::PacketRecycler::default();
         let blob_recycler = packet::BlobRecycler::default();
@@ -392,7 +392,7 @@ impl AccountantSkel {
             streamer::receiver(serve, exit.clone(), packet_recycler.clone(), packet_sender)?;
         let (responder_sender, responder_receiver) = channel();
         let t_responder = streamer::responder(
-            write, 
+            respond_socket, 
             exit.clone(),
             blob_recycler.clone(),
             responder_receiver
@@ -409,8 +409,9 @@ impl AccountantSkel {
 
         let (broadcast_sender, broadcast_receiver) = channel();
 
+        let broadcast_socket = UdpSocket::bind(local)?;
         let t_broadcast = streamer::broadcaster(
-            write,
+            broadcast_socket,
             exit.clone(),
             crdt.clone(),
             blob_recycler.clone(),
