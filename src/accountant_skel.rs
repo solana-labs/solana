@@ -102,14 +102,14 @@ impl AccountantSkel {
         }
     }
 
-    fn update_entry<W: Write>(&mut self, writer: &mut W, entry: &Entry) {
+    fn update_entry<W: Write>(&mut self, writer: &Arc<Mutex<W>>, entry: &Entry) {
         self.last_id = entry.id;
         self.acc.register_entry_id(&self.last_id);
-        writeln!(writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
+        writeln!(writer.lock().unwrap(), "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         self.notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_to_list<W: Write>(&mut self, writer: &mut W, max: usize) -> Result<LinkedList<Entry>> {
+    fn receive_to_list<W: Write>(&mut self, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
@@ -136,22 +136,22 @@ impl AccountantSkel {
         writer: &Arc<Mutex<W>>,
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
-        let list = {
-            let w = writer.lock().unwrap();
-            obj.lock().unwrap().receive_to_list(&mut w, max)?;
-        };
-        let b = blob_recycler.allocate();
-        let pos = {
-            let mut bd = b.write().unwrap();
-            let out = Cursor::new(bd.data_mut());
-            serialize_into(&mut out, &list)?;
-            out.position() as usize
-        };
-        b.write().unwrap().set_size(pos);
         let mut q = VecDeque::new();
-        q.push_back(b);
-        broadcast.send(q)?;
-        blob_recycler.recycle(b);
+        while let Ok(list) = obj.lock().unwrap().receive_to_list(writer, max) {
+
+            let b = blob_recycler.allocate();
+            let pos = {
+                let mut bd = b.write().unwrap();
+                let mut out = Cursor::new(bd.data_mut());
+                serialize_into(&mut out, &list)?;
+                out.position() as usize
+            };
+            b.write().unwrap().set_size(pos);
+            q.push_back(b);
+        }
+        if !q.is_empty() {
+            broadcast.send(q)?;
+        }
         Ok(())
     }
 
@@ -717,12 +717,23 @@ mod tests {
         let (target1_data, target1_gossip, target1_replicate, _) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
+
+        //start crdt1 
         let crdt1 = Crdt::new(target1_data.clone());
         crdt1.insert(leader_data);
         crdt1.set_leader(leader_data.id);
         let cref1 = Arc::new(RwLock::new(crdt1));
         let t1_gossip = Crdt::gossip(cref1.clone(), exit.clone());
         let t1_listen = Crdt::listen(cref1, target1_gossip, exit.clone());
+
+        //start crdt2
+        let crdt2 = Crdt::new(target2_data.clone());
+        crdt2.insert(leader_data);
+        crdt2.set_leader(leader_data.id);
+        let cref2 = Arc::new(RwLock::new(crdt2));
+        let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
+        let t2_listen = Crdt::listen(cref2, target2_gossip, exit.clone());
+
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
