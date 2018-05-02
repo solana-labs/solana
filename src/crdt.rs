@@ -497,22 +497,8 @@ mod test {
         assert_eq!(crdt.table[&d.id].version, 2);
     }
 
-    use std::sync::{Once, ONCE_INIT};
-    extern crate env_logger;
-
-    static INIT: Once = ONCE_INIT;
-
-    /// Setup function that is only run once, even if called multiple times.
-    fn setup() {
-        INIT.call_once(|| {
-            env_logger::init().unwrap();
-        });
-    }
-
-
     #[test]
     pub fn test_crdt_retransmit() {
-        setup();
         println!("c1:");
         let (mut c1,s1,r1,e1) = test_node();
         println!("c2:");
