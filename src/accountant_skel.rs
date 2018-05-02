@@ -133,10 +133,13 @@ impl AccountantSkel {
         obj: Arc<Mutex<Self>>,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
-        writer: &mut W,
+        writer: &Arc<Mutex<W>>,
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
-        let list = obj.lock().unwrap().receive_to_list(writer, max)?;
+        let list = {
+            let w = writer.lock().unwrap();
+            obj.lock().unwrap().receive_to_list(&mut w, max)?;
+        };
         let b = blob_recycler.allocate();
         let pos = {
             let mut bd = b.write().unwrap();
@@ -157,10 +160,10 @@ impl AccountantSkel {
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
-        writer: W,
+        writer: Arc<Mutex<W>>,
     ) -> JoinHandle<()> {
         spawn(move|| loop {
-            let e = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &mut writer);
+            let e = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -423,7 +426,7 @@ impl AccountantSkel {
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),
-            writer,
+            Arc::new(Mutex::new(writer)),
         );
  
         let skel = obj.clone();
@@ -576,6 +579,7 @@ mod tests {
     use event::Event;
     use entry;
     use chrono::prelude::*;
+    use crdt::Crdt;
 
     #[test]
     fn test_layout() {
@@ -713,6 +717,12 @@ mod tests {
         let (target1_data, target1_gossip, target1_replicate, _) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
+        let crdt1 = Crdt::new(target1_data.clone());
+        crdt1.insert(leader_data);
+        crdt1.set_leader(leader_data.id);
+        let cref1 = Arc::new(RwLock::new(crdt1));
+        let t1_gossip = Crdt::gossip(cref1.clone(), exit.clone());
+        let t1_listen = Crdt::listen(cref1, target1_gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to

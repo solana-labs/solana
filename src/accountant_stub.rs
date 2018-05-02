@@ -175,13 +175,13 @@ mod tests {
     fn test_accountant_stub() {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(pubkey,
                                     gossip.local_addr().unwrap(),
                                     "0.0.0.0:0".parse().unwrap(),
                                     serve.local_addr().unwrap(),
                                     );
-        let send = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
@@ -196,7 +196,7 @@ mod tests {
         let threads = AccountantSkel::serve(&acc, d, gossip, serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind(send_addr).unwrap();
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let mut acc = AccountantStub::new(addr, socket);
