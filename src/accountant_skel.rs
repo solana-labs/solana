@@ -143,9 +143,10 @@ impl AccountantSkel {
             let pos = {
                 let mut bd = b.write().unwrap();
                 let mut out = Cursor::new(bd.data_mut());
-                serialize_into(&mut out, &list)?;
+                serialize_into(&mut out, &list).expect("failed to serialize output");
                 out.position() as usize
             };
+            assert!(pos < BLOB_SIZE);
             b.write().unwrap().set_size(pos);
             q.push_back(b);
         }
@@ -567,7 +568,7 @@ mod tests {
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
@@ -657,13 +658,13 @@ mod tests {
             alice.last_id(),
             historian,
         )));
+        let serve_addr = leader_serve.local_addr().unwrap();
         let threads = AccountantSkel::serve(&acc, leader_data, leader_gossip, leader_serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = unused_replicate;
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-        let addr = leader_serve.local_addr().unwrap();
-        let mut acc = AccountantStub::new(addr, socket);
+        let mut acc = AccountantStub::new(serve_addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
@@ -713,22 +714,20 @@ mod tests {
     #[test]
     fn test_replicate() {
         setup();
-        let (leader_data, leader_gossip, leader_replicate, leader_serve) = test_node();
+        let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let (target1_data, target1_gossip, target1_replicate, _) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
 
-        //start crdt1 
-        let crdt1 = Crdt::new(target1_data.clone());
-        crdt1.insert(leader_data);
-        crdt1.set_leader(leader_data.id);
-        let cref1 = Arc::new(RwLock::new(crdt1));
-        let t1_gossip = Crdt::gossip(cref1.clone(), exit.clone());
-        let t1_listen = Crdt::listen(cref1, target1_gossip, exit.clone());
+        //start crdt_leader
+        let crdt_l = Crdt::new(leader_data.clone());
+        let cref_l = Arc::new(RwLock::new(crdt_l));
+        let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
+        let t_l_listen = Crdt::listen(cref_l, leader_gossip, exit.clone());
 
         //start crdt2
-        let crdt2 = Crdt::new(target2_data.clone());
-        crdt2.insert(leader_data);
+        let mut crdt2 = Crdt::new(target2_data.clone());
+        crdt2.insert(leader_data.clone());
         crdt2.set_leader(leader_data.id);
         let cref2 = Arc::new(RwLock::new(crdt2));
         let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
@@ -766,8 +765,8 @@ mod tests {
             alice.last_id(),
             historian,
         )));
-
-        let _threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, leader_data.clone(), exit.clone()).unwrap();
+        let replicate_addr = target1_data.replicate_addr;
+        let threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, leader_data, exit.clone()).unwrap();
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
@@ -805,7 +804,7 @@ mod tests {
 
             w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
             w.set_size(serialized_entry.len());
-            w.meta.set_addr(&target1_data.replicate_addr);
+            w.meta.set_addr(&replicate_addr);
             drop(w);
             msgs.push_back(b_);
         }
@@ -836,10 +835,16 @@ mod tests {
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().expect("join");
+        }
+        t2_gossip.join().expect("join");
+        t2_listen.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        t_l_gossip.join().expect("join");
+        t_l_listen.join().expect("join");
     }
-
 }
 
 #[cfg(all(feature = "unstable", test))]
