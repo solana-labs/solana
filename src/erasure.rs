@@ -153,7 +153,7 @@ pub fn decode_blocks(data: &mut [&mut [u8]], coding: &[&[u8]], erasures: &[i32])
 // Generate coding blocks in window from consumed to consumed+NUM_DATA
 pub fn generate_coding(
     re: &BlobRecycler,
-    window: &mut Vec<Option<SharedBlob>>,
+    window: &mut Vec<SharedBlob>,
     consumed: usize,
 ) -> Result<()> {
     let mut data_blobs = Vec::new();
@@ -179,7 +179,7 @@ pub fn generate_coding(
     let coding_end = consumed + NUM_CODED;
     for i in coding_start..coding_end {
         let n = i % window.len();
-        window[n] = Some(re.allocate());
+        window[n] = re.allocate();
         coding_blobs.push(window[n].clone().unwrap());
     }
     for b in &coding_blobs {

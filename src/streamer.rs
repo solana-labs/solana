@@ -8,7 +8,9 @@ use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use subscribers::Subscribers;
+use crdt::Crdt;
+#[cfg(feature = "erasure")]
+use erasure;
 
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
@@ -109,7 +111,7 @@ pub fn blob_receiver(
 
 fn recv_window(
     window: &mut Vec<Option<SharedBlob>>,
-    subs: &Arc<RwLock<Subscribers>>,
+    crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
     r: &BlobReceiver,
@@ -118,24 +120,25 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
+    let leader_id = crdt.read().unwrap().leader_data().id;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
     {
         //retransmit all leader blocks
         let mut retransmitq = VecDeque::new();
-        let rsubs = subs.read().unwrap();
         for b in &dq {
             let p = b.read().unwrap();
             //TODO this check isn't safe against adverserial packets
             //we need to maintain a sequence window
             trace!(
-                "idx: {} addr: {:?} leader: {:?}",
+                "idx: {} addr: {:?} id: {:?} leader: {:?}",
                 p.get_index().unwrap(),
+                p.get_id().unwrap(),
                 p.meta.addr(),
-                rsubs.leader.addr
+                leader_id
             );
-            if p.meta.addr() == rsubs.leader.addr {
+            if p.get_id().unwrap() == leader_id {
                 //TODO
                 //need to copy the retransmited blob
                 //otherwise we get into races with which thread
@@ -195,7 +198,7 @@ fn recv_window(
 
 pub fn window(
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Subscribers>>,
+    crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
@@ -210,7 +213,7 @@ pub fn window(
             }
             let _ = recv_window(
                 &mut window,
-                &subs,
+                &crdt,
                 &recycler,
                 &mut consumed,
                 &r,
@@ -221,8 +224,57 @@ pub fn window(
     })
 }
 
+fn broadcast(
+    crdt: &Arc<RwLock<Crdt>>,
+    recycler: &BlobRecycler,
+    r: &BlobReceiver,
+    sock: &UdpSocket,
+    transmit_index: &mut u64
+) -> Result<()> {
+    let timer = Duration::new(1, 0);
+    let mut dq = r.recv_timeout(timer)?;
+    while let Ok(mut nq) = r.try_recv() {
+        dq.append(&mut nq);
+    }
+    let mut blobs = dq.into_iter().collect();
+    /// appends codes to the list of blobs allowing us to reconstruct the stream
+    #[cfg(feature = "erasure")]
+    erasure::generate_codes(blobs);
+    Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
+    while let Some(b) = blobs.pop() {
+        recycler.recycle(b);
+    }
+    Ok(())
+}
+
+/// Service to broadcast messages from the leader to layer 1 nodes.
+/// See `crdt` for network layer definitions.
+/// # Arguments
+/// * `sock` - Socket to send from.
+/// * `exit` - Boolean to signal system exit.
+/// * `crdt` - CRDT structure
+/// * `recycler` - Blob recycler.
+/// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
+pub fn broadcaster(
+    sock: UdpSocket,
+    exit: Arc<AtomicBool>,
+    crdt: Arc<RwLock<Crdt>>,
+    recycler: BlobRecycler,
+    r: BlobReceiver,
+) -> JoinHandle<()> {
+    spawn(move || {
+        let mut transmit_index = 0;
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+            let _ = broadcast(&crdt, &recycler, &r, &sock, &mut transmit_index);
+        }
+    })
+}
+
 fn retransmit(
-    subs: &Arc<RwLock<Subscribers>>,
+    crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -233,10 +285,8 @@ fn retransmit(
         dq.append(&mut nq);
     }
     {
-        let wsubs = subs.read().unwrap();
         for b in &dq {
-            let mut mb = b.write().unwrap();
-            wsubs.retransmit(&mut mb, sock)?;
+            Crdt::retransmit(&crdt, b, sock)?;
         }
     }
     while let Some(b) = dq.pop_front() {
@@ -246,18 +296,17 @@ fn retransmit(
 }
 
 /// Service to retransmit messages from the leader to layer 1 nodes.
-/// See `subscribers` for network layer definitions.
+/// See `crdt` for network layer definitions.
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
-/// * `subs` - Shared Subscriber structure.  This structure needs to be updated and popualted by
-/// the accountant.
+/// * `crdt` - This structure needs to be updated and populated by the accountant and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
-    subs: Arc<RwLock<Subscribers>>,
+    crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -265,7 +314,7 @@ pub fn retransmitter(
         if exit.load(Ordering::Relaxed) {
             break;
         }
-        let _ = retransmit(&subs, &recycler, &r, &sock);
+        let _ = retransmit(&crdt, &recycler, &r, &sock);
     })
 }
 
@@ -384,7 +433,9 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
                    PacketReceiver};
-    use subscribers::{Node, Subscribers};
+    use crdt::{Crdt, ReplicatedData};
+    use signature::KeyPair;
+    use signature::KeyPairUtil;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -455,15 +506,18 @@ mod test {
 
     #[test]
     pub fn window_send_test() {
+        let pubkey_me = KeyPair::new().pubkey();
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Subscribers::new(
-            Node::default(),
-            Node::new([0; 8], 0, send.local_addr().unwrap()),
-            &[],
-        )));
+        let rep_data = ReplicatedData::new(pubkey_me,
+                                           read.local_addr().unwrap(),
+                                           send.local_addr().unwrap(),
+                                           serve.local_addr().unwrap());
+        let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
+
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver =
@@ -509,14 +563,18 @@ mod test {
 
     #[test]
     pub fn retransmit() {
+        let pubkey_me = KeyPair::new().pubkey();
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let subs = Arc::new(RwLock::new(Subscribers::new(
-            Node::default(),
-            Node::default(),
-            &[Node::new([0; 8], 1, read.local_addr().unwrap())],
-        )));
+
+        let rep_data = ReplicatedData::new(pubkey_me,
+                                           read.local_addr().unwrap(),
+                                           send.local_addr().unwrap(),
+                                           serve.local_addr().unwrap());
+        let subs = Arc::new(RwLock::new(Crdt::new(rep_data)));
+
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
         let saddr = send.local_addr().unwrap();

@@ -10,11 +10,11 @@ use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
-use std::net::UdpSocket;
+use std::net::{UdpSocket, SocketAddr};
 use transaction::Transaction;
 
 pub struct AccountantStub {
-    pub addr: String,
+    pub addr: SocketAddr,
     pub socket: UdpSocket,
     last_id: Option<Hash>,
     num_events: u64,
@@ -25,9 +25,9 @@ impl AccountantStub {
     /// Create a new AccountantStub that will interface with AccountantSkel
     /// over `socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking AccountantStub methods.
-    pub fn new(addr: &str, socket: UdpSocket) -> Self {
+    pub fn new(addr: SocketAddr, socket: UdpSocket) -> Self {
         let stub = AccountantStub {
-            addr: addr.to_string(),
+            addr: addr,
             socket,
             last_id: None,
             num_events: 0,
@@ -168,12 +168,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
+    use crdt::ReplicatedData;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
     fn test_accountant_stub() {
-        let addr = "127.0.0.1:9000";
-        let send_addr = "127.0.0.1:9001";
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(pubkey,
+                                    gossip.local_addr().unwrap(),
+                                    "0.0.0.0:0".parse().unwrap(),
+                                    serve.local_addr().unwrap(),
+                                    );
+        let send = UdpSocket::bind("0.0.0.0:0").unwrap();
+
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -182,10 +191,9 @@ mod tests {
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
-            sink(),
             historian,
         )));
-        let _threads = AccountantSkel::serve(&acc, addr, exit.clone()).unwrap();
+        let threads = AccountantSkel::serve(&acc, d, gossip, serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind(send_addr).unwrap();
@@ -197,5 +205,8 @@ mod tests {
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
