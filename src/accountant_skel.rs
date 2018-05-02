@@ -582,6 +582,7 @@ mod tests {
     use entry;
     use chrono::prelude::*;
     use crdt::Crdt;
+    use logger;
 
     #[test]
     fn test_layout() {
@@ -686,18 +687,6 @@ mod tests {
         }
     }
 
-    use std::sync::{Once, ONCE_INIT};
-    extern crate env_logger;
-
-    static INIT: Once = ONCE_INIT;
-
-    /// Setup function that is only run once, even if called multiple times.
-    fn setup() {
-        INIT.call_once(|| {
-            env_logger::init().unwrap();
-        });
-    }
-
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -714,7 +703,7 @@ mod tests {
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
-        setup();
+        logger::setup();
         let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let (target1_data, target1_gossip, target1_replicate, _) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _) = test_node();
