@@ -377,7 +377,7 @@ mod test {
                                     serve.local_addr().unwrap(),
                                     );
         let crdt = Crdt::new(d);
-        println!("id: {} gossip: {} replicate: {} serve: {}",
+        trace!("id: {} gossip: {} replicate: {} serve: {}",
                  crdt.my_data().id[0],
                  gossip.local_addr().unwrap(),
                  replicate.local_addr().unwrap(),
@@ -520,21 +520,21 @@ mod test {
 
         // Create listen threads
         let a1 = Arc::new(RwLock::new(c1));
-        let _t1 = Crdt::listen(a1.clone(), s1, exit.clone());
+        let t1 = Crdt::listen(a1.clone(), s1, exit.clone());
 
         let a2 = Arc::new(RwLock::new(c2));
-        let _t2 = Crdt::listen(a2.clone(), s2, exit.clone());
+        let t2 = Crdt::listen(a2.clone(), s2, exit.clone());
 
         let a3 = Arc::new(RwLock::new(c3));
-        let _t3 = Crdt::listen(a3.clone(), s3, exit.clone());
+        let t3 = Crdt::listen(a3.clone(), s3, exit.clone());
 
         // Create gossip threads
-        let _t1_gossip = Crdt::gossip(a1.clone(), exit.clone());
-        let _t2_gossip = Crdt::gossip(a2.clone(), exit.clone());
-        let _t3_gossip = Crdt::gossip(a3.clone(), exit.clone());
+        let t1_gossip = Crdt::gossip(a1.clone(), exit.clone());
+        let t2_gossip = Crdt::gossip(a2.clone(), exit.clone());
+        let t3_gossip = Crdt::gossip(a3.clone(), exit.clone());
 
         //wait to converge
-        println!("waitng to converge:");
+        trace!("waitng to converge:");
         let mut done = false;
         for _ in 0 .. 10 {
             done = a1.read().unwrap().table.len() == 3 &&
@@ -555,9 +555,16 @@ mod test {
                 let mut b = Blob::default();
                 s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
                 let res = s.recv_from(&mut b.data);
-                res.is_err()
+                res.is_err() //true if failed to receive the retransmit packet
             })
             .collect();
+        //true if failed receive the retransmit packet, r2, and r3 should succeed
+        //r1 was the sender, so it should fail to receive the packet
         assert_eq!(res, [true, false, false]);
+        exit.store(true, Ordering::Relaxed);
+        let threads = vec![t1,t2,t3,t1_gossip,t2_gossip,t3_gossip];
+        for t in threads.into_iter() {
+            t.join().unwrap();
+        }
     }
 }
