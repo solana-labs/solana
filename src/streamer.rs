@@ -382,9 +382,8 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{
-        blob_receiver, receiver, responder, retransmitter, window, BlobReceiver, PacketReceiver,
-    };
+    use streamer::{blob_receiver, receiver, responder, retransmitter, window, BlobReceiver,
+                   PacketReceiver};
     use subscribers::{Node, Subscribers};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
