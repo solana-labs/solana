@@ -21,7 +21,7 @@ use std::collections::VecDeque;
 use std::io::Write;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -34,6 +34,7 @@ pub struct AccountantSkel<W: Write + Send + 'static> {
     acc: Accountant,
     last_id: Hash,
     writer: W,
+    historian_input: SyncSender<Signal>,
     historian: Historian,
     entry_info_subscribers: Vec<SocketAddr>,
 }
@@ -78,11 +79,18 @@ pub enum Response {
 
 impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(acc: Accountant, last_id: Hash, writer: W, historian: Historian) -> Self {
+    pub fn new(
+        acc: Accountant,
+        last_id: Hash,
+        writer: W,
+        historian_input: SyncSender<Signal>,
+        historian: Historian,
+    ) -> Self {
         AccountantSkel {
             acc,
             last_id,
             writer,
+            historian_input,
             historian,
             entry_info_subscribers: vec![],
         }
@@ -214,15 +222,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         // Process the transactions in parallel and then log the successful ones.
         for result in self.acc.process_verified_transactions(trs) {
             if let Ok(tr) = result {
-                self.historian
-                    .input
+                self.historian_input
                     .send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        self.historian.input.send(Signal::Tick)?;
+        self.historian_input.send(Signal::Tick)?;
 
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
@@ -482,6 +489,7 @@ mod tests {
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::sync_channel;
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
@@ -530,8 +538,9 @@ mod tests {
         let mint = Mint::new(2);
         let acc = Accountant::new(&mint);
         let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
-        let historian = Historian::new(&mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), historian);
+        let (input, event_receiver) = sync_channel(10);
+        let historian = Historian::new(event_receiver, &mint.last_id(), None);
+        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), input, historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -545,8 +554,8 @@ mod tests {
         assert!(skel.process_packets(req_vers).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        skel.historian.input.send(Signal::Tick).unwrap();
-        drop(skel.historian.input);
+        skel.historian_input.send(Signal::Tick).unwrap();
+        drop(skel.historian_input);
         let entries: Vec<Entry> = skel.historian.output.iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
@@ -569,11 +578,13 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let historian = Historian::new(&alice.last_id(), Some(30));
+        let (input, event_receiver) = sync_channel(10);
+        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             sink(),
+            input,
             historian,
         )));
         let _threads = AccountantSkel::serve(&acc, &addr, exit.clone()).unwrap();
@@ -651,11 +662,13 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let acc = Accountant::new(&alice);
-        let historian = Historian::new(&alice.last_id(), Some(30));
+        let (input, event_receiver) = sync_channel(10);
+        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             sink(),
+            input,
             historian,
         )));
 
@@ -790,8 +803,9 @@ mod bench {
             .map(|tr| (Request::Transaction(tr), rsp_addr, 1_u8))
             .collect();
 
-        let historian = Historian::new(&mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), historian);
+        let (input, event_receiver) = sync_channel(10);
+        let historian = Historian::new(event_receiver, &mint.last_id(), None);
+        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), input, historian);
 
         let now = Instant::now();
         assert!(skel.process_packets(req_vers).is_ok());
@@ -800,7 +814,7 @@ mod bench {
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(skel.historian.input);
+        drop(input);
         let entries: Vec<Entry> = skel.historian.output.iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);

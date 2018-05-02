@@ -15,6 +15,7 @@ use std::env;
 use std::io::{stdin, stdout, Read};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 
 fn print_usage(program: &str, opts: Options) {
@@ -95,12 +96,14 @@ fn main() {
         acc.register_entry_id(&last_id);
     }
 
-    let historian = Historian::new(&last_id, Some(1000));
+    let (input, event_receiver) = sync_channel(10_000);
+    let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
     let skel = Arc::new(Mutex::new(AccountantSkel::new(
         acc,
         last_id,
         stdout(),
+        input,
         historian,
     )));
     let threads = AccountantSkel::serve(&skel, &addr, exit.clone()).unwrap();
