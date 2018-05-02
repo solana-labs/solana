@@ -487,14 +487,14 @@ mod tests {
     use std::time::Duration;
     use transaction::Transaction;
 
-    use subscribers::{Node, Subscribers};
-    use streamer;
-    use std::sync::mpsc::channel;
-    use std::collections::VecDeque;
-    use hash::{hash, Hash};
-    use event::Event;
-    use entry;
     use chrono::prelude::*;
+    use entry;
+    use event::Event;
+    use hash::{hash, Hash};
+    use std::collections::VecDeque;
+    use std::sync::mpsc::channel;
+    use streamer;
+    use subscribers::{Node, Subscribers};
 
     #[test]
     fn test_layout() {
@@ -774,11 +774,11 @@ mod bench {
                 // Seed the 'from' account.
                 let rando0 = KeyPair::new();
                 let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-                let _ = acc.process_verified_transaction(&tr);
+                acc.process_verified_transaction(&tr).unwrap();
 
                 let rando1 = KeyPair::new();
                 let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-                let _ = acc.process_verified_transaction(&tr);
+                acc.process_verified_transaction(&tr).unwrap();
 
                 // Finally, return a transaction that's unique
                 Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
@@ -803,10 +803,7 @@ mod bench {
         drop(skel.historian.sender);
         let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
         assert_eq!(entries.len(), 1);
-        assert_eq!(
-            entries[0].events.len(),
-            txs as usize
-        );
+        assert_eq!(entries[0].events.len(), txs as usize);
 
         println!("{} tps", tps);
     }

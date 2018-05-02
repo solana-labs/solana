@@ -14,8 +14,8 @@ use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::result;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
 use transaction::Transaction;
 
