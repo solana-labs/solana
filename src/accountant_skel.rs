@@ -34,7 +34,7 @@ use std::mem::size_of;
 pub struct AccountantSkel {
     acc: Accountant,
     last_id: Hash,
-    historian: Historian,
+    historian: Arc<Mutex<Historian>>,
     entry_info_subscribers: Vec<SocketAddr>,
 }
 
@@ -79,11 +79,12 @@ pub enum Response {
 impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
     pub fn new(acc: Accountant, last_id: Hash, historian: Historian) -> Self {
+        let hist = Arc::new(Mutex::new(historian));
         AccountantSkel {
             acc,
             last_id,
             entry_info_subscribers: vec![],
-            historian,
+            historian: hist,
         }
     }
 
@@ -109,15 +110,16 @@ impl AccountantSkel {
         self.notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_to_list<W: Write>(&mut self, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
+    fn receive_to_list<W: Write>(obj: &Arc<Mutex<Self>>, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
-        let entry = self.historian.receiver.recv_timeout(Duration::new(1, 0))?;
-        self.update_entry(writer, &entry);
+        let hist = obj.lock().unwrap().historian.clone();
+        let entry = hist.lock().unwrap().receiver.recv_timeout(Duration::new(1, 0))?;
+        obj.lock().unwrap().update_entry(writer, &entry);
         l.push_back(entry);
-        while let Ok(entry) = self.historian.receiver.try_recv() {
-            self.update_entry(writer, &entry);
+        while let Ok(entry) = hist.lock().unwrap().receiver.try_recv() {
+            obj.lock().unwrap().update_entry(writer, &entry);
             l.push_back(entry);
             num += 1;
             if num == max {
@@ -137,7 +139,7 @@ impl AccountantSkel {
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
         let mut q = VecDeque::new();
-        while let Ok(list) = obj.lock().unwrap().receive_to_list(writer, max) {
+        while let Ok(list) = Self::receive_to_list(&obj, writer, max) {
 
             let b = blob_recycler.allocate();
             let pos = {
@@ -263,28 +265,31 @@ impl AccountantSkel {
     }
 
     fn process_packets(
-        &mut self,
+        obj: &Arc<Mutex<Self>>,
         req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
-        for result in self.acc.process_verified_transactions(trs) {
+        let hist = obj.lock().unwrap().historian.clone();
+        for result in obj.lock().unwrap().acc.process_verified_transactions(trs) {
             if let Ok(tr) = result {
-                self.historian.sender.send(Signal::Event(Event::Transaction(tr)))?;
+                hist.lock().unwrap().sender.send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        self.historian.sender.send(Signal::Tick)?;
+        hist.lock().unwrap().sender.send(Signal::Tick)?;
 
         // Process the remaining requests serially.
-        let rsps = reqs.into_iter()
-            .filter_map(|(req, rsp_addr)| self.process_request(req, rsp_addr))
-            .collect();
-
-        Ok(rsps)
+        {
+            let mut state = obj.lock().unwrap();
+            let rsps = reqs.into_iter()
+                .filter_map(|(req, rsp_addr)| state.process_request(req, rsp_addr))
+                .collect();
+            Ok(rsps)
+        }
     }
 
     fn serialize_response(
@@ -331,7 +336,7 @@ impl AccountantSkel {
                 .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
                 .filter(|x| x.0.verify())
                 .collect();
-            let rsps = obj.lock().unwrap().process_packets(req_vers)?;
+            let rsps = Self::process_packets(&obj, req_vers)?;
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
@@ -619,24 +624,29 @@ mod tests {
         let acc = Accountant::new(&mint);
         let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
         let historian = Historian::new(&mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), historian);
+        let skel = AccountantSkel::new(acc, mint.last_id(), historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
-        assert!(skel.process_packets(req_vers).is_ok());
+        let locked = Arc::new(Mutex::new(skel));
+        assert!(AccountantSkel::process_packets(&locked, req_vers).is_ok());
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
-        assert!(skel.process_packets(req_vers).is_ok());
+        assert!(AccountantSkel::process_packets(&locked, req_vers).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        skel.historian.sender.send(Signal::Tick).unwrap();
-        drop(skel.historian.sender);
-        let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
-
+        // TODO(anatoly): this needs some love
+        let hist = locked.lock().unwrap().historian.clone();
+        hist.lock().unwrap().sender.send(Signal::Tick).unwrap();
+        let mut entries: Vec<Entry> = vec![];
+        sleep(Duration::from_millis(500));
+        while let Ok(e) =  hist.lock().unwrap().receiver.try_recv() {
+            entries.push(e);
+        }
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
@@ -832,12 +842,10 @@ mod tests {
         for t in threads {
             t.join().expect("join");
         }
-        t2_gossip.join().expect("join");
-        t2_listen.join().expect("join");
-        t_receiver.join().expect("join");
-        t_responder.join().expect("join");
-        t_l_gossip.join().expect("join");
-        t_l_listen.join().expect("join");
+        let threads = vec![t2_gossip, t2_listen, t_receiver, t_responder, t_l_gossip, t_l_listen];
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
 
