@@ -8,6 +8,7 @@ pub mod entry;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod event;
+pub mod logger;
 pub mod hash;
 pub mod historian;
 pub mod ledger;

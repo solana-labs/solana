@@ -364,6 +364,7 @@ mod test {
     use std::time::Duration;
     use rayon::iter::*;
     use packet::Blob;
+    use logger;
 
     fn test_node() -> (Crdt, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -499,11 +500,12 @@ mod test {
 
     #[test]
     pub fn test_crdt_retransmit() {
-        println!("c1:");
+        logger::setup();
+        trace!("c1:");
         let (mut c1,s1,r1,e1) = test_node();
-        println!("c2:");
+        trace!("c2:");
         let (mut c2,s2,r2,_) = test_node();
-        println!("c3:");
+        trace!("c3:");
         let (mut c3,s3,r3,_) = test_node();
         let c1_id = c1.my_data().id;
         c1.set_leader(c1_id);
