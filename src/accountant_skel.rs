@@ -487,14 +487,14 @@ mod tests {
     use std::time::Duration;
     use transaction::Transaction;
 
-    use subscribers::{Node, Subscribers};
-    use streamer;
-    use std::sync::mpsc::channel;
-    use std::collections::VecDeque;
-    use hash::{hash, Hash};
-    use event::Event;
-    use entry;
     use chrono::prelude::*;
+    use entry;
+    use event::Event;
+    use hash::{hash, Hash};
+    use std::collections::VecDeque;
+    use std::sync::mpsc::channel;
+    use streamer;
+    use subscribers::{Node, Subscribers};
 
     #[test]
     fn test_layout() {
