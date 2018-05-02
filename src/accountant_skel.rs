@@ -476,6 +476,7 @@ impl AccountantSkel {
     ) -> Result<Vec<JoinHandle<()>>> {
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        crdt.write().unwrap().set_leader(leader.id);
         crdt.write().unwrap().insert(leader);
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
@@ -720,7 +721,9 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader
-        let crdt_l = Crdt::new(leader_data.clone());
+        let mut crdt_l = Crdt::new(leader_data.clone());
+        crdt_l.set_leader(leader_data.id);
+
         let cref_l = Arc::new(RwLock::new(crdt_l));
         let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
         let t_l_listen = Crdt::listen(cref_l, leader_gossip, exit.clone());
@@ -729,6 +732,7 @@ mod tests {
         let mut crdt2 = Crdt::new(target2_data.clone());
         crdt2.insert(leader_data.clone());
         crdt2.set_leader(leader_data.id);
+        let leader_id = leader_data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
         let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
         let t2_listen = Crdt::listen(cref2, target2_gossip, exit.clone());
@@ -779,6 +783,7 @@ mod tests {
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             w.set_index(i).unwrap();
+            w.set_id(leader_id).unwrap();
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
