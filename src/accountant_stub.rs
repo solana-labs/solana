@@ -10,11 +10,11 @@ use hash::Hash;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
-use std::net::UdpSocket;
+use std::net::{UdpSocket, SocketAddr};
 use transaction::Transaction;
 
 pub struct AccountantStub {
-    pub addr: String,
+    pub addr: SocketAddr,
     pub socket: UdpSocket,
     last_id: Option<Hash>,
     num_events: u64,
@@ -25,9 +25,9 @@ impl AccountantStub {
     /// Create a new AccountantStub that will interface with AccountantSkel
     /// over `socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking AccountantStub methods.
-    pub fn new(addr: &str, socket: UdpSocket) -> Self {
+    pub fn new(addr: SocketAddr, socket: UdpSocket) -> Self {
         let stub = AccountantStub {
-            addr: addr.to_string(),
+            addr: addr,
             socket,
             last_id: None,
             num_events: 0,

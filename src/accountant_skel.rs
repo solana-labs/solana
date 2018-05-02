@@ -102,14 +102,14 @@ impl AccountantSkel {
         }
     }
 
-    fn update_entry<W: Write>(&mut self, writer: &W, entry: &Entry) {
+    fn update_entry<W: Write>(&mut self, writer: &mut W, entry: &Entry) {
         self.last_id = entry.id;
         self.acc.register_entry_id(&self.last_id);
         writeln!(writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
         self.notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_to_list<W: Write>(&mut self, writer: &W, max: usize) -> Result<LinkedList<Entry>> {
+    fn receive_to_list<W: Write>(&mut self, writer: &mut W, max: usize) -> Result<LinkedList<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
@@ -133,19 +133,21 @@ impl AccountantSkel {
         obj: Arc<Mutex<Self>>,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
-        writer: &W,
+        writer: &mut W,
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
         let list = obj.lock().unwrap().receive_to_list(writer, max)?;
         let b = blob_recycler.allocate();
-        let mut bd = b.write().unwrap();
-        let mut out = Cursor::new(bd.data_mut());
-        serialize_into(out, &list)?;
-        bd.set_size(out.position() as usize);
+        let pos = {
+            let mut bd = b.write().unwrap();
+            let out = Cursor::new(bd.data_mut());
+            serialize_into(&mut out, &list)?;
+            out.position() as usize
+        };
+        b.write().unwrap().set_size(pos);
         let mut q = VecDeque::new();
         q.push_back(b);
         broadcast.send(q)?;
-        drop(bd);
         blob_recycler.recycle(b);
         Ok(())
     }
@@ -158,7 +160,7 @@ impl AccountantSkel {
         writer: W,
     ) -> JoinHandle<()> {
         spawn(move|| loop {
-            let e = Self::run_sync(obj, &broadcast, &blob_recycler, &writer);
+            let e = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &mut writer);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -312,7 +314,6 @@ impl AccountantSkel {
     fn process(
         obj: Arc<Mutex<Self>>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        broadcast_sender: &streamer::BlobSender,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
@@ -370,15 +371,17 @@ impl AccountantSkel {
     pub fn serve<W: Write + Send + 'static>(
         obj: &Arc<Mutex<Self>>,
         me: ReplicatedData,
+        serve: UdpSocket,
+        gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let gossip = UdpSocket::bind(me.gossip_addr)?;
-        let read = UdpSocket::bind(me.serve_addr)?;
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let t_gossip = Crdt::gossip(crdt, exit.clone());
+        let t_listen = Crdt::listen(crdt, gossip, exit.clone());
 
         // make sure we are on the same interface
-        let mut local = read.local_addr()?;
+        let mut local = serve.local_addr()?;
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
 
@@ -386,7 +389,7 @@ impl AccountantSkel {
         let blob_recycler = packet::BlobRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver =
-            streamer::receiver(read, exit.clone(), packet_recycler.clone(), packet_sender)?;
+            streamer::receiver(serve, exit.clone(), packet_recycler.clone(), packet_sender)?;
         let (responder_sender, responder_receiver) = channel();
         let t_responder = streamer::responder(
             write, 
@@ -427,7 +430,6 @@ impl AccountantSkel {
             let e = Self::process(
                 skel.clone(),
                 &verified_receiver,
-                &broadcast_sender,
                 &responder_sender,
                 &packet_recycler,
                 &blob_recycler,
@@ -438,7 +440,7 @@ impl AccountantSkel {
                 }
             }
         });
-        Ok(vec![t_receiver, t_responder, t_server, t_verifier, t_sync])
+        Ok(vec![t_receiver, t_responder, t_server, t_verifier, t_sync, t_gossip, t_listen, t_broadcast])
     }
 
     /// This service receives messages from a leader in the network and processes the transactions
@@ -467,7 +469,6 @@ impl AccountantSkel {
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let replicate = UdpSocket::bind(me.replicate_addr)?;
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         crdt.write().unwrap().insert(leader);
@@ -640,10 +641,7 @@ mod tests {
 
     #[test]
     fn test_accountant_bad_sig() {
-        let serve_port = 9002;
-        let send_port = 9003;
-        let addr = format!("127.0.0.1:{}", serve_port);
-        let send_addr = format!("127.0.0.1:{}", send_port);
+        let (leader_data, leader_gossip, unused_replicate, leader_serve) = test_node();
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -654,13 +652,13 @@ mod tests {
             alice.last_id(),
             historian,
         )));
-        let _threads = AccountantSkel::serve(&acc, &addr, exit.clone(), sink()).unwrap();
+        let threads = AccountantSkel::serve(&acc, leader_data, leader_gossip, leader_serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind(send_addr).unwrap();
+        let socket = unused_replicate;
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-
-        let mut acc = AccountantStub::new(&addr, socket);
+        let addr = leader_serve.local_addr().unwrap();
+        let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
@@ -676,6 +674,9 @@ mod tests {
 
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 
     use std::sync::{Once, ONCE_INIT};
@@ -741,6 +742,7 @@ mod tests {
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
+            historian,
         )));
 
         let _threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, exit.clone()).unwrap();
