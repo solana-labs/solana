@@ -4,9 +4,9 @@ use result::{Error, Result};
 use std::collections::VecDeque;
 use std::fmt;
 use std::io;
+use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, RwLock};
-use std::mem::size_of;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
