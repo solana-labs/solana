@@ -17,7 +17,7 @@ fn create_ledger(hist: &Historian, seed: &Hash) -> Result<(), SendError<Signal>>
     let keypair = KeyPair::new();
     let tr = Transaction::new(&keypair, keypair.pubkey(), 42, *seed);
     let signal0 = Signal::Event(Event::Transaction(tr));
-    hist.sender.send(signal0)?;
+    hist.input.send(signal0)?;
     sleep(Duration::from_millis(10));
     Ok(())
 }
@@ -26,8 +26,8 @@ fn main() {
     let seed = Hash::default();
     let hist = Historian::new(&seed, Some(10));
     create_ledger(&hist, &seed).expect("send error");
-    drop(hist.sender);
-    let entries: Vec<Entry> = hist.receiver.iter().collect();
+    drop(hist.input);
+    let entries: Vec<Entry> = hist.output.iter().collect();
     for entry in &entries {
         println!("{:?}", entry);
     }

@@ -105,7 +105,7 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
 
     /// Process any Entry items that have been published by the Historian.
     pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.historian.receiver.try_recv() {
+        while let Ok(entry) = self.historian.output.try_recv() {
             self.last_id = entry.id;
             self.acc.register_entry_id(&self.last_id);
             writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
@@ -215,14 +215,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         for result in self.acc.process_verified_transactions(trs) {
             if let Ok(tr) = result {
                 self.historian
-                    .sender
+                    .input
                     .send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        self.historian.sender.send(Signal::Tick)?;
+        self.historian.input.send(Signal::Tick)?;
 
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
@@ -545,9 +545,9 @@ mod tests {
         assert!(skel.process_packets(req_vers).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        skel.historian.sender.send(Signal::Tick).unwrap();
-        drop(skel.historian.sender);
-        let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
+        skel.historian.input.send(Signal::Tick).unwrap();
+        drop(skel.historian.input);
+        let entries: Vec<Entry> = skel.historian.output.iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -800,8 +800,8 @@ mod bench {
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(skel.historian.sender);
-        let entries: Vec<Entry> = skel.historian.receiver.iter().collect();
+        drop(skel.historian.input);
+        let entries: Vec<Entry> = skel.historian.output.iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 
