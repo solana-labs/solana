@@ -405,7 +405,7 @@ mod bench {
         let time = elapsed.as_secs() * 10000000000 + elapsed.subsec_nanos() as u64;
         let ftime = (time as f64) / 10000000000f64;
         let fcount = (end_val - start_val) as f64;
-        println!("performance: {:?}", fcount / ftime);
+        trace!("performance: {:?}", fcount / ftime);
         exit.store(true, Ordering::Relaxed);
         t_reader.join()?;
         t_producer1.join()?;
@@ -442,7 +442,7 @@ mod test {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(m) => *num += m.read().unwrap().packets.len(),
-                e => println!("error {:?}", e),
+                e => info!("error {:?}", e),
             }
             if *num == 10 {
                 break;
@@ -496,7 +496,7 @@ mod test {
                     }
                     *num += m.len();
                 }
-                e => println!("error {:?}", e),
+                e => info!("error {:?}", e),
             }
             if *num == 10 {
                 break;
@@ -601,7 +601,7 @@ mod test {
         let t_receiver =
             blob_receiver(exit.clone(), blob_recycler.clone(), read, s_blob_receiver).unwrap();
         let recv = r_blob_receiver.recv();
-        println!("recv: {:?}", recv);
+        trace!("recv: {:?}", recv);
         let mut oq = recv.unwrap();
         assert_eq!(oq.len(), 1);
         let o = oq.pop_front().unwrap();
