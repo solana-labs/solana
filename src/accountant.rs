@@ -24,7 +24,6 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 #[derive(Debug, PartialEq, Eq)]
 pub enum AccountingError {
     AccountNotFound,
-    BalanceUpdatedBeforeTransactionCompleted,
     InsufficientFunds,
     InvalidTransferSignature,
 }
@@ -142,25 +141,27 @@ impl Accountant {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        let bal = option.unwrap();
-        let current = bal.load(Ordering::Relaxed) as i64;
+        loop {
+            let bal = option.unwrap();
+            let current = bal.load(Ordering::Relaxed) as i64;
 
-        if current < tr.data.tokens {
-            self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
-            return Err(AccountingError::InsufficientFunds);
+            if current < tr.data.tokens {
+                self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
+                return Err(AccountingError::InsufficientFunds);
+            }
+
+            let result = bal.compare_exchange(
+                current as isize,
+                (current - tr.data.tokens) as isize,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+
+            match result {
+                Ok(_) => return Ok(()),
+                Err(_) => continue,
+            };
         }
-
-        let result = bal.compare_exchange(
-            current as isize,
-            (current - tr.data.tokens) as isize,
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-        );
-
-        return match result {
-            Ok(_) => Ok(()),
-            Err(_) => Err(AccountingError::BalanceUpdatedBeforeTransactionCompleted),
-        };
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
