@@ -110,7 +110,6 @@ If your rustc version is lower than 1.25.0, please update and install rustfmt:
 
 ```bash
 $ rustup update
-$ rustup component add rustfmt-preview
 ```
 
 Download the source code:
