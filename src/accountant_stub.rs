@@ -57,9 +57,6 @@ impl AccountantStub {
             Response::Balance { key, val } => {
                 self.balances.insert(key, val);
             }
-            Response::LastId { id } => {
-                self.last_id = Some(id);
-            }
             Response::EntryInfo(entry_info) => {
                 self.last_id = Some(entry_info.id);
                 self.num_events += entry_info.num_events;
@@ -111,15 +108,10 @@ impl AccountantStub {
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
-        let req = Request::GetLastId;
-        let data = serialize(&req).expect("serialize GetId");
-        self.socket
-            .send_to(&data, &self.addr)
-            .expect("buffer error");
         let mut done = false;
         while !done {
             let resp = self.recv_response().expect("recv response");
-            if let &Response::LastId { .. } = &resp {
+            if let &Response::EntryInfo { .. } = &resp {
                 done = true;
             }
             self.process_response(resp);
