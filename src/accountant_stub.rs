@@ -41,6 +41,7 @@ impl AccountantStub {
         let subscriptions = vec![Subscription::EntryInfo];
         let req = Request::Subscribe { subscriptions };
         let data = serialize(&req).expect("serialize Subscribe");
+        trace!("subscribing to {}", self.addr);
         let _res = self.socket.send_to(&data, &self.addr);
     }
 
