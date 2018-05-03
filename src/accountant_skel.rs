@@ -759,6 +759,7 @@ mod bench {
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
     use std::io::sink;
+    use std::sync::mpsc::sync_channel;
     use std::time::Instant;
     use transaction::Transaction;
 
@@ -814,7 +815,7 @@ mod bench {
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(input);
+        drop(skel.historian_input);
         let entries: Vec<Entry> = skel.historian.output.iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
