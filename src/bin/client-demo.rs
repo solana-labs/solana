@@ -16,7 +16,7 @@ use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::env;
 use std::io::{stdin, Read};
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
 use std::time::Instant;
 use untrusted::Input;
@@ -33,7 +33,7 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     let mut threads = 4usize;
     let mut addr: String = "127.0.0.1:8000".to_string();
-    let mut send_addr: String = "127.0.0.1:8001".to_string();
+    let mut client_addr: String = "127.0.0.1:8001".to_string();
 
     let mut opts = Options::new();
     opts.optopt("s", "", "server address", "host:port");
@@ -58,7 +58,7 @@ fn main() {
         addr = matches.opt_str("s").unwrap();
     }
     if matches.opt_present("c") {
-        send_addr = matches.opt_str("c").unwrap();
+        client_addr = matches.opt_str("c").unwrap();
     }
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
@@ -82,11 +82,13 @@ fn main() {
         exit(1);
     });
 
-    let socket = UdpSocket::bind(&send_addr).unwrap();
+    println!("Binding to {}", client_addr);
+    let socket = UdpSocket::bind(&client_addr).unwrap();
     let mut acc = AccountantStub::new(&addr, socket);
 
     println!("Get last ID...");
     let last_id = acc.get_last_id().wait().unwrap();
+    println!("Got last ID {:?}", last_id);
 
     println!("Creating keypairs...");
     let txs = demo.users.len() / 2;
@@ -119,9 +121,10 @@ fn main() {
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
-        println!("Transferring 1 unit {} times...", trs.len());
-        let send_addr = "0.0.0.0:0";
-        let socket = UdpSocket::bind(send_addr).unwrap();
+        println!("Transferring 1 unit {} times... to", trs.len());
+        let mut client_addr: SocketAddr = client_addr.parse().unwrap();
+        client_addr.set_port(0);
+        let socket = UdpSocket::bind(client_addr).unwrap();
         let acc = AccountantStub::new(&addr, socket);
         for tr in trs {
             acc.transfer_signed(tr.clone()).unwrap();
