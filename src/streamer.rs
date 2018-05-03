@@ -438,6 +438,7 @@ mod test {
     use signature::KeyPair;
     use signature::KeyPairUtil;
     use logger;
+    use std::thread::sleep;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -568,9 +569,9 @@ mod test {
     }
 
     fn test_node() -> (Arc<RwLock<Crdt>>, UdpSocket, UdpSocket, UdpSocket) {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(pubkey,
                                     gossip.local_addr().unwrap(),
@@ -606,7 +607,7 @@ mod test {
         crdt_target.write().unwrap().insert(leader_data.clone());
         crdt_target.write().unwrap().set_leader(leader_data.id);
         let crdt_target_g_t = Crdt::gossip(crdt_target.clone(), exit.clone());
-        let crdt_target_l_t = Crdt::listen(crdt_target, sock_gossip_target, exit.clone());
+        let crdt_target_l_t = Crdt::listen(crdt_target.clone(), sock_gossip_target, exit.clone());
         //leader retransmitter
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
@@ -614,7 +615,7 @@ mod test {
         let t_retransmit = retransmitter(
             sock_leader,
             exit.clone(),
-            crdt_leader,
+            crdt_leader.clone(),
             blob_recycler.clone(),
             r_retransmit,
         );
@@ -623,6 +624,15 @@ mod test {
         let (s_blob_receiver, r_blob_receiver) = channel();
         let t_receiver =
             blob_receiver(exit.clone(), blob_recycler.clone(), sock_replicate_target, s_blob_receiver).unwrap();
+        for _ in 0 .. 10 {
+            let done = crdt_target.read().unwrap().update_index == 2 &&
+                       crdt_leader.read().unwrap().update_index == 2;
+            if done {
+                break;
+            }
+            let timer = Duration::new(1,0);
+            sleep(timer);
+        }
 
         //send the data through
         let mut bq = VecDeque::new();
@@ -630,7 +640,7 @@ mod test {
         b.write().unwrap().meta.size = 10;
         bq.push_back(b);
         s_retransmit.send(bq).unwrap();
-        let timer = Duration::new(10,0);
+        let timer = Duration::new(5,0);
         trace!("Waiting for timeout");
         let mut oq = r_blob_receiver.recv_timeout(timer).unwrap();
         assert_eq!(oq.len(), 1);

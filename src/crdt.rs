@@ -90,7 +90,7 @@ pub struct Crdt {
     /// The value of the remote update index that i have last seen
     /// This Node will ask external nodes for updates since the value in this list
     remote: HashMap<PublicKey, u64>,
-    update_index: u64,
+    pub update_index: u64,
     me: PublicKey,
     timeout: Duration,
 }
