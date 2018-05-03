@@ -8,15 +8,18 @@ use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
 use solana::accountant_skel::AccountantSkel;
+use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
 use solana::historian::Historian;
+use solana::signature::{KeyPair, KeyPairUtil};
 use std::env;
 use std::io::{stdin, stdout, Read};
+use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::sync_channel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
@@ -49,7 +52,9 @@ fn main() {
     if matches.opt_present("p") {
         port = matches.opt_str("p").unwrap().parse().expect("port");
     }
-    let addr = format!("0.0.0.0:{}", port);
+    let serve_addr = format!("0.0.0.0:{}", port);
+    let gossip_addr = format!("0.0.0.0:{}", port + 1);
+    let replicate_addr = format!("0.0.0.0:{}", port + 2);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a log file");
@@ -99,15 +104,20 @@ fn main() {
     let (input, event_receiver) = sync_channel(10_000);
     let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(Mutex::new(AccountantSkel::new(
-        acc,
-        last_id,
-        stdout(),
-        input,
-        historian,
-    )));
-    let threads = AccountantSkel::serve(&skel, &addr, exit.clone()).unwrap();
-    eprintln!("Ready. Listening on {}", addr);
+    let skel = Arc::new(AccountantSkel::new(acc, last_id, input, historian));
+    let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
+    let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
+    let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
+    let pubkey = KeyPair::new().pubkey();
+    let d = ReplicatedData::new(
+        pubkey,
+        gossip_sock.local_addr().unwrap(),
+        replicate_sock.local_addr().unwrap(),
+        serve_sock.local_addr().unwrap(),
+    );
+    let threads =
+        AccountantSkel::serve(&skel, d, serve_sock, gossip_sock, exit.clone(), stdout()).unwrap();
+    eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");
     }

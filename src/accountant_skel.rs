@@ -3,22 +3,25 @@
 //! in flux. Clients should use AccountantStub to interact with it.
 
 use accountant::Accountant;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialize_into};
+use crdt::{Crdt, ReplicatedData};
 use ecdsa;
 use entry::Entry;
 use event::Event;
 use hash::Hash;
 use historian::Historian;
 use packet;
-use packet::SharedPackets;
+use packet::{SharedPackets, BLOB_SIZE};
 use rayon::prelude::*;
 use recorder::Signal;
 use result::Result;
 use serde_json;
 use signature::PublicKey;
 use std::cmp::max;
+use std::collections::LinkedList;
 use std::collections::VecDeque;
-use std::io::Write;
+use std::io::{Cursor, Write};
+use std::mem::size_of;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
@@ -28,15 +31,12 @@ use std::time::Duration;
 use streamer;
 use transaction::Transaction;
 
-use subscribers;
-
-pub struct AccountantSkel<W: Write + Send + 'static> {
-    acc: Accountant,
-    last_id: Hash,
-    writer: W,
-    historian_input: SyncSender<Signal>,
+pub struct AccountantSkel {
+    acc: Mutex<Accountant>,
+    last_id: Mutex<Hash>,
+    historian_input: Mutex<SyncSender<Signal>>,
     historian: Historian,
-    entry_info_subscribers: Vec<SocketAddr>,
+    entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -70,6 +70,8 @@ impl Request {
     }
 }
 
+type SharedSkel = Arc<AccountantSkel>;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
@@ -77,30 +79,31 @@ pub enum Response {
     LastId { id: Hash },
 }
 
-impl<W: Write + Send + 'static> AccountantSkel<W> {
+impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
     pub fn new(
         acc: Accountant,
         last_id: Hash,
-        writer: W,
         historian_input: SyncSender<Signal>,
         historian: Historian,
     ) -> Self {
         AccountantSkel {
-            acc,
-            last_id,
-            writer,
-            historian_input,
+            acc: Mutex::new(acc),
+            last_id: Mutex::new(last_id),
+            entry_info_subscribers: Mutex::new(vec![]),
+            historian_input: Mutex::new(historian_input),
             historian,
-            entry_info_subscribers: vec![],
         }
     }
 
-    fn notify_entry_info_subscribers(&mut self, entry: &Entry) {
+    fn notify_entry_info_subscribers(obj: &SharedSkel, entry: &Entry) {
         // TODO: No need to bind().
         let socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        for addr in &self.entry_info_subscribers {
+        // copy subscribers to avoid taking lock while doing io
+        let addrs = obj.entry_info_subscribers.lock().unwrap().clone();
+        trace!("Sending to {} addrs", addrs.len());
+        for addr in addrs {
             let entry_info = EntryInfo {
                 id: entry.id,
                 num_hashes: entry.num_hashes,
@@ -111,34 +114,131 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         }
     }
 
-    /// Process any Entry items that have been published by the Historian.
-    pub fn sync(&mut self) -> Hash {
-        while let Ok(entry) = self.historian.output.try_recv() {
-            self.last_id = entry.id;
-            self.acc.register_entry_id(&self.last_id);
-            writeln!(self.writer, "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-            self.notify_entry_info_subscribers(&entry);
+    fn update_entry<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, entry: &Entry) {
+        trace!("update_entry entry");
+        let mut last_id_l = obj.last_id.lock().unwrap();
+        *last_id_l = entry.id;
+        obj.acc.lock().unwrap().register_entry_id(&last_id_l);
+        drop(last_id_l);
+        writeln!(
+            writer.lock().unwrap(),
+            "{}",
+            serde_json::to_string(&entry).unwrap()
+        ).unwrap();
+        trace!("notify_entry_info entry");
+        Self::notify_entry_info_subscribers(obj, &entry);
+        trace!("notify_entry_info done");
+    }
+
+    fn receive_to_list<W: Write>(
+        obj: &SharedSkel,
+        writer: &Arc<Mutex<W>>,
+        max: usize,
+    ) -> Result<LinkedList<Entry>> {
+        //TODO implement a serialize for channel that does this without allocations
+        let mut num = 0;
+        let mut l = LinkedList::new();
+        let entry = obj.historian
+            .output
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::new(1, 0))?;
+        Self::update_entry(obj, writer, &entry);
+        l.push_back(entry);
+        while let Ok(entry) = obj.historian.receive() {
+            Self::update_entry(obj, writer, &entry);
+            l.push_back(entry);
+            num += 1;
+            if num == max {
+                break;
+            }
+            trace!("receive_to_list entries num: {}", num);
         }
-        self.last_id
+        Ok(l)
+    }
+
+    /// Process any Entry items that have been published by the Historian.
+    /// continuosly broadcast blobs of entries out
+    fn run_sync<W: Write>(
+        obj: SharedSkel,
+        broadcast: &streamer::BlobSender,
+        blob_recycler: &packet::BlobRecycler,
+        writer: &Arc<Mutex<W>>,
+        exit: Arc<AtomicBool>,
+    ) -> Result<()> {
+        // TODO: should it be the serialized Entry size?
+        let max = BLOB_SIZE / size_of::<Entry>();
+        let mut q = VecDeque::new();
+        let mut count = 0;
+        trace!("max: {}", max);
+        while let Ok(list) = Self::receive_to_list(&obj, writer, max) {
+            trace!("New blobs? {} {}", count, list.len());
+            let b = blob_recycler.allocate();
+            let pos = {
+                let mut bd = b.write().unwrap();
+                let mut out = Cursor::new(bd.data_mut());
+                serialize_into(&mut out, &list).expect("failed to serialize output");
+                out.position() as usize
+            };
+            assert!(pos < BLOB_SIZE);
+            b.write().unwrap().set_size(pos);
+            q.push_back(b);
+            count += 1;
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+        if !q.is_empty() {
+            broadcast.send(q)?;
+        }
+        Ok(())
+    }
+
+    pub fn sync_service<W: Write + Send + 'static>(
+        obj: SharedSkel,
+        exit: Arc<AtomicBool>,
+        broadcast: streamer::BlobSender,
+        blob_recycler: packet::BlobRecycler,
+        writer: Arc<Mutex<W>>,
+    ) -> JoinHandle<()> {
+        spawn(move || loop {
+            let e = Self::run_sync(
+                obj.clone(),
+                &broadcast,
+                &blob_recycler,
+                &writer,
+                exit.clone(),
+            );
+            if e.is_err() && exit.load(Ordering::Relaxed) {
+                break;
+            }
+        })
     }
 
     /// Process Request items sent by clients.
     pub fn process_request(
-        &mut self,
+        &self,
         msg: Request,
         rsp_addr: SocketAddr,
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.acc.get_balance(&key);
+                let val = self.acc.lock().unwrap().get_balance(&key);
                 Some((Response::Balance { key, val }, rsp_addr))
             }
-            Request::GetLastId => Some((Response::LastId { id: self.sync() }, rsp_addr)),
+            Request::GetLastId => Some((
+                Response::LastId {
+                    id: *self.last_id.lock().unwrap(),
+                },
+                rsp_addr,
+            )),
             Request::Transaction(_) => unreachable!(),
             Request::Subscribe { subscriptions } => {
                 for subscription in subscriptions {
                     match subscription {
-                        Subscription::EntryInfo => self.entry_info_subscribers.push(rsp_addr),
+                        Subscription::EntryInfo => {
+                            self.entry_info_subscribers.lock().unwrap().push(rsp_addr)
+                        }
                     }
                 }
                 None
@@ -214,22 +314,25 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     fn process_packets(
-        &mut self,
+        &self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
+        trace!("partitioning");
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
-        for result in self.acc.process_verified_transactions(trs) {
+        for result in self.acc.lock().unwrap().process_verified_transactions(trs) {
             if let Ok(tr) = result {
                 self.historian_input
+                    .lock()
+                    .unwrap()
                     .send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        self.historian_input.send(Signal::Tick)?;
+        self.historian_input.lock().unwrap().send(Signal::Tick)?;
 
         // Process the remaining requests serially.
         let rsps = reqs.into_iter()
@@ -268,39 +371,44 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     }
 
     fn process(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &SharedSkel,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        blob_sender: &streamer::BlobSender,
+        responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let mms = verified_receiver.recv_timeout(timer)?;
+        trace!("got some messages: {}", mms.len());
         for (msgs, vers) in mms {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
             let req_vers = reqs.into_iter()
                 .zip(vers)
                 .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
-                .filter(|x| x.0.verify())
+                .filter(|x| {
+                    let v = x.0.verify();
+                    trace!("v:{} x:{:?}", v, x);
+                    v
+                })
                 .collect();
-            let rsps = obj.lock().unwrap().process_packets(req_vers)?;
+            trace!("process_packets");
+            let rsps = obj.process_packets(req_vers)?;
+            trace!("done process_packets");
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
+            trace!("sending blobs: {}", blobs.len());
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
-                blob_sender.send(blobs)?;
+                responder_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
-
-            // Write new entries to the ledger and notify subscribers.
-            obj.lock().unwrap().sync();
         }
-
+        trace!("done responding");
         Ok(())
     }
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
+        obj: &SharedSkel,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -310,11 +418,11 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
             for entry in entries {
-                obj.lock().unwrap().acc.register_entry_id(&entry.id);
+                obj.acc.lock().unwrap().register_entry_id(&entry.id);
 
-                obj.lock()
+                obj.acc
+                    .lock()
                     .unwrap()
-                    .acc
                     .process_verified_events(entry.events)?;
             }
             //TODO respond back to leader with hash of the state
@@ -328,25 +436,35 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// Create a UDP microservice that forwards messages the given AccountantSkel.
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
-    pub fn serve(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
-        addr: &str,
+    pub fn serve<W: Write + Send + 'static>(
+        obj: &SharedSkel,
+        me: ReplicatedData,
+        serve: UdpSocket,
+        gossip: UdpSocket,
         exit: Arc<AtomicBool>,
+        writer: W,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let read = UdpSocket::bind(addr)?;
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
+
         // make sure we are on the same interface
-        let mut local = read.local_addr()?;
+        let mut local = serve.local_addr()?;
         local.set_port(0);
-        let write = UdpSocket::bind(local)?;
+        let respond_socket = UdpSocket::bind(local.clone())?;
 
         let packet_recycler = packet::PacketRecycler::default();
         let blob_recycler = packet::BlobRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver =
-            streamer::receiver(read, exit.clone(), packet_recycler.clone(), packet_sender)?;
-        let (blob_sender, blob_receiver) = channel();
-        let t_responder =
-            streamer::responder(write, exit.clone(), blob_recycler.clone(), blob_receiver);
+            streamer::receiver(serve, exit.clone(), packet_recycler.clone(), packet_sender)?;
+        let (responder_sender, responder_receiver) = channel();
+        let t_responder = streamer::responder(
+            respond_socket,
+            exit.clone(),
+            blob_recycler.clone(),
+            responder_receiver,
+        );
         let (verified_sender, verified_receiver) = channel();
 
         let exit_ = exit.clone();
@@ -357,32 +475,58 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
             }
         });
 
+        let (broadcast_sender, broadcast_receiver) = channel();
+
+        let broadcast_socket = UdpSocket::bind(local)?;
+        let t_broadcast = streamer::broadcaster(
+            broadcast_socket,
+            exit.clone(),
+            crdt.clone(),
+            blob_recycler.clone(),
+            broadcast_receiver,
+        );
+
+        let t_sync = Self::sync_service(
+            obj.clone(),
+            exit.clone(),
+            broadcast_sender,
+            blob_recycler.clone(),
+            Arc::new(Mutex::new(writer)),
+        );
+
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
-                &skel,
+                &mut skel.clone(),
                 &verified_receiver,
-                &blob_sender,
+                &responder_sender,
                 &packet_recycler,
                 &blob_recycler,
             );
             if e.is_err() {
-                // Assume this was a timeout, so sync any empty entries.
-                skel.lock().unwrap().sync();
-
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
             }
         });
-        Ok(vec![t_receiver, t_responder, t_server, t_verifier])
+        Ok(vec![
+            t_receiver,
+            t_responder,
+            t_server,
+            t_verifier,
+            t_sync,
+            t_gossip,
+            t_listen,
+            t_broadcast,
+        ])
     }
 
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the accountant state.
     /// # Arguments
     /// * `obj` - The accountant state.
-    /// * `rsubs` - The subscribers.
+    /// * `me` - my configuration
+    /// * `leader` - leader configuration
     /// * `exit` - The exit signal.
     /// # Remarks
     /// The pipeline is constructed as follows:
@@ -396,13 +540,21 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
     /// 4. process the transaction state machine
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
-        obj: &Arc<Mutex<AccountantSkel<W>>>,
-        rsubs: subscribers::Subscribers,
+        obj: &SharedSkel,
+        me: ReplicatedData,
+        gossip: UdpSocket,
+        replicate: UdpSocket,
+        leader: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let read = UdpSocket::bind(rsubs.me.addr)?;
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        crdt.write().unwrap().set_leader(leader.id);
+        crdt.write().unwrap().insert(leader);
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
+
         // make sure we are on the same interface
-        let mut local = read.local_addr()?;
+        let mut local = replicate.local_addr()?;
         local.set_port(0);
         let write = UdpSocket::bind(local)?;
 
@@ -411,26 +563,26 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
         let t_blob_receiver = streamer::blob_receiver(
             exit.clone(),
             blob_recycler.clone(),
-            read,
+            replicate,
             blob_sender.clone(),
         )?;
         let (window_sender, window_receiver) = channel();
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let subs = Arc::new(RwLock::new(rsubs));
         let t_retransmit = streamer::retransmitter(
             write,
             exit.clone(),
-            subs.clone(),
+            crdt.clone(),
             blob_recycler.clone(),
             retransmit_receiver,
         );
+
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let t_window = streamer::window(
             exit.clone(),
-            subs,
+            crdt,
             blob_recycler.clone(),
             blob_receiver,
             window_sender,
@@ -444,7 +596,14 @@ impl<W: Write + Send + 'static> AccountantSkel<W> {
                 break;
             }
         });
-        Ok(vec![t_blob_receiver, t_retransmit, t_window, t_server])
+        Ok(vec![
+            t_blob_receiver,
+            t_retransmit,
+            t_window,
+            t_server,
+            t_gossip,
+            t_listen,
+        ])
     }
 }
 
@@ -479,30 +638,30 @@ mod tests {
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
     use accountant_stub::AccountantStub;
+    use chrono::prelude::*;
+    use crdt::Crdt;
+    use crdt::ReplicatedData;
+    use entry;
     use entry::Entry;
+    use event::Event;
     use futures::Future;
+    use hash::{hash, Hash};
     use historian::Historian;
     use mint::Mint;
     use plan::Plan;
     use recorder::Signal;
     use signature::{KeyPair, KeyPairUtil};
+    use std::collections::VecDeque;
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::channel;
     use std::sync::mpsc::sync_channel;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::Transaction;
-
-    use chrono::prelude::*;
-    use entry;
-    use event::Event;
-    use hash::{hash, Hash};
-    use std::collections::VecDeque;
-    use std::sync::mpsc::channel;
     use streamer;
-    use subscribers::{Node, Subscribers};
+    use transaction::Transaction;
 
     #[test]
     fn test_layout() {
@@ -540,7 +699,7 @@ mod tests {
         let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), input, historian);
+        let skel = AccountantSkel::new(acc, mint.last_id(), input, historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -554,9 +713,13 @@ mod tests {
         assert!(skel.process_packets(req_vers).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        skel.historian_input.send(Signal::Tick).unwrap();
+        skel.historian_input
+            .lock()
+            .unwrap()
+            .send(Signal::Tick)
+            .unwrap();
         drop(skel.historian_input);
-        let entries: Vec<Entry> = skel.historian.output.iter().collect();
+        let entries: Vec<Entry> = skel.historian.output.lock().unwrap().iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -570,45 +733,50 @@ mod tests {
 
     #[test]
     fn test_accountant_bad_sig() {
-        let serve_port = 9002;
-        let send_port = 9003;
-        let addr = format!("127.0.0.1:{}", serve_port);
-        let send_addr = format!("127.0.0.1:{}", send_port);
+        let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(
-            acc,
-            alice.last_id(),
+        let acc_skel = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let serve_addr = leader_serve.local_addr().unwrap();
+        let threads = AccountantSkel::serve(
+            &acc_skel,
+            leader_data,
+            leader_serve,
+            leader_gossip,
+            exit.clone(),
             sink(),
-            input,
-            historian,
-        )));
-        let _threads = AccountantSkel::serve(&acc, &addr, exit.clone()).unwrap();
+        ).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind(send_addr).unwrap();
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
+        let mut acc_stub = AccountantStub::new(serve_addr, socket);
+        let last_id = acc_stub.get_last_id().wait().unwrap();
 
-        let mut acc = AccountantStub::new(&addr, socket);
-        let last_id = acc.get_last_id().wait().unwrap();
+        trace!("doing stuff");
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
-        let _sig = acc.transfer_signed(tr).unwrap();
+        let _sig = acc_stub.transfer_signed(tr).unwrap();
 
-        let last_id = acc.get_last_id().wait().unwrap();
+        let last_id = acc_stub.get_last_id().wait().unwrap();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         tr2.data.tokens = 502;
         tr2.data.plan = Plan::new_payment(502, bob_pubkey);
-        let _sig = acc.transfer_signed(tr2).unwrap();
+        let _sig = acc_stub.transfer_signed(tr2).unwrap();
 
-        assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
+        assert_eq!(acc_stub.get_balance(&bob_pubkey).wait().unwrap(), 500);
+        trace!("exiting");
         exit.store(true, Ordering::Relaxed);
+        trace!("joining threads");
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 
     use std::sync::{Once, ONCE_INIT};
@@ -623,21 +791,45 @@ mod tests {
         });
     }
 
+    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(
+            pubkey,
+            gossip.local_addr().unwrap(),
+            replicate.local_addr().unwrap(),
+            serve.local_addr().unwrap(),
+        );
+        (d, gossip, replicate, serve)
+    }
+
+    /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
         setup();
-        let leader_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let leader_addr = leader_sock.local_addr().unwrap();
-        let me_addr = "127.0.0.1:9010".parse().unwrap();
-        let target_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let target_peer_addr = target_peer_sock.local_addr().unwrap();
-        let source_peer_sock = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let (leader_data, leader_gossip, _, leader_serve) = test_node();
+        let (target1_data, target1_gossip, target1_replicate, _) = test_node();
+        let (target2_data, target2_gossip, target2_replicate, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let node_me = Node::new([0, 0, 0, 0, 0, 0, 0, 1], 10, me_addr);
-        let node_subs = vec![Node::new([0, 0, 0, 0, 0, 0, 0, 2], 8, target_peer_addr); 1];
-        let node_leader = Node::new([0, 0, 0, 0, 0, 0, 0, 3], 20, leader_addr);
-        let subs = Subscribers::new(node_me, node_leader, &node_subs);
+        //start crdt_leader
+        let mut crdt_l = Crdt::new(leader_data.clone());
+        crdt_l.set_leader(leader_data.id);
+
+        let cref_l = Arc::new(RwLock::new(crdt_l));
+        let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
+        let t_l_listen = Crdt::listen(cref_l, leader_gossip, exit.clone());
+
+        //start crdt2
+        let mut crdt2 = Crdt::new(target2_data.clone());
+        crdt2.insert(leader_data.clone());
+        crdt2.set_leader(leader_data.id);
+        let leader_id = leader_data.id;
+        let cref2 = Arc::new(RwLock::new(crdt2));
+        let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
+        let t2_listen = Crdt::listen(cref2, target2_gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -648,12 +840,14 @@ mod tests {
         let t_receiver = streamer::blob_receiver(
             exit.clone(),
             recv_recycler.clone(),
-            target_peer_sock,
+            target2_replicate,
             s_reader,
         ).unwrap();
+
+        // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
-            source_peer_sock,
+            leader_serve,
             exit.clone(),
             resp_recycler.clone(),
             r_responder,
@@ -664,15 +858,16 @@ mod tests {
         let acc = Accountant::new(&alice);
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(
-            acc,
-            alice.last_id(),
-            sink(),
-            input,
-            historian,
-        )));
-
-        let _threads = AccountantSkel::replicate(&acc, subs, exit.clone()).unwrap();
+        let acc = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let replicate_addr = target1_data.replicate_addr;
+        let threads = AccountantSkel::replicate(
+            &acc,
+            target1_data,
+            target1_gossip,
+            target1_replicate,
+            leader_data,
+            exit.clone(),
+        ).unwrap();
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
@@ -685,10 +880,11 @@ mod tests {
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             w.set_index(i).unwrap();
+            w.set_id(leader_id).unwrap();
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
@@ -697,11 +893,11 @@ mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
             let entry1 =
                 entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
@@ -710,7 +906,7 @@ mod tests {
 
             w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
             w.set_size(serialized_entry.len());
-            w.meta.set_addr(&me_addr);
+            w.meta.set_addr(&replicate_addr);
             drop(w);
             msgs.push_back(b_);
         }
@@ -726,25 +922,31 @@ mod tests {
             msgs.push(msg);
         }
 
-        let alice_balance = acc.lock()
+        let alice_balance = acc.acc
+            .lock()
             .unwrap()
-            .acc
             .get_balance(&alice.keypair().pubkey())
             .unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = acc.lock()
+        let bob_balance = acc.acc
+            .lock()
             .unwrap()
-            .acc
             .get_balance(&bob_keypair.pubkey())
             .unwrap();
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().expect("join");
+        }
+        t2_gossip.join().expect("join");
+        t2_listen.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        t_l_gossip.join().expect("join");
+        t_l_listen.join().expect("join");
     }
-
 }
 
 #[cfg(all(feature = "unstable", test))]
@@ -758,7 +960,6 @@ mod bench {
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
-    use std::io::sink;
     use std::sync::mpsc::sync_channel;
     use std::time::Instant;
     use transaction::Transaction;
@@ -806,7 +1007,7 @@ mod bench {
 
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let mut skel = AccountantSkel::new(acc, mint.last_id(), sink(), input, historian);
+        let skel = AccountantSkel::new(acc, mint.last_id(), input, historian);
 
         let now = Instant::now();
         assert!(skel.process_packets(req_vers).is_ok());
@@ -816,7 +1017,7 @@ mod bench {
 
         // Ensure that all transactions were successfully logged.
         drop(skel.historian_input);
-        let entries: Vec<Entry> = skel.historian.output.iter().collect();
+        let entries: Vec<Entry> = skel.historian.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 
