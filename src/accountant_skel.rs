@@ -43,7 +43,6 @@ pub struct AccountantSkel {
 pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
-    GetLastId,
     Subscribe { subscriptions: Vec<Subscription> },
 }
 
@@ -75,7 +74,6 @@ type SharedSkel = Arc<AccountantSkel>;
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     EntryInfo(EntryInfo),
-    LastId { id: Hash },
 }
 
 impl AccountantSkel {
@@ -216,12 +214,6 @@ impl AccountantSkel {
                 let val = self.acc.lock().unwrap().get_balance(&key);
                 Some((Response::Balance { key, val }, rsp_addr))
             }
-            Request::GetLastId => Some((
-                Response::LastId {
-                    id: self.acc.lock().unwrap().last_id(),
-                },
-                rsp_addr,
-            )),
             Request::Transaction(_) => unreachable!(),
             Request::Subscribe { subscriptions } => {
                 for subscription in subscriptions {
