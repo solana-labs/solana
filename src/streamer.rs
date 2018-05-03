@@ -101,10 +101,7 @@ pub fn blob_receiver(
         if exit.load(Ordering::Relaxed) {
             break;
         }
-        let ret = recv_blobs(&recycler, &sock, &s);
-        if ret.is_err() {
-            break;
-        }
+        let _ = recv_blobs(&recycler, &sock, &s);
     });
     Ok(t)
 }
@@ -310,11 +307,15 @@ pub fn retransmitter(
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
-    spawn(move || loop {
+    spawn(move || {
+        trace!("retransmitter started");
+        loop {
         if exit.load(Ordering::Relaxed) {
             break;
         }
         let _ = retransmit(&crdt, &recycler, &r, &sock);
+    }
+        trace!("exiting retransmitter");
     })
 }
 
@@ -405,7 +406,7 @@ mod bench {
         let time = elapsed.as_secs() * 10000000000 + elapsed.subsec_nanos() as u64;
         let ftime = (time as f64) / 10000000000f64;
         let fcount = (end_val - start_val) as f64;
-        println!("performance: {:?}", fcount / ftime);
+        trace!("performance: {:?}", fcount / ftime);
         exit.store(true, Ordering::Relaxed);
         t_reader.join()?;
         t_producer1.join()?;
@@ -436,13 +437,15 @@ mod test {
     use crdt::{Crdt, ReplicatedData};
     use signature::KeyPair;
     use signature::KeyPairUtil;
+    use logger;
+    use std::thread::sleep;
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(m) => *num += m.read().unwrap().packets.len(),
-                e => println!("error {:?}", e),
+                e => info!("error {:?}", e),
             }
             if *num == 10 {
                 break;
@@ -496,7 +499,7 @@ mod test {
                     }
                     *num += m.len();
                 }
-                e => println!("error {:?}", e),
+                e => info!("error {:?}", e),
             }
             if *num == 10 {
                 break;
@@ -565,52 +568,91 @@ mod test {
         t_window.join().expect("join");
     }
 
+    fn test_node() -> (Arc<RwLock<Crdt>>, UdpSocket, UdpSocket, UdpSocket) {
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(pubkey,
+                                    gossip.local_addr().unwrap(),
+                                    replicate.local_addr().unwrap(),
+                                    serve.local_addr().unwrap(),
+                                    );
+        let crdt = Crdt::new(d);
+        trace!("id: {} gossip: {} replicate: {} serve: {}",
+                 crdt.my_data().id[0],
+                 gossip.local_addr().unwrap(),
+                 replicate.local_addr().unwrap(),
+                 serve.local_addr().unwrap(),
+                 );
+        (Arc::new(RwLock::new(crdt)), gossip, replicate, serve)
+    }
+
+
+
     #[test]
+    //retransmit from leader to replicate target
     pub fn retransmit() {
-        let pubkey_me = KeyPair::new().pubkey();
-        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        logger::setup();
+        trace!("here");
         let exit = Arc::new(AtomicBool::new(false));
+        let (crdt_leader, sock_gossip_leader, _, sock_leader) = test_node();
+        let (crdt_target, sock_gossip_target, sock_replicate_target, _) = test_node();
+        let leader_data = crdt_leader.read().unwrap().my_data().clone();
+        crdt_leader.write().unwrap().insert(leader_data.clone());
+        crdt_leader.write().unwrap().set_leader(leader_data.id);
+        let crdt_leader_g_t = Crdt::gossip(crdt_leader.clone(), exit.clone());
+        let crdt_leader_l_t = Crdt::listen(crdt_leader.clone(), sock_gossip_leader, exit.clone());
 
-        let rep_data = ReplicatedData::new(pubkey_me,
-                                           read.local_addr().unwrap(),
-                                           send.local_addr().unwrap(),
-                                           serve.local_addr().unwrap());
-        let mut crdt_me = Crdt::new(rep_data);
-        let me_id = crdt_me.my_data().id;
-        crdt_me.set_leader(me_id);
-        let subs = Arc::new(RwLock::new(crdt_me));
-
+        crdt_target.write().unwrap().insert(leader_data.clone());
+        crdt_target.write().unwrap().set_leader(leader_data.id);
+        let crdt_target_g_t = Crdt::gossip(crdt_target.clone(), exit.clone());
+        let crdt_target_l_t = Crdt::listen(crdt_target.clone(), sock_gossip_target, exit.clone());
+        //leader retransmitter
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
-        let saddr = send.local_addr().unwrap();
+        let saddr = sock_leader.local_addr().unwrap();
         let t_retransmit = retransmitter(
-            send,
+            sock_leader,
             exit.clone(),
-            subs,
+            crdt_leader.clone(),
             blob_recycler.clone(),
             r_retransmit,
         );
+
+        //target receiver
+        let (s_blob_receiver, r_blob_receiver) = channel();
+        let t_receiver =
+            blob_receiver(exit.clone(), blob_recycler.clone(), sock_replicate_target, s_blob_receiver).unwrap();
+        for _ in 0 .. 10 {
+            let done = crdt_target.read().unwrap().update_index == 2 &&
+                       crdt_leader.read().unwrap().update_index == 2;
+            if done {
+                break;
+            }
+            let timer = Duration::new(1,0);
+            sleep(timer);
+        }
+
+        //send the data through
         let mut bq = VecDeque::new();
         let b = blob_recycler.allocate();
         b.write().unwrap().meta.size = 10;
         bq.push_back(b);
         s_retransmit.send(bq).unwrap();
-        let (s_blob_receiver, r_blob_receiver) = channel();
-        let t_receiver =
-            blob_receiver(exit.clone(), blob_recycler.clone(), read, s_blob_receiver).unwrap();
-        let recv = r_blob_receiver.recv();
-        println!("recv: {:?}", recv);
-        let mut oq = recv.unwrap();
+        let timer = Duration::new(5,0);
+        trace!("Waiting for timeout");
+        let mut oq = r_blob_receiver.recv_timeout(timer).unwrap();
         assert_eq!(oq.len(), 1);
         let o = oq.pop_front().unwrap();
         let ro = o.read().unwrap();
         assert_eq!(ro.meta.size, 10);
         assert_eq!(ro.meta.addr(), saddr);
         exit.store(true, Ordering::Relaxed);
-        t_receiver.join().expect("join");
-        t_retransmit.join().expect("join");
+        let threads = vec![t_receiver, t_retransmit, crdt_target_g_t, crdt_target_l_t, crdt_leader_g_t, crdt_leader_l_t];
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 
 }

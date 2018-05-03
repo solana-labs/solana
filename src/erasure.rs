@@ -272,7 +272,6 @@ pub fn recover(
 mod test {
     use erasure;
     use packet::{BlobRecycler, SharedBlob, PACKET_DATA_SIZE};
-    extern crate env_logger;
 
     #[test]
     pub fn test_coding() {

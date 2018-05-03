@@ -93,9 +93,9 @@ impl AccountantSkel {
         // TODO: No need to bind().
         let socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        println!("taking read lock");
+        trace!("taking read lock");
         let addrs = obj.entry_info_subscribers.lock().unwrap().clone();
-        println!("dropping read lock");
+        trace!("dropping read lock");
         for addr in addrs {
             let entry_info = EntryInfo {
                 id: entry.id,
@@ -103,48 +103,48 @@ impl AccountantSkel {
                 num_events: entry.events.len() as u64,
             };
             let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
-            println!("sending to {}", addr);
+            trace!("sending to {}", addr);
             let _res = socket.send_to(&data, addr);
-            println!("done");
+            trace!("done");
         }
     }
 
     fn update_entry<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, entry: &Entry) {
-        println!("update_entry");
+        trace!("update_entry");
         let mut last_id_l = obj.last_id.lock().unwrap();
         *last_id_l = entry.id;
-        println!("update_entry 3");
+        trace!("update_entry 3");
         obj.acc.lock().unwrap().register_entry_id(&last_id_l);
         drop(last_id_l);
-        println!("update_entry 4");
+        trace!("update_entry 4");
         writeln!(writer.lock().unwrap(), "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-        println!("dropping write lock");
+        trace!("dropping write lock");
         Self::notify_entry_info_subscribers(obj, &entry);
-        println!("done entry_info notify");
+        trace!("done entry_info notify");
     }
 
     fn receive_to_list<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
-        //println!("receive_to_list entry");
+        //trace!("receive_to_list entry");
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
         let entry = obj.historian.receiver.lock().unwrap().recv_timeout(Duration::new(1, 0))?;
-        println!("obj.write 1 {:?}", entry);
+        trace!("obj.write 1 {:?}", entry);
         Self::update_entry(obj, writer, &entry);
-        println!("obj.write 1.end");
+        trace!("obj.write 1.end");
         l.push_back(entry);
         while let Ok(entry) = obj.historian.receive() {
-            println!("obj.write 2");
+            trace!("obj.write 2");
             Self::update_entry(obj, writer, &entry);
-            println!("obj.write 2.end");
+            trace!("obj.write 2.end");
             l.push_back(entry);
             num += 1;
             if num == max {
                 break;
             }
-            println!("num: {}", num);
+            trace!("num: {}", num);
         }
-        //println!("receive_to_list exit");
+        //trace!("receive_to_list exit");
         Ok(l)
     }
 
@@ -160,9 +160,9 @@ impl AccountantSkel {
         let max = BLOB_SIZE / size_of::<Entry>();
         let mut q = VecDeque::new();
         let mut count = 0;
-        println!("max: {}", max);
+        trace!("max: {}", max);
         while let Ok(list) = Self::receive_to_list(&obj, writer, max) {
-            println!("New blobs? {} {}", count, list.len());
+            trace!("New blobs? {} {}", count, list.len());
             let b = blob_recycler.allocate();
             let pos = {
                 let mut bd = b.write().unwrap();
@@ -294,7 +294,7 @@ impl AccountantSkel {
         &self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
-        println!("partitioning");
+        trace!("partitioning");
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
@@ -353,26 +353,26 @@ impl AccountantSkel {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let mms = verified_receiver.recv_timeout(timer)?;
-        println!("got some messages: {}", mms.len());
+        trace!("got some messages: {}", mms.len());
         for (msgs, vers) in mms {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
             let req_vers = reqs.into_iter()
                 .zip(vers)
                 .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
-                .filter(|x| { let v = x.0.verify(); println!("v:{} x:{:?}", v, x); v} )
+                .filter(|x| { let v = x.0.verify(); trace!("v:{} x:{:?}", v, x); v} )
                 .collect();
-            println!("process_packets");
+            trace!("process_packets");
             let rsps = obj.process_packets(req_vers)?;
-            println!("done process_packets");
+            trace!("done process_packets");
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
-            println!("sending blobs: {}", blobs.len());
+            trace!("sending blobs: {}", blobs.len());
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
                 responder_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
         }
-        println!("done responding");
+        trace!("done responding");
         Ok(())
     }
     /// Process verified blobs, already in order
@@ -602,7 +602,7 @@ mod tests {
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn test_accountant_bad_sig() {
-        let (leader_data, leader_gossip, unused_replicate, leader_serve) = test_node();
+        let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -696,13 +696,12 @@ mod tests {
         let threads = AccountantSkel::serve(&acc_skel, leader_data, leader_serve, leader_gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        //let socket = unused_replicate;
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
         let mut acc = AccountantStub::new(serve_addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
 
-        println!("doing stuff");
+        trace!("doing stuff");
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
@@ -716,9 +715,9 @@ mod tests {
         let _sig = acc.transfer_signed(tr2).unwrap();
 
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
-        println!("exiting");
+        trace!("exiting");
         exit.store(true, Ordering::Relaxed);
-        println!("joining threads");
+        trace!("joining threads");
         for t in threads {
             t.join().unwrap();
         }
@@ -737,9 +736,9 @@ mod tests {
     }
 
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(pubkey,
                                     gossip.local_addr().unwrap(),

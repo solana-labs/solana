@@ -165,7 +165,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, RwLock};
+    use std::sync::{Arc};
     use std::thread::sleep;
     use std::time::Duration;
     use crdt::ReplicatedData;
