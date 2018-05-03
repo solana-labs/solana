@@ -4,13 +4,14 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, SendError, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
+use std::sync::{Arc, Mutex};
 
 pub struct Historian {
-    pub sender: SyncSender<Signal>,
-    pub receiver: Receiver<Entry>,
+    pub sender: Arc<Mutex<SyncSender<Signal>>>,
+    pub receiver: Arc<Mutex<Receiver<Entry>>>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
@@ -20,9 +21,11 @@ impl Historian {
         let (entry_sender, receiver) = sync_channel(10_000);
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
+        let lsender = Arc::new(Mutex::new(sender));
+        let lreceiver = Arc::new(Mutex::new(receiver));
         Historian {
-            sender,
-            receiver,
+            sender:lsender,
+            receiver:lreceiver,
             thread_hdl,
         }
     }
@@ -48,6 +51,15 @@ impl Historian {
             }
         })
     }
+
+    pub fn send(self: &Self, s: Signal) -> Result<(), SendError<Signal>> {
+        self.sender.lock().unwrap().send(s)
+    }
+
+    pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
+        self.receiver.lock().unwrap().try_recv()
+    }
+
 }
 
 #[cfg(test)]
@@ -62,15 +74,15 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, None);
 
-        hist.sender.send(Signal::Tick).unwrap();
+        hist.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Signal::Tick).unwrap();
+        hist.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Signal::Tick).unwrap();
+        hist.sender.lock().unwrap().send(Signal::Tick).unwrap();
 
-        let entry0 = hist.receiver.recv().unwrap();
-        let entry1 = hist.receiver.recv().unwrap();
-        let entry2 = hist.receiver.recv().unwrap();
+        let entry0 = hist.receiver.lock().unwrap().recv().unwrap();
+        let entry1 = hist.receiver.lock().unwrap().recv().unwrap();
+        let entry2 = hist.receiver.lock().unwrap().recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -90,7 +102,7 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, None);
         drop(hist.receiver);
-        hist.sender.send(Signal::Tick).unwrap();
+        hist.sender.lock().unwrap().send(Signal::Tick).unwrap();
         assert_eq!(
             hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
@@ -102,9 +114,9 @@ mod tests {
         let zero = Hash::default();
         let hist = Historian::new(&zero, Some(20));
         sleep(Duration::from_millis(300));
-        hist.sender.send(Signal::Tick).unwrap();
+        hist.sender.lock().unwrap().send(Signal::Tick).unwrap();
         drop(hist.sender);
-        let entries: Vec<Entry> = hist.receiver.iter().collect();
+        let entries: Vec<Entry> = hist.receiver.lock().unwrap().iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.
