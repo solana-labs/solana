@@ -57,9 +57,6 @@ impl AccountantStub {
             Response::Balance { key, val } => {
                 self.balances.insert(key, val);
             }
-            Response::LastId { id } => {
-                self.last_id = Some(id);
-            }
             Response::EntryInfo(entry_info) => {
                 self.last_id = Some(entry_info.id);
                 self.num_events += entry_info.num_events;
@@ -109,23 +106,9 @@ impl AccountantStub {
     }
 
     /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response. At the time of this writing,
-    /// it also has the side-effect of causing the server to log any
-    /// entries that have been published by the Historian.
+    /// until the server sends a response.
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
-        let req = Request::GetLastId;
-        let data = serialize(&req).expect("serialize GetId");
-        self.socket
-            .send_to(&data, &self.addr)
-            .expect("buffer error");
-        let mut done = false;
-        while !done {
-            let resp = self.recv_response().expect("recv response");
-            if let &Response::LastId { .. } = &resp {
-                done = true;
-            }
-            self.process_response(resp);
-        }
+        self.transaction_count();
         ok(self.last_id.unwrap_or(Hash::default()))
     }
 
@@ -192,7 +175,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let acc = Arc::new(AccountantSkel::new(acc, input, historian));
         let threads = AccountantSkel::serve(&acc, d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
