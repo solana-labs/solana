@@ -108,14 +108,7 @@ impl AccountantStub {
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
-        let mut done = false;
-        while !done {
-            let resp = self.recv_response().expect("recv response");
-            if let &Response::EntryInfo { .. } = &resp {
-                done = true;
-            }
-            self.process_response(resp);
-        }
+        self.transaction_count();
         ok(self.last_id.unwrap_or(Hash::default()))
     }
 
