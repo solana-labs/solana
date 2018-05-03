@@ -74,6 +74,13 @@ impl Accountant {
         acc
     }
 
+    /// Return the last entry ID registered
+    pub fn last_id(&self) -> Hash {
+        let last_ids = self.last_ids.read().unwrap();
+        let last_item = last_ids.iter().last().expect("empty last_ids list");
+        last_item.0
+    }
+
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
         if signatures.read().unwrap().contains(sig) {
             return false;
@@ -327,6 +334,8 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
         let acc = Accountant::new(&alice);
+        assert_eq!(acc.last_id(), alice.last_id());
+
         acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);

@@ -192,7 +192,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let acc = Arc::new(AccountantSkel::new(acc, input, historian));
         let threads = AccountantSkel::serve(&acc, d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 

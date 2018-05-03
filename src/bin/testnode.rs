@@ -104,7 +104,7 @@ fn main() {
     let (input, event_receiver) = sync_channel(10_000);
     let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(AccountantSkel::new(acc, last_id, input, historian));
+    let skel = Arc::new(AccountantSkel::new(acc, input, historian));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
