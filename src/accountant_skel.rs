@@ -33,7 +33,6 @@ use transaction::Transaction;
 
 pub struct AccountantSkel {
     acc: Mutex<Accountant>,
-    last_id: Mutex<Hash>,
     historian_input: Mutex<SyncSender<Signal>>,
     historian: Historian,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
@@ -81,15 +80,9 @@ pub enum Response {
 
 impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
-    pub fn new(
-        acc: Accountant,
-        last_id: Hash,
-        historian_input: SyncSender<Signal>,
-        historian: Historian,
-    ) -> Self {
+    pub fn new(acc: Accountant, historian_input: SyncSender<Signal>, historian: Historian) -> Self {
         AccountantSkel {
             acc: Mutex::new(acc),
-            last_id: Mutex::new(last_id),
             entry_info_subscribers: Mutex::new(vec![]),
             historian_input: Mutex::new(historian_input),
             historian,
@@ -116,10 +109,7 @@ impl AccountantSkel {
 
     fn update_entry<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, entry: &Entry) {
         trace!("update_entry entry");
-        let mut last_id_l = obj.last_id.lock().unwrap();
-        *last_id_l = entry.id;
-        obj.acc.lock().unwrap().register_entry_id(&last_id_l);
-        drop(last_id_l);
+        obj.acc.lock().unwrap().register_entry_id(&entry.id);
         writeln!(
             writer.lock().unwrap(),
             "{}",
@@ -228,7 +218,7 @@ impl AccountantSkel {
             }
             Request::GetLastId => Some((
                 Response::LastId {
-                    id: *self.last_id.lock().unwrap(),
+                    id: self.acc.lock().unwrap().last_id(),
                 },
                 rsp_addr,
             )),
@@ -699,7 +689,7 @@ mod tests {
         let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let skel = AccountantSkel::new(acc, mint.last_id(), input, historian);
+        let skel = AccountantSkel::new(acc, input, historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -740,7 +730,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc_skel = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let acc_skel = Arc::new(AccountantSkel::new(acc, input, historian));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = AccountantSkel::serve(
             &acc_skel,
@@ -858,7 +848,7 @@ mod tests {
         let acc = Accountant::new(&alice);
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(AccountantSkel::new(acc, alice.last_id(), input, historian));
+        let acc = Arc::new(AccountantSkel::new(acc, input, historian));
         let replicate_addr = target1_data.replicate_addr;
         let threads = AccountantSkel::replicate(
             &acc,
@@ -1007,7 +997,7 @@ mod bench {
 
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let skel = AccountantSkel::new(acc, mint.last_id(), input, historian);
+        let skel = AccountantSkel::new(acc, input, historian);
 
         let now = Instant::now();
         assert!(skel.process_packets(req_vers).is_ok());
