@@ -9,22 +9,20 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
 pub struct Historian {
-    pub sender: SyncSender<Signal>,
-    pub receiver: Receiver<Entry>,
+    pub output: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
 impl Historian {
-    pub fn new(start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
-        let (sender, event_receiver) = sync_channel(10_000);
-        let (entry_sender, receiver) = sync_channel(10_000);
+    pub fn new(
+        event_receiver: Receiver<Signal>,
+        start_hash: &Hash,
+        ms_per_tick: Option<u64>,
+    ) -> Self {
+        let (entry_sender, output) = sync_channel(10_000);
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
-        Historian {
-            sender,
-            receiver,
-            thread_hdl,
-        }
+        Historian { output, thread_hdl }
     }
 
     /// A background thread that will continue tagging received Event messages and
@@ -59,24 +57,25 @@ mod tests {
 
     #[test]
     fn test_historian() {
+        let (input, event_receiver) = sync_channel(10);
         let zero = Hash::default();
-        let hist = Historian::new(&zero, None);
+        let hist = Historian::new(event_receiver, &zero, None);
 
-        hist.sender.send(Signal::Tick).unwrap();
+        input.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Signal::Tick).unwrap();
+        input.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        hist.sender.send(Signal::Tick).unwrap();
+        input.send(Signal::Tick).unwrap();
 
-        let entry0 = hist.receiver.recv().unwrap();
-        let entry1 = hist.receiver.recv().unwrap();
-        let entry2 = hist.receiver.recv().unwrap();
+        let entry0 = hist.output.recv().unwrap();
+        let entry1 = hist.output.recv().unwrap();
+        let entry2 = hist.output.recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
         assert_eq!(entry2.num_hashes, 0);
 
-        drop(hist.sender);
+        drop(input);
         assert_eq!(
             hist.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
@@ -87,10 +86,11 @@ mod tests {
 
     #[test]
     fn test_historian_closed_sender() {
+        let (input, event_receiver) = sync_channel(10);
         let zero = Hash::default();
-        let hist = Historian::new(&zero, None);
-        drop(hist.receiver);
-        hist.sender.send(Signal::Tick).unwrap();
+        let hist = Historian::new(event_receiver, &zero, None);
+        drop(hist.output);
+        input.send(Signal::Tick).unwrap();
         assert_eq!(
             hist.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
@@ -99,12 +99,13 @@ mod tests {
 
     #[test]
     fn test_ticking_historian() {
+        let (input, event_receiver) = sync_channel(10);
         let zero = Hash::default();
-        let hist = Historian::new(&zero, Some(20));
+        let hist = Historian::new(event_receiver, &zero, Some(20));
         sleep(Duration::from_millis(300));
-        hist.sender.send(Signal::Tick).unwrap();
-        drop(hist.sender);
-        let entries: Vec<Entry> = hist.receiver.iter().collect();
+        input.send(Signal::Tick).unwrap();
+        drop(input);
+        let entries: Vec<Entry> = hist.output.iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

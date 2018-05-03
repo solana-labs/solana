@@ -165,6 +165,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::sync_channel;
     use std::sync::{Arc, Mutex};
     use std::thread::sleep;
     use std::time::Duration;
@@ -178,11 +179,13 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let historian = Historian::new(&alice.last_id(), Some(30));
+        let (input, event_receiver) = sync_channel(10);
+        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let acc = Arc::new(Mutex::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             sink(),
+            input,
             historian,
         )));
         let _threads = AccountantSkel::serve(&acc, addr, exit.clone()).unwrap();
