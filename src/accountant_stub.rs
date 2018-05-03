@@ -173,13 +173,14 @@ mod tests {
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
     fn test_accountant_stub() {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let iface = "127.0.0.1:0";
+        let gossip = UdpSocket::bind(iface).unwrap();
+        let serve = UdpSocket::bind(iface).unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(pubkey,
                                     gossip.local_addr().unwrap(),
-                                    "0.0.0.0:0".parse().unwrap(),
+                                    iface.parse().unwrap(),
                                     serve.local_addr().unwrap(),
                                     );
 
@@ -193,10 +194,10 @@ mod tests {
             alice.last_id(),
             historian,
         ));
-        let threads = AccountantSkel::serve(&acc, d, gossip, serve, exit.clone(), sink()).unwrap();
+        let threads = AccountantSkel::serve(&acc, d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let socket = UdpSocket::bind(iface).unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let mut acc = AccountantStub::new(addr, socket);
