@@ -115,7 +115,6 @@ impl AccountantStub {
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetId");
-        assert!(data.len() < 4096);
         self.socket
             .send_to(&data, &self.addr)
             .expect("buffer error");
