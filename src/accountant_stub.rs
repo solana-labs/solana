@@ -109,9 +109,7 @@ impl AccountantStub {
     }
 
     /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response. At the time of this writing,
-    /// it also has the side-effect of causing the server to log any
-    /// entries that have been published by the Historian.
+    /// until the server sends a response.
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetId");
