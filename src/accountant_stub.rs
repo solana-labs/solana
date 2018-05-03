@@ -165,7 +165,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc};
     use std::thread::sleep;
     use std::time::Duration;
     use crdt::ReplicatedData;
@@ -188,11 +188,11 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let historian = Historian::new(&alice.last_id(), Some(30));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+        let acc = Arc::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             historian,
-        )));
+        ));
         let threads = AccountantSkel::serve(&acc, d, gossip, serve, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 

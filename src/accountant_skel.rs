@@ -32,10 +32,10 @@ use std::collections::LinkedList;
 use std::mem::size_of;
 
 pub struct AccountantSkel {
-    acc: Accountant,
-    last_id: Hash,
-    historian: Arc<Mutex<Historian>>,
-    entry_info_subscribers: Vec<SocketAddr>,
+    acc: Mutex<Accountant>,
+    last_id: Mutex<Hash>,
+    historian: Historian,
+    entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -69,6 +69,8 @@ impl Request {
     }
 }
 
+type SharedSkel = Arc<AccountantSkel>;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
@@ -79,68 +81,88 @@ pub enum Response {
 impl AccountantSkel {
     /// Create a new AccountantSkel that wraps the given Accountant.
     pub fn new(acc: Accountant, last_id: Hash, historian: Historian) -> Self {
-        let hist = Arc::new(Mutex::new(historian));
         AccountantSkel {
-            acc,
-            last_id,
-            entry_info_subscribers: vec![],
-            historian: hist,
+            acc: Mutex::new(acc),
+            last_id: Mutex::new(last_id),
+            entry_info_subscribers: Mutex::new(vec![]),
+            historian,
         }
     }
 
-    fn notify_entry_info_subscribers(&mut self, entry: &Entry) {
+    fn notify_entry_info_subscribers(obj: &SharedSkel, entry: &Entry) {
         // TODO: No need to bind().
         let socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
 
-        for addr in &self.entry_info_subscribers {
+        trace!("taking read lock");
+        let addrs = obj.entry_info_subscribers.lock().unwrap().clone();
+        trace!("dropping read lock");
+        for addr in addrs {
             let entry_info = EntryInfo {
                 id: entry.id,
                 num_hashes: entry.num_hashes,
                 num_events: entry.events.len() as u64,
             };
             let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
+            trace!("sending to {}", addr);
             let _res = socket.send_to(&data, addr);
+            trace!("done");
         }
     }
 
-    fn update_entry<W: Write>(&mut self, writer: &Arc<Mutex<W>>, entry: &Entry) {
-        self.last_id = entry.id;
-        self.acc.register_entry_id(&self.last_id);
+    fn update_entry<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, entry: &Entry) {
+        trace!("update_entry");
+        let mut last_id_l = obj.last_id.lock().unwrap();
+        *last_id_l = entry.id;
+        trace!("update_entry 3");
+        obj.acc.lock().unwrap().register_entry_id(&last_id_l);
+        drop(last_id_l);
+        trace!("update_entry 4");
         writeln!(writer.lock().unwrap(), "{}", serde_json::to_string(&entry).unwrap()).unwrap();
-        self.notify_entry_info_subscribers(&entry);
+        trace!("dropping write lock");
+        Self::notify_entry_info_subscribers(obj, &entry);
+        trace!("done entry_info notify");
     }
 
-    fn receive_to_list<W: Write>(obj: &Arc<Mutex<Self>>, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
+    fn receive_to_list<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, max: usize) -> Result<LinkedList<Entry>> {
+        //trace!("receive_to_list entry");
         //TODO implement a serialize for channel that does this without allocations
         let mut num = 0;
         let mut l = LinkedList::new();
-        let hist = obj.lock().unwrap().historian.clone();
-        let entry = hist.lock().unwrap().receiver.recv_timeout(Duration::new(1, 0))?;
-        obj.lock().unwrap().update_entry(writer, &entry);
+        let entry = obj.historian.receiver.lock().unwrap().recv_timeout(Duration::new(1, 0))?;
+        trace!("obj.write 1 {:?}", entry);
+        Self::update_entry(obj, writer, &entry);
+        trace!("obj.write 1.end");
         l.push_back(entry);
-        while let Ok(entry) = hist.lock().unwrap().receiver.try_recv() {
-            obj.lock().unwrap().update_entry(writer, &entry);
+        while let Ok(entry) = obj.historian.receive() {
+            trace!("obj.write 2");
+            Self::update_entry(obj, writer, &entry);
+            trace!("obj.write 2.end");
             l.push_back(entry);
             num += 1;
             if num == max {
                 break;
             }
+            trace!("num: {}", num);
         }
+        //trace!("receive_to_list exit");
         Ok(l)
     }
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync<W: Write>(
-        obj: Arc<Mutex<Self>>,
+        obj: SharedSkel,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
         writer: &Arc<Mutex<W>>,
+        exit: Arc<AtomicBool>,
     ) -> Result<()> {
         let max = BLOB_SIZE / size_of::<Entry>();
         let mut q = VecDeque::new();
+        let mut count = 0;
+        trace!("max: {}", max);
         while let Ok(list) = Self::receive_to_list(&obj, writer, max) {
-
+            trace!("New blobs? {} {}", count, list.len());
             let b = blob_recycler.allocate();
             let pos = {
                 let mut bd = b.write().unwrap();
@@ -151,6 +173,10 @@ impl AccountantSkel {
             assert!(pos < BLOB_SIZE);
             b.write().unwrap().set_size(pos);
             q.push_back(b);
+            count += 1;
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
         }
         if !q.is_empty() {
             broadcast.send(q)?;
@@ -159,14 +185,14 @@ impl AccountantSkel {
     }
 
     pub fn sync_service<W: Write + Send + 'static>(
-        obj: Arc<Mutex<Self>>,
+        obj: SharedSkel,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
         writer: Arc<Mutex<W>>,
     ) -> JoinHandle<()> {
         spawn(move|| loop {
-            let e = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer);
+            let e = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer, exit.clone());
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -175,21 +201,21 @@ impl AccountantSkel {
  
     /// Process Request items sent by clients.
     pub fn process_request(
-        &mut self,
+        &self,
         msg: Request,
         rsp_addr: SocketAddr,
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.acc.get_balance(&key);
+                let val = self.acc.lock().unwrap().get_balance(&key);
                 Some((Response::Balance { key, val }, rsp_addr))
             }
-            Request::GetLastId => Some((Response::LastId { id: self.last_id }, rsp_addr)),
+            Request::GetLastId => Some((Response::LastId { id: *self.last_id.lock().unwrap() }, rsp_addr)),
             Request::Transaction(_) => unreachable!(),
             Request::Subscribe { subscriptions } => {
                 for subscription in subscriptions {
                     match subscription {
-                        Subscription::EntryInfo => self.entry_info_subscribers.push(rsp_addr),
+                        Subscription::EntryInfo => self.entry_info_subscribers.lock().unwrap().push(rsp_addr),
                     }
                 }
                 None
@@ -265,31 +291,29 @@ impl AccountantSkel {
     }
 
     fn process_packets(
-        obj: &Arc<Mutex<Self>>,
+        &self,
         req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
+        trace!("partitioning");
         let (trs, reqs) = Self::partition_requests(req_vers);
 
         // Process the transactions in parallel and then log the successful ones.
-        let hist = obj.lock().unwrap().historian.clone();
-        for result in obj.lock().unwrap().acc.process_verified_transactions(trs) {
+        for result in self.acc.lock().unwrap().process_verified_transactions(trs) {
             if let Ok(tr) = result {
-                hist.lock().unwrap().sender.send(Signal::Event(Event::Transaction(tr)))?;
+                self.historian.sender.lock().unwrap().send(Signal::Event(Event::Transaction(tr)))?;
             }
         }
 
         // Let validators know they should not attempt to process additional
         // transactions in parallel.
-        hist.lock().unwrap().sender.send(Signal::Tick)?;
+        self.historian.sender.lock().unwrap().send(Signal::Tick)?;
 
         // Process the remaining requests serially.
-        {
-            let mut state = obj.lock().unwrap();
-            let rsps = reqs.into_iter()
-                .filter_map(|(req, rsp_addr)| state.process_request(req, rsp_addr))
-                .collect();
-            Ok(rsps)
-        }
+        let rsps = reqs.into_iter()
+            .filter_map(|(req, rsp_addr)| self.process_request(req, rsp_addr))
+            .collect();
+
+        Ok(rsps)
     }
 
     fn serialize_response(
@@ -321,7 +345,7 @@ impl AccountantSkel {
     }
 
     fn process(
-        obj: Arc<Mutex<Self>>,
+        obj: &SharedSkel,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
@@ -329,27 +353,32 @@ impl AccountantSkel {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let mms = verified_receiver.recv_timeout(timer)?;
+        trace!("got some messages: {}", mms.len());
         for (msgs, vers) in mms {
             let reqs = Self::deserialize_packets(&msgs.read().unwrap());
             let req_vers = reqs.into_iter()
                 .zip(vers)
                 .filter_map(|(req, ver)| req.map(|(msg, addr)| (msg, addr, ver)))
-                .filter(|x| x.0.verify())
+                .filter(|x| { let v = x.0.verify(); trace!("v:{} x:{:?}", v, x); v} )
                 .collect();
-            let rsps = Self::process_packets(&obj, req_vers)?;
+            trace!("process_packets");
+            let rsps = obj.process_packets(req_vers)?;
+            trace!("done process_packets");
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
+            trace!("sending blobs: {}", blobs.len());
             if !blobs.is_empty() {
                 //don't wake up the other side if there is nothing
                 responder_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
         }
+        trace!("done responding");
         Ok(())
     }
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &Arc<Mutex<Self>>,
+        obj: &SharedSkel,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -359,11 +388,10 @@ impl AccountantSkel {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
             for entry in entries {
-                obj.lock().unwrap().acc.register_entry_id(&entry.id);
+                obj.acc.lock().unwrap().register_entry_id(&entry.id);
 
-                obj.lock()
+                obj.acc.lock()
                     .unwrap()
-                    .acc
                     .process_verified_events(entry.events)?;
             }
             //TODO respond back to leader with hash of the state
@@ -378,7 +406,7 @@ impl AccountantSkel {
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(
-        obj: &Arc<Mutex<Self>>,
+        obj: &SharedSkel,
         me: ReplicatedData,
         serve: UdpSocket,
         gossip: UdpSocket,
@@ -438,7 +466,7 @@ impl AccountantSkel {
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
-                skel.clone(),
+                &mut skel.clone(),
                 &verified_receiver,
                 &responder_sender,
                 &packet_recycler,
@@ -472,7 +500,7 @@ impl AccountantSkel {
     /// 4. process the transaction state machine
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
-        obj: &Arc<Mutex<Self>>,
+        obj: &SharedSkel,
         me: ReplicatedData,
         gossip: UdpSocket,
         replicate: UdpSocket,
@@ -574,7 +602,7 @@ mod tests {
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::Transaction;
@@ -587,7 +615,6 @@ mod tests {
     use entry;
     use chrono::prelude::*;
     use crdt::Crdt;
-    use logger;
 
     #[test]
     fn test_layout() {
@@ -630,23 +657,18 @@ mod tests {
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
-        let locked = Arc::new(Mutex::new(skel));
-        assert!(AccountantSkel::process_packets(&locked, req_vers).is_ok());
+        assert!(skel.process_packets(req_vers).is_ok());
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let req_vers = vec![(Request::Transaction(tr), rsp_addr, 1_u8)];
-        assert!(AccountantSkel::process_packets(&locked, req_vers).is_ok());
+        assert!(skel.process_packets(req_vers).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        // TODO(anatoly): this needs some love
-        let hist = locked.lock().unwrap().historian.clone();
-        hist.lock().unwrap().sender.send(Signal::Tick).unwrap();
-        let mut entries: Vec<Entry> = vec![];
-        sleep(Duration::from_millis(500));
-        while let Ok(e) =  hist.lock().unwrap().receiver.try_recv() {
-            entries.push(e);
-        }
+        skel.historian.sender.lock().unwrap().send(Signal::Tick).unwrap();
+        drop(skel.historian.sender);
+        let entries: Vec<Entry> = skel.historian.receiver.lock().unwrap().iter().collect();
+
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
@@ -659,25 +681,27 @@ mod tests {
 
     #[test]
     fn test_accountant_bad_sig() {
-        let (leader_data, leader_gossip, unused_replicate, leader_serve) = test_node();
+        let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let historian = Historian::new(&alice.last_id(), Some(30));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+        let acc_skel = Arc::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             historian,
-        )));
+        ));
         let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = AccountantSkel::serve(&acc, leader_data, leader_gossip, leader_serve, exit.clone(), sink()).unwrap();
+        let threads = AccountantSkel::serve(&acc_skel, leader_data, leader_serve, leader_gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = unused_replicate;
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
         let mut acc = AccountantStub::new(serve_addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
+
+        trace!("doing stuff");
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
@@ -691,16 +715,30 @@ mod tests {
         let _sig = acc.transfer_signed(tr2).unwrap();
 
         assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
+        trace!("exiting");
         exit.store(true, Ordering::Relaxed);
+        trace!("joining threads");
         for t in threads {
             t.join().unwrap();
         }
     }
 
+    use std::sync::{Once, ONCE_INIT};
+    extern crate env_logger;
+
+    static INIT: Once = ONCE_INIT;
+
+    /// Setup function that is only run once, even if called multiple times.
+    fn setup() {
+        INIT.call_once(|| {
+            env_logger::init().unwrap();
+        });
+    }
+
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(pubkey,
                                     gossip.local_addr().unwrap(),
@@ -713,7 +751,7 @@ mod tests {
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
-        logger::setup();
+        setup();
         let (leader_data, leader_gossip, _, leader_serve) = test_node();
         let (target1_data, target1_gossip, target1_replicate, _) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _) = test_node();
@@ -763,11 +801,11 @@ mod tests {
         let alice = Mint::new(starting_balance);
         let acc = Accountant::new(&alice);
         let historian = Historian::new(&alice.last_id(), Some(30));
-        let acc = Arc::new(Mutex::new(AccountantSkel::new(
+        let acc = Arc::new(AccountantSkel::new(
             acc,
             alice.last_id(),
             historian,
-        )));
+        ));
         let replicate_addr = target1_data.replicate_addr;
         let threads = AccountantSkel::replicate(&acc, target1_data, target1_gossip, target1_replicate, leader_data, exit.clone()).unwrap();
 
@@ -786,7 +824,7 @@ mod tests {
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
@@ -795,11 +833,11 @@ mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
             let entry1 =
                 entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
-            acc.lock().unwrap().acc.register_entry_id(&cur_hash);
+            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
@@ -824,16 +862,18 @@ mod tests {
             msgs.push(msg);
         }
 
-        let alice_balance = acc.lock()
-            .unwrap()
+        let alice_balance = acc
             .acc
+            .lock()
+            .unwrap()
             .get_balance(&alice.keypair().pubkey())
             .unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = acc.lock()
-            .unwrap()
+        let bob_balance = acc
             .acc
+            .lock()
+            .unwrap()
             .get_balance(&bob_keypair.pubkey())
             .unwrap();
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
@@ -842,10 +882,12 @@ mod tests {
         for t in threads {
             t.join().expect("join");
         }
-        let threads = vec![t2_gossip, t2_listen, t_receiver, t_responder, t_l_gossip, t_l_listen];
-        for t in threads {
-            t.join().unwrap();
-        }
+        t2_gossip.join().expect("join");
+        t2_listen.join().expect("join");
+        t_receiver.join().expect("join");
+        t_responder.join().expect("join");
+        t_l_gossip.join().expect("join");
+        t_l_listen.join().expect("join");
     }
 }
 
