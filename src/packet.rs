@@ -176,18 +176,26 @@ impl Packets {
         //  * read until it fails
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
+        let mut error_msgs = 0;
         for p in &mut self.packets {
             p.meta.size = 0;
+            trace!("receiving");
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    trace!("got {:?} messages", i);
-                    break;
+                    debug!("got {:?} messages", i);
+                    error_msgs += 1;
+                    if error_msgs > 30 {
+                        break;
+                    } else {
+                        continue;
+                    }
                 }
                 Err(e) => {
-                    info!("recv_from err {:?}", e);
+                    trace!("recv_from err {:?}", e);
                     return Err(Error::IO(e));
                 }
                 Ok((nrecv, from)) => {
+                    error_msgs = 0;
                     p.meta.size = nrecv;
                     p.meta.set_addr(&from);
                     if i == 0 {
@@ -202,6 +210,7 @@ impl Packets {
     pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<()> {
         let sz = self.run_read_from(socket)?;
         self.packets.resize(sz, Packet::default());
+        debug!("recv_from: {}", sz);
         Ok(())
     }
     pub fn send_to(&self, socket: &UdpSocket) -> Result<()> {
@@ -233,6 +242,7 @@ impl Blob {
         let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
         Ok(e)
     }
+
     pub fn set_id(&mut self, id: PublicKey) -> Result<()> {
         let wtr = serialize(&id)?;
         self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);

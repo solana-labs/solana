@@ -76,6 +76,8 @@ fn main() {
         })
     });
 
+    eprintln!("done parsing...");
+
     // The first item in the ledger is required to be an entry with zero num_hashes,
     // which implies its id can be used as the ledger's seed.
     let entry0 = entries.next().unwrap();
@@ -90,9 +92,13 @@ fn main() {
         None
     };
 
+    eprintln!("creating accountant...");
+
     let acc = Accountant::new_from_deposit(&deposit.unwrap());
     acc.register_entry_id(&entry0.id);
     acc.register_entry_id(&entry1.id);
+
+    eprintln!("processing entries...");
 
     let mut last_id = entry1.id;
     for entry in entries {
@@ -100,6 +106,8 @@ fn main() {
         acc.process_verified_events(entry.events).unwrap();
         acc.register_entry_id(&last_id);
     }
+
+    eprintln!("creating networking stack...");
 
     let (input, event_receiver) = sync_channel(10_000);
     let historian = Historian::new(event_receiver, &last_id, Some(1000));
@@ -115,6 +123,7 @@ fn main() {
         replicate_sock.local_addr().unwrap(),
         serve_sock.local_addr().unwrap(),
     );
+    eprintln!("starting server...");
     let threads =
         AccountantSkel::serve(&skel, d, serve_sock, gossip_sock, exit.clone(), stdout()).unwrap();
     eprintln!("Ready. Listening on {}", serve_addr);
