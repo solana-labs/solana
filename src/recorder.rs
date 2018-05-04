@@ -8,6 +8,7 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
+use packet::BLOB_SIZE;
 use std::mem;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
@@ -83,7 +84,7 @@ impl Recorder {
                         // Record an entry early if we anticipate its serialized size will
                         // be larger than 64kb. At the time of this writing, we assume each
                         // event will be well under 256 bytes.
-                        if self.events.len() >= 65_536 / 256 {
+                        if self.events.len() >= BLOB_SIZE / (2 * mem::size_of::<Event>()) {
                             self.record_entry()?;
                         }
                     }
@@ -100,8 +101,8 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use signature::{KeyPair, KeyPairUtil};
-    use transaction::Transaction;
     use std::sync::mpsc::sync_channel;
+    use transaction::Transaction;
 
     #[test]
     fn test_sub64k_entry_size() {

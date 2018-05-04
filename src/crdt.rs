@@ -91,7 +91,7 @@ pub struct Crdt {
     local: HashMap<PublicKey, u64>,
     /// The value of the remote update index that i have last seen
     /// This Node will ask external nodes for updates since the value in this list
-    remote: HashMap<PublicKey, u64>,
+    pub remote: HashMap<PublicKey, u64>,
     pub update_index: u64,
     me: PublicKey,
     timeout: Duration,
@@ -172,20 +172,33 @@ impl Crdt {
             let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
             (robj.table[&robj.me].clone(), cloned_table)
         };
-        let errs: Vec<_> = table
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let items: Vec<(usize, &ReplicatedData)> = table
             .iter()
-            .enumerate()
-            .cycle()
-            .zip(blobs.iter())
-            .map(|((i, v), b)| {
+            .filter(|v| {
                 if me.id == v.id {
-                    return Ok(0);
+                    //filter myself
+                    false
+                } else if v.replicate_addr == daddr {
+                    //filter nodes that are not listening
+                    false
+                } else {
+                    true
                 }
+            })
+            .enumerate()
+            .collect();
+        let orders: Vec<_> = items.into_iter().cycle().zip(blobs.iter()).collect();
+        let errs: Vec<_> = orders
+            .into_par_iter()
+            .map(|((i, v), b)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().unwrap();
+                blob.set_id(me.id).expect("set_id");
                 blob.set_index(*transmit_index + i as u64)
                     .expect("set_index");
+                //TODO profile this, may need multiple sockets for par_iter
                 s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
             })
             .collect();
@@ -210,17 +223,28 @@ impl Crdt {
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
         };
         let rblob = blob.read().unwrap();
-        let errs: Vec<_> = table
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let orders: Vec<_> = table
+            .iter()
+            .filter(|v| {
+                if me.id == v.id {
+                    false
+                } else if me.current_leader_id == v.id {
+                    trace!("skip retransmit to leader {:?}", v.id);
+                    false
+                } else if v.replicate_addr == daddr {
+                    trace!("skip nodes that are not listening {:?}", v.id);
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                if me.id == v.id {
-                    return Ok(0);
-                }
-                if me.current_leader_id == v.id {
-                    trace!("skip retransmit to leader{:?}", v.id);
-                    return Ok(0);
-                }
                 trace!("retransmit blob to {}", v.replicate_addr);
+                //TODO profile this, may need multiple sockets for par_iter
                 s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
             .collect();
@@ -258,13 +282,18 @@ impl Crdt {
     /// (A,B)
     /// * A - Address to send to
     /// * B - RequestUpdates protocol message
-    fn gossip_request(&self) -> (SocketAddr, Protocol) {
-        let n = (Self::random() as usize) % self.table.len();
-        trace!("random {:?} {}", &self.me[0..1], n);
+    fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
+        if self.table.len() <= 1 {
+            return Err(Error::GeneralError);
+        }
+        let mut n = (Self::random() as usize) % self.table.len();
+        while self.table.values().nth(n).unwrap().id == self.me {
+            n = (Self::random() as usize) % self.table.len();
+        }
         let v = self.table.values().nth(n).unwrap().clone();
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
-        (v.gossip_addr, req)
+        Ok((v.gossip_addr, req))
     }
 
     /// At random pick a node and try to get updated changes from them
@@ -274,7 +303,7 @@ impl Crdt {
 
         // Lock the object only to do this operation and not for any longer
         // especially not when doing the `sock.send_to`
-        let (remote_gossip_addr, req) = obj.read().unwrap().gossip_request();
+        let (remote_gossip_addr, req) = obj.read().unwrap().gossip_request()?;
         let sock = UdpSocket::bind("0.0.0.0:0")?;
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
