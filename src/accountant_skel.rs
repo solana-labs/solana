@@ -88,7 +88,7 @@ impl AccountantSkel {
 
     fn notify_entry_info_subscribers(obj: &SharedSkel, entry: &Entry) {
         // TODO: No need to bind().
-        let socket = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let socket = UdpSocket::bind("0.0.0.0:0").expect("bind");
 
         // copy subscribers to avoid taking lock while doing io
         let addrs = obj.entry_info_subscribers.lock().unwrap().clone();
@@ -100,7 +100,10 @@ impl AccountantSkel {
                 num_events: entry.events.len() as u64,
             };
             let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
-            let _res = socket.send_to(&data, addr);
+            let res = socket.send_to(&data, addr);
+            if res.is_err() {
+                eprintln!("couldn't send response: {:?}", res);
+            }
         }
     }
 
