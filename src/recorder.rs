@@ -84,7 +84,7 @@ impl Recorder {
                         // Record an entry early if we anticipate its serialized size will
                         // be larger than 64kb. At the time of this writing, we assume each
                         // event will be well under 256 bytes.
-                        if self.events.len() >= BLOB_SIZE / (2 * mem::size_of::<Event>()) {
+                        if self.events.len() >= BLOB_SIZE / 256 {
                             self.record_entry()?;
                         }
                     }
