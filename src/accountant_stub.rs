@@ -11,7 +11,6 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::time::Duration;
 use transaction::Transaction;
 
 pub struct AccountantStub {
@@ -48,7 +47,6 @@ impl AccountantStub {
 
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
-        self.socket.set_read_timeout(Some(Duration::new(1, 0)))?;
         info!("start recv_from");
         self.socket.recv_from(&mut buf)?;
         info!("end recv_from");
@@ -190,7 +188,6 @@ mod tests {
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
