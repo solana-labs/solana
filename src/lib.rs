@@ -20,6 +20,7 @@ pub mod result;
 pub mod signature;
 pub mod streamer;
 pub mod transaction;
+pub mod timing;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
@@ -41,3 +42,5 @@ extern crate futures;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
+
+extern crate rand;
