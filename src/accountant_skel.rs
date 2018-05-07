@@ -308,20 +308,20 @@ impl AccountantSkel {
     /// Split Request list into verified transactions and the rest
     fn partition_requests(
         req_vers: Vec<(Request, SocketAddr, u8)>,
-    ) -> (Vec<Transaction>, Vec<(Request, SocketAddr)>) {
-        let mut trs = vec![];
+    ) -> (Vec<Event>, Vec<(Request, SocketAddr)>) {
+        let mut events = vec![];
         let mut reqs = vec![];
         for (msg, rsp_addr, verify) in req_vers {
             match msg {
                 Request::Transaction(tr) => {
                     if verify != 0 {
-                        trs.push(tr);
+                        events.push(Event::Transaction(tr));
                     }
                 }
                 _ => reqs.push((msg, rsp_addr)),
             }
         }
-        (trs, reqs)
+        (events, reqs)
     }
 
     fn process_packets(
@@ -329,16 +329,16 @@ impl AccountantSkel {
         req_vers: Vec<(Request, SocketAddr, u8)>,
     ) -> Result<Vec<(Response, SocketAddr)>> {
         debug!("partitioning");
-        let (trs, reqs) = Self::partition_requests(req_vers);
-        debug!("trs: {} reqs: {}", trs.len(), reqs.len());
+        let (events, reqs) = Self::partition_requests(req_vers);
+        debug!("events: {} reqs: {}", events.len(), reqs.len());
 
         // Process the transactions in parallel and then log the successful ones.
-        for result in self.acc.lock().unwrap().process_verified_transactions(trs) {
-            if let Ok(tr) = result {
+        for result in self.acc.lock().unwrap().process_verified_events(events) {
+            if let Ok(event) = result {
                 self.historian_input
                     .lock()
                     .unwrap()
-                    .send(Signal::Event(Event::Transaction(tr)))?;
+                    .send(Signal::Event(event))?;
             }
         }
 
@@ -436,13 +436,12 @@ impl AccountantSkel {
         for msgs in &blobs {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
+            let acc = obj.acc.lock().unwrap();
             for entry in entries {
-                obj.acc.lock().unwrap().register_entry_id(&entry.id);
-
-                obj.acc
-                    .lock()
-                    .unwrap()
-                    .process_verified_events(entry.events)?;
+                acc.register_entry_id(&entry.id);
+                for result in acc.process_verified_events(entry.events) {
+                    result?;
+                }
             }
             //TODO respond back to leader with hash of the state
         }
@@ -805,7 +804,11 @@ mod tests {
         // the account balance below zero before the credit is added.
         let acc = Accountant::new(&mint);
         for entry in entries {
-            acc.process_verified_events(entry.events).unwrap();
+            assert!(
+                acc.process_verified_events(entry.events)
+                    .into_iter()
+                    .all(|x| x.is_ok())
+            );
         }
         assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
     }
