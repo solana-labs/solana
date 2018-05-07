@@ -47,7 +47,9 @@ impl AccountantStub {
 
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
+        info!("start recv_from");
         self.socket.recv_from(&mut buf)?;
+        info!("end recv_from");
         let resp = deserialize(&buf).expect("deserialize balance");
         Ok(resp)
     }
@@ -55,9 +57,11 @@ impl AccountantStub {
     pub fn process_response(&mut self, resp: Response) {
         match resp {
             Response::Balance { key, val } => {
+                info!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
             }
             Response::EntryInfo(entry_info) => {
+                trace!("Response entry_info {:?}", entry_info.id);
                 self.last_id = Some(entry_info.id);
                 self.num_events += entry_info.num_events;
             }
@@ -88,7 +92,8 @@ impl AccountantStub {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&mut self, pubkey: &PublicKey) -> FutureResult<i64, i64> {
+    pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
+        info!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance");
         self.socket
@@ -96,13 +101,14 @@ impl AccountantStub {
             .expect("buffer error");
         let mut done = false;
         while !done {
-            let resp = self.recv_response().expect("recv response");
+            let resp = self.recv_response()?;
+            info!("recv_response {:?}", resp);
             if let &Response::Balance { ref key, .. } = &resp {
                 done = key == pubkey;
             }
             self.process_response(resp);
         }
-        ok(self.balances[pubkey].unwrap())
+        self.balances[pubkey].ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
     /// Request the last Entry ID from the server. This method blocks
@@ -143,21 +149,23 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
-    use crdt::ReplicatedData;
+    use crdt::{Crdt, ReplicatedData};
     use futures::Future;
     use historian::Historian;
+    use logger;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::sync_channel;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
     fn test_accountant_stub() {
+        logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
@@ -180,15 +188,153 @@ mod tests {
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
 
         let mut acc = AccountantStub::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).wait().unwrap(), 500);
+        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         for t in threads {
+            t.join().unwrap();
+        }
+    }
+
+    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let leader = ReplicatedData::new(
+            pubkey,
+            gossip.local_addr().unwrap(),
+            replicate.local_addr().unwrap(),
+            serve.local_addr().unwrap(),
+        );
+        (leader, gossip, serve, replicate)
+    }
+
+    #[test]
+    fn test_multi_accountant_stub() {
+        logger::setup();
+        info!("test_multi_accountant_stub");
+        let leader = test_node();
+        let replicant = test_node();
+        let alice = Mint::new(10_000);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let leader_acc = {
+            let (input, event_receiver) = sync_channel(10);
+            let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
+            let acc = Accountant::new(&alice);
+            Arc::new(AccountantSkel::new(acc, input, historian))
+        };
+
+        let replicant_acc = {
+            let (input, event_receiver) = sync_channel(10);
+            let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
+            let acc = Accountant::new(&alice);
+            Arc::new(AccountantSkel::new(acc, input, historian))
+        };
+
+        let leader_threads = AccountantSkel::serve(
+            &leader_acc,
+            leader.0.clone(),
+            leader.2,
+            leader.1,
+            exit.clone(),
+            sink(),
+        ).unwrap();
+        let replicant_threads = AccountantSkel::replicate(
+            &replicant_acc,
+            replicant.0.clone(),
+            replicant.1,
+            replicant.2,
+            replicant.3,
+            leader.0.clone(),
+            exit.clone(),
+        ).unwrap();
+
+        //lets spy on the network
+        let (mut spy, spy_gossip, _, _) = test_node();
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        spy.replicate_addr = daddr;
+        spy.serve_addr = daddr;
+        let mut spy_crdt = Crdt::new(spy);
+        spy_crdt.insert(leader.0.clone());
+        spy_crdt.set_leader(leader.0.id);
+
+        let spy_ref = Arc::new(RwLock::new(spy_crdt));
+        let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_gossip, exit.clone());
+        let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
+        //wait for the network to converge
+        for _ in 0..20 {
+            let ix = spy_ref.read().unwrap().update_index;
+            info!("my update index is {}", ix);
+            let len = spy_ref.read().unwrap().remote.values().len();
+            let mut done = false;
+            info!("remote len {}", len);
+            if len > 1 && ix > 2 {
+                done = true;
+                //check if everyones remote index is greater or equal to ours
+                let vs: Vec<u64> = spy_ref.read().unwrap().remote.values().cloned().collect();
+                for t in vs.into_iter() {
+                    info!("remote update index is {} vs {}", t, ix);
+                    if t < 3 {
+                        done = false;
+                    }
+                }
+            }
+            if done == true {
+                info!("converged!");
+                break;
+            }
+            sleep(Duration::new(1, 0));
+        }
+
+        //verify leader can do transfer
+        let leader_balance = {
+            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
+            let mut acc = AccountantStub::new(leader.0.serve_addr, socket);
+            info!("getting leader last_id");
+            let last_id = acc.get_last_id().wait().unwrap();
+            info!("executing leader transer");
+            let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
+                .unwrap();
+            info!("getting leader balance");
+            acc.get_balance(&bob_pubkey).unwrap()
+        };
+        assert_eq!(leader_balance, 500);
+        //verify replicant has the same balance
+        let mut replicant_balance = 0;
+        for _ in 0..10 {
+            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
+            let mut acc = AccountantStub::new(replicant.0.serve_addr, socket);
+            info!("getting replicant balance");
+            if let Ok(bal) = acc.get_balance(&bob_pubkey) {
+                replicant_balance = bal;
+            }
+            info!("replicant balance {}", replicant_balance);
+            if replicant_balance == leader_balance {
+                break;
+            }
+            sleep(Duration::new(1, 0));
+        }
+        assert_eq!(replicant_balance, leader_balance);
+
+        exit.store(true, Ordering::Relaxed);
+        for t in leader_threads {
+            t.join().unwrap();
+        }
+        for t in replicant_threads {
+            t.join().unwrap();
+        }
+        for t in vec![t_spy_listen, t_spy_gossip] {
             t.join().unwrap();
         }
     }
