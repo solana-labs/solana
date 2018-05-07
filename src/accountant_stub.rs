@@ -215,7 +215,6 @@ mod tests {
     }
 
     #[test]
- //   #[ignore]
     fn test_multi_accountant_stub() {
         logger::setup();
         info!("test_multi_accountant_stub");
