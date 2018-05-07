@@ -103,7 +103,13 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        acc.process_verified_events(entry.events).unwrap();
+        let results = acc.process_verified_events(entry.events);
+        for result in results {
+            if let Err(e) = result {
+                eprintln!("failed to process event {:?}", e);
+                exit(1);
+            }
+        }
         acc.register_entry_id(&last_id);
     }
 

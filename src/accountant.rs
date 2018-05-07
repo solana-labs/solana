@@ -218,13 +218,18 @@ impl Accountant {
         (trs, rest)
     }
 
-    pub fn process_verified_events(&self, events: Vec<Event>) -> Result<()> {
+    pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
-        self.process_verified_transactions(trs);
+        let mut results: Vec<_> = self.process_verified_transactions(trs)
+            .into_iter()
+            .map(|x| x.map(Event::Transaction))
+            .collect();
+
         for event in rest {
-            self.process_verified_event(&event)?;
+            results.push(self.process_verified_event(event));
         }
-        Ok(())
+
+        results
     }
 
     /// Process a Witness Signature that has already been verified.
@@ -278,12 +283,13 @@ impl Accountant {
     }
 
     /// Process an Transaction or Witness that has already been verified.
-    pub fn process_verified_event(&self, event: &Event) -> Result<()> {
-        match *event {
+    pub fn process_verified_event(&self, event: Event) -> Result<Event> {
+        match event {
             Event::Transaction(ref tr) => self.process_verified_transaction(tr),
             Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
             Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),
-        }
+        }?;
+        Ok(event)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
