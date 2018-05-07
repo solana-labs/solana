@@ -8,7 +8,7 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
-use packet::BLOB_SIZE;
+use packet::BLOB_DATA_SIZE;
 use std::mem;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
@@ -84,7 +84,7 @@ impl Recorder {
                         // Record an entry early if we anticipate its serialized size will
                         // be larger than 64kb. At the time of this writing, we assume each
                         // event will be well under 256 bytes.
-                        if self.events.len() >= BLOB_SIZE / 256 {
+                        if self.events.len() >= BLOB_DATA_SIZE / 256 {
                             self.record_entry()?;
                         }
                     }
