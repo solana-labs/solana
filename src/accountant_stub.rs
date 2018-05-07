@@ -149,7 +149,7 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use accountant_skel::AccountantSkel;
-    use crdt::ReplicatedData;
+    use crdt::{Crdt, ReplicatedData};
     use futures::Future;
     use historian::Historian;
     use logger;
@@ -158,7 +158,7 @@ mod tests {
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::sync_channel;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -199,25 +199,6 @@ mod tests {
             t.join().unwrap();
         }
     }
-}
-
-#[cfg(all(feature = "unstable", test))]
-mod unstsable_tests {
-    use super::*;
-    use accountant::Accountant;
-    use accountant_skel::AccountantSkel;
-    use crdt::{Crdt, ReplicatedData};
-    use futures::Future;
-    use historian::Historian;
-    use logger;
-    use mint::Mint;
-    use signature::{KeyPair, KeyPairUtil};
-    use std::io::sink;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::sync_channel;
-    use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
 
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -234,6 +215,7 @@ mod unstsable_tests {
     }
 
     #[test]
+ //   #[ignore]
     fn test_multi_accountant_stub() {
         logger::setup();
         info!("test_multi_accountant_stub");
