@@ -146,6 +146,7 @@ $ cargo +nightly bench --features="unstable"
 To run the benchmarks on Linux with GPU optimizations enabled:
 
 ```bash
+$ wget https://solana.com/gpu/latest/libcuda_verify_ed25519.a
 $ cargo +nightly bench --features="unstable,cuda"
 ```
 
