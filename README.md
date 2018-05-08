@@ -29,10 +29,6 @@ $ curl https://sh.rustup.rs -sSf | sh
 $ source $HOME/.cargo/env
 ```
 
-If you plan to run with GPU optimizations enabled (not recommended), you'll need a CUDA library stored in git LFS. Install git-lfs here:
-
-https://git-lfs.github.com/
-
 Now checkout the code from github:
 
 ```bash
