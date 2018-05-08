@@ -212,6 +212,24 @@ impl AccountantSkel {
         })
     }
 
+    fn process_thin_client_requests(_obj: SharedSkel, _socket: &UdpSocket) -> Result<()> {
+        Ok(())
+    }
+
+    fn thin_client_service(
+        obj: SharedSkel,
+        exit: Arc<AtomicBool>,
+        socket: UdpSocket,
+    ) -> JoinHandle<()> {
+        spawn(move || loop {
+            let _ = Self::process_thin_client_requests(obj.clone(), &socket);
+            if exit.load(Ordering::Relaxed) {
+                info!("sync_service exiting");
+                break;
+            }
+        })
+    }
+
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync_no_broadcast(obj: SharedSkel) -> Result<()> {
@@ -459,6 +477,7 @@ impl AccountantSkel {
         obj: &SharedSkel,
         me: ReplicatedData,
         serve: UdpSocket,
+        skinny: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
@@ -513,6 +532,8 @@ impl AccountantSkel {
             Arc::new(Mutex::new(writer)),
         );
 
+        let t_skinny = Self::thin_client_service(obj.clone(), exit.clone(), skinny);
+
         let skel = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
@@ -534,6 +555,7 @@ impl AccountantSkel {
             t_server,
             t_verifier,
             t_sync,
+            t_skinny,
             t_gossip,
             t_listen,
             t_broadcast,
@@ -815,7 +837,7 @@ mod tests {
 
     #[test]
     fn test_accountant_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve) = test_node();
+        let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = test_node();
         let alice = Mint::new(10_000);
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -828,6 +850,7 @@ mod tests {
             &acc_skel,
             leader_data,
             leader_serve,
+            leader_skinny,
             leader_gossip,
             exit.clone(),
             sink(),
@@ -861,7 +884,8 @@ mod tests {
         }
     }
 
-    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
+    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
+        let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
         let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -872,16 +896,16 @@ mod tests {
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
         );
-        (d, gossip, replicate, serve)
+        (d, gossip, replicate, serve, skinny)
     }
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
         logger::setup();
-        let (leader_data, leader_gossip, _, leader_serve) = test_node();
-        let (target1_data, target1_gossip, target1_replicate, target1_serve) = test_node();
-        let (target2_data, target2_gossip, target2_replicate, _) = test_node();
+        let (leader_data, leader_gossip, _, leader_serve, _) = test_node();
+        let (target1_data, target1_gossip, target1_replicate, target1_serve, _) = test_node();
+        let (target2_data, target2_gossip, target2_replicate, _, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader
