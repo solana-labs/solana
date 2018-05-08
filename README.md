@@ -124,6 +124,18 @@ Run the test suite:
 cargo test
 ```
 
+Debugging
+---
+
+There are some useful debug messages in the code, you can enable them on a per-module and per-level
+basis with the normal RUST\_LOG environment variable. Run the testnode with this syntax:
+```bash
+$ RUST_LOG=solana::streamer=debug,solana::accountant_skel=info cat genesis.log | ./target/release/solana-testnode > transactions0.log
+```
+to see the debug and info sections for streamer and accountant\_skel respectively. Generally
+we are using debug for infrequent debug messages, trace for potentially frequent messages and
+info for performance-related logging.
+
 Benchmarking
 ---
 
