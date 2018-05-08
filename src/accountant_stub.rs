@@ -169,6 +169,7 @@ mod tests {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let skinny = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
@@ -185,7 +186,8 @@ mod tests {
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let acc = Arc::new(AccountantSkel::new(acc, input, historian));
-        let threads = AccountantSkel::serve(&acc, d, serve, gossip, exit.clone(), sink()).unwrap();
+        let threads =
+            AccountantSkel::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -212,9 +214,10 @@ mod tests {
         }
     }
 
-    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket) {
+    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let skinny = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let leader = ReplicatedData::new(
@@ -223,7 +226,7 @@ mod tests {
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
         );
-        (leader, gossip, serve, replicate)
+        (leader, gossip, serve, replicate, skinny)
     }
 
     #[test]
@@ -254,6 +257,7 @@ mod tests {
             &leader_acc,
             leader.0.clone(),
             leader.2,
+            leader.4,
             leader.1,
             exit.clone(),
             sink(),
@@ -269,7 +273,7 @@ mod tests {
         ).unwrap();
 
         //lets spy on the network
-        let (mut spy, spy_gossip, _, _) = test_node();
+        let (mut spy, spy_gossip, _, _, _) = test_node();
         let daddr = "0.0.0.0:0".parse().unwrap();
         spy.replicate_addr = daddr;
         spy.serve_addr = daddr;
