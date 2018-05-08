@@ -130,7 +130,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use accountant_skel::Request;
+    use tpu::Request;
     use bincode::serialize;
     use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
