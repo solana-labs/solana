@@ -35,7 +35,7 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     let mut threads = 4usize;
     let mut addr: String = "127.0.0.1:8000".to_string();
-    let mut client_addr: String = "127.0.0.1:8001".to_string();
+    let mut client_addr: String = "127.0.0.1:8010".to_string();
 
     let mut opts = Options::new();
     opts.optopt("s", "", "server address", "host:port");
