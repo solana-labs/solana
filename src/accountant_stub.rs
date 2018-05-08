@@ -161,6 +161,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
+    use std::time::Instant;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
@@ -193,7 +194,18 @@ mod tests {
         let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
+        let mut balance;
+        let now = Instant::now();
+        loop {
+            balance = acc.get_balance(&bob_pubkey);
+            if balance.is_ok() {
+                break;
+            }
+            if now.elapsed().as_secs() > 0 {
+                break;
+            }
+        }
+        assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         for t in threads {
             t.join().unwrap();
