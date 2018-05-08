@@ -137,7 +137,7 @@ fn main() {
 
     println!("Waiting for transactions to complete...",);
     let mut tx_count;
-    for _ in 0..5 {
+    for _ in 0..10 {
         tx_count = acc.transaction_count();
         duration = now.elapsed();
         let txs = tx_count - initial_tx_count;
