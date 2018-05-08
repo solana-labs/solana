@@ -160,10 +160,9 @@ impl AccountantSkel {
             // See that we made progress and a single
             // vec of Events wasn't too big for a single packet
             if end <= start {
-                eprintln!("Event too big for the blob!");
-                start += 1;
-                end = start;
-                continue;
+                // Trust the recorder to not package more than we can
+                // serialize
+                end += 1;
             }
 
             let b = blob_recycler.allocate();
