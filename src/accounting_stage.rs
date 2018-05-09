@@ -138,13 +138,13 @@ pub enum Response {
 #[cfg(test)]
 mod tests {
     use accountant::Accountant;
+    use accounting_stage::AccountingStage;
     use entry::Entry;
     use event::Event;
     use historian::Historian;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::mpsc::sync_channel;
-    use accounting_stage::AccountingStage;
     use transaction::Transaction;
 
     #[test]
@@ -193,21 +193,22 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::{Accountant, MAX_ENTRY_IDS};
+    use accounting_stage::*;
     use bincode::serialize;
     use hash::hash;
+    use historian::Historian;
     use mint::Mint;
+    use rayon::prelude::*;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
     use std::sync::mpsc::sync_channel;
     use std::time::Instant;
-    use accounting_stage::*;
     use transaction::Transaction;
 
     #[bench]
     fn process_events_bench(_bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
         let acc = Accountant::new(&mint);
-        let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
         // Create transactions between unrelated parties.
         let txs = 100_000;
         let last_ids: Mutex<HashSet<Hash>> = Mutex::new(HashSet::new());
@@ -239,24 +240,24 @@ mod bench {
             })
             .collect();
 
-        let req_vers = transactions
+        let events: Vec<_> = transactions
             .into_iter()
-            .map(|tr| (Request::Transaction(tr), rsp_addr, 1_u8))
+            .map(|tr| Event::Transaction(tr))
             .collect();
 
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let stage = AccountingStage::new(acc, input, historian);
+        let stage = AccountingStage::new(acc, input);
 
         let now = Instant::now();
-        assert!(stage.process_events(req_vers).is_ok());
+        assert!(stage.process_events(events).is_ok());
         let duration = now.elapsed();
         let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
         drop(stage.historian_input);
-        let entries: Vec<Entry> = stage.historian.output.lock().unwrap().iter().collect();
+        let entries: Vec<Entry> = historian.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 

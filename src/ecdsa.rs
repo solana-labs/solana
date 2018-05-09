@@ -130,11 +130,11 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use accounting_stage::Request;
     use bincode::serialize;
     use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
     use std::sync::RwLock;
-    use accounting_stage::Request;
     use transaction::test_tx;
     use transaction::Transaction;
 
