@@ -41,11 +41,7 @@ impl Tpu {
 
     fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
         trace!("update_entry entry");
-        obj.accounting
-            .acc
-            .lock()
-            .unwrap()
-            .register_entry_id(&entry.id);
+        obj.accounting.acc.register_entry_id(&entry.id);
         writeln!(
             writer.lock().unwrap(),
             "{}",
@@ -374,7 +370,7 @@ impl Tpu {
         for msgs in &blobs {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
-            let acc = obj.accounting.acc.lock().unwrap();
+            let acc = &obj.accounting.acc;
             for entry in entries {
                 acc.register_entry_id(&entry.id);
                 for result in acc.process_verified_events(entry.events) {
@@ -809,7 +805,7 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let acc = tpu.accounting.acc.lock().unwrap();
+            let acc = &tpu.accounting.acc;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
@@ -851,7 +847,7 @@ mod tests {
             msgs.push(msg);
         }
 
-        let acc = tpu.accounting.acc.lock().unwrap();
+        let acc = &tpu.accounting.acc;
         let alice_balance = acc.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 

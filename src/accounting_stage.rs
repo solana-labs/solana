@@ -17,7 +17,7 @@ use transaction::Transaction;
 pub struct AccountingStage {
     pub output: Arc<Mutex<Receiver<Entry>>>,
     entry_sender: Arc<Mutex<Sender<Entry>>>,
-    pub acc: Mutex<Accountant>,
+    pub acc: Accountant,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
@@ -32,7 +32,7 @@ impl AccountingStage {
         AccountingStage {
             output: Arc::new(Mutex::new(output)),
             entry_sender: Arc::new(Mutex::new(entry_sender)),
-            acc: Mutex::new(acc),
+            acc,
             entry_info_subscribers: Mutex::new(vec![]),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
@@ -41,16 +41,15 @@ impl AccountingStage {
 
     /// Process the transactions in parallel and then log the successful ones.
     pub fn process_events(&self, events: Vec<Event>) -> Result<()> {
-        let acc = self.acc.lock().unwrap();
         let historian = self.historian.lock().unwrap();
-        let results = acc.process_verified_events(events);
+        let results = self.acc.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
         let sender = self.historian_input.lock().unwrap();
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
         let entry = historian.output.lock().unwrap().recv()?;
-        acc.register_entry_id(&entry.id);
+        self.acc.register_entry_id(&entry.id);
         self.entry_sender.lock().unwrap().send(entry)?;
 
         debug!("after historian_input");
@@ -65,7 +64,7 @@ impl AccountingStage {
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.acc.lock().unwrap().get_balance(&key);
+                let val = self.acc.get_balance(&key);
                 let rsp = (Response::Balance { key, val }, rsp_addr);
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)
