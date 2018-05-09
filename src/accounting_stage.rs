@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use transaction::Transaction;
 
 pub struct AccountingStage {
-    acc: Mutex<Accountant>,
+    pub acc: Mutex<Accountant>,
     historian_input: Mutex<SyncSender<Signal>>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }

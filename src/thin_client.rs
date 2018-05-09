@@ -10,7 +10,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use tpu::{Request, Response, Subscription};
+use accounting_stage::{Request, Response, Subscription};
 use transaction::Transaction;
 
 pub struct ThinClient {

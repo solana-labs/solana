@@ -134,7 +134,7 @@ mod tests {
     use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
     use std::sync::RwLock;
-    use tpu::Request;
+    use accounting_stage::Request;
     use transaction::test_tx;
     use transaction::Transaction;
 
