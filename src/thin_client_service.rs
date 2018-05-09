@@ -14,18 +14,18 @@ use transaction::Transaction;
 pub struct ThinClientService {
     //pub output: Mutex<Receiver<Response>>,
     //response_sender: Mutex<Sender<Response>>,
-    pub acc: Arc<Accountant>,
+    accountant: Arc<Accountant>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 impl ThinClientService {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Arc<Accountant>) -> Self {
+    pub fn new(accountant: Arc<Accountant>) -> Self {
         //let (response_sender, output) = channel();
         ThinClientService {
             //output: Mutex::new(output),
             //response_sender: Mutex::new(response_sender),
-            acc,
+            accountant,
             entry_info_subscribers: Mutex::new(vec![]),
         }
     }
@@ -38,7 +38,7 @@ impl ThinClientService {
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.acc.get_balance(&key);
+                let val = self.accountant.get_balance(&key);
                 let rsp = (Response::Balance { key, val }, rsp_addr);
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)

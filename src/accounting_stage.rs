@@ -13,21 +13,21 @@ use std::sync::{Arc, Mutex};
 pub struct AccountingStage {
     pub output: Mutex<Receiver<Entry>>,
     entry_sender: Mutex<Sender<Entry>>,
-    pub acc: Arc<Accountant>,
+    pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
 }
 
 impl AccountingStage {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
+    pub fn new(accountant: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (historian_input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, start_hash, ms_per_tick);
         let (entry_sender, output) = channel();
         AccountingStage {
             output: Mutex::new(output),
             entry_sender: Mutex::new(entry_sender),
-            acc: Arc::new(acc),
+            accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
         }
@@ -36,14 +36,14 @@ impl AccountingStage {
     /// Process the transactions in parallel and then log the successful ones.
     pub fn process_events(&self, events: Vec<Event>) -> Result<()> {
         let historian = self.historian.lock().unwrap();
-        let results = self.acc.process_verified_events(events);
+        let results = self.accountant.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
         let sender = self.historian_input.lock().unwrap();
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
         let entry = historian.output.lock().unwrap().recv()?;
-        self.acc.register_entry_id(&entry.id);
+        self.accountant.register_entry_id(&entry.id);
         self.entry_sender.lock().unwrap().send(entry)?;
         Ok(())
     }
@@ -65,8 +65,8 @@ mod tests {
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
-        let acc = Accountant::new(&mint);
-        let accounting_stage = AccountingStage::new(acc, &mint.last_id(), None);
+        let accountant = Accountant::new(&mint);
+        let accounting_stage = AccountingStage::new(accountant, &mint.last_id(), None);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -86,15 +86,16 @@ mod tests {
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
-        let acc = Accountant::new(&mint);
+        let accountant = Accountant::new(&mint);
         for entry in entries {
             assert!(
-                acc.process_verified_events(entry.events)
+                accountant
+                    .process_verified_events(entry.events)
                     .into_iter()
                     .all(|x| x.is_ok())
             );
         }
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
+        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(1));
     }
 }
 
@@ -118,7 +119,7 @@ mod bench {
     #[bench]
     fn process_events_bench(_bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
-        let acc = Accountant::new(&mint);
+        let accountant = Accountant::new(&mint);
         // Create transactions between unrelated parties.
         let txs = 100_000;
         let last_ids: Mutex<HashSet<Hash>> = Mutex::new(HashSet::new());
@@ -132,18 +133,18 @@ mod bench {
                     let mut last_ids = last_ids.lock().unwrap();
                     if !last_ids.contains(&last_id) {
                         last_ids.insert(last_id);
-                        acc.register_entry_id(&last_id);
+                        accountant.register_entry_id(&last_id);
                     }
                 }
 
                 // Seed the 'from' account.
                 let rando0 = KeyPair::new();
                 let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-                acc.process_verified_transaction(&tr).unwrap();
+                accountant.process_verified_transaction(&tr).unwrap();
 
                 let rando1 = KeyPair::new();
                 let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-                acc.process_verified_transaction(&tr).unwrap();
+                accountant.process_verified_transaction(&tr).unwrap();
 
                 // Finally, return a transaction that's unique
                 Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
@@ -156,7 +157,7 @@ mod bench {
             .collect();
 
         let (input, event_receiver) = channel();
-        let accounting_stage = AccountingStage::new(acc, &mint.last_id(), None);
+        let accounting_stage = AccountingStage::new(accountant, &mint.last_id(), None);
 
         let now = Instant::now();
         assert!(accounting_stage.process_events(events).is_ok());

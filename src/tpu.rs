@@ -39,7 +39,7 @@ type SharedTpu = Arc<Tpu>;
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accounting_stage: AccountingStage) -> Self {
-        let thin_client_service = ThinClientService::new(accounting_stage.acc.clone());
+        let thin_client_service = ThinClientService::new(accounting_stage.accountant.clone());
         Tpu {
             accounting_stage,
             thin_client_service,
@@ -48,7 +48,7 @@ impl Tpu {
 
     fn update_entry<W: Write>(obj: &Tpu, writer: &Mutex<W>, entry: &Entry) {
         trace!("update_entry entry");
-        obj.accounting_stage.acc.register_entry_id(&entry.id);
+        obj.accounting_stage.accountant.register_entry_id(&entry.id);
         writeln!(
             writer.lock().unwrap(),
             "{}",
@@ -153,12 +153,12 @@ impl Tpu {
     }
 
     fn thin_client_service(
-        acc: Arc<Accountant>,
+        accountant: Arc<Accountant>,
         exit: Arc<AtomicBool>,
         socket: UdpSocket,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let _ = Self::process_thin_client_requests(&acc, &socket);
+            let _ = Self::process_thin_client_requests(&accountant, &socket);
             if exit.load(Ordering::Relaxed) {
                 info!("sync_service exiting");
                 break;
@@ -378,10 +378,10 @@ impl Tpu {
         for msgs in &blobs {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
-            let acc = &obj.accounting_stage.acc;
+            let accountant = &obj.accounting_stage.accountant;
             for entry in entries {
-                acc.register_entry_id(&entry.id);
-                for result in acc.process_verified_events(entry.events) {
+                accountant.register_entry_id(&entry.id);
+                for result in accountant.process_verified_events(entry.events) {
                     result?;
                 }
             }
@@ -463,8 +463,11 @@ impl Tpu {
             Mutex::new(writer),
         );
 
-        let t_skinny =
-            Self::thin_client_service(obj.accounting_stage.acc.clone(), exit.clone(), skinny);
+        let t_skinny = Self::thin_client_service(
+            obj.accounting_stage.accountant.clone(),
+            exit.clone(),
+            skinny,
+        );
 
         let tpu = obj.clone();
         let t_server = spawn(move || loop {
@@ -787,8 +790,8 @@ mod tests {
 
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
-        let acc = Accountant::new(&alice);
-        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let accountant = Accountant::new(&alice);
+        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
         let tpu = Arc::new(Tpu::new(accounting_stage));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tpu::replicate(
@@ -814,11 +817,11 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let acc = &tpu.accounting_stage.acc;
+            let accountant = &tpu.accounting_stage.accountant;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
-            acc.register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
@@ -827,11 +830,11 @@ mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            acc.register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
             let entry1 =
                 entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
-            acc.register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
@@ -856,11 +859,11 @@ mod tests {
             msgs.push(msg);
         }
 
-        let acc = &tpu.accounting_stage.acc;
-        let alice_balance = acc.get_balance(&alice.keypair().pubkey()).unwrap();
+        let accountant = &tpu.accounting_stage.accountant;
+        let alice_balance = accountant.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = acc.get_balance(&bob_keypair.pubkey()).unwrap();
+        let bob_balance = accountant.get_balance(&bob_keypair.pubkey()).unwrap();
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);

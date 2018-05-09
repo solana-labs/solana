@@ -179,24 +179,26 @@ mod tests {
         );
 
         let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
-        let acc = Arc::new(Tpu::new(accounting_stage));
-        let threads = Tpu::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
+        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
+        let accountant = Arc::new(Tpu::new(accounting_stage));
+        let threads =
+            Tpu::serve(&accountant, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut acc = ThinClient::new(addr, socket);
-        let last_id = acc.get_last_id().wait().unwrap();
-        let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
+        let mut accountant = ThinClient::new(addr, socket);
+        let last_id = accountant.get_last_id().wait().unwrap();
+        let _sig = accountant
+            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
         let mut balance;
         let now = Instant::now();
         loop {
-            balance = acc.get_balance(&bob_pubkey);
+            balance = accountant.get_balance(&bob_pubkey);
             if balance.is_ok() {
                 break;
             }
@@ -215,10 +217,10 @@ mod tests {
     fn test_bad_sig() {
         let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = tpu::test_node();
         let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
         let tpu = Arc::new(Tpu::new(accounting_stage));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = Tpu::serve(
@@ -286,14 +288,14 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_acc = {
-            let acc = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            let accountant = Accountant::new(&alice);
+            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
             Arc::new(Tpu::new(accounting_stage))
         };
 
         let replicant_acc = {
-            let acc = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            let accountant = Accountant::new(&alice);
+            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
             Arc::new(Tpu::new(accounting_stage))
         };
 
@@ -358,14 +360,15 @@ mod tests {
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
-            let mut acc = ThinClient::new(leader.0.serve_addr, socket);
+            let mut accountant = ThinClient::new(leader.0.serve_addr, socket);
             info!("getting leader last_id");
-            let last_id = acc.get_last_id().wait().unwrap();
+            let last_id = accountant.get_last_id().wait().unwrap();
             info!("executing leader transer");
-            let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
+            let _sig = accountant
+                .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
                 .unwrap();
             info!("getting leader balance");
-            acc.get_balance(&bob_pubkey).unwrap()
+            accountant.get_balance(&bob_pubkey).unwrap()
         };
         assert_eq!(leader_balance, 500);
         //verify replicant has the same balance
@@ -374,9 +377,9 @@ mod tests {
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
-            let mut acc = ThinClient::new(replicant.0.serve_addr, socket);
+            let mut accountant = ThinClient::new(replicant.0.serve_addr, socket);
             info!("getting replicant balance");
-            if let Ok(bal) = acc.get_balance(&bob_pubkey) {
+            if let Ok(bal) = accountant.get_balance(&bob_pubkey) {
                 replicant_balance = bal;
             }
             info!("replicant balance {}", replicant_balance);

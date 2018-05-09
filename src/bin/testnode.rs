@@ -94,28 +94,28 @@ fn main() {
 
     eprintln!("creating accountant...");
 
-    let acc = Accountant::new_from_deposit(&deposit.unwrap());
-    acc.register_entry_id(&entry0.id);
-    acc.register_entry_id(&entry1.id);
+    let accountant = Accountant::new_from_deposit(&deposit.unwrap());
+    accountant.register_entry_id(&entry0.id);
+    accountant.register_entry_id(&entry1.id);
 
     eprintln!("processing entries...");
 
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = acc.process_verified_events(entry.events);
+        let results = accountant.process_verified_events(entry.events);
         for result in results {
             if let Err(e) = result {
                 eprintln!("failed to process event {:?}", e);
                 exit(1);
             }
         }
-        acc.register_entry_id(&last_id);
+        accountant.register_entry_id(&last_id);
     }
 
     eprintln!("creating networking stack...");
 
-    let accounting_stage = AccountingStage::new(acc, &last_id, Some(1000));
+    let accounting_stage = AccountingStage::new(accountant, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
     let tpu = Arc::new(Tpu::new(accounting_stage));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
