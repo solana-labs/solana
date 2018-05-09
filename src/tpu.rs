@@ -2,137 +2,73 @@
 //! 5-stage transaction processing pipeline in software.
 
 use accountant::Accountant;
+use accounting_stage::AccountingStage;
 use bincode::{deserialize, serialize, serialize_into};
 use crdt::{Crdt, ReplicatedData};
 use ecdsa;
 use entry::Entry;
 use event::Event;
-use hash::Hash;
-use historian::Historian;
 use packet;
 use packet::{SharedBlob, SharedPackets, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use recorder::Signal;
 use result::Result;
 use serde_json;
-use signature::PublicKey;
 use std::collections::VecDeque;
 use std::io::sink;
 use std::io::{Cursor, Write};
 use std::mem::size_of;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
+use thin_client_service::{Request, Response, ThinClientService};
 use timing;
-use transaction::Transaction;
 
 pub struct Tpu {
-    acc: Mutex<Accountant>,
-    historian_input: Mutex<SyncSender<Signal>>,
-    historian: Historian,
-    entry_info_subscribers: Mutex<Vec<SocketAddr>>,
-}
-
-#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Request {
-    Transaction(Transaction),
-    GetBalance { key: PublicKey },
-    Subscribe { subscriptions: Vec<Subscription> },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Subscription {
-    EntryInfo,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EntryInfo {
-    pub id: Hash,
-    pub num_hashes: u64,
-    pub num_events: u64,
-}
-
-impl Request {
-    /// Verify the request is valid.
-    pub fn verify(&self) -> bool {
-        match *self {
-            Request::Transaction(ref tr) => tr.verify_plan(),
-            _ => true,
-        }
-    }
+    accounting_stage: AccountingStage,
+    thin_client_service: ThinClientService,
 }
 
 type SharedTpu = Arc<Tpu>;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Response {
-    Balance { key: PublicKey, val: Option<i64> },
-    EntryInfo(EntryInfo),
-}
-
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: SyncSender<Signal>, historian: Historian) -> Self {
+    pub fn new(accounting_stage: AccountingStage) -> Self {
+        let thin_client_service = ThinClientService::new(accounting_stage.accountant.clone());
         Tpu {
-            acc: Mutex::new(acc),
-            entry_info_subscribers: Mutex::new(vec![]),
-            historian_input: Mutex::new(historian_input),
-            historian,
+            accounting_stage,
+            thin_client_service,
         }
     }
 
-    fn notify_entry_info_subscribers(obj: &SharedTpu, entry: &Entry) {
-        // TODO: No need to bind().
-        let socket = UdpSocket::bind("0.0.0.0:0").expect("bind");
-
-        // copy subscribers to avoid taking lock while doing io
-        let addrs = obj.entry_info_subscribers.lock().unwrap().clone();
-        trace!("Sending to {} addrs", addrs.len());
-        for addr in addrs {
-            let entry_info = EntryInfo {
-                id: entry.id,
-                num_hashes: entry.num_hashes,
-                num_events: entry.events.len() as u64,
-            };
-            let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
-            trace!("sending {} to {}", data.len(), addr);
-            //TODO dont do IO here, this needs to be on a separate channel
-            let res = socket.send_to(&data, addr);
-            if res.is_err() {
-                eprintln!("couldn't send response: {:?}", res);
-            }
-        }
-    }
-
-    fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
+    fn update_entry<W: Write>(obj: &Tpu, writer: &Mutex<W>, entry: &Entry) {
         trace!("update_entry entry");
-        obj.acc.lock().unwrap().register_entry_id(&entry.id);
+        obj.accounting_stage.accountant.register_entry_id(&entry.id);
         writeln!(
             writer.lock().unwrap(),
             "{}",
             serde_json::to_string(&entry).unwrap()
         ).unwrap();
-        Self::notify_entry_info_subscribers(obj, &entry);
+        obj.thin_client_service
+            .notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_all<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
+    fn receive_all<W: Write>(obj: &Tpu, writer: &Mutex<W>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
-        let entry = obj.historian
+        let entry = obj.accounting_stage
             .output
             .lock()
             .unwrap()
             .recv_timeout(Duration::new(1, 0))?;
         Self::update_entry(obj, writer, &entry);
         l.push(entry);
-        while let Ok(entry) = obj.historian.receive() {
+        while let Ok(entry) = obj.accounting_stage.output.lock().unwrap().try_recv() {
             Self::update_entry(obj, writer, &entry);
             l.push(entry);
         }
@@ -184,7 +120,7 @@ impl Tpu {
         obj: SharedTpu,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
-        writer: &Arc<Mutex<W>>,
+        writer: &Mutex<W>,
     ) -> Result<()> {
         let mut q = VecDeque::new();
         let list = Self::receive_all(&obj, writer)?;
@@ -201,7 +137,7 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
-        writer: Arc<Mutex<W>>,
+        writer: Mutex<W>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             let _ = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer);
@@ -212,17 +148,17 @@ impl Tpu {
         })
     }
 
-    fn process_thin_client_requests(_obj: SharedTpu, _socket: &UdpSocket) -> Result<()> {
+    fn process_thin_client_requests(_acc: &Arc<Accountant>, _socket: &UdpSocket) -> Result<()> {
         Ok(())
     }
 
     fn thin_client_service(
-        obj: SharedTpu,
+        accountant: Arc<Accountant>,
         exit: Arc<AtomicBool>,
         socket: UdpSocket,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let _ = Self::process_thin_client_requests(obj.clone(), &socket);
+            let _ = Self::process_thin_client_requests(&accountant, &socket);
             if exit.load(Ordering::Relaxed) {
                 info!("sync_service exiting");
                 break;
@@ -245,33 +181,6 @@ impl Tpu {
                 break;
             }
         })
-    }
-
-    /// Process Request items sent by clients.
-    pub fn process_request(
-        &self,
-        msg: Request,
-        rsp_addr: SocketAddr,
-    ) -> Option<(Response, SocketAddr)> {
-        match msg {
-            Request::GetBalance { key } => {
-                let val = self.acc.lock().unwrap().get_balance(&key);
-                let rsp = (Response::Balance { key, val }, rsp_addr);
-                info!("Response::Balance {:?}", rsp);
-                Some(rsp)
-            }
-            Request::Transaction(_) => unreachable!(),
-            Request::Subscribe { subscriptions } => {
-                for subscription in subscriptions {
-                    match subscription {
-                        Subscription::EntryInfo => {
-                            self.entry_info_subscribers.lock().unwrap().push(rsp_addr)
-                        }
-                    }
-                }
-                None
-            }
-        }
     }
 
     fn recv_batch(recvr: &streamer::PacketReceiver) -> Result<(Vec<SharedPackets>, usize)> {
@@ -365,31 +274,6 @@ impl Tpu {
         (events, reqs)
     }
 
-    /// Process the transactions in parallel and then log the successful ones.
-    fn process_events(&self, events: Vec<Event>) -> Result<()> {
-        for result in self.acc.lock().unwrap().process_verified_events(events) {
-            if let Ok(event) = result {
-                self.historian_input
-                    .lock()
-                    .unwrap()
-                    .send(Signal::Event(event))?;
-            }
-        }
-
-        // Let validators know they should not attempt to process additional
-        // transactions in parallel.
-        self.historian_input.lock().unwrap().send(Signal::Tick)?;
-        debug!("after historian_input");
-
-        Ok(())
-    }
-
-    fn process_requests(&self, reqs: Vec<(Request, SocketAddr)>) -> Vec<(Response, SocketAddr)> {
-        reqs.into_iter()
-            .filter_map(|(req, rsp_addr)| self.process_request(req, rsp_addr))
-            .collect()
-    }
-
     fn serialize_response(
         resp: Response,
         rsp_addr: SocketAddr,
@@ -419,7 +303,7 @@ impl Tpu {
     }
 
     fn process(
-        obj: &SharedTpu,
+        obj: &Tpu,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
@@ -454,11 +338,11 @@ impl Tpu {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            obj.process_events(events)?;
+            obj.accounting_stage.process_events(events)?;
             debug!("done process_events");
 
             debug!("process_requests");
-            let rsps = obj.process_requests(reqs);
+            let rsps = obj.thin_client_service.process_requests(reqs);
             debug!("done process_requests");
 
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
@@ -484,7 +368,7 @@ impl Tpu {
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &SharedTpu,
+        obj: &Tpu,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -494,10 +378,10 @@ impl Tpu {
         for msgs in &blobs {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
-            let acc = obj.acc.lock().unwrap();
+            let accountant = &obj.accounting_stage.accountant;
             for entry in entries {
-                acc.register_entry_id(&entry.id);
-                for result in acc.process_verified_events(entry.events) {
+                accountant.register_entry_id(&entry.id);
+                for result in accountant.process_verified_events(entry.events) {
                     result?;
                 }
             }
@@ -576,10 +460,14 @@ impl Tpu {
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),
-            Arc::new(Mutex::new(writer)),
+            Mutex::new(writer),
         );
 
-        let t_skinny = Self::thin_client_service(obj.clone(), exit.clone(), skinny);
+        let t_skinny = Self::thin_client_service(
+            obj.accounting_stage.accountant.clone(),
+            exit.clone(),
+            skinny,
+        );
 
         let tpu = obj.clone();
         let t_server = spawn(move || loop {
@@ -784,41 +672,46 @@ pub fn to_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedP
 }
 
 #[cfg(test)]
-mod tests {
-    use bincode::serialize;
-    use ecdsa;
-    use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
-    use tpu::{to_packets, Request};
-    use transaction::{memfind, test_tx};
+pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
+    use signature::{KeyPair, KeyPairUtil};
 
+    let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let pubkey = KeyPair::new().pubkey();
+    let d = ReplicatedData::new(
+        pubkey,
+        gossip.local_addr().unwrap(),
+        replicate.local_addr().unwrap(),
+        serve.local_addr().unwrap(),
+    );
+    (d, gossip, replicate, serve, skinny)
+}
+
+#[cfg(test)]
+mod tests {
     use accountant::Accountant;
+    use accounting_stage::AccountingStage;
+    use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
-    use crdt::ReplicatedData;
+    use ecdsa;
     use entry;
-    use entry::Entry;
     use event::Event;
-    use futures::Future;
     use hash::{hash, Hash};
-    use historian::Historian;
     use logger;
     use mint::Mint;
-    use plan::Plan;
-    use recorder::Signal;
+    use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
-    use std::io::sink;
-    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::mpsc::sync_channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
     use std::time::Duration;
     use streamer;
-    use thin_client::ThinClient;
-    use tpu::Tpu;
-    use transaction::Transaction;
+    use tpu::{test_node, to_packets, Request, Tpu};
+    use transaction::{memfind, test_tx, Transaction};
 
     #[test]
     fn test_layout() {
@@ -846,117 +739,9 @@ mod tests {
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);
     }
 
-    #[test]
-    fn test_accounting_sequential_consistency() {
-        // In this attack we'll demonstrate that a verifier can interpret the ledger
-        // differently if either the server doesn't signal the ledger to add an
-        // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let mint = Mint::new(2);
-        let acc = Accountant::new(&mint);
-        let (input, event_receiver) = sync_channel(10);
-        let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let tpu = Tpu::new(acc, input, historian);
-
-        // Process a batch that includes a transaction that receives two tokens.
-        let alice = KeyPair::new();
-        let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
-        let events = vec![Event::Transaction(tr)];
-        assert!(tpu.process_events(events).is_ok());
-
-        // Process a second batch that spends one of those tokens.
-        let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
-        let events = vec![Event::Transaction(tr)];
-        assert!(tpu.process_events(events).is_ok());
-
-        // Collect the ledger and feed it to a new accountant.
-        tpu.historian_input
-            .lock()
-            .unwrap()
-            .send(Signal::Tick)
-            .unwrap();
-        drop(tpu.historian_input);
-        let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
-
-        // Assert the user holds one token, not two. If the server only output one
-        // entry, then the second transaction will be rejected, because it drives
-        // the account balance below zero before the credit is added.
-        let acc = Accountant::new(&mint);
-        for entry in entries {
-            assert!(
-                acc.process_verified_events(entry.events)
-                    .into_iter()
-                    .all(|x| x.is_ok())
-            );
-        }
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
-    }
-
-    #[test]
-    fn test_accountant_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = test_node();
-        let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
-        let (input, event_receiver) = sync_channel(10);
-        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(acc, input, historian));
-        let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = Tpu::serve(
-            &tpu,
-            leader_data,
-            leader_serve,
-            leader_skinny,
-            leader_gossip,
-            exit.clone(),
-            sink(),
-        ).unwrap();
-        sleep(Duration::from_millis(300));
-
-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-        let mut client = ThinClient::new(serve_addr, socket);
-        let last_id = client.get_last_id().wait().unwrap();
-
-        trace!("doing stuff");
-
-        let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
-
-        let _sig = client.transfer_signed(tr).unwrap();
-
-        let last_id = client.get_last_id().wait().unwrap();
-
-        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        tr2.data.tokens = 502;
-        tr2.data.plan = Plan::new_payment(502, bob_pubkey);
-        let _sig = client.transfer_signed(tr2).unwrap();
-
-        assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 500);
-        trace!("exiting");
-        exit.store(true, Ordering::Relaxed);
-        trace!("joining threads");
-        for t in threads {
-            t.join().unwrap();
-        }
-    }
-
-    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
-        let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let pubkey = KeyPair::new().pubkey();
-        let d = ReplicatedData::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-        );
-        (d, gossip, replicate, serve, skinny)
-    }
-
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
+    #[ignore]
     fn test_replicate() {
         logger::setup();
         let (leader_data, leader_gossip, _, leader_serve, _) = test_node();
@@ -1005,13 +790,12 @@ mod tests {
 
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
-        let acc = Accountant::new(&alice);
-        let (input, event_receiver) = sync_channel(10);
-        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(Tpu::new(acc, input, historian));
+        let accountant = Accountant::new(&alice);
+        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting_stage));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tpu::replicate(
-            &acc,
+            &tpu,
             target1_data,
             target1_gossip,
             target1_serve,
@@ -1033,9 +817,11 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
+            let accountant = &tpu.accounting_stage.accountant;
+
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
-            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
@@ -1044,11 +830,11 @@ mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
             let entry1 =
                 entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
-            acc.acc.lock().unwrap().register_entry_id(&cur_hash);
+            accountant.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
@@ -1073,18 +859,11 @@ mod tests {
             msgs.push(msg);
         }
 
-        let alice_balance = acc.acc
-            .lock()
-            .unwrap()
-            .get_balance(&alice.keypair().pubkey())
-            .unwrap();
+        let accountant = &tpu.accounting_stage.accountant;
+        let alice_balance = accountant.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = acc.acc
-            .lock()
-            .unwrap()
-            .get_balance(&bob_keypair.pubkey())
-            .unwrap();
+        let bob_balance = accountant.get_balance(&bob_keypair.pubkey()).unwrap();
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
@@ -1118,81 +897,5 @@ mod tests {
         }
         trace!("len: {} ref_len: {}", blob_q.len(), num_blobs_ref);
         assert!(blob_q.len() > num_blobs_ref);
-    }
-}
-
-#[cfg(all(feature = "unstable", test))]
-mod bench {
-    extern crate test;
-    use self::test::Bencher;
-    use accountant::{Accountant, MAX_ENTRY_IDS};
-    use bincode::serialize;
-    use hash::hash;
-    use mint::Mint;
-    use signature::{KeyPair, KeyPairUtil};
-    use std::collections::HashSet;
-    use std::sync::mpsc::sync_channel;
-    use std::time::Instant;
-    use tpu::*;
-    use transaction::Transaction;
-
-    #[bench]
-    fn process_packets_bench(_bencher: &mut Bencher) {
-        let mint = Mint::new(100_000_000);
-        let acc = Accountant::new(&mint);
-        let rsp_addr: SocketAddr = "0.0.0.0:0".parse().expect("socket address");
-        // Create transactions between unrelated parties.
-        let txs = 100_000;
-        let last_ids: Mutex<HashSet<Hash>> = Mutex::new(HashSet::new());
-        let transactions: Vec<_> = (0..txs)
-            .into_par_iter()
-            .map(|i| {
-                // Seed the 'to' account and a cell for its signature.
-                let dummy_id = i % (MAX_ENTRY_IDS as i32);
-                let last_id = hash(&serialize(&dummy_id).unwrap()); // Semi-unique hash
-                {
-                    let mut last_ids = last_ids.lock().unwrap();
-                    if !last_ids.contains(&last_id) {
-                        last_ids.insert(last_id);
-                        acc.register_entry_id(&last_id);
-                    }
-                }
-
-                // Seed the 'from' account.
-                let rando0 = KeyPair::new();
-                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-                acc.process_verified_transaction(&tr).unwrap();
-
-                let rando1 = KeyPair::new();
-                let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-                acc.process_verified_transaction(&tr).unwrap();
-
-                // Finally, return a transaction that's unique
-                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
-            })
-            .collect();
-
-        let req_vers = transactions
-            .into_iter()
-            .map(|tr| (Request::Transaction(tr), rsp_addr, 1_u8))
-            .collect();
-
-        let (input, event_receiver) = sync_channel(10);
-        let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let tpu = Tpu::new(acc, input, historian);
-
-        let now = Instant::now();
-        assert!(tpu.process_events(req_vers).is_ok());
-        let duration = now.elapsed();
-        let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
-        let tps = txs as f64 / sec;
-
-        // Ensure that all transactions were successfully logged.
-        drop(tpu.historian_input);
-        let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].events.len(), txs as usize);
-
-        println!("{} tps", tps);
     }
 }

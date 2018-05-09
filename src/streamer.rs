@@ -594,6 +594,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     //retransmit from leader to replicate target
     pub fn retransmit() {
         logger::setup();

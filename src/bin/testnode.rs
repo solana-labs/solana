@@ -7,10 +7,10 @@ extern crate solana;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
+use solana::accounting_stage::AccountingStage;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
-use solana::historian::Historian;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::tpu::Tpu;
 use std::env;
@@ -18,7 +18,6 @@ use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::sync_channel;
 use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
@@ -95,31 +94,30 @@ fn main() {
 
     eprintln!("creating accountant...");
 
-    let acc = Accountant::new_from_deposit(&deposit.unwrap());
-    acc.register_entry_id(&entry0.id);
-    acc.register_entry_id(&entry1.id);
+    let accountant = Accountant::new_from_deposit(&deposit.unwrap());
+    accountant.register_entry_id(&entry0.id);
+    accountant.register_entry_id(&entry1.id);
 
     eprintln!("processing entries...");
 
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = acc.process_verified_events(entry.events);
+        let results = accountant.process_verified_events(entry.events);
         for result in results {
             if let Err(e) = result {
                 eprintln!("failed to process event {:?}", e);
                 exit(1);
             }
         }
-        acc.register_entry_id(&last_id);
+        accountant.register_entry_id(&last_id);
     }
 
     eprintln!("creating networking stack...");
 
-    let (input, event_receiver) = sync_channel(10_000);
-    let historian = Historian::new(event_receiver, &last_id, Some(1000));
+    let accounting_stage = AccountingStage::new(accountant, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let tpu = Arc::new(Tpu::new(acc, input, historian));
+    let tpu = Arc::new(Tpu::new(accounting_stage));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();

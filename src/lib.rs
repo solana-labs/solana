@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod accountant;
+pub mod accounting_stage;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
@@ -18,6 +19,7 @@ pub mod result;
 pub mod signature;
 pub mod streamer;
 pub mod thin_client;
+pub mod thin_client_service;
 pub mod timing;
 pub mod tpu;
 pub mod transaction;
