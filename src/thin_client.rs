@@ -3,7 +3,6 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use tpu::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
@@ -11,6 +10,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
+use tpu::{Request, Response, Subscription};
 use transaction::Transaction;
 
 pub struct ThinClient {
@@ -148,7 +148,6 @@ impl ThinClient {
 mod tests {
     use super::*;
     use accountant::Accountant;
-    use tpu::Tpu;
     use crdt::{Crdt, ReplicatedData};
     use futures::Future;
     use historian::Historian;
@@ -162,6 +161,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
+    use tpu::Tpu;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]

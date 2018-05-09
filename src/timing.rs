@@ -1,5 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn duration_as_ms(d: &Duration) -> u64 {
     return (d.as_secs() * 1000) + (d.subsec_nanos() as u64 / 1_000_000);

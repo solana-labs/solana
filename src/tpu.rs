@@ -11,6 +11,7 @@ use hash::Hash;
 use historian::Historian;
 use packet;
 use packet::{SharedBlob, SharedPackets, BLOB_SIZE};
+use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use recorder::Signal;
 use result::Result;
@@ -26,11 +27,10 @@ use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use streamer;
-use transaction::Transaction;
-use timing;
 use std::time::Instant;
-use rand::{thread_rng, Rng};
+use streamer;
+use timing;
+use transaction::Transaction;
 
 pub struct Tpu {
     acc: Mutex<Accountant>,
@@ -785,15 +785,13 @@ pub fn to_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedP
 
 #[cfg(test)]
 mod tests {
-    use tpu::{to_packets, Request};
     use bincode::serialize;
     use ecdsa;
     use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
+    use tpu::{to_packets, Request};
     use transaction::{memfind, test_tx};
 
     use accountant::Accountant;
-    use tpu::Tpu;
-    use thin_client::ThinClient;
     use chrono::prelude::*;
     use crdt::Crdt;
     use crdt::ReplicatedData;
@@ -818,6 +816,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use streamer;
+    use thin_client::ThinClient;
+    use tpu::Tpu;
     use transaction::Transaction;
 
     #[test]
@@ -1126,7 +1126,6 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::{Accountant, MAX_ENTRY_IDS};
-    use tpu::*;
     use bincode::serialize;
     use hash::hash;
     use mint::Mint;
@@ -1134,6 +1133,7 @@ mod bench {
     use std::collections::HashSet;
     use std::sync::mpsc::sync_channel;
     use std::time::Instant;
+    use tpu::*;
     use transaction::Transaction;
 
     #[bench]
