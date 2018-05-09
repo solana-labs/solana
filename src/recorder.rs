@@ -15,7 +15,6 @@ use std::time::{Duration, Instant};
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
-    Event(Event),
     Events(Vec<Event>),
 }
 
@@ -77,9 +76,6 @@ impl Recorder {
                 Ok(signal) => match signal {
                     Signal::Tick => {
                         self.record_entry()?;
-                    }
-                    Signal::Event(event) => {
-                        self.events.push(event);
                     }
                     Signal::Events(events) => {
                         self.events.extend(events);
