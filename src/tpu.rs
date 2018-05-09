@@ -664,38 +664,46 @@ pub fn to_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedP
 }
 
 #[cfg(test)]
+pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
+    use signature::{KeyPair, KeyPairUtil};
+
+    let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let pubkey = KeyPair::new().pubkey();
+    let d = ReplicatedData::new(
+        pubkey,
+        gossip.local_addr().unwrap(),
+        replicate.local_addr().unwrap(),
+        serve.local_addr().unwrap(),
+    );
+    (d, gossip, replicate, serve, skinny)
+}
+
+#[cfg(test)]
 mod tests {
     use bincode::serialize;
     use ecdsa;
     use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
-    use tpu::{to_packets, Request};
-    use transaction::{memfind, test_tx};
-
     use accountant::Accountant;
     use accounting_stage::AccountingStage;
     use chrono::prelude::*;
     use crdt::Crdt;
-    use crdt::ReplicatedData;
     use entry;
     use event::Event;
-    use futures::Future;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
-    use plan::Plan;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
-    use std::io::sink;
-    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
     use std::time::Duration;
     use streamer;
-    use thin_client::ThinClient;
-    use tpu::Tpu;
-    use transaction::Transaction;
+    use tpu::{test_node, to_packets, Request, Tpu};
+    use transaction::{memfind, test_tx, Transaction};
 
     #[test]
     fn test_layout() {
@@ -721,69 +729,6 @@ mod tests {
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);
-    }
-
-    #[test]
-    fn test_accountant_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = test_node();
-        let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
-        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting));
-        let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = Tpu::serve(
-            &tpu,
-            leader_data,
-            leader_serve,
-            leader_skinny,
-            leader_gossip,
-            exit.clone(),
-            sink(),
-        ).unwrap();
-        sleep(Duration::from_millis(300));
-
-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-        let mut client = ThinClient::new(serve_addr, socket);
-        let last_id = client.get_last_id().wait().unwrap();
-
-        trace!("doing stuff");
-
-        let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
-
-        let _sig = client.transfer_signed(tr).unwrap();
-
-        let last_id = client.get_last_id().wait().unwrap();
-
-        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        tr2.data.tokens = 502;
-        tr2.data.plan = Plan::new_payment(502, bob_pubkey);
-        let _sig = client.transfer_signed(tr2).unwrap();
-
-        assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 500);
-        trace!("exiting");
-        exit.store(true, Ordering::Relaxed);
-        trace!("joining threads");
-        for t in threads {
-            t.join().unwrap();
-        }
-    }
-
-    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
-        let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let pubkey = KeyPair::new().pubkey();
-        let d = ReplicatedData::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-        );
-        (d, gossip, replicate, serve, skinny)
     }
 
     /// Test that mesasge sent from leader to target1 and repliated to target2

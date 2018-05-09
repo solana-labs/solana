@@ -153,6 +153,7 @@ mod tests {
     use futures::Future;
     use logger;
     use mint::Mint;
+    use plan::Plan;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -160,9 +161,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
-    use tpu::Tpu;
+    use tpu::{self, Tpu};
 
-    // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
     fn test_thin_client() {
         logger::setup();
@@ -206,6 +206,54 @@ mod tests {
         }
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_bad_sig() {
+        let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = tpu::test_node();
+        let alice = Mint::new(10_000);
+        let acc = Accountant::new(&alice);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting));
+        let serve_addr = leader_serve.local_addr().unwrap();
+        let threads = Tpu::serve(
+            &tpu,
+            leader_data,
+            leader_serve,
+            leader_skinny,
+            leader_gossip,
+            exit.clone(),
+            sink(),
+        ).unwrap();
+        sleep(Duration::from_millis(300));
+
+        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
+        let mut client = ThinClient::new(serve_addr, socket);
+        let last_id = client.get_last_id().wait().unwrap();
+
+        trace!("doing stuff");
+
+        let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
+
+        let _sig = client.transfer_signed(tr).unwrap();
+
+        let last_id = client.get_last_id().wait().unwrap();
+
+        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
+        tr2.data.tokens = 502;
+        tr2.data.plan = Plan::new_payment(502, bob_pubkey);
+        let _sig = client.transfer_signed(tr2).unwrap();
+
+        assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 500);
+        trace!("exiting");
+        exit.store(true, Ordering::Relaxed);
+        trace!("joining threads");
         for t in threads {
             t.join().unwrap();
         }
