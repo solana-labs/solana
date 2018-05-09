@@ -1,7 +1,11 @@
 [package]
 name = "solana"
 description = "High Performance Blockchain"
+<<<<<<< HEAD
 version = "0.5.0-beta"
+=======
+version = "0.5.0"
+>>>>>>> 3236be7877143563faf35255a599cb944603d0f3
 documentation = "https://docs.rs/solana"
 homepage = "http://solana.io/"
 repository = "https://github.com/solana-labs/solana"
@@ -68,3 +72,4 @@ libc = "^0.2.1"
 getopts = "^0.2"
 isatty = "0.1"
 futures = "0.1"
+rand = "0.4.2"

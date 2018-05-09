@@ -8,6 +8,7 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
+use packet::BLOB_DATA_SIZE;
 use std::mem;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
@@ -79,11 +80,49 @@ impl Recorder {
                     }
                     Signal::Event(event) => {
                         self.events.push(event);
+
+                        // Record an entry early if we anticipate its serialized size will
+                        // be larger than 64kb. At the time of this writing, we assume each
+                        // event will be well under 256 bytes.
+                        if self.events.len() >= BLOB_DATA_SIZE / 256 {
+                            self.record_entry()?;
+                        }
                     }
                 },
                 Err(TryRecvError::Empty) => return Ok(()),
                 Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
             };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bincode::serialize;
+    use signature::{KeyPair, KeyPairUtil};
+    use std::sync::mpsc::sync_channel;
+    use transaction::Transaction;
+
+    #[test]
+    fn test_sub64k_entry_size() {
+        let (signal_sender, signal_receiver) = sync_channel(500);
+        let (entry_sender, entry_receiver) = sync_channel(10);
+        let zero = Hash::default();
+        let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
+        let alice_keypair = KeyPair::new();
+        let bob_pubkey = KeyPair::new().pubkey();
+        for _ in 0..256 {
+            let tx = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
+            let event = Event::Transaction(tx);
+            signal_sender.send(Signal::Event(event)).unwrap();
+        }
+
+        recorder.process_events(Instant::now(), None).unwrap();
+
+        drop(recorder.sender);
+        let entries: Vec<_> = entry_receiver.iter().collect();
+        assert_eq!(entries.len(), 1);
+        assert!(serialize(&entries[0]).unwrap().len() <= 65_536);
     }
 }

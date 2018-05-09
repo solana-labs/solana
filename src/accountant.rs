@@ -15,6 +15,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
 use transaction::Transaction;
 
@@ -30,18 +31,18 @@ pub enum AccountingError {
 pub type Result<T> = result::Result<T, AccountingError>;
 
 /// Commit funds to the 'to' party.
-fn apply_payment(balances: &RwLock<HashMap<PublicKey, RwLock<i64>>>, payment: &Payment) {
+fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
     if balances.read().unwrap().contains_key(&payment.to) {
         let bals = balances.read().unwrap();
-        *bals[&payment.to].write().unwrap() += payment.tokens;
+        bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
     } else {
         let mut bals = balances.write().unwrap();
-        bals.insert(payment.to, RwLock::new(payment.tokens));
+        bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
     }
 }
 
 pub struct Accountant {
-    balances: RwLock<HashMap<PublicKey, RwLock<i64>>>,
+    balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
     pending: RwLock<HashMap<Signature, Plan>>,
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
@@ -71,6 +72,13 @@ impl Accountant {
         let acc = Self::new_from_deposit(&deposit);
         acc.register_entry_id(&mint.last_id());
         acc
+    }
+
+    /// Return the last entry ID registered
+    pub fn last_id(&self) -> Hash {
+        let last_ids = self.last_ids.read().unwrap();
+        let last_item = last_ids.iter().last().expect("empty last_ids list");
+        last_item.0
     }
 
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
@@ -127,27 +135,37 @@ impl Accountant {
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
         let bals = self.balances.read().unwrap();
-
-        // Hold a write lock before the condition check, so that a debit can't occur
-        // between checking the balance and the withdraw.
         let option = bals.get(&tr.from);
+
         if option.is_none() {
             return Err(AccountingError::AccountNotFound);
         }
-        let mut bal = option.unwrap().write().unwrap();
 
         if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
             return Err(AccountingError::InvalidTransferSignature);
         }
 
-        if *bal < tr.data.tokens {
-            self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
-            return Err(AccountingError::InsufficientFunds);
+        loop {
+            let bal = option.unwrap();
+            let current = bal.load(Ordering::Relaxed) as i64;
+
+            if current < tr.data.tokens {
+                self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
+                return Err(AccountingError::InsufficientFunds);
+            }
+
+            let result = bal.compare_exchange(
+                current as isize,
+                (current - tr.data.tokens) as isize,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+
+            match result {
+                Ok(_) => return Ok(()),
+                Err(_) => continue,
+            };
         }
-
-        *bal -= tr.data.tokens;
-
-        Ok(())
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
@@ -200,13 +218,18 @@ impl Accountant {
         (trs, rest)
     }
 
-    pub fn process_verified_events(&self, events: Vec<Event>) -> Result<()> {
+    pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
-        self.process_verified_transactions(trs);
+        let mut results: Vec<_> = self.process_verified_transactions(trs)
+            .into_iter()
+            .map(|x| x.map(Event::Transaction))
+            .collect();
+
         for event in rest {
-            self.process_verified_event(&event)?;
+            results.push(self.process_verified_event(event));
         }
-        Ok(())
+
+        results
     }
 
     /// Process a Witness Signature that has already been verified.
@@ -260,12 +283,13 @@ impl Accountant {
     }
 
     /// Process an Transaction or Witness that has already been verified.
-    pub fn process_verified_event(&self, event: &Event) -> Result<()> {
-        match *event {
+    pub fn process_verified_event(&self, event: Event) -> Result<Event> {
+        match event {
             Event::Transaction(ref tr) => self.process_verified_transaction(tr),
             Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
             Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),
-        }
+        }?;
+        Ok(event)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -300,7 +324,7 @@ impl Accountant {
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
         let bals = self.balances.read().unwrap();
-        bals.get(pubkey).map(|x| *x.read().unwrap())
+        bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
     }
 }
 
@@ -316,6 +340,8 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
         let acc = Accountant::new(&alice);
+        assert_eq!(acc.last_id(), alice.last_id());
+
         acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);

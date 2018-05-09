@@ -10,14 +10,16 @@ use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
-use solana::accountant_stub::AccountantStub;
 use solana::mint::MintDemo;
 use solana::signature::{KeyPair, KeyPairUtil};
+use solana::thin_client::ThinClient;
 use solana::transaction::Transaction;
 use std::env;
 use std::io::{stdin, Read};
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 use std::time::Instant;
 use untrusted::Input;
 
@@ -33,12 +35,12 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     let mut threads = 4usize;
     let mut addr: String = "127.0.0.1:8000".to_string();
-    let mut send_addr: String = "127.0.0.1:8001".to_string();
+    let mut client_addr: String = "127.0.0.1:8010".to_string();
 
     let mut opts = Options::new();
     opts.optopt("s", "", "server address", "host:port");
     opts.optopt("c", "", "client address", "host:port");
-    opts.optopt("t", "", "number of threads", "4");
+    opts.optopt("t", "", "number of threads", &format!("{}", threads));
     opts.optflag("h", "help", "print help");
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
@@ -58,7 +60,7 @@ fn main() {
         addr = matches.opt_str("s").unwrap();
     }
     if matches.opt_present("c") {
-        send_addr = matches.opt_str("c").unwrap();
+        client_addr = matches.opt_str("c").unwrap();
     }
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
@@ -82,11 +84,14 @@ fn main() {
         exit(1);
     });
 
-    let socket = UdpSocket::bind(&send_addr).unwrap();
-    let mut acc = AccountantStub::new(&addr, socket);
+    println!("Binding to {}", client_addr);
+    let socket = UdpSocket::bind(&client_addr).unwrap();
+    socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
+    let mut acc = ThinClient::new(addr.parse().unwrap(), socket);
 
     println!("Get last ID...");
     let last_id = acc.get_last_id().wait().unwrap();
+    println!("Got last ID {:?}", last_id);
 
     println!("Creating keypairs...");
     let txs = demo.users.len() / 2;
@@ -102,7 +107,7 @@ fn main() {
         .into_par_iter()
         .map(|chunk| Transaction::new(&chunk[0], chunk[1].pubkey(), 1, last_id))
         .collect();
-    let duration = now.elapsed();
+    let mut duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
@@ -113,31 +118,33 @@ fn main() {
     );
 
     let initial_tx_count = acc.transaction_count();
+    println!("initial count {}", initial_tx_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
     let now = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
-        println!("Transferring 1 unit {} times...", trs.len());
-        let send_addr = "0.0.0.0:0";
-        let socket = UdpSocket::bind(send_addr).unwrap();
-        let acc = AccountantStub::new(&addr, socket);
+        println!("Transferring 1 unit {} times... to", trs.len());
+        let mut client_addr: SocketAddr = client_addr.parse().unwrap();
+        client_addr.set_port(0);
+        let socket = UdpSocket::bind(client_addr).unwrap();
+        let acc = ThinClient::new(addr.parse().unwrap(), socket);
         for tr in trs {
             acc.transfer_signed(tr.clone()).unwrap();
         }
     });
 
-    println!("Waiting for half the transactions to complete...",);
-    let mut tx_count = acc.transaction_count();
-    while tx_count < transactions.len() as u64 / 2 {
+    println!("Waiting for transactions to complete...",);
+    let mut tx_count;
+    for _ in 0..10 {
         tx_count = acc.transaction_count();
+        duration = now.elapsed();
+        let txs = tx_count - initial_tx_count;
+        println!("Transactions processed {}", txs);
+        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+        let tps = (txs * 1_000_000_000) as f64 / ns as f64;
+        println!("{} tps", tps);
+        sleep(Duration::new(1, 0));
     }
-    let txs = tx_count - initial_tx_count;
-    println!("Transactions processed {}", txs);
-
-    let duration = now.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-    println!("Done. {} tps", tps);
 }

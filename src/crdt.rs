@@ -1,14 +1,24 @@
 //! The `crdt` module defines a data structure that is shared by all the nodes in the network over
-//! a gossip control plane.  The goal is to share small bits of of-chain information and detect and
+//! a gossip control plane.  The goal is to share small bits of off-chain information and detect and
 //! repair partitions.
 //!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
 //! The last version is always picked durring an update.
+//!
+//! The network is arranged in layers:
+//!
+//! * layer 0 - Leader.
+//! * layer 1 - As many nodes as we can fit
+//! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
+//!
+//! Accountant needs to provide an interface for us to query the stake weight
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hash::Hash;
-use result::Result;
+use packet::SharedBlob;
+use rayon::prelude::*;
+use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
 use signature::{PublicKey, Signature};
 use std::collections::HashMap;
@@ -22,16 +32,16 @@ use std::time::Duration;
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ReplicatedData {
-    id: PublicKey,
+    pub id: PublicKey,
     sig: Signature,
     /// should always be increasing
     version: u64,
     /// address to connect to for gossip
-    gossip_addr: SocketAddr,
+    pub gossip_addr: SocketAddr,
     /// address to connect to for replication
-    replicate_addr: SocketAddr,
+    pub replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
-    lead_addr: SocketAddr,
+    pub serve_addr: SocketAddr,
     /// current leader identity
     current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -41,15 +51,19 @@ pub struct ReplicatedData {
 }
 
 impl ReplicatedData {
-    pub fn new(id: PublicKey, gossip_addr: SocketAddr) -> ReplicatedData {
-        let daddr = "0.0.0.0:0".parse().unwrap();
+    pub fn new(
+        id: PublicKey,
+        gossip_addr: SocketAddr,
+        replicate_addr: SocketAddr,
+        serve_addr: SocketAddr,
+    ) -> ReplicatedData {
         ReplicatedData {
             id,
             sig: Signature::default(),
             version: 0,
             gossip_addr,
-            replicate_addr: daddr,
-            lead_addr: daddr,
+            replicate_addr,
+            serve_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -77,8 +91,8 @@ pub struct Crdt {
     local: HashMap<PublicKey, u64>,
     /// The value of the remote update index that i have last seen
     /// This Node will ask external nodes for updates since the value in this list
-    remote: HashMap<PublicKey, u64>,
-    update_index: u64,
+    pub remote: HashMap<PublicKey, u64>,
+    pub update_index: u64,
     me: PublicKey,
     timeout: Duration,
 }
@@ -109,23 +123,141 @@ impl Crdt {
         g.table.insert(me.id, me);
         g
     }
-    pub fn import(&mut self, v: &ReplicatedData) {
-        // TODO check that last_verified types are always increasing
-        // TODO probably an error or attack
-        if self.me != v.id {
-            self.insert(v);
-        }
+    pub fn my_data(&self) -> &ReplicatedData {
+        &self.table[&self.me]
     }
-    pub fn insert(&mut self, v: &ReplicatedData) {
+    pub fn leader_data(&self) -> &ReplicatedData {
+        &self.table[&self.table[&self.me].current_leader_id]
+    }
+
+    pub fn set_leader(&mut self, key: PublicKey) -> () {
+        let mut me = self.my_data().clone();
+        me.current_leader_id = key;
+        me.version += 1;
+        self.insert(me);
+    }
+
+    pub fn insert(&mut self, v: ReplicatedData) {
+        // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
+            //somehow we signed a message for our own identity with a higher version that
+            // we have stored ourselves
+            trace!("me: {:?}", self.me[0]);
+            trace!("v.id: {:?}", v.id[0]);
             trace!("insert! {}", v.version);
             self.update_index += 1;
-            let _ = self.table.insert(v.id, v.clone());
+            let _ = self.table.insert(v.id.clone(), v.clone());
             let _ = self.local.insert(v.id, self.update_index);
         } else {
-            trace!("INSERT FAILED {}", v.version);
+            trace!(
+                "INSERT FAILED new.version: {} me.version: {}",
+                v.version,
+                self.table[&v.id].version
+            );
         }
     }
+
+    /// broadcast messages from the leader to layer 1 nodes
+    /// # Remarks
+    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    pub fn broadcast(
+        obj: &Arc<RwLock<Self>>,
+        blobs: &Vec<SharedBlob>,
+        s: &UdpSocket,
+        transmit_index: &mut u64,
+    ) -> Result<()> {
+        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
+            // copy to avoid locking durring IO
+            let robj = obj.read().unwrap();
+            let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
+            (robj.table[&robj.me].clone(), cloned_table)
+        };
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let items: Vec<(usize, &ReplicatedData)> = table
+            .iter()
+            .filter(|v| {
+                if me.id == v.id {
+                    //filter myself
+                    false
+                } else if v.replicate_addr == daddr {
+                    //filter nodes that are not listening
+                    false
+                } else {
+                    true
+                }
+            })
+            .enumerate()
+            .collect();
+        let orders: Vec<_> = items.into_iter().cycle().zip(blobs.iter()).collect();
+        let errs: Vec<_> = orders
+            .into_par_iter()
+            .map(|((i, v), b)| {
+                // only leader should be broadcasting
+                assert!(me.current_leader_id != v.id);
+                let mut blob = b.write().unwrap();
+                blob.set_id(me.id).expect("set_id");
+                blob.set_index(*transmit_index + i as u64)
+                    .expect("set_index");
+                //TODO profile this, may need multiple sockets for par_iter
+                s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
+            })
+            .collect();
+        for e in errs {
+            trace!("retransmit result {:?}", e);
+            match e {
+                Err(e) => return Err(Error::IO(e)),
+                _ => (),
+            }
+            *transmit_index += 1;
+        }
+        Ok(())
+    }
+
+    /// retransmit messages from the leader to layer 1 nodes
+    /// # Remarks
+    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
+        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
+            // copy to avoid locking durring IO
+            let s = obj.read().unwrap();
+            (s.table[&s.me].clone(), s.table.values().cloned().collect())
+        };
+        let rblob = blob.read().unwrap();
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let orders: Vec<_> = table
+            .iter()
+            .filter(|v| {
+                if me.id == v.id {
+                    false
+                } else if me.current_leader_id == v.id {
+                    trace!("skip retransmit to leader {:?}", v.id);
+                    false
+                } else if v.replicate_addr == daddr {
+                    trace!("skip nodes that are not listening {:?}", v.id);
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+        let errs: Vec<_> = orders
+            .par_iter()
+            .map(|v| {
+                trace!("retransmit blob to {}", v.replicate_addr);
+                //TODO profile this, may need multiple sockets for par_iter
+                s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
+            })
+            .collect();
+        for e in errs {
+            trace!("retransmit result {:?}", e);
+            match e {
+                Err(e) => return Err(Error::IO(e)),
+                _ => (),
+            }
+        }
+        Ok(())
+    }
+
     fn random() -> u64 {
         let rnd = SystemRandom::new();
         let mut buf = [0u8; 8];
@@ -134,7 +266,7 @@ impl Crdt {
         rdr.read_u64::<LittleEndian>().unwrap()
     }
     fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<ReplicatedData>) {
-        trace!("get updates since {}", v);
+        //trace!("get updates since {}", v);
         let data = self.table
             .values()
             .filter(|x| self.local[&x.id] > v)
@@ -147,17 +279,21 @@ impl Crdt {
 
     /// Create a random gossip request
     /// # Returns
-    /// (A,B,C)
-    /// * A - Remote gossip address
-    /// * B - My gossip address
-    /// * C - Remote update index to request updates since
-    fn gossip_request(&self) -> (SocketAddr, Protocol) {
-        let n = (Self::random() as usize) % self.table.len();
-        trace!("random {:?} {}", &self.me[0..1], n);
+    /// (A,B)
+    /// * A - Address to send to
+    /// * B - RequestUpdates protocol message
+    fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
+        if self.table.len() <= 1 {
+            return Err(Error::GeneralError);
+        }
+        let mut n = (Self::random() as usize) % self.table.len();
+        while self.table.values().nth(n).unwrap().id == self.me {
+            n = (Self::random() as usize) % self.table.len();
+        }
         let v = self.table.values().nth(n).unwrap().clone();
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
-        (v.gossip_addr, req)
+        Ok((v.gossip_addr, req))
     }
 
     /// At random pick a node and try to get updated changes from them
@@ -167,7 +303,7 @@ impl Crdt {
 
         // Lock the object only to do this operation and not for any longer
         // especially not when doing the `sock.send_to`
-        let (remote_gossip_addr, req) = obj.read().unwrap().gossip_request();
+        let (remote_gossip_addr, req) = obj.read().unwrap().gossip_request()?;
         let sock = UdpSocket::bind("0.0.0.0:0")?;
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
@@ -186,7 +322,7 @@ impl Crdt {
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
-            self.import(&v);
+            self.insert(v.clone());
         }
         *self.remote.entry(from).or_insert(update_index) = update_index;
     }
@@ -222,7 +358,7 @@ impl Crdt {
                 let rsp = serialize(&Protocol::ReceiveUpdates(from, ups, data))?;
                 trace!("send_to {}", addr);
                 //TODO verify reqdata belongs to sender
-                obj.write().unwrap().import(&reqdata);
+                obj.write().unwrap().insert(reqdata);
                 sock.send_to(&rsp, addr).unwrap();
                 trace!("send_to done!");
             }
@@ -251,6 +387,9 @@ impl Crdt {
 #[cfg(test)]
 mod test {
     use crdt::{Crdt, ReplicatedData};
+    use logger;
+    use packet::Blob;
+    use rayon::iter::*;
     use signature::KeyPair;
     use signature::KeyPairUtil;
     use std::net::UdpSocket;
@@ -258,6 +397,28 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::{sleep, JoinHandle};
     use std::time::Duration;
+
+    fn test_node() -> (Crdt, UdpSocket, UdpSocket, UdpSocket) {
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let d = ReplicatedData::new(
+            pubkey,
+            gossip.local_addr().unwrap(),
+            replicate.local_addr().unwrap(),
+            serve.local_addr().unwrap(),
+        );
+        let crdt = Crdt::new(d);
+        trace!(
+            "id: {} gossip: {} replicate: {} serve: {}",
+            crdt.my_data().id[0],
+            gossip.local_addr().unwrap(),
+            replicate.local_addr().unwrap(),
+            serve.local_addr().unwrap(),
+        );
+        (crdt, gossip, replicate, serve)
+    }
 
     /// Test that the network converges.
     /// Run until every node in the network has a full ReplicatedData set.
@@ -271,12 +432,9 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let listen: Vec<_> = (0..num)
             .map(|_| {
-                let listener = UdpSocket::bind("0.0.0.0:0").unwrap();
-                let pubkey = KeyPair::new().pubkey();
-                let d = ReplicatedData::new(pubkey, listener.local_addr().unwrap());
-                let crdt = Crdt::new(d);
+                let (crdt, gossip, _, _) = test_node();
                 let c = Arc::new(RwLock::new(crdt));
-                let l = Crdt::listen(c.clone(), listener, exit.clone());
+                let l = Crdt::listen(c.clone(), gossip, exit.clone());
                 (c, l)
             })
             .collect();
@@ -332,7 +490,7 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(&d);
+                xv.insert(d);
             }
         });
     }
@@ -349,7 +507,7 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(&d);
+                xv.insert(d);
             }
         });
     }
@@ -357,16 +515,89 @@ mod test {
     /// Test that insert drops messages that are older
     #[test]
     fn insert_test() {
-        let mut d = ReplicatedData::new(KeyPair::new().pubkey(), "127.0.0.1:1234".parse().unwrap());
+        let mut d = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+        );
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
         d.version = 2;
-        crdt.insert(&d);
+        crdt.insert(d.clone());
         assert_eq!(crdt.table[&d.id].version, 2);
         d.version = 1;
-        crdt.insert(&d);
+        crdt.insert(d.clone());
         assert_eq!(crdt.table[&d.id].version, 2);
     }
 
+    #[test]
+    pub fn test_crdt_retransmit() {
+        logger::setup();
+        trace!("c1:");
+        let (mut c1, s1, r1, e1) = test_node();
+        trace!("c2:");
+        let (mut c2, s2, r2, _) = test_node();
+        trace!("c3:");
+        let (mut c3, s3, r3, _) = test_node();
+        let c1_id = c1.my_data().id;
+        c1.set_leader(c1_id);
+
+        c2.insert(c1.my_data().clone());
+        c3.insert(c1.my_data().clone());
+
+        c2.set_leader(c1.my_data().id);
+        c3.set_leader(c1.my_data().id);
+
+        let exit = Arc::new(AtomicBool::new(false));
+
+        // Create listen threads
+        let a1 = Arc::new(RwLock::new(c1));
+        let t1 = Crdt::listen(a1.clone(), s1, exit.clone());
+
+        let a2 = Arc::new(RwLock::new(c2));
+        let t2 = Crdt::listen(a2.clone(), s2, exit.clone());
+
+        let a3 = Arc::new(RwLock::new(c3));
+        let t3 = Crdt::listen(a3.clone(), s3, exit.clone());
+
+        // Create gossip threads
+        let t1_gossip = Crdt::gossip(a1.clone(), exit.clone());
+        let t2_gossip = Crdt::gossip(a2.clone(), exit.clone());
+        let t3_gossip = Crdt::gossip(a3.clone(), exit.clone());
+
+        //wait to converge
+        trace!("waitng to converge:");
+        let mut done = false;
+        for _ in 0..10 {
+            done = a1.read().unwrap().table.len() == 3 && a2.read().unwrap().table.len() == 3
+                && a3.read().unwrap().table.len() == 3;
+            if done {
+                break;
+            }
+            sleep(Duration::new(1, 0));
+        }
+        assert!(done);
+        let mut b = Blob::default();
+        b.meta.size = 10;
+        Crdt::retransmit(&a1, &Arc::new(RwLock::new(b)), &e1).unwrap();
+        let res: Vec<_> = [r1, r2, r3]
+            .into_par_iter()
+            .map(|s| {
+                let mut b = Blob::default();
+                s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+                let res = s.recv_from(&mut b.data);
+                res.is_err() //true if failed to receive the retransmit packet
+            })
+            .collect();
+        //true if failed receive the retransmit packet, r2, and r3 should succeed
+        //r1 was the sender, so it should fail to receive the packet
+        assert_eq!(res, [true, false, false]);
+        exit.store(true, Ordering::Relaxed);
+        let threads = vec![t1, t2, t3, t1_gossip, t2_gossip, t3_gossip];
+        for t in threads.into_iter() {
+            t.join().unwrap();
+        }
+    }
 }

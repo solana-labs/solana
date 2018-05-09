@@ -1,10 +1,10 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
+use accountant;
 use bincode;
 use serde_json;
 use std;
 use std::any::Any;
-use accountant;
 
 #[derive(Debug)]
 pub enum Error {
@@ -18,6 +18,7 @@ pub enum Error {
     AccountingError(accountant::AccountingError),
     SendError,
     Services,
+    GeneralError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

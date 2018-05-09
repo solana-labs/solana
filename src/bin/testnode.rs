@@ -7,15 +7,19 @@ extern crate solana;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
-use solana::accountant_skel::AccountantSkel;
+use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
 use solana::historian::Historian;
+use solana::signature::{KeyPair, KeyPairUtil};
+use solana::tpu::Tpu;
 use std::env;
 use std::io::{stdin, stdout, Read};
+use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::sync_channel;
+use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
@@ -48,7 +52,10 @@ fn main() {
     if matches.opt_present("p") {
         port = matches.opt_str("p").unwrap().parse().expect("port");
     }
-    let addr = format!("0.0.0.0:{}", port);
+    let serve_addr = format!("0.0.0.0:{}", port);
+    let gossip_addr = format!("0.0.0.0:{}", port + 1);
+    let replicate_addr = format!("0.0.0.0:{}", port + 2);
+    let skinny_addr = format!("0.0.0.0:{}", port + 3);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a log file");
@@ -70,6 +77,8 @@ fn main() {
         })
     });
 
+    eprintln!("done parsing...");
+
     // The first item in the ledger is required to be an entry with zero num_hashes,
     // which implies its id can be used as the ledger's seed.
     let entry0 = entries.next().unwrap();
@@ -84,27 +93,55 @@ fn main() {
         None
     };
 
+    eprintln!("creating accountant...");
+
     let acc = Accountant::new_from_deposit(&deposit.unwrap());
     acc.register_entry_id(&entry0.id);
     acc.register_entry_id(&entry1.id);
 
+    eprintln!("processing entries...");
+
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        acc.process_verified_events(entry.events).unwrap();
+        let results = acc.process_verified_events(entry.events);
+        for result in results {
+            if let Err(e) = result {
+                eprintln!("failed to process event {:?}", e);
+                exit(1);
+            }
+        }
         acc.register_entry_id(&last_id);
     }
 
-    let historian = Historian::new(&last_id, Some(1000));
+    eprintln!("creating networking stack...");
+
+    let (input, event_receiver) = sync_channel(10_000);
+    let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(Mutex::new(AccountantSkel::new(
-        acc,
-        last_id,
+    let tpu = Arc::new(Tpu::new(acc, input, historian));
+    let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
+    let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
+    let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
+    let skinny_sock = UdpSocket::bind(&skinny_addr).unwrap();
+    let pubkey = KeyPair::new().pubkey();
+    let d = ReplicatedData::new(
+        pubkey,
+        gossip_sock.local_addr().unwrap(),
+        replicate_sock.local_addr().unwrap(),
+        serve_sock.local_addr().unwrap(),
+    );
+    eprintln!("starting server...");
+    let threads = Tpu::serve(
+        &tpu,
+        d,
+        serve_sock,
+        skinny_sock,
+        gossip_sock,
+        exit.clone(),
         stdout(),
-        historian,
-    )));
-    let threads = AccountantSkel::serve(&skel, &addr, exit.clone()).unwrap();
-    eprintln!("Ready. Listening on {}", addr);
+    ).unwrap();
+    eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");
     }

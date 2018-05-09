@@ -102,6 +102,12 @@ $ source $HOME/.cargo/env
 $ rustup component add rustfmt-preview
 ```
 
+If your rustc version is lower than 1.25.0, please update it:
+
+```bash
+$ rustup update
+```
+
 Download the source code:
 
 ```bash
@@ -118,6 +124,18 @@ Run the test suite:
 cargo test
 ```
 
+Debugging
+---
+
+There are some useful debug messages in the code, you can enable them on a per-module and per-level
+basis with the normal RUST\_LOG environment variable. Run the testnode with this syntax:
+```bash
+$ RUST_LOG=solana::streamer=debug,solana::accountant_skel=info cat genesis.log | ./target/release/solana-testnode > transactions0.log
+```
+to see the debug and info sections for streamer and accountant\_skel respectively. Generally
+we are using debug for infrequent debug messages, trace for potentially frequent messages and
+info for performance-related logging.
+
 Benchmarking
 ---
 
@@ -131,6 +149,13 @@ Run the benchmarks:
 
 ```bash
 $ cargo +nightly bench --features="unstable"
+```
+
+To run the benchmarks on Linux with GPU optimizations enabled:
+
+```bash
+$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.5.0/libcuda_verify_ed25519.a
+$ cargo +nightly bench --features="unstable,cuda"
 ```
 
 Code coverage

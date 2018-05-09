@@ -1,12 +1,14 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use result::{Error, Result};
+use signature::PublicKey;
 use std::collections::VecDeque;
 use std::fmt;
 use std::io;
+use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex, RwLock};
-use std::mem::size_of;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -14,7 +16,8 @@ pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
-const BLOB_SIZE: usize = 64 * 1024;
+pub const BLOB_SIZE: usize = 64 * 1024;
+pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_ID_END;
 pub const PACKET_DATA_SIZE: usize = 256;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
@@ -176,13 +179,14 @@ impl Packets {
         socket.set_nonblocking(false)?;
         for p in &mut self.packets {
             p.meta.size = 0;
+            trace!("receiving");
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    trace!("got {:?} messages", i);
+                    debug!("got {:?} messages", i);
                     break;
                 }
                 Err(e) => {
-                    info!("recv_from err {:?}", e);
+                    trace!("recv_from err {:?}", e);
                     return Err(Error::IO(e));
                 }
                 Ok((nrecv, from)) => {
@@ -200,6 +204,7 @@ impl Packets {
     pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<()> {
         let sz = self.run_read_from(socket)?;
         self.packets.resize(sz, Packet::default());
+        debug!("recv_from: {}", sz);
         Ok(())
     }
     pub fn send_to(&self, socket: &UdpSocket) -> Result<()> {
@@ -211,28 +216,41 @@ impl Packets {
     }
 }
 
-const BLOB_INDEX_SIZE: usize = size_of::<u64>();
+const BLOB_INDEX_END: usize = size_of::<u64>();
+const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_SIZE]);
+        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_END]);
         let r = rdr.read_u64::<LittleEndian>()?;
         Ok(r)
     }
     pub fn set_index(&mut self, ix: u64) -> Result<()> {
         let mut wtr = vec![];
         wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[..BLOB_INDEX_SIZE].clone_from_slice(&wtr);
+        self.data[..BLOB_INDEX_END].clone_from_slice(&wtr);
         Ok(())
     }
+
+    pub fn get_id(&self) -> Result<PublicKey> {
+        let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
+        Ok(e)
+    }
+
+    pub fn set_id(&mut self, id: PublicKey) -> Result<()> {
+        let wtr = serialize(&id)?;
+        self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
+        Ok(())
+    }
+
     pub fn data(&self) -> &[u8] {
-        &self.data[BLOB_INDEX_SIZE..]
+        &self.data[BLOB_ID_END..]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[BLOB_INDEX_SIZE..]
+        &mut self.data[BLOB_ID_END..]
     }
     pub fn set_size(&mut self, size: usize) {
-        self.meta.size = size + BLOB_INDEX_SIZE;
+        self.meta.size = size + BLOB_ID_END;
     }
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<VecDeque<SharedBlob>> {
         let mut v = VecDeque::new();

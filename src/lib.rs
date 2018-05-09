@@ -1,7 +1,5 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod accountant;
-pub mod accountant_skel;
-pub mod accountant_stub;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
@@ -11,6 +9,7 @@ pub mod event;
 pub mod hash;
 pub mod historian;
 pub mod ledger;
+pub mod logger;
 pub mod mint;
 pub mod packet;
 pub mod plan;
@@ -18,7 +17,9 @@ pub mod recorder;
 pub mod result;
 pub mod signature;
 pub mod streamer;
-pub mod subscribers;
+pub mod thin_client;
+pub mod timing;
+pub mod tpu;
 pub mod transaction;
 extern crate bincode;
 extern crate byteorder;
@@ -41,3 +42,5 @@ extern crate futures;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
+
+extern crate rand;
