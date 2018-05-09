@@ -11,7 +11,7 @@ use solana::accountant::MAX_ENTRY_IDS;
 use solana::entry::{create_entry, next_tick};
 use solana::event::Event;
 use solana::mint::MintDemo;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::io::{stdin, Read};
 use std::process::exit;
@@ -36,12 +36,23 @@ fn main() {
         exit(1);
     });
 
-    let num_accounts = demo.users.len();
+    let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
+    let tokens_per_user = 1_000;
+
+    let users: Vec<_> = (0..demo.num_accounts)
+        .into_iter()
+        .map(|_| {
+            let pkcs8 = rnd.new_key();
+            (pkcs8, tokens_per_user)
+        })
+        .collect();
+
+    let num_accounts = users.len();
     let last_id = demo.mint.last_id();
     let mint_keypair = demo.mint.keypair();
 
     eprintln!("Signing {} transactions...", num_accounts);
-    let events: Vec<_> = demo.users
+    let events: Vec<_> = users
         .into_par_iter()
         .map(|(pkcs8, tokens)| {
             let rando = KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap();
