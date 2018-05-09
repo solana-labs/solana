@@ -367,20 +367,11 @@ impl Tpu {
 
     /// Process the transactions in parallel and then log the successful ones.
     fn process_events(&self, events: Vec<Event>) -> Result<()> {
-        for result in self.acc.lock().unwrap().process_verified_events(events) {
-            if let Ok(event) = result {
-                self.historian_input
-                    .lock()
-                    .unwrap()
-                    .send(Signal::Event(event))?;
-            }
-        }
-
-        // Let validators know they should not attempt to process additional
-        // transactions in parallel.
-        self.historian_input.lock().unwrap().send(Signal::Tick)?;
+        let results = self.acc.lock().unwrap().process_verified_events(events);
+        let events = results.into_iter().filter_map(|x| x.ok()).collect();
+        let sender = self.historian_input.lock().unwrap();
+        sender.send(Signal::Events(events))?;
         debug!("after historian_input");
-
         Ok(())
     }
 
@@ -804,7 +795,6 @@ mod tests {
     use logger;
     use mint::Mint;
     use plan::Plan;
-    use recorder::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
     use std::io::sink;
@@ -869,11 +859,6 @@ mod tests {
         assert!(tpu.process_events(events).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        tpu.historian_input
-            .lock()
-            .unwrap()
-            .send(Signal::Tick)
-            .unwrap();
         drop(tpu.historian_input);
         let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
 

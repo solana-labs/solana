@@ -229,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_multi_node() {
         logger::setup();
         info!("test_multi_node");
