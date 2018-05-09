@@ -7,12 +7,12 @@ extern crate solana;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
-use solana::accountant_skel::AccountantSkel;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
 use solana::historian::Historian;
 use solana::signature::{KeyPair, KeyPairUtil};
+use solana::tpu::Tpu;
 use std::env;
 use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
@@ -119,7 +119,7 @@ fn main() {
     let (input, event_receiver) = sync_channel(10_000);
     let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let skel = Arc::new(AccountantSkel::new(acc, input, historian));
+    let tpu = Arc::new(Tpu::new(acc, input, historian));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
@@ -132,8 +132,8 @@ fn main() {
         serve_sock.local_addr().unwrap(),
     );
     eprintln!("starting server...");
-    let threads = AccountantSkel::serve(
-        &skel,
+    let threads = Tpu::serve(
+        &tpu,
         d,
         serve_sock,
         skinny_sock,

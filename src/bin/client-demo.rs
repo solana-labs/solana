@@ -10,9 +10,9 @@ use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
-use solana::accountant_stub::AccountantStub;
 use solana::mint::MintDemo;
 use solana::signature::{KeyPair, KeyPairUtil};
+use solana::thin_client::ThinClient;
 use solana::transaction::Transaction;
 use std::env;
 use std::io::{stdin, Read};
@@ -87,7 +87,7 @@ fn main() {
     println!("Binding to {}", client_addr);
     let socket = UdpSocket::bind(&client_addr).unwrap();
     socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-    let mut acc = AccountantStub::new(addr.parse().unwrap(), socket);
+    let mut acc = ThinClient::new(addr.parse().unwrap(), socket);
 
     println!("Get last ID...");
     let last_id = acc.get_last_id().wait().unwrap();
@@ -129,7 +129,7 @@ fn main() {
         let mut client_addr: SocketAddr = client_addr.parse().unwrap();
         client_addr.set_port(0);
         let socket = UdpSocket::bind(client_addr).unwrap();
-        let acc = AccountantStub::new(addr.parse().unwrap(), socket);
+        let acc = ThinClient::new(addr.parse().unwrap(), socket);
         for tr in trs {
             acc.transfer_signed(tr.clone()).unwrap();
         }

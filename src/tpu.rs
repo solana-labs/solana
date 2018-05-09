@@ -1,6 +1,5 @@
-//! The `accountant_skel` module is a microservice that exposes the high-level
-//! Accountant API to the network. Its message encoding is currently
-//! in flux. Clients should use AccountantStub to interact with it.
+//! The `tpu` module implements the Transaction Processing Unit, a
+//! 5-stage transaction processing pipeline in software.
 
 use accountant::Accountant;
 use bincode::{deserialize, serialize, serialize_into};
@@ -12,6 +11,7 @@ use hash::Hash;
 use historian::Historian;
 use packet;
 use packet::{SharedBlob, SharedPackets, BLOB_SIZE};
+use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use recorder::Signal;
 use result::Result;
@@ -27,13 +27,12 @@ use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
-use streamer;
-use transaction::Transaction;
-use timing;
 use std::time::Instant;
-use rand::{thread_rng, Rng};
+use streamer;
+use timing;
+use transaction::Transaction;
 
-pub struct AccountantSkel {
+pub struct Tpu {
     acc: Mutex<Accountant>,
     historian_input: Mutex<SyncSender<Signal>>,
     historian: Historian,
@@ -70,7 +69,7 @@ impl Request {
     }
 }
 
-type SharedSkel = Arc<AccountantSkel>;
+type SharedTpu = Arc<Tpu>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
@@ -78,10 +77,10 @@ pub enum Response {
     EntryInfo(EntryInfo),
 }
 
-impl AccountantSkel {
-    /// Create a new AccountantSkel that wraps the given Accountant.
+impl Tpu {
+    /// Create a new Tpu that wraps the given Accountant.
     pub fn new(acc: Accountant, historian_input: SyncSender<Signal>, historian: Historian) -> Self {
-        AccountantSkel {
+        Tpu {
             acc: Mutex::new(acc),
             entry_info_subscribers: Mutex::new(vec![]),
             historian_input: Mutex::new(historian_input),
@@ -89,7 +88,7 @@ impl AccountantSkel {
         }
     }
 
-    fn notify_entry_info_subscribers(obj: &SharedSkel, entry: &Entry) {
+    fn notify_entry_info_subscribers(obj: &SharedTpu, entry: &Entry) {
         // TODO: No need to bind().
         let socket = UdpSocket::bind("0.0.0.0:0").expect("bind");
 
@@ -112,7 +111,7 @@ impl AccountantSkel {
         }
     }
 
-    fn update_entry<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>, entry: &Entry) {
+    fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
         trace!("update_entry entry");
         obj.acc.lock().unwrap().register_entry_id(&entry.id);
         writeln!(
@@ -123,7 +122,7 @@ impl AccountantSkel {
         Self::notify_entry_info_subscribers(obj, &entry);
     }
 
-    fn receive_all<W: Write>(obj: &SharedSkel, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
+    fn receive_all<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
         let entry = obj.historian
@@ -182,7 +181,7 @@ impl AccountantSkel {
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync<W: Write>(
-        obj: SharedSkel,
+        obj: SharedTpu,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
         writer: &Arc<Mutex<W>>,
@@ -198,7 +197,7 @@ impl AccountantSkel {
     }
 
     pub fn sync_service<W: Write + Send + 'static>(
-        obj: SharedSkel,
+        obj: SharedTpu,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
@@ -213,12 +212,12 @@ impl AccountantSkel {
         })
     }
 
-    fn process_thin_client_requests(_obj: SharedSkel, _socket: &UdpSocket) -> Result<()> {
+    fn process_thin_client_requests(_obj: SharedTpu, _socket: &UdpSocket) -> Result<()> {
         Ok(())
     }
 
     fn thin_client_service(
-        obj: SharedSkel,
+        obj: SharedTpu,
         exit: Arc<AtomicBool>,
         socket: UdpSocket,
     ) -> JoinHandle<()> {
@@ -233,12 +232,12 @@ impl AccountantSkel {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    fn run_sync_no_broadcast(obj: SharedSkel) -> Result<()> {
+    fn run_sync_no_broadcast(obj: SharedTpu) -> Result<()> {
         Self::receive_all(&obj, &Arc::new(Mutex::new(sink())))?;
         Ok(())
     }
 
-    pub fn sync_no_broadcast_service(obj: SharedSkel, exit: Arc<AtomicBool>) -> JoinHandle<()> {
+    pub fn sync_no_broadcast_service(obj: SharedTpu, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         spawn(move || loop {
             let _ = Self::run_sync_no_broadcast(obj.clone());
             if exit.load(Ordering::Relaxed) {
@@ -420,7 +419,7 @@ impl AccountantSkel {
     }
 
     fn process(
-        obj: &SharedSkel,
+        obj: &SharedTpu,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
@@ -485,7 +484,7 @@ impl AccountantSkel {
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &SharedSkel,
+        obj: &SharedTpu,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -510,11 +509,11 @@ impl AccountantSkel {
         Ok(())
     }
 
-    /// Create a UDP microservice that forwards messages the given AccountantSkel.
+    /// Create a UDP microservice that forwards messages the given Tpu.
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(
-        obj: &SharedSkel,
+        obj: &SharedTpu,
         me: ReplicatedData,
         serve: UdpSocket,
         skinny: UdpSocket,
@@ -582,10 +581,10 @@ impl AccountantSkel {
 
         let t_skinny = Self::thin_client_service(obj.clone(), exit.clone(), skinny);
 
-        let skel = obj.clone();
+        let tpu = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
-                &mut skel.clone(),
+                &mut tpu.clone(),
                 &verified_receiver,
                 &responder_sender,
                 &packet_recycler,
@@ -631,7 +630,7 @@ impl AccountantSkel {
     /// 4. process the transaction state machine
     /// 5. respond with the hash of the state back to the leader
     pub fn replicate(
-        obj: &SharedSkel,
+        obj: &SharedTpu,
         me: ReplicatedData,
         gossip: UdpSocket,
         serve: UdpSocket,
@@ -682,10 +681,10 @@ impl AccountantSkel {
             retransmit_sender,
         );
 
-        let skel = obj.clone();
+        let tpu = obj.clone();
         let s_exit = exit.clone();
         let t_replicator = spawn(move || loop {
-            let e = Self::replicate_state(&skel, &window_receiver, &blob_recycler);
+            let e = Self::replicate_state(&tpu, &window_receiver, &blob_recycler);
             if e.is_err() && s_exit.load(Ordering::Relaxed) {
                 break;
             }
@@ -728,11 +727,11 @@ impl AccountantSkel {
         }
         let t_sync = Self::sync_no_broadcast_service(obj.clone(), exit.clone());
 
-        let skel = obj.clone();
+        let tpu = obj.clone();
         let s_exit = exit.clone();
         let t_server = spawn(move || loop {
             let e = Self::process(
-                &mut skel.clone(),
+                &mut tpu.clone(),
                 &verified_receiver,
                 &responder_sender,
                 &packet_recycler,
@@ -786,15 +785,13 @@ pub fn to_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedP
 
 #[cfg(test)]
 mod tests {
-    use accountant_skel::{to_packets, Request};
     use bincode::serialize;
     use ecdsa;
     use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
+    use tpu::{to_packets, Request};
     use transaction::{memfind, test_tx};
 
     use accountant::Accountant;
-    use accountant_skel::AccountantSkel;
-    use accountant_stub::AccountantStub;
     use chrono::prelude::*;
     use crdt::Crdt;
     use crdt::ReplicatedData;
@@ -819,6 +816,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use streamer;
+    use thin_client::ThinClient;
+    use tpu::Tpu;
     use transaction::Transaction;
 
     #[test]
@@ -856,27 +855,27 @@ mod tests {
         let acc = Accountant::new(&mint);
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let skel = AccountantSkel::new(acc, input, historian);
+        let tpu = Tpu::new(acc, input, historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(skel.process_events(events).is_ok());
+        assert!(tpu.process_events(events).is_ok());
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(skel.process_events(events).is_ok());
+        assert!(tpu.process_events(events).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        skel.historian_input
+        tpu.historian_input
             .lock()
             .unwrap()
             .send(Signal::Tick)
             .unwrap();
-        drop(skel.historian_input);
-        let entries: Vec<Entry> = skel.historian.output.lock().unwrap().iter().collect();
+        drop(tpu.historian_input);
+        let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -901,10 +900,10 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc_skel = Arc::new(AccountantSkel::new(acc, input, historian));
+        let tpu = Arc::new(Tpu::new(acc, input, historian));
         let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = AccountantSkel::serve(
-            &acc_skel,
+        let threads = Tpu::serve(
+            &tpu,
             leader_data,
             leader_serve,
             leader_skinny,
@@ -916,23 +915,23 @@ mod tests {
 
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-        let mut acc_stub = AccountantStub::new(serve_addr, socket);
-        let last_id = acc_stub.get_last_id().wait().unwrap();
+        let mut client = ThinClient::new(serve_addr, socket);
+        let last_id = client.get_last_id().wait().unwrap();
 
         trace!("doing stuff");
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
-        let _sig = acc_stub.transfer_signed(tr).unwrap();
+        let _sig = client.transfer_signed(tr).unwrap();
 
-        let last_id = acc_stub.get_last_id().wait().unwrap();
+        let last_id = client.get_last_id().wait().unwrap();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         tr2.data.tokens = 502;
         tr2.data.plan = Plan::new_payment(502, bob_pubkey);
-        let _sig = acc_stub.transfer_signed(tr2).unwrap();
+        let _sig = client.transfer_signed(tr2).unwrap();
 
-        assert_eq!(acc_stub.get_balance(&bob_pubkey).unwrap(), 500);
+        assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 500);
         trace!("exiting");
         exit.store(true, Ordering::Relaxed);
         trace!("joining threads");
@@ -1009,9 +1008,9 @@ mod tests {
         let acc = Accountant::new(&alice);
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(AccountantSkel::new(acc, input, historian));
+        let acc = Arc::new(Tpu::new(acc, input, historian));
         let replicate_addr = target1_data.replicate_addr;
-        let threads = AccountantSkel::replicate(
+        let threads = Tpu::replicate(
             &acc,
             target1_data,
             target1_gossip,
@@ -1111,7 +1110,7 @@ mod tests {
         let entry_list = vec![e0; 1000];
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
-        AccountantSkel::process_entry_list_into_blobs(&entry_list, &blob_recycler, &mut blob_q);
+        Tpu::process_entry_list_into_blobs(&entry_list, &blob_recycler, &mut blob_q);
         let serialized_entry_list = serialize(&entry_list).unwrap();
         let mut num_blobs_ref = serialized_entry_list.len() / BLOB_SIZE;
         if serialized_entry_list.len() % BLOB_SIZE != 0 {
@@ -1127,7 +1126,6 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::{Accountant, MAX_ENTRY_IDS};
-    use accountant_skel::*;
     use bincode::serialize;
     use hash::hash;
     use mint::Mint;
@@ -1135,6 +1133,7 @@ mod bench {
     use std::collections::HashSet;
     use std::sync::mpsc::sync_channel;
     use std::time::Instant;
+    use tpu::*;
     use transaction::Transaction;
 
     #[bench]
@@ -1180,17 +1179,17 @@ mod bench {
 
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let skel = AccountantSkel::new(acc, input, historian);
+        let tpu = Tpu::new(acc, input, historian);
 
         let now = Instant::now();
-        assert!(skel.process_events(req_vers).is_ok());
+        assert!(tpu.process_events(req_vers).is_ok());
         let duration = now.elapsed();
         let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(skel.historian_input);
-        let entries: Vec<Entry> = skel.historian.output.lock().unwrap().iter().collect();
+        drop(tpu.historian_input);
+        let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 

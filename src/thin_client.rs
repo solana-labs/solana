@@ -1,9 +1,8 @@
-//! The `accountant_stub` module is a client-side object that interfaces with a server-side Accountant
-//! object via the network interface exposed by AccountantSkel. Client code should use
-//! this object instead of writing messages to the network directly. The binary
-//! encoding of its messages are unstable and may change in future releases.
+//! The `thin_client` module is a client-side object that interfaces with
+//! a server-side TPU.  Client code should use this object instead of writing
+//! messages to the network directly. The binary encoding of its messages are
+//! unstable and may change in future releases.
 
-use accountant_skel::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
@@ -11,9 +10,10 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
+use tpu::{Request, Response, Subscription};
 use transaction::Transaction;
 
-pub struct AccountantStub {
+pub struct ThinClient {
     pub addr: SocketAddr,
     pub socket: UdpSocket,
     last_id: Option<Hash>,
@@ -21,20 +21,20 @@ pub struct AccountantStub {
     balances: HashMap<PublicKey, Option<i64>>,
 }
 
-impl AccountantStub {
-    /// Create a new AccountantStub that will interface with AccountantSkel
+impl ThinClient {
+    /// Create a new ThinClient that will interface with Tpu
     /// over `socket`. To receive responses, the caller must bind `socket`
-    /// to a public address before invoking AccountantStub methods.
+    /// to a public address before invoking ThinClient methods.
     pub fn new(addr: SocketAddr, socket: UdpSocket) -> Self {
-        let stub = AccountantStub {
+        let client = ThinClient {
             addr: addr,
             socket,
             last_id: None,
             num_events: 0,
             balances: HashMap::new(),
         };
-        stub.init();
-        stub
+        client.init();
+        client
     }
 
     pub fn init(&self) {
@@ -119,7 +119,7 @@ impl AccountantStub {
     }
 
     /// Return the number of transactions the server processed since creating
-    /// this stub instance.
+    /// this client instance.
     pub fn transaction_count(&mut self) -> u64 {
         // Wait for at least one EntryInfo.
         let mut done = false;
@@ -148,7 +148,6 @@ impl AccountantStub {
 mod tests {
     use super::*;
     use accountant::Accountant;
-    use accountant_skel::AccountantSkel;
     use crdt::{Crdt, ReplicatedData};
     use futures::Future;
     use historian::Historian;
@@ -162,10 +161,11 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
+    use tpu::Tpu;
 
     // TODO: Figure out why this test sometimes hangs on TravisCI.
     #[test]
-    fn test_accountant_stub() {
+    fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -185,14 +185,13 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let (input, event_receiver) = sync_channel(10);
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(AccountantSkel::new(acc, input, historian));
-        let threads =
-            AccountantSkel::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
+        let acc = Arc::new(Tpu::new(acc, input, historian));
+        let threads = Tpu::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut acc = AccountantStub::new(addr, socket);
+        let mut acc = ThinClient::new(addr, socket);
         let last_id = acc.get_last_id().wait().unwrap();
         let _sig = acc.transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
@@ -230,9 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn test_multi_accountant_stub() {
+    fn test_multi_node() {
         logger::setup();
-        info!("test_multi_accountant_stub");
+        info!("test_multi_node");
         let leader = test_node();
         let replicant = test_node();
         let alice = Mint::new(10_000);
@@ -243,17 +242,17 @@ mod tests {
             let (input, event_receiver) = sync_channel(10);
             let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
-            Arc::new(AccountantSkel::new(acc, input, historian))
+            Arc::new(Tpu::new(acc, input, historian))
         };
 
         let replicant_acc = {
             let (input, event_receiver) = sync_channel(10);
             let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
-            Arc::new(AccountantSkel::new(acc, input, historian))
+            Arc::new(Tpu::new(acc, input, historian))
         };
 
-        let leader_threads = AccountantSkel::serve(
+        let leader_threads = Tpu::serve(
             &leader_acc,
             leader.0.clone(),
             leader.2,
@@ -262,7 +261,7 @@ mod tests {
             exit.clone(),
             sink(),
         ).unwrap();
-        let replicant_threads = AccountantSkel::replicate(
+        let replicant_threads = Tpu::replicate(
             &replicant_acc,
             replicant.0.clone(),
             replicant.1,
@@ -314,7 +313,7 @@ mod tests {
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
-            let mut acc = AccountantStub::new(leader.0.serve_addr, socket);
+            let mut acc = ThinClient::new(leader.0.serve_addr, socket);
             info!("getting leader last_id");
             let last_id = acc.get_last_id().wait().unwrap();
             info!("executing leader transer");
@@ -330,7 +329,7 @@ mod tests {
             let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
-            let mut acc = AccountantStub::new(replicant.0.serve_addr, socket);
+            let mut acc = ThinClient::new(replicant.0.serve_addr, socket);
             info!("getting replicant balance");
             if let Ok(bal) = acc.get_balance(&bob_pubkey) {
                 replicant_balance = bal;
