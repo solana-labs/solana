@@ -46,7 +46,7 @@ impl Tpu {
         }
     }
 
-    fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
+    fn update_entry<W: Write>(obj: &Tpu, writer: &Mutex<W>, entry: &Entry) {
         trace!("update_entry entry");
         obj.accounting.acc.register_entry_id(&entry.id);
         writeln!(
@@ -58,7 +58,7 @@ impl Tpu {
             .notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_all<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
+    fn receive_all<W: Write>(obj: &Tpu, writer: &Mutex<W>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
         let entry = obj.accounting
@@ -120,7 +120,7 @@ impl Tpu {
         obj: SharedTpu,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
-        writer: &Arc<Mutex<W>>,
+        writer: &Mutex<W>,
     ) -> Result<()> {
         let mut q = VecDeque::new();
         let list = Self::receive_all(&obj, writer)?;
@@ -137,7 +137,7 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
-        writer: Arc<Mutex<W>>,
+        writer: Mutex<W>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             let _ = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer);
@@ -303,7 +303,7 @@ impl Tpu {
     }
 
     fn process(
-        obj: &SharedTpu,
+        obj: &Tpu,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
@@ -368,7 +368,7 @@ impl Tpu {
     /// Process verified blobs, already in order
     /// Respond with a signed hash of the state
     fn replicate_state(
-        obj: &SharedTpu,
+        obj: &Tpu,
         verified_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -460,7 +460,7 @@ impl Tpu {
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),
-            Arc::new(Mutex::new(writer)),
+            Mutex::new(writer),
         );
 
         let t_skinny = Self::thin_client_service(obj.accounting.acc.clone(), exit.clone(), skinny);
