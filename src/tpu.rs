@@ -1,6 +1,7 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
+use accountant::Accountant;
 use accounting_stage::{AccountingStage, Request, Response};
 use bincode::{deserialize, serialize, serialize_into};
 use crdt::{Crdt, ReplicatedData};
@@ -140,17 +141,17 @@ impl Tpu {
         })
     }
 
-    fn process_thin_client_requests(_obj: SharedTpu, _socket: &UdpSocket) -> Result<()> {
+    fn process_thin_client_requests(_acc: &Arc<Accountant>, _socket: &UdpSocket) -> Result<()> {
         Ok(())
     }
 
     fn thin_client_service(
-        obj: SharedTpu,
+        acc: Arc<Accountant>,
         exit: Arc<AtomicBool>,
         socket: UdpSocket,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let _ = Self::process_thin_client_requests(obj.clone(), &socket);
+            let _ = Self::process_thin_client_requests(&acc, &socket);
             if exit.load(Ordering::Relaxed) {
                 info!("sync_service exiting");
                 break;
@@ -455,7 +456,7 @@ impl Tpu {
             Arc::new(Mutex::new(writer)),
         );
 
-        let t_skinny = Self::thin_client_service(obj.clone(), exit.clone(), skinny);
+        let t_skinny = Self::thin_client_service(obj.accounting.acc.clone(), exit.clone(), skinny);
 
         let tpu = obj.clone();
         let t_server = spawn(move || loop {

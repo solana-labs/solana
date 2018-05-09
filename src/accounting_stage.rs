@@ -11,13 +11,13 @@ use result::Result;
 use signature::PublicKey;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use transaction::Transaction;
 
 pub struct AccountingStage {
     pub output: Mutex<Receiver<Entry>>,
     entry_sender: Mutex<Sender<Entry>>,
-    pub acc: Accountant,
+    pub acc: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
@@ -32,7 +32,7 @@ impl AccountingStage {
         AccountingStage {
             output: Mutex::new(output),
             entry_sender: Mutex::new(entry_sender),
-            acc,
+            acc: Arc::new(acc),
             entry_info_subscribers: Mutex::new(vec![]),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
