@@ -8,7 +8,7 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -24,7 +24,7 @@ pub enum ExitReason {
 }
 
 pub struct Recorder {
-    sender: SyncSender<Entry>,
+    sender: Sender<Entry>,
     receiver: Receiver<Signal>,
     last_hash: Hash,
     num_hashes: u64,
@@ -32,7 +32,7 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, last_hash: Hash) -> Self {
+    pub fn new(receiver: Receiver<Signal>, sender: Sender<Entry>, last_hash: Hash) -> Self {
         Recorder {
             receiver,
             sender,
@@ -88,13 +88,13 @@ impl Recorder {
 mod tests {
     use super::*;
     use signature::{KeyPair, KeyPairUtil};
-    use std::sync::mpsc::sync_channel;
+    use std::sync::mpsc::channel;
     use transaction::Transaction;
 
     #[test]
     fn test_events() {
-        let (signal_sender, signal_receiver) = sync_channel(500);
-        let (entry_sender, entry_receiver) = sync_channel(10);
+        let (signal_sender, signal_receiver) = channel();
+        let (entry_sender, entry_receiver) = channel();
         let zero = Hash::default();
         let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
         let alice_keypair = KeyPair::new();

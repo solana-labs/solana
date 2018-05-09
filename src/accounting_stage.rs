@@ -9,19 +9,19 @@ use recorder::Signal;
 use result::Result;
 use signature::PublicKey;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 use transaction::Transaction;
 
 pub struct AccountingStage {
     pub acc: Mutex<Accountant>,
-    historian_input: Mutex<SyncSender<Signal>>,
+    historian_input: Mutex<Sender<Signal>>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 impl AccountingStage {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: SyncSender<Signal>) -> Self {
+    pub fn new(acc: Accountant, historian_input: Sender<Signal>) -> Self {
         AccountingStage {
             acc: Mutex::new(acc),
             entry_info_subscribers: Mutex::new(vec![]),
@@ -144,7 +144,7 @@ mod tests {
     use historian::Historian;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
-    use std::sync::mpsc::sync_channel;
+    use std::sync::mpsc::channel;
     use transaction::Transaction;
 
     #[test]
@@ -154,7 +154,7 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let acc = Accountant::new(&mint);
-        let (input, event_receiver) = sync_channel(10);
+        let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
         let stage = AccountingStage::new(acc, input);
 
@@ -201,7 +201,7 @@ mod bench {
     use rayon::prelude::*;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
-    use std::sync::mpsc::sync_channel;
+    use std::sync::mpsc::channel;
     use std::time::Instant;
     use transaction::Transaction;
 
@@ -245,7 +245,7 @@ mod bench {
             .map(|tr| Event::Transaction(tr))
             .collect();
 
-        let (input, event_receiver) = sync_channel(10);
+        let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
         let stage = AccountingStage::new(acc, input);
 

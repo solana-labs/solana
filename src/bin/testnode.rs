@@ -18,7 +18,7 @@ use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
@@ -116,7 +116,7 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let (input, event_receiver) = sync_channel(10_000);
+    let (input, event_receiver) = channel();
     let historian = Historian::new(event_receiver, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
     let tpu = Arc::new(Tpu::new(acc, input, historian));

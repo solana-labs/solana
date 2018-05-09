@@ -22,7 +22,7 @@ use std::io::{Cursor, Write};
 use std::mem::size_of;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -39,7 +39,7 @@ type SharedTpu = Arc<Tpu>;
 
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: SyncSender<Signal>, historian: Historian) -> Self {
+    pub fn new(acc: Accountant, historian_input: Sender<Signal>, historian: Historian) -> Self {
         let accounting = AccountingStage::new(acc, historian_input);
         Tpu {
             accounting,
@@ -697,7 +697,6 @@ mod tests {
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::mpsc::sync_channel;
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
@@ -739,7 +738,7 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let (input, event_receiver) = sync_channel(10);
+        let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let tpu = Arc::new(Tpu::new(acc, input, historian));
         let serve_addr = leader_serve.local_addr().unwrap();
@@ -848,7 +847,7 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let acc = Accountant::new(&alice);
-        let (input, event_receiver) = sync_channel(10);
+        let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let tpu = Arc::new(Tpu::new(acc, input, historian));
         let replicate_addr = target1_data.replicate_addr;

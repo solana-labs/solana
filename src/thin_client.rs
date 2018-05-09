@@ -156,7 +156,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::sync_channel;
+    use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
@@ -183,7 +183,7 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let (input, event_receiver) = sync_channel(10);
+        let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
         let acc = Arc::new(Tpu::new(acc, input, historian));
         let threads = Tpu::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
@@ -240,14 +240,14 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_acc = {
-            let (input, event_receiver) = sync_channel(10);
+            let (input, event_receiver) = channel();
             let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
             Arc::new(Tpu::new(acc, input, historian))
         };
 
         let replicant_acc = {
-            let (input, event_receiver) = sync_channel(10);
+            let (input, event_receiver) = channel();
             let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
             Arc::new(Tpu::new(acc, input, historian))
