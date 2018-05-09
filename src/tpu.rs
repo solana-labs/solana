@@ -2,7 +2,7 @@
 //! 5-stage transaction processing pipeline in software.
 
 use accountant::Accountant;
-use accounting_stage::{AccountingStage, Request, Response};
+use accounting_stage::AccountingStage;
 use bincode::{deserialize, serialize, serialize_into};
 use crdt::{Crdt, ReplicatedData};
 use ecdsa;
@@ -26,10 +26,12 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
+use thin_client_service::{Request, Response, ThinClientService};
 use timing;
 
 pub struct Tpu {
     accounting: AccountingStage,
+    thin_client_service: ThinClientService,
 }
 
 type SharedTpu = Arc<Tpu>;
@@ -37,7 +39,11 @@ type SharedTpu = Arc<Tpu>;
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accounting: AccountingStage) -> Self {
-        Tpu { accounting }
+        let thin_client_service = ThinClientService::new(accounting.acc.clone());
+        Tpu {
+            accounting,
+            thin_client_service,
+        }
     }
 
     fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
@@ -48,7 +54,8 @@ impl Tpu {
             "{}",
             serde_json::to_string(&entry).unwrap()
         ).unwrap();
-        obj.accounting.notify_entry_info_subscribers(&entry);
+        obj.thin_client_service
+            .notify_entry_info_subscribers(&entry);
     }
 
     fn receive_all<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
@@ -335,7 +342,7 @@ impl Tpu {
             debug!("done process_events");
 
             debug!("process_requests");
-            let rsps = obj.accounting.process_requests(reqs);
+            let rsps = obj.thin_client_service.process_requests(reqs);
             debug!("done process_requests");
 
             let blobs = Self::serialize_responses(rsps, blob_recycler)?;
@@ -680,18 +687,18 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
 
 #[cfg(test)]
 mod tests {
-    use bincode::serialize;
-    use ecdsa;
-    use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
     use accountant::Accountant;
     use accounting_stage::AccountingStage;
+    use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
+    use ecdsa;
     use entry;
     use event::Event;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
+    use packet::{BlobRecycler, PacketRecycler, BLOB_SIZE, NUM_PACKETS};
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
     use std::sync::atomic::{AtomicBool, Ordering};

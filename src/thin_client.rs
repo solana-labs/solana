@@ -3,7 +3,6 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use accounting_stage::{Request, Response, Subscription};
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
@@ -11,6 +10,7 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
+use thin_client_service::{Request, Response, Subscription};
 use transaction::Transaction;
 
 pub struct ThinClient {
