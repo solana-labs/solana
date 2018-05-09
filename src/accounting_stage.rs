@@ -5,36 +5,52 @@ use bincode::serialize;
 use entry::Entry;
 use event::Event;
 use hash::Hash;
+use historian::Historian;
 use recorder::Signal;
 use result::Result;
 use signature::PublicKey;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::mpsc::Sender;
-use std::sync::Mutex;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use transaction::Transaction;
 
 pub struct AccountingStage {
+    pub output: Arc<Mutex<Receiver<Entry>>>,
+    entry_sender: Arc<Mutex<Sender<Entry>>>,
     pub acc: Mutex<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
+    historian: Mutex<Historian>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 impl AccountingStage {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: Sender<Signal>) -> Self {
+    pub fn new(acc: Accountant, historian_input: Sender<Signal>, historian: Historian) -> Self {
+        let (entry_sender, output) = channel();
         AccountingStage {
+            output: Arc::new(Mutex::new(output)),
+            entry_sender: Arc::new(Mutex::new(entry_sender)),
             acc: Mutex::new(acc),
             entry_info_subscribers: Mutex::new(vec![]),
             historian_input: Mutex::new(historian_input),
+            historian: Mutex::new(historian),
         }
     }
 
     /// Process the transactions in parallel and then log the successful ones.
     pub fn process_events(&self, events: Vec<Event>) -> Result<()> {
-        let results = self.acc.lock().unwrap().process_verified_events(events);
+        let acc = self.acc.lock().unwrap();
+        let historian = self.historian.lock().unwrap();
+        let results = acc.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
         let sender = self.historian_input.lock().unwrap();
         sender.send(Signal::Events(events))?;
+
+        // Wait for the historian to tag our Events with an ID and then register it.
+        let entry = historian.output.lock().unwrap().recv()?;
+        acc.register_entry_id(&entry.id);
+        self.entry_sender.lock().unwrap().send(entry)?;
+
         debug!("after historian_input");
         Ok(())
     }
@@ -156,7 +172,7 @@ mod tests {
         let acc = Accountant::new(&mint);
         let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let stage = AccountingStage::new(acc, input);
+        let stage = AccountingStage::new(acc, input, historian);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -170,8 +186,8 @@ mod tests {
         assert!(stage.process_events(events).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        drop(stage.historian_input);
-        let entries: Vec<Entry> = historian.output.lock().unwrap().iter().collect();
+        drop(stage.entry_sender);
+        let entries: Vec<Entry> = stage.output.lock().unwrap().iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -247,7 +263,7 @@ mod bench {
 
         let (input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let stage = AccountingStage::new(acc, input);
+        let stage = AccountingStage::new(acc, input, historian);
 
         let now = Instant::now();
         assert!(stage.process_events(events).is_ok());
@@ -257,7 +273,7 @@ mod bench {
 
         // Ensure that all transactions were successfully logged.
         drop(stage.historian_input);
-        let entries: Vec<Entry> = historian.output.lock().unwrap().iter().collect();
+        let entries: Vec<Entry> = stage.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 

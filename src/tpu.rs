@@ -32,7 +32,6 @@ use timing;
 
 pub struct Tpu {
     accounting: AccountingStage,
-    historian: Historian,
 }
 
 type SharedTpu = Arc<Tpu>;
@@ -40,11 +39,8 @@ type SharedTpu = Arc<Tpu>;
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(acc: Accountant, historian_input: Sender<Signal>, historian: Historian) -> Self {
-        let accounting = AccountingStage::new(acc, historian_input);
-        Tpu {
-            accounting,
-            historian,
-        }
+        let accounting = AccountingStage::new(acc, historian_input, historian);
+        Tpu { accounting }
     }
 
     fn update_entry<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>, entry: &Entry) {
@@ -65,14 +61,14 @@ impl Tpu {
     fn receive_all<W: Write>(obj: &SharedTpu, writer: &Arc<Mutex<W>>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
-        let entry = obj.historian
+        let entry = obj.accounting
             .output
             .lock()
             .unwrap()
             .recv_timeout(Duration::new(1, 0))?;
         Self::update_entry(obj, writer, &entry);
         l.push(entry);
-        while let Ok(entry) = obj.historian.receive() {
+        while let Ok(entry) = obj.accounting.output.lock().unwrap().try_recv() {
             Self::update_entry(obj, writer, &entry);
             l.push(entry);
         }
