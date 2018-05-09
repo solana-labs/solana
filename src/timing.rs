@@ -10,6 +10,6 @@ pub fn duration_as_s(d: &Duration) -> f32 {
 }
 
 pub fn timestamp() -> u64 {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("failed to create timestamp");
     return duration_as_ms(&now);
 }
