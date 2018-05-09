@@ -25,7 +25,9 @@ pub struct AccountingStage {
 
 impl AccountingStage {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: Sender<Signal>, historian: Historian) -> Self {
+    pub fn new(acc: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
+        let (historian_input, event_receiver) = channel();
+        let historian = Historian::new(event_receiver, start_hash, ms_per_tick);
         let (entry_sender, output) = channel();
         AccountingStage {
             output: Arc::new(Mutex::new(output)),
@@ -157,10 +159,8 @@ mod tests {
     use accounting_stage::AccountingStage;
     use entry::Entry;
     use event::Event;
-    use historian::Historian;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
-    use std::sync::mpsc::channel;
     use transaction::Transaction;
 
     #[test]
@@ -170,9 +170,7 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let acc = Accountant::new(&mint);
-        let (input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let stage = AccountingStage::new(acc, input, historian);
+        let stage = AccountingStage::new(acc, &mint.last_id(), None);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
@@ -262,8 +260,7 @@ mod bench {
             .collect();
 
         let (input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, &mint.last_id(), None);
-        let stage = AccountingStage::new(acc, input, historian);
+        let stage = AccountingStage::new(acc, &mint.last_id(), None);
 
         let now = Instant::now();
         assert!(stage.process_events(events).is_ok());

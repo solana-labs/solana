@@ -1,19 +1,16 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
-use accountant::Accountant;
 use accounting_stage::{AccountingStage, Request, Response};
 use bincode::{deserialize, serialize, serialize_into};
 use crdt::{Crdt, ReplicatedData};
 use ecdsa;
 use entry::Entry;
 use event::Event;
-use historian::Historian;
 use packet;
 use packet::{SharedBlob, SharedPackets, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use recorder::Signal;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
@@ -38,8 +35,7 @@ type SharedTpu = Arc<Tpu>;
 
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(acc: Accountant, historian_input: Sender<Signal>, historian: Historian) -> Self {
-        let accounting = AccountingStage::new(acc, historian_input, historian);
+    pub fn new(accounting: AccountingStage) -> Self {
         Tpu { accounting }
     }
 
@@ -676,6 +672,7 @@ mod tests {
     use transaction::{memfind, test_tx};
 
     use accountant::Accountant;
+    use accounting_stage::AccountingStage;
     use chrono::prelude::*;
     use crdt::Crdt;
     use crdt::ReplicatedData;
@@ -683,7 +680,6 @@ mod tests {
     use event::Event;
     use futures::Future;
     use hash::{hash, Hash};
-    use historian::Historian;
     use logger;
     use mint::Mint;
     use plan::Plan;
@@ -734,9 +730,8 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let (input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(acc, input, historian));
+        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = Tpu::serve(
             &tpu,
@@ -843,9 +838,8 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let acc = Accountant::new(&alice);
-        let (input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(acc, input, historian));
+        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tpu::replicate(
             &tpu,

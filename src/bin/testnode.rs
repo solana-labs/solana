@@ -7,10 +7,10 @@ extern crate solana;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
+use solana::accounting_stage::AccountingStage;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
-use solana::historian::Historian;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::tpu::Tpu;
 use std::env;
@@ -18,7 +18,6 @@ use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
@@ -116,10 +115,9 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let (input, event_receiver) = channel();
-    let historian = Historian::new(event_receiver, &last_id, Some(1000));
+    let accounting = AccountingStage::new(acc, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let tpu = Arc::new(Tpu::new(acc, input, historian));
+    let tpu = Arc::new(Tpu::new(accounting));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();

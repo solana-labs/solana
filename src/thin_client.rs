@@ -148,15 +148,14 @@ impl ThinClient {
 mod tests {
     use super::*;
     use accountant::Accountant;
+    use accounting_stage::AccountingStage;
     use crdt::{Crdt, ReplicatedData};
     use futures::Future;
-    use historian::Historian;
     use logger;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
@@ -183,9 +182,8 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let (input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
-        let acc = Arc::new(Tpu::new(acc, input, historian));
+        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let acc = Arc::new(Tpu::new(accounting));
         let threads = Tpu::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
@@ -240,17 +238,15 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_acc = {
-            let (input, event_receiver) = channel();
-            let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
-            Arc::new(Tpu::new(acc, input, historian))
+            let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            Arc::new(Tpu::new(accounting))
         };
 
         let replicant_acc = {
-            let (input, event_receiver) = channel();
-            let historian = Historian::new(event_receiver, &alice.last_id(), Some(30));
             let acc = Accountant::new(&alice);
-            Arc::new(Tpu::new(acc, input, historian))
+            let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            Arc::new(Tpu::new(accounting))
         };
 
         let leader_threads = Tpu::serve(
