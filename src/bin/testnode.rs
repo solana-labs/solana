@@ -115,9 +115,9 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let accounting = AccountingStage::new(acc, &last_id, Some(1000));
+    let accounting_stage = AccountingStage::new(acc, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let tpu = Arc::new(Tpu::new(accounting));
+    let tpu = Arc::new(Tpu::new(accounting_stage));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();

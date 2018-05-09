@@ -66,22 +66,22 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let acc = Accountant::new(&mint);
-        let stage = AccountingStage::new(acc, &mint.last_id(), None);
+        let accounting_stage = AccountingStage::new(acc, &mint.last_id(), None);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(stage.process_events(events).is_ok());
+        assert!(accounting_stage.process_events(events).is_ok());
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(stage.process_events(events).is_ok());
+        assert!(accounting_stage.process_events(events).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        drop(stage.entry_sender);
-        let entries: Vec<Entry> = stage.output.lock().unwrap().iter().collect();
+        drop(accounting_stage.entry_sender);
+        let entries: Vec<Entry> = accounting_stage.output.lock().unwrap().iter().collect();
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -156,17 +156,17 @@ mod bench {
             .collect();
 
         let (input, event_receiver) = channel();
-        let stage = AccountingStage::new(acc, &mint.last_id(), None);
+        let accounting_stage = AccountingStage::new(acc, &mint.last_id(), None);
 
         let now = Instant::now();
-        assert!(stage.process_events(events).is_ok());
+        assert!(accounting_stage.process_events(events).is_ok());
         let duration = now.elapsed();
         let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(stage.historian_input);
-        let entries: Vec<Entry> = stage.output.lock().unwrap().iter().collect();
+        drop(accounting_stage.historian_input);
+        let entries: Vec<Entry> = accounting_stage.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 

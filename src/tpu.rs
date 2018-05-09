@@ -30,7 +30,7 @@ use thin_client_service::{Request, Response, ThinClientService};
 use timing;
 
 pub struct Tpu {
-    accounting: AccountingStage,
+    accounting_stage: AccountingStage,
     thin_client_service: ThinClientService,
 }
 
@@ -38,17 +38,17 @@ type SharedTpu = Arc<Tpu>;
 
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(accounting: AccountingStage) -> Self {
-        let thin_client_service = ThinClientService::new(accounting.acc.clone());
+    pub fn new(accounting_stage: AccountingStage) -> Self {
+        let thin_client_service = ThinClientService::new(accounting_stage.acc.clone());
         Tpu {
-            accounting,
+            accounting_stage,
             thin_client_service,
         }
     }
 
     fn update_entry<W: Write>(obj: &Tpu, writer: &Mutex<W>, entry: &Entry) {
         trace!("update_entry entry");
-        obj.accounting.acc.register_entry_id(&entry.id);
+        obj.accounting_stage.acc.register_entry_id(&entry.id);
         writeln!(
             writer.lock().unwrap(),
             "{}",
@@ -61,14 +61,14 @@ impl Tpu {
     fn receive_all<W: Write>(obj: &Tpu, writer: &Mutex<W>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
-        let entry = obj.accounting
+        let entry = obj.accounting_stage
             .output
             .lock()
             .unwrap()
             .recv_timeout(Duration::new(1, 0))?;
         Self::update_entry(obj, writer, &entry);
         l.push(entry);
-        while let Ok(entry) = obj.accounting.output.lock().unwrap().try_recv() {
+        while let Ok(entry) = obj.accounting_stage.output.lock().unwrap().try_recv() {
             Self::update_entry(obj, writer, &entry);
             l.push(entry);
         }
@@ -338,7 +338,7 @@ impl Tpu {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            obj.accounting.process_events(events)?;
+            obj.accounting_stage.process_events(events)?;
             debug!("done process_events");
 
             debug!("process_requests");
@@ -378,7 +378,7 @@ impl Tpu {
         for msgs in &blobs {
             let blob = msgs.read().unwrap();
             let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
-            let acc = &obj.accounting.acc;
+            let acc = &obj.accounting_stage.acc;
             for entry in entries {
                 acc.register_entry_id(&entry.id);
                 for result in acc.process_verified_events(entry.events) {
@@ -463,7 +463,8 @@ impl Tpu {
             Mutex::new(writer),
         );
 
-        let t_skinny = Self::thin_client_service(obj.accounting.acc.clone(), exit.clone(), skinny);
+        let t_skinny =
+            Self::thin_client_service(obj.accounting_stage.acc.clone(), exit.clone(), skinny);
 
         let tpu = obj.clone();
         let t_server = spawn(move || loop {
@@ -787,8 +788,8 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let acc = Accountant::new(&alice);
-        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting));
+        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting_stage));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tpu::replicate(
             &tpu,
@@ -813,7 +814,7 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let acc = &tpu.accounting.acc;
+            let acc = &tpu.accounting_stage.acc;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
@@ -855,7 +856,7 @@ mod tests {
             msgs.push(msg);
         }
 
-        let acc = &tpu.accounting.acc;
+        let acc = &tpu.accounting_stage.acc;
         let alice_balance = acc.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 

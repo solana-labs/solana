@@ -182,8 +182,8 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-        let acc = Arc::new(Tpu::new(accounting));
+        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let acc = Arc::new(Tpu::new(accounting_stage));
         let threads = Tpu::serve(&acc, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
@@ -218,8 +218,8 @@ mod tests {
         let acc = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting));
+        let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+        let tpu = Arc::new(Tpu::new(accounting_stage));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = Tpu::serve(
             &tpu,
@@ -287,14 +287,14 @@ mod tests {
 
         let leader_acc = {
             let acc = Accountant::new(&alice);
-            let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting))
+            let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            Arc::new(Tpu::new(accounting_stage))
         };
 
         let replicant_acc = {
             let acc = Accountant::new(&alice);
-            let accounting = AccountingStage::new(acc, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting))
+            let accounting_stage = AccountingStage::new(acc, &alice.last_id(), Some(30));
+            Arc::new(Tpu::new(accounting_stage))
         };
 
         let leader_threads = Tpu::serve(
