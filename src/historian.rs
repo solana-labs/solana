@@ -5,12 +5,12 @@ use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
 pub struct Historian {
-    pub output: Arc<Mutex<Receiver<Entry>>>,
+    pub output: Mutex<Receiver<Entry>>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
@@ -23,9 +23,8 @@ impl Historian {
         let (entry_sender, output) = channel();
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
-        let loutput = Arc::new(Mutex::new(output));
         Historian {
-            output: loutput,
+            output: Mutex::new(output),
             thread_hdl,
         }
     }
