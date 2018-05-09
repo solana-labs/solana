@@ -107,12 +107,10 @@ mod bench {
     use accounting_stage::*;
     use bincode::serialize;
     use hash::hash;
-    use historian::Historian;
     use mint::Mint;
     use rayon::prelude::*;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::HashSet;
-    use std::sync::mpsc::channel;
     use std::time::Instant;
     use transaction::Transaction;
 
@@ -156,7 +154,6 @@ mod bench {
             .map(|tr| Event::Transaction(tr))
             .collect();
 
-        let (input, event_receiver) = channel();
         let accounting_stage = AccountingStage::new(accountant, &mint.last_id(), None);
 
         let now = Instant::now();
