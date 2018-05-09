@@ -795,7 +795,6 @@ mod tests {
     use logger;
     use mint::Mint;
     use plan::Plan;
-    use recorder::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
     use std::io::sink;
@@ -860,11 +859,6 @@ mod tests {
         assert!(tpu.process_events(events).is_ok());
 
         // Collect the ledger and feed it to a new accountant.
-        tpu.historian_input
-            .lock()
-            .unwrap()
-            .send(Signal::Tick)
-            .unwrap();
         drop(tpu.historian_input);
         let entries: Vec<Entry> = tpu.historian.output.lock().unwrap().iter().collect();
 
