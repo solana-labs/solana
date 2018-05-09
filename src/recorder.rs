@@ -8,7 +8,6 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
-use std::mem;
 use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -28,7 +27,6 @@ pub struct Recorder {
     sender: SyncSender<Entry>,
     receiver: Receiver<Signal>,
     last_hash: Hash,
-    events: Vec<Event>,
     num_hashes: u64,
     num_ticks: u64,
 }
@@ -39,7 +37,6 @@ impl Recorder {
             receiver,
             sender,
             last_hash,
-            events: vec![],
             num_hashes: 0,
             num_ticks: 0,
         }
@@ -50,8 +47,7 @@ impl Recorder {
         self.num_hashes += 1;
     }
 
-    pub fn record_entry(&mut self) -> Result<(), ExitReason> {
-        let events = mem::replace(&mut self.events, vec![]);
+    pub fn record_entry(&mut self, events: Vec<Event>) -> Result<(), ExitReason> {
         let entry = create_entry_mut(&mut self.last_hash, &mut self.num_hashes, events);
         self.sender
             .send(entry)
@@ -67,7 +63,7 @@ impl Recorder {
         loop {
             if let Some(ms) = ms_per_tick {
                 if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
-                    self.record_entry()?;
+                    self.record_entry(vec![])?;
                     self.num_ticks += 1;
                 }
             }
@@ -75,11 +71,10 @@ impl Recorder {
             match self.receiver.try_recv() {
                 Ok(signal) => match signal {
                     Signal::Tick => {
-                        self.record_entry()?;
+                        self.record_entry(vec![])?;
                     }
                     Signal::Events(events) => {
-                        self.events.extend(events);
-                        self.record_entry()?;
+                        self.record_entry(events)?;
                     }
                 },
                 Err(TryRecvError::Empty) => return Ok(()),
