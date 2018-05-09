@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 pub enum Signal {
     Tick,
     Event(Event),
+    Events(Vec<Event>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +81,10 @@ impl Recorder {
                     Signal::Event(event) => {
                         self.events.push(event);
                     }
+                    Signal::Events(events) => {
+                        self.events.extend(events);
+                        self.record_entry()?;
+                    }
                 },
                 Err(TryRecvError::Empty) => return Ok(()),
                 Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
@@ -88,31 +93,30 @@ impl Recorder {
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//    use bincode::serialize;
-//    use signature::{KeyPair, KeyPairUtil};
-//    use std::sync::mpsc::sync_channel;
-//    use transaction::Transaction;
-//
-//    #[test]
-//    fn test_events() {
-//        let (signal_sender, signal_receiver) = sync_channel(500);
-//        let (entry_sender, entry_receiver) = sync_channel(10);
-//        let zero = Hash::default();
-//        let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
-//        let alice_keypair = KeyPair::new();
-//        let bob_pubkey = KeyPair::new().pubkey();
-//        let event0 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 1, zero));
-//        let event1 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 2, zero));
-//        signal_sender
-//            .send(Signal::Events(vec![event0, event1]))
-//            .unwrap();
-//        recorder.process_events(Instant::now(), None).unwrap();
-//
-//        drop(recorder.sender);
-//        let entries: Vec<_> = entry_receiver.iter().collect();
-//        assert_eq!(entries.len(), 1);
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signature::{KeyPair, KeyPairUtil};
+    use std::sync::mpsc::sync_channel;
+    use transaction::Transaction;
+
+    #[test]
+    fn test_events() {
+        let (signal_sender, signal_receiver) = sync_channel(500);
+        let (entry_sender, entry_receiver) = sync_channel(10);
+        let zero = Hash::default();
+        let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
+        let alice_keypair = KeyPair::new();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let event0 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 1, zero));
+        let event1 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 2, zero));
+        signal_sender
+            .send(Signal::Events(vec![event0, event1]))
+            .unwrap();
+        recorder.process_events(Instant::now(), None).unwrap();
+
+        drop(recorder.sender);
+        let entries: Vec<_> = entry_receiver.iter().collect();
+        assert_eq!(entries.len(), 1);
+    }
+}
