@@ -64,6 +64,25 @@ fn recv_send(sock: &UdpSocket, recycler: &BlobRecycler, r: &BlobReceiver) -> Res
     Ok(())
 }
 
+pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)> {
+    let timer = Duration::new(1, 0);
+    let msgs = recvr.recv_timeout(timer)?;
+    debug!("got msgs");
+    let mut len = msgs.read().unwrap().packets.len();
+    let mut batch = vec![msgs];
+    while let Ok(more) = recvr.try_recv() {
+        trace!("got more msgs");
+        len += more.read().unwrap().packets.len();
+        batch.push(more);
+
+        if len > 100_000 {
+            break;
+        }
+    }
+    debug!("batch len {}", batch.len());
+    Ok((batch, len))
+}
+
 pub fn responder(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,

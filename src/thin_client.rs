@@ -168,7 +168,7 @@ mod tests {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let skinny = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
@@ -184,8 +184,15 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
         let accountant = Arc::new(Tpu::new(accounting_stage));
-        let threads =
-            Tpu::serve(&accountant, d, serve, skinny, gossip, exit.clone(), sink()).unwrap();
+        let threads = Tpu::serve(
+            &accountant,
+            d,
+            serve,
+            events_socket,
+            gossip,
+            exit.clone(),
+            sink(),
+        ).unwrap();
         sleep(Duration::from_millis(300));
 
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -215,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_skinny) = tpu::test_node();
+        let (leader_data, leader_gossip, _, leader_serve, leader_events) = tpu::test_node();
         let alice = Mint::new(10_000);
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -227,7 +234,7 @@ mod tests {
             &tpu,
             leader_data,
             leader_serve,
-            leader_skinny,
+            leader_events,
             leader_gossip,
             exit.clone(),
             sink(),
@@ -264,7 +271,7 @@ mod tests {
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let skinny = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let leader = ReplicatedData::new(
@@ -273,7 +280,7 @@ mod tests {
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
         );
-        (leader, gossip, serve, replicate, skinny)
+        (leader, gossip, serve, replicate, events_socket)
     }
 
     #[test]
