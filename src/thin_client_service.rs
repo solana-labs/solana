@@ -302,8 +302,8 @@ mod tests {
     use bincode::serialize;
     use ecdsa;
     use packet::{PacketRecycler, NUM_PACKETS};
-    use transaction::{memfind, test_tx};
     use thin_client_service::{to_request_packets, Request};
+    use transaction::{memfind, test_tx};
 
     #[test]
     fn test_layout() {
