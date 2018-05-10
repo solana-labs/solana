@@ -42,8 +42,8 @@ impl Tpu {
         }
     }
 
-    fn update_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
-        trace!("update_entry entry");
+    fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
+        trace!("write_entry entry");
         self.accounting_stage
             .accountant
             .register_entry_id(&entry.id);
@@ -56,7 +56,7 @@ impl Tpu {
             .notify_entry_info_subscribers(&entry);
     }
 
-    fn receive_all<W: Write>(&self, writer: &Mutex<W>) -> Result<Vec<Entry>> {
+    fn write_entries<W: Write>(&self, writer: &Mutex<W>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
         let entry = self.accounting_stage
@@ -64,10 +64,10 @@ impl Tpu {
             .lock()
             .unwrap()
             .recv_timeout(Duration::new(1, 0))?;
-        self.update_entry(writer, &entry);
+        self.write_entry(writer, &entry);
         l.push(entry);
         while let Ok(entry) = self.accounting_stage.output.lock().unwrap().try_recv() {
-            self.update_entry(writer, &entry);
+            self.write_entry(writer, &entry);
             l.push(entry);
         }
         Ok(l)
@@ -82,7 +82,7 @@ impl Tpu {
         writer: &Mutex<W>,
     ) -> Result<()> {
         let mut q = VecDeque::new();
-        let list = self.receive_all(writer)?;
+        let list = self.write_entries(writer)?;
         trace!("New blobs? {}", list.len());
         ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
         if !q.is_empty() {
@@ -110,7 +110,7 @@ impl Tpu {
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     fn run_sync_no_broadcast(&self) -> Result<()> {
-        self.receive_all(&Arc::new(Mutex::new(sink())))?;
+        self.write_entries(&Arc::new(Mutex::new(sink())))?;
         Ok(())
     }
 
