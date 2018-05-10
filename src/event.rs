@@ -24,7 +24,7 @@ pub enum Event {
 impl Event {
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
     pub fn new_timestamp(from: &KeyPair, dt: DateTime<Utc>) -> Self {
-        let sign_data = serialize(&dt).expect("failed to serialize Event sign_data");
+        let sign_data = serialize(&dt).expect("serialize 'dt' in pub fn new_timestamp");
         let sig = Signature::clone_from_slice(from.sign(&sign_data).as_ref());
         Event::Timestamp {
             from: from.pubkey(),
@@ -49,7 +49,7 @@ impl Event {
         match *self {
             Event::Transaction(ref tr) => tr.verify_sig(),
             Event::Signature { from, tx_sig, sig } => sig.verify(&from, &tx_sig),
-            Event::Timestamp { from, dt, sig } => sig.verify(&from, &serialize(&dt).expect("failed to verify Event Timestamp")),
+            Event::Timestamp { from, dt, sig } => sig.verify(&from, &serialize(&dt).expect("serialize 'dt' in pub fn verify")),
         }
     }
 }
