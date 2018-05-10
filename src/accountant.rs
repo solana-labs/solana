@@ -6,6 +6,7 @@
 extern crate libc;
 
 use chrono::prelude::*;
+use entry::Entry;
 use event::Event;
 use hash::Hash;
 use mint::Mint;
@@ -15,8 +16,8 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
@@ -230,6 +231,16 @@ impl Accountant {
         }
 
         results
+    }
+
+    pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
+        for entry in entries {
+            self.register_entry_id(&entry.id);
+            for result in self.process_verified_events(entry.events) {
+                result?;
+            }
+        }
+        Ok(())
     }
 
     /// Process a Witness Signature that has already been verified.

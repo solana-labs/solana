@@ -1,9 +1,17 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
+use bincode::{deserialize, serialize_into};
 use entry::{next_tick, Entry};
+use event::Event;
 use hash::Hash;
+use packet;
+use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
 use rayon::prelude::*;
+use std::cmp::min;
+use std::collections::VecDeque;
+use std::io::Cursor;
+use std::mem::size_of;
 
 pub trait Block {
     /// Verifies the hashes and counts of a slice of events are all consistent.
@@ -30,10 +38,95 @@ pub fn next_ticks(start_hash: &Hash, num_hashes: u64, len: usize) -> Vec<Entry> 
     ticks
 }
 
+pub fn process_entry_list_into_blobs(
+    list: &Vec<Entry>,
+    blob_recycler: &packet::BlobRecycler,
+    q: &mut VecDeque<SharedBlob>,
+) {
+    let mut start = 0;
+    let mut end = 0;
+    while start < list.len() {
+        let mut entries: Vec<Vec<Entry>> = Vec::new();
+        let mut total = 0;
+        for i in &list[start..] {
+            total += size_of::<Event>() * i.events.len();
+            total += size_of::<Entry>();
+            if total >= BLOB_DATA_SIZE {
+                break;
+            }
+            end += 1;
+        }
+        // See if we need to split the events
+        if end <= start {
+            let mut event_start = 0;
+            let num_events_per_blob = BLOB_DATA_SIZE / size_of::<Event>();
+            let total_entry_chunks =
+                (list[end].events.len() + num_events_per_blob - 1) / num_events_per_blob;
+            trace!(
+                "splitting events end: {} total_chunks: {}",
+                end,
+                total_entry_chunks
+            );
+            for _ in 0..total_entry_chunks {
+                let event_end = min(event_start + num_events_per_blob, list[end].events.len());
+                let mut entry = Entry {
+                    num_hashes: list[end].num_hashes,
+                    id: list[end].id,
+                    events: list[end].events[event_start..event_end].to_vec(),
+                };
+                entries.push(vec![entry]);
+                event_start = event_end;
+            }
+            end += 1;
+        } else {
+            entries.push(list[start..end].to_vec());
+        }
+
+        for entry in entries {
+            let b = blob_recycler.allocate();
+            let pos = {
+                let mut bd = b.write().unwrap();
+                let mut out = Cursor::new(bd.data_mut());
+                serialize_into(&mut out, &entry).expect("failed to serialize output");
+                out.position() as usize
+            };
+            assert!(pos < BLOB_SIZE);
+            b.write().unwrap().set_size(pos);
+            q.push_back(b);
+        }
+        start = end;
+    }
+}
+
+pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> Vec<Entry> {
+    let mut entries_to_apply: Vec<Entry> = Vec::new();
+    let mut last_id = Hash::default();
+    for msgs in blobs {
+        let blob = msgs.read().unwrap();
+        let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
+        for entry in entries {
+            if entry.id == last_id {
+                if let Some(last_entry) = entries_to_apply.last_mut() {
+                    last_entry.events.extend(entry.events);
+                }
+            } else {
+                last_id = entry.id;
+                entries_to_apply.push(entry);
+            }
+        }
+        //TODO respond back to leader with hash of the state
+    }
+    entries_to_apply
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use entry;
     use hash::hash;
+    use packet::BlobRecycler;
+    use signature::{KeyPair, KeyPairUtil};
+    use transaction::Transaction;
 
     #[test]
     fn test_verify_slice() {
@@ -47,6 +140,24 @@ mod tests {
         let mut bad_ticks = next_ticks(&zero, 0, 2);
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
+    }
+
+    #[test]
+    fn test_entry_to_blobs() {
+        let zero = Hash::default();
+        let one = hash(&zero);
+        let keypair = KeyPair::new();
+        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, one));
+        let events = vec![tr0.clone(); 10000];
+        let e0 = entry::create_entry(&zero, 0, events);
+
+        let entry_list = vec![e0.clone(); 1];
+        let blob_recycler = BlobRecycler::default();
+        let mut blob_q = VecDeque::new();
+        process_entry_list_into_blobs(&entry_list, &blob_recycler, &mut blob_q);
+        let entries = reconstruct_entries_from_blobs(&blob_q);
+
+        assert_eq!(entry_list, entries);
     }
 }
 
