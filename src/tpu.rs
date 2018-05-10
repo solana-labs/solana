@@ -124,25 +124,6 @@ impl Tpu {
         })
     }
 
-    fn recv_batch(recvr: &streamer::PacketReceiver) -> Result<(Vec<SharedPackets>, usize)> {
-        let timer = Duration::new(1, 0);
-        let msgs = recvr.recv_timeout(timer)?;
-        debug!("got msgs");
-        let mut len = msgs.read().unwrap().packets.len();
-        let mut batch = vec![msgs];
-        while let Ok(more) = recvr.try_recv() {
-            trace!("got more msgs");
-            len += more.read().unwrap().packets.len();
-            batch.push(more);
-
-            if len > 100_000 {
-                break;
-            }
-        }
-        debug!("batch len {}", batch.len());
-        Ok((batch, len))
-    }
-
     fn verify_batch(
         batch: Vec<SharedPackets>,
         sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
@@ -158,7 +139,7 @@ impl Tpu {
         recvr: &Arc<Mutex<streamer::PacketReceiver>>,
         sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> Result<()> {
-        let (batch, len) = Self::recv_batch(&recvr.lock().unwrap())?;
+        let (batch, len) = streamer::recv_batch(&recvr.lock().unwrap())?;
         let now = Instant::now();
         let batch_len = batch.len();
         let rand_id = thread_rng().gen_range(0, 100);
