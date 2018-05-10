@@ -53,7 +53,7 @@ impl Historian {
     }
 
     pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
-        self.output.lock().unwrap().try_recv()
+        self.output.lock().expect("failed 'output' lock in Historian").try_recv()
     }
 }
 
