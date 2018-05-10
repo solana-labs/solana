@@ -164,10 +164,10 @@ pub fn generate_coding(
     let mut coding_ptrs: Vec<&mut [u8]> = Vec::new();
     for i in consumed..consumed + NUM_DATA {
         let n = i % window.len();
-        data_blobs.push(window[n].clone().unwrap());
+        data_blobs.push(window[n].clone().expect("'data_blobs' arr in pub fn generate_coding"));
     }
     for b in &data_blobs {
-        data_locks.push(b.write().unwrap());
+        data_locks.push(b.write().expect("'b' write lock in pub fn generate_coding"));
     }
     for (i, l) in data_locks.iter_mut().enumerate() {
         trace!("i: {} data: {}", i, l.data[0]);
@@ -180,10 +180,10 @@ pub fn generate_coding(
     for i in coding_start..coding_end {
         let n = i % window.len();
         window[n] = re.allocate();
-        coding_blobs.push(window[n].clone().unwrap());
+        coding_blobs.push(window[n].clone().expect("'coding_blobs' arr in pub fn generate_coding"));
     }
     for b in &coding_blobs {
-        coding_locks.push(b.write().unwrap());
+        coding_locks.push(b.write().expect("'coding_locks' arr in pub fn generate_coding"));
     }
     for (i, l) in coding_locks.iter_mut().enumerate() {
         trace!("i: {} data: {}", i, l.data[0]);
@@ -231,7 +231,7 @@ pub fn recover(
                 let j = i % window.len();
                 let mut b = &mut window[j];
                 if b.is_some() {
-                    blobs.push(b.clone().unwrap());
+                    blobs.push(b.clone().expect("'blobs' arr in pb fn recover"));
                     continue;
                 }
                 let n = re.allocate();
@@ -244,7 +244,7 @@ pub fn recover(
             trace!("erasures: {:?}", erasures);
             //lock everything
             for b in &blobs {
-                locks.push(b.write().unwrap());
+                locks.push(b.write().expect("'locks' arr in pb fn recover"));
             }
             for (i, l) in locks.iter_mut().enumerate() {
                 if i >= NUM_DATA {
