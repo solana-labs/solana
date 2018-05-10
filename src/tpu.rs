@@ -1,7 +1,6 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
-use accountant::Accountant;
 use accounting_stage::AccountingStage;
 use bincode::{deserialize, serialize};
 use crdt::{Crdt, ReplicatedData};
@@ -102,24 +101,6 @@ impl Tpu {
     ) -> JoinHandle<()> {
         spawn(move || loop {
             let _ = Self::run_sync(obj.clone(), &broadcast, &blob_recycler, &writer);
-            if exit.load(Ordering::Relaxed) {
-                info!("sync_service exiting");
-                break;
-            }
-        })
-    }
-
-    fn process_thin_client_requests(_acc: &Arc<Accountant>, _socket: &UdpSocket) -> Result<()> {
-        Ok(())
-    }
-
-    fn thin_client_service(
-        accountant: Arc<Accountant>,
-        exit: Arc<AtomicBool>,
-        socket: UdpSocket,
-    ) -> JoinHandle<()> {
-        spawn(move || loop {
-            let _ = Self::process_thin_client_requests(&accountant, &socket);
             if exit.load(Ordering::Relaxed) {
                 info!("sync_service exiting");
                 break;
@@ -367,7 +348,7 @@ impl Tpu {
         obj: &SharedTpu,
         me: ReplicatedData,
         serve: UdpSocket,
-        skinny: UdpSocket,
+        _events_socket: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
@@ -430,12 +411,6 @@ impl Tpu {
             Mutex::new(writer),
         );
 
-        let t_skinny = Self::thin_client_service(
-            obj.accounting_stage.accountant.clone(),
-            exit.clone(),
-            skinny,
-        );
-
         let tpu = obj.clone();
         let t_server = spawn(move || loop {
             let e = Self::process_request_packets(
@@ -457,7 +432,6 @@ impl Tpu {
             t_responder,
             t_server,
             t_sync,
-            t_skinny,
             t_gossip,
             t_listen,
             t_broadcast,
@@ -642,7 +616,7 @@ pub fn to_request_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec
 pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
     use signature::{KeyPair, KeyPairUtil};
 
-    let skinny = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let events_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
     let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
     let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -653,7 +627,7 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
         replicate.local_addr().unwrap(),
         serve.local_addr().unwrap(),
     );
-    (d, gossip, replicate, serve, skinny)
+    (d, gossip, replicate, serve, events_socket)
 }
 
 #[cfg(test)]

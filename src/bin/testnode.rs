@@ -54,7 +54,7 @@ fn main() {
     let serve_addr = format!("0.0.0.0:{}", port);
     let gossip_addr = format!("0.0.0.0:{}", port + 1);
     let replicate_addr = format!("0.0.0.0:{}", port + 2);
-    let skinny_addr = format!("0.0.0.0:{}", port + 3);
+    let events_addr = format!("0.0.0.0:{}", port + 3);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a log file");
@@ -121,7 +121,7 @@ fn main() {
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
-    let skinny_sock = UdpSocket::bind(&skinny_addr).unwrap();
+    let events_sock = UdpSocket::bind(&events_addr).unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
@@ -134,7 +134,7 @@ fn main() {
         &tpu,
         d,
         serve_sock,
-        skinny_sock,
+        events_sock,
         gossip_sock,
         exit.clone(),
         stdout(),
