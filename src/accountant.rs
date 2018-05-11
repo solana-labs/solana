@@ -16,8 +16,8 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;

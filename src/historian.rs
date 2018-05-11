@@ -4,8 +4,8 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
