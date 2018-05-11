@@ -202,7 +202,7 @@ impl Tpu {
     pub fn serve<W: Write + Send + 'static>(
         obj: &SharedTpu,
         me: ReplicatedData,
-        serve: UdpSocket,
+        requests_socket: UdpSocket,
         _events_socket: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
@@ -213,15 +213,19 @@ impl Tpu {
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
-        let mut local = serve.local_addr()?;
+        let mut local = requests_socket.local_addr()?;
         local.set_port(0);
         let respond_socket = UdpSocket::bind(local.clone())?;
 
         let packet_recycler = packet::PacketRecycler::default();
         let blob_recycler = packet::BlobRecycler::default();
         let (packet_sender, packet_receiver) = channel();
-        let t_receiver =
-            streamer::receiver(serve, exit.clone(), packet_recycler.clone(), packet_sender)?;
+        let t_receiver = streamer::receiver(
+            requests_socket,
+            exit.clone(),
+            packet_recycler.clone(),
+            packet_sender,
+        )?;
         let (responder_sender, responder_receiver) = channel();
         let t_responder = streamer::responder(
             respond_socket,
@@ -317,7 +321,7 @@ impl Tpu {
         obj: &SharedTpu,
         me: ReplicatedData,
         gossip: UdpSocket,
-        serve: UdpSocket,
+        requests_socket: UdpSocket,
         replicate: UdpSocket,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
@@ -380,15 +384,19 @@ impl Tpu {
 
         //serve pipeline
         // make sure we are on the same interface
-        let mut local = serve.local_addr()?;
+        let mut local = requests_socket.local_addr()?;
         local.set_port(0);
         let respond_socket = UdpSocket::bind(local.clone())?;
 
         let packet_recycler = packet::PacketRecycler::default();
         let blob_recycler = packet::BlobRecycler::default();
         let (packet_sender, packet_receiver) = channel();
-        let t_packet_receiver =
-            streamer::receiver(serve, exit.clone(), packet_recycler.clone(), packet_sender)?;
+        let t_packet_receiver = streamer::receiver(
+            requests_socket,
+            exit.clone(),
+            packet_recycler.clone(),
+            packet_sender,
+        )?;
         let (responder_sender, responder_receiver) = channel();
         let t_responder = streamer::responder(
             respond_socket,
@@ -458,15 +466,15 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
     let events_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
     let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
         gossip.local_addr().unwrap(),
         replicate.local_addr().unwrap(),
-        serve.local_addr().unwrap(),
+        requests_socket.local_addr().unwrap(),
     );
-    (d, gossip, replicate, serve, events_socket)
+    (d, gossip, replicate, requests_socket, events_socket)
 }
 
 #[cfg(test)]
