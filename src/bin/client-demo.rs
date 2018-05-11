@@ -87,10 +87,10 @@ fn main() {
     println!("Binding to {}", client_addr);
     let socket = UdpSocket::bind(&client_addr).unwrap();
     socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-    let mut accountant = ThinClient::new(addr.parse().unwrap(), socket);
+    let mut client = ThinClient::new(addr.parse().unwrap(), socket);
 
     println!("Get last ID...");
-    let last_id = accountant.get_last_id().wait().unwrap();
+    let last_id = client.get_last_id().wait().unwrap();
     println!("Got last ID {:?}", last_id);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
@@ -122,7 +122,7 @@ fn main() {
         nsps / 1_000_f64
     );
 
-    let initial_tx_count = accountant.transaction_count();
+    let initial_tx_count = client.transaction_count();
     println!("initial count {}", initial_tx_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
@@ -134,16 +134,16 @@ fn main() {
         let mut client_addr: SocketAddr = client_addr.parse().unwrap();
         client_addr.set_port(0);
         let socket = UdpSocket::bind(client_addr).unwrap();
-        let accountant = ThinClient::new(addr.parse().unwrap(), socket);
+        let client = ThinClient::new(addr.parse().unwrap(), socket);
         for tr in trs {
-            accountant.transfer_signed(tr.clone()).unwrap();
+            client.transfer_signed(tr.clone()).unwrap();
         }
     });
 
     println!("Waiting for transactions to complete...",);
     let mut tx_count;
     for _ in 0..10 {
-        tx_count = accountant.transaction_count();
+        tx_count = client.transaction_count();
         duration = now.elapsed();
         let txs = tx_count - initial_tx_count;
         println!("Transactions processed {}", txs);
