@@ -40,7 +40,7 @@ impl ThinClient {
     pub fn init(&self) {
         let subscriptions = vec![Subscription::EntryInfo];
         let req = Request::Subscribe { subscriptions };
-        let data = serialize(&req).expect("serialize Subscribe");
+        let data = serialize(&req).expect("serialize Subscribe in thin_client");
         trace!("subscribing to {}", self.addr);
         let _res = self.socket.send_to(&data, &self.addr);
     }
@@ -50,7 +50,7 @@ impl ThinClient {
         info!("start recv_from");
         self.socket.recv_from(&mut buf)?;
         info!("end recv_from");
-        let resp = deserialize(&buf).expect("deserialize balance");
+        let resp = deserialize(&buf).expect("deserialize balance in thin_client");
         Ok(resp)
     }
 
@@ -72,7 +72,7 @@ impl ThinClient {
     /// does not wait for a response.
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let req = Request::Transaction(tr);
-        let data = serialize(&req).unwrap();
+        let data = serialize(&req).expect("serialize Transaction in pub fn transfer_signed");
         self.socket.send_to(&data, &self.addr)
     }
 
@@ -95,10 +95,10 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
         info!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
-        let data = serialize(&req).expect("serialize GetBalance");
+        let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
         self.socket
             .send_to(&data, &self.addr)
-            .expect("buffer error");
+            .expect("buffer error in pub fn get_balance");
         let mut done = false;
         while !done {
             let resp = self.recv_response()?;
@@ -124,7 +124,7 @@ impl ThinClient {
         // Wait for at least one EntryInfo.
         let mut done = false;
         while !done {
-            let resp = self.recv_response().expect("recv response");
+            let resp = self.recv_response().expect("recv_response in pub fn transaction_count");
             if let &Response::EntryInfo(_) = &resp {
                 done = true;
             }
@@ -132,14 +132,14 @@ impl ThinClient {
         }
 
         // Then take the rest.
-        self.socket.set_nonblocking(true).expect("set nonblocking");
+        self.socket.set_nonblocking(true).expect("set_nonblocking in pub fn transaction_count");
         loop {
             match self.recv_response() {
                 Err(_) => break,
                 Ok(resp) => self.process_response(resp),
             }
         }
-        self.socket.set_nonblocking(false).expect("set blocking");
+        self.socket.set_nonblocking(false).expect("set_nonblocking in pub fn transaction_count");
         self.num_events
     }
 }
