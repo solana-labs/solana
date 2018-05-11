@@ -124,7 +124,8 @@ impl ThinClient {
         // Wait for at least one EntryInfo.
         let mut done = false;
         while !done {
-            let resp = self.recv_response().expect("recv_response in pub fn transaction_count");
+            let resp = self.recv_response()
+                .expect("recv_response in pub fn transaction_count");
             if let &Response::EntryInfo(_) = &resp {
                 done = true;
             }
@@ -132,14 +133,18 @@ impl ThinClient {
         }
 
         // Then take the rest.
-        self.socket.set_nonblocking(true).expect("set_nonblocking in pub fn transaction_count");
+        self.socket
+            .set_nonblocking(true)
+            .expect("set_nonblocking in pub fn transaction_count");
         loop {
             match self.recv_response() {
                 Err(_) => break,
                 Ok(resp) => self.process_response(resp),
             }
         }
-        self.socket.set_nonblocking(false).expect("set_nonblocking in pub fn transaction_count");
+        self.socket
+            .set_nonblocking(false)
+            .expect("set_nonblocking in pub fn transaction_count");
         self.num_events
     }
 }

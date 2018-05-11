@@ -49,7 +49,10 @@ impl Event {
         match *self {
             Event::Transaction(ref tr) => tr.verify_sig(),
             Event::Signature { from, tx_sig, sig } => sig.verify(&from, &tx_sig),
-            Event::Timestamp { from, dt, sig } => sig.verify(&from, &serialize(&dt).expect("serialize 'dt' in pub fn verify")),
+            Event::Timestamp { from, dt, sig } => sig.verify(
+                &from,
+                &serialize(&dt).expect("serialize 'dt' in pub fn verify"),
+            ),
         }
     }
 }

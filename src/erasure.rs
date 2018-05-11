@@ -164,7 +164,11 @@ pub fn generate_coding(
     let mut coding_ptrs: Vec<&mut [u8]> = Vec::new();
     for i in consumed..consumed + NUM_DATA {
         let n = i % window.len();
-        data_blobs.push(window[n].clone().expect("'data_blobs' arr in pub fn generate_coding"));
+        data_blobs.push(
+            window[n]
+                .clone()
+                .expect("'data_blobs' arr in pub fn generate_coding"),
+        );
     }
     for b in &data_blobs {
         data_locks.push(b.write().expect("'b' write lock in pub fn generate_coding"));
@@ -180,10 +184,17 @@ pub fn generate_coding(
     for i in coding_start..coding_end {
         let n = i % window.len();
         window[n] = re.allocate();
-        coding_blobs.push(window[n].clone().expect("'coding_blobs' arr in pub fn generate_coding"));
+        coding_blobs.push(
+            window[n]
+                .clone()
+                .expect("'coding_blobs' arr in pub fn generate_coding"),
+        );
     }
     for b in &coding_blobs {
-        coding_locks.push(b.write().expect("'coding_locks' arr in pub fn generate_coding"));
+        coding_locks.push(
+            b.write()
+                .expect("'coding_locks' arr in pub fn generate_coding"),
+        );
     }
     for (i, l) in coding_locks.iter_mut().enumerate() {
         trace!("i: {} data: {}", i, l.data[0]);

@@ -27,7 +27,10 @@ fn recv_loop(
         let msgs = re.allocate();
         let msgs_ = msgs.clone();
         loop {
-            match msgs.write().expect("write lock in fn recv_loop").recv_from(sock) {
+            match msgs.write()
+                .expect("write lock in fn recv_loop")
+                .recv_from(sock)
+            {
                 Ok(()) => {
                     channel.send(msgs_)?;
                     break;
@@ -136,7 +139,10 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
-    let leader_id = crdt.read().expect("'crdt' read lock in fn recv_window").leader_data().id;
+    let leader_id = crdt.read()
+        .expect("'crdt' read lock in fn recv_window")
+        .leader_data()
+        .id;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
@@ -457,8 +463,8 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use streamer::{BlobReceiver, PacketReceiver};
     use streamer::{blob_receiver, receiver, responder, retransmitter, window};
+    use streamer::{BlobReceiver, PacketReceiver};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {

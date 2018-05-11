@@ -1,7 +1,7 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
-use entry::Entry;
 use entry::create_entry;
+use entry::Entry;
 use event::Event;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
@@ -19,8 +19,11 @@ pub struct Mint {
 impl Mint {
     pub fn new(tokens: i64) -> Self {
         let rnd = SystemRandom::new();
-        let pkcs8 = KeyPair::generate_pkcs8(&rnd).expect("generate_pkcs8 in mint pub fn new").to_vec();
-        let keypair = KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
+        let pkcs8 = KeyPair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        let keypair =
+            KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
         let pubkey = keypair.pubkey();
         Mint {
             pkcs8,

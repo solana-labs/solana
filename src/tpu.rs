@@ -12,8 +12,8 @@ use rand::{thread_rng, Rng};
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
-use std::io::Write;
 use std::io::sink;
+use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
@@ -66,7 +66,12 @@ impl Tpu {
             .recv_timeout(Duration::new(1, 0))?;
         self.write_entry(writer, &entry);
         l.push(entry);
-        while let Ok(entry) = self.accounting_stage.output.lock().expect("'output' lock in fn write_entries").try_recv() {
+        while let Ok(entry) = self.accounting_stage
+            .output
+            .lock()
+            .expect("'output' lock in fn write_entries")
+            .try_recv()
+        {
             self.write_entry(writer, &entry);
             l.push(entry);
         }
@@ -130,7 +135,10 @@ impl Tpu {
     ) -> Result<()> {
         let r = ecdsa::ed25519_verify(&batch);
         let res = batch.into_iter().zip(r).collect();
-        sendr.lock().expect("lock in fn verify_batch in tpu").send(res)?;
+        sendr
+            .lock()
+            .expect("lock in fn verify_batch in tpu")
+            .send(res)?;
         // TODO: fix error handling here?
         Ok(())
     }
@@ -139,7 +147,8 @@ impl Tpu {
         recvr: &Arc<Mutex<streamer::PacketReceiver>>,
         sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> Result<()> {
-        let (batch, len) = streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
+        let (batch, len) =
+            streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
 
         let now = Instant::now();
         let batch_len = batch.len();
@@ -315,8 +324,12 @@ impl Tpu {
     ) -> Result<Vec<JoinHandle<()>>> {
         //replicate pipeline
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        crdt.write().expect("'crdt' write lock in pub fn replicate").set_leader(leader.id);
-        crdt.write().expect("'crdt' write lock before insert() in pub fn replicate").insert(leader);
+        crdt.write()
+            .expect("'crdt' write lock in pub fn replicate")
+            .set_leader(leader.id);
+        crdt.write()
+            .expect("'crdt' write lock before insert() in pub fn replicate")
+            .insert(leader);
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 

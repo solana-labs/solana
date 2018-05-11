@@ -78,7 +78,11 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     let mut rvs = Vec::new();
 
     for packets in batches {
-        locks.push(packets.read().expect("'packets' read lock in pub fn ed25519_verify"));
+        locks.push(
+            packets
+                .read()
+                .expect("'packets' read lock in pub fn ed25519_verify"),
+        );
     }
     let mut num = 0;
     for p in locks {
@@ -135,8 +139,8 @@ mod tests {
     use packet::{Packet, Packets, SharedPackets};
     use std::sync::RwLock;
     use thin_client_service::Request;
-    use transaction::Transaction;
     use transaction::test_tx;
+    use transaction::Transaction;
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {
         let tx = serialize(&Request::Transaction(tr)).unwrap();

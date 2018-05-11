@@ -1,7 +1,7 @@
 //! The `signature` module provides functionality for public, and private keys.
 
-use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};
+use generic_array::GenericArray;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use untrusted;
@@ -19,8 +19,10 @@ impl KeyPairUtil for Ed25519KeyPair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
         let rng = rand::SystemRandom::new();
-        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("generate_pkcs8 in signature pb fn new");
-        signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).expect("from_pcks8 in signature pb fn new")
+        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
+            .expect("generate_pkcs8 in signature pb fn new");
+        signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes))
+            .expect("from_pcks8 in signature pb fn new")
     }
 
     /// Return the public key for the given keypair

@@ -16,8 +16,8 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::RwLock;
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
@@ -34,7 +34,11 @@ pub type Result<T> = result::Result<T, AccountingError>;
 /// Commit funds to the 'to' party.
 fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
     // First we check balances with a read lock to maximize potential parallelization.
-    if balances.read().expect("'balances' read lock in apply_payment").contains_key(&payment.to) {
+    if balances
+        .read()
+        .expect("'balances' read lock in apply_payment")
+        .contains_key(&payment.to)
+    {
         let bals = balances.read().expect("'balances' read lock");
         bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
     } else {
@@ -90,15 +94,25 @@ impl Accountant {
     }
 
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
-        if signatures.read().expect("'signatures' read lock").contains(sig) {
+        if signatures
+            .read()
+            .expect("'signatures' read lock")
+            .contains(sig)
+        {
             return false;
         }
-        signatures.write().expect("'signatures' write lock").insert(*sig);
+        signatures
+            .write()
+            .expect("'signatures' write lock")
+            .insert(*sig);
         true
     }
 
     fn forget_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
-        signatures.write().expect("'signatures' write lock in forget_signature").remove(sig)
+        signatures
+            .write()
+            .expect("'signatures' write lock in forget_signature")
+            .remove(sig)
     }
 
     fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
@@ -132,7 +146,9 @@ impl Accountant {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// accountant will reject transactions using that `last_id`.
     pub fn register_entry_id(&self, last_id: &Hash) {
-        let mut last_ids = self.last_ids.write().expect("'last_ids' write lock in register_entry_id");
+        let mut last_ids = self.last_ids
+            .write()
+            .expect("'last_ids' write lock in register_entry_id");
         if last_ids.len() >= MAX_ENTRY_IDS {
             last_ids.pop_front();
         }
@@ -142,7 +158,9 @@ impl Accountant {
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
-        let bals = self.balances.read().expect("'balances' read lock in process_verified_transaction_debits");
+        let bals = self.balances
+            .read()
+            .expect("'balances' read lock in process_verified_transaction_debits");
         let option = bals.get(&tr.from);
 
         if option.is_none() {
@@ -178,13 +196,16 @@ impl Accountant {
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
         let mut plan = tr.data.plan.clone();
-        plan.apply_witness(&Witness::Timestamp(*self.last_time.read()
+        plan.apply_witness(&Witness::Timestamp(*self.last_time
+            .read()
             .expect("timestamp creation in process_verified_transaction_credits")));
 
         if let Some(ref payment) = plan.final_payment() {
             apply_payment(&self.balances, payment);
         } else {
-            let mut pending = self.pending.write().expect("'pending' write lock in process_verified_transaction_credits");
+            let mut pending = self.pending
+                .write()
+                .expect("'pending' write lock in process_verified_transaction_credits");
             pending.insert(tr.sig, plan);
         }
     }
@@ -253,7 +274,11 @@ impl Accountant {
 
     /// Process a Witness Signature that has already been verified.
     fn process_verified_sig(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        if let Occupied(mut e) = self.pending.write().expect("write() in process_verified_sig").entry(tx_sig) {
+        if let Occupied(mut e) = self.pending
+            .write()
+            .expect("write() in process_verified_sig")
+            .entry(tx_sig)
+        {
             e.get_mut().apply_witness(&Witness::Signature(from));
             if let Some(ref payment) = e.get().final_payment() {
                 apply_payment(&self.balances, payment);
@@ -268,11 +293,22 @@ impl Accountant {
     fn process_verified_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // If this is the first timestamp we've seen, it probably came from the genesis block,
         // so we'll trust it.
-        if *self.last_time.read().expect("'last_time' read lock on first timestamp check") == Utc.timestamp(0, 0) {
-            self.time_sources.write().expect("'time_sources' write lock on first timestamp").insert(from);
+        if *self.last_time
+            .read()
+            .expect("'last_time' read lock on first timestamp check")
+            == Utc.timestamp(0, 0)
+        {
+            self.time_sources
+                .write()
+                .expect("'time_sources' write lock on first timestamp")
+                .insert(from);
         }
 
-        if self.time_sources.read().expect("'time_sources' read lock").contains(&from) {
+        if self.time_sources
+            .read()
+            .expect("'time_sources' read lock")
+            .contains(&from)
+        {
             if dt > *self.last_time.read().expect("'last_time' read lock") {
                 *self.last_time.write().expect("'last_time' write lock") = dt;
             }
@@ -285,9 +321,13 @@ impl Accountant {
 
         // Hold 'pending' write lock until the end of this function. Otherwise another thread can
         // double-spend if it enters before the modified plan is removed from 'pending'.
-        let mut pending = self.pending.write().expect("'pending' write lock in process_verified_timestamp");
+        let mut pending = self.pending
+            .write()
+            .expect("'pending' write lock in process_verified_timestamp");
         for (key, plan) in pending.iter_mut() {
-            plan.apply_witness(&Witness::Timestamp(*self.last_time.read().expect("'last_time' read lock when creating timestamp")));
+            plan.apply_witness(&Witness::Timestamp(*self.last_time
+                .read()
+                .expect("'last_time' read lock when creating timestamp")));
             if let Some(ref payment) = plan.final_payment() {
                 apply_payment(&self.balances, payment);
                 completed.push(key.clone());
@@ -342,7 +382,9 @@ impl Accountant {
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
-        let bals = self.balances.read().expect("'balances' read lock in get_balance");
+        let bals = self.balances
+            .read()
+            .expect("'balances' read lock in get_balance");
         bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
     }
 }
