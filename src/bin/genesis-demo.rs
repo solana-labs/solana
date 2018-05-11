@@ -42,13 +42,14 @@ fn main() {
 
     let users = rnd.gen_n_keys(num_accounts, tokens_per_user);
 
-    let last_id = demo.mint.last_id();
     let mint_keypair = demo.mint.keypair();
+    let last_id = demo.mint.last_id();
 
     eprintln!("Signing {} transactions...", num_accounts);
     let events: Vec<_> = users
         .into_par_iter()
         .map(|(pkcs8, tokens)| {
+            let last_id = demo.mint.last_id();
             let rando = KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap();
             let tr = Transaction::new(&mint_keypair, rando.pubkey(), tokens, last_id);
             Event::Transaction(tr)

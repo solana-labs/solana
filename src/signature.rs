@@ -3,13 +3,12 @@
 use generic_array::typenum::{U32, U64};
 use generic_array::GenericArray;
 use rand::{ChaChaRng, Rng, SeedableRng};
-use rayon::prelude::*;
 use ring::error::Unspecified;
 use ring::rand::SecureRandom;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
+use std::cell::RefCell;
 use std::mem;
-use std::sync::RwLock;
 use untrusted;
 
 pub type KeyPair = Ed25519KeyPair;
@@ -49,7 +48,9 @@ impl SignatureUtil for GenericArray<u8, U64> {
 }
 
 pub struct GenKeys {
-    generator: RwLock<ChaChaRng>,
+    // This is necessary because the rng needs to mutate its state to remain
+    // deterministic, and the fill trait requires an immuatble reference to self
+    generator: RefCell<ChaChaRng>,
 }
 
 impl GenKeys {
@@ -57,7 +58,7 @@ impl GenKeys {
         let seed: &[u8] = &seed_values[..];
         let rng: ChaChaRng = SeedableRng::from_seed(unsafe { mem::transmute(seed) });
         GenKeys {
-            generator: RwLock::new(rng),
+            generator: RefCell::new(rng),
         }
     }
 
@@ -67,7 +68,7 @@ impl GenKeys {
 
     pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
         let users: Vec<_> = (0..n_keys)
-            .into_par_iter()
+            .into_iter()
             .map(|_| {
                 let pkcs8 = self.new_key();
                 (pkcs8, tokens_per_user)
@@ -79,7 +80,7 @@ impl GenKeys {
 
 impl SecureRandom for GenKeys {
     fn fill(&self, dest: &mut [u8]) -> Result<(), Unspecified> {
-        let mut rng = self.generator.write().unwrap();
+        let mut rng = self.generator.borrow_mut();
         rng.fill_bytes(dest);
         Ok(())
     }
