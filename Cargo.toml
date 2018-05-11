@@ -13,10 +13,6 @@ authors = [
 license = "Apache-2.0"
 
 [[bin]]
-name = "solana-historian-demo"
-path = "src/bin/historian-demo.rs"
-
-[[bin]]
 name = "solana-client-demo"
 path = "src/bin/client-demo.rs"
 

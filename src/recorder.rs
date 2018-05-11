@@ -8,15 +8,13 @@
 use entry::{create_entry_mut, Entry};
 use event::Event;
 use hash::{hash, Hash};
-use packet::BLOB_DATA_SIZE;
-use std::mem;
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
-    Event(Event),
+    Events(Vec<Event>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -26,21 +24,19 @@ pub enum ExitReason {
 }
 
 pub struct Recorder {
-    sender: SyncSender<Entry>,
+    sender: Sender<Entry>,
     receiver: Receiver<Signal>,
     last_hash: Hash,
-    events: Vec<Event>,
     num_hashes: u64,
     num_ticks: u64,
 }
 
 impl Recorder {
-    pub fn new(receiver: Receiver<Signal>, sender: SyncSender<Entry>, last_hash: Hash) -> Self {
+    pub fn new(receiver: Receiver<Signal>, sender: Sender<Entry>, last_hash: Hash) -> Self {
         Recorder {
             receiver,
             sender,
             last_hash,
-            events: vec![],
             num_hashes: 0,
             num_ticks: 0,
         }
@@ -51,8 +47,7 @@ impl Recorder {
         self.num_hashes += 1;
     }
 
-    pub fn record_entry(&mut self) -> Result<(), ExitReason> {
-        let events = mem::replace(&mut self.events, vec![]);
+    pub fn record_entry(&mut self, events: Vec<Event>) -> Result<(), ExitReason> {
         let entry = create_entry_mut(&mut self.last_hash, &mut self.num_hashes, events);
         self.sender
             .send(entry)
@@ -68,7 +63,7 @@ impl Recorder {
         loop {
             if let Some(ms) = ms_per_tick {
                 if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
-                    self.record_entry()?;
+                    self.record_entry(vec![])?;
                     self.num_ticks += 1;
                 }
             }
@@ -76,17 +71,10 @@ impl Recorder {
             match self.receiver.try_recv() {
                 Ok(signal) => match signal {
                     Signal::Tick => {
-                        self.record_entry()?;
+                        self.record_entry(vec![])?;
                     }
-                    Signal::Event(event) => {
-                        self.events.push(event);
-
-                        // Record an entry early if we anticipate its serialized size will
-                        // be larger than 64kb. At the time of this writing, we assume each
-                        // event will be well under 256 bytes.
-                        if self.events.len() >= BLOB_DATA_SIZE / 256 {
-                            self.record_entry()?;
-                        }
+                    Signal::Events(events) => {
+                        self.record_entry(events)?;
                     }
                 },
                 Err(TryRecvError::Empty) => return Ok(()),
@@ -99,30 +87,27 @@ impl Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
     use signature::{KeyPair, KeyPairUtil};
-    use std::sync::mpsc::sync_channel;
+    use std::sync::mpsc::channel;
     use transaction::Transaction;
 
     #[test]
-    fn test_sub64k_entry_size() {
-        let (signal_sender, signal_receiver) = sync_channel(500);
-        let (entry_sender, entry_receiver) = sync_channel(10);
+    fn test_events() {
+        let (signal_sender, signal_receiver) = channel();
+        let (entry_sender, entry_receiver) = channel();
         let zero = Hash::default();
         let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
-        for _ in 0..256 {
-            let tx = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
-            let event = Event::Transaction(tx);
-            signal_sender.send(Signal::Event(event)).unwrap();
-        }
-
+        let event0 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 1, zero));
+        let event1 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 2, zero));
+        signal_sender
+            .send(Signal::Events(vec![event0, event1]))
+            .unwrap();
         recorder.process_events(Instant::now(), None).unwrap();
 
         drop(recorder.sender);
         let entries: Vec<_> = entry_receiver.iter().collect();
         assert_eq!(entries.len(), 1);
-        assert!(serialize(&entries[0]).unwrap().len() <= 65_536);
     }
 }
