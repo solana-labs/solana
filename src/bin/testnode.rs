@@ -17,8 +17,8 @@ use std::env;
 use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
 use std::process::exit;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);

@@ -4,8 +4,8 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use std::sync::Mutex;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::sync::Mutex;
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
@@ -52,7 +52,10 @@ impl Historian {
     }
 
     pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
-        self.output.lock().unwrap().try_recv()
+        self.output
+            .lock()
+            .expect("'output' lock in pub fn receive")
+            .try_recv()
     }
 }
 

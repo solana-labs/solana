@@ -12,8 +12,8 @@ use rand::{thread_rng, Rng};
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
-use std::io::Write;
 use std::io::sink;
+use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
@@ -48,10 +48,10 @@ impl Tpu {
             .accountant
             .register_entry_id(&entry.id);
         writeln!(
-            writer.lock().unwrap(),
+            writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
-            serde_json::to_string(&entry).unwrap()
-        ).unwrap();
+            serde_json::to_string(&entry).expect("'entry' to_strong in fn write_entry")
+        ).expect("writeln! in fn write_entry");
         self.thin_client_service
             .notify_entry_info_subscribers(&entry);
     }
@@ -62,11 +62,16 @@ impl Tpu {
         let entry = self.accounting_stage
             .output
             .lock()
-            .unwrap()
+            .expect("'ouput' lock in fn receive_all")
             .recv_timeout(Duration::new(1, 0))?;
         self.write_entry(writer, &entry);
         l.push(entry);
-        while let Ok(entry) = self.accounting_stage.output.lock().unwrap().try_recv() {
+        while let Ok(entry) = self.accounting_stage
+            .output
+            .lock()
+            .expect("'output' lock in fn write_entries")
+            .try_recv()
+        {
             self.write_entry(writer, &entry);
             l.push(entry);
         }
@@ -130,7 +135,10 @@ impl Tpu {
     ) -> Result<()> {
         let r = ecdsa::ed25519_verify(&batch);
         let res = batch.into_iter().zip(r).collect();
-        sendr.lock().unwrap().send(res)?;
+        sendr
+            .lock()
+            .expect("lock in fn verify_batch in tpu")
+            .send(res)?;
         // TODO: fix error handling here?
         Ok(())
     }
@@ -139,7 +147,9 @@ impl Tpu {
         recvr: &Arc<Mutex<streamer::PacketReceiver>>,
         sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> Result<()> {
-        let (batch, len) = streamer::recv_batch(&recvr.lock().unwrap())?;
+        let (batch, len) =
+            streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
+
         let now = Instant::now();
         let batch_len = batch.len();
         let rand_id = thread_rng().gen_range(0, 100);
@@ -150,7 +160,7 @@ impl Tpu {
             rand_id
         );
 
-        Self::verify_batch(batch, sendr).unwrap();
+        Self::verify_batch(batch, sendr).expect("verify_batch in fn verifier");
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());
         let total_time_s = timing::duration_as_s(&now.elapsed());
@@ -314,8 +324,12 @@ impl Tpu {
     ) -> Result<Vec<JoinHandle<()>>> {
         //replicate pipeline
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        crdt.write().unwrap().set_leader(leader.id);
-        crdt.write().unwrap().insert(leader);
+        crdt.write()
+            .expect("'crdt' write lock in pub fn replicate")
+            .set_leader(leader.id);
+        crdt.write()
+            .expect("'crdt' write lock before insert() in pub fn replicate")
+            .insert(leader);
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
 
