@@ -6,6 +6,7 @@
 extern crate libc;
 
 use chrono::prelude::*;
+use entry::Entry;
 use event::Event;
 use hash::Hash;
 use mint::Mint;
@@ -15,8 +16,8 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
@@ -32,12 +33,19 @@ pub type Result<T> = result::Result<T, AccountingError>;
 
 /// Commit funds to the 'to' party.
 fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
+    // First we check balances with a read lock to maximize potential parallelization.
     if balances.read().unwrap().contains_key(&payment.to) {
         let bals = balances.read().unwrap();
         bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
     } else {
+        // Now we know the key wasn't present a nanosecond ago, but it might be there
+        // by the time we aquire a write lock, so we'll have to check again.
         let mut bals = balances.write().unwrap();
-        bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+        if bals.contains_key(&payment.to) {
+            bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+        } else {
+            bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+        }
     }
 }
 
@@ -69,9 +77,9 @@ impl Accountant {
             to: mint.pubkey(),
             tokens: mint.tokens,
         };
-        let acc = Self::new_from_deposit(&deposit);
-        acc.register_entry_id(&mint.last_id());
-        acc
+        let accountant = Self::new_from_deposit(&deposit);
+        accountant.register_entry_id(&mint.last_id());
+        accountant
     }
 
     /// Return the last entry ID registered
@@ -232,6 +240,16 @@ impl Accountant {
         results
     }
 
+    pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
+        for entry in entries {
+            self.register_entry_id(&entry.id);
+            for result in self.process_verified_events(entry.events) {
+                result?;
+            }
+        }
+        Ok(())
+    }
+
     /// Process a Witness Signature that has already been verified.
     fn process_verified_sig(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending.write().unwrap().entry(tx_sig) {
@@ -339,24 +357,26 @@ mod tests {
     fn test_accountant() {
         let alice = Mint::new(10_000);
         let bob_pubkey = KeyPair::new().pubkey();
-        let acc = Accountant::new(&alice);
-        assert_eq!(acc.last_id(), alice.last_id());
+        let accountant = Accountant::new(&alice);
+        assert_eq!(accountant.last_id(), alice.last_id());
 
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
+        accountant
+            .transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
+        assert_eq!(accountant.get_balance(&bob_pubkey).unwrap(), 1_000);
 
-        acc.transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
+        accountant
+            .transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_500);
+        assert_eq!(accountant.get_balance(&bob_pubkey).unwrap(), 1_500);
     }
 
     #[test]
     fn test_account_not_found() {
         let mint = Mint::new(1);
-        let acc = Accountant::new(&mint);
+        let accountant = Accountant::new(&mint);
         assert_eq!(
-            acc.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
+            accountant.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
             Err(AccountingError::AccountNotFound)
         );
     }
@@ -364,141 +384,156 @@ mod tests {
     #[test]
     fn test_invalid_transfer() {
         let alice = Mint::new(11_000);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
+        accountant
+            .transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(
-            acc.transfer(10_001, &alice.keypair(), bob_pubkey, alice.last_id()),
+            accountant.transfer(10_001, &alice.keypair(), bob_pubkey, alice.last_id()),
             Err(AccountingError::InsufficientFunds)
         );
 
         let alice_pubkey = alice.keypair().pubkey();
-        assert_eq!(acc.get_balance(&alice_pubkey).unwrap(), 10_000);
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 1_000);
+        assert_eq!(accountant.get_balance(&alice_pubkey).unwrap(), 10_000);
+        assert_eq!(accountant.get_balance(&bob_pubkey).unwrap(), 1_000);
     }
 
     #[test]
     fn test_transfer_to_newb() {
         let alice = Mint::new(10_000);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
-        acc.transfer(500, &alice_keypair, bob_pubkey, alice.last_id())
+        accountant
+            .transfer(500, &alice_keypair, bob_pubkey, alice.last_id())
             .unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey).unwrap(), 500);
+        assert_eq!(accountant.get_balance(&bob_pubkey).unwrap(), 500);
     }
 
     #[test]
     fn test_transfer_on_date() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        accountant
+            .transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
+        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(0));
 
         // Bob's balance will be None because the funds have not been
         // sent.
-        assert_eq!(acc.get_balance(&bob_pubkey), None);
+        assert_eq!(accountant.get_balance(&bob_pubkey), None);
 
         // Now, acknowledge the time in the condition occurred and
         // that bob's funds are now available.
-        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
-        assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
+        accountant
+            .process_verified_timestamp(alice.pubkey(), dt)
+            .unwrap();
+        assert_eq!(accountant.get_balance(&bob_pubkey), Some(1));
 
-        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
-        assert_ne!(acc.get_balance(&bob_pubkey), Some(2));
+        accountant
+            .process_verified_timestamp(alice.pubkey(), dt)
+            .unwrap(); // <-- Attack! Attempt to process completed transaction.
+        assert_ne!(accountant.get_balance(&bob_pubkey), Some(2));
     }
 
     #[test]
     fn test_transfer_after_date() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        acc.process_verified_timestamp(alice.pubkey(), dt).unwrap();
-
-        // It's now past now, so this transfer should be processed immediately.
-        acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        accountant
+            .process_verified_timestamp(alice.pubkey(), dt)
             .unwrap();
 
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
-        assert_eq!(acc.get_balance(&bob_pubkey), Some(1));
+        // It's now past now, so this transfer should be processed immediately.
+        accountant
+            .transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+            .unwrap();
+
+        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(0));
+        assert_eq!(accountant.get_balance(&bob_pubkey), Some(1));
     }
 
     #[test]
     fn test_cancel_transfer() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let alice_keypair = alice.keypair();
         let bob_pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = acc.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        let sig = accountant
+            .transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
         // Alice's balance will be zero because all funds are locked up.
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(0));
+        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(0));
 
         // Bob's balance will be None because the funds have not been
         // sent.
-        assert_eq!(acc.get_balance(&bob_pubkey), None);
+        assert_eq!(accountant.get_balance(&bob_pubkey), None);
 
         // Now, cancel the trancaction. Alice gets her funds back, Bob never sees them.
-        acc.process_verified_sig(alice.pubkey(), sig).unwrap();
-        assert_eq!(acc.get_balance(&alice.pubkey()), Some(1));
-        assert_eq!(acc.get_balance(&bob_pubkey), None);
+        accountant
+            .process_verified_sig(alice.pubkey(), sig)
+            .unwrap();
+        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(1));
+        assert_eq!(accountant.get_balance(&bob_pubkey), None);
 
-        acc.process_verified_sig(alice.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
-        assert_ne!(acc.get_balance(&alice.pubkey()), Some(2));
+        accountant
+            .process_verified_sig(alice.pubkey(), sig)
+            .unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        assert_ne!(accountant.get_balance(&alice.pubkey()), Some(2));
     }
 
     #[test]
     fn test_duplicate_event_signature() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let sig = Signature::default();
-        assert!(acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
-        assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(accountant.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!accountant.reserve_signature_with_last_id(&sig, &alice.last_id()));
     }
 
     #[test]
     fn test_forget_signature() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let sig = Signature::default();
-        acc.reserve_signature_with_last_id(&sig, &alice.last_id());
-        assert!(acc.forget_signature_with_last_id(&sig, &alice.last_id()));
-        assert!(!acc.forget_signature_with_last_id(&sig, &alice.last_id()));
+        accountant.reserve_signature_with_last_id(&sig, &alice.last_id());
+        assert!(accountant.forget_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!accountant.forget_signature_with_last_id(&sig, &alice.last_id()));
     }
 
     #[test]
     fn test_max_entry_ids() {
         let alice = Mint::new(1);
-        let acc = Accountant::new(&alice);
+        let accountant = Accountant::new(&alice);
         let sig = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            acc.register_entry_id(&last_id);
+            accountant.register_entry_id(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
-        assert!(!acc.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!accountant.reserve_signature_with_last_id(&sig, &alice.last_id()));
     }
 
     #[test]
     fn test_debits_before_credits() {
         let mint = Mint::new(2);
-        let acc = Accountant::new(&mint);
+        let accountant = Accountant::new(&mint);
         let alice = KeyPair::new();
         let tr0 = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let tr1 = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
-        assert!(acc.process_verified_transactions(trs)[1].is_err());
+        assert!(accountant.process_verified_transactions(trs)[1].is_err());
     }
 }
 
@@ -514,7 +549,7 @@ mod bench {
     #[bench]
     fn process_verified_event_bench(bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
-        let acc = Accountant::new(&mint);
+        let accountant = Accountant::new(&mint);
         // Create transactions between unrelated parties.
         let transactions: Vec<_> = (0..4096)
             .into_par_iter()
@@ -522,15 +557,15 @@ mod bench {
                 // Seed the 'from' account.
                 let rando0 = KeyPair::new();
                 let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
-                acc.process_verified_transaction(&tr).unwrap();
+                accountant.process_verified_transaction(&tr).unwrap();
 
                 // Seed the 'to' account and a cell for its signature.
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                acc.register_entry_id(&last_id);
+                accountant.register_entry_id(&last_id);
 
                 let rando1 = KeyPair::new();
                 let tr = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
-                acc.process_verified_transaction(&tr).unwrap();
+                accountant.process_verified_transaction(&tr).unwrap();
 
                 // Finally, return a transaction that's unique
                 Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
@@ -538,12 +573,13 @@ mod bench {
             .collect();
         bencher.iter(|| {
             // Since benchmarker runs this multiple times, we need to clear the signatures.
-            for sigs in acc.last_ids.read().unwrap().iter() {
+            for sigs in accountant.last_ids.read().unwrap().iter() {
                 sigs.1.write().unwrap().clear();
             }
 
             assert!(
-                acc.process_verified_transactions(transactions.clone())
+                accountant
+                    .process_verified_transactions(transactions.clone())
                     .iter()
                     .all(|x| x.is_ok())
             );

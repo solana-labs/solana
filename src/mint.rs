@@ -1,7 +1,7 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
-use entry::create_entry;
 use entry::Entry;
+use entry::create_entry;
 use event::Event;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;

@@ -8,7 +8,7 @@ extern crate untrusted;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::accountant::MAX_ENTRY_IDS;
-use solana::entry::{create_entry, next_tick};
+use solana::entry::{create_entry, next_entry};
 use solana::event::Event;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
@@ -67,7 +67,7 @@ fn main() {
     // Offer client lots of entry IDs to use for each transaction's last_id.
     let mut last_id = last_id;
     for _ in 0..MAX_ENTRY_IDS {
-        let entry = next_tick(&last_id, 1);
+        let entry = next_entry(&last_id, 1, vec![]);
         last_id = entry.id;
         let serialized = serde_json::to_string(&entry).unwrap_or_else(|e| {
             eprintln!("failed to serialize: {}", e);
