@@ -19,8 +19,8 @@ impl KeyPairUtil for Ed25519KeyPair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
         let rng = rand::SystemRandom::new();
-        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("failed to generate_pkcs8");
-        signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).expect("failed to construct Ed25519KeyPair")
+        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("generate_pkcs8 in signature pb fn new");
+        signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).expect("from_pcks8 in signature pb fn new")
     }
 
     /// Return the public key for the given keypair
