@@ -156,12 +156,12 @@ impl<T: Default> Clone for Recycler<T> {
 
 impl<T: Default> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
-        let mut gc = self.gc.lock().expect("recycler lock");
+        let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
         gc.pop()
             .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
     }
     pub fn recycle(&self, msgs: Arc<RwLock<T>>) {
-        let mut gc = self.gc.lock().expect("recycler lock");
+        let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
         gc.push(msgs);
     }
 }
@@ -264,7 +264,7 @@ impl Blob {
         for i in 0..NUM_BLOBS {
             let r = re.allocate();
             {
-                let mut p = r.write().unwrap();
+                let mut p = r.write().expect("'r' write lock in pub fn recv_from");
                 match socket.recv_from(&mut p.data) {
                     Err(_) if i > 0 => {
                         trace!("got {:?} messages", i);
@@ -294,7 +294,7 @@ impl Blob {
     ) -> Result<()> {
         while let Some(r) = v.pop_front() {
             {
-                let p = r.read().unwrap();
+                let p = r.read().expect("'r' read lock in pub fn send_to");
                 let a = p.meta.addr();
                 socket.send_to(&p.data[..p.meta.size], &a)?;
             }
