@@ -11,7 +11,7 @@ use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::mint::MintDemo;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::thin_client::ThinClient;
 use solana::transaction::Transaction;
 use std::env;
@@ -93,9 +93,14 @@ fn main() {
     let last_id = accountant.get_last_id().wait().unwrap();
     println!("Got last ID {:?}", last_id);
 
+    let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
+    let tokens_per_user = 1_000;
+
+    let users = rnd.gen_n_keys(demo.num_accounts, tokens_per_user);
+
     println!("Creating keypairs...");
-    let txs = demo.users.len() / 2;
-    let keypairs: Vec<_> = demo.users
+    let txs = demo.num_accounts / 2;
+    let keypairs: Vec<_> = users
         .into_par_iter()
         .map(|(pkcs8, _)| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
         .collect();
