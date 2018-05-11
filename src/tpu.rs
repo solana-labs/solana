@@ -117,7 +117,7 @@ impl Tpu {
         writeln!(
             writer.lock().expect("'writer' lock in fn update_entry"),
             "{}",
-            serde_json::to_string(&entry).expect("entry to_string in fn update_entry")
+            serde_json::to_string(&entry).expect("'entry' to_string in fn update_entry")
         ).expect("writeln! in fn update_entry");
         Self::notify_entry_info_subscribers(obj, &entry);
     }
@@ -371,7 +371,7 @@ impl Tpu {
             if let Ok(event) = result {
                 self.historian_input
                     .lock()
-                    .expect("historian_input lock in in for loop fn process_events")
+                    .expect("historian_input lock in for loop in fn process_events")
                     .send(Signal::Event(event))?;
             }
         }
