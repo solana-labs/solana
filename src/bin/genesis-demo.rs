@@ -37,17 +37,11 @@ fn main() {
     });
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
+    let num_accounts = demo.num_accounts;
     let tokens_per_user = 1_000;
 
-    let users: Vec<_> = (0..demo.num_accounts)
-        .into_iter()
-        .map(|_| {
-            let pkcs8 = rnd.new_key();
-            (pkcs8, tokens_per_user)
-        })
-        .collect();
+    let users = rnd.gen_n_keys(num_accounts, tokens_per_user);
 
-    let num_accounts = users.len();
     let last_id = demo.mint.last_id();
     let mint_keypair = demo.mint.keypair();
 

@@ -96,16 +96,10 @@ fn main() {
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
     let tokens_per_user = 1_000;
 
-    let users: Vec<_> = (0..demo.num_accounts)
-        .into_par_iter()
-        .map(|_| {
-            let pkcs8 = rnd.new_key();
-            (pkcs8, tokens_per_user)
-        })
-        .collect();
+    let users = rnd.gen_n_keys(demo.num_accounts, tokens_per_user);
 
     println!("Creating keypairs...");
-    let txs = users.len() / 2;
+    let txs = demo.num_accounts / 2;
     let keypairs: Vec<_> = users
         .into_par_iter()
         .map(|(pkcs8, _)| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
