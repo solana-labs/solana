@@ -103,12 +103,12 @@ pub fn create_entry_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec
     entry
 }
 
-/// Creates the next Tick Entry `num_hashes` after `start_hash`.
-pub fn next_tick(start_hash: &Hash, num_hashes: u64) -> Entry {
+/// Creates the next Tick or Event Entry `num_hashes` after `start_hash`.
+pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Event>) -> Entry {
     Entry {
         num_hashes,
-        id: next_hash(start_hash, num_hashes, &[]),
-        events: vec![],
+        id: next_hash(start_hash, num_hashes, &events),
+        events: events,
     }
 }
 
@@ -128,8 +128,8 @@ mod tests {
         let one = hash(&zero);
         assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
         assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
-        assert!(next_tick(&zero, 1).verify(&zero)); // inductive step
-        assert!(!next_tick(&zero, 1).verify(&one)); // inductive step, bad
+        assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
+        assert!(!next_entry(&zero, 1, vec![]).verify(&one)); // inductive step, bad
     }
 
     #[test]
@@ -167,9 +167,9 @@ mod tests {
     }
 
     #[test]
-    fn test_next_tick() {
+    fn test_next_entry() {
         let zero = Hash::default();
-        let tick = next_tick(&zero, 1);
+        let tick = next_entry(&zero, 1,vec![]);
         assert_eq!(tick.num_hashes, 1);
         assert_ne!(tick.id, zero);
     }

@@ -2,7 +2,7 @@
 //! Proof of History ledger.
 
 use bincode::{deserialize, serialize_into};
-use entry::{next_tick, Entry};
+use entry::{next_entry, Entry};
 use event::Event;
 use hash::Hash;
 use packet;
@@ -26,16 +26,17 @@ impl Block for [Entry] {
     }
 }
 
-/// Create a vector of Ticks of length `len` from `start_hash` hash and `num_hashes`.
-pub fn next_ticks(start_hash: &Hash, num_hashes: u64, len: usize) -> Vec<Entry> {
+/// Create a vector of Entries of length `event_set.len()` from `start_hash` hash, `num_hashes`, and `event_set`.
+pub fn next_entries(start_hash: &Hash, num_hashes: u64, event_set: Vec<Vec<Event>>) -> Vec<Entry> {
     let mut id = *start_hash;
-    let mut ticks = vec![];
-    for _ in 0..len {
-        let entry = next_tick(&id, num_hashes);
+    let mut entries = vec![];
+    for event_list in &event_set {
+        let events = event_list.clone();
+        let entry = next_entry(&id, num_hashes, events);
         id = entry.id;
-        ticks.push(entry);
+        entries.push(entry);
     }
-    ticks
+    entries
 }
 
 pub fn process_entry_list_into_blobs(
@@ -135,9 +136,9 @@ mod tests {
         assert!(vec![][..].verify(&zero)); // base case
         assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
         assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(next_ticks(&zero, 0, 2)[..].verify(&zero)); // inductive step
+        assert!(next_entries(&zero, 0, vec![vec![]; 2])[..].verify(&zero)); // inductive step
 
-        let mut bad_ticks = next_ticks(&zero, 0, 2);
+        let mut bad_ticks = next_entries(&zero, 0, vec![vec![]; 2]);
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
@@ -159,6 +160,27 @@ mod tests {
 
         assert_eq!(entry_list, entries);
     }
+
+    #[test]
+    fn test_next_entries(){
+        let mut id = Hash::default();
+        let next_id = hash(&id);
+        let keypair = KeyPair::new();
+        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, next_id));
+        let events = vec![tr0.clone(); 5];
+        let event_set = vec![events.clone(); 5];
+        let entries0 = next_entries(&id, 0, event_set);
+
+        assert_eq!(entries0.len(),5);
+
+        let mut entries1 = vec![];
+        for _ in 0..5{
+            let entry = next_entry(&id, 0, events.clone());
+            id = entry.id;
+            entries1.push(entry);
+        }
+        assert_eq!(entries0,entries1);
+    }
 }
 
 #[cfg(all(feature = "unstable", test))]
@@ -170,7 +192,7 @@ mod bench {
     #[bench]
     fn event_bench(bencher: &mut Bencher) {
         let start_hash = Hash::default();
-        let entries = next_ticks(&start_hash, 10_000, 8);
+        let entries = next_entries(&start_hash, 10_000, vec![vec![]; 8]);
         bencher.iter(|| {
             assert!(entries.verify(&start_hash));
         });
