@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_next_entry() {
         let zero = Hash::default();
-        let tick = next_entry(&zero, 1,vec![]);
+        let tick = next_entry(&zero, 1, vec![]);
         assert_eq!(tick.num_hashes, 1);
         assert_ne!(tick.id, zero);
     }

@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn test_next_entries(){
+    fn test_next_entries() {
         let mut id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
@@ -171,7 +171,7 @@ mod tests {
         let event_set = vec![events.clone(); 5];
         let entries0 = next_entries(&id, 0, event_set);
 
-        assert_eq!(entries0.len(),5);
+        assert_eq!(entries0.len(), 5);
 
         let mut entries1 = vec![];
         for _ in 0..5{
@@ -179,7 +179,7 @@ mod tests {
             id = entry.id;
             entries1.push(entry);
         }
-        assert_eq!(entries0,entries1);
+        assert_eq!(entries0, entries1);
     }
 }
 
