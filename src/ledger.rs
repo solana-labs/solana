@@ -174,7 +174,7 @@ mod tests {
         assert_eq!(entries0.len(), 5);
 
         let mut entries1 = vec![];
-        for _ in 0..5{
+        for _ in 0..5 {
             let entry = next_entry(&id, 0, events.clone());
             id = entry.id;
             entries1.push(entry);
