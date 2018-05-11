@@ -33,12 +33,19 @@ pub type Result<T> = result::Result<T, AccountingError>;
 
 /// Commit funds to the 'to' party.
 fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
+    // First we check balances with a read lock to maximize potential parallelization.
     if balances.read().unwrap().contains_key(&payment.to) {
         let bals = balances.read().unwrap();
         bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
     } else {
+        // Now we know the key wasn't present a nanosecond ago, but it might be there
+        // by the time we aquire a write lock, so we'll have to check again.
         let mut bals = balances.write().unwrap();
-        bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+        if bals.contains_key(&payment.to) {
+            bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+        } else {
+            bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+        }
     }
 }
 
