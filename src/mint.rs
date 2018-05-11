@@ -19,8 +19,8 @@ pub struct Mint {
 impl Mint {
     pub fn new(tokens: i64) -> Self {
         let rnd = SystemRandom::new();
-        let pkcs8 = KeyPair::generate_pkcs8(&rnd).unwrap().to_vec();
-        let keypair = KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap();
+        let pkcs8 = KeyPair::generate_pkcs8(&rnd).expect("generate_pkcs8 in mint pub fn new").to_vec();
+        let keypair = KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
         let pubkey = keypair.pubkey();
         Mint {
             pkcs8,
@@ -38,7 +38,7 @@ impl Mint {
     }
 
     pub fn keypair(&self) -> KeyPair {
-        KeyPair::from_pkcs8(Input::from(&self.pkcs8)).unwrap()
+        KeyPair::from_pkcs8(Input::from(&self.pkcs8)).expect("from_pkcs8 in mint pub fn keypair")
     }
 
     pub fn pubkey(&self) -> PublicKey {
