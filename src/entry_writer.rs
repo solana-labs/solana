@@ -1,7 +1,7 @@
 //! The `entry_writer` module helps implement the TPU's write stage.
 
+use accountant::Accountant;
 use entry::Entry;
-use event_processor::EventProcessor;
 use ledger;
 use packet;
 use request_stage::RequestProcessor;
@@ -16,25 +16,22 @@ use std::time::Duration;
 use streamer;
 
 pub struct EntryWriter<'a> {
-    event_processor: &'a EventProcessor,
+    accountant: &'a Accountant,
     request_processor: &'a RequestProcessor,
 }
 
 impl<'a> EntryWriter<'a> {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(
-        event_processor: &'a EventProcessor,
-        request_processor: &'a RequestProcessor,
-    ) -> Self {
+    pub fn new(accountant: &'a Accountant, request_processor: &'a RequestProcessor) -> Self {
         EntryWriter {
-            event_processor,
+            accountant,
             request_processor,
         }
     }
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
         trace!("write_entry entry");
-        self.event_processor.accountant.register_entry_id(&entry.id);
+        self.accountant.register_entry_id(&entry.id);
         writeln!(
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
