@@ -3,6 +3,7 @@
 use generic_array::GenericArray;
 use generic_array::typenum::{U32, U64};
 use rand::{ChaChaRng, Rng, SeedableRng};
+use rayon::prelude::*;
 use ring::error::Unspecified;
 use ring::rand::SecureRandom;
 use ring::signature::Ed25519KeyPair;
@@ -68,11 +69,27 @@ impl GenKeys {
         KeyPair::generate_pkcs8(self).unwrap().to_vec()
     }
 
-    pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
-        let users: Vec<_> = (0..n_keys)
+    pub fn gen_n_seeds(&self, n_seeds: i64) -> Vec<[u8; 16]> {
+        let mut rng = self.generator.borrow_mut();
+
+        let seeds = (0..n_seeds)
             .into_iter()
             .map(|_| {
-                let pkcs8 = self.new_key();
+                let seed: [u8; 16] = rng.gen();
+                seed
+            })
+            .collect();
+        seeds
+    }
+
+    pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
+        let keys = self.gen_n_seeds(n_keys);
+
+        let users: Vec<_> = keys
+            .into_par_iter()
+            .map(|seed| {
+                let new: GenKeys = GenKeys::new(&seed[..]);
+                let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
                 (pkcs8, tokens_per_user)
             })
             .collect();
