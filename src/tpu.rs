@@ -97,13 +97,11 @@ impl Tpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
-        let (responder_sender, responder_receiver) = channel();
         let thin_client_service = ThinClientService::new(
             obj.request_processor.clone(),
             obj.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
-            responder_sender,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
@@ -131,7 +129,7 @@ impl Tpu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            responder_receiver,
+            thin_client_service.output,
         );
 
         let mut threads = vec![
@@ -265,26 +263,25 @@ impl Tpu {
             packet_recycler.clone(),
             packet_sender,
         )?;
-        let (responder_sender, responder_receiver) = channel();
-        let t_responder = streamer::responder(
-            respond_socket,
-            exit.clone(),
-            blob_recycler.clone(),
-            responder_receiver,
-        );
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
-
-        let t_write = Self::drain_service(obj.clone(), exit.clone());
 
         let thin_client_service = ThinClientService::new(
             obj.request_processor.clone(),
             obj.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
-            responder_sender,
             packet_recycler.clone(),
             blob_recycler.clone(),
+        );
+
+        let t_write = Self::drain_service(obj.clone(), exit.clone());
+
+        let t_responder = streamer::responder(
+            respond_socket,
+            exit.clone(),
+            blob_recycler.clone(),
+            thin_client_service.output,
         );
 
         let mut threads = vec![

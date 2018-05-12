@@ -15,15 +15,14 @@ use signature::PublicKey;
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
-use transaction::Transaction;
-//use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
 use timing;
+use transaction::Transaction;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -62,8 +61,6 @@ pub enum Response {
 }
 
 pub struct RequestProcessor {
-    //pub output: Mutex<Receiver<Response>>,
-    //response_sender: Mutex<Sender<Response>>,
     accountant: Arc<Accountant>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
@@ -71,10 +68,7 @@ pub struct RequestProcessor {
 impl RequestProcessor {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accountant: Arc<Accountant>) -> Self {
-        //let (response_sender, output) = channel();
         RequestProcessor {
-            //output: Mutex::new(output),
-            //response_sender: Mutex::new(response_sender),
             accountant,
             entry_info_subscribers: Mutex::new(vec![]),
         }
@@ -278,6 +272,7 @@ impl RequestProcessor {
 
 pub struct ThinClientService {
     pub thread_hdl: JoinHandle<()>,
+    pub output: streamer::BlobReceiver,
 }
 
 impl ThinClientService {
@@ -286,10 +281,10 @@ impl ThinClientService {
         accounting_stage: Arc<AccountingStage>,
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        responder_sender: streamer::BlobSender,
         packet_recycler: packet::PacketRecycler,
         blob_recycler: packet::BlobRecycler,
     ) -> Self {
+        let (responder_sender, output) = channel();
         let thread_hdl = spawn(move || loop {
             let e = request_processor.process_request_packets(
                 &accounting_stage,
@@ -304,7 +299,7 @@ impl ThinClientService {
                 }
             }
         });
-        ThinClientService { thread_hdl }
+        ThinClientService { thread_hdl, output }
     }
 }
 
