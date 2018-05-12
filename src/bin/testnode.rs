@@ -7,12 +7,12 @@ extern crate solana;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::accountant::Accountant;
-use solana::accounting_stage::AccountingStage;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
+use solana::event_processor::EventProcessor;
+use solana::rpu::Rpu;
 use solana::signature::{KeyPair, KeyPairUtil};
-use solana::tpu::Tpu;
 use std::env;
 use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
@@ -115,13 +115,13 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let accounting_stage = AccountingStage::new(accountant, &last_id, Some(1000));
+    let event_processor = EventProcessor::new(accountant, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let tpu = Arc::new(Tpu::new(accounting_stage));
+    let rpu = Rpu::new(event_processor);
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
-    let events_sock = UdpSocket::bind(&events_addr).unwrap();
+    let _events_sock = UdpSocket::bind(&events_addr).unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
@@ -130,15 +130,8 @@ fn main() {
         serve_sock.local_addr().unwrap(),
     );
     eprintln!("starting server...");
-    let threads = Tpu::serve(
-        &tpu,
-        d,
-        serve_sock,
-        events_sock,
-        gossip_sock,
-        exit.clone(),
-        stdout(),
-    ).unwrap();
+    let threads = rpu.serve(d, serve_sock, gossip_sock, exit.clone(), stdout())
+        .unwrap();
     eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");

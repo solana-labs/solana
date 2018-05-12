@@ -1,4 +1,4 @@
-//! The `accounting_stage` module implements the accounting stage of the TPU.
+//! The `event_processor` module implements the accounting stage of the TPU.
 
 use accountant::Accountant;
 use entry::Entry;
@@ -7,26 +7,21 @@ use hash::Hash;
 use historian::Historian;
 use recorder::Signal;
 use result::Result;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
-pub struct AccountingStage {
-    pub output: Mutex<Receiver<Entry>>,
-    entry_sender: Mutex<Sender<Entry>>,
+pub struct EventProcessor {
     pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
 }
 
-impl AccountingStage {
-    /// Create a new Tpu that wraps the given Accountant.
+impl EventProcessor {
+    /// Create a new stage of the TPU for event and transaction processing
     pub fn new(accountant: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (historian_input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, start_hash, ms_per_tick);
-        let (entry_sender, output) = channel();
-        AccountingStage {
-            output: Mutex::new(output),
-            entry_sender: Mutex::new(entry_sender),
+        EventProcessor {
             accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
@@ -34,7 +29,7 @@ impl AccountingStage {
     }
 
     /// Process the transactions in parallel and then log the successful ones.
-    pub fn process_events(&self, events: Vec<Event>) -> Result<()> {
+    pub fn process_events(&self, events: Vec<Event>) -> Result<Entry> {
         let historian = self.historian.lock().unwrap();
         let results = self.accountant.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
@@ -42,46 +37,45 @@ impl AccountingStage {
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
-        let entry = historian.output.lock().unwrap().recv()?;
+        let entry = historian.entry_receiver.lock().unwrap().recv()?;
         self.accountant.register_entry_id(&entry.id);
-        self.entry_sender.lock().unwrap().send(entry)?;
-        Ok(())
+        Ok(entry)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use accountant::Accountant;
-    use accounting_stage::AccountingStage;
-    use entry::Entry;
     use event::Event;
+    use event_processor::EventProcessor;
     use mint::Mint;
     use signature::{KeyPair, KeyPairUtil};
     use transaction::Transaction;
 
     #[test]
+    // TODO: Move this test accounting_stage. Calling process_events() directly
+    // defeats the purpose of this test.
     fn test_accounting_sequential_consistency() {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let accountant = Accountant::new(&mint);
-        let accounting_stage = AccountingStage::new(accountant, &mint.last_id(), None);
+        let event_processor = EventProcessor::new(accountant, &mint.last_id(), None);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(accounting_stage.process_events(events).is_ok());
+        let entry0 = event_processor.process_events(events).unwrap();
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(accounting_stage.process_events(events).is_ok());
+        let entry1 = event_processor.process_events(events).unwrap();
 
         // Collect the ledger and feed it to a new accountant.
-        drop(accounting_stage.entry_sender);
-        let entries: Vec<Entry> = accounting_stage.output.lock().unwrap().iter().collect();
+        let entries = vec![entry0, entry1];
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives
@@ -104,8 +98,8 @@ mod bench {
     extern crate test;
     use self::test::Bencher;
     use accountant::{Accountant, MAX_ENTRY_IDS};
-    use accounting_stage::*;
     use bincode::serialize;
+    use event_processor::*;
     use hash::hash;
     use mint::Mint;
     use rayon::prelude::*;
@@ -154,17 +148,17 @@ mod bench {
             .map(|tr| Event::Transaction(tr))
             .collect();
 
-        let accounting_stage = AccountingStage::new(accountant, &mint.last_id(), None);
+        let event_processor = EventProcessor::new(accountant, &mint.last_id(), None);
 
         let now = Instant::now();
-        assert!(accounting_stage.process_events(events).is_ok());
+        assert!(event_processor.process_events(events).is_ok());
         let duration = now.elapsed();
         let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
         let tps = txs as f64 / sec;
 
         // Ensure that all transactions were successfully logged.
-        drop(accounting_stage.historian_input);
-        let entries: Vec<Entry> = accounting_stage.output.lock().unwrap().iter().collect();
+        drop(event_processor.historian_input);
+        let entries: Vec<Entry> = event_processor.output.lock().unwrap().iter().collect();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].events.len(), txs as usize);
 

@@ -6,29 +6,31 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
+use request_stage::{Request, Response, Subscription};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use thin_client_service::{Request, Response, Subscription};
 use transaction::Transaction;
 
 pub struct ThinClient {
     pub addr: SocketAddr,
-    pub socket: UdpSocket,
+    pub requests_socket: UdpSocket,
+    pub events_socket: UdpSocket,
     last_id: Option<Hash>,
     num_events: u64,
     balances: HashMap<PublicKey, Option<i64>>,
 }
 
 impl ThinClient {
-    /// Create a new ThinClient that will interface with Tpu
-    /// over `socket`. To receive responses, the caller must bind `socket`
+    /// Create a new ThinClient that will interface with Rpu
+    /// over `requests_socket` and `events_socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking ThinClient methods.
-    pub fn new(addr: SocketAddr, socket: UdpSocket) -> Self {
+    pub fn new(addr: SocketAddr, requests_socket: UdpSocket, events_socket: UdpSocket) -> Self {
         let client = ThinClient {
             addr: addr,
-            socket,
+            requests_socket,
+            events_socket,
             last_id: None,
             num_events: 0,
             balances: HashMap::new(),
@@ -42,13 +44,13 @@ impl ThinClient {
         let req = Request::Subscribe { subscriptions };
         let data = serialize(&req).expect("serialize Subscribe in thin_client");
         trace!("subscribing to {}", self.addr);
-        let _res = self.socket.send_to(&data, &self.addr);
+        let _res = self.requests_socket.send_to(&data, &self.addr);
     }
 
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
         info!("start recv_from");
-        self.socket.recv_from(&mut buf)?;
+        self.requests_socket.recv_from(&mut buf)?;
         info!("end recv_from");
         let resp = deserialize(&buf).expect("deserialize balance in thin_client");
         Ok(resp)
@@ -73,7 +75,7 @@ impl ThinClient {
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let req = Request::Transaction(tr);
         let data = serialize(&req).expect("serialize Transaction in pub fn transfer_signed");
-        self.socket.send_to(&data, &self.addr)
+        self.requests_socket.send_to(&data, &self.addr)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -96,7 +98,7 @@ impl ThinClient {
         info!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
-        self.socket
+        self.requests_socket
             .send_to(&data, &self.addr)
             .expect("buffer error in pub fn get_balance");
         let mut done = false;
@@ -133,7 +135,7 @@ impl ThinClient {
         }
 
         // Then take the rest.
-        self.socket
+        self.requests_socket
             .set_nonblocking(true)
             .expect("set_nonblocking in pub fn transaction_count");
         loop {
@@ -142,7 +144,7 @@ impl ThinClient {
                 Ok(resp) => self.process_response(resp),
             }
         }
-        self.socket
+        self.requests_socket
             .set_nonblocking(false)
             .expect("set_nonblocking in pub fn transaction_count");
         self.num_events
@@ -153,12 +155,13 @@ impl ThinClient {
 mod tests {
     use super::*;
     use accountant::Accountant;
-    use accounting_stage::AccountingStage;
     use crdt::{Crdt, ReplicatedData};
+    use event_processor::EventProcessor;
     use futures::Future;
     use logger;
     use mint::Mint;
     use plan::Plan;
+    use rpu::Rpu;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -166,14 +169,14 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
-    use tpu::{self, Tpu};
+    use tvu::{self, Tvu};
 
     #[test]
     fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let _events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
@@ -187,30 +190,23 @@ mod tests {
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let accountant = Arc::new(Tpu::new(accounting_stage));
-        let threads = Tpu::serve(
-            &accountant,
-            d,
-            serve,
-            events_socket,
-            gossip,
-            exit.clone(),
-            sink(),
-        ).unwrap();
+        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let rpu = Arc::new(Rpu::new(event_processor));
+        let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut accountant = ThinClient::new(addr, socket);
-        let last_id = accountant.get_last_id().wait().unwrap();
-        let _sig = accountant
+        let mut client = ThinClient::new(addr, requests_socket, events_socket);
+        let last_id = client.get_last_id().wait().unwrap();
+        let _sig = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
         let mut balance;
         let now = Instant::now();
         loop {
-            balance = accountant.get_balance(&bob_pubkey);
+            balance = client.get_balance(&bob_pubkey);
             if balance.is_ok() {
                 break;
             }
@@ -227,28 +223,29 @@ mod tests {
 
     #[test]
     fn test_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_events) = tpu::test_node();
+        let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting_stage));
+        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let rpu = Arc::new(Rpu::new(event_processor));
         let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = Tpu::serve(
-            &tpu,
+        let threads = rpu.serve(
             leader_data,
             leader_serve,
-            leader_events,
             leader_gossip,
             exit.clone(),
             sink(),
         ).unwrap();
         sleep(Duration::from_millis(300));
 
-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-        let mut client = ThinClient::new(serve_addr, socket);
+        let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let events_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut client = ThinClient::new(serve_addr, requests_socket, events_socket);
         let last_id = client.get_last_id().wait().unwrap();
 
         trace!("doing stuff");
@@ -301,26 +298,20 @@ mod tests {
 
         let leader_acc = {
             let accountant = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting_stage))
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            Arc::new(Rpu::new(event_processor))
         };
 
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting_stage))
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            Arc::new(Tvu::new(event_processor))
         };
 
-        let leader_threads = Tpu::serve(
-            &leader_acc,
-            leader.0.clone(),
-            leader.2,
-            leader.4,
-            leader.1,
-            exit.clone(),
-            sink(),
-        ).unwrap();
-        let replicant_threads = Tpu::replicate(
+        let leader_threads = leader_acc
+            .serve(leader.0.clone(), leader.2, leader.1, exit.clone(), sink())
+            .unwrap();
+        let replicant_threads = Tvu::serve(
             &replicant_acc,
             replicant.0.clone(),
             replicant.1,
@@ -369,29 +360,36 @@ mod tests {
 
         //verify leader can do transfer
         let leader_balance = {
-            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+            let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            requests_socket
+                .set_read_timeout(Some(Duration::new(1, 0)))
+                .unwrap();
+            let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-            let mut accountant = ThinClient::new(leader.0.serve_addr, socket);
+            let mut client = ThinClient::new(leader.0.serve_addr, requests_socket, events_socket);
             info!("getting leader last_id");
-            let last_id = accountant.get_last_id().wait().unwrap();
+            let last_id = client.get_last_id().wait().unwrap();
             info!("executing leader transer");
-            let _sig = accountant
+            let _sig = client
                 .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
                 .unwrap();
             info!("getting leader balance");
-            accountant.get_balance(&bob_pubkey).unwrap()
+            client.get_balance(&bob_pubkey).unwrap()
         };
         assert_eq!(leader_balance, 500);
         //verify replicant has the same balance
         let mut replicant_balance = 0;
         for _ in 0..10 {
-            let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            socket.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+            let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+            requests_socket
+                .set_read_timeout(Some(Duration::new(1, 0)))
+                .unwrap();
+            let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-            let mut accountant = ThinClient::new(replicant.0.serve_addr, socket);
+            let mut client =
+                ThinClient::new(replicant.0.serve_addr, requests_socket, events_socket);
             info!("getting replicant balance");
-            if let Ok(bal) = accountant.get_balance(&bob_pubkey) {
+            if let Ok(bal) = client.get_balance(&bob_pubkey) {
                 replicant_balance = bal;
             }
             info!("replicant balance {}", replicant_balance);

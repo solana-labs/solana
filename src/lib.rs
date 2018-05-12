@@ -1,12 +1,13 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod accountant;
-pub mod accounting_stage;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
+pub mod entry_writer;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod event;
+pub mod event_processor;
 pub mod hash;
 pub mod historian;
 pub mod ledger;
@@ -15,14 +16,16 @@ pub mod mint;
 pub mod packet;
 pub mod plan;
 pub mod recorder;
+pub mod request_stage;
 pub mod result;
+pub mod rpu;
+pub mod sig_verify_stage;
 pub mod signature;
 pub mod streamer;
 pub mod thin_client;
-pub mod thin_client_service;
 pub mod timing;
-pub mod tpu;
 pub mod transaction;
+pub mod tvu;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;

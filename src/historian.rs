@@ -10,7 +10,7 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
 pub struct Historian {
-    pub output: Mutex<Receiver<Entry>>,
+    pub entry_receiver: Mutex<Receiver<Entry>>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
@@ -20,11 +20,11 @@ impl Historian {
         start_hash: &Hash,
         ms_per_tick: Option<u64>,
     ) -> Self {
-        let (entry_sender, output) = channel();
+        let (entry_sender, entry_receiver) = channel();
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
         Historian {
-            output: Mutex::new(output),
+            entry_receiver: Mutex::new(entry_receiver),
             thread_hdl,
         }
     }
@@ -52,9 +52,9 @@ impl Historian {
     }
 
     pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
-        self.output
+        self.entry_receiver
             .lock()
-            .expect("'output' lock in pub fn receive")
+            .expect("'entry_receiver' lock in pub fn receive")
             .try_recv()
     }
 }
@@ -78,9 +78,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         input.send(Signal::Tick).unwrap();
 
-        let entry0 = hist.output.lock().unwrap().recv().unwrap();
-        let entry1 = hist.output.lock().unwrap().recv().unwrap();
-        let entry2 = hist.output.lock().unwrap().recv().unwrap();
+        let entry0 = hist.entry_receiver.lock().unwrap().recv().unwrap();
+        let entry1 = hist.entry_receiver.lock().unwrap().recv().unwrap();
+        let entry2 = hist.entry_receiver.lock().unwrap().recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -100,7 +100,7 @@ mod tests {
         let (input, event_receiver) = channel();
         let zero = Hash::default();
         let hist = Historian::new(event_receiver, &zero, None);
-        drop(hist.output);
+        drop(hist.entry_receiver);
         input.send(Signal::Tick).unwrap();
         assert_eq!(
             hist.thread_hdl.join().unwrap(),
@@ -116,7 +116,7 @@ mod tests {
         sleep(Duration::from_millis(300));
         input.send(Signal::Tick).unwrap();
         drop(input);
-        let entries: Vec<Entry> = hist.output.lock().unwrap().iter().collect();
+        let entries: Vec<Entry> = hist.entry_receiver.lock().unwrap().iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

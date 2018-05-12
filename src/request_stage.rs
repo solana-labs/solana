@@ -1,11 +1,10 @@
-//! The `thin_client_service` sits alongside the TPU and queries it for information
-//! on behalf of thing clients.
+//! The `request_stage` processes thin client Request messages.
 
 use accountant::Accountant;
-use accounting_stage::AccountingStage;
 use bincode::{deserialize, serialize};
 use entry::Entry;
 use event::Event;
+use event_processor::EventProcessor;
 use hash::Hash;
 use packet;
 use packet::SharedPackets;
@@ -14,17 +13,15 @@ use result::Result;
 use signature::PublicKey;
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
-use transaction::Transaction;
-//use std::io::{Cursor, Write};
-//use std::sync::atomic::{AtomicBool, Ordering};
-//use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::mpsc::Receiver;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-//use std::thread::{spawn, JoinHandle};
+use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
 use timing;
+use transaction::Transaction;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -62,20 +59,15 @@ pub enum Response {
     EntryInfo(EntryInfo),
 }
 
-pub struct ThinClientService {
-    //pub output: Mutex<Receiver<Response>>,
-    //response_sender: Mutex<Sender<Response>>,
+pub struct RequestProcessor {
     accountant: Arc<Accountant>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
-impl ThinClientService {
+impl RequestProcessor {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accountant: Arc<Accountant>) -> Self {
-        //let (response_sender, output) = channel();
-        ThinClientService {
-            //output: Mutex::new(output),
-            //response_sender: Mutex::new(response_sender),
+        RequestProcessor {
             accountant,
             entry_info_subscribers: Mutex::new(vec![]),
         }
@@ -213,9 +205,10 @@ impl ThinClientService {
 
     pub fn process_request_packets(
         &self,
-        accounting_stage: &AccountingStage,
+        event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        responder_sender: &streamer::BlobSender,
+        entry_sender: &Sender<Entry>,
+        blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -248,7 +241,8 @@ impl ThinClientService {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            accounting_stage.process_events(events)?;
+            let entry = event_processor.process_events(events)?;
+            entry_sender.send(entry)?;
             debug!("done process_events");
 
             debug!("process_requests");
@@ -259,7 +253,7 @@ impl ThinClientService {
             if !blobs.is_empty() {
                 info!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
-                responder_sender.send(blobs)?;
+                blob_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
         }
@@ -274,6 +268,50 @@ impl ThinClientService {
             (reqs_len as f32) / (total_time_s)
         );
         Ok(())
+    }
+}
+
+pub struct RequestStage {
+    pub thread_hdl: JoinHandle<()>,
+    pub entry_receiver: Receiver<Entry>,
+    pub blob_receiver: streamer::BlobReceiver,
+    pub request_processor: Arc<RequestProcessor>,
+}
+
+impl RequestStage {
+    pub fn new(
+        request_processor: RequestProcessor,
+        event_processor: Arc<EventProcessor>,
+        exit: Arc<AtomicBool>,
+        verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+        packet_recycler: packet::PacketRecycler,
+        blob_recycler: packet::BlobRecycler,
+    ) -> Self {
+        let request_processor = Arc::new(request_processor);
+        let request_processor_ = request_processor.clone();
+        let (entry_sender, entry_receiver) = channel();
+        let (blob_sender, blob_receiver) = channel();
+        let thread_hdl = spawn(move || loop {
+            let e = request_processor_.process_request_packets(
+                &event_processor,
+                &verified_receiver,
+                &entry_sender,
+                &blob_sender,
+                &packet_recycler,
+                &blob_recycler,
+            );
+            if e.is_err() {
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        });
+        RequestStage {
+            thread_hdl,
+            entry_receiver,
+            blob_receiver,
+            request_processor,
+        }
     }
 }
 
@@ -302,7 +340,7 @@ mod tests {
     use bincode::serialize;
     use ecdsa;
     use packet::{PacketRecycler, NUM_PACKETS};
-    use thin_client_service::{to_request_packets, Request};
+    use request_stage::{to_request_packets, Request};
     use transaction::{memfind, test_tx};
 
     #[test]

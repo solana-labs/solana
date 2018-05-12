@@ -35,7 +35,7 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     let mut threads = 4usize;
     let mut addr: String = "127.0.0.1:8000".to_string();
-    let mut client_addr: String = "127.0.0.1:8010".to_string();
+    let mut requests_addr: String = "127.0.0.1:8010".to_string();
 
     let mut opts = Options::new();
     opts.optopt("s", "", "server address", "host:port");
@@ -60,11 +60,15 @@ fn main() {
         addr = matches.opt_str("s").unwrap();
     }
     if matches.opt_present("c") {
-        client_addr = matches.opt_str("c").unwrap();
+        requests_addr = matches.opt_str("c").unwrap();
     }
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
+
+    let mut events_addr: SocketAddr = requests_addr.parse().unwrap();
+    let requests_port = events_addr.port();
+    events_addr.set_port(requests_port + 1);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a json file");
@@ -84,13 +88,16 @@ fn main() {
         exit(1);
     });
 
-    println!("Binding to {}", client_addr);
-    let socket = UdpSocket::bind(&client_addr).unwrap();
-    socket.set_read_timeout(Some(Duration::new(5, 0))).unwrap();
-    let mut accountant = ThinClient::new(addr.parse().unwrap(), socket);
+    println!("Binding to {}", requests_addr);
+    let requests_socket = UdpSocket::bind(&requests_addr).unwrap();
+    requests_socket
+        .set_read_timeout(Some(Duration::new(5, 0)))
+        .unwrap();
+    let events_socket = UdpSocket::bind(&events_addr).unwrap();
+    let mut client = ThinClient::new(addr.parse().unwrap(), requests_socket, events_socket);
 
     println!("Get last ID...");
-    let last_id = accountant.get_last_id().wait().unwrap();
+    let last_id = client.get_last_id().wait().unwrap();
     println!("Got last ID {:?}", last_id);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
@@ -122,7 +129,7 @@ fn main() {
         nsps / 1_000_f64
     );
 
-    let initial_tx_count = accountant.transaction_count();
+    let initial_tx_count = client.transaction_count();
     println!("initial count {}", initial_tx_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
@@ -131,19 +138,26 @@ fn main() {
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
         println!("Transferring 1 unit {} times... to", trs.len());
-        let mut client_addr: SocketAddr = client_addr.parse().unwrap();
-        client_addr.set_port(0);
-        let socket = UdpSocket::bind(client_addr).unwrap();
-        let accountant = ThinClient::new(addr.parse().unwrap(), socket);
+        let mut requests_addr: SocketAddr = requests_addr.parse().unwrap();
+        requests_addr.set_port(0);
+        let requests_socket = UdpSocket::bind(requests_addr).unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let mut events_addr: SocketAddr = requests_addr.clone();
+        let requests_port = events_addr.port();
+        events_addr.set_port(requests_port + 1);
+        let events_socket = UdpSocket::bind(&events_addr).unwrap();
+        let client = ThinClient::new(addr.parse().unwrap(), requests_socket, events_socket);
         for tr in trs {
-            accountant.transfer_signed(tr.clone()).unwrap();
+            client.transfer_signed(tr.clone()).unwrap();
         }
     });
 
     println!("Waiting for transactions to complete...",);
     let mut tx_count;
     for _ in 0..10 {
-        tx_count = accountant.transaction_count();
+        tx_count = client.transaction_count();
         duration = now.elapsed();
         let txs = tx_count - initial_tx_count;
         println!("Transactions processed {}", txs);
