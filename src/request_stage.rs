@@ -1,10 +1,10 @@
 //! The `request_stage` processes thin client Request messages.
 
 use accountant::Accountant;
-use accounting_stage::AccountingStage;
 use bincode::{deserialize, serialize};
 use entry::Entry;
 use event::Event;
+use event_processor::EventProcessor;
 use hash::Hash;
 use packet;
 use packet::SharedPackets;
@@ -205,7 +205,7 @@ impl RequestProcessor {
 
     pub fn process_request_packets(
         &self,
-        accounting_stage: &AccountingStage,
+        event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
@@ -240,7 +240,7 @@ impl RequestProcessor {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            accounting_stage.process_events(events)?;
+            event_processor.process_events(events)?;
             debug!("done process_events");
 
             debug!("process_requests");
@@ -278,7 +278,7 @@ pub struct RequestStage {
 impl RequestStage {
     pub fn new(
         request_processor: RequestProcessor,
-        accounting_stage: Arc<AccountingStage>,
+        event_processor: Arc<EventProcessor>,
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: packet::PacketRecycler,
@@ -289,7 +289,7 @@ impl RequestStage {
         let (responder_sender, output) = channel();
         let thread_hdl = spawn(move || loop {
             let e = request_processor_.process_request_packets(
-                &accounting_stage,
+                &event_processor,
                 &verified_receiver,
                 &responder_sender,
                 &packet_recycler,

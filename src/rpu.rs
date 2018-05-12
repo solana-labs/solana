@@ -1,9 +1,9 @@
 //! The `rpu` module implements the Request Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
-use accounting_stage::AccountingStage;
 use crdt::{Crdt, ReplicatedData};
 use entry_writer::EntryWriter;
+use event_processor::EventProcessor;
 use packet;
 use request_stage::{RequestProcessor, RequestStage};
 use result::Result;
@@ -17,19 +17,19 @@ use std::thread::{spawn, JoinHandle};
 use streamer;
 
 pub struct Rpu {
-    accounting_stage: Arc<AccountingStage>,
+    event_processor: Arc<EventProcessor>,
 }
 
 impl Rpu {
     /// Create a new Rpu that wraps the given Accountant.
-    pub fn new(accounting_stage: AccountingStage) -> Self {
+    pub fn new(event_processor: EventProcessor) -> Self {
         Rpu {
-            accounting_stage: Arc::new(accounting_stage),
+            event_processor: Arc::new(event_processor),
         }
     }
 
     fn write_service<W: Write + Send + 'static>(
-        accounting_stage: Arc<AccountingStage>,
+        event_processor: Arc<EventProcessor>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
@@ -37,7 +37,7 @@ impl Rpu {
         writer: Mutex<W>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let entry_writer = EntryWriter::new(&accounting_stage, &request_processor);
+            let entry_writer = EntryWriter::new(&event_processor, &request_processor);
             let _ = entry_writer.write_and_send_entries(&broadcast, &blob_recycler, &writer);
             if exit.load(Ordering::Relaxed) {
                 info!("broadcat_service exiting");
@@ -77,10 +77,10 @@ impl Rpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
-        let request_processor = RequestProcessor::new(self.accounting_stage.accountant.clone());
+        let request_processor = RequestProcessor::new(self.event_processor.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            self.accounting_stage.clone(),
+            self.event_processor.clone(),
             exit.clone(),
             sig_verify_stage.output,
             packet_recycler.clone(),
@@ -89,7 +89,7 @@ impl Rpu {
 
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
-            self.accounting_stage.clone(),
+            self.event_processor.clone(),
             request_stage.request_processor.clone(),
             exit.clone(),
             broadcast_sender,

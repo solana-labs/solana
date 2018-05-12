@@ -1,9 +1,9 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
 //! 5-stage transaction validation pipeline in software.
 
-use accounting_stage::AccountingStage;
 use crdt::{Crdt, ReplicatedData};
 use entry_writer::EntryWriter;
+use event_processor::EventProcessor;
 use ledger;
 use packet;
 use request_stage::{RequestProcessor, RequestStage};
@@ -18,24 +18,24 @@ use std::time::Duration;
 use streamer;
 
 pub struct Tvu {
-    accounting_stage: Arc<AccountingStage>,
+    event_processor: Arc<EventProcessor>,
 }
 
 impl Tvu {
     /// Create a new Tvu that wraps the given Accountant.
-    pub fn new(accounting_stage: AccountingStage) -> Self {
+    pub fn new(event_processor: EventProcessor) -> Self {
         Tvu {
-            accounting_stage: Arc::new(accounting_stage),
+            event_processor: Arc::new(event_processor),
         }
     }
 
     fn drain_service(
-        accounting_stage: Arc<AccountingStage>,
+        event_processor: Arc<EventProcessor>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         spawn(move || {
-            let entry_writer = EntryWriter::new(&accounting_stage, &request_processor);
+            let entry_writer = EntryWriter::new(&event_processor, &request_processor);
             loop {
                 let _ = entry_writer.drain_entries();
                 if exit.load(Ordering::Relaxed) {
@@ -57,7 +57,7 @@ impl Tvu {
         let blobs = verified_receiver.recv_timeout(timer)?;
         trace!("replicating blobs {}", blobs.len());
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
-        obj.accounting_stage
+        obj.event_processor
             .accountant
             .process_verified_entries(entries)?;
         for blob in blobs {
@@ -167,10 +167,10 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let request_processor = RequestProcessor::new(obj.accounting_stage.accountant.clone());
+        let request_processor = RequestProcessor::new(obj.event_processor.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            obj.accounting_stage.clone(),
+            obj.event_processor.clone(),
             exit.clone(),
             sig_verify_stage.output,
             packet_recycler.clone(),
@@ -178,7 +178,7 @@ impl Tvu {
         );
 
         let t_write = Self::drain_service(
-            obj.accounting_stage.clone(),
+            obj.event_processor.clone(),
             request_stage.request_processor.clone(),
             exit.clone(),
         );
@@ -230,12 +230,12 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
 #[cfg(test)]
 mod tests {
     use accountant::Accountant;
-    use accounting_stage::AccountingStage;
     use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
     use entry;
     use event::Event;
+    use event_processor::EventProcessor;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
@@ -302,8 +302,8 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let accountant = Accountant::new(&alice);
-        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let tvu = Arc::new(Tvu::new(accounting_stage));
+        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let tvu = Arc::new(Tvu::new(event_processor));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tvu::serve(
             &tvu,
@@ -328,7 +328,7 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let accountant = &tvu.accounting_stage.accountant;
+            let accountant = &tvu.event_processor.accountant;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
@@ -370,7 +370,7 @@ mod tests {
             msgs.push(msg);
         }
 
-        let accountant = &tvu.accounting_stage.accountant;
+        let accountant = &tvu.event_processor.accountant;
         let alice_balance = accountant.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 

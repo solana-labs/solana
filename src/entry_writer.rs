@@ -1,7 +1,7 @@
 //! The `entry_writer` module helps implement the TPU's write stage.
 
-use accounting_stage::AccountingStage;
 use entry::Entry;
+use event_processor::EventProcessor;
 use ledger;
 use packet;
 use request_stage::RequestProcessor;
@@ -15,27 +15,25 @@ use std::time::Duration;
 use streamer;
 
 pub struct EntryWriter<'a> {
-    accounting_stage: &'a AccountingStage,
+    event_processor: &'a EventProcessor,
     request_processor: &'a RequestProcessor,
 }
 
 impl<'a> EntryWriter<'a> {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(
-        accounting_stage: &'a AccountingStage,
+        event_processor: &'a EventProcessor,
         request_processor: &'a RequestProcessor,
     ) -> Self {
         EntryWriter {
-            accounting_stage,
+            event_processor,
             request_processor,
         }
     }
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
         trace!("write_entry entry");
-        self.accounting_stage
-            .accountant
-            .register_entry_id(&entry.id);
+        self.event_processor.accountant.register_entry_id(&entry.id);
         writeln!(
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
@@ -47,14 +45,14 @@ impl<'a> EntryWriter<'a> {
     fn write_entries<W: Write>(&self, writer: &Mutex<W>) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
-        let entry = self.accounting_stage
+        let entry = self.event_processor
             .output
             .lock()
             .expect("'ouput' lock in fn receive_all")
             .recv_timeout(Duration::new(1, 0))?;
         self.write_entry(writer, &entry);
         l.push(entry);
-        while let Ok(entry) = self.accounting_stage
+        while let Ok(entry) = self.event_processor
             .output
             .lock()
             .expect("'output' lock in fn write_entries")

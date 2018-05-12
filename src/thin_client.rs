@@ -155,8 +155,8 @@ impl ThinClient {
 mod tests {
     use super::*;
     use accountant::Accountant;
-    use accounting_stage::AccountingStage;
     use crdt::{Crdt, ReplicatedData};
+    use event_processor::EventProcessor;
     use futures::Future;
     use logger;
     use mint::Mint;
@@ -190,8 +190,8 @@ mod tests {
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Arc::new(Rpu::new(accounting_stage));
+        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let rpu = Arc::new(Rpu::new(event_processor));
         let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
@@ -228,8 +228,8 @@ mod tests {
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Arc::new(Rpu::new(accounting_stage));
+        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let rpu = Arc::new(Rpu::new(event_processor));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = rpu.serve(
             leader_data,
@@ -298,14 +298,14 @@ mod tests {
 
         let leader_acc = {
             let accountant = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Rpu::new(accounting_stage))
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            Arc::new(Rpu::new(event_processor))
         };
 
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
-            let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tvu::new(accounting_stage))
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            Arc::new(Tvu::new(event_processor))
         };
 
         let leader_threads = leader_acc
