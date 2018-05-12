@@ -137,8 +137,8 @@ mod tests {
     use bincode::serialize;
     use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
+    use request_stage::Request;
     use std::sync::RwLock;
-    use thin_client_service::Request;
     use transaction::Transaction;
     use transaction::test_tx;
 

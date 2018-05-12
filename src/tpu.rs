@@ -5,6 +5,7 @@ use accounting_stage::AccountingStage;
 use crdt::{Crdt, ReplicatedData};
 use entry_writer::EntryWriter;
 use packet;
+use request_stage::{RequestProcessor, RequestStage};
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
@@ -14,7 +15,6 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use streamer;
-use thin_client_service::{RequestProcessor, ThinClientService};
 
 pub struct Tpu {
     accounting_stage: Arc<AccountingStage>,
@@ -98,7 +98,7 @@ impl Tpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
-        let thin_client_service = ThinClientService::new(
+        let request_stage = RequestStage::new(
             self.request_processor.clone(),
             self.accounting_stage.clone(),
             exit.clone(),
@@ -131,13 +131,13 @@ impl Tpu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            thin_client_service.output,
+            request_stage.output,
         );
 
         let mut threads = vec![
             t_receiver,
             t_responder,
-            thin_client_service.thread_hdl,
+            request_stage.thread_hdl,
             t_write,
             t_gossip,
             t_listen,

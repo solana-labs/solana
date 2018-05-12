@@ -4,6 +4,7 @@ use accounting_stage::AccountingStage;
 use entry::Entry;
 use ledger;
 use packet;
+use request_stage::RequestProcessor;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
@@ -12,7 +13,6 @@ use std::io::sink;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use streamer;
-use thin_client_service::RequestProcessor;
 
 pub struct EntryWriter<'a> {
     accounting_stage: &'a AccountingStage,

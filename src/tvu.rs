@@ -6,6 +6,7 @@ use crdt::{Crdt, ReplicatedData};
 use entry_writer::EntryWriter;
 use ledger;
 use packet;
+use request_stage::{RequestProcessor, RequestStage};
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
@@ -15,7 +16,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
-use thin_client_service::{RequestProcessor, ThinClientService};
 
 pub struct Tvu {
     accounting_stage: Arc<AccountingStage>,
@@ -170,7 +170,7 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let thin_client_service = ThinClientService::new(
+        let request_stage = RequestStage::new(
             obj.request_processor.clone(),
             obj.accounting_stage.clone(),
             exit.clone(),
@@ -189,7 +189,7 @@ impl Tvu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            thin_client_service.output,
+            request_stage.output,
         );
 
         let mut threads = vec![
@@ -203,7 +203,7 @@ impl Tvu {
             //serve threads
             t_packet_receiver,
             t_responder,
-            thin_client_service.thread_hdl,
+            request_stage.thread_hdl,
             t_write,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());

@@ -19,7 +19,7 @@ pub struct AccountingStage {
 }
 
 impl AccountingStage {
-    /// Create a new Tpu that wraps the given Accountant.
+    /// Create a new stage of the TPU for event and transaction processing
     pub fn new(accountant: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (historian_input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, start_hash, ms_per_tick);

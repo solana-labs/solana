@@ -6,11 +6,11 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
+use request_stage::{Request, Response, Subscription};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use thin_client_service::{Request, Response, Subscription};
 use transaction::Transaction;
 
 pub struct ThinClient {

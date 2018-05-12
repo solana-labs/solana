@@ -1,5 +1,4 @@
-//! The `thin_client_service` sits alongside the TPU and queries it for information
-//! on behalf of thing clients.
+//! The `request_stage` processes thin client Request messages.
 
 use accountant::Accountant;
 use accounting_stage::AccountingStage;
@@ -270,12 +269,12 @@ impl RequestProcessor {
     }
 }
 
-pub struct ThinClientService {
+pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
     pub output: streamer::BlobReceiver,
 }
 
-impl ThinClientService {
+impl RequestStage {
     pub fn new(
         request_processor: Arc<RequestProcessor>,
         accounting_stage: Arc<AccountingStage>,
@@ -299,7 +298,7 @@ impl ThinClientService {
                 }
             }
         });
-        ThinClientService { thread_hdl, output }
+        RequestStage { thread_hdl, output }
     }
 }
 
@@ -328,7 +327,7 @@ mod tests {
     use bincode::serialize;
     use ecdsa;
     use packet::{PacketRecycler, NUM_PACKETS};
-    use thin_client_service::{to_request_packets, Request};
+    use request_stage::{to_request_packets, Request};
     use transaction::{memfind, test_tx};
 
     #[test]
