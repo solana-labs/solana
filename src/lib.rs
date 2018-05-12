@@ -4,6 +4,7 @@ pub mod accounting_stage;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
+pub mod entry_writer;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod event;
