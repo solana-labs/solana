@@ -16,6 +16,7 @@ pub mod packet;
 pub mod plan;
 pub mod recorder;
 pub mod result;
+pub mod sig_verify_stage;
 pub mod signature;
 pub mod streamer;
 pub mod thin_client;
