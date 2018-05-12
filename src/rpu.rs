@@ -31,7 +31,7 @@ impl Rpu {
         }
     }
 
-    pub fn write_service<W: Write + Send + 'static>(
+    fn write_service<W: Write + Send + 'static>(
         accounting_stage: Arc<AccountingStage>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
@@ -45,23 +45,6 @@ impl Rpu {
             if exit.load(Ordering::Relaxed) {
                 info!("broadcat_service exiting");
                 break;
-            }
-        })
-    }
-
-    pub fn drain_service(
-        accounting_stage: Arc<AccountingStage>,
-        request_processor: Arc<RequestProcessor>,
-        exit: Arc<AtomicBool>,
-    ) -> JoinHandle<()> {
-        spawn(move || {
-            let entry_writer = EntryWriter::new(&accounting_stage, &request_processor);
-            loop {
-                let _ = entry_writer.drain_entries();
-                if exit.load(Ordering::Relaxed) {
-                    info!("drain_service exiting");
-                    break;
-                }
             }
         })
     }

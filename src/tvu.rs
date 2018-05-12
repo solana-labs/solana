@@ -32,7 +32,7 @@ impl Tvu {
         }
     }
 
-    pub fn drain_service(
+    fn drain_service(
         accounting_stage: Arc<AccountingStage>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
