@@ -4,7 +4,7 @@ use accountant::Accountant;
 use entry::Entry;
 use ledger;
 use packet;
-use request_stage::RequestProcessor;
+use request_processor::RequestProcessor;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
