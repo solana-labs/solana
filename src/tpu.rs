@@ -80,7 +80,7 @@ impl Tpu {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    fn run_sync<W: Write>(
+    fn broadcast_entries<W: Write>(
         &self,
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
@@ -96,7 +96,7 @@ impl Tpu {
         Ok(())
     }
 
-    pub fn sync_service<W: Write + Send + 'static>(
+    pub fn broadcast_service<W: Write + Send + 'static>(
         obj: SharedTpu,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
@@ -104,9 +104,9 @@ impl Tpu {
         writer: Mutex<W>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let _ = obj.run_sync(&broadcast, &blob_recycler, &writer);
+            let _ = obj.broadcast_entries(&broadcast, &blob_recycler, &writer);
             if exit.load(Ordering::Relaxed) {
-                info!("sync_service exiting");
+                info!("broadcat_service exiting");
                 break;
             }
         })
@@ -114,16 +114,16 @@ impl Tpu {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    fn run_sync_no_broadcast(&self) -> Result<()> {
+    fn drain_entries(&self) -> Result<()> {
         self.write_entries(&Arc::new(Mutex::new(sink())))?;
         Ok(())
     }
 
-    pub fn sync_no_broadcast_service(obj: SharedTpu, exit: Arc<AtomicBool>) -> JoinHandle<()> {
+    pub fn write_service(obj: SharedTpu, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         spawn(move || loop {
-            let _ = obj.run_sync_no_broadcast();
+            let _ = obj.drain_entries();
             if exit.load(Ordering::Relaxed) {
-                info!("sync_no_broadcast_service exiting");
+                info!("write_service exiting");
                 break;
             }
         })
@@ -282,7 +282,7 @@ impl Tpu {
             Self::verifier_services(exit.clone(), packet_receiver, verified_sender);
 
         let (broadcast_sender, broadcast_receiver) = channel();
-        let t_sync = Self::sync_service(
+        let t_sync = Self::broadcast_service(
             obj.clone(),
             exit.clone(),
             broadcast_sender,
@@ -438,7 +438,7 @@ impl Tpu {
         let verify_threads: Vec<_> =
             Self::verifier_services(exit.clone(), packet_receiver, verified_sender);
 
-        let t_sync = Self::sync_no_broadcast_service(obj.clone(), exit.clone());
+        let t_sync = Self::write_service(obj.clone(), exit.clone());
 
         let t_thin_client = Self::thin_client_service(
             obj.clone(),
