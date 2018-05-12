@@ -69,6 +69,45 @@ impl GenKeys {
         KeyPair::generate_pkcs8(self).unwrap().to_vec()
     }
 
+    pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
+        let users: Vec<_> = (0..n_keys)
+            .into_iter()
+            .map(|_| {
+                let pkcs8 = self.new_key();
+                (pkcs8, tokens_per_user)
+            })
+            .collect();
+        users
+    }
+}
+
+impl SecureRandom for GenKeys {
+    fn fill(&self, dest: &mut [u8]) -> Result<(), Unspecified> {
+        let mut rng = self.generator.borrow_mut();
+        rng.fill_bytes(dest);
+        Ok(())
+    }
+}
+
+pub struct GenKeys2 {
+    // This is necessary because the rng needs to mutate its state to remain
+    // deterministic, and the fill trait requires an immuatble reference to self
+    generator: RefCell<ChaChaRng>,
+}
+
+impl GenKeys2 {
+    pub fn new(seed_values: &[u8]) -> GenKeys2 {
+        let seed: &[u8] = &seed_values[..];
+        let rng: ChaChaRng = SeedableRng::from_seed(unsafe { mem::transmute(seed) });
+        GenKeys2 {
+            generator: RefCell::new(rng),
+        }
+    }
+
+    pub fn new_key(&self) -> Vec<u8> {
+        KeyPair::generate_pkcs8(self).unwrap().to_vec()
+    }
+
     pub fn gen_n_seeds(&self, n_seeds: i64) -> Vec<[u8; 16]> {
         let mut rng = self.generator.borrow_mut();
 
@@ -88,7 +127,7 @@ impl GenKeys {
         let users: Vec<_> = keys
             .into_par_iter()
             .map(|seed| {
-                let new: GenKeys = GenKeys::new(&seed[..]);
+                let new: GenKeys2 = GenKeys2::new(&seed[..]);
                 let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
                 (pkcs8, tokens_per_user)
             })
@@ -97,7 +136,7 @@ impl GenKeys {
     }
 }
 
-impl SecureRandom for GenKeys {
+impl SecureRandom for GenKeys2 {
     fn fill(&self, dest: &mut [u8]) -> Result<(), Unspecified> {
         let mut rng = self.generator.borrow_mut();
         rng.fill_bytes(dest);
@@ -105,11 +144,29 @@ impl SecureRandom for GenKeys {
     }
 }
 
-#[cfg(test)]
+
+#[cfg(all(feature = "unstable", test))]
 mod tests {
+    extern crate test;
+
+    use self::test::Bencher;
     use super::*;
     use std::collections::HashSet;
     use std::iter::FromIterator;
+
+    #[bench]
+    fn bench_gen_keys(b: &mut Bencher) {
+        let seed: &[_] = &[1, 2, 3, 4];
+        let rnd = GenKeys::new(seed);
+        b.iter(|| rnd.gen_n_keys(100, 1));
+    }
+
+    #[bench]
+    fn bench_gen_keys2(b: &mut Bencher) {
+        let seed: &[_] = &[1, 2, 3, 4];
+        let rnd = GenKeys2::new(seed);
+        b.iter(|| rnd.gen_n_keys(100, 1));
+    }
 
     #[test]
     fn test_new_key_is_redundant() {
