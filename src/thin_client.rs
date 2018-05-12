@@ -176,7 +176,7 @@ mod tests {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let _events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
@@ -192,8 +192,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
         let rpu = Arc::new(Rpu::new(accounting_stage));
-        let threads = rpu.serve(d, serve, events_socket, gossip, exit.clone(), sink())
-            .unwrap();
+        let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -224,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_events) = tvu::test_node();
+        let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -235,7 +234,6 @@ mod tests {
         let threads = rpu.serve(
             leader_data,
             leader_serve,
-            leader_events,
             leader_gossip,
             exit.clone(),
             sink(),
@@ -311,14 +309,7 @@ mod tests {
         };
 
         let leader_threads = leader_acc
-            .serve(
-                leader.0.clone(),
-                leader.2,
-                leader.4,
-                leader.1,
-                exit.clone(),
-                sink(),
-            )
+            .serve(leader.0.clone(), leader.2, leader.1, exit.clone(), sink())
             .unwrap();
         let replicant_threads = Tvu::serve(
             &replicant_acc,

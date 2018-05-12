@@ -121,7 +121,7 @@ fn main() {
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
-    let events_sock = UdpSocket::bind(&events_addr).unwrap();
+    let _events_sock = UdpSocket::bind(&events_addr).unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
@@ -130,14 +130,8 @@ fn main() {
         serve_sock.local_addr().unwrap(),
     );
     eprintln!("starting server...");
-    let threads = rpu.serve(
-        d,
-        serve_sock,
-        events_sock,
-        gossip_sock,
-        exit.clone(),
-        stdout(),
-    ).unwrap();
+    let threads = rpu.serve(d, serve_sock, gossip_sock, exit.clone(), stdout())
+        .unwrap();
     eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");

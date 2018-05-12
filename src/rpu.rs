@@ -73,7 +73,6 @@ impl Rpu {
         &self,
         me: ReplicatedData,
         requests_socket: UdpSocket,
-        _events_socket: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
