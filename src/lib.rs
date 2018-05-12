@@ -16,6 +16,7 @@ pub mod mint;
 pub mod packet;
 pub mod plan;
 pub mod recorder;
+pub mod request;
 pub mod request_stage;
 pub mod result;
 pub mod rpu;

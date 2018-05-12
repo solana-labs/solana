@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
-use request_stage::{Request, Response, Subscription};
+use request::{Request, Response, Subscription};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
