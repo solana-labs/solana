@@ -2,6 +2,7 @@
 //! 5-stage transaction validation pipeline in software.
 
 use crdt::{Crdt, ReplicatedData};
+use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
 use ledger;
@@ -11,7 +12,7 @@ use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -33,11 +34,12 @@ impl Tvu {
         event_processor: Arc<EventProcessor>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
+        entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || {
             let entry_writer = EntryWriter::new(&event_processor, &request_processor);
             loop {
-                let _ = entry_writer.drain_entries();
+                let _ = entry_writer.drain_entries(&entry_receiver);
                 if exit.load(Ordering::Relaxed) {
                     info!("drain_service exiting");
                     break;
@@ -181,6 +183,7 @@ impl Tvu {
             obj.event_processor.clone(),
             request_stage.request_processor.clone(),
             exit.clone(),
+            request_stage.entry_receiver,
         );
 
         let t_responder = streamer::responder(

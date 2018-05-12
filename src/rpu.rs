@@ -2,6 +2,7 @@
 //! 5-stage transaction processing pipeline in software.
 
 use crdt::{Crdt, ReplicatedData};
+use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
 use packet;
@@ -11,7 +12,7 @@ use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use streamer;
@@ -35,10 +36,16 @@ impl Rpu {
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
         writer: Mutex<W>,
+        entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             let entry_writer = EntryWriter::new(&event_processor, &request_processor);
-            let _ = entry_writer.write_and_send_entries(&broadcast, &blob_recycler, &writer);
+            let _ = entry_writer.write_and_send_entries(
+                &broadcast,
+                &blob_recycler,
+                &writer,
+                &entry_receiver,
+            );
             if exit.load(Ordering::Relaxed) {
                 info!("broadcat_service exiting");
                 break;
@@ -95,6 +102,7 @@ impl Rpu {
             broadcast_sender,
             blob_recycler.clone(),
             Mutex::new(writer),
+            request_stage.entry_receiver,
         );
 
         let broadcast_socket = UdpSocket::bind(local)?;

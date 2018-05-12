@@ -7,12 +7,10 @@ use hash::Hash;
 use historian::Historian;
 use recorder::Signal;
 use result::Result;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
 pub struct EventProcessor {
-    pub output: Mutex<Receiver<Entry>>,
-    entry_sender: Mutex<Sender<Entry>>,
     pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
@@ -23,10 +21,7 @@ impl EventProcessor {
     pub fn new(accountant: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
         let (historian_input, event_receiver) = channel();
         let historian = Historian::new(event_receiver, start_hash, ms_per_tick);
-        let (entry_sender, output) = channel();
         EventProcessor {
-            output: Mutex::new(output),
-            entry_sender: Mutex::new(entry_sender),
             accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
@@ -34,7 +29,7 @@ impl EventProcessor {
     }
 
     /// Process the transactions in parallel and then log the successful ones.
-    pub fn process_events(&self, events: Vec<Event>) -> Result<()> {
+    pub fn process_events(&self, events: Vec<Event>) -> Result<Entry> {
         let historian = self.historian.lock().unwrap();
         let results = self.accountant.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
@@ -44,15 +39,13 @@ impl EventProcessor {
         // Wait for the historian to tag our Events with an ID and then register it.
         let entry = historian.output.lock().unwrap().recv()?;
         self.accountant.register_entry_id(&entry.id);
-        self.entry_sender.lock().unwrap().send(entry)?;
-        Ok(())
+        Ok(entry)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use accountant::Accountant;
-    use entry::Entry;
     use event::Event;
     use event_processor::EventProcessor;
     use mint::Mint;
@@ -60,6 +53,8 @@ mod tests {
     use transaction::Transaction;
 
     #[test]
+    // TODO: Move this test accounting_stage. Calling process_events() directly
+    // defeats the purpose of this test.
     fn test_accounting_sequential_consistency() {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
@@ -72,16 +67,15 @@ mod tests {
         let alice = KeyPair::new();
         let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(event_processor.process_events(events).is_ok());
+        let entry0 = event_processor.process_events(events).unwrap();
 
         // Process a second batch that spends one of those tokens.
         let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let events = vec![Event::Transaction(tr)];
-        assert!(event_processor.process_events(events).is_ok());
+        let entry1 = event_processor.process_events(events).unwrap();
 
         // Collect the ledger and feed it to a new accountant.
-        drop(event_processor.entry_sender);
-        let entries: Vec<Entry> = event_processor.output.lock().unwrap().iter().collect();
+        let entries = vec![entry0, entry1];
 
         // Assert the user holds one token, not two. If the server only output one
         // entry, then the second transaction will be rejected, because it drives

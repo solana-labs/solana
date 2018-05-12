@@ -14,7 +14,7 @@ use signature::PublicKey;
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
@@ -207,6 +207,7 @@ impl RequestProcessor {
         &self,
         event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+        entry_sender: &Sender<Entry>,
         responder_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
@@ -240,7 +241,8 @@ impl RequestProcessor {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            event_processor.process_events(events)?;
+            let entry = event_processor.process_events(events)?;
+            entry_sender.send(entry)?;
             debug!("done process_events");
 
             debug!("process_requests");
@@ -271,6 +273,7 @@ impl RequestProcessor {
 
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
+    pub entry_receiver: Receiver<Entry>,
     pub output: streamer::BlobReceiver,
     pub request_processor: Arc<RequestProcessor>,
 }
@@ -286,11 +289,13 @@ impl RequestStage {
     ) -> Self {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
+        let (entry_sender, entry_receiver) = channel();
         let (responder_sender, output) = channel();
         let thread_hdl = spawn(move || loop {
             let e = request_processor_.process_request_packets(
                 &event_processor,
                 &verified_receiver,
+                &entry_sender,
                 &responder_sender,
                 &packet_recycler,
                 &blob_recycler,
@@ -303,6 +308,7 @@ impl RequestStage {
         });
         RequestStage {
             thread_hdl,
+            entry_receiver,
             output,
             request_processor,
         }

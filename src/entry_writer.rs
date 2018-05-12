@@ -10,6 +10,7 @@ use serde_json;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::io::sink;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use streamer;
@@ -42,22 +43,17 @@ impl<'a> EntryWriter<'a> {
         self.request_processor.notify_entry_info_subscribers(&entry);
     }
 
-    fn write_entries<W: Write>(&self, writer: &Mutex<W>) -> Result<Vec<Entry>> {
+    fn write_entries<W: Write>(
+        &self,
+        writer: &Mutex<W>,
+        entry_receiver: &Receiver<Entry>,
+    ) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
-        let entry = self.event_processor
-            .output
-            .lock()
-            .expect("'ouput' lock in fn receive_all")
-            .recv_timeout(Duration::new(1, 0))?;
+        let entry = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         self.write_entry(writer, &entry);
         l.push(entry);
-        while let Ok(entry) = self.event_processor
-            .output
-            .lock()
-            .expect("'output' lock in fn write_entries")
-            .try_recv()
-        {
+        while let Ok(entry) = entry_receiver.try_recv() {
             self.write_entry(writer, &entry);
             l.push(entry);
         }
@@ -71,9 +67,10 @@ impl<'a> EntryWriter<'a> {
         broadcast: &streamer::BlobSender,
         blob_recycler: &packet::BlobRecycler,
         writer: &Mutex<W>,
+        entry_receiver: &Receiver<Entry>,
     ) -> Result<()> {
         let mut q = VecDeque::new();
-        let list = self.write_entries(writer)?;
+        let list = self.write_entries(writer, entry_receiver)?;
         trace!("New blobs? {}", list.len());
         ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
         if !q.is_empty() {
@@ -84,8 +81,8 @@ impl<'a> EntryWriter<'a> {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    pub fn drain_entries(&self) -> Result<()> {
-        self.write_entries(&Arc::new(Mutex::new(sink())))?;
+    pub fn drain_entries(&self, entry_receiver: &Receiver<Entry>) -> Result<()> {
+        self.write_entries(&Arc::new(Mutex::new(sink())), entry_receiver)?;
         Ok(())
     }
 }
