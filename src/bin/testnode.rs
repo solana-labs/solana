@@ -11,8 +11,8 @@ use solana::accounting_stage::AccountingStage;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
+use solana::rpu::Rpu;
 use solana::signature::{KeyPair, KeyPairUtil};
-use solana::tpu::Tpu;
 use std::env;
 use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
@@ -117,7 +117,7 @@ fn main() {
 
     let accounting_stage = AccountingStage::new(accountant, &last_id, Some(1000));
     let exit = Arc::new(AtomicBool::new(false));
-    let tpu = Arc::new(Tpu::new(accounting_stage));
+    let rpu = Arc::new(Rpu::new(accounting_stage));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
@@ -130,7 +130,7 @@ fn main() {
         serve_sock.local_addr().unwrap(),
     );
     eprintln!("starting server...");
-    let threads = tpu.serve(
+    let threads = rpu.serve(
         d,
         serve_sock,
         events_sock,

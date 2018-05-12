@@ -1,4 +1,4 @@
-//! The `tpu` module implements the Transaction Processing Unit, a
+//! The `rpu` module implements the Request Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
 use accounting_stage::AccountingStage;
@@ -16,16 +16,16 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use streamer;
 
-pub struct Tpu {
+pub struct Rpu {
     accounting_stage: Arc<AccountingStage>,
     request_processor: Arc<RequestProcessor>,
 }
 
-impl Tpu {
-    /// Create a new Tpu that wraps the given Accountant.
+impl Rpu {
+    /// Create a new Rpu that wraps the given Accountant.
     pub fn new(accounting_stage: AccountingStage) -> Self {
         let request_processor = RequestProcessor::new(accounting_stage.accountant.clone());
-        Tpu {
+        Rpu {
             accounting_stage: Arc::new(accounting_stage),
             request_processor: Arc::new(request_processor),
         }
@@ -66,7 +66,7 @@ impl Tpu {
         })
     }
 
-    /// Create a UDP microservice that forwards messages the given Tpu.
+    /// Create a UDP microservice that forwards messages the given Rpu.
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(

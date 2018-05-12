@@ -23,7 +23,7 @@ pub struct ThinClient {
 }
 
 impl ThinClient {
-    /// Create a new ThinClient that will interface with Tpu
+    /// Create a new ThinClient that will interface with Rpu
     /// over `requests_socket` and `events_socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking ThinClient methods.
     pub fn new(addr: SocketAddr, requests_socket: UdpSocket, events_socket: UdpSocket) -> Self {
@@ -161,6 +161,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use plan::Plan;
+    use rpu::Rpu;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -168,7 +169,6 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
-    use tpu::Tpu;
     use tvu::{self, Tvu};
 
     #[test]
@@ -191,8 +191,8 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting_stage));
-        let threads = tpu.serve(d, serve, events_socket, gossip, exit.clone(), sink())
+        let rpu = Arc::new(Rpu::new(accounting_stage));
+        let threads = rpu.serve(d, serve, events_socket, gossip, exit.clone(), sink())
             .unwrap();
         sleep(Duration::from_millis(300));
 
@@ -230,10 +230,9 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-        let tpu = Arc::new(Tpu::new(accounting_stage));
+        let rpu = Arc::new(Rpu::new(accounting_stage));
         let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = Tpu::serve(
-            &tpu,
+        let threads = rpu.serve(
             leader_data,
             leader_serve,
             leader_events,
@@ -302,7 +301,7 @@ mod tests {
         let leader_acc = {
             let accountant = Accountant::new(&alice);
             let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting_stage))
+            Arc::new(Rpu::new(accounting_stage))
         };
 
         let replicant_acc = {
