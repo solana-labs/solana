@@ -268,6 +268,7 @@ impl Tpu {
 
         let packet_recycler = packet::PacketRecycler::default();
         let blob_recycler = packet::BlobRecycler::default();
+
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
             requests_socket,
@@ -275,19 +276,19 @@ impl Tpu {
             packet_recycler.clone(),
             packet_sender,
         )?;
-        let (responder_sender, responder_receiver) = channel();
-        let t_responder = streamer::responder(
-            respond_socket,
-            exit.clone(),
-            blob_recycler.clone(),
-            responder_receiver,
-        );
 
         let (verified_sender, verified_receiver) = channel();
         let verify_threads: Vec<_> =
             Self::verifier_services(exit.clone(), packet_receiver, verified_sender);
 
         let (broadcast_sender, broadcast_receiver) = channel();
+        let t_sync = Self::sync_service(
+            obj.clone(),
+            exit.clone(),
+            broadcast_sender,
+            blob_recycler.clone(),
+            Mutex::new(writer),
+        );
 
         let broadcast_socket = UdpSocket::bind(local)?;
         let t_broadcast = streamer::broadcaster(
@@ -298,12 +299,12 @@ impl Tpu {
             broadcast_receiver,
         );
 
-        let t_sync = Self::sync_service(
-            obj.clone(),
+        let (responder_sender, responder_receiver) = channel();
+        let t_responder = streamer::responder(
+            respond_socket,
             exit.clone(),
-            broadcast_sender,
             blob_recycler.clone(),
-            Mutex::new(writer),
+            responder_receiver,
         );
 
         let t_thin_client = Self::thin_client_service(
