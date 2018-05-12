@@ -6,22 +6,21 @@ use crdt::{Crdt, ReplicatedData};
 use entry_writer::EntryWriter;
 use ledger;
 use packet;
-use packet::SharedPackets;
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
-use thin_client_service::RequestProcessor;
+use thin_client_service::{RequestProcessor, ThinClientService};
 
 pub struct Tpu {
-    accounting_stage: AccountingStage,
-    request_processor: RequestProcessor,
+    accounting_stage: Arc<AccountingStage>,
+    request_processor: Arc<RequestProcessor>,
 }
 
 type SharedTpu = Arc<Tpu>;
@@ -31,8 +30,8 @@ impl Tpu {
     pub fn new(accounting_stage: AccountingStage) -> Self {
         let request_processor = RequestProcessor::new(accounting_stage.accountant.clone());
         Tpu {
-            accounting_stage,
-            request_processor,
+            accounting_stage: Arc::new(accounting_stage),
+            request_processor: Arc::new(request_processor),
         }
     }
 
@@ -60,30 +59,6 @@ impl Tpu {
                 let _ = entry_writer.drain_entries();
                 if exit.load(Ordering::Relaxed) {
                     info!("drain_service exiting");
-                    break;
-                }
-            }
-        })
-    }
-
-    fn thin_client_service(
-        obj: SharedTpu,
-        exit: Arc<AtomicBool>,
-        verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        responder_sender: streamer::BlobSender,
-        packet_recycler: packet::PacketRecycler,
-        blob_recycler: packet::BlobRecycler,
-    ) -> JoinHandle<()> {
-        spawn(move || loop {
-            let e = obj.request_processor.process_request_packets(
-                &obj.accounting_stage,
-                &verified_receiver,
-                &responder_sender,
-                &packet_recycler,
-                &blob_recycler,
-            );
-            if e.is_err() {
-                if exit.load(Ordering::Relaxed) {
                     break;
                 }
             }
@@ -123,8 +98,9 @@ impl Tpu {
 
         let blob_recycler = packet::BlobRecycler::default();
         let (responder_sender, responder_receiver) = channel();
-        let t_thin_client = Self::thin_client_service(
-            obj.clone(),
+        let thin_client_service = ThinClientService::new(
+            obj.request_processor.clone(),
+            obj.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
             responder_sender,
@@ -161,7 +137,7 @@ impl Tpu {
         let mut threads = vec![
             t_receiver,
             t_responder,
-            t_thin_client,
+            thin_client_service.thread_hdl,
             t_write,
             t_gossip,
             t_listen,
@@ -301,8 +277,9 @@ impl Tpu {
 
         let t_write = Self::drain_service(obj.clone(), exit.clone());
 
-        let t_thin_client = Self::thin_client_service(
-            obj.clone(),
+        let thin_client_service = ThinClientService::new(
+            obj.request_processor.clone(),
+            obj.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
             responder_sender,
@@ -321,7 +298,7 @@ impl Tpu {
             //serve threads
             t_packet_receiver,
             t_responder,
-            t_thin_client,
+            thin_client_service.thread_hdl,
             t_write,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());

@@ -14,13 +14,12 @@ use result::Result;
 use signature::PublicKey;
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{spawn, JoinHandle};
 use transaction::Transaction;
-//use std::io::{Cursor, Write};
-//use std::sync::atomic::{AtomicBool, Ordering};
 //use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
-//use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
@@ -274,6 +273,38 @@ impl RequestProcessor {
             (reqs_len as f32) / (total_time_s)
         );
         Ok(())
+    }
+}
+
+pub struct ThinClientService {
+    pub thread_hdl: JoinHandle<()>,
+}
+
+impl ThinClientService {
+    pub fn new(
+        request_processor: Arc<RequestProcessor>,
+        accounting_stage: Arc<AccountingStage>,
+        exit: Arc<AtomicBool>,
+        verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+        responder_sender: streamer::BlobSender,
+        packet_recycler: packet::PacketRecycler,
+        blob_recycler: packet::BlobRecycler,
+    ) -> Self {
+        let thread_hdl = spawn(move || loop {
+            let e = request_processor.process_request_packets(
+                &accounting_stage,
+                &verified_receiver,
+                &responder_sender,
+                &packet_recycler,
+                &blob_recycler,
+            );
+            if e.is_err() {
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        });
+        ThinClientService { thread_hdl }
     }
 }
 
