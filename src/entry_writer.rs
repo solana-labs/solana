@@ -12,22 +12,22 @@ use std::io::sink;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use streamer;
-use thin_client_service::ThinClientService;
+use thin_client_service::RequestProcessor;
 
 pub struct EntryWriter<'a> {
     accounting_stage: &'a AccountingStage,
-    thin_client_service: &'a ThinClientService,
+    request_processor: &'a RequestProcessor,
 }
 
 impl<'a> EntryWriter<'a> {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(
         accounting_stage: &'a AccountingStage,
-        thin_client_service: &'a ThinClientService,
+        request_processor: &'a RequestProcessor,
     ) -> Self {
         EntryWriter {
             accounting_stage,
-            thin_client_service,
+            request_processor,
         }
     }
 
@@ -41,8 +41,7 @@ impl<'a> EntryWriter<'a> {
             "{}",
             serde_json::to_string(&entry).expect("'entry' to_strong in fn write_entry")
         ).expect("writeln! in fn write_entry");
-        self.thin_client_service
-            .notify_entry_info_subscribers(&entry);
+        self.request_processor.notify_entry_info_subscribers(&entry);
     }
 
     fn write_entries<W: Write>(&self, writer: &Mutex<W>) -> Result<Vec<Entry>> {

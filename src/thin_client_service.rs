@@ -62,18 +62,18 @@ pub enum Response {
     EntryInfo(EntryInfo),
 }
 
-pub struct ThinClientService {
+pub struct RequestProcessor {
     //pub output: Mutex<Receiver<Response>>,
     //response_sender: Mutex<Sender<Response>>,
     accountant: Arc<Accountant>,
     entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
-impl ThinClientService {
+impl RequestProcessor {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accountant: Arc<Accountant>) -> Self {
         //let (response_sender, output) = channel();
-        ThinClientService {
+        RequestProcessor {
             //output: Mutex::new(output),
             //response_sender: Mutex::new(response_sender),
             accountant,

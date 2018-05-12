@@ -17,11 +17,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
-use thin_client_service::ThinClientService;
+use thin_client_service::RequestProcessor;
 
 pub struct Tpu {
     accounting_stage: AccountingStage,
-    thin_client_service: ThinClientService,
+    request_processor: RequestProcessor,
 }
 
 type SharedTpu = Arc<Tpu>;
@@ -29,10 +29,10 @@ type SharedTpu = Arc<Tpu>;
 impl Tpu {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accounting_stage: AccountingStage) -> Self {
-        let thin_client_service = ThinClientService::new(accounting_stage.accountant.clone());
+        let request_processor = RequestProcessor::new(accounting_stage.accountant.clone());
         Tpu {
             accounting_stage,
-            thin_client_service,
+            request_processor,
         }
     }
 
@@ -44,7 +44,7 @@ impl Tpu {
         writer: Mutex<W>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let entry_writer = EntryWriter::new(&obj.accounting_stage, &obj.thin_client_service);
+            let entry_writer = EntryWriter::new(&obj.accounting_stage, &obj.request_processor);
             let _ = entry_writer.write_and_send_entries(&broadcast, &blob_recycler, &writer);
             if exit.load(Ordering::Relaxed) {
                 info!("broadcat_service exiting");
@@ -55,7 +55,7 @@ impl Tpu {
 
     pub fn drain_service(obj: SharedTpu, exit: Arc<AtomicBool>) -> JoinHandle<()> {
         spawn(move || {
-            let entry_writer = EntryWriter::new(&obj.accounting_stage, &obj.thin_client_service);
+            let entry_writer = EntryWriter::new(&obj.accounting_stage, &obj.request_processor);
             loop {
                 let _ = entry_writer.drain_entries();
                 if exit.load(Ordering::Relaxed) {
@@ -75,7 +75,7 @@ impl Tpu {
         blob_recycler: packet::BlobRecycler,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let e = obj.thin_client_service.process_request_packets(
+            let e = obj.request_processor.process_request_packets(
                 &obj.accounting_stage,
                 &verified_receiver,
                 &responder_sender,
