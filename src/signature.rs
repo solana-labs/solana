@@ -124,8 +124,7 @@ impl GenKeys2 {
     pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
         let keys = self.gen_n_seeds(n_keys);
 
-        let users: Vec<_> = keys
-            .into_par_iter()
+        let users: Vec<_> = keys.into_par_iter()
             .map(|seed| {
                 let new: GenKeys2 = GenKeys2::new(&seed[..]);
                 let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
@@ -143,7 +142,6 @@ impl SecureRandom for GenKeys2 {
         Ok(())
     }
 }
-
 
 #[cfg(all(feature = "unstable", test))]
 mod tests {
