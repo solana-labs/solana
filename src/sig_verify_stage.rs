@@ -13,17 +13,17 @@ use streamer;
 use timing;
 
 pub struct SigVerifyStage {
-    pub output: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+    pub verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl SigVerifyStage {
     pub fn new(exit: Arc<AtomicBool>, packets_receiver: Receiver<SharedPackets>) -> Self {
-        let (verified_sender, output) = channel();
+        let (verified_sender, verified_receiver) = channel();
         let thread_hdls = Self::verifier_services(exit, packets_receiver, verified_sender);
         SigVerifyStage {
             thread_hdls,
-            output,
+            verified_receiver,
         }
     }
 

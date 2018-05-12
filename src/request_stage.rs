@@ -208,7 +208,7 @@ impl RequestProcessor {
         event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         entry_sender: &Sender<Entry>,
-        responder_sender: &streamer::BlobSender,
+        blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
@@ -253,7 +253,7 @@ impl RequestProcessor {
             if !blobs.is_empty() {
                 info!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
-                responder_sender.send(blobs)?;
+                blob_sender.send(blobs)?;
             }
             packet_recycler.recycle(msgs);
         }
@@ -274,7 +274,7 @@ impl RequestProcessor {
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
     pub entry_receiver: Receiver<Entry>,
-    pub output: streamer::BlobReceiver,
+    pub blob_receiver: streamer::BlobReceiver,
     pub request_processor: Arc<RequestProcessor>,
 }
 
@@ -290,13 +290,13 @@ impl RequestStage {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
         let (entry_sender, entry_receiver) = channel();
-        let (responder_sender, output) = channel();
+        let (blob_sender, blob_receiver) = channel();
         let thread_hdl = spawn(move || loop {
             let e = request_processor_.process_request_packets(
                 &event_processor,
                 &verified_receiver,
                 &entry_sender,
-                &responder_sender,
+                &blob_sender,
                 &packet_recycler,
                 &blob_recycler,
             );
@@ -309,7 +309,7 @@ impl RequestStage {
         RequestStage {
             thread_hdl,
             entry_receiver,
-            output,
+            blob_receiver,
             request_processor,
         }
     }

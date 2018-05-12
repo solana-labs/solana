@@ -37,7 +37,7 @@ impl EventProcessor {
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
-        let entry = historian.output.lock().unwrap().recv()?;
+        let entry = historian.entry_receiver.lock().unwrap().recv()?;
         self.accountant.register_entry_id(&entry.id);
         Ok(entry)
     }

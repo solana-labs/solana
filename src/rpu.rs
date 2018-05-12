@@ -89,7 +89,7 @@ impl Rpu {
             request_processor,
             self.event_processor.clone(),
             exit.clone(),
-            sig_verify_stage.output,
+            sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
@@ -119,7 +119,7 @@ impl Rpu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            request_stage.output,
+            request_stage.blob_receiver,
         );
 
         let mut threads = vec![

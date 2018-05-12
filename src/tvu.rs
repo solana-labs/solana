@@ -174,7 +174,7 @@ impl Tvu {
             request_processor,
             obj.event_processor.clone(),
             exit.clone(),
-            sig_verify_stage.output,
+            sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
@@ -190,7 +190,7 @@ impl Tvu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            request_stage.output,
+            request_stage.blob_receiver,
         );
 
         let mut threads = vec![
