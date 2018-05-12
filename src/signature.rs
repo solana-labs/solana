@@ -158,14 +158,14 @@ mod tests {
     fn bench_gen_keys(b: &mut Bencher) {
         let seed: &[_] = &[1, 2, 3, 4];
         let rnd = GenKeys::new(seed);
-        b.iter(|| rnd.gen_n_keys(100, 1));
+        b.iter(|| rnd.gen_n_keys(1000, 1));
     }
 
     #[bench]
     fn bench_gen_keys2(b: &mut Bencher) {
         let seed: &[_] = &[1, 2, 3, 4];
         let rnd = GenKeys2::new(seed);
-        b.iter(|| rnd.gen_n_keys(100, 1));
+        b.iter(|| rnd.gen_n_keys(1000, 1));
     }
 
     #[test]
