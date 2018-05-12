@@ -130,8 +130,7 @@ fn main() {
         serve_sock.local_addr().unwrap(),
     );
     eprintln!("starting server...");
-    let threads = Tpu::serve(
-        &tpu,
+    let threads = tpu.serve(
         d,
         serve_sock,
         events_sock,

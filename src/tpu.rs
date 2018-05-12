@@ -74,7 +74,7 @@ impl Tpu {
     /// This service is the network leader
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(
-        obj: &SharedTpu,
+        &self,
         me: ReplicatedData,
         requests_socket: UdpSocket,
         _events_socket: UdpSocket,
@@ -103,8 +103,8 @@ impl Tpu {
 
         let blob_recycler = packet::BlobRecycler::default();
         let thin_client_service = ThinClientService::new(
-            obj.request_processor.clone(),
-            obj.accounting_stage.clone(),
+            self.request_processor.clone(),
+            self.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
             packet_recycler.clone(),
@@ -113,8 +113,8 @@ impl Tpu {
 
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
-            obj.accounting_stage.clone(),
-            obj.request_processor.clone(),
+            self.accounting_stage.clone(),
+            self.request_processor.clone(),
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),

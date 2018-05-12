@@ -191,8 +191,8 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
         let tpu = Arc::new(Tpu::new(accounting_stage));
-        let threads =
-            Tpu::serve(&tpu, d, serve, events_socket, gossip, exit.clone(), sink()).unwrap();
+        let threads = tpu.serve(d, serve, events_socket, gossip, exit.clone(), sink())
+            .unwrap();
         sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
