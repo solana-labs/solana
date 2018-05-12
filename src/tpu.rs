@@ -129,18 +129,9 @@ impl Tpu {
         })
     }
 
-    fn verify_batch(
-        batch: Vec<SharedPackets>,
-        sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
-    ) -> Result<()> {
+    fn verify_batch(batch: Vec<SharedPackets>) -> Vec<(SharedPackets, Vec<u8>)> {
         let r = ecdsa::ed25519_verify(&batch);
-        let res = batch.into_iter().zip(r).collect();
-        sendr
-            .lock()
-            .expect("lock in fn verify_batch in tpu")
-            .send(res)?;
-        // TODO: fix error handling here?
-        Ok(())
+        batch.into_iter().zip(r).collect()
     }
 
     fn verifier(
@@ -160,7 +151,11 @@ impl Tpu {
             rand_id
         );
 
-        Self::verify_batch(batch, sendr).expect("verify_batch in fn verifier");
+        let verified_batch = Self::verify_batch(batch);
+        sendr
+            .lock()
+            .expect("lock in fn verify_batch in tpu")
+            .send(verified_batch)?;
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());
         let total_time_s = timing::duration_as_s(&now.elapsed());
