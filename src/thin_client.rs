@@ -168,7 +168,8 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use std::time::Instant;
-    use tpu::{self, Tpu};
+    use tpu::Tpu;
+    use tvu::{self, Tvu};
 
     #[test]
     fn test_thin_client() {
@@ -223,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_bad_sig() {
-        let (leader_data, leader_gossip, _, leader_serve, leader_events) = tpu::test_node();
+        let (leader_data, leader_gossip, _, leader_serve, leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -307,19 +308,20 @@ mod tests {
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
             let accounting_stage = AccountingStage::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tpu::new(accounting_stage))
+            Arc::new(Tvu::new(accounting_stage))
         };
 
-        let leader_threads = Tpu::serve(
-            &leader_acc,
-            leader.0.clone(),
-            leader.2,
-            leader.4,
-            leader.1,
-            exit.clone(),
-            sink(),
-        ).unwrap();
-        let replicant_threads = Tpu::replicate(
+        let leader_threads = leader_acc
+            .serve(
+                leader.0.clone(),
+                leader.2,
+                leader.4,
+                leader.1,
+                exit.clone(),
+                sink(),
+            )
+            .unwrap();
+        let replicant_threads = Tvu::serve(
             &replicant_acc,
             replicant.0.clone(),
             replicant.1,
