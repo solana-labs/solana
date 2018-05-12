@@ -272,20 +272,23 @@ impl RequestProcessor {
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
     pub output: streamer::BlobReceiver,
+    pub request_processor: Arc<RequestProcessor>,
 }
 
 impl RequestStage {
     pub fn new(
-        request_processor: Arc<RequestProcessor>,
+        request_processor: RequestProcessor,
         accounting_stage: Arc<AccountingStage>,
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: packet::PacketRecycler,
         blob_recycler: packet::BlobRecycler,
     ) -> Self {
+        let request_processor = Arc::new(request_processor);
+        let request_processor_ = request_processor.clone();
         let (responder_sender, output) = channel();
         let thread_hdl = spawn(move || loop {
-            let e = request_processor.process_request_packets(
+            let e = request_processor_.process_request_packets(
                 &accounting_stage,
                 &verified_receiver,
                 &responder_sender,
@@ -298,7 +301,11 @@ impl RequestStage {
                 }
             }
         });
-        RequestStage { thread_hdl, output }
+        RequestStage {
+            thread_hdl,
+            output,
+            request_processor,
+        }
     }
 }
 

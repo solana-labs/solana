@@ -18,16 +18,13 @@ use streamer;
 
 pub struct Rpu {
     accounting_stage: Arc<AccountingStage>,
-    request_processor: Arc<RequestProcessor>,
 }
 
 impl Rpu {
     /// Create a new Rpu that wraps the given Accountant.
     pub fn new(accounting_stage: AccountingStage) -> Self {
-        let request_processor = RequestProcessor::new(accounting_stage.accountant.clone());
         Rpu {
             accounting_stage: Arc::new(accounting_stage),
-            request_processor: Arc::new(request_processor),
         }
     }
 
@@ -80,8 +77,9 @@ impl Rpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
+        let request_processor = RequestProcessor::new(self.accounting_stage.accountant.clone());
         let request_stage = RequestStage::new(
-            self.request_processor.clone(),
+            request_processor,
             self.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
@@ -92,7 +90,7 @@ impl Rpu {
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
             self.accounting_stage.clone(),
-            self.request_processor.clone(),
+            request_stage.request_processor.clone(),
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),

@@ -19,16 +19,13 @@ use streamer;
 
 pub struct Tvu {
     accounting_stage: Arc<AccountingStage>,
-    request_processor: Arc<RequestProcessor>,
 }
 
 impl Tvu {
     /// Create a new Tvu that wraps the given Accountant.
     pub fn new(accounting_stage: AccountingStage) -> Self {
-        let request_processor = RequestProcessor::new(accounting_stage.accountant.clone());
         Tvu {
             accounting_stage: Arc::new(accounting_stage),
-            request_processor: Arc::new(request_processor),
         }
     }
 
@@ -170,8 +167,9 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
+        let request_processor = RequestProcessor::new(obj.accounting_stage.accountant.clone());
         let request_stage = RequestStage::new(
-            obj.request_processor.clone(),
+            request_processor,
             obj.accounting_stage.clone(),
             exit.clone(),
             sig_verify_stage.output,
@@ -181,7 +179,7 @@ impl Tvu {
 
         let t_write = Self::drain_service(
             obj.accounting_stage.clone(),
-            obj.request_processor.clone(),
+            request_stage.request_processor.clone(),
             exit.clone(),
         );
 
