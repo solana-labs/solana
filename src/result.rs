@@ -88,13 +88,11 @@ mod tests {
         let r = "12fdfasfsafsadfs".parse()?;
         Ok(r)
     }
-
     fn join_error() -> Result<()> {
         panic::set_hook(Box::new(|_info| {}));
         let r = thread::spawn(|| panic!("hi")).join()?;
         Ok(r)
     }
-
     fn json_error() -> Result<()> {
         let r = serde_json::from_slice("=342{;;;;:}".as_bytes())?;
         Ok(r)
