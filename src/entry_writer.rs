@@ -65,6 +65,7 @@ impl<'a> EntryWriter<'a> {
         trace!("New blobs? {}", list.len());
         ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
         if !q.is_empty() {
+            info!("broadcasting {}", q.len());
             broadcast.send(q)?;
         }
         Ok(())

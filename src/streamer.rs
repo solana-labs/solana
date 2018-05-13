@@ -2,16 +2,17 @@
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, NUM_BLOBS};
+use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets};
 use result::Result;
 use std::collections::VecDeque;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
+pub const WINDOW_SIZE: usize = 1024;
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
 pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
@@ -129,7 +130,7 @@ pub fn blob_receiver(
 }
 
 fn recv_window(
-    window: &mut Vec<Option<SharedBlob>>,
+    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
@@ -188,19 +189,20 @@ fn recv_window(
         let b_ = b.clone();
         let p = b.write().expect("'b' write lock in fn recv_window");
         let pix = p.get_index()? as usize;
-        let w = pix % NUM_BLOBS;
+        let w = pix % WINDOW_SIZE;
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
         //that is a network failure/attack
         trace!("window w: {} size: {}", w, p.meta.size);
         {
+            let mut window = locked_window.write().unwrap();
             if window[w].is_none() {
                 window[w] = Some(b_);
             } else {
                 debug!("duplicate blob at index {:}", w);
             }
             loop {
-                let k = *consumed % NUM_BLOBS;
+                let k = *consumed % WINDOW_SIZE;
                 trace!("k: {} consumed: {}", k, *consumed);
                 if window[k].is_none() {
                     break;
@@ -211,30 +213,73 @@ fn recv_window(
             }
         }
     }
+    {
+        let buf: Vec<_> = locked_window
+            .read()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                if i == (*consumed % WINDOW_SIZE) {
+                    assert!(v.is_none());
+                    "_"
+                } else if v.is_none() {
+                    "0"
+                } else {
+                    "1"
+                }
+            })
+            .collect();
+        trace!("WINDOW: {}", buf.join(""));
+    }
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
         s.send(contq)?;
     }
+    let repair: Option<(SocketAddr, Vec<u8>)> = {
+        let mut window = locked_window.write().unwrap();
+        let next = (*consumed + 1) % WINDOW_SIZE;
+        if let &Some(ref blob) = &window[next] {
+            let cix = blob.read().unwrap().get_index().expect("blob index value");
+            let val = crdt.read().unwrap().window_index_request(cix - 1);
+            if let Ok((to, req)) = val {
+                Some((to, req))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+    if let Some((to, req)) = repair {
+        //todo cache socket
+        let sock = UdpSocket::bind("0.0.0.0:0")?;
+        sock.send_to(&req, to)?;
+    }
     Ok(())
+}
+
+pub fn default_window() -> Arc<RwLock<Vec<Option<SharedBlob>>>> {
+    Arc::new(RwLock::new(vec![None; WINDOW_SIZE]))
 }
 
 pub fn window(
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
+    window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
 ) -> JoinHandle<()> {
     spawn(move || {
-        let mut window = vec![None; NUM_BLOBS];
         let mut consumed = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
             let _ = recv_window(
-                &mut window,
+                &window,
                 &crdt,
                 &recycler,
                 &mut consumed,
@@ -248,6 +293,7 @@ pub fn window(
 
 fn broadcast(
     crdt: &Arc<RwLock<Crdt>>,
+    window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -263,8 +309,16 @@ fn broadcast(
     #[cfg(feature = "erasure")]
     erasure::generate_codes(blobs);
     Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
+    // keep the cache of blobs that are broadcast
     while let Some(b) = blobs.pop() {
-        recycler.recycle(b);
+        let mut win = window.write().unwrap();
+        let ix = b.read().unwrap().get_index().expect("blob index");
+        let pos = (ix as usize) % WINDOW_SIZE;
+        let prev = win[pos].clone();
+        win[pos] = Some(b);
+        if let Some(b) = prev {
+            recycler.recycle(b);
+        }
     }
     Ok(())
 }
@@ -275,12 +329,14 @@ fn broadcast(
 /// * `sock` - Socket to send from.
 /// * `exit` - Boolean to signal system exit.
 /// * `crdt` - CRDT structure
+/// * `window` - Cache of blobs that we have broadcast
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn broadcaster(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
+    window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -290,7 +346,7 @@ pub fn broadcaster(
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = broadcast(&crdt, &recycler, &r, &sock, &mut transmit_index);
+            let _ = broadcast(&crdt, &window, &recycler, &r, &sock, &mut transmit_index);
         }
     })
 }
@@ -463,7 +519,7 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use streamer::{BlobReceiver, PacketReceiver};
+    use streamer::{default_window, BlobReceiver, PacketReceiver};
     use streamer::{blob_receiver, receiver, responder, retransmitter, window};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
@@ -558,9 +614,11 @@ mod test {
             blob_receiver(exit.clone(), resp_recycler.clone(), read, s_reader).unwrap();
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
+        let win = default_window();
         let t_window = window(
             exit.clone(),
             subs,
+            win,
             resp_recycler.clone(),
             r_reader,
             s_window,
@@ -628,15 +686,27 @@ mod test {
         let (crdt_leader, sock_gossip_leader, _, sock_leader) = test_node();
         let (crdt_target, sock_gossip_target, sock_replicate_target, _) = test_node();
         let leader_data = crdt_leader.read().unwrap().my_data().clone();
-        crdt_leader.write().unwrap().insert(leader_data.clone());
+        crdt_leader.write().unwrap().insert(&leader_data);
         crdt_leader.write().unwrap().set_leader(leader_data.id);
         let t_crdt_leader_g = Crdt::gossip(crdt_leader.clone(), exit.clone());
-        let t_crdt_leader_l = Crdt::listen(crdt_leader.clone(), sock_gossip_leader, exit.clone());
+        let window_leader = Arc::new(RwLock::new(vec![]));
+        let t_crdt_leader_l = Crdt::listen(
+            crdt_leader.clone(),
+            window_leader,
+            sock_gossip_leader,
+            exit.clone(),
+        );
 
-        crdt_target.write().unwrap().insert(leader_data.clone());
+        crdt_target.write().unwrap().insert(&leader_data);
         crdt_target.write().unwrap().set_leader(leader_data.id);
         let t_crdt_target_g = Crdt::gossip(crdt_target.clone(), exit.clone());
-        let t_crdt_target_l = Crdt::listen(crdt_target.clone(), sock_gossip_target, exit.clone());
+        let window_target = Arc::new(RwLock::new(vec![]));
+        let t_crdt_target_l = Crdt::listen(
+            crdt_target.clone(),
+            window_target,
+            sock_gossip_target,
+            exit.clone(),
+        );
         //leader retransmitter
         let (s_retransmit, r_retransmit) = channel();
         let blob_recycler = BlobRecycler::default();
