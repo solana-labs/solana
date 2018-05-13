@@ -94,6 +94,7 @@ mod tests {
         let r = thread::spawn(|| panic!("hi")).join()?;
         Ok(r)
     }
+
     fn json_error() -> Result<()> {
         let r = serde_json::from_slice("=342{;;;;:}".as_bytes())?;
         Ok(r)
@@ -118,6 +119,7 @@ mod tests {
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
         assert_matches!(Error::from(ioe), Error::IO(_));
     }
+
     #[test]
     fn fmt_test() {
         write!(io::sink(), "{:?}", addr_parse_error()).unwrap();
