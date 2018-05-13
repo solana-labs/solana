@@ -78,6 +78,7 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
+    use std::panic;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
     use std::sync::mpsc::channel;
@@ -89,9 +90,13 @@ mod tests {
     }
 
     fn join_error() -> Result<()> {
-        let r = thread::spawn(|| panic!("hi")).join()?;
+        panic::set_hook(Box::new(|_info| {}));
+        let r = thread::spawn(|| {
+            panic!("hi")
+        }).join()?;
         Ok(r)
     }
+
     fn json_error() -> Result<()> {
         let r = serde_json::from_slice("=342{;;;;:}".as_bytes())?;
         Ok(r)
@@ -116,6 +121,7 @@ mod tests {
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
         assert_matches!(Error::from(ioe), Error::IO(_));
     }
+
     #[test]
     fn fmt_test() {
         write!(io::sink(), "{:?}", addr_parse_error()).unwrap();
