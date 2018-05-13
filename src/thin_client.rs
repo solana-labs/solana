@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
-use request_stage::{Request, Response, Subscription};
+use request::{Request, Response, Subscription};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
@@ -191,7 +191,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Arc::new(Rpu::new(event_processor));
+        let rpu = Rpu::new(event_processor);
         let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(300));
 
@@ -229,7 +229,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Arc::new(Rpu::new(event_processor));
+        let rpu = Rpu::new(event_processor);
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = rpu.serve(
             leader_data,
@@ -299,7 +299,7 @@ mod tests {
         let leader_acc = {
             let accountant = Accountant::new(&alice);
             let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Rpu::new(event_processor))
+            Rpu::new(event_processor)
         };
 
         let replicant_acc = {

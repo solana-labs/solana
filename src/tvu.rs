@@ -1,13 +1,15 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
 //! 5-stage transaction validation pipeline in software.
 
+use accountant::Accountant;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
 use ledger;
 use packet;
-use request_stage::{RequestProcessor, RequestStage};
+use request_processor::RequestProcessor;
+use request_stage::RequestStage;
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
@@ -31,13 +33,13 @@ impl Tvu {
     }
 
     fn drain_service(
-        event_processor: Arc<EventProcessor>,
+        accountant: Arc<Accountant>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || {
-            let entry_writer = EntryWriter::new(&event_processor, &request_processor);
+            let entry_writer = EntryWriter::new(&accountant, &request_processor);
             loop {
                 let _ = entry_writer.drain_entries(&entry_receiver);
                 if exit.load(Ordering::Relaxed) {
@@ -180,7 +182,7 @@ impl Tvu {
         );
 
         let t_write = Self::drain_service(
-            obj.event_processor.clone(),
+            obj.event_processor.accountant.clone(),
             request_stage.request_processor.clone(),
             exit.clone(),
             request_stage.entry_receiver,

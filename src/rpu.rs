@@ -1,12 +1,14 @@
 //! The `rpu` module implements the Request Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
+use accountant::Accountant;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
 use packet;
-use request_stage::{RequestProcessor, RequestStage};
+use request_processor::RequestProcessor;
+use request_stage::RequestStage;
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
@@ -30,7 +32,7 @@ impl Rpu {
     }
 
     fn write_service<W: Write + Send + 'static>(
-        event_processor: Arc<EventProcessor>,
+        accountant: Arc<Accountant>,
         request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
@@ -39,7 +41,7 @@ impl Rpu {
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let entry_writer = EntryWriter::new(&event_processor, &request_processor);
+            let entry_writer = EntryWriter::new(&accountant, &request_processor);
             let _ = entry_writer.write_and_send_entries(
                 &broadcast,
                 &blob_recycler,
@@ -96,7 +98,7 @@ impl Rpu {
 
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
-            self.event_processor.clone(),
+            self.event_processor.accountant.clone(),
             request_stage.request_processor.clone(),
             exit.clone(),
             broadcast_sender,
