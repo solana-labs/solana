@@ -18,7 +18,8 @@ pub enum Error {
     AccountingError(accountant::AccountingError),
     SendError,
     Services,
-    GeneralError,
+    CrdtToSmall,
+    GenericError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
