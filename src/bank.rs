@@ -407,18 +407,18 @@ mod tests {
 
     #[test]
     fn test_bank() {
-        let alice = Mint::new(10_000);
-        let bob_pubkey = KeyPair::new().pubkey();
-        let bank = Bank::new(&alice);
-        assert_eq!(bank.last_id(), alice.last_id());
+        let mint = Mint::new(10_000);
+        let pubkey = KeyPair::new().pubkey();
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.last_id(), mint.last_id());
 
-        bank.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
+        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&bob_pubkey).unwrap(), 1_000);
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_000);
 
-        bank.transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
+        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&bob_pubkey).unwrap(), 1_500);
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_500);
         assert_eq!(bank.transaction_count(), 2);
     }
 
@@ -435,155 +435,151 @@ mod tests {
 
     #[test]
     fn test_invalid_transfer() {
-        let alice = Mint::new(11_000);
-        let bank = Bank::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
-        bank.transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
+        let mint = Mint::new(11_000);
+        let bank = Bank::new(&mint);
+        let pubkey = KeyPair::new().pubkey();
+        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(
-            bank.transfer(10_001, &alice.keypair(), bob_pubkey, alice.last_id()),
+            bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
             Err(BankError::InsufficientFunds)
         );
         assert_eq!(bank.transaction_count(), 1);
 
-        let alice_pubkey = alice.keypair().pubkey();
-        assert_eq!(bank.get_balance(&alice_pubkey).unwrap(), 10_000);
-        assert_eq!(bank.get_balance(&bob_pubkey).unwrap(), 1_000);
+        let mint_pubkey = mint.keypair().pubkey();
+        assert_eq!(bank.get_balance(&mint_pubkey).unwrap(), 10_000);
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_000);
     }
 
     #[test]
     fn test_transfer_to_newb() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
-        let alice_keypair = alice.keypair();
-        let bob_pubkey = KeyPair::new().pubkey();
-        bank.transfer(500, &alice_keypair, bob_pubkey, alice.last_id())
+        let mint = Mint::new(10_000);
+        let bank = Bank::new(&mint);
+        let pubkey = KeyPair::new().pubkey();
+        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&bob_pubkey).unwrap(), 500);
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 500);
     }
 
     #[test]
     fn test_transfer_on_date() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
-        let alice_keypair = alice.keypair();
-        let bob_pubkey = KeyPair::new().pubkey();
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        bank.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
-        // Alice's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&alice.pubkey()), Some(0));
+        // Mint's balance will be zero because all funds are locked up.
+        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
 
         // tx count is 1, because debits were applied.
         assert_eq!(bank.transaction_count(), 1);
 
-        // Bob's balance will be None because the funds have not been
+        // pubkey's balance will be None because the funds have not been
         // sent.
-        assert_eq!(bank.get_balance(&bob_pubkey), None);
+        assert_eq!(bank.get_balance(&pubkey), None);
 
         // Now, acknowledge the time in the condition occurred and
-        // that bob's funds are now available.
-        bank.process_verified_timestamp(alice.pubkey(), dt).unwrap();
-        assert_eq!(bank.get_balance(&bob_pubkey), Some(1));
+        // that pubkey's funds are now available.
+        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap();
+        assert_eq!(bank.get_balance(&pubkey), Some(1));
 
         // tx count is still 1, because we chose not to count timestamp events
         // tx count.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.process_verified_timestamp(alice.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
-        assert_ne!(bank.get_balance(&bob_pubkey), Some(2));
+        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
+        assert_ne!(bank.get_balance(&pubkey), Some(2));
     }
 
     #[test]
     fn test_transfer_after_date() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
-        let alice_keypair = alice.keypair();
-        let bob_pubkey = KeyPair::new().pubkey();
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        bank.process_verified_timestamp(alice.pubkey(), dt).unwrap();
+        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap();
 
         // It's now past now, so this transfer should be processed immediately.
-        bank.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
-        assert_eq!(bank.get_balance(&alice.pubkey()), Some(0));
-        assert_eq!(bank.get_balance(&bob_pubkey), Some(1));
+        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
+        assert_eq!(bank.get_balance(&pubkey), Some(1));
     }
 
     #[test]
     fn test_cancel_transfer() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
-        let alice_keypair = alice.keypair();
-        let bob_pubkey = KeyPair::new().pubkey();
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank.transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
+        let sig = bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
         // Assert the debit counts as a transaction.
         assert_eq!(bank.transaction_count(), 1);
 
-        // Alice's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&alice.pubkey()), Some(0));
+        // Mint's balance will be zero because all funds are locked up.
+        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
 
-        // Bob's balance will be None because the funds have not been
+        // pubkey's balance will be None because the funds have not been
         // sent.
-        assert_eq!(bank.get_balance(&bob_pubkey), None);
+        assert_eq!(bank.get_balance(&pubkey), None);
 
-        // Now, cancel the trancaction. Alice gets her funds back, Bob never sees them.
-        bank.process_verified_sig(alice.pubkey(), sig).unwrap();
-        assert_eq!(bank.get_balance(&alice.pubkey()), Some(1));
-        assert_eq!(bank.get_balance(&bob_pubkey), None);
+        // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
+        bank.process_verified_sig(mint.pubkey(), sig).unwrap();
+        assert_eq!(bank.get_balance(&mint.pubkey()), Some(1));
+        assert_eq!(bank.get_balance(&pubkey), None);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.process_verified_sig(alice.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
-        assert_ne!(bank.get_balance(&alice.pubkey()), Some(2));
+        bank.process_verified_sig(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        assert_ne!(bank.get_balance(&mint.pubkey()), Some(2));
     }
 
     #[test]
     fn test_duplicate_event_signature() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let sig = Signature::default();
-        assert!(bank.reserve_signature_with_last_id(&sig, &alice.last_id()));
-        assert!(!bank.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
+        assert!(!bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
     }
 
     #[test]
     fn test_forget_signature() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &alice.last_id());
-        assert!(bank.forget_signature_with_last_id(&sig, &alice.last_id()));
-        assert!(!bank.forget_signature_with_last_id(&sig, &alice.last_id()));
+        bank.reserve_signature_with_last_id(&sig, &mint.last_id());
+        assert!(bank.forget_signature_with_last_id(&sig, &mint.last_id()));
+        assert!(!bank.forget_signature_with_last_id(&sig, &mint.last_id()));
     }
 
     #[test]
     fn test_max_entry_ids() {
-        let alice = Mint::new(1);
-        let bank = Bank::new(&alice);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let sig = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             bank.register_entry_id(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
-        assert!(!bank.reserve_signature_with_last_id(&sig, &alice.last_id()));
+        assert!(!bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
     }
 
     #[test]
     fn test_debits_before_credits() {
         let mint = Mint::new(2);
         let bank = Bank::new(&mint);
-        let alice = KeyPair::new();
-        let tr0 = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
-        let tr1 = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+        let keypair = KeyPair::new();
+        let tr0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
+        let tr1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
         let results = bank.process_verified_transactions(trs);
         assert!(results[1].is_err());

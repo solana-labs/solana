@@ -307,11 +307,11 @@ mod tests {
         );
 
         let starting_balance = 10_000;
-        let alice = Mint::new(starting_balance);
-        let bank = Bank::new(&alice);
+        let mint = Mint::new(starting_balance);
+        let bank = Bank::new(&mint);
         let tvu = Arc::new(Tvu::new(
             bank,
-            alice.last_id(),
+            mint.last_id(),
             Some(Duration::from_millis(30)),
         ));
         let replicate_addr = target1_data.replicate_addr;
@@ -346,7 +346,7 @@ mod tests {
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
-                &alice.keypair(),
+                &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
@@ -381,7 +381,7 @@ mod tests {
         }
 
         let bank = &tvu.bank;
-        let alice_balance = bank.get_balance(&alice.keypair().pubkey()).unwrap();
+        let alice_balance = bank.get_balance(&mint.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
         let bob_balance = bank.get_balance(&bob_keypair.pubkey()).unwrap();
