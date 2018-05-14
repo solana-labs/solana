@@ -63,9 +63,12 @@ impl Tvu {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
-        trace!("replicating blobs {}", blobs.len());
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
-        obj.bank.process_verified_entries(entries)?;
+        let res = obj.bank.process_verified_entries(entries);
+        if res.is_err() {
+            error!("process_verified_entries {} {:?}", blobs.len(), res);
+        }
+        res?;
         for blob in blobs {
             blob_recycler.recycle(blob);
         }
@@ -106,9 +109,10 @@ impl Tvu {
             .set_leader(leader.id);
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
-            .insert(leader);
+            .insert(&leader);
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
-        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
+        let window = streamer::default_window();
+        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
         let mut local = replicate.local_addr()?;
@@ -140,6 +144,7 @@ impl Tvu {
         let t_window = streamer::window(
             exit.clone(),
             crdt.clone(),
+            window,
             blob_recycler.clone(),
             blob_receiver,
             window_sender,
@@ -273,16 +278,18 @@ mod tests {
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
         let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
-        let t_l_listen = Crdt::listen(cref_l, leader_gossip, exit.clone());
+        let window1 = streamer::default_window();
+        let t_l_listen = Crdt::listen(cref_l, window1, leader_gossip, exit.clone());
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2_data.clone());
-        crdt2.insert(leader_data.clone());
+        crdt2.insert(&leader_data);
         crdt2.set_leader(leader_data.id);
         let leader_id = leader_data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
         let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
-        let t2_listen = Crdt::listen(cref2, target2_gossip, exit.clone());
+        let window2 = streamer::default_window();
+        let t2_listen = Crdt::listen(cref2, window2, target2_gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to

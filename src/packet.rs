@@ -271,7 +271,9 @@ impl Blob {
                         break;
                     }
                     Err(e) => {
-                        info!("recv_from err {:?}", e);
+                        if e.kind() != io::ErrorKind::WouldBlock {
+                            info!("recv_from err {:?}", e);
+                        }
                         return Err(Error::IO(e));
                     }
                     Ok((nrecv, from)) => {

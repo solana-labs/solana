@@ -160,6 +160,7 @@ impl Bank {
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
+        info!("Transaction {}", tr.data.tokens);
         let bals = self.balances
             .read()
             .expect("'balances' read lock in process_verified_transaction_debits");

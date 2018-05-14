@@ -83,7 +83,7 @@ impl ReplicatedData {
 /// * `listen` - listen for requests and responses
 /// No attempt to keep track of timeouts or dropped requests is made, or should be.
 pub struct Crdt {
-    table: HashMap<PublicKey, ReplicatedData>,
+    pub table: HashMap<PublicKey, ReplicatedData>,
     /// Value of my update index when entry in table was updated.
     /// Nodes will ask for updates since `update_index`, and this node
     /// should respond with all the identities that are greater then the
@@ -93,7 +93,7 @@ pub struct Crdt {
     /// This Node will ask external nodes for updates since the value in this list
     pub remote: HashMap<PublicKey, u64>,
     pub update_index: u64,
-    me: PublicKey,
+    pub me: PublicKey,
     timeout: Duration,
 }
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
@@ -106,6 +106,8 @@ enum Protocol {
     //TODO might need a since?
     /// from id, form's last update index, ReplicatedData
     ReceiveUpdates(PublicKey, u64, Vec<ReplicatedData>),
+    /// ask for a missing index
+    RequestWindowIndex(ReplicatedData, u64),
 }
 
 impl Crdt {
@@ -117,7 +119,7 @@ impl Crdt {
             remote: HashMap::new(),
             me: me.id,
             update_index: 1,
-            timeout: Duration::new(0, 100_000),
+            timeout: Duration::from_millis(100),
         };
         g.local.insert(me.id, g.update_index);
         g.table.insert(me.id, me);
@@ -134,10 +136,10 @@ impl Crdt {
         let mut me = self.my_data().clone();
         me.current_leader_id = key;
         me.version += 1;
-        self.insert(me);
+        self.insert(&me);
     }
 
-    pub fn insert(&mut self, v: ReplicatedData) {
+    pub fn insert(&mut self, v: &ReplicatedData) {
         // TODO check that last_verified types are always increasing
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
             //somehow we signed a message for our own identity with a higher version that
@@ -169,11 +171,12 @@ impl Crdt {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
             let robj = obj.read().expect("'obj' read lock in pub fn broadcast");
+            info!("broadcast table {}", robj.table.len());
             let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
             (robj.table[&robj.me].clone(), cloned_table)
         };
         let daddr = "0.0.0.0:0".parse().unwrap();
-        let items: Vec<(usize, &ReplicatedData)> = table
+        let nodes: Vec<&ReplicatedData> = table
             .iter()
             .filter(|v| {
                 if me.id == v.id {
@@ -183,15 +186,30 @@ impl Crdt {
                     //filter nodes that are not listening
                     false
                 } else {
+                    info!("broadcast node {}", v.replicate_addr);
                     true
                 }
             })
-            .enumerate()
             .collect();
-        let orders: Vec<_> = items.into_iter().cycle().zip(blobs.iter()).collect();
+        assert!(nodes.len() > 0);
+        info!("nodes table {}", nodes.len());
+        info!("blobs table {}", blobs.len());
+        // enumerate all the blobs, those are the indecies
+        // transmit them to nodes, starting from a different node
+        let orders: Vec<_> = blobs
+            .iter()
+            .enumerate()
+            .zip(
+                nodes
+                    .iter()
+                    .cycle()
+                    .skip((*transmit_index as usize) % nodes.len()),
+            )
+            .collect();
+        info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
-            .into_par_iter()
-            .map(|((i, v), b)| {
+            .into_iter()
+            .map(|((i, b), v)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
@@ -199,13 +217,19 @@ impl Crdt {
                 blob.set_index(*transmit_index + i as u64)
                     .expect("set_index in pub fn broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
-                s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
+                info!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
+                info!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                e
             })
             .collect();
+        info!("broadcast results {}", errs.len());
         for e in errs {
-            trace!("retransmit result {:?}", e);
             match e {
-                Err(e) => return Err(Error::IO(e)),
+                Err(e) => {
+                    error!("broadcast result {:?}", e);
+                    return Err(Error::IO(e));
+                }
                 _ => (),
             }
             *transmit_index += 1;
@@ -222,7 +246,11 @@ impl Crdt {
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
         };
-        let rblob = blob.read().expect("'blob' read lock in pub fn retransmit");
+        blob.write()
+            .unwrap()
+            .set_id(me.id)
+            .expect("set_id in pub fn retransmit");
+        let rblob = blob.read().unwrap();
         let daddr = "0.0.0.0:0".parse().unwrap();
         let orders: Vec<_> = table
             .iter()
@@ -243,15 +271,21 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                trace!("retransmit blob to {}", v.replicate_addr);
+                info!(
+                    "retransmit blob {} to {}",
+                    rblob.get_index().unwrap(),
+                    v.replicate_addr
+                );
                 //TODO profile this, may need multiple sockets for par_iter
                 s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
             .collect();
         for e in errs {
-            trace!("retransmit result {:?}", e);
             match e {
-                Err(e) => return Err(Error::IO(e)),
+                Err(e) => {
+                    info!("retransmit error {:?}", e);
+                    return Err(Error::IO(e));
+                }
                 _ => (),
             }
         }
@@ -278,29 +312,32 @@ impl Crdt {
         (id, ups, data)
     }
 
+    pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
+        if self.table.len() <= 1 {
+            return Err(Error::CrdtToSmall);
+        }
+        let mut n = (Self::random() as usize) % self.table.len();
+        while self.table.values().nth(n).unwrap().id == self.me {
+            n = (Self::random() as usize) % self.table.len();
+        }
+        let addr = self.table.values().nth(n).unwrap().gossip_addr.clone();
+        let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix);
+        let out = serialize(&req)?;
+        Ok((addr, out))
+    }
+
     /// Create a random gossip request
     /// # Returns
     /// (A,B)
     /// * A - Address to send to
     /// * B - RequestUpdates protocol message
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
-        if self.table.len() <= 1 {
-            return Err(Error::GeneralError);
+        let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
+        if options.len() < 1 {
+            return Err(Error::CrdtToSmall);
         }
-        let mut n = (Self::random() as usize) % self.table.len();
-        while self.table
-            .values()
-            .nth(n)
-            .expect("'values().nth(n)' while loop in fn gossip_request")
-            .id == self.me
-        {
-            n = (Self::random() as usize) % self.table.len();
-        }
-        let v = self.table
-            .values()
-            .nth(n)
-            .expect("'values().nth(n)' in fn gossip_request")
-            .clone();
+        let n = (Self::random() as usize) % options.len();
+        let v = options[n].clone();
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
         Ok((v.gossip_addr, req))
@@ -334,7 +371,7 @@ impl Crdt {
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
-            self.insert(v.clone());
+            self.insert(&v);
         }
         *self.remote.entry(from).or_insert(update_index) = update_index;
     }
@@ -354,9 +391,40 @@ impl Crdt {
             );
         })
     }
-
+    fn run_window_request(
+        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        sock: &UdpSocket,
+        from: &ReplicatedData,
+        ix: u64,
+    ) -> Result<()> {
+        let pos = (ix as usize) % window.read().unwrap().len();
+        let mut outblob = vec![];
+        if let &Some(ref blob) = &window.read().unwrap()[pos] {
+            let rblob = blob.read().unwrap();
+            let blob_ix = rblob.get_index().expect("run_window_request get_index");
+            if blob_ix == ix {
+                // copy to avoid doing IO inside the lock
+                outblob.extend(&rblob.data[..rblob.meta.size]);
+            }
+        } else {
+            assert!(window.read().unwrap()[pos].is_none());
+            info!("failed RequestWindowIndex {} {}", ix, from.replicate_addr);
+        }
+        if outblob.len() > 0 {
+            info!(
+                "responding RequestWindowIndex {} {}",
+                ix, from.replicate_addr
+            );
+            sock.send_to(&outblob, from.replicate_addr)?;
+        }
+        Ok(())
+    }
     /// Process messages from the network
-    fn run_listen(obj: &Arc<RwLock<Self>>, sock: &UdpSocket) -> Result<()> {
+    fn run_listen(
+        obj: &Arc<RwLock<Self>>,
+        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        sock: &UdpSocket,
+    ) -> Result<()> {
         //TODO cache connections
         let mut buf = vec![0u8; 1024 * 64];
         let (amt, src) = sock.recv_from(&mut buf)?;
@@ -378,7 +446,7 @@ impl Crdt {
                 //TODO verify reqdata belongs to sender
                 obj.write()
                     .expect("'obj' write lock in RequestUpdates")
-                    .insert(reqdata);
+                    .insert(&reqdata);
                 sock.send_to(&rsp, addr)
                     .expect("'sock.send_to' in RequestUpdates");
                 trace!("send_to done!");
@@ -389,18 +457,30 @@ impl Crdt {
                     .expect("'obj' write lock in ReceiveUpdates")
                     .apply_updates(from, ups, &data);
             }
+            Protocol::RequestWindowIndex(from, ix) => {
+                //TODO verify from is signed
+                obj.write().unwrap().insert(&from);
+                let me = obj.read().unwrap().my_data().clone();
+                info!(
+                    "received RequestWindowIndex {} {} myaddr {}",
+                    ix, from.replicate_addr, me.replicate_addr
+                );
+                assert_ne!(from.replicate_addr, me.replicate_addr);
+                let _ = Self::run_window_request(window, sock, &from, ix);
+            }
         }
         Ok(())
     }
     pub fn listen(
         obj: Arc<RwLock<Self>>,
+        window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
         sock: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         sock.set_read_timeout(Some(Duration::new(2, 0)))
             .expect("'sock.set_read_timeout' in crdt.rs");
         spawn(move || loop {
-            let _ = Self::run_listen(&obj, &sock);
+            let _ = Self::run_listen(&obj, &window, &sock);
             if exit.load(Ordering::Relaxed) {
                 return;
             }
@@ -458,7 +538,8 @@ mod test {
             .map(|_| {
                 let (crdt, gossip, _, _) = test_node();
                 let c = Arc::new(RwLock::new(crdt));
-                let l = Crdt::listen(c.clone(), gossip, exit.clone());
+                let w = Arc::new(RwLock::new(vec![]));
+                let l = Crdt::listen(c.clone(), w, gossip, exit.clone());
                 (c, l)
             })
             .collect();
@@ -468,7 +549,7 @@ mod test {
             .map(|&(ref c, _)| Crdt::gossip(c.clone(), exit.clone()))
             .collect();
         let mut done = true;
-        for _ in 0..(num * 16) {
+        for _ in 0..(num * 32) {
             done = true;
             for &(ref c, _) in listen.iter() {
                 trace!(
@@ -504,6 +585,7 @@ mod test {
     }
     /// ring a -> b -> c -> d -> e -> a
     #[test]
+    #[ignore]
     fn gossip_ring_test() {
         run_gossip_topo(|listen| {
             let num = listen.len();
@@ -514,13 +596,14 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(d);
+                xv.insert(&d);
             }
         });
     }
 
     /// star (b,c,d,e) -> a
     #[test]
+    #[ignore]
     fn gossip_star_test() {
         run_gossip_topo(|listen| {
             let num = listen.len();
@@ -531,7 +614,7 @@ mod test {
                 let yv = listen[y].0.read().unwrap();
                 let mut d = yv.table[&yv.me].clone();
                 d.version = 0;
-                xv.insert(d);
+                xv.insert(&d);
             }
         });
     }
@@ -549,14 +632,15 @@ mod test {
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
         d.version = 2;
-        crdt.insert(d.clone());
+        crdt.insert(&d);
         assert_eq!(crdt.table[&d.id].version, 2);
         d.version = 1;
-        crdt.insert(d.clone());
+        crdt.insert(&d);
         assert_eq!(crdt.table[&d.id].version, 2);
     }
 
     #[test]
+    #[ignore]
     pub fn test_crdt_retransmit() {
         logger::setup();
         trace!("c1:");
@@ -568,8 +652,8 @@ mod test {
         let c1_id = c1.my_data().id;
         c1.set_leader(c1_id);
 
-        c2.insert(c1.my_data().clone());
-        c3.insert(c1.my_data().clone());
+        c2.insert(&c1.my_data());
+        c3.insert(&c1.my_data());
 
         c2.set_leader(c1.my_data().id);
         c3.set_leader(c1.my_data().id);
@@ -577,14 +661,17 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
 
         // Create listen threads
+        let win1 = Arc::new(RwLock::new(vec![]));
         let a1 = Arc::new(RwLock::new(c1));
-        let t1 = Crdt::listen(a1.clone(), s1, exit.clone());
+        let t1 = Crdt::listen(a1.clone(), win1, s1, exit.clone());
 
         let a2 = Arc::new(RwLock::new(c2));
-        let t2 = Crdt::listen(a2.clone(), s2, exit.clone());
+        let win2 = Arc::new(RwLock::new(vec![]));
+        let t2 = Crdt::listen(a2.clone(), win2, s2, exit.clone());
 
         let a3 = Arc::new(RwLock::new(c3));
-        let t3 = Crdt::listen(a3.clone(), s3, exit.clone());
+        let win3 = Arc::new(RwLock::new(vec![]));
+        let t3 = Crdt::listen(a3.clone(), win3, s3, exit.clone());
 
         // Create gossip threads
         let t1_gossip = Crdt::gossip(a1.clone(), exit.clone());
@@ -594,7 +681,7 @@ mod test {
         //wait to converge
         trace!("waitng to converge:");
         let mut done = false;
-        for _ in 0..10 {
+        for _ in 0..30 {
             done = a1.read().unwrap().table.len() == 3 && a2.read().unwrap().table.len() == 3
                 && a3.read().unwrap().table.len() == 3;
             if done {

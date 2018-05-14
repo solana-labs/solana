@@ -73,7 +73,8 @@ impl Rpu {
     ) -> Result<Vec<JoinHandle<()>>> {
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
-        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
+        let window = streamer::default_window();
+        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
         let mut local = requests_socket.local_addr()?;
@@ -121,6 +122,7 @@ impl Rpu {
             broadcast_socket,
             exit.clone(),
             crdt.clone(),
+            window,
             blob_recycler.clone(),
             broadcast_receiver,
         );
