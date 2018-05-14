@@ -1,4 +1,4 @@
-//! The `historian` module provides a microservice for generating a Proof of History.
+//! The `record_stage` implements the Record stage of the TPU.
 //! It manages a thread containing a Proof of History Recorder.
 
 use entry::Entry;
@@ -8,12 +8,12 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
 
-pub struct Historian {
+pub struct RecordStage {
     pub entry_receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
-impl Historian {
+impl RecordStage {
     pub fn new(
         event_receiver: Receiver<Signal>,
         start_hash: &Hash,
@@ -22,7 +22,7 @@ impl Historian {
         let (entry_sender, entry_receiver) = channel();
         let thread_hdl =
             Self::create_recorder(*start_hash, tick_duration, event_receiver, entry_sender);
-        Historian {
+        RecordStage {
             entry_receiver,
             thread_hdl,
         }
@@ -65,7 +65,7 @@ mod tests {
     fn test_historian() {
         let (input, event_receiver) = channel();
         let zero = Hash::default();
-        let hist = Historian::new(event_receiver, &zero, None);
+        let record_stage = RecordStage::new(event_receiver, &zero, None);
 
         input.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
@@ -73,9 +73,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         input.send(Signal::Tick).unwrap();
 
-        let entry0 = hist.entry_receiver.recv().unwrap();
-        let entry1 = hist.entry_receiver.recv().unwrap();
-        let entry2 = hist.entry_receiver.recv().unwrap();
+        let entry0 = record_stage.entry_receiver.recv().unwrap();
+        let entry1 = record_stage.entry_receiver.recv().unwrap();
+        let entry2 = record_stage.entry_receiver.recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -83,7 +83,7 @@ mod tests {
 
         drop(input);
         assert_eq!(
-            hist.thread_hdl.join().unwrap(),
+            record_stage.thread_hdl.join().unwrap(),
             ExitReason::RecvDisconnected
         );
 
@@ -94,11 +94,11 @@ mod tests {
     fn test_historian_closed_sender() {
         let (input, event_receiver) = channel();
         let zero = Hash::default();
-        let hist = Historian::new(event_receiver, &zero, None);
-        drop(hist.entry_receiver);
+        let record_stage = RecordStage::new(event_receiver, &zero, None);
+        drop(record_stage.entry_receiver);
         input.send(Signal::Tick).unwrap();
         assert_eq!(
-            hist.thread_hdl.join().unwrap(),
+            record_stage.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
         );
     }
@@ -108,11 +108,11 @@ mod tests {
     fn test_ticking_historian() {
         let (input, event_receiver) = channel();
         let zero = Hash::default();
-        let hist = Historian::new(event_receiver, &zero, Some(Duration::from_millis(20)));
+        let record_stage = RecordStage::new(event_receiver, &zero, Some(Duration::from_millis(20)));
         sleep(Duration::from_millis(900));
         input.send(Signal::Tick).unwrap();
         drop(input);
-        let entries: Vec<Entry> = hist.entry_receiver.iter().collect();
+        let entries: Vec<Entry> = record_stage.entry_receiver.iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

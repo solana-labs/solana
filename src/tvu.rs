@@ -6,9 +6,9 @@ use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
-use historian::Historian;
 use ledger;
 use packet;
+use record_stage::RecordStage;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use result::Result;
@@ -180,7 +180,7 @@ impl Tvu {
             blob_recycler.clone(),
         );
 
-        let historian_stage = Historian::new(
+        let record_stage = RecordStage::new(
             request_stage.signal_receiver,
             &obj.event_processor.start_hash,
             obj.event_processor.tick_duration,
@@ -189,7 +189,7 @@ impl Tvu {
         let t_write = Self::drain_service(
             obj.event_processor.accountant.clone(),
             exit.clone(),
-            historian_stage.entry_receiver,
+            record_stage.entry_receiver,
         );
 
         let t_responder = streamer::responder(

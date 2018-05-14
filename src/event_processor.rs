@@ -4,7 +4,7 @@ use accountant::Accountant;
 use entry::Entry;
 use event::Event;
 use hash::Hash;
-use historian::Historian;
+use record_stage::RecordStage;
 use recorder::Signal;
 use result::Result;
 use std::sync::mpsc::{channel, Sender};
@@ -14,7 +14,7 @@ use std::time::Duration;
 pub struct EventProcessor {
     pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
-    historian: Mutex<Historian>,
+    record_stage: Mutex<RecordStage>,
     pub start_hash: Hash,
     pub tick_duration: Option<Duration>,
 }
@@ -23,11 +23,11 @@ impl EventProcessor {
     /// Create a new stage of the TPU for event and transaction processing
     pub fn new(accountant: Accountant, start_hash: &Hash, tick_duration: Option<Duration>) -> Self {
         let (historian_input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, start_hash, tick_duration);
+        let record_stage = RecordStage::new(event_receiver, start_hash, tick_duration);
         EventProcessor {
             accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
-            historian: Mutex::new(historian),
+            record_stage: Mutex::new(record_stage),
             start_hash: *start_hash,
             tick_duration,
         }
@@ -35,14 +35,14 @@ impl EventProcessor {
 
     /// Process the transactions in parallel and then log the successful ones.
     pub fn process_events(&self, events: Vec<Event>) -> Result<Entry> {
-        let historian = self.historian.lock().unwrap();
+        let record_stage = self.record_stage.lock().unwrap();
         let results = self.accountant.process_verified_events(events);
         let events = results.into_iter().filter_map(|x| x.ok()).collect();
         let sender = self.historian_input.lock().unwrap();
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
-        let entry = historian.entry_receiver.recv()?;
+        let entry = record_stage.entry_receiver.recv()?;
         self.accountant.register_entry_id(&entry.id);
         Ok(entry)
     }

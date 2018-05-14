@@ -6,8 +6,8 @@ use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
-use historian::Historian;
 use packet;
+use record_stage::RecordStage;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use result::Result;
@@ -95,7 +95,7 @@ impl Rpu {
             blob_recycler.clone(),
         );
 
-        let historian_stage = Historian::new(
+        let record_stage = RecordStage::new(
             request_stage.signal_receiver,
             &self.event_processor.start_hash,
             self.event_processor.tick_duration,
@@ -108,7 +108,7 @@ impl Rpu {
             broadcast_sender,
             blob_recycler.clone(),
             Mutex::new(writer),
-            historian_stage.entry_receiver,
+            record_stage.entry_receiver,
         );
 
         let broadcast_socket = UdpSocket::bind(local)?;
