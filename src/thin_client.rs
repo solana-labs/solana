@@ -148,8 +148,22 @@ impl ThinClient {
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
-        self.transaction_count();
-        ok(self.last_id.unwrap_or(Hash::default()))
+        info!("get_last_id");
+        let req = Request::GetLastId;
+        let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
+        self.requests_socket
+            .send_to(&data, &self.addr)
+            .expect("buffer error in pub fn get_last_id");
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("get_last_id response");
+            info!("recv_response {:?}", resp);
+            if let &Response::LastId { .. } = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
+        ok(self.last_id.expect("some last_id"))
     }
 
     /// Return the number of transactions the server processed since creating
