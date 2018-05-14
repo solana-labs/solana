@@ -549,7 +549,7 @@ mod test {
             .map(|&(ref c, _)| Crdt::gossip(c.clone(), exit.clone()))
             .collect();
         let mut done = true;
-        for _ in 0..(num * 16) {
+        for _ in 0..(num * 32) {
             done = true;
             for &(ref c, _) in listen.iter() {
                 trace!(
