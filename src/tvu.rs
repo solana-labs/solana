@@ -3,8 +3,6 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
-use entry::Entry;
-use entry_writer::EntryWriter;
 use hash::Hash;
 use ledger;
 use packet;
@@ -15,11 +13,12 @@ use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
+use write_stage::WriteStage;
 
 pub struct Tvu {
     bank: Arc<Bank>,
@@ -35,23 +34,6 @@ impl Tvu {
             start_hash,
             tick_duration,
         }
-    }
-
-    fn drain_service(
-        bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
-        entry_receiver: Receiver<Entry>,
-    ) -> JoinHandle<()> {
-        spawn(move || {
-            let entry_writer = EntryWriter::new(&bank);
-            loop {
-                let _ = entry_writer.drain_entries(&entry_receiver);
-                if exit.load(Ordering::Relaxed) {
-                    info!("drain_service exiting");
-                    break;
-                }
-            }
-        })
     }
 
     /// Process verified blobs, already in order
@@ -188,8 +170,8 @@ impl Tvu {
             obj.tick_duration,
         );
 
-        let t_write =
-            Self::drain_service(obj.bank.clone(), exit.clone(), record_stage.entry_receiver);
+        let write_stage =
+            WriteStage::new_drain(obj.bank.clone(), exit.clone(), record_stage.entry_receiver);
 
         let t_responder = streamer::responder(
             respond_socket,
@@ -210,7 +192,7 @@ impl Tvu {
             t_packet_receiver,
             t_responder,
             request_stage.thread_hdl,
-            t_write,
+            write_stage.thread_hdl,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());
         Ok(threads)
