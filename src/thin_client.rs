@@ -64,6 +64,10 @@ impl ThinClient {
                 info!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
             }
+            Response::LastId { id } => {
+                info!("Response last_id {:?}", id);
+                self.last_id = Some(id);
+            }
             Response::TransactionCount { transaction_count } => {
                 info!("Response transaction count {:?}", transaction_count);
                 self.transaction_count = transaction_count;

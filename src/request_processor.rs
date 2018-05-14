@@ -46,6 +46,12 @@ impl RequestProcessor {
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)
             }
+            Request::GetLastId => {
+                let id = self.accountant.last_id();
+                let rsp = (Response::LastId { id }, rsp_addr);
+                info!("Response::LastId {:?}", rsp);
+                Some(rsp)
+            }
             Request::GetTransactionCount => {
                 let transaction_count = self.accountant.transaction_count() as u64;
                 let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);
