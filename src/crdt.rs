@@ -176,7 +176,7 @@ impl Crdt {
             (robj.table[&robj.me].clone(), cloned_table)
         };
         let daddr = "0.0.0.0:0".parse().unwrap();
-        let items: Vec<&ReplicatedData> = table
+        let nodes: Vec<&ReplicatedData> = table
             .iter()
             .filter(|v| {
                 if me.id == v.id {
@@ -191,26 +191,24 @@ impl Crdt {
                 }
             })
             .collect();
-        info!("items table {}", items.len());
+        assert!(nodes.len() > 0);
+        info!("nodes table {}", nodes.len());
         info!("blobs table {}", blobs.len());
-        // forward the messages to crd nodes starting with a different
-        // node
-        let orders: Vec<_> = items
-            .into_iter()
+        // enumerate all the blobs, those are the indecies
+        // transmit them to nodes, starting from a different node
+        let orders: Vec<_> = blobs
+            .iter()
             .enumerate()
-            .cycle()
-            .zip(
-                blobs
-                    .iter()
-                    .cycle()
-                    .skip((*transmit_index as usize) % blobs.len())
-                    .take(blobs.len()),
+            .zip(nodes
+                 .iter()
+                 .cycle()
+                 .skip((*transmit_index as usize) % nodes.len())
             )
             .collect();
         info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
-            .map(|((i, v), b)| {
+            .map(|((i, b), v)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
@@ -228,7 +226,7 @@ impl Crdt {
         for e in errs {
             match e {
                 Err(e) => {
-                    info!("broadcast result {:?}", e);
+                    error!("broadcast result {:?}", e);
                     return Err(Error::IO(e));
                 }
                 _ => (),

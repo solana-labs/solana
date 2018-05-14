@@ -139,7 +139,7 @@ fn find_next_missing(
         return Err(Error::GenericError)
     }
     let window = locked_window.read().unwrap();
-    for pix in (*consumed + 1) .. (*received + 1) {
+    for pix in *consumed .. *received {
         let i = pix % WINDOW_SIZE;
         if let &None = &window[i] {
             let val = crdt.read().unwrap().window_index_request(pix as u64);
@@ -175,7 +175,7 @@ fn recv_window(
     s: &BlobSender,
     retransmit: &BlobSender,
 ) -> Result<()> {
-    let timer = Duration::from_millis(300);
+    let timer = Duration::from_millis(100);
     let mut dq = r.recv_timeout(timer)?;
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
@@ -347,14 +347,16 @@ fn broadcast(
                 warn!("popped {} at {}", x.read().unwrap().get_index().unwrap(), pos);
                 recycler.recycle(x.clone());
             }
+            warn!("null {}", pos);
             win[pos] = None;
+            assert!(win[pos].is_none());
         }
         while let Some(b) = blobs.pop() {
             let ix = b.read().unwrap().get_index().expect("blob index");
             let pos = (ix as usize) % WINDOW_SIZE;
+            warn!("caching {} at {}", ix, pos);
             assert!(win[pos].is_none());
             win[pos] = Some(b);
-            warn!("cached {} at {}", ix, pos);
         }
     }
     Ok(())
