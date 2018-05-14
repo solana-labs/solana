@@ -193,12 +193,17 @@ impl Crdt {
             .collect();
         info!("items table {}", items.len());
         info!("blobs table {}", blobs.len());
+        // forward the messages to crd nodes starting with a different 
+        // node
         let orders: Vec<_> = items
             .into_iter()
             .enumerate()
             .cycle()
             .zip(blobs
                  .iter()
+                 .cycle()
+                 .skip((*transmit_index as usize) % blobs.len())
+                 .take(blobs.len())
                  ).collect();
         info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
