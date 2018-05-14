@@ -222,6 +222,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_bad_sig() {
         let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
