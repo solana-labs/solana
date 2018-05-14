@@ -26,6 +26,7 @@ pub mod signature;
 pub mod streamer;
 pub mod thin_client;
 pub mod timing;
+pub mod tpu;
 pub mod transaction;
 pub mod tvu;
 pub mod write_stage;
