@@ -59,7 +59,6 @@ impl Tvu {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
-        trace!("replicating blobs {}", blobs.len());
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
         let res = obj.event_processor
             .accountant

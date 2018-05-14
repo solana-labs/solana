@@ -34,14 +34,23 @@ impl EventProcessor {
 
     /// Process the transactions in parallel and then log the successful ones.
     pub fn process_events(&self, events: Vec<Event>) -> Result<Entry> {
+        info!("start sending events {}", events.len());
         let historian = self.historian.lock().unwrap();
         let results = self.accountant.process_verified_events(events);
-        let events = results.into_iter().filter_map(|x| x.ok()).collect();
+        let events: Vec<_> = results.into_iter().filter_map(|x| match x {
+            Ok(e) => Some(e),
+            Err(e) => {
+                info!("error {:?}", e);
+                None
+            }
+        }).collect();
         let sender = self.historian_input.lock().unwrap();
+        info!("sending events {}", events.len());
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
         let entry = historian.entry_receiver.recv()?;
+        info!("entry events {}", entry.events.len());
         self.accountant.register_entry_id(&entry.id);
         Ok(entry)
     }
