@@ -172,6 +172,7 @@ mod tests {
     use tvu::{self, Tvu};
 
     #[test]
+    #[ignore]
     fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
