@@ -6,6 +6,7 @@ use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
+use historian::Historian;
 use packet;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
@@ -67,7 +68,8 @@ impl Rpu {
     ) -> Result<Vec<JoinHandle<()>>> {
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
-        let t_listen = Crdt::listen(crdt.clone(), gossip, exit.clone());
+        let window = streamer::default_window();
+        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
 
         // make sure we are on the same interface
         let mut local = requests_socket.local_addr()?;
@@ -88,11 +90,16 @@ impl Rpu {
         let request_processor = RequestProcessor::new(self.event_processor.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            self.event_processor.clone(),
             exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
+        );
+
+        let historian_stage = Historian::new(
+            request_stage.signal_receiver,
+            &self.event_processor.start_hash,
+            self.event_processor.ms_per_tick,
         );
 
         let (broadcast_sender, broadcast_receiver) = channel();
@@ -102,7 +109,7 @@ impl Rpu {
             broadcast_sender,
             blob_recycler.clone(),
             Mutex::new(writer),
-            request_stage.entry_receiver,
+            historian_stage.entry_receiver,
         );
 
         let broadcast_socket = UdpSocket::bind(local)?;
@@ -110,6 +117,7 @@ impl Rpu {
             broadcast_socket,
             exit.clone(),
             crdt.clone(),
+            window,
             blob_recycler.clone(),
             broadcast_receiver,
         );
