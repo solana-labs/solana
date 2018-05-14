@@ -10,7 +10,6 @@ use solana::accountant::Accountant;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
-use solana::event_processor::EventProcessor;
 use solana::rpu::Rpu;
 use solana::signature::{KeyPair, KeyPairUtil};
 use std::env;
@@ -116,10 +115,8 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let event_processor =
-        EventProcessor::new(accountant, &last_id, Some(Duration::from_millis(1000)));
     let exit = Arc::new(AtomicBool::new(false));
-    let rpu = Rpu::new(event_processor);
+    let rpu = Rpu::new(accountant, last_id, Some(Duration::from_millis(1000)));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();

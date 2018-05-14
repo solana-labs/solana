@@ -5,7 +5,7 @@ use accountant::Accountant;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
-use event_processor::EventProcessor;
+use hash::Hash;
 use packet;
 use record_stage::RecordStage;
 use request_processor::RequestProcessor;
@@ -18,17 +18,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, JoinHandle};
+use std::time::Duration;
 use streamer;
 
 pub struct Rpu {
-    event_processor: Arc<EventProcessor>,
+    accountant: Arc<Accountant>,
+    start_hash: Hash,
+    tick_duration: Option<Duration>,
 }
 
 impl Rpu {
     /// Create a new Rpu that wraps the given Accountant.
-    pub fn new(event_processor: EventProcessor) -> Self {
+    pub fn new(accountant: Accountant, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
         Rpu {
-            event_processor: Arc::new(event_processor),
+            accountant: Arc::new(accountant),
+            start_hash,
+            tick_duration,
         }
     }
 
@@ -86,7 +91,7 @@ impl Rpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
-        let request_processor = RequestProcessor::new(self.event_processor.accountant.clone());
+        let request_processor = RequestProcessor::new(self.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
             exit.clone(),
@@ -97,13 +102,13 @@ impl Rpu {
 
         let record_stage = RecordStage::new(
             request_stage.signal_receiver,
-            &self.event_processor.start_hash,
-            self.event_processor.tick_duration,
+            &self.start_hash,
+            self.tick_duration,
         );
 
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
-            self.event_processor.accountant.clone(),
+            self.accountant.clone(),
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),
