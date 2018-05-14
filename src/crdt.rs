@@ -24,7 +24,6 @@ use signature::{PublicKey, Signature};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{SocketAddr, UdpSocket};
-use std::cmp::max;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
@@ -241,7 +240,8 @@ impl Crdt {
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
         };
-        let rblob = blob.read().expect("'blob' read lock in pub fn retransmit");
+        blob.write().unwrap().set_id(me.id).expect("set_id in pub fn retransmit");
+        let rblob = blob.read().unwrap();
         let daddr = "0.0.0.0:0".parse().unwrap();
         let orders: Vec<_> = table
             .iter()
@@ -262,7 +262,7 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                trace!("retransmit blob to {}", v.replicate_addr);
+                info!("retransmit blob {} to {}", rblob.get_index().unwrap(), v.replicate_addr);
                 //TODO profile this, may need multiple sockets for par_iter
                 s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
