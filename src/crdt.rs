@@ -678,7 +678,7 @@ mod test {
         //wait to converge
         trace!("waitng to converge:");
         let mut done = false;
-        for _ in 0..20 {
+        for _ in 0..30 {
             done = a1.read().unwrap().table.len() == 3 && a2.read().unwrap().table.len() == 3
                 && a3.read().unwrap().table.len() == 3;
             if done {
