@@ -19,6 +19,7 @@ pub enum Error {
     SendError,
     Services,
     CrdtToSmall,
+    GenericError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

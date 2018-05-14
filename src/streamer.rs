@@ -3,7 +3,7 @@ use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
 use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets};
-use result::Result;
+use result::{Result, Error};
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -128,31 +128,39 @@ pub fn blob_receiver(
     });
     Ok(t)
 }
+
+fn find_next_missing(
+    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    crdt: &Arc<RwLock<Crdt>>,
+    consumed: &mut usize,
+    received: &mut usize,
+) -> Result<(SocketAddr, Vec<u8>)> {
+    if *received <= *consumed {
+        return Err(Error::GenericError)
+    }
+    let window = locked_window.read().unwrap();
+    for pix in (*consumed + 1) .. (*received + 1) {
+        let i = pix % WINDOW_SIZE;
+        if let &None = &window[i] {
+            let val = crdt.read().unwrap().window_index_request(pix as u64);
+            if let Ok((to, req)) = val {
+                return Ok((to, req));
+            }
+        }
+    }
+    Err(Error::GenericError)
+}
+
 fn repair_window(
     locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
     crdt: &Arc<RwLock<Crdt>>,
     consumed: &mut usize,
+    received: &mut usize,
 ) -> Result<()> {
-    let repair: Option<(SocketAddr, Vec<u8>)> = {
-        let mut window = locked_window.write().unwrap();
-        let next = (*consumed + 1) % WINDOW_SIZE;
-        if let &Some(ref blob) = &window[next] {
-            let cix = blob.read().unwrap().get_index().expect("blob index value");
-            let val = crdt.read().unwrap().window_index_request(cix - 1);
-            if let Ok((to, req)) = val {
-                Some((to, req))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-    if let Some((to, req)) = repair {
-        //todo cache socket
-        let sock = UdpSocket::bind("0.0.0.0:0")?;
-        sock.send_to(&req, to)?;
-    }
+    let (to,req) = find_next_missing(locked_window, crdt, consumed, received)?;
+    //todo cache socket
+    let sock = UdpSocket::bind("0.0.0.0:0")?;
+    sock.send_to(&req, to)?;
     Ok(())
 }
 
@@ -161,11 +169,12 @@ fn recv_window(
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
+    received: &mut usize,
     r: &BlobReceiver,
     s: &BlobSender,
     retransmit: &BlobSender,
 ) -> Result<()> {
-    let timer = Duration::from_millis(200);
+    let timer = Duration::from_millis(100);
     let mut dq = r.recv_timeout(timer)?;
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
@@ -216,6 +225,9 @@ fn recv_window(
         let b_ = b.clone();
         let p = b.write().expect("'b' write lock in fn recv_window");
         let pix = p.get_index()? as usize;
+        if pix > *received {
+            *received = pix;
+        }
         let w = pix % WINDOW_SIZE;
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
@@ -225,8 +237,12 @@ fn recv_window(
             let mut window = locked_window.write().unwrap();
             if window[w].is_none() {
                 window[w] = Some(b_);
-            } else {
-                debug!("duplicate blob at index {:}", w);
+            } else if let &Some(ref cblob) = &window[w] {
+                if cblob.read().unwrap().get_index().unwrap() != pix as u64 {
+                    warn!("overrun blob at index {:}", w);
+                } else {
+                    warn!("duplicate blob at index {:}", w);
+                }
             }
             loop {
                 let k = *consumed % WINDOW_SIZE;
@@ -282,6 +298,7 @@ pub fn window(
 ) -> JoinHandle<()> {
     spawn(move || {
         let mut consumed = 0;
+        let mut received = 0;
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -291,11 +308,12 @@ pub fn window(
                 &crdt,
                 &recycler,
                 &mut consumed,
+                &mut received,
                 &r,
                 &s,
                 &retransmit,
             );
-            let _ = repair_window(&window, &crdt, &mut consumed);
+            let _ = repair_window(&window, &crdt, &mut consumed, &mut received);
         }
     })
 }

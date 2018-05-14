@@ -63,7 +63,9 @@ impl Tvu {
         let res = obj.event_processor
             .accountant
             .process_verified_entries(entries);
-        info!("process_verified_entries {} {:?}", blobs.len(), res);
+        if res.is_err() {
+            error!("process_verified_entries {} {:?}", blobs.len(), res);
+        }
         for blob in blobs {
             blob_recycler.recycle(blob);
         }

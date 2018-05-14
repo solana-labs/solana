@@ -13,7 +13,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use streamer;
-use event::Event;
 
 pub struct EntryWriter<'a> {
     accountant: &'a Accountant,
