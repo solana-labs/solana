@@ -295,11 +295,7 @@ pub fn window(
                 &s,
                 &retransmit,
             );
-            let _ = repair_window(
-                &window,
-                &crdt,
-                &mut consumed,
-            );
+            let _ = repair_window(&window, &crdt, &mut consumed);
         }
     })
 }

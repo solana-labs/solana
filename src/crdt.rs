@@ -193,22 +193,24 @@ impl Crdt {
             .collect();
         info!("items table {}", items.len());
         info!("blobs table {}", blobs.len());
-        // forward the messages to crd nodes starting with a different 
+        // forward the messages to crd nodes starting with a different
         // node
         let orders: Vec<_> = items
             .into_iter()
             .enumerate()
             .cycle()
-            .zip(blobs
-                 .iter()
-                 .cycle()
-                 .skip((*transmit_index as usize) % blobs.len())
-                 .take(blobs.len())
-                 ).collect();
+            .zip(
+                blobs
+                    .iter()
+                    .cycle()
+                    .skip((*transmit_index as usize) % blobs.len())
+                    .take(blobs.len()),
+            )
+            .collect();
         info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
-            .map(|((i,v), b)| {
+            .map(|((i, v), b)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
@@ -245,7 +247,10 @@ impl Crdt {
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
         };
-        blob.write().unwrap().set_id(me.id).expect("set_id in pub fn retransmit");
+        blob.write()
+            .unwrap()
+            .set_id(me.id)
+            .expect("set_id in pub fn retransmit");
         let rblob = blob.read().unwrap();
         let daddr = "0.0.0.0:0".parse().unwrap();
         let orders: Vec<_> = table
@@ -267,7 +272,11 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                info!("retransmit blob {} to {}", rblob.get_index().unwrap(), v.replicate_addr);
+                info!(
+                    "retransmit blob {} to {}",
+                    rblob.get_index().unwrap(),
+                    v.replicate_addr
+                );
                 //TODO profile this, may need multiple sockets for par_iter
                 s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
