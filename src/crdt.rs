@@ -202,13 +202,13 @@ impl Crdt {
                  ).collect();
         info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
-            .iter()
+            .into_iter()
             .map(|((i,v), b)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
                 blob.set_id(me.id).expect("set_id in pub fn broadcast");
-                blob.set_index(*transmit_index + *i as u64)
+                blob.set_index(*transmit_index + i as u64)
                     .expect("set_index in pub fn broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 info!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
