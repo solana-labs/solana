@@ -6,6 +6,7 @@ use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
 use event_processor::EventProcessor;
+use historian::Historian;
 use ledger;
 use packet;
 use request_processor::RequestProcessor;
@@ -173,17 +174,22 @@ impl Tvu {
         let request_processor = RequestProcessor::new(obj.event_processor.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            obj.event_processor.clone(),
             exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
 
+        let historian_stage = Historian::new(
+            request_stage.signal_receiver,
+            &obj.event_processor.start_hash,
+            obj.event_processor.ms_per_tick,
+        );
+
         let t_write = Self::drain_service(
             obj.event_processor.accountant.clone(),
             exit.clone(),
-            request_stage.entry_receiver,
+            historian_stage.entry_receiver,
         );
 
         let t_responder = streamer::responder(

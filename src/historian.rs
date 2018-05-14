@@ -4,13 +4,12 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
-use std::sync::Mutex;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
 
 pub struct Historian {
-    pub entry_receiver: Mutex<Receiver<Entry>>,
+    pub entry_receiver: Receiver<Entry>,
     pub thread_hdl: JoinHandle<ExitReason>,
 }
 
@@ -24,7 +23,7 @@ impl Historian {
         let thread_hdl =
             Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
         Historian {
-            entry_receiver: Mutex::new(entry_receiver),
+            entry_receiver,
             thread_hdl,
         }
     }
@@ -52,10 +51,7 @@ impl Historian {
     }
 
     pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
-        self.entry_receiver
-            .lock()
-            .expect("'entry_receiver' lock in pub fn receive")
-            .try_recv()
+        self.entry_receiver.try_recv()
     }
 }
 
@@ -78,9 +74,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         input.send(Signal::Tick).unwrap();
 
-        let entry0 = hist.entry_receiver.lock().unwrap().recv().unwrap();
-        let entry1 = hist.entry_receiver.lock().unwrap().recv().unwrap();
-        let entry2 = hist.entry_receiver.lock().unwrap().recv().unwrap();
+        let entry0 = hist.entry_receiver.recv().unwrap();
+        let entry1 = hist.entry_receiver.recv().unwrap();
+        let entry2 = hist.entry_receiver.recv().unwrap();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -117,7 +113,7 @@ mod tests {
         sleep(Duration::from_millis(900));
         input.send(Signal::Tick).unwrap();
         drop(input);
-        let entries: Vec<Entry> = hist.entry_receiver.lock().unwrap().iter().collect();
+        let entries: Vec<Entry> = hist.entry_receiver.iter().collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

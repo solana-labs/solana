@@ -14,6 +14,8 @@ pub struct EventProcessor {
     pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
+    pub start_hash: Hash,
+    pub ms_per_tick: Option<u64>,
 }
 
 impl EventProcessor {
@@ -25,6 +27,8 @@ impl EventProcessor {
             accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
+            start_hash: *start_hash,
+            ms_per_tick,
         }
     }
 
@@ -37,7 +41,7 @@ impl EventProcessor {
         sender.send(Signal::Events(events))?;
 
         // Wait for the historian to tag our Events with an ID and then register it.
-        let entry = historian.entry_receiver.lock().unwrap().recv()?;
+        let entry = historian.entry_receiver.recv()?;
         self.accountant.register_entry_id(&entry.id);
         Ok(entry)
     }

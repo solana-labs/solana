@@ -1,9 +1,8 @@
 //! The `request_stage` processes thin client Request messages.
 
-use entry::Entry;
-use event_processor::EventProcessor;
 use packet;
 use packet::SharedPackets;
+use recorder::Signal;
 use request_processor::RequestProcessor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,7 +12,7 @@ use streamer;
 
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
-    pub entry_receiver: Receiver<Entry>,
+    pub signal_receiver: Receiver<Signal>,
     pub blob_receiver: streamer::BlobReceiver,
     pub request_processor: Arc<RequestProcessor>,
 }
@@ -21,7 +20,6 @@ pub struct RequestStage {
 impl RequestStage {
     pub fn new(
         request_processor: RequestProcessor,
-        event_processor: Arc<EventProcessor>,
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: packet::PacketRecycler,
@@ -29,13 +27,12 @@ impl RequestStage {
     ) -> Self {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
-        let (entry_sender, entry_receiver) = channel();
+        let (signal_sender, signal_receiver) = channel();
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = spawn(move || loop {
             let e = request_processor_.process_request_packets(
-                &event_processor,
                 &verified_receiver,
-                &entry_sender,
+                &signal_sender,
                 &blob_sender,
                 &packet_recycler,
                 &blob_recycler,
@@ -48,7 +45,7 @@ impl RequestStage {
         });
         RequestStage {
             thread_hdl,
-            entry_receiver,
+            signal_receiver,
             blob_receiver,
             request_processor,
         }

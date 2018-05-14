@@ -2,12 +2,11 @@
 
 use accountant::Accountant;
 use bincode::{deserialize, serialize};
-use entry::Entry;
 use event::Event;
-use event_processor::EventProcessor;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
+use recorder::Signal;
 use request::{Request, Response};
 use result::Result;
 use std::collections::VecDeque;
@@ -140,9 +139,8 @@ impl RequestProcessor {
 
     pub fn process_request_packets(
         &self,
-        event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        entry_sender: &Sender<Entry>,
+        signal_sender: &Sender<Signal>,
         blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
@@ -176,8 +174,9 @@ impl RequestProcessor {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            let entry = event_processor.process_events(events)?;
-            entry_sender.send(entry)?;
+            let results = self.accountant.process_verified_events(events);
+            let events = results.into_iter().filter_map(|x| x.ok()).collect();
+            signal_sender.send(Signal::Events(events))?;
             debug!("done process_events");
 
             debug!("process_requests");
