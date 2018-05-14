@@ -17,7 +17,7 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
@@ -59,6 +59,7 @@ pub struct Accountant {
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
     last_time: RwLock<DateTime<Utc>>,
+    transaction_count: AtomicUsize,
 }
 
 impl Accountant {
@@ -72,6 +73,7 @@ impl Accountant {
             last_ids: RwLock::new(VecDeque::new()),
             time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
+            transaction_count: AtomicUsize::new(0),
         }
     }
 
@@ -188,7 +190,10 @@ impl Accountant {
             );
 
             match result {
-                Ok(_) => return Ok(()),
+                Ok(_) => {
+                    self.transaction_count.fetch_add(1, Ordering::Relaxed);
+                    return Ok(());
+                }
                 Err(_) => continue,
             };
         }
@@ -387,6 +392,10 @@ impl Accountant {
             .expect("'balances' read lock in get_balance");
         bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
     }
+
+    pub fn transaction_count(&self) -> usize {
+        self.transaction_count.load(Ordering::Relaxed)
+    }
 }
 
 #[cfg(test)]
@@ -412,6 +421,7 @@ mod tests {
             .transfer(500, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
         assert_eq!(accountant.get_balance(&bob_pubkey).unwrap(), 1_500);
+        assert_eq!(accountant.transaction_count(), 2);
     }
 
     #[test]
@@ -422,6 +432,7 @@ mod tests {
             accountant.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
             Err(AccountingError::AccountNotFound)
         );
+        assert_eq!(accountant.transaction_count(), 0);
     }
 
     #[test]
@@ -432,10 +443,12 @@ mod tests {
         accountant
             .transfer(1_000, &alice.keypair(), bob_pubkey, alice.last_id())
             .unwrap();
+        assert_eq!(accountant.transaction_count(), 1);
         assert_eq!(
             accountant.transfer(10_001, &alice.keypair(), bob_pubkey, alice.last_id()),
             Err(AccountingError::InsufficientFunds)
         );
+        assert_eq!(accountant.transaction_count(), 1);
 
         let alice_pubkey = alice.keypair().pubkey();
         assert_eq!(accountant.get_balance(&alice_pubkey).unwrap(), 10_000);
@@ -468,6 +481,9 @@ mod tests {
         // Alice's balance will be zero because all funds are locked up.
         assert_eq!(accountant.get_balance(&alice.pubkey()), Some(0));
 
+        // tx count is 1, because debits were applied.
+        assert_eq!(accountant.transaction_count(), 1);
+
         // Bob's balance will be None because the funds have not been
         // sent.
         assert_eq!(accountant.get_balance(&bob_pubkey), None);
@@ -478,6 +494,10 @@ mod tests {
             .process_verified_timestamp(alice.pubkey(), dt)
             .unwrap();
         assert_eq!(accountant.get_balance(&bob_pubkey), Some(1));
+
+        // tx count is still 1, because we chose not to count timestamp events
+        // tx count.
+        assert_eq!(accountant.transaction_count(), 1);
 
         accountant
             .process_verified_timestamp(alice.pubkey(), dt)
@@ -516,6 +536,9 @@ mod tests {
             .transfer_on_date(1, &alice_keypair, bob_pubkey, dt, alice.last_id())
             .unwrap();
 
+        // Assert the debit counts as a transaction.
+        assert_eq!(accountant.transaction_count(), 1);
+
         // Alice's balance will be zero because all funds are locked up.
         assert_eq!(accountant.get_balance(&alice.pubkey()), Some(0));
 
@@ -529,6 +552,9 @@ mod tests {
             .unwrap();
         assert_eq!(accountant.get_balance(&alice.pubkey()), Some(1));
         assert_eq!(accountant.get_balance(&bob_pubkey), None);
+
+        // Assert cancel doesn't cause count to go backward.
+        assert_eq!(accountant.transaction_count(), 1);
 
         accountant
             .process_verified_sig(alice.pubkey(), sig)
@@ -576,7 +602,11 @@ mod tests {
         let tr0 = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
         let tr1 = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
-        assert!(accountant.process_verified_transactions(trs)[1].is_err());
+        let results = accountant.process_verified_transactions(trs);
+        assert!(results[1].is_err());
+
+        // Assert bad transactions aren't counted.
+        assert_eq!(accountant.transaction_count(), 1);
     }
 }
 

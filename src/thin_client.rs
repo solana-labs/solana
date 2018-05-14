@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
-use request::{Request, Response, Subscription};
+use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
@@ -18,7 +18,7 @@ pub struct ThinClient {
     pub requests_socket: UdpSocket,
     pub events_socket: UdpSocket,
     last_id: Option<Hash>,
-    num_events: u64,
+    transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
 }
 
@@ -32,19 +32,10 @@ impl ThinClient {
             requests_socket,
             events_socket,
             last_id: None,
-            num_events: 0,
+            transaction_count: 0,
             balances: HashMap::new(),
         };
-        client.init();
         client
-    }
-
-    pub fn init(&self) {
-        let subscriptions = vec![Subscription::EntryInfo];
-        let req = Request::Subscribe { subscriptions };
-        let data = serialize(&req).expect("serialize Subscribe in thin_client");
-        trace!("subscribing to {}", self.addr);
-        let _res = self.requests_socket.send_to(&data, &self.addr);
     }
 
     pub fn recv_response(&self) -> io::Result<Response> {
@@ -62,10 +53,13 @@ impl ThinClient {
                 info!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
             }
-            Response::EntryInfo(entry_info) => {
-                trace!("Response entry_info {:?}", entry_info.id);
-                self.last_id = Some(entry_info.id);
-                self.num_events += entry_info.num_events;
+            Response::LastId { id } => {
+                info!("Response last_id {:?}", id);
+                self.last_id = Some(id);
+            }
+            Response::TransactionCount { transaction_count } => {
+                info!("Response transaction count {:?}", transaction_count);
+                self.transaction_count = transaction_count;
             }
         }
     }
@@ -113,41 +107,47 @@ impl ThinClient {
         self.balances[pubkey].ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
-    /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
-        self.transaction_count();
-        ok(self.last_id.unwrap_or(Hash::default()))
-    }
-
-    /// Return the number of transactions the server processed since creating
-    /// this client instance.
+    /// Request the transaction count.  If the response packet is dropped by the network,
+    /// this method will hang.
     pub fn transaction_count(&mut self) -> u64 {
-        // Wait for at least one EntryInfo.
+        info!("transaction_count");
+        let req = Request::GetTransactionCount;
+        let data =
+            serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
+        self.requests_socket
+            .send_to(&data, &self.addr)
+            .expect("buffer error in pub fn transaction_count");
         let mut done = false;
         while !done {
-            let resp = self.recv_response()
-                .expect("recv_response in pub fn transaction_count");
-            if let &Response::EntryInfo(_) = &resp {
+            let resp = self.recv_response().expect("transaction count dropped");
+            info!("recv_response {:?}", resp);
+            if let &Response::TransactionCount { .. } = &resp {
                 done = true;
             }
             self.process_response(resp);
         }
+        self.transaction_count
+    }
 
-        // Then take the rest.
+    /// Request the last Entry ID from the server. This method blocks
+    /// until the server sends a response.
+    pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
+        info!("get_last_id");
+        let req = Request::GetLastId;
+        let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
         self.requests_socket
-            .set_nonblocking(true)
-            .expect("set_nonblocking in pub fn transaction_count");
-        loop {
-            match self.recv_response() {
-                Err(_) => break,
-                Ok(resp) => self.process_response(resp),
+            .send_to(&data, &self.addr)
+            .expect("buffer error in pub fn get_last_id");
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("get_last_id response");
+            info!("recv_response {:?}", resp);
+            if let &Response::LastId { .. } = &resp {
+                done = true;
             }
+            self.process_response(resp);
         }
-        self.requests_socket
-            .set_nonblocking(false)
-            .expect("set_nonblocking in pub fn transaction_count");
-        self.num_events
+        ok(self.last_id.expect("some last_id"))
     }
 }
 
