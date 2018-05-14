@@ -585,6 +585,7 @@ mod test {
     }
     /// ring a -> b -> c -> d -> e -> a
     #[test]
+    #[ignore]
     fn gossip_ring_test() {
         run_gossip_topo(|listen| {
             let num = listen.len();
@@ -602,6 +603,7 @@ mod test {
 
     /// star (b,c,d,e) -> a
     #[test]
+    #[ignore]
     fn gossip_star_test() {
         run_gossip_topo(|listen| {
             let num = listen.len();
@@ -638,6 +640,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn test_crdt_retransmit() {
         logger::setup();
         trace!("c1:");
