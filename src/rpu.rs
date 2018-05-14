@@ -1,7 +1,7 @@
 //! The `rpu` module implements the Request Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
-use accountant::Accountant;
+use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
@@ -22,23 +22,23 @@ use std::time::Duration;
 use streamer;
 
 pub struct Rpu {
-    accountant: Arc<Accountant>,
+    bank: Arc<Bank>,
     start_hash: Hash,
     tick_duration: Option<Duration>,
 }
 
 impl Rpu {
-    /// Create a new Rpu that wraps the given Accountant.
-    pub fn new(accountant: Accountant, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
+    /// Create a new Rpu that wraps the given Bank.
+    pub fn new(bank: Bank, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
         Rpu {
-            accountant: Arc::new(accountant),
+            bank: Arc::new(bank),
             start_hash,
             tick_duration,
         }
     }
 
     fn write_service<W: Write + Send + 'static>(
-        accountant: Arc<Accountant>,
+        bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
@@ -46,7 +46,7 @@ impl Rpu {
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let entry_writer = EntryWriter::new(&accountant);
+            let entry_writer = EntryWriter::new(&bank);
             let _ = entry_writer.write_and_send_entries(
                 &broadcast,
                 &blob_recycler,
@@ -91,7 +91,7 @@ impl Rpu {
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
-        let request_processor = RequestProcessor::new(self.accountant.clone());
+        let request_processor = RequestProcessor::new(self.bank.clone());
         let request_stage = RequestStage::new(
             request_processor,
             exit.clone(),
@@ -108,7 +108,7 @@ impl Rpu {
 
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
-            self.accountant.clone(),
+            self.bank.clone(),
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),

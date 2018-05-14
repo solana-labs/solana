@@ -52,9 +52,9 @@ impl RequestStage {
     }
 }
 
-// TODO: When accounting is pulled out of RequestStage, add this test back in.
+// TODO: When banking is pulled out of RequestStage, add this test back in.
 
-//use accountant::Accountant;
+//use bank::Bank;
 //use entry::Entry;
 //use event::Event;
 //use hash::Hash;
@@ -67,7 +67,7 @@ impl RequestStage {
 //
 //#[cfg(test)]
 //mod tests {
-//    use accountant::Accountant;
+//    use bank::Bank;
 //    use event::Event;
 //    use event_processor::EventProcessor;
 //    use mint::Mint;
@@ -75,15 +75,15 @@ impl RequestStage {
 //    use transaction::Transaction;
 //
 //    #[test]
-//    // TODO: Move this test accounting_stage. Calling process_events() directly
+//    // TODO: Move this test banking_stage. Calling process_events() directly
 //    // defeats the purpose of this test.
-//    fn test_accounting_sequential_consistency() {
+//    fn test_banking_sequential_consistency() {
 //        // In this attack we'll demonstrate that a verifier can interpret the ledger
 //        // differently if either the server doesn't signal the ledger to add an
 //        // Entry OR if the verifier tries to parallelize across multiple Entries.
 //        let mint = Mint::new(2);
-//        let accountant = Accountant::new(&mint);
-//        let event_processor = EventProcessor::new(accountant, &mint.last_id(), None);
+//        let bank = Bank::new(&mint);
+//        let event_processor = EventProcessor::new(bank, &mint.last_id(), None);
 //
 //        // Process a batch that includes a transaction that receives two tokens.
 //        let alice = KeyPair::new();
@@ -96,22 +96,22 @@ impl RequestStage {
 //        let events = vec![Event::Transaction(tr)];
 //        let entry1 = event_processor.process_events(events).unwrap();
 //
-//        // Collect the ledger and feed it to a new accountant.
+//        // Collect the ledger and feed it to a new bank.
 //        let entries = vec![entry0, entry1];
 //
 //        // Assert the user holds one token, not two. If the server only output one
 //        // entry, then the second transaction will be rejected, because it drives
 //        // the account balance below zero before the credit is added.
-//        let accountant = Accountant::new(&mint);
+//        let bank = Bank::new(&mint);
 //        for entry in entries {
 //            assert!(
-//                accountant
+//                bank
 //                    .process_verified_events(entry.events)
 //                    .into_iter()
 //                    .all(|x| x.is_ok())
 //            );
 //        }
-//        assert_eq!(accountant.get_balance(&alice.pubkey()), Some(1));
+//        assert_eq!(bank.get_balance(&alice.pubkey()), Some(1));
 //    }
 //}
 //
@@ -119,7 +119,7 @@ impl RequestStage {
 //mod bench {
 //    extern crate test;
 //    use self::test::Bencher;
-//    use accountant::{Accountant, MAX_ENTRY_IDS};
+//    use bank::{Bank, MAX_ENTRY_IDS};
 //    use bincode::serialize;
 //    use event_processor::*;
 //    use hash::hash;
@@ -133,7 +133,7 @@ impl RequestStage {
 //    #[bench]
 //    fn process_events_bench(_bencher: &mut Bencher) {
 //        let mint = Mint::new(100_000_000);
-//        let accountant = Accountant::new(&mint);
+//        let bank = Bank::new(&mint);
 //        // Create transactions between unrelated parties.
 //        let txs = 100_000;
 //        let last_ids: Mutex<HashSet<Hash>> = Mutex::new(HashSet::new());
@@ -147,18 +147,18 @@ impl RequestStage {
 //                    let mut last_ids = last_ids.lock().unwrap();
 //                    if !last_ids.contains(&last_id) {
 //                        last_ids.insert(last_id);
-//                        accountant.register_entry_id(&last_id);
+//                        bank.register_entry_id(&last_id);
 //                    }
 //                }
 //
 //                // Seed the 'from' account.
 //                let rando0 = KeyPair::new();
 //                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-//                accountant.process_verified_transaction(&tr).unwrap();
+//                bank.process_verified_transaction(&tr).unwrap();
 //
 //                let rando1 = KeyPair::new();
 //                let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-//                accountant.process_verified_transaction(&tr).unwrap();
+//                bank.process_verified_transaction(&tr).unwrap();
 //
 //                // Finally, return a transaction that's unique
 //                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
@@ -170,7 +170,7 @@ impl RequestStage {
 //            .map(|tr| Event::Transaction(tr))
 //            .collect();
 //
-//        let event_processor = EventProcessor::new(accountant, &mint.last_id(), None);
+//        let event_processor = EventProcessor::new(bank, &mint.last_id(), None);
 //
 //        let now = Instant::now();
 //        assert!(event_processor.process_events(events).is_ok());

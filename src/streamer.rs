@@ -322,7 +322,7 @@ fn retransmit(
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
 /// * `exit` - Boolean to signal system exit.
-/// * `crdt` - This structure needs to be updated and populated by the accountant and via gossip.
+/// * `crdt` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(

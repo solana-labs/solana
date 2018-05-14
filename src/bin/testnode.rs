@@ -6,7 +6,7 @@ extern crate solana;
 
 use getopts::Options;
 use isatty::stdin_isatty;
-use solana::accountant::Accountant;
+use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
@@ -92,31 +92,31 @@ fn main() {
         None
     };
 
-    eprintln!("creating accountant...");
+    eprintln!("creating bank...");
 
-    let accountant = Accountant::new_from_deposit(&deposit.unwrap());
-    accountant.register_entry_id(&entry0.id);
-    accountant.register_entry_id(&entry1.id);
+    let bank = Bank::new_from_deposit(&deposit.unwrap());
+    bank.register_entry_id(&entry0.id);
+    bank.register_entry_id(&entry1.id);
 
     eprintln!("processing entries...");
 
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = accountant.process_verified_events(entry.events);
+        let results = bank.process_verified_events(entry.events);
         for result in results {
             if let Err(e) = result {
                 eprintln!("failed to process event {:?}", e);
                 exit(1);
             }
         }
-        accountant.register_entry_id(&last_id);
+        bank.register_entry_id(&last_id);
     }
 
     eprintln!("creating networking stack...");
 
     let exit = Arc::new(AtomicBool::new(false));
-    let rpu = Rpu::new(accountant, last_id, Some(Duration::from_millis(1000)));
+    let rpu = Rpu::new(bank, last_id, Some(Duration::from_millis(1000)));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();

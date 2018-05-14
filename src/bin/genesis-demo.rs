@@ -7,7 +7,7 @@ extern crate untrusted;
 
 use isatty::stdin_isatty;
 use rayon::prelude::*;
-use solana::accountant::MAX_ENTRY_IDS;
+use solana::bank::MAX_ENTRY_IDS;
 use solana::entry::{create_entry, next_entry};
 use solana::event::Event;
 use solana::mint::MintDemo;
