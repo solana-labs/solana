@@ -6,7 +6,7 @@ use hash::Hash;
 use recorder::{ExitReason, Recorder, Signal};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub struct Historian {
     pub entry_receiver: Receiver<Entry>,
@@ -17,11 +17,11 @@ impl Historian {
     pub fn new(
         event_receiver: Receiver<Signal>,
         start_hash: &Hash,
-        ms_per_tick: Option<u64>,
+        tick_duration: Option<Duration>,
     ) -> Self {
         let (entry_sender, entry_receiver) = channel();
         let thread_hdl =
-            Historian::create_recorder(*start_hash, ms_per_tick, event_receiver, entry_sender);
+            Self::create_recorder(*start_hash, tick_duration, event_receiver, entry_sender);
         Historian {
             entry_receiver,
             thread_hdl,
@@ -32,18 +32,18 @@ impl Historian {
     /// sending back Entry messages until either the receiver or sender channel is closed.
     fn create_recorder(
         start_hash: Hash,
-        ms_per_tick: Option<u64>,
+        tick_duration: Option<Duration>,
         receiver: Receiver<Signal>,
         sender: Sender<Entry>,
     ) -> JoinHandle<ExitReason> {
         spawn(move || {
             let mut recorder = Recorder::new(receiver, sender, start_hash);
-            let now = Instant::now();
+            let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
             loop {
-                if let Err(err) = recorder.process_events(now, ms_per_tick) {
+                if let Err(err) = recorder.process_events(duration_data) {
                     return err;
                 }
-                if ms_per_tick.is_some() {
+                if duration_data.is_some() {
                     recorder.hash();
                 }
             }
@@ -60,7 +60,6 @@ mod tests {
     use super::*;
     use ledger::Block;
     use std::thread::sleep;
-    use std::time::Duration;
 
     #[test]
     fn test_historian() {
@@ -109,7 +108,7 @@ mod tests {
     fn test_ticking_historian() {
         let (input, event_receiver) = channel();
         let zero = Hash::default();
-        let hist = Historian::new(event_receiver, &zero, Some(20));
+        let hist = Historian::new(event_receiver, &zero, Some(Duration::from_millis(20)));
         sleep(Duration::from_millis(900));
         input.send(Signal::Tick).unwrap();
         drop(input);

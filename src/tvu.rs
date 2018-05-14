@@ -183,7 +183,7 @@ impl Tvu {
         let historian_stage = Historian::new(
             request_stage.signal_receiver,
             &obj.event_processor.start_hash,
-            obj.event_processor.ms_per_tick,
+            obj.event_processor.tick_duration,
         );
 
         let t_write = Self::drain_service(
@@ -311,7 +311,11 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let accountant = Accountant::new(&alice);
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let event_processor = EventProcessor::new(
+            accountant,
+            &alice.last_id(),
+            Some(Duration::from_millis(30)),
+        );
         let tvu = Arc::new(Tvu::new(event_processor));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tvu::serve(

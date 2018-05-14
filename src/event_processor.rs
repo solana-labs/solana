@@ -9,26 +9,27 @@ use recorder::Signal;
 use result::Result;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub struct EventProcessor {
     pub accountant: Arc<Accountant>,
     historian_input: Mutex<Sender<Signal>>,
     historian: Mutex<Historian>,
     pub start_hash: Hash,
-    pub ms_per_tick: Option<u64>,
+    pub tick_duration: Option<Duration>,
 }
 
 impl EventProcessor {
     /// Create a new stage of the TPU for event and transaction processing
-    pub fn new(accountant: Accountant, start_hash: &Hash, ms_per_tick: Option<u64>) -> Self {
+    pub fn new(accountant: Accountant, start_hash: &Hash, tick_duration: Option<Duration>) -> Self {
         let (historian_input, event_receiver) = channel();
-        let historian = Historian::new(event_receiver, start_hash, ms_per_tick);
+        let historian = Historian::new(event_receiver, start_hash, tick_duration);
         EventProcessor {
             accountant: Arc::new(accountant),
             historian_input: Mutex::new(historian_input),
             historian: Mutex::new(historian),
             start_hash: *start_hash,
-            ms_per_tick,
+            tick_duration,
         }
     }
 

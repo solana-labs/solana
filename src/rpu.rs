@@ -98,7 +98,7 @@ impl Rpu {
         let historian_stage = Historian::new(
             request_stage.signal_receiver,
             &self.event_processor.start_hash,
-            self.event_processor.ms_per_tick,
+            self.event_processor.tick_duration,
         );
 
         let (broadcast_sender, broadcast_receiver) = channel();

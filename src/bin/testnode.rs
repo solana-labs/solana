@@ -19,6 +19,7 @@ use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
@@ -115,7 +116,8 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let event_processor = EventProcessor::new(accountant, &last_id, Some(1000));
+    let event_processor =
+        EventProcessor::new(accountant, &last_id, Some(Duration::from_millis(1000)));
     let exit = Arc::new(AtomicBool::new(false));
     let rpu = Rpu::new(event_processor);
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();

@@ -57,12 +57,11 @@ impl Recorder {
 
     pub fn process_events(
         &mut self,
-        epoch: Instant,
-        ms_per_tick: Option<u64>,
+        duration_data: Option<(Instant, Duration)>,
     ) -> Result<(), ExitReason> {
         loop {
-            if let Some(ms) = ms_per_tick {
-                if epoch.elapsed() > Duration::from_millis(ms) * (self.num_ticks + 1) {
+            if let Some((start_time, tick_duration)) = duration_data {
+                if start_time.elapsed() > tick_duration * (self.num_ticks + 1) {
                     self.record_entry(vec![])?;
                     // TODO: don't let this overflow u32
                     self.num_ticks += 1;
@@ -105,7 +104,7 @@ mod tests {
         signal_sender
             .send(Signal::Events(vec![event0, event1]))
             .unwrap();
-        recorder.process_events(Instant::now(), None).unwrap();
+        recorder.process_events(None).unwrap();
 
         drop(recorder.sender);
         let entries: Vec<_> = entry_receiver.iter().collect();

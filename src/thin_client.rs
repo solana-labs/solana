@@ -191,7 +191,11 @@ mod tests {
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let event_processor = EventProcessor::new(
+            accountant,
+            &alice.last_id(),
+            Some(Duration::from_millis(30)),
+        );
         let rpu = Rpu::new(event_processor);
         let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(900));
@@ -230,7 +234,11 @@ mod tests {
         let accountant = Accountant::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+        let event_processor = EventProcessor::new(
+            accountant,
+            &alice.last_id(),
+            Some(Duration::from_millis(30)),
+        );
         let rpu = Rpu::new(event_processor);
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = rpu.serve(
@@ -300,13 +308,21 @@ mod tests {
 
         let leader_acc = {
             let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            let event_processor = EventProcessor::new(
+                accountant,
+                &alice.last_id(),
+                Some(Duration::from_millis(30)),
+            );
             Rpu::new(event_processor)
         };
 
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            let event_processor = EventProcessor::new(
+                accountant,
+                &alice.last_id(),
+                Some(Duration::from_millis(30)),
+            );
             Arc::new(Tvu::new(event_processor))
         };
 
