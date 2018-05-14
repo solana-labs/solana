@@ -12,6 +12,7 @@ use transaction::Transaction;
 pub enum Request {
     Transaction(Transaction),
     GetBalance { key: PublicKey },
+    GetTransactionCount,
     Subscribe { subscriptions: Vec<Subscription> },
 }
 
@@ -40,6 +41,7 @@ impl Request {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
+    TransactionCount { transaction_count: u64 },
     EntryInfo(EntryInfo),
 }
 

@@ -19,6 +19,7 @@ pub struct ThinClient {
     pub events_socket: UdpSocket,
     last_id: Option<Hash>,
     num_events: u64,
+    transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
 }
 
@@ -33,6 +34,7 @@ impl ThinClient {
             events_socket,
             last_id: None,
             num_events: 0,
+            transaction_count: 0,
             balances: HashMap::new(),
         };
         client.init();
@@ -61,6 +63,10 @@ impl ThinClient {
             Response::Balance { key, val } => {
                 info!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
+            }
+            Response::TransactionCount { transaction_count } => {
+                info!("Response transaction count {:?}", transaction_count);
+                self.transaction_count = transaction_count;
             }
             Response::EntryInfo(entry_info) => {
                 trace!("Response entry_info {:?}", entry_info.id);
@@ -111,6 +117,28 @@ impl ThinClient {
             self.process_response(resp);
         }
         self.balances[pubkey].ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
+    }
+
+    /// Request the transaction count.  If the response packet is dropped by the network,
+    /// this method will hang.
+    pub fn server_transaction_count(&mut self) -> io::Result<u64> {
+        info!("server_transaction_count");
+        let req = Request::GetTransactionCount;
+        let data =
+            serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
+        self.requests_socket
+            .send_to(&data, &self.addr)
+            .expect("buffer error in pub fn transaction_count");
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response()?;
+            info!("recv_response {:?}", resp);
+            if let &Response::TransactionCount { .. } = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
+        Ok(self.transaction_count)
     }
 
     /// Request the last Entry ID from the server. This method blocks

@@ -46,6 +46,12 @@ impl RequestProcessor {
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)
             }
+            Request::GetTransactionCount => {
+                let transaction_count = self.accountant.transaction_count() as u64;
+                let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);
+                info!("Response::TransactionCount {:?}", rsp);
+                Some(rsp)
+            }
             Request::Transaction(_) => unreachable!(),
             Request::Subscribe { subscriptions } => {
                 for subscription in subscriptions {
