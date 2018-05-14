@@ -1,7 +1,7 @@
 //! The `hash` module provides functions for creating SHA-256 hashes.
 
-use generic_array::GenericArray;
 use generic_array::typenum::U32;
+use generic_array::GenericArray;
 use sha2::{Digest, Sha256};
 
 pub type Hash = GenericArray<u8, U32>;

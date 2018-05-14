@@ -5,9 +5,9 @@ use event_processor::EventProcessor;
 use packet;
 use packet::SharedPackets;
 use request_processor::RequestProcessor;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
+use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
 use streamer;
 
