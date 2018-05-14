@@ -193,7 +193,7 @@ mod tests {
         let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
         let rpu = Rpu::new(event_processor);
         let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
-        sleep(Duration::from_millis(300));
+        sleep(Duration::from_millis(900));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
