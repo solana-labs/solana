@@ -413,11 +413,14 @@ impl Crdt {
         let mut outblob = vec![];
         if let &Some(ref blob) = &window.read().unwrap()[pos] {
             let rblob = blob.read().unwrap();
-            let blob_ix = rblob.get_index()?;
+            let blob_ix = rblob.get_index().expect("run_window_request get_index");;
             if blob_ix == ix {
                 // copy to avoid doing IO inside the lock
                 outblob.extend(&rblob.data[..rblob.meta.size]);
             }
+        } else {
+            assert!(window.read().unwrap()[pos].is_none());
+            warn!("failed RequestWindowIndex {} {}", from.replicate_addr, ix);
         }
         if outblob.len() > 0 {
             warn!("sending RequestWindowIndex {} {}", from.replicate_addr, ix);
@@ -464,9 +467,11 @@ impl Crdt {
                     .apply_updates(from, ups, &data);
             }
             Protocol::RequestWindowIndex(from, ix) => {
-                warn!("RequestWindowIndex {} {}", from.replicate_addr, ix);
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
+                let me = obj.read().unwrap().my_data().clone();
+                warn!("received RequestWindowIndex {} {} myaddr {}", from.replicate_addr, ix, me.replicate_addr);
+                assert_ne!(from.replicate_addr, me.replicate_addr);
                 let _ = Self::run_window_request(window, sock, &from, ix);
             }
         }

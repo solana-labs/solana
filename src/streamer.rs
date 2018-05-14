@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
-pub const WINDOW_SIZE: usize = 32;
+pub const WINDOW_SIZE: usize = 1024;
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
 pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
@@ -158,6 +158,7 @@ fn repair_window(
     received: &mut usize,
 ) -> Result<()> {
     let (to,req) = find_next_missing(locked_window, crdt, consumed, received)?;
+    info!("repair_window {} {}", *consumed, *received);
     //todo cache socket
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     sock.send_to(&req, to)?;
@@ -174,7 +175,7 @@ fn recv_window(
     s: &BlobSender,
     retransmit: &BlobSender,
 ) -> Result<()> {
-    let timer = Duration::from_millis(100);
+    let timer = Duration::from_millis(300);
     let mut dq = r.recv_timeout(timer)?;
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
@@ -277,7 +278,7 @@ fn recv_window(
     }
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
-        info!("sending contq.len: {}", contq.len());
+        trace!("sending contq.len: {}", contq.len());
         s.send(contq)?;
     }
     Ok(())
@@ -337,15 +338,23 @@ fn broadcast(
     erasure::generate_codes(blobs);
     Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
     // keep the cache of blobs that are broadcast
+    for b in &blobs {
+        let mut win = window.write().unwrap();
+        let ix = b.read().unwrap().get_index().expect("blob index");
+        let pos = (ix as usize) % WINDOW_SIZE;
+        if let Some(x) = &win[pos] {
+            warn!("popped {} at {}", x.read().unwrap().get_index().unwrap(), pos);
+            recycler.recycle(x.clone());
+        }
+        win[pos] = None;
+    }
     while let Some(b) = blobs.pop() {
         let mut win = window.write().unwrap();
         let ix = b.read().unwrap().get_index().expect("blob index");
         let pos = (ix as usize) % WINDOW_SIZE;
-        let prev = win[pos].clone();
+        assert!(win[pos].is_none());
         win[pos] = Some(b);
-        if let Some(b) = prev {
-            recycler.recycle(b);
-        }
+        warn!("cached {} at {}", ix, pos);
     }
     Ok(())
 }

@@ -367,7 +367,7 @@ mod tests {
     #[ignore]
     fn test_multi_node() {
         logger::setup();
-        const N: usize = 5;
+        const N: usize = 1;
         trace!("test_multi_accountant_stub");
         let leader = test_node();
         let alice = Mint::new(10_000);
