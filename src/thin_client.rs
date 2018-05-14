@@ -125,8 +125,8 @@ impl ThinClient {
 
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will hang.
-    pub fn server_transaction_count(&mut self) -> u64 {
-        info!("server_transaction_count");
+    pub fn transaction_count(&mut self) -> u64 {
+        info!("transaction_count");
         let req = Request::GetTransactionCount;
         let data =
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
@@ -164,36 +164,6 @@ impl ThinClient {
             self.process_response(resp);
         }
         ok(self.last_id.expect("some last_id"))
-    }
-
-    /// Return the number of transactions the server processed since creating
-    /// this client instance.
-    pub fn transaction_count(&mut self) -> u64 {
-        // Wait for at least one EntryInfo.
-        let mut done = false;
-        while !done {
-            let resp = self.recv_response()
-                .expect("recv_response in pub fn transaction_count");
-            if let &Response::EntryInfo(_) = &resp {
-                done = true;
-            }
-            self.process_response(resp);
-        }
-
-        // Then take the rest.
-        self.requests_socket
-            .set_nonblocking(true)
-            .expect("set_nonblocking in pub fn transaction_count");
-        loop {
-            match self.recv_response() {
-                Err(_) => break,
-                Ok(resp) => self.process_response(resp),
-            }
-        }
-        self.requests_socket
-            .set_nonblocking(false)
-            .expect("set_nonblocking in pub fn transaction_count");
-        self.num_events
     }
 }
 
