@@ -158,6 +158,26 @@ $ wget https://solana-build-artifacts.s3.amazonaws.com/v0.5.0/libcuda_verify_ed2
 $ cargo +nightly bench --features="unstable,cuda"
 ```
 
+
+Tools
+===
+
+Formatting
+---
+
+```bash
+$ rustup component add rustfmt-preview
+$ cargo fmt
+```
+
+Logs
+---
+
+You can specify logs for `solana` module as well as each module individually.
+```bash
+$ export RUST_LOG=solana=debug,solana::thin_client=info,solana::rpu=info,solana::entry_writer=info,solana::tvu=info
+```
+
 Code coverage
 ---
 
