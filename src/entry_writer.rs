@@ -64,20 +64,6 @@ impl<'a> EntryWriter<'a> {
         let mut q = VecDeque::new();
         let list = self.write_entries(writer, entry_receiver)?;
         info!("New blobs? {}", list.len());
-        for i in &list {
-            info!("num events {}", i.events.len());
-            for e in &i.events {
-                if let Event::Transaction(_) = e {
-                    info!("got Transaction");
-                }
-                if let Event::Signature{..} = e {
-                    info!("got Signature");
-                }
-                if let Event::Timestamp{..} = e {
-                    info!("got Timestamp");
-                }
-            }
-        }
         ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
         if !q.is_empty() {
             info!("broadcasting {}", q.len());
