@@ -420,6 +420,7 @@ impl Crdt {
             }
         }
         if outblob.len() > 0 {
+            warn!("sending RequestWindowIndex {} {}", from.replicate_addr, ix);
             sock.send_to(&outblob, from.replicate_addr)?;
         }
         Ok(())
@@ -463,7 +464,7 @@ impl Crdt {
                     .apply_updates(from, ups, &data);
             }
             Protocol::RequestWindowIndex(from, ix) => {
-                trace!("RequestWindowIndex");
+                warn!("RequestWindowIndex {} {}", from.replicate_addr, ix);
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let _ = Self::run_window_request(window, sock, &from, ix);
