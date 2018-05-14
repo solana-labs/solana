@@ -28,7 +28,7 @@ pub struct Recorder {
     receiver: Receiver<Signal>,
     last_hash: Hash,
     num_hashes: u64,
-    num_ticks: u64,
+    num_ticks: u32,
 }
 
 impl Recorder {
@@ -62,8 +62,9 @@ impl Recorder {
     ) -> Result<(), ExitReason> {
         loop {
             if let Some(ms) = ms_per_tick {
-                if epoch.elapsed() > Duration::from_millis((self.num_ticks + 1) * ms) {
+                if epoch.elapsed() > Duration::from_millis(ms) * (self.num_ticks + 1) {
                     self.record_entry(vec![])?;
+                    // TODO: don't let this overflow u32
                     self.num_ticks += 1;
                 }
             }
