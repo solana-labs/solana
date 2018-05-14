@@ -418,10 +418,10 @@ impl Crdt {
             }
         } else {
             assert!(window.read().unwrap()[pos].is_none());
-            warn!("failed RequestWindowIndex {} {}", from.replicate_addr, ix);
+            warn!("failed RequestWindowIndex {} {}", ix, from.replicate_addr);
         }
         if outblob.len() > 0 {
-            warn!("sending RequestWindowIndex {} {}", from.replicate_addr, ix);
+            warn!("responding RequestWindowIndex {} {}", ix, from.replicate_addr);
             sock.send_to(&outblob, from.replicate_addr)?;
         }
         Ok(())
@@ -468,7 +468,7 @@ impl Crdt {
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
-                warn!("received RequestWindowIndex {} {} myaddr {}", from.replicate_addr, ix, me.replicate_addr);
+                warn!("received RequestWindowIndex {} {} myaddr {}", ix, from.replicate_addr, me.replicate_addr);
                 assert_ne!(from.replicate_addr, me.replicate_addr);
                 let _ = Self::run_window_request(window, sock, &from, ix);
             }
