@@ -5,7 +5,7 @@ use accountant::Accountant;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
-use event_processor::EventProcessor;
+use hash::Hash;
 use ledger;
 use packet;
 use record_stage::RecordStage;
@@ -22,14 +22,18 @@ use std::time::Duration;
 use streamer;
 
 pub struct Tvu {
-    event_processor: Arc<EventProcessor>,
+    accountant: Arc<Accountant>,
+    start_hash: Hash,
+    tick_duration: Option<Duration>,
 }
 
 impl Tvu {
     /// Create a new Tvu that wraps the given Accountant.
-    pub fn new(event_processor: EventProcessor) -> Self {
+    pub fn new(accountant: Accountant, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
         Tvu {
-            event_processor: Arc::new(event_processor),
+            accountant: Arc::new(accountant),
+            start_hash,
+            tick_duration,
         }
     }
 
@@ -61,9 +65,7 @@ impl Tvu {
         let blobs = verified_receiver.recv_timeout(timer)?;
         trace!("replicating blobs {}", blobs.len());
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
-        obj.event_processor
-            .accountant
-            .process_verified_entries(entries)?;
+        obj.accountant.process_verified_entries(entries)?;
         for blob in blobs {
             blob_recycler.recycle(blob);
         }
@@ -171,7 +173,7 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let request_processor = RequestProcessor::new(obj.event_processor.accountant.clone());
+        let request_processor = RequestProcessor::new(obj.accountant.clone());
         let request_stage = RequestStage::new(
             request_processor,
             exit.clone(),
@@ -182,12 +184,12 @@ impl Tvu {
 
         let record_stage = RecordStage::new(
             request_stage.signal_receiver,
-            &obj.event_processor.start_hash,
-            obj.event_processor.tick_duration,
+            &obj.start_hash,
+            obj.tick_duration,
         );
 
         let t_write = Self::drain_service(
-            obj.event_processor.accountant.clone(),
+            obj.accountant.clone(),
             exit.clone(),
             record_stage.entry_receiver,
         );
@@ -244,7 +246,6 @@ mod tests {
     use crdt::Crdt;
     use entry;
     use event::Event;
-    use event_processor::EventProcessor;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
@@ -311,12 +312,11 @@ mod tests {
         let starting_balance = 10_000;
         let alice = Mint::new(starting_balance);
         let accountant = Accountant::new(&alice);
-        let event_processor = EventProcessor::new(
+        let tvu = Arc::new(Tvu::new(
             accountant,
-            &alice.last_id(),
+            alice.last_id(),
             Some(Duration::from_millis(30)),
-        );
-        let tvu = Arc::new(Tvu::new(event_processor));
+        ));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tvu::serve(
             &tvu,
@@ -341,7 +341,7 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let accountant = &tvu.event_processor.accountant;
+            let accountant = &tvu.accountant;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
@@ -383,7 +383,7 @@ mod tests {
             msgs.push(msg);
         }
 
-        let accountant = &tvu.event_processor.accountant;
+        let accountant = &tvu.accountant;
         let alice_balance = accountant.get_balance(&alice.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 

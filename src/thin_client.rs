@@ -156,7 +156,6 @@ mod tests {
     use super::*;
     use accountant::Accountant;
     use crdt::{Crdt, ReplicatedData};
-    use event_processor::EventProcessor;
     use futures::Future;
     use logger;
     use mint::Mint;
@@ -303,12 +302,11 @@ mod tests {
 
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(
+            Arc::new(Tvu::new(
                 accountant,
-                &alice.last_id(),
+                alice.last_id(),
                 Some(Duration::from_millis(30)),
-            );
-            Arc::new(Tvu::new(event_processor))
+            ))
         };
 
         let leader_threads = leader_acc

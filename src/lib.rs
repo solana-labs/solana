@@ -7,7 +7,6 @@ pub mod entry_writer;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod event;
-pub mod event_processor;
 pub mod hash;
 pub mod ledger;
 pub mod logger;
