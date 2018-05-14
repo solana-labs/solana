@@ -295,11 +295,7 @@ mod tests {
         let replicant = test_node();
         let replicant_bank = {
             let bank = Bank::new(&alice);
-            Arc::new(Tvu::new(
-                bank,
-                alice.last_id(),
-                None,
-            ))
+            Arc::new(Tvu::new(bank, alice.last_id(), None))
         };
         let mut ts = Tvu::serve(
             &replicant_bank,
