@@ -8,12 +8,12 @@ use event_processor::EventProcessor;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
-use request::{EntryInfo, Request, Response, Subscription};
+use request::{Request, Response};
 use result::Result;
 use std::collections::VecDeque;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time::Instant;
 use streamer;
@@ -21,16 +21,12 @@ use timing;
 
 pub struct RequestProcessor {
     accountant: Arc<Accountant>,
-    entry_info_subscribers: Mutex<Vec<SocketAddr>>,
 }
 
 impl RequestProcessor {
     /// Create a new Tpu that wraps the given Accountant.
     pub fn new(accountant: Arc<Accountant>) -> Self {
-        RequestProcessor {
-            accountant,
-            entry_info_subscribers: Mutex::new(vec![]),
-        }
+        RequestProcessor { accountant }
     }
 
     /// Process Request items sent by clients.
@@ -59,16 +55,6 @@ impl RequestProcessor {
                 Some(rsp)
             }
             Request::Transaction(_) => unreachable!(),
-            Request::Subscribe { subscriptions } => {
-                for subscription in subscriptions {
-                    match subscription {
-                        Subscription::EntryInfo => {
-                            self.entry_info_subscribers.lock().unwrap().push(rsp_addr)
-                        }
-                    }
-                }
-                None
-            }
         }
     }
 
@@ -79,29 +65,6 @@ impl RequestProcessor {
         reqs.into_iter()
             .filter_map(|(req, rsp_addr)| self.process_request(req, rsp_addr))
             .collect()
-    }
-
-    pub fn notify_entry_info_subscribers(&self, entry: &Entry) {
-        // TODO: No need to bind().
-        let socket = UdpSocket::bind("0.0.0.0:0").expect("bind");
-
-        // copy subscribers to avoid taking lock while doing io
-        let addrs = self.entry_info_subscribers.lock().unwrap().clone();
-        trace!("Sending to {} addrs", addrs.len());
-        for addr in addrs {
-            let entry_info = EntryInfo {
-                id: entry.id,
-                num_hashes: entry.num_hashes,
-                num_events: entry.events.len() as u64,
-            };
-            let data = serialize(&Response::EntryInfo(entry_info)).expect("serialize EntryInfo");
-            trace!("sending {} to {}", data.len(), addr);
-            //TODO dont do IO here, this needs to be on a separate channel
-            let res = socket.send_to(&data, addr);
-            if res.is_err() {
-                eprintln!("couldn't send response: {:?}", res);
-            }
-        }
     }
 
     fn deserialize_requests(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {

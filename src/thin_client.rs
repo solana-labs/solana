@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use futures::future::{ok, FutureResult};
 use hash::Hash;
-use request::{Request, Response, Subscription};
+use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
@@ -18,7 +18,6 @@ pub struct ThinClient {
     pub requests_socket: UdpSocket,
     pub events_socket: UdpSocket,
     last_id: Option<Hash>,
-    num_events: u64,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
 }
@@ -33,20 +32,10 @@ impl ThinClient {
             requests_socket,
             events_socket,
             last_id: None,
-            num_events: 0,
             transaction_count: 0,
             balances: HashMap::new(),
         };
-        client.init();
         client
-    }
-
-    pub fn init(&self) {
-        let subscriptions = vec![Subscription::EntryInfo];
-        let req = Request::Subscribe { subscriptions };
-        let data = serialize(&req).expect("serialize Subscribe in thin_client");
-        trace!("subscribing to {}", self.addr);
-        let _res = self.requests_socket.send_to(&data, &self.addr);
     }
 
     pub fn recv_response(&self) -> io::Result<Response> {
@@ -71,11 +60,6 @@ impl ThinClient {
             Response::TransactionCount { transaction_count } => {
                 info!("Response transaction count {:?}", transaction_count);
                 self.transaction_count = transaction_count;
-            }
-            Response::EntryInfo(entry_info) => {
-                trace!("Response entry_info {:?}", entry_info.id);
-                self.last_id = Some(entry_info.id);
-                self.num_events += entry_info.num_events;
             }
         }
     }

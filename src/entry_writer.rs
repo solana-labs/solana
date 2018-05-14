@@ -4,7 +4,6 @@ use accountant::Accountant;
 use entry::Entry;
 use ledger;
 use packet;
-use request_processor::RequestProcessor;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
@@ -17,16 +16,12 @@ use streamer;
 
 pub struct EntryWriter<'a> {
     accountant: &'a Accountant,
-    request_processor: &'a RequestProcessor,
 }
 
 impl<'a> EntryWriter<'a> {
     /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(accountant: &'a Accountant, request_processor: &'a RequestProcessor) -> Self {
-        EntryWriter {
-            accountant,
-            request_processor,
-        }
+    pub fn new(accountant: &'a Accountant) -> Self {
+        EntryWriter { accountant }
     }
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
@@ -37,7 +32,6 @@ impl<'a> EntryWriter<'a> {
             "{}",
             serde_json::to_string(&entry).expect("'entry' to_strong in fn write_entry")
         ).expect("writeln! in fn write_entry");
-        self.request_processor.notify_entry_info_subscribers(&entry);
     }
 
     fn write_entries<W: Write>(

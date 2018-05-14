@@ -14,19 +14,6 @@ pub enum Request {
     GetBalance { key: PublicKey },
     GetLastId,
     GetTransactionCount,
-    Subscribe { subscriptions: Vec<Subscription> },
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Subscription {
-    EntryInfo,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EntryInfo {
-    pub id: Hash,
-    pub num_hashes: u64,
-    pub num_events: u64,
 }
 
 impl Request {
@@ -44,7 +31,6 @@ pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     LastId { id: Hash },
     TransactionCount { transaction_count: u64 },
-    EntryInfo(EntryInfo),
 }
 
 pub fn to_request_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedPackets> {

@@ -33,7 +33,6 @@ impl Rpu {
 
     fn write_service<W: Write + Send + 'static>(
         accountant: Arc<Accountant>,
-        request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
         broadcast: streamer::BlobSender,
         blob_recycler: packet::BlobRecycler,
@@ -41,7 +40,7 @@ impl Rpu {
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            let entry_writer = EntryWriter::new(&accountant, &request_processor);
+            let entry_writer = EntryWriter::new(&accountant);
             let _ = entry_writer.write_and_send_entries(
                 &broadcast,
                 &blob_recycler,
@@ -99,7 +98,6 @@ impl Rpu {
         let (broadcast_sender, broadcast_receiver) = channel();
         let t_write = Self::write_service(
             self.event_processor.accountant.clone(),
-            request_stage.request_processor.clone(),
             exit.clone(),
             broadcast_sender,
             blob_recycler.clone(),

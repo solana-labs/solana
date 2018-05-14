@@ -34,12 +34,11 @@ impl Tvu {
 
     fn drain_service(
         accountant: Arc<Accountant>,
-        request_processor: Arc<RequestProcessor>,
         exit: Arc<AtomicBool>,
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || {
-            let entry_writer = EntryWriter::new(&accountant, &request_processor);
+            let entry_writer = EntryWriter::new(&accountant);
             loop {
                 let _ = entry_writer.drain_entries(&entry_receiver);
                 if exit.load(Ordering::Relaxed) {
@@ -183,7 +182,6 @@ impl Tvu {
 
         let t_write = Self::drain_service(
             obj.event_processor.accountant.clone(),
-            request_stage.request_processor.clone(),
             exit.clone(),
             request_stage.entry_receiver,
         );
