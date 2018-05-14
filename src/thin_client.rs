@@ -345,7 +345,7 @@ mod tests {
             }
             info!("length {} {}", len, min);
             if num_nodes == len && min >= (num_nodes as u64) {
-                info!("converged! {} {}", len, min);
+                warn!("converged! {} {}", len, min);
                 break;
             }
             sleep(Duration::new(1, 0));
@@ -367,7 +367,7 @@ mod tests {
     #[ignore]
     fn test_multi_node() {
         logger::setup();
-        const N: usize = 2;
+        const N: usize = 5;
         trace!("test_multi_accountant_stub");
         let leader = test_node();
         let alice = Mint::new(10_000);

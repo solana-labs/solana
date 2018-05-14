@@ -270,7 +270,7 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                info!(
+                warn!(
                     "retransmit blob {} to {}",
                     rblob.get_index().unwrap(),
                     v.replicate_addr
@@ -282,7 +282,7 @@ impl Crdt {
         for e in errs {
             match e {
                 Err(e) => {
-                    info!("retransmit result {:?}", e);
+                    warn!("retransmit error {:?}", e);
                     return Err(Error::IO(e));
                 }
                 _ => (),

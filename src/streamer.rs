@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
-pub const WINDOW_SIZE: usize = 1024;
+pub const WINDOW_SIZE: usize = 2*1024;
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
 pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
@@ -134,21 +134,23 @@ fn find_next_missing(
     crdt: &Arc<RwLock<Crdt>>,
     consumed: &mut usize,
     received: &mut usize,
-) -> Result<(SocketAddr, Vec<u8>)> {
+) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     if *received <= *consumed {
         return Err(Error::GenericError)
     }
     let window = locked_window.read().unwrap();
-    for pix in *consumed .. *received {
+    let reqs: Vec<_> = (*consumed .. *received).filter_map(|pix| {
         let i = pix % WINDOW_SIZE;
         if let &None = &window[i] {
             let val = crdt.read().unwrap().window_index_request(pix as u64);
             if let Ok((to, req)) = val {
-                return Ok((to, req));
+                return Some((to, req));
             }
         }
-    }
-    Err(Error::GenericError)
+        None
+    })
+    .collect();
+    Ok(reqs)
 }
 
 fn repair_window(
@@ -157,11 +159,13 @@ fn repair_window(
     consumed: &mut usize,
     received: &mut usize,
 ) -> Result<()> {
-    let (to,req) = find_next_missing(locked_window, crdt, consumed, received)?;
+    let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     info!("repair_window {} {}", *consumed, *received);
-    //todo cache socket
     let sock = UdpSocket::bind("0.0.0.0:0")?;
-    sock.send_to(&req, to)?;
+    for (to,req) in reqs {
+        //todo cache socket
+        sock.send_to(&req, to)?;
+    }
     Ok(())
 }
 
@@ -175,7 +179,7 @@ fn recv_window(
     s: &BlobSender,
     retransmit: &BlobSender,
 ) -> Result<()> {
-    let timer = Duration::from_millis(100);
+    let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
