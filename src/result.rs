@@ -78,17 +78,18 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
+    use std::panic;
+    use std::sync::mpsc::channel;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
-    use std::sync::mpsc::channel;
     use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {
         let r = "12fdfasfsafsadfs".parse()?;
         Ok(r)
     }
-
     fn join_error() -> Result<()> {
+        panic::set_hook(Box::new(|_info| {}));
         let r = thread::spawn(|| panic!("hi")).join()?;
         Ok(r)
     }
@@ -116,6 +117,7 @@ mod tests {
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
         assert_matches!(Error::from(ioe), Error::IO(_));
     }
+
     #[test]
     fn fmt_test() {
         write!(io::sink(), "{:?}", addr_parse_error()).unwrap();

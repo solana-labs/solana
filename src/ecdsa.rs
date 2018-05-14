@@ -139,8 +139,8 @@ mod tests {
     use packet::{Packet, Packets, SharedPackets};
     use request::Request;
     use std::sync::RwLock;
-    use transaction::Transaction;
     use transaction::test_tx;
+    use transaction::Transaction;
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {
         let tx = serialize(&Request::Transaction(tr)).unwrap();
