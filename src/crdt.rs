@@ -194,15 +194,12 @@ impl Crdt {
             .collect();
         info!("items table {}", items.len());
         info!("blobs table {}", blobs.len());
-        let m = max(items.len(), blobs.len());
         let orders: Vec<_> = items
             .into_iter()
             .enumerate()
             .cycle()
             .zip(blobs
                  .iter()
-                 .cycle()
-                 .take(m)
                  ).collect();
         info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
