@@ -27,6 +27,7 @@ pub mod thin_client;
 pub mod timing;
 pub mod transaction;
 pub mod tvu;
+pub mod write_stage;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;

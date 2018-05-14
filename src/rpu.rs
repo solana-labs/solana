@@ -3,8 +3,6 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
-use entry::Entry;
-use entry_writer::EntryWriter;
 use hash::Hash;
 use packet;
 use record_stage::RecordStage;
@@ -14,12 +12,13 @@ use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread::{spawn, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 use streamer;
+use write_stage::WriteStage;
 
 pub struct Rpu {
     bank: Arc<Bank>,
@@ -35,29 +34,6 @@ impl Rpu {
             start_hash,
             tick_duration,
         }
-    }
-
-    fn write_service<W: Write + Send + 'static>(
-        bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
-        broadcast: streamer::BlobSender,
-        blob_recycler: packet::BlobRecycler,
-        writer: Mutex<W>,
-        entry_receiver: Receiver<Entry>,
-    ) -> JoinHandle<()> {
-        spawn(move || loop {
-            let entry_writer = EntryWriter::new(&bank);
-            let _ = entry_writer.write_and_send_entries(
-                &broadcast,
-                &blob_recycler,
-                &writer,
-                &entry_receiver,
-            );
-            if exit.load(Ordering::Relaxed) {
-                info!("broadcat_service exiting");
-                break;
-            }
-        })
     }
 
     /// Create a UDP microservice that forwards messages the given Rpu.
@@ -107,11 +83,9 @@ impl Rpu {
             self.tick_duration,
         );
 
-        let (broadcast_sender, broadcast_receiver) = channel();
-        let t_write = Self::write_service(
+        let write_stage = WriteStage::new(
             self.bank.clone(),
             exit.clone(),
-            broadcast_sender,
             blob_recycler.clone(),
             Mutex::new(writer),
             record_stage.entry_receiver,
@@ -124,7 +98,7 @@ impl Rpu {
             crdt.clone(),
             window,
             blob_recycler.clone(),
-            broadcast_receiver,
+            write_stage.blob_receiver,
         );
 
         let respond_socket = UdpSocket::bind(local.clone())?;
@@ -139,7 +113,7 @@ impl Rpu {
             t_receiver,
             t_responder,
             request_stage.thread_hdl,
-            t_write,
+            write_stage.thread_hdl,
             t_gossip,
             t_listen,
             t_broadcast,
