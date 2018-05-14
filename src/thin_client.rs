@@ -298,7 +298,7 @@ mod tests {
         let replicant = test_node();
         let replicant_acc = {
             let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), None);
             Arc::new(Tvu::new(event_processor))
         };
 
@@ -376,7 +376,7 @@ mod tests {
 
         let leader_acc = {
             let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
+            let event_processor = EventProcessor::new(accountant, &alice.last_id(), None);
             Rpu::new(event_processor)
         };
         let mut threads = leader_acc
