@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "unstable", feature(test))]
-pub mod accountant;
+pub mod bank;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
@@ -7,14 +7,13 @@ pub mod entry_writer;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod event;
-pub mod event_processor;
 pub mod hash;
-pub mod historian;
 pub mod ledger;
 pub mod logger;
 pub mod mint;
 pub mod packet;
 pub mod plan;
+pub mod record_stage;
 pub mod recorder;
 pub mod request;
 pub mod request_processor;

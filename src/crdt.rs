@@ -11,7 +11,7 @@
 //! * layer 1 - As many nodes as we can fit
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
-//! Accountant needs to provide an interface for us to query the stake weight
+//! Bank needs to provide an interface for us to query the stake weight
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};

@@ -1,13 +1,12 @@
 //! The `request_stage` processes thin client Request messages.
 
-use accountant::Accountant;
+use bank::Bank;
 use bincode::{deserialize, serialize};
-use entry::Entry;
 use event::Event;
-use event_processor::EventProcessor;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
+use recorder::Signal;
 use request::{Request, Response};
 use result::Result;
 use std::collections::VecDeque;
@@ -20,13 +19,13 @@ use streamer;
 use timing;
 
 pub struct RequestProcessor {
-    accountant: Arc<Accountant>,
+    bank: Arc<Bank>,
 }
 
 impl RequestProcessor {
-    /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(accountant: Arc<Accountant>) -> Self {
-        RequestProcessor { accountant }
+    /// Create a new Tpu that wraps the given Bank.
+    pub fn new(bank: Arc<Bank>) -> Self {
+        RequestProcessor { bank }
     }
 
     /// Process Request items sent by clients.
@@ -37,19 +36,19 @@ impl RequestProcessor {
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.accountant.get_balance(&key);
+                let val = self.bank.get_balance(&key);
                 let rsp = (Response::Balance { key, val }, rsp_addr);
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)
             }
             Request::GetLastId => {
-                let id = self.accountant.last_id();
+                let id = self.bank.last_id();
                 let rsp = (Response::LastId { id }, rsp_addr);
                 info!("Response::LastId {:?}", rsp);
                 Some(rsp)
             }
             Request::GetTransactionCount => {
-                let transaction_count = self.accountant.transaction_count() as u64;
+                let transaction_count = self.bank.transaction_count() as u64;
                 let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);
                 info!("Response::TransactionCount {:?}", rsp);
                 Some(rsp)
@@ -140,9 +139,8 @@ impl RequestProcessor {
 
     pub fn process_request_packets(
         &self,
-        event_processor: &EventProcessor,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        entry_sender: &Sender<Entry>,
+        signal_sender: &Sender<Signal>,
         blob_sender: &streamer::BlobSender,
         packet_recycler: &packet::PacketRecycler,
         blob_recycler: &packet::BlobRecycler,
@@ -176,8 +174,9 @@ impl RequestProcessor {
             debug!("events: {} reqs: {}", events.len(), reqs.len());
 
             debug!("process_events");
-            let entry = event_processor.process_events(events)?;
-            entry_sender.send(entry)?;
+            let results = self.bank.process_verified_events(events);
+            let events = results.into_iter().filter_map(|x| x.ok()).collect();
+            signal_sender.send(Signal::Events(events))?;
             debug!("done process_events");
 
             debug!("process_requests");

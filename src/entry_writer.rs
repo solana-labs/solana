@@ -1,6 +1,6 @@
 //! The `entry_writer` module helps implement the TPU's write stage.
 
-use accountant::Accountant;
+use bank::Bank;
 use entry::Entry;
 use ledger;
 use packet;
@@ -15,18 +15,18 @@ use std::time::Duration;
 use streamer;
 
 pub struct EntryWriter<'a> {
-    accountant: &'a Accountant,
+    bank: &'a Bank,
 }
 
 impl<'a> EntryWriter<'a> {
-    /// Create a new Tpu that wraps the given Accountant.
-    pub fn new(accountant: &'a Accountant) -> Self {
-        EntryWriter { accountant }
+    /// Create a new Tpu that wraps the given Bank.
+    pub fn new(bank: &'a Bank) -> Self {
+        EntryWriter { bank }
     }
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
         trace!("write_entry entry");
-        self.accountant.register_entry_id(&entry.id);
+        self.bank.register_entry_id(&entry.id);
         writeln!(
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",

@@ -154,9 +154,8 @@ impl ThinClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use accountant::Accountant;
+    use bank::Bank;
     use crdt::{Crdt, ReplicatedData};
-    use event_processor::EventProcessor;
     use futures::Future;
     use logger;
     use mint::Mint;
@@ -188,11 +187,10 @@ mod tests {
         );
 
         let alice = Mint::new(10_000);
-        let accountant = Accountant::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Rpu::new(event_processor);
+        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
         let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
         sleep(Duration::from_millis(900));
 
@@ -227,11 +225,10 @@ mod tests {
     fn test_bad_sig() {
         let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
-        let accountant = Accountant::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-        let rpu = Rpu::new(event_processor);
+        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
         let serve_addr = leader_serve.local_addr().unwrap();
         let threads = rpu.serve(
             leader_data,
@@ -298,23 +295,25 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let leader_acc = {
-            let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-            Rpu::new(event_processor)
+        let leader_bank = {
+            let bank = Bank::new(&alice);
+            Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)))
         };
 
-        let replicant_acc = {
-            let accountant = Accountant::new(&alice);
-            let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-            Arc::new(Tvu::new(event_processor))
+        let replicant_bank = {
+            let bank = Bank::new(&alice);
+            Arc::new(Tvu::new(
+                bank,
+                alice.last_id(),
+                Some(Duration::from_millis(30)),
+            ))
         };
 
-        let leader_threads = leader_acc
+        let leader_threads = leader_bank
             .serve(leader.0.clone(), leader.2, leader.1, exit.clone(), sink())
             .unwrap();
         let replicant_threads = Tvu::serve(
-            &replicant_acc,
+            &replicant_bank,
             replicant.0.clone(),
             replicant.1,
             replicant.2,

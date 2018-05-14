@@ -1,13 +1,14 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
 //! 5-stage transaction validation pipeline in software.
 
-use accountant::Accountant;
+use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
 use entry::Entry;
 use entry_writer::EntryWriter;
-use event_processor::EventProcessor;
+use hash::Hash;
 use ledger;
 use packet;
+use record_stage::RecordStage;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use result::Result;
@@ -21,24 +22,28 @@ use std::time::Duration;
 use streamer;
 
 pub struct Tvu {
-    event_processor: Arc<EventProcessor>,
+    bank: Arc<Bank>,
+    start_hash: Hash,
+    tick_duration: Option<Duration>,
 }
 
 impl Tvu {
-    /// Create a new Tvu that wraps the given Accountant.
-    pub fn new(event_processor: EventProcessor) -> Self {
+    /// Create a new Tvu that wraps the given Bank.
+    pub fn new(bank: Bank, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
         Tvu {
-            event_processor: Arc::new(event_processor),
+            bank: Arc::new(bank),
+            start_hash,
+            tick_duration,
         }
     }
 
     fn drain_service(
-        accountant: Arc<Accountant>,
+        bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
         entry_receiver: Receiver<Entry>,
     ) -> JoinHandle<()> {
         spawn(move || {
-            let entry_writer = EntryWriter::new(&accountant);
+            let entry_writer = EntryWriter::new(&bank);
             loop {
                 let _ = entry_writer.drain_entries(&entry_receiver);
                 if exit.load(Ordering::Relaxed) {
@@ -60,9 +65,7 @@ impl Tvu {
         let blobs = verified_receiver.recv_timeout(timer)?;
         trace!("replicating blobs {}", blobs.len());
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
-        obj.event_processor
-            .accountant
-            .process_verified_entries(entries)?;
+        obj.bank.process_verified_entries(entries)?;
         for blob in blobs {
             blob_recycler.recycle(blob);
         }
@@ -70,9 +73,9 @@ impl Tvu {
     }
 
     /// This service receives messages from a leader in the network and processes the transactions
-    /// on the accountant state.
+    /// on the bank state.
     /// # Arguments
-    /// * `obj` - The accountant state.
+    /// * `obj` - The bank state.
     /// * `me` - my configuration
     /// * `leader` - leader configuration
     /// * `exit` - The exit signal.
@@ -170,21 +173,23 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let request_processor = RequestProcessor::new(obj.event_processor.accountant.clone());
+        let request_processor = RequestProcessor::new(obj.bank.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            obj.event_processor.clone(),
             exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
 
-        let t_write = Self::drain_service(
-            obj.event_processor.accountant.clone(),
-            exit.clone(),
-            request_stage.entry_receiver,
+        let record_stage = RecordStage::new(
+            request_stage.signal_receiver,
+            &obj.start_hash,
+            obj.tick_duration,
         );
+
+        let t_write =
+            Self::drain_service(obj.bank.clone(), exit.clone(), record_stage.entry_receiver);
 
         let t_responder = streamer::responder(
             respond_socket,
@@ -232,13 +237,12 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
 
 #[cfg(test)]
 mod tests {
-    use accountant::Accountant;
+    use bank::Bank;
     use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
     use entry;
     use event::Event;
-    use event_processor::EventProcessor;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
@@ -303,10 +307,13 @@ mod tests {
         );
 
         let starting_balance = 10_000;
-        let alice = Mint::new(starting_balance);
-        let accountant = Accountant::new(&alice);
-        let event_processor = EventProcessor::new(accountant, &alice.last_id(), Some(30));
-        let tvu = Arc::new(Tvu::new(event_processor));
+        let mint = Mint::new(starting_balance);
+        let bank = Bank::new(&mint);
+        let tvu = Arc::new(Tvu::new(
+            bank,
+            mint.last_id(),
+            Some(Duration::from_millis(30)),
+        ));
         let replicate_addr = target1_data.replicate_addr;
         let threads = Tvu::serve(
             &tvu,
@@ -331,24 +338,24 @@ mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let accountant = &tvu.event_processor.accountant;
+            let bank = &tvu.bank;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
-            accountant.register_entry_id(&cur_hash);
+            bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             let tr1 = Transaction::new(
-                &alice.keypair(),
+                &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
             );
-            accountant.register_entry_id(&cur_hash);
+            bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
             let entry1 =
                 entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
-            accountant.register_entry_id(&cur_hash);
+            bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
@@ -373,11 +380,11 @@ mod tests {
             msgs.push(msg);
         }
 
-        let accountant = &tvu.event_processor.accountant;
-        let alice_balance = accountant.get_balance(&alice.keypair().pubkey()).unwrap();
+        let bank = &tvu.bank;
+        let alice_balance = bank.get_balance(&mint.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = accountant.get_balance(&bob_keypair.pubkey()).unwrap();
+        let bob_balance = bank.get_balance(&bob_keypair.pubkey()).unwrap();
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);

@@ -1,6 +1,6 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use accountant;
+use bank;
 use bincode;
 use serde_json;
 use std;
@@ -15,7 +15,7 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    AccountingError(accountant::AccountingError),
+    BankError(bank::BankError),
     SendError,
     Services,
     GeneralError,
@@ -33,9 +33,9 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
         Error::RecvTimeoutError(e)
     }
 }
-impl std::convert::From<accountant::AccountingError> for Error {
-    fn from(e: accountant::AccountingError) -> Error {
-        Error::AccountingError(e)
+impl std::convert::From<bank::BankError> for Error {
+    fn from(e: bank::BankError) -> Error {
+        Error::BankError(e)
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {
