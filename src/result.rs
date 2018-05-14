@@ -78,6 +78,7 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::SocketAddr;
+    use std::panic;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
     use std::sync::mpsc::channel;
@@ -89,6 +90,7 @@ mod tests {
     }
 
     fn join_error() -> Result<()> {
+        panic::set_hook(Box::new(|_info| {}));
         let r = thread::spawn(|| panic!("hi")).join()?;
         Ok(r)
     }
