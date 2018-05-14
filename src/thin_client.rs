@@ -125,7 +125,7 @@ impl ThinClient {
 
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will hang.
-    pub fn server_transaction_count(&mut self) -> io::Result<u64> {
+    pub fn server_transaction_count(&mut self) -> u64 {
         info!("server_transaction_count");
         let req = Request::GetTransactionCount;
         let data =
@@ -135,14 +135,14 @@ impl ThinClient {
             .expect("buffer error in pub fn transaction_count");
         let mut done = false;
         while !done {
-            let resp = self.recv_response()?;
+            let resp = self.recv_response().expect("transaction count dropped");
             info!("recv_response {:?}", resp);
             if let &Response::TransactionCount { .. } = &resp {
                 done = true;
             }
             self.process_response(resp);
         }
-        Ok(self.transaction_count)
+        self.transaction_count
     }
 
     /// Request the last Entry ID from the server. This method blocks
