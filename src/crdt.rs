@@ -24,6 +24,7 @@ use signature::{PublicKey, Signature};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{SocketAddr, UdpSocket};
+use std::cmp::max;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
@@ -171,11 +172,12 @@ impl Crdt {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking durring IO
             let robj = obj.read().expect("'obj' read lock in pub fn broadcast");
+            info!("broadcast table {}", robj.table.len());
             let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
             (robj.table[&robj.me].clone(), cloned_table)
         };
         let daddr = "0.0.0.0:0".parse().unwrap();
-        let items: Vec<(usize, &ReplicatedData)> = table
+        let items: Vec<&ReplicatedData> = table
             .iter()
             .filter(|v| {
                 if me.id == v.id {
@@ -185,25 +187,41 @@ impl Crdt {
                     //filter nodes that are not listening
                     false
                 } else {
+                    info!("broadcast node {}", v.replicate_addr);
                     true
                 }
             })
-            .enumerate()
             .collect();
-        let orders: Vec<_> = items.into_iter().cycle().zip(blobs.iter()).collect();
+        info!("items table {}", items.len());
+        info!("blobs table {}", blobs.len());
+        let m = max(items.len(), blobs.len());
+        let orders: Vec<_> = items
+            .into_iter()
+            .enumerate()
+            .cycle()
+            .zip(blobs
+                 .iter()
+                 .cycle()
+                 .take(m)
+                 ).collect();
+        info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
-            .into_par_iter()
-            .map(|((i, v), b)| {
+            .iter()
+            .map(|((i,v), b)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
                 let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
                 blob.set_id(me.id).expect("set_id in pub fn broadcast");
-                blob.set_index(*transmit_index + i as u64)
+                blob.set_index(*transmit_index + *i as u64)
                     .expect("set_index in pub fn broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
-                s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr)
+                info!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
+                info!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                e
             })
             .collect();
+        info!("broadcast results {}", errs.len());
         for e in errs {
             match e {
                 Err(e) => {

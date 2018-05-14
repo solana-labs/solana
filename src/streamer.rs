@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 
-pub const WINDOW_SIZE: usize = 1024;
+pub const WINDOW_SIZE: usize = 32;
 pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
 pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
@@ -128,6 +128,33 @@ pub fn blob_receiver(
     });
     Ok(t)
 }
+fn repair_window(
+    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    crdt: &Arc<RwLock<Crdt>>,
+    consumed: &mut usize,
+) -> Result<()> {
+    let repair: Option<(SocketAddr, Vec<u8>)> = {
+        let mut window = locked_window.write().unwrap();
+        let next = (*consumed + 1) % WINDOW_SIZE;
+        if let &Some(ref blob) = &window[next] {
+            let cix = blob.read().unwrap().get_index().expect("blob index value");
+            let val = crdt.read().unwrap().window_index_request(cix - 1);
+            if let Ok((to, req)) = val {
+                Some((to, req))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+    if let Some((to, req)) = repair {
+        //todo cache socket
+        let sock = UdpSocket::bind("0.0.0.0:0")?;
+        sock.send_to(&req, to)?;
+    }
+    Ok(())
+}
 
 fn recv_window(
     locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
@@ -138,7 +165,7 @@ fn recv_window(
     s: &BlobSender,
     retransmit: &BlobSender,
 ) -> Result<()> {
-    let timer = Duration::new(1, 0);
+    let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
@@ -234,27 +261,8 @@ fn recv_window(
     }
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
+        info!("sending contq.len: {}", contq.len());
         s.send(contq)?;
-    }
-    let repair: Option<(SocketAddr, Vec<u8>)> = {
-        let mut window = locked_window.write().unwrap();
-        let next = (*consumed + 1) % WINDOW_SIZE;
-        if let &Some(ref blob) = &window[next] {
-            let cix = blob.read().unwrap().get_index().expect("blob index value");
-            let val = crdt.read().unwrap().window_index_request(cix - 1);
-            if let Ok((to, req)) = val {
-                Some((to, req))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    };
-    if let Some((to, req)) = repair {
-        //todo cache socket
-        let sock = UdpSocket::bind("0.0.0.0:0")?;
-        sock.send_to(&req, to)?;
     }
     Ok(())
 }
@@ -286,6 +294,11 @@ pub fn window(
                 &r,
                 &s,
                 &retransmit,
+            );
+            let _ = repair_window(
+                &window,
+                &crdt,
+                &mut consumed,
             );
         }
     })

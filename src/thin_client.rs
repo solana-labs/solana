@@ -40,9 +40,9 @@ impl ThinClient {
 
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
-        info!("start recv_from");
+        trace!("start recv_from");
         self.requests_socket.recv_from(&mut buf)?;
-        info!("end recv_from");
+        trace!("end recv_from");
         let resp = deserialize(&buf).expect("deserialize balance in thin_client");
         Ok(resp)
     }
@@ -50,7 +50,7 @@ impl ThinClient {
     pub fn process_response(&mut self, resp: Response) {
         match resp {
             Response::Balance { key, val } => {
-                info!("Response balance {:?} {:?}", key, val);
+                trace!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
             }
             Response::LastId { id } => {
@@ -89,7 +89,7 @@ impl ThinClient {
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
-        info!("get_balance");
+        trace!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
         self.requests_socket
@@ -98,7 +98,7 @@ impl ThinClient {
         let mut done = false;
         while !done {
             let resp = self.recv_response()?;
-            info!("recv_response {:?}", resp);
+            trace!("recv_response {:?}", resp);
             if let &Response::Balance { ref key, .. } = &resp {
                 done = key == pubkey;
             }
