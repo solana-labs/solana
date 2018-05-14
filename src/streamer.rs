@@ -338,23 +338,24 @@ fn broadcast(
     erasure::generate_codes(blobs);
     Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
     // keep the cache of blobs that are broadcast
-    for b in &blobs {
+    {
         let mut win = window.write().unwrap();
-        let ix = b.read().unwrap().get_index().expect("blob index");
-        let pos = (ix as usize) % WINDOW_SIZE;
-        if let Some(x) = &win[pos] {
-            warn!("popped {} at {}", x.read().unwrap().get_index().unwrap(), pos);
-            recycler.recycle(x.clone());
+        for b in &blobs {
+            let ix = b.read().unwrap().get_index().expect("blob index");
+            let pos = (ix as usize) % WINDOW_SIZE;
+            if let Some(x) = &win[pos] {
+                warn!("popped {} at {}", x.read().unwrap().get_index().unwrap(), pos);
+                recycler.recycle(x.clone());
+            }
+            win[pos] = None;
         }
-        win[pos] = None;
-    }
-    while let Some(b) = blobs.pop() {
-        let mut win = window.write().unwrap();
-        let ix = b.read().unwrap().get_index().expect("blob index");
-        let pos = (ix as usize) % WINDOW_SIZE;
-        assert!(win[pos].is_none());
-        win[pos] = Some(b);
-        warn!("cached {} at {}", ix, pos);
+        while let Some(b) = blobs.pop() {
+            let ix = b.read().unwrap().get_index().expect("blob index");
+            let pos = (ix as usize) % WINDOW_SIZE;
+            assert!(win[pos].is_none());
+            win[pos] = Some(b);
+            warn!("cached {} at {}", ix, pos);
+        }
     }
     Ok(())
 }
