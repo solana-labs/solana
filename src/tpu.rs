@@ -20,8 +20,6 @@ use write_stage::WriteStage;
 
 pub struct Tpu {
     bank: Arc<Bank>,
-    start_hash: Hash,
-    tick_duration: Option<Duration>,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -40,11 +38,18 @@ impl Tpu {
     ) -> Self {
         let mut tpu = Tpu {
             bank: Arc::new(bank),
-            start_hash,
-            tick_duration,
             thread_hdls: vec![],
         };
-        let thread_hdls = tpu.serve(me, requests_socket, broadcast_socket, gossip, exit, writer);
+        let thread_hdls = tpu.serve(
+            start_hash,
+            tick_duration,
+            me,
+            requests_socket,
+            broadcast_socket,
+            gossip,
+            exit,
+            writer,
+        );
         tpu.thread_hdls.extend(thread_hdls);
         tpu
     }
@@ -54,6 +59,8 @@ impl Tpu {
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(
         &self,
+        start_hash: Hash,
+        tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
         broadcast_socket: UdpSocket,
@@ -80,11 +87,8 @@ impl Tpu {
             packet_recycler.clone(),
         );
 
-        let record_stage = RecordStage::new(
-            banking_stage.signal_receiver,
-            &self.start_hash,
-            self.tick_duration,
-        );
+        let record_stage =
+            RecordStage::new(banking_stage.signal_receiver, &start_hash, tick_duration);
 
         let write_stage = WriteStage::new(
             self.bank.clone(),

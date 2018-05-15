@@ -21,8 +21,6 @@ use write_stage::WriteStage;
 
 pub struct Rpu {
     bank: Arc<Bank>,
-    start_hash: Hash,
-    tick_duration: Option<Duration>,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -42,11 +40,11 @@ impl Rpu {
     ) -> Self {
         let mut rpu = Rpu {
             bank: Arc::new(bank),
-            start_hash,
-            tick_duration,
             thread_hdls: vec![],
         };
         let thread_hdls = rpu.serve(
+            start_hash,
+            tick_duration,
             me,
             requests_socket,
             broadcast_socket,
@@ -64,6 +62,8 @@ impl Rpu {
     /// Set `exit` to shutdown its threads.
     pub fn serve<W: Write + Send + 'static>(
         &self,
+        start_hash: Hash,
+        tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
         broadcast_socket: UdpSocket,
@@ -93,11 +93,8 @@ impl Rpu {
             blob_recycler.clone(),
         );
 
-        let record_stage = RecordStage::new(
-            request_stage.signal_receiver,
-            &self.start_hash,
-            self.tick_duration,
-        );
+        let record_stage =
+            RecordStage::new(request_stage.signal_receiver, &start_hash, tick_duration);
 
         let write_stage = WriteStage::new(
             self.bank.clone(),
