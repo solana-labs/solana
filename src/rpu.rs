@@ -23,6 +23,7 @@ pub struct Rpu {
     bank: Arc<Bank>,
     start_hash: Hash,
     tick_duration: Option<Duration>,
+    pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Rpu {
@@ -32,7 +33,34 @@ impl Rpu {
             bank: Arc::new(bank),
             start_hash,
             tick_duration,
+            thread_hdls: vec![],
         }
+    }
+
+    pub fn new1<W: Write + Send + 'static>(
+        bank: Bank,
+        start_hash: Hash,
+        tick_duration: Option<Duration>,
+        me: ReplicatedData,
+        requests_socket: UdpSocket,
+        broadcast_socket: UdpSocket,
+        respond_socket: UdpSocket,
+        gossip: UdpSocket,
+        exit: Arc<AtomicBool>,
+        writer: W,
+    ) -> Self {
+        let mut rpu = Self::new(bank, start_hash, tick_duration);
+        let thread_hdls = rpu.serve(
+            me,
+            requests_socket,
+            broadcast_socket,
+            respond_socket,
+            gossip,
+            exit,
+            writer,
+        );
+        rpu.thread_hdls.extend(thread_hdls);
+        rpu
     }
 
     /// Create a UDP microservice that forwards messages the given Rpu.

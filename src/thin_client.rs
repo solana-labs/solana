@@ -193,14 +193,16 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
 
         let mut local = serve.local_addr().unwrap();
         local.set_port(0);
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let threads = rpu.serve(
+        let rpu = Rpu::new1(
+            bank,
+            alice.last_id(),
+            Some(Duration::from_millis(30)),
             d,
             serve,
             broadcast_socket,
@@ -232,7 +234,7 @@ mod tests {
         }
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in threads {
+        for t in rpu.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -245,7 +247,6 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
         let serve_addr = leader_serve.local_addr().unwrap();
 
         let mut local = leader_serve.local_addr().unwrap();
@@ -253,7 +254,10 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let threads = rpu.serve(
+        let rpu = Rpu::new1(
+            bank,
+            alice.last_id(),
+            Some(Duration::from_millis(30)),
             leader_data,
             leader_serve,
             broadcast_socket,
@@ -289,7 +293,7 @@ mod tests {
         trace!("exiting");
         exit.store(true, Ordering::Relaxed);
         trace!("joining threads");
-        for t in threads {
+        for t in rpu.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -394,17 +398,17 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let leader_bank = {
-            let bank = Bank::new(&alice);
-            Rpu::new(bank, alice.last_id(), None)
-        };
+        let leader_bank = Bank::new(&alice);
 
         let mut local = leader.2.local_addr().unwrap();
         local.set_port(0);
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let mut threads = leader_bank.serve(
+        let rpu = Rpu::new1(
+            leader_bank,
+            alice.last_id(),
+            None,
             leader.0.clone(),
             leader.2,
             broadcast_socket,
@@ -414,6 +418,7 @@ mod tests {
             sink(),
         );
 
+        let mut threads = rpu.thread_hdls;
         for _ in 0..N {
             replicant(&leader.0, exit.clone(), &alice, &mut threads);
         }

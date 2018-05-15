@@ -7,7 +7,6 @@ use crdt::{Crdt, ReplicatedData};
 use hash::Hash;
 use packet;
 use record_stage::RecordStage;
-use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
@@ -23,6 +22,7 @@ pub struct Tpu {
     bank: Arc<Bank>,
     start_hash: Hash,
     tick_duration: Option<Duration>,
+    pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Tpu {
@@ -32,7 +32,25 @@ impl Tpu {
             bank: Arc::new(bank),
             start_hash,
             tick_duration,
+            thread_hdls: vec![],
         }
+    }
+
+    pub fn new1<W: Write + Send + 'static>(
+        bank: Bank,
+        start_hash: Hash,
+        tick_duration: Option<Duration>,
+        me: ReplicatedData,
+        requests_socket: UdpSocket,
+        broadcast_socket: UdpSocket,
+        gossip: UdpSocket,
+        exit: Arc<AtomicBool>,
+        writer: W,
+    ) -> Self {
+        let mut tpu = Tpu::new(bank, start_hash, tick_duration);
+        let thread_hdls = tpu.serve(me, requests_socket, broadcast_socket, gossip, exit, writer);
+        tpu.thread_hdls.extend(thread_hdls);
+        tpu
     }
 
     /// Create a UDP microservice that forwards messages the given Tpu.

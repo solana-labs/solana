@@ -116,7 +116,6 @@ fn main() {
     eprintln!("creating networking stack...");
 
     let exit = Arc::new(AtomicBool::new(false));
-    let rpu = Rpu::new(bank, last_id, Some(Duration::from_millis(1000)));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
     serve_sock
         .set_read_timeout(Some(Duration::new(1, 0)))
@@ -139,7 +138,10 @@ fn main() {
     let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
     eprintln!("starting server...");
-    let threads = rpu.serve(
+    let rpu = Rpu::new1(
+        bank,
+        last_id,
+        Some(Duration::from_millis(1000)),
         d,
         serve_sock,
         broadcast_socket,
@@ -149,7 +151,7 @@ fn main() {
         stdout(),
     );
     eprintln!("Ready. Listening on {}", serve_addr);
-    for t in threads {
+    for t in rpu.thread_hdls {
         t.join().expect("join");
     }
 }
