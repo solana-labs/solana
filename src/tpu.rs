@@ -42,15 +42,11 @@ impl Tpu {
         &self,
         me: ReplicatedData,
         requests_socket: UdpSocket,
+        broadcast_socket: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
-    ) -> Result<Vec<JoinHandle<()>>> {
-        // make sure we are on the same interface
-        let mut local = requests_socket.local_addr()?;
-        local.set_port(0);
-        let broadcast_socket = UdpSocket::bind(local)?;
-
+    ) -> Vec<JoinHandle<()>> {
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
@@ -107,6 +103,6 @@ impl Tpu {
             t_broadcast,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());
-        Ok(threads)
+        threads
     }
 }

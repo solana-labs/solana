@@ -8,7 +8,6 @@ use packet;
 use record_stage::RecordStage;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
-use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
@@ -48,7 +47,7 @@ impl Rpu {
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
-    ) -> Result<Vec<JoinHandle<()>>> {
+    ) -> Vec<JoinHandle<()>> {
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
@@ -115,6 +114,6 @@ impl Rpu {
             t_broadcast,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());
-        Ok(threads)
+        threads
     }
 }

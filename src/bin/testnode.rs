@@ -147,7 +147,7 @@ fn main() {
         gossip_sock,
         exit.clone(),
         stdout(),
-    ).unwrap();
+    );
     eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");

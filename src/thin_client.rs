@@ -208,7 +208,7 @@ mod tests {
             gossip,
             exit.clone(),
             sink(),
-        ).unwrap();
+        );
         sleep(Duration::from_millis(900));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -261,7 +261,7 @@ mod tests {
             leader_gossip,
             exit.clone(),
             sink(),
-        ).unwrap();
+        );
         sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -404,17 +404,15 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let mut threads = leader_bank
-            .serve(
-                leader.0.clone(),
-                leader.2,
-                broadcast_socket,
-                respond_socket,
-                leader.1,
-                exit.clone(),
-                sink(),
-            )
-            .unwrap();
+        let mut threads = leader_bank.serve(
+            leader.0.clone(),
+            leader.2,
+            broadcast_socket,
+            respond_socket,
+            leader.1,
+            exit.clone(),
+            sink(),
+        );
 
         for _ in 0..N {
             replicant(&leader.0, exit.clone(), &alice, &mut threads);
