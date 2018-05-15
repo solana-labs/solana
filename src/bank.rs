@@ -11,13 +11,14 @@ use event::Event;
 use hash::Hash;
 use mint::Mint;
 use plan::{Payment, Plan, Witness};
+use rayon::iter::ParallelIterator;
 use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
+use std::sync::RwLock;
 use transaction::Transaction;
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
@@ -224,22 +225,23 @@ impl Bank {
     }
 
     /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
+    pub fn process_verified_transactions<'a>(
+        &'a self,
+        trs: Vec<Transaction>,
+    ) -> impl ParallelIterator<Item = Result<Transaction>> + 'a {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         let results: Vec<_> = trs.into_par_iter()
             .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
-        results
-            .into_par_iter()
-            .map(|result| {
-                result.map(|tr| {
-                    self.process_verified_transaction_credits(&tr);
-                    tr
-                })
+        // returns a parallel iterator because process_verified_events immediately maps
+        results.into_par_iter().map(move |result| {
+            result.map(|tr| {
+                self.process_verified_transaction_credits(&tr);
+                tr
             })
-            .collect()
+        })
     }
 
     fn partition_events(events: Vec<Event>) -> (Vec<Transaction>, Vec<Event>) {
@@ -257,7 +259,6 @@ impl Bank {
     pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
         let mut results: Vec<_> = self.process_verified_transactions(trs)
-            .into_iter()
             .map(|x| x.map(Event::Transaction))
             .collect();
 
@@ -582,7 +583,7 @@ mod tests {
         let tr0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tr1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
-        let results = bank.process_verified_transactions(trs);
+        let results: Vec<Result<Transaction>> = bank.process_verified_transactions(trs).collect();
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
