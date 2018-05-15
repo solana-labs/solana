@@ -132,9 +132,22 @@ fn main() {
         replicate_sock.local_addr().unwrap(),
         serve_sock.local_addr().unwrap(),
     );
+
+    let mut local = serve_sock.local_addr().unwrap();
+    local.set_port(0);
+    let broadcast_socket = UdpSocket::bind(local).unwrap();
+    let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+
     eprintln!("starting server...");
-    let threads = rpu.serve(d, serve_sock, gossip_sock, exit.clone(), stdout())
-        .unwrap();
+    let threads = rpu.serve(
+        d,
+        serve_sock,
+        broadcast_socket,
+        respond_socket,
+        gossip_sock,
+        exit.clone(),
+        stdout(),
+    ).unwrap();
     eprintln!("Ready. Listening on {}", serve_addr);
     for t in threads {
         t.join().expect("join");
