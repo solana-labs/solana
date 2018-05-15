@@ -191,7 +191,10 @@ impl Crdt {
                 }
             })
             .collect();
-        assert!(nodes.len() > 0);
+        if nodes.len() < 1 {
+            return Err(Error::CrdtToSmall);
+        }
+
         info!("nodes table {}", nodes.len());
         info!("blobs table {}", blobs.len());
         // enumerate all the blobs, those are the indecies
