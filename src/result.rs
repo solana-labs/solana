@@ -18,7 +18,7 @@ pub enum Error {
     BankError(bank::BankError),
     SendError,
     Services,
-    CrdtToSmall,
+    CrdtTooSmall,
     GenericError,
 }
 

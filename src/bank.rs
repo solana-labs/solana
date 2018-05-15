@@ -286,8 +286,8 @@ impl Bank {
             .entry(tx_sig)
         {
             e.get_mut().apply_witness(&Witness::Signature(from));
-            if let Some(ref payment) = e.get().final_payment() {
-                apply_payment(&self.balances, payment);
+            if let Some(payment) = e.get().final_payment() {
+                apply_payment(&self.balances, &payment);
                 e.remove_entry();
             }
         };
