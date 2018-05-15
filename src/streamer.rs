@@ -51,12 +51,12 @@ pub fn receiver(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
     recycler: PacketRecycler,
-    channel: PacketSender,
-) -> Result<JoinHandle<()>> {
-    Ok(spawn(move || {
-        let _ = recv_loop(&sock, &exit, &recycler, &channel);
+    packet_sender: PacketSender,
+) -> JoinHandle<()> {
+    spawn(move || {
+        let _ = recv_loop(&sock, &exit, &recycler, &packet_sender);
         ()
-    }))
+    })
 }
 
 fn recv_send(sock: &UdpSocket, recycler: &BlobRecycler, r: &BlobReceiver) -> Result<()> {
@@ -591,13 +591,15 @@ mod test {
     #[test]
     pub fn streamer_send_test() {
         let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader).unwrap();
+        let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
         let (s_responder, r_responder) = channel();
         let t_responder = responder(send, exit.clone(), resp_recycler.clone(), r_responder);
         let mut msgs = VecDeque::new();

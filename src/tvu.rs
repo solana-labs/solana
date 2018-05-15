@@ -156,7 +156,7 @@ impl Tvu {
             exit.clone(),
             packet_recycler.clone(),
             packet_sender,
-        )?;
+        );
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
