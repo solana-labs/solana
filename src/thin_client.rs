@@ -178,6 +178,7 @@ mod tests {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        serve.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
         let _events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let addr = serve.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
@@ -274,6 +275,8 @@ mod tests {
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        serve.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();

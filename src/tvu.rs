@@ -212,6 +212,9 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
     let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
     let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
     let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+    requests_socket
+        .set_read_timeout(Some(Duration::new(1, 0)))
+        .unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,

@@ -118,6 +118,10 @@ fn main() {
     let exit = Arc::new(AtomicBool::new(false));
     let rpu = Rpu::new(bank, last_id, Some(Duration::from_millis(1000)));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
+    serve_sock
+        .set_read_timeout(Some(Duration::new(1, 0)))
+        .unwrap();
+
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
     let _events_sock = UdpSocket::bind(&events_addr).unwrap();

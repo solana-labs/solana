@@ -53,8 +53,6 @@ pub fn receiver(
     recycler: PacketRecycler,
     channel: PacketSender,
 ) -> Result<JoinHandle<()>> {
-    let timer = Duration::new(1, 0);
-    sock.set_read_timeout(Some(timer))?;
     Ok(spawn(move || {
         let _ = recv_loop(&sock, &exit, &recycler, &channel);
         ()
@@ -515,6 +513,8 @@ mod bench {
     }
     fn run_streamer_bench() -> Result<()> {
         let read = UdpSocket::bind("127.0.0.1:0")?;
+        read.set_read_timeout(Some(Duration::new(1, 0)))?;
+
         let addr = read.local_addr()?;
         let exit = Arc::new(AtomicBool::new(false));
         let pack_recycler = PacketRecycler::default();
