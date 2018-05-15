@@ -19,12 +19,10 @@ use streamer;
 use write_stage::WriteStage;
 
 pub struct Tpu {
-    bank: Arc<Bank>,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Tpu {
-    /// Create a new Tpu that wraps the given Bank.
     pub fn new1<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
@@ -36,38 +34,8 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
-        let mut tpu = Tpu {
-            bank: Arc::new(bank),
-            thread_hdls: vec![],
-        };
-        let thread_hdls = tpu.serve(
-            start_hash,
-            tick_duration,
-            me,
-            requests_socket,
-            broadcast_socket,
-            gossip,
-            exit,
-            writer,
-        );
-        tpu.thread_hdls.extend(thread_hdls);
-        tpu
-    }
+        let bank = Arc::new(bank);
 
-    /// Create a UDP microservice that forwards messages the given Tpu.
-    /// This service is the network leader
-    /// Set `exit` to shutdown its threads.
-    pub fn serve<W: Write + Send + 'static>(
-        &self,
-        start_hash: Hash,
-        tick_duration: Option<Duration>,
-        me: ReplicatedData,
-        requests_socket: UdpSocket,
-        broadcast_socket: UdpSocket,
-        gossip: UdpSocket,
-        exit: Arc<AtomicBool>,
-        writer: W,
-    ) -> Vec<JoinHandle<()>> {
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
@@ -81,7 +49,7 @@ impl Tpu {
 
         let blob_recycler = packet::BlobRecycler::default();
         let banking_stage = BankingStage::new(
-            self.bank.clone(),
+            bank.clone(),
             exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
@@ -91,7 +59,7 @@ impl Tpu {
             RecordStage::new(banking_stage.signal_receiver, &start_hash, tick_duration);
 
         let write_stage = WriteStage::new(
-            self.bank.clone(),
+            bank.clone(),
             exit.clone(),
             blob_recycler.clone(),
             Mutex::new(writer),
@@ -112,7 +80,7 @@ impl Tpu {
             write_stage.blob_receiver,
         );
 
-        let mut threads = vec![
+        let mut thread_hdls = vec![
             t_receiver,
             banking_stage.thread_hdl,
             write_stage.thread_hdl,
@@ -120,7 +88,7 @@ impl Tpu {
             t_listen,
             t_broadcast,
         ];
-        threads.extend(sig_verify_stage.thread_hdls.into_iter());
-        threads
+        thread_hdls.extend(sig_verify_stage.thread_hdls.into_iter());
+        Tpu { thread_hdls }
     }
 }
