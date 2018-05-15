@@ -29,8 +29,9 @@ impl Server {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
+        let bank = Arc::new(bank);
         let rpu = Rpu::new(
-            bank,
+            bank.clone(),
             start_hash,
             tick_duration,
             me,

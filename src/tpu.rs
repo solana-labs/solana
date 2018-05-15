@@ -24,7 +24,7 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new<W: Write + Send + 'static>(
-        bank: Bank,
+        bank: Arc<Bank>,
         start_hash: Hash,
         tick_duration: Option<Duration>,
         me: ReplicatedData,
@@ -34,8 +34,6 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
-        let bank = Arc::new(bank);
-
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
