@@ -3,7 +3,7 @@
 //! repair partitions.
 //!
 //! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
-//! The last version is always picked durring an update.
+//! The last version is always picked during an update.
 //!
 //! The network is arranged in layers:
 //!
@@ -89,7 +89,7 @@ pub struct Crdt {
     /// should respond with all the identities that are greater then the
     /// request's `update_index` in this list
     local: HashMap<PublicKey, u64>,
-    /// The value of the remote update index that i have last seen
+    /// The value of the remote update index that I have last seen
     /// This Node will ask external nodes for updates since the value in this list
     pub remote: HashMap<PublicKey, u64>,
     pub update_index: u64,
@@ -169,7 +169,7 @@ impl Crdt {
         transmit_index: &mut u64,
     ) -> Result<()> {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
-            // copy to avoid locking durring IO
+            // copy to avoid locking during IO
             let robj = obj.read().expect("'obj' read lock in pub fn broadcast");
             info!("broadcast table {}", robj.table.len());
             let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
@@ -197,7 +197,7 @@ impl Crdt {
 
         info!("nodes table {}", nodes.len());
         info!("blobs table {}", blobs.len());
-        // enumerate all the blobs, those are the indecies
+        // enumerate all the blobs, those are the indices
         // transmit them to nodes, starting from a different node
         let orders: Vec<_> = blobs
             .iter()
@@ -245,7 +245,7 @@ impl Crdt {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
-            // copy to avoid locking durring IO
+            // copy to avoid locking during IO
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
         };
@@ -439,7 +439,7 @@ impl Crdt {
             Protocol::RequestUpdates(v, reqdata) => {
                 trace!("RequestUpdates {}", v);
                 let addr = reqdata.gossip_addr;
-                // only lock for this call, dont lock durring IO `sock.send_to` or `sock.recv_from`
+                // only lock for this call, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = obj.read()
                     .expect("'obj' read lock in RequestUpdates")
                     .get_updates_since(v);
