@@ -46,14 +46,10 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Result<Vec<JoinHandle<()>>> {
-        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
-        let window = streamer::default_window();
-        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
-
         // make sure we are on the same interface
         let mut local = requests_socket.local_addr()?;
         local.set_port(0);
+        let broadcast_socket = UdpSocket::bind(local)?;
 
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
@@ -88,7 +84,11 @@ impl Tpu {
             record_stage.entry_receiver,
         );
 
-        let broadcast_socket = UdpSocket::bind(local)?;
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let window = streamer::default_window();
+        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
+
         let t_broadcast = streamer::broadcaster(
             broadcast_socket,
             exit.clone(),
