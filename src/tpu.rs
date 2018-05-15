@@ -27,15 +27,6 @@ pub struct Tpu {
 
 impl Tpu {
     /// Create a new Tpu that wraps the given Bank.
-    pub fn new(bank: Bank, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
-        Tpu {
-            bank: Arc::new(bank),
-            start_hash,
-            tick_duration,
-            thread_hdls: vec![],
-        }
-    }
-
     pub fn new1<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
@@ -47,7 +38,12 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
-        let mut tpu = Tpu::new(bank, start_hash, tick_duration);
+        let mut tpu = Tpu {
+            bank: Arc::new(bank),
+            start_hash,
+            tick_duration,
+            thread_hdls: vec![],
+        };
         let thread_hdls = tpu.serve(me, requests_socket, broadcast_socket, gossip, exit, writer);
         tpu.thread_hdls.extend(thread_hdls);
         tpu

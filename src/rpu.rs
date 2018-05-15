@@ -28,15 +28,6 @@ pub struct Rpu {
 
 impl Rpu {
     /// Create a new Rpu that wraps the given Bank.
-    pub fn new(bank: Bank, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
-        Rpu {
-            bank: Arc::new(bank),
-            start_hash,
-            tick_duration,
-            thread_hdls: vec![],
-        }
-    }
-
     pub fn new1<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
@@ -49,7 +40,12 @@ impl Rpu {
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
-        let mut rpu = Self::new(bank, start_hash, tick_duration);
+        let mut rpu = Rpu {
+            bank: Arc::new(bank),
+            start_hash,
+            tick_duration,
+            thread_hdls: vec![],
+        };
         let thread_hdls = rpu.serve(
             me,
             requests_socket,
