@@ -2,13 +2,12 @@
 //! 5-stage transaction validation pipeline in software.
 
 use bank::Bank;
+use banking_stage::BankingStage;
 use crdt::{Crdt, ReplicatedData};
 use hash::Hash;
 use ledger;
 use packet;
 use record_stage::RecordStage;
-use request_processor::RequestProcessor;
-use request_stage::RequestStage;
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
@@ -146,10 +145,8 @@ impl Tvu {
         // make sure we are on the same interface
         let mut local = requests_socket.local_addr()?;
         local.set_port(0);
-        let respond_socket = UdpSocket::bind(local.clone())?;
 
         let packet_recycler = packet::PacketRecycler::default();
-        let blob_recycler = packet::BlobRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_packet_receiver = streamer::receiver(
             requests_socket,
@@ -160,30 +157,21 @@ impl Tvu {
 
         let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let request_processor = RequestProcessor::new(obj.bank.clone());
-        let request_stage = RequestStage::new(
-            request_processor,
+        let banking_stage = BankingStage::new(
+            obj.bank.clone(),
             exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
-            blob_recycler.clone(),
         );
 
         let record_stage = RecordStage::new(
-            request_stage.signal_receiver,
+            banking_stage.signal_receiver,
             &obj.start_hash,
             obj.tick_duration,
         );
 
         let write_stage =
             WriteStage::new_drain(obj.bank.clone(), exit.clone(), record_stage.entry_receiver);
-
-        let t_responder = streamer::responder(
-            respond_socket,
-            exit.clone(),
-            blob_recycler.clone(),
-            request_stage.blob_receiver,
-        );
 
         let mut threads = vec![
             //replicate threads
@@ -195,8 +183,7 @@ impl Tvu {
             t_listen,
             //serve threads
             t_packet_receiver,
-            t_responder,
-            request_stage.thread_hdl,
+            banking_stage.thread_hdl,
             write_stage.thread_hdl,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());

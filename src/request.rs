@@ -5,12 +5,10 @@ use hash::Hash;
 use packet;
 use packet::SharedPackets;
 use signature::PublicKey;
-use transaction::Transaction;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Request {
-    Transaction(Transaction),
     GetBalance { key: PublicKey },
     GetLastId,
     GetTransactionCount,
@@ -19,10 +17,7 @@ pub enum Request {
 impl Request {
     /// Verify the request is valid.
     pub fn verify(&self) -> bool {
-        match *self {
-            Request::Transaction(ref tr) => tr.verify_plan(),
-            _ => true,
-        }
+        true
     }
 }
 
@@ -54,24 +49,12 @@ pub fn to_request_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec
 
 #[cfg(test)]
 mod tests {
-    use bincode::serialize;
-    use ecdsa;
     use packet::{PacketRecycler, NUM_PACKETS};
     use request::{to_request_packets, Request};
-    use transaction::{memfind, test_tx};
-
-    #[test]
-    fn test_layout() {
-        let tr = test_tx();
-        let tx = serialize(&tr).unwrap();
-        let packet = serialize(&Request::Transaction(tr)).unwrap();
-        assert_matches!(memfind(&packet, &tx), Some(ecdsa::TX_OFFSET));
-        assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
-    }
 
     #[test]
     fn test_to_packets() {
-        let tr = Request::Transaction(test_tx());
+        let tr = Request::GetTransactionCount;
         let re = PacketRecycler::default();
         let rv = to_request_packets(&re, vec![tr.clone(); 1]);
         assert_eq!(rv.len(), 1);

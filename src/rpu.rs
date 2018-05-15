@@ -5,7 +5,6 @@ use bank::Bank;
 use packet;
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
-use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -33,14 +32,12 @@ impl Rpu {
             packet_sender,
         );
 
-        let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
-
         let blob_recycler = packet::BlobRecycler::default();
         let request_processor = RequestProcessor::new(bank.clone());
         let request_stage = RequestStage::new(
             request_processor,
             exit.clone(),
-            sig_verify_stage.verified_receiver,
+            packet_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
         );
@@ -52,9 +49,7 @@ impl Rpu {
             request_stage.blob_receiver,
         );
 
-        let mut thread_hdls = vec![t_receiver, t_responder, request_stage.thread_hdl];
-        thread_hdls.extend(sig_verify_stage.thread_hdls.into_iter());
-
+        let thread_hdls = vec![t_receiver, t_responder, request_stage.thread_hdl];
         Rpu { thread_hdls }
     }
 }

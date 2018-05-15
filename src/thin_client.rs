@@ -4,6 +4,7 @@
 //! unstable and may change in future releases.
 
 use bincode::{deserialize, serialize};
+use event::Event;
 use futures::future::{ok, FutureResult};
 use hash::Hash;
 use request::{Request, Response};
@@ -67,8 +68,8 @@ impl ThinClient {
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
-        let req = Request::Transaction(tr);
-        let data = serialize(&req).expect("serialize Transaction in pub fn transfer_signed");
+        let event = Event::Transaction(tr);
+        let data = serialize(&event).expect("serialize Transaction in pub fn transfer_signed");
         self.events_socket.send_to(&data, &self.addr)
     }
 
