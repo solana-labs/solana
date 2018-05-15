@@ -160,7 +160,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use plan::Plan;
-    use rpu::Rpu;
+    use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -199,7 +199,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new(
+        let server = Server::new(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -234,7 +234,7 @@ mod tests {
         }
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in rpu.thread_hdls {
+        for t in server.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -254,7 +254,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new(
+        let server = Server::new(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -293,7 +293,7 @@ mod tests {
         trace!("exiting");
         exit.store(true, Ordering::Relaxed);
         trace!("joining threads");
-        for t in rpu.thread_hdls {
+        for t in server.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -405,7 +405,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new(
+        let server = Server::new(
             leader_bank,
             alice.last_id(),
             None,
@@ -418,7 +418,7 @@ mod tests {
             sink(),
         );
 
-        let mut threads = rpu.thread_hdls;
+        let mut threads = server.thread_hdls;
         for _ in 0..N {
             replicant(&leader.0, exit.clone(), &alice, &mut threads);
         }

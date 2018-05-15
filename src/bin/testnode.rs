@@ -10,7 +10,7 @@ use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
-use solana::rpu::Rpu;
+use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
 use std::env;
 use std::io::{stdin, stdout, Read};
@@ -138,7 +138,7 @@ fn main() {
     let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
     eprintln!("starting server...");
-    let rpu = Rpu::new(
+    let server = Server::new(
         bank,
         last_id,
         Some(Duration::from_millis(1000)),
@@ -151,7 +151,7 @@ fn main() {
         stdout(),
     );
     eprintln!("Ready. Listening on {}", serve_addr);
-    for t in rpu.thread_hdls {
+    for t in server.thread_hdls {
         t.join().expect("join");
     }
 }

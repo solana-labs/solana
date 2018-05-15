@@ -21,6 +21,7 @@ pub mod request_processor;
 pub mod request_stage;
 pub mod result;
 pub mod rpu;
+pub mod server;
 pub mod sig_verify_stage;
 pub mod signature;
 pub mod streamer;
