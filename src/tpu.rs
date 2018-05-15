@@ -23,7 +23,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
-    pub fn new1<W: Write + Send + 'static>(
+    pub fn new<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
         tick_duration: Option<Duration>,

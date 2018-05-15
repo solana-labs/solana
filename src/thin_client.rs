@@ -199,7 +199,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new1(
+        let rpu = Rpu::new(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -254,7 +254,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new1(
+        let rpu = Rpu::new(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -405,7 +405,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let rpu = Rpu::new1(
+        let rpu = Rpu::new(
             leader_bank,
             alice.last_id(),
             None,

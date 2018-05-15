@@ -138,7 +138,7 @@ fn main() {
     let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
     eprintln!("starting server...");
-    let rpu = Rpu::new1(
+    let rpu = Rpu::new(
         bank,
         last_id,
         Some(Duration::from_millis(1000)),
