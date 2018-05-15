@@ -69,7 +69,7 @@ impl ThinClient {
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let req = Request::Transaction(tr);
         let data = serialize(&req).expect("serialize Transaction in pub fn transfer_signed");
-        self.requests_socket.send_to(&data, &self.addr)
+        self.events_socket.send_to(&data, &self.addr)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.

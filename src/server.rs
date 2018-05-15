@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 use std::time::Duration;
-//use tpu::Tpu;
+use tpu::Tpu;
 
 pub struct Server {
     pub thread_hdls: Vec<JoinHandle<()>>,
@@ -23,7 +23,7 @@ impl Server {
         tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
-        _events_socket: UdpSocket,
+        events_socket: UdpSocket,
         broadcast_socket: UdpSocket,
         respond_socket: UdpSocket,
         gossip: UdpSocket,
@@ -32,32 +32,21 @@ impl Server {
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
-        let rpu = Rpu::new(
+        let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
+        thread_hdls.extend(rpu.thread_hdls);
+
+        let tpu = Tpu::new(
             bank.clone(),
             start_hash,
             tick_duration,
             me,
-            requests_socket,
+            events_socket,
             broadcast_socket,
-            respond_socket,
             gossip,
             exit.clone(),
             writer,
         );
-        thread_hdls.extend(rpu.thread_hdls);
-
-        //let tpu = Tpu::new(
-        //    bank.clone(),
-        //    start_hash,
-        //    tick_duration,
-        //    me,
-        //    events_socket,
-        //    broadcast_socket,
-        //    gossip,
-        //    exit.clone(),
-        //    writer,
-        //);
-        //thread_hdls.extend(tpu.thread_hdls);
+        thread_hdls.extend(tpu.thread_hdls);
 
         Server { thread_hdls }
     }
