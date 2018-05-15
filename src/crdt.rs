@@ -192,7 +192,7 @@ impl Crdt {
             })
             .collect();
         if nodes.len() < 1 {
-            return Err(Error::CrdtToSmall);
+            return Err(Error::CrdtTooSmall);
         }
 
         info!("nodes table {}", nodes.len());
@@ -317,7 +317,7 @@ impl Crdt {
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         if self.table.len() <= 1 {
-            return Err(Error::CrdtToSmall);
+            return Err(Error::CrdtTooSmall);
         }
         let mut n = (Self::random() as usize) % self.table.len();
         while self.table.values().nth(n).unwrap().id == self.me {
@@ -337,7 +337,7 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
         if options.len() < 1 {
-            return Err(Error::CrdtToSmall);
+            return Err(Error::CrdtTooSmall);
         }
         let n = (Self::random() as usize) % options.len();
         let v = options[n].clone();
