@@ -22,6 +22,7 @@ impl Server {
         tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
+        _events_socket: UdpSocket,
         broadcast_socket: UdpSocket,
         respond_socket: UdpSocket,
         gossip: UdpSocket,

@@ -123,7 +123,7 @@ fn main() {
 
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
-    let _events_sock = UdpSocket::bind(&events_addr).unwrap();
+    let events_sock = UdpSocket::bind(&events_addr).unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
@@ -144,6 +144,7 @@ fn main() {
         Some(Duration::from_millis(1000)),
         d,
         serve_sock,
+        events_sock,
         broadcast_socket,
         respond_socket,
         gossip_sock,

@@ -177,16 +177,18 @@ mod tests {
     fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        serve.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-        let _events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let addr = serve.local_addr().unwrap();
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(1, 0)))
+            .unwrap();
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let addr = requests_socket.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
             pubkey,
             gossip.local_addr().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
-            serve.local_addr().unwrap(),
+            requests_socket.local_addr().unwrap(),
         );
 
         let alice = Mint::new(10_000);
@@ -194,7 +196,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let mut local = serve.local_addr().unwrap();
+        let mut local = requests_socket.local_addr().unwrap();
         local.set_port(0);
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
@@ -204,7 +206,8 @@ mod tests {
             alice.last_id(),
             Some(Duration::from_millis(30)),
             d,
-            serve,
+            requests_socket,
+            events_socket,
             broadcast_socket,
             respond_socket,
             gossip,
@@ -251,6 +254,7 @@ mod tests {
 
         let mut local = leader_serve.local_addr().unwrap();
         local.set_port(0);
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
@@ -260,6 +264,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader_data,
             leader_serve,
+            events_socket,
             broadcast_socket,
             respond_socket,
             leader_gossip,
@@ -411,6 +416,7 @@ mod tests {
             None,
             leader.0.clone(),
             leader.2,
+            leader.4,
             broadcast_socket,
             respond_socket,
             leader.1,
