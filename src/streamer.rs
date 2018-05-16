@@ -520,7 +520,7 @@ mod bench {
         let pack_recycler = PacketRecycler::default();
 
         let (s_reader, r_reader) = channel();
-        let t_reader = receiver(read, exit.clone(), pack_recycler.clone(), s_reader)?;
+        let t_reader = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
         let t_producer1 = producer(&addr, pack_recycler.clone(), exit.clone());
         let t_producer2 = producer(&addr, pack_recycler.clone(), exit.clone());
         let t_producer3 = producer(&addr, pack_recycler.clone(), exit.clone());
