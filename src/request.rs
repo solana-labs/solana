@@ -4,6 +4,7 @@ use bincode::serialize;
 use hash::Hash;
 use packet;
 use packet::SharedPackets;
+use serde::Serialize;
 use signature::PublicKey;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
@@ -28,7 +29,10 @@ pub enum Response {
     TransactionCount { transaction_count: u64 },
 }
 
-pub fn to_request_packets(r: &packet::PacketRecycler, reqs: Vec<Request>) -> Vec<SharedPackets> {
+pub fn to_request_packets<T: Serialize>(
+    r: &packet::PacketRecycler,
+    reqs: Vec<T>,
+) -> Vec<SharedPackets> {
     let mut out = vec![];
     for rrs in reqs.chunks(packet::NUM_PACKETS) {
         let p = r.allocate();
