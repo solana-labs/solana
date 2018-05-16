@@ -1,7 +1,6 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
 use entry::Entry;
-use entry::create_entry;
 use event::Event;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
@@ -55,8 +54,8 @@ impl Mint {
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
-        let e0 = create_entry(&self.seed(), 0, vec![]);
-        let e1 = create_entry(&e0.id, 0, self.create_events());
+        let e0 = Entry::new(&self.seed(), 0, vec![]);
+        let e1 = Entry::new(&e0.id, 0, self.create_events());
         vec![e0, e1]
     }
 }

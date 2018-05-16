@@ -25,6 +25,25 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Creates the next Entry `num_hashes` after `start_hash`.
+    pub fn new(start_hash: &Hash, cur_hashes: u64, events: Vec<Event>) -> Self {
+        let num_hashes = cur_hashes + if events.is_empty() { 0 } else { 1 };
+        let id = next_hash(start_hash, 0, &events);
+        Entry {
+            num_hashes,
+            id,
+            events,
+        }
+    }
+
+    /// Creates the next Tick Entry `num_hashes` after `start_hash`.
+    pub fn new_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Event>) -> Self {
+        let entry = Self::new(start_hash, *cur_hashes, events);
+        *start_hash = entry.id;
+        *cur_hashes = 0;
+        entry
+    }
+
     /// Creates a Entry from the number of hashes `num_hashes` since the previous event
     /// and that resulting `id`.
     pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
@@ -84,25 +103,6 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
     }
 }
 
-/// Creates the next Entry `num_hashes` after `start_hash`.
-pub fn create_entry(start_hash: &Hash, cur_hashes: u64, events: Vec<Event>) -> Entry {
-    let num_hashes = cur_hashes + if events.is_empty() { 0 } else { 1 };
-    let id = next_hash(start_hash, 0, &events);
-    Entry {
-        num_hashes,
-        id,
-        events,
-    }
-}
-
-/// Creates the next Tick Entry `num_hashes` after `start_hash`.
-pub fn create_entry_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Event>) -> Entry {
-    let entry = create_entry(start_hash, *cur_hashes, events);
-    *start_hash = entry.id;
-    *cur_hashes = 0;
-    entry
-}
-
 /// Creates the next Tick or Event Entry `num_hashes` after `start_hash`.
 pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Event>) -> Entry {
     Entry {
@@ -116,7 +116,7 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Event>) -> Ent
 mod tests {
     use super::*;
     use chrono::prelude::*;
-    use entry::create_entry;
+    use entry::Entry;
     use event::Event;
     use hash::hash;
     use signature::{KeyPair, KeyPairUtil};
@@ -139,7 +139,7 @@ mod tests {
         let keypair = KeyPair::new();
         let tr0 = Event::new_transaction(&keypair, keypair.pubkey(), 0, zero);
         let tr1 = Event::new_transaction(&keypair, keypair.pubkey(), 1, zero);
-        let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two events and ensure verification fails.
@@ -156,7 +156,7 @@ mod tests {
         let keypair = KeyPair::new();
         let tr0 = Event::new_timestamp(&keypair, Utc::now());
         let tr1 = Event::new_signature(&keypair, Default::default());
-        let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two witness events and ensure verification fails.

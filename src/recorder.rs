@@ -5,7 +5,7 @@
 //! Event, the latest hash, and the number of hashes since the last event.
 //! The resulting stream of entries represents ordered events in time.
 
-use entry::{create_entry_mut, Entry};
+use entry::Entry;
 use event::Event;
 use hash::{hash, Hash};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
@@ -48,7 +48,7 @@ impl Recorder {
     }
 
     pub fn record_entry(&mut self, events: Vec<Event>) -> Result<(), ExitReason> {
-        let entry = create_entry_mut(&mut self.last_hash, &mut self.num_hashes, events);
+        let entry = Entry::new_mut(&mut self.last_hash, &mut self.num_hashes, events);
         self.sender
             .send(entry)
             .or(Err(ExitReason::SendDisconnected))?;
