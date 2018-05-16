@@ -643,8 +643,8 @@ mod bench {
         let tokens_per_user = 1_000;
 
         bencher.iter(|| {
-            let mint = Mint::new(1_000_000);
-            let num_accounts = 100;
+            let mint = Mint::new(1_000_000_000);
+            let num_accounts = 100_000;
             let mint_keypair = mint.keypair();
             let rnd = GenKeys::new(mint.keypair().public_key_bytes());
             let users = rnd.gen_n_keys(num_accounts, tokens_per_user);
@@ -674,8 +674,8 @@ mod bench {
         let tokens_per_user = 1_000;
 
         bencher.iter(|| {
-            let mint = Mint::new(1_000_000);
-            let num_accounts = 100;
+            let mint = Mint::new(1_000_000_000);
+            let num_accounts = 100_000;
             let mint_keypair = mint.keypair();
             let rnd = GenKeys::new(mint.keypair().public_key_bytes());
             let users = rnd.gen_n_keys(num_accounts, tokens_per_user);
@@ -696,7 +696,7 @@ mod bench {
 
     #[bench]
     fn process_verified_event_new_bench(bencher: &mut Bencher) {
-        let mint = Mint::new(100_000_000);
+        let mint = Mint::new(1_000_000_000);
         let bank = Bank::new(&mint);
         // Create transactions between unrelated parties.
         let transactions: Vec<_> = (0..4096)
@@ -734,7 +734,7 @@ mod bench {
 
     #[bench]
     fn process_verified_event_old_bench(bencher: &mut Bencher) {
-        let mint = Mint::new(100_000_000);
+        let mint = Mint::new(1_000_000_000);
         let bank = Bank::new(&mint);
         // Create transactions between unrelated parties.
         let transactions: Vec<_> = (0..4096)
