@@ -552,21 +552,29 @@ mod test {
             .map(|&(ref c, _)| Crdt::gossip(c.clone(), exit.clone()))
             .collect();
         let mut done = true;
-        for _ in 0..(num * 32) {
-            done = true;
+        for i in 0..(num * 32) {
+            done = false;
+            trace!("round {}", i);
             for &(ref c, _) in listen.iter() {
-                trace!(
-                    "done updates {} {}",
-                    c.read().unwrap().table.len(),
-                    c.read().unwrap().update_index
-                );
-                //make sure the number of updates doesn't grow unbounded
-                assert!(c.read().unwrap().update_index <= num as u64);
-                //make sure we got all the updates
-                if c.read().unwrap().table.len() != num {
-                    done = false;
+                assert!(num >= c.read().unwrap().remote.values().len());
+                trace!("len {}", c.read().unwrap().remote.values().len());
+                if (num - 1)== c.read().unwrap().remote.values().len() { 
+                    done = true;
+                    //for this node check if it thinks every node received num updates
+                    for r in c.read().unwrap().remote.values() {
+                        assert!(*r <= num as u64);
+                        trace!("r value {}", *r);
+                        if *r != num as u64 {
+                            done = false;
+                        }
+                    }
+                }
+                //at least 1 node thinks every node has received num updates
+                if done == true {
+                    break;
                 }
             }
+            //at least 1 node things every node has received num updates
             if done == true {
                 break;
             }
@@ -590,6 +598,7 @@ mod test {
     #[test]
     #[ignore]
     fn gossip_ring_test() {
+        logger::setup();
         run_gossip_topo(|listen| {
             let num = listen.len();
             for n in 0..num {
