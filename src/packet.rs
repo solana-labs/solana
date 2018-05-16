@@ -2,6 +2,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use result::{Error, Result};
+use serde::Serialize;
 use signature::PublicKey;
 use std::collections::VecDeque;
 use std::fmt;
@@ -216,6 +217,25 @@ impl Packets {
     }
 }
 
+pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPackets> {
+    let mut out = vec![];
+    for x in xs.chunks(NUM_PACKETS) {
+        let p = r.allocate();
+        p.write()
+            .unwrap()
+            .packets
+            .resize(x.len(), Default::default());
+        for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
+            let v = serialize(&i).expect("serialize request");
+            let len = v.len();
+            o.data[..len].copy_from_slice(&v);
+            o.meta.size = len;
+        }
+        out.push(p);
+    }
+    return out;
+}
+
 const BLOB_INDEX_END: usize = size_of::<u64>();
 const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
 
@@ -308,11 +328,13 @@ impl Blob {
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets};
+    use packet::{to_packets, Blob, BlobRecycler, Packet, PacketRecycler, Packets, NUM_PACKETS};
+    use request::Request;
     use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
+
     #[test]
     pub fn packet_recycler_test() {
         let r = PacketRecycler::default();
@@ -352,6 +374,24 @@ mod test {
         }
 
         r.recycle(p);
+    }
+
+    #[test]
+    fn test_to_packets() {
+        let tr = Request::GetTransactionCount;
+        let re = PacketRecycler::default();
+        let rv = to_packets(&re, vec![tr.clone(); 1]);
+        assert_eq!(rv.len(), 1);
+        assert_eq!(rv[0].read().unwrap().packets.len(), 1);
+
+        let rv = to_packets(&re, vec![tr.clone(); NUM_PACKETS]);
+        assert_eq!(rv.len(), 1);
+        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
+
+        let rv = to_packets(&re, vec![tr.clone(); NUM_PACKETS + 1]);
+        assert_eq!(rv.len(), 2);
+        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[1].read().unwrap().packets.len(), 1);
     }
 
     #[test]
