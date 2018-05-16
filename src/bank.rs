@@ -224,22 +224,22 @@ impl Bank {
     }
 
     /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Result<Vec<Transaction>> {
+    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Event>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
-        let results: Vec<Transaction> = trs.into_par_iter()
+        let results: Vec<_> = trs.into_par_iter()
             .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
-            .filter_map(Result::ok)
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
-        let result: Vec<Transaction> = results.into_par_iter()
-            .map(|tr| {
-                self.process_verified_transaction_credits(&tr);
-                tr
+        results
+            .into_par_iter()
+            .map(|result| {
+                result.map(|tr| {
+                    self.process_verified_transaction_credits(&tr);
+                    Event::Transaction(tr)
+                })
             })
-            .collect();
-
-        Ok(result)
+            .collect()
     }
 
     fn partition_events(events: Vec<Event>) -> (Vec<Transaction>, Vec<Event>) {
@@ -254,24 +254,26 @@ impl Bank {
         (trs, rest)
     }
 
-    pub fn process_verified_events(&self, events: Vec<Event>) -> Result<Vec<Event>> {
+    pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
         let mut results: Vec<_> = self.process_verified_transactions(trs)
-            .unwrap()
             .into_iter()
-            .map(|x| Event::Transaction(x))
+            .map(|x| x.map(Event::Transaction))
             .collect();
 
         for event in rest {
-            results.push(self.process_verified_event(event)?);
+            results.push(self.process_verified_event(event));
         }
 
-        Ok(results)
+        results
     }
 
     pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
         for entry in entries {
             self.register_entry_id(&entry.id);
+            for result in self.process_verified_events(entry.events) {
+                result?;
+            }
         }
         Ok(())
     }
@@ -580,8 +582,8 @@ mod tests {
         let tr0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tr1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
-        let results = bank.process_verified_transactions(trs).unwrap();
-        assert_eq!(results.len(), 1);
+        let results = bank.process_verified_transactions(trs);
+        assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
         assert_eq!(bank.transaction_count(), 1);

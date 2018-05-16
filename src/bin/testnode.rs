@@ -103,10 +103,12 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let result = bank.process_verified_events(entry.events);
-        if let Err(e) = result {
-            eprintln!("failed to process event {:?}", e);
-            exit(1);
+        let results = bank.process_verified_events(entry.events);
+        for result in results {
+            if let Err(e) = result {
+                eprintln!("failed to process event {:?}", e);
+                exit(1);
+            }
         }
         bank.register_entry_id(&last_id);
     }
