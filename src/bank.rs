@@ -256,10 +256,7 @@ impl Bank {
 
     pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
-        let mut results: Vec<_> = self.process_verified_transactions(trs)
-            .into_iter()
-            .map(|x| x.map(Event::Transaction))
-            .collect();
+        let mut results: Vec<_> = self.process_verified_transactions(trs);
 
         for event in rest {
             results.push(self.process_verified_event(event));
