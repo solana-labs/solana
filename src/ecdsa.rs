@@ -136,14 +136,23 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 mod tests {
     use bincode::serialize;
     use ecdsa;
+    use event::Event;
     use packet::{Packet, Packets, SharedPackets};
-    use request::Request;
     use std::sync::RwLock;
     use transaction::Transaction;
-    use transaction::test_tx;
+    use transaction::{memfind, test_tx};
+
+    #[test]
+    fn test_layout() {
+        let tr = test_tx();
+        let tx = serialize(&tr).unwrap();
+        let packet = serialize(&Event::Transaction(tr)).unwrap();
+        assert_matches!(memfind(&packet, &tx), Some(ecdsa::TX_OFFSET));
+        assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
+    }
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {
-        let tx = serialize(&Request::Transaction(tr)).unwrap();
+        let tx = serialize(&Event::Transaction(tr)).unwrap();
         let mut packet = Packet::default();
         packet.meta.size = tx.len();
         packet.data[..packet.meta.size].copy_from_slice(&tx);

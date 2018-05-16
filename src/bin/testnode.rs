@@ -10,7 +10,7 @@ use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::event::Event;
-use solana::rpu::Rpu;
+use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
 use std::env;
 use std::io::{stdin, stdout, Read};
@@ -116,11 +116,14 @@ fn main() {
     eprintln!("creating networking stack...");
 
     let exit = Arc::new(AtomicBool::new(false));
-    let rpu = Rpu::new(bank, last_id, Some(Duration::from_millis(1000)));
     let serve_sock = UdpSocket::bind(&serve_addr).unwrap();
+    serve_sock
+        .set_read_timeout(Some(Duration::new(1, 0)))
+        .unwrap();
+
     let gossip_sock = UdpSocket::bind(&gossip_addr).unwrap();
     let replicate_sock = UdpSocket::bind(&replicate_addr).unwrap();
-    let _events_sock = UdpSocket::bind(&events_addr).unwrap();
+    let events_sock = UdpSocket::bind(&events_addr).unwrap();
     let pubkey = KeyPair::new().pubkey();
     let d = ReplicatedData::new(
         pubkey,
@@ -128,11 +131,28 @@ fn main() {
         replicate_sock.local_addr().unwrap(),
         serve_sock.local_addr().unwrap(),
     );
+
+    let mut local = serve_sock.local_addr().unwrap();
+    local.set_port(0);
+    let broadcast_socket = UdpSocket::bind(local).unwrap();
+    let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+
     eprintln!("starting server...");
-    let threads = rpu.serve(d, serve_sock, gossip_sock, exit.clone(), stdout())
-        .unwrap();
+    let server = Server::new(
+        bank,
+        last_id,
+        Some(Duration::from_millis(1000)),
+        d,
+        serve_sock,
+        events_sock,
+        broadcast_socket,
+        respond_socket,
+        gossip_sock,
+        exit.clone(),
+        stdout(),
+    );
     eprintln!("Ready. Listening on {}", serve_addr);
-    for t in threads {
+    for t in server.thread_hdls {
         t.join().expect("join");
     }
 }

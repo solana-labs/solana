@@ -4,6 +4,7 @@
 //! unstable and may change in future releases.
 
 use bincode::{deserialize, serialize};
+use event::Event;
 use futures::future::{ok, FutureResult};
 use hash::Hash;
 use request::{Request, Response};
@@ -67,9 +68,9 @@ impl ThinClient {
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
-        let req = Request::Transaction(tr);
-        let data = serialize(&req).expect("serialize Transaction in pub fn transfer_signed");
-        self.requests_socket.send_to(&data, &self.addr)
+        let event = Event::Transaction(tr);
+        let data = serialize(&event).expect("serialize Transaction in pub fn transfer_signed");
+        self.events_socket.send_to(&data, &self.addr)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -160,7 +161,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use plan::Plan;
-    use rpu::Rpu;
+    use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -177,23 +178,43 @@ mod tests {
     fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let _events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let addr = serve.local_addr().unwrap();
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(1, 0)))
+            .unwrap();
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let addr = requests_socket.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
             pubkey,
             gossip.local_addr().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
-            serve.local_addr().unwrap(),
+            requests_socket.local_addr().unwrap(),
         );
 
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
-        let threads = rpu.serve(d, serve, gossip, exit.clone(), sink()).unwrap();
+
+        let mut local = requests_socket.local_addr().unwrap();
+        local.set_port(0);
+        let broadcast_socket = UdpSocket::bind(local).unwrap();
+        let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+
+        let server = Server::new(
+            bank,
+            alice.last_id(),
+            Some(Duration::from_millis(30)),
+            d,
+            requests_socket,
+            events_socket,
+            broadcast_socket,
+            respond_socket,
+            gossip,
+            exit.clone(),
+            sink(),
+        );
         sleep(Duration::from_millis(900));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -217,7 +238,7 @@ mod tests {
         }
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in threads {
+        for t in server.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -230,15 +251,27 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let rpu = Rpu::new(bank, alice.last_id(), Some(Duration::from_millis(30)));
         let serve_addr = leader_serve.local_addr().unwrap();
-        let threads = rpu.serve(
+
+        let mut local = leader_serve.local_addr().unwrap();
+        local.set_port(0);
+        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast_socket = UdpSocket::bind(local).unwrap();
+        let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+
+        let server = Server::new(
+            bank,
+            alice.last_id(),
+            Some(Duration::from_millis(30)),
             leader_data,
             leader_serve,
+            events_socket,
+            broadcast_socket,
+            respond_socket,
             leader_gossip,
             exit.clone(),
             sink(),
-        ).unwrap();
+        );
         sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -266,7 +299,7 @@ mod tests {
         trace!("exiting");
         exit.store(true, Ordering::Relaxed);
         trace!("joining threads");
-        for t in threads {
+        for t in server.thread_hdls {
             t.join().unwrap();
         }
     }
@@ -274,6 +307,8 @@ mod tests {
     fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        serve.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
@@ -369,15 +404,28 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let leader_bank = {
-            let bank = Bank::new(&alice);
-            Rpu::new(bank, alice.last_id(), None)
-        };
+        let leader_bank = Bank::new(&alice);
 
-        let mut threads = leader_bank
-            .serve(leader.0.clone(), leader.2, leader.1, exit.clone(), sink())
-            .unwrap();
+        let mut local = leader.2.local_addr().unwrap();
+        local.set_port(0);
+        let broadcast_socket = UdpSocket::bind(local).unwrap();
+        let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
+        let server = Server::new(
+            leader_bank,
+            alice.last_id(),
+            None,
+            leader.0.clone(),
+            leader.2,
+            leader.4,
+            broadcast_socket,
+            respond_socket,
+            leader.1,
+            exit.clone(),
+            sink(),
+        );
+
+        let mut threads = server.thread_hdls;
         for _ in 0..N {
             replicant(&leader.0, exit.clone(), &alice, &mut threads);
         }

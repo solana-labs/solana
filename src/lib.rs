@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod bank;
+pub mod banking_stage;
 pub mod crdt;
 pub mod ecdsa;
 pub mod entry;
@@ -20,11 +21,13 @@ pub mod request_processor;
 pub mod request_stage;
 pub mod result;
 pub mod rpu;
+pub mod server;
 pub mod sig_verify_stage;
 pub mod signature;
 pub mod streamer;
 pub mod thin_client;
 pub mod timing;
+pub mod tpu;
 pub mod transaction;
 pub mod tvu;
 pub mod write_stage;
