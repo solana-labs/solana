@@ -20,3 +20,17 @@ script:
 after_success: |
   docker run -it --rm --security-opt seccomp=unconfined --volume "$PWD:/volume" elmtai/docker-rust-kcov
   bash <(curl -s https://codecov.io/bash) -s target/cov
+before_deploy:
+  - cargo package
+deploy:
+  provider: releases
+  api-key:
+    secure: j3cPAbOuGjXuSl+j+JL/4GWxD6dA0/f5NQ0Od4LBVewPmnKiqimGOJ1xj3eKth+ZzwuCpcHwBIIR54NEDSJgHaYDXiukc05qCeToIPqOc0wGJ+GcUrWAy8M7Wo981I/0SVYDAnLv4+ivvJxYE7b2Jr3pHsQAzH7ClY8g2xu9HlNkScEsc4cizA9Sf3zIqtIoi480vxtQ5ghGOUCkwZuG3+Dg+IGnnjvE4qQOYey1del+KIDkmbHjry7iFWPF6fWK2187JNt6XiO2/2tZt6BkMEmdRnkw1r/wL9tj0AbqLgyBjzlI4QQfkBwsuX3ZFeNGArn71s7WmAUGyVOl0DJXfwN/BEUxMTd+lkMjuMNUxaU/hxVZ7zAWH55KJK+qf6B95DLVWr7ypjfJLLBcds+JfkBNoReWLM1XoDUKAU+wBf1b+PKiywNfNascjZTcz6QGe94sa7l/T4PxtHDSREmflFgu1Hysg61WuODDwTTHGrsg9ZuvlINnqQhXsJo9r9+TMIGwwWHcvLQDNz2TPALCfcLtd+RsevdOeXItYa0KD3D4gKGv36bwAVDpCIoZnSeiaT/PUyjilFtJjBpKz9BbOKgOtQhHGrHucn0WOF+bu/t3SFaJKQf/W+hLwO3NV8yiL5LQyHVm/TPY62nBfne2KEqi/LOFxgKG35aACouP0ig=
+  file: target/package/solana-$TRAVIS_TAG.crate
+  skip_cleanup: true
+  on:
+    tags: true
+    condition: "$TRAVIS_RUST_VERSION = stable"
+
+after_deploy:
+  - cargo publish --token "$CRATES_IO_TOKEN"
