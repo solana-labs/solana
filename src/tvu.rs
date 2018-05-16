@@ -231,7 +231,6 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
-    use transaction::Transaction;
     use tvu::{test_node, Tvu};
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
@@ -324,7 +323,7 @@ mod tests {
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
-            let tr1 = Transaction::new(
+            let tr1 = Event::new_transaction(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
@@ -332,8 +331,7 @@ mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
-            let entry1 =
-                entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
+            let entry1 = entry::create_entry(&cur_hash, i + num_blobs, vec![tr1]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 

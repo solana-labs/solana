@@ -89,7 +89,6 @@ mod tests {
     use super::*;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::mpsc::channel;
-    use transaction::Transaction;
 
     #[test]
     fn test_events() {
@@ -99,8 +98,8 @@ mod tests {
         let mut recorder = Recorder::new(signal_receiver, entry_sender, zero);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
-        let event0 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 1, zero));
-        let event1 = Event::Transaction(Transaction::new(&alice_keypair, bob_pubkey, 2, zero));
+        let event0 = Event::new_transaction(&alice_keypair, bob_pubkey, 1, zero);
+        let event1 = Event::new_transaction(&alice_keypair, bob_pubkey, 2, zero);
         signal_sender
             .send(Signal::Events(vec![event0, event1]))
             .unwrap();

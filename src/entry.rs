@@ -120,7 +120,6 @@ mod tests {
     use event::Event;
     use hash::hash;
     use signature::{KeyPair, KeyPairUtil};
-    use transaction::Transaction;
 
     #[test]
     fn test_entry_verify() {
@@ -138,8 +137,8 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 0, zero));
-        let tr1 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, zero));
+        let tr0 = Event::new_transaction(&keypair, keypair.pubkey(), 0, zero);
+        let tr1 = Event::new_transaction(&keypair, keypair.pubkey(), 1, zero);
         let mut e0 = create_entry(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 

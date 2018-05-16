@@ -3,6 +3,7 @@
 
 use bincode::serialize;
 use chrono::prelude::*;
+use hash::Hash;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 use transaction::Transaction;
 
@@ -22,6 +23,16 @@ pub enum Event {
 }
 
 impl Event {
+    pub fn new_transaction(
+        from_keypair: &KeyPair,
+        to: PublicKey,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self {
+        let tr = Transaction::new(from_keypair, to, tokens, last_id);
+        Event::Transaction(tr)
+    }
+
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
     pub fn new_timestamp(from: &KeyPair, dt: DateTime<Utc>) -> Self {
         let sign_data = serialize(&dt).expect("serialize 'dt' in pub fn new_timestamp");
