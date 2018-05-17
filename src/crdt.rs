@@ -557,7 +557,7 @@ mod test {
             trace!("round {}", i);
             for &(ref c, _) in listen.iter() {
                 assert!(num >= c.read().unwrap().remote.values().len());
-                trace!("len {}", c.read().unwrap().remote.values().len());
+                trace!("len {}", c.read().unwrap().table.values().len());
                 if (num - 1)== c.read().unwrap().remote.values().len() { 
                     done = true;
                     //for this node check if it thinks every node received num updates
