@@ -21,6 +21,7 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
 use signature::{PublicKey, Signature};
+use std;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{SocketAddr, UdpSocket};
@@ -28,7 +29,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
-use std;
 
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone)]
@@ -298,10 +298,12 @@ impl Crdt {
 
     // max number of nodes that we could be converged to
     pub fn convergence(&self) -> u64 {
-        let min = self.remote.values().fold(std::u64::MAX, |a,b| std::cmp::min(a, *b)); 
+        let min = self.remote
+            .values()
+            .fold(std::u64::MAX, |a, b| std::cmp::min(a, *b));
         std::cmp::min(min, self.remote.values().len() as u64 + 1)
     }
- 
+
     fn random() -> u64 {
         let rnd = SystemRandom::new();
         let mut buf = [0u8; 8];
