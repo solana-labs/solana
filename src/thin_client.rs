@@ -365,21 +365,25 @@ mod tests {
         let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy_gossip, exit.clone());
         let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
         //wait for the network to converge
+        let mut converged = false;
         for _ in 0..30 {
-            let len = spy_ref.read().unwrap().table.values().len();
+            let len = spy_ref.read().unwrap().remote.values().len();
             let mut min = num_nodes as u64;
             for u in spy_ref.read().unwrap().remote.values() {
                 if min > *u {
                     min = *u;
                 }
             }
-            info!("length {} {}", len, min);
-            if num_nodes == len && min >= (num_nodes as u64) {
+            info!("converging... {} {}", len, min);
+            assert!(min <= num_nodes as u64);
+            if (num_nodes - 1) == len && min == (num_nodes as u64) {
+                converged = true;
                 warn!("converged! {} {}", len, min);
                 break;
             }
             sleep(Duration::new(1, 0));
         }
+        assert!(converged);
         threads.push(t_spy_listen);
         threads.push(t_spy_gossip);
         let v: Vec<SocketAddr> = spy_ref
