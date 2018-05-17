@@ -367,18 +367,9 @@ mod tests {
         //wait for the network to converge
         let mut converged = false;
         for _ in 0..30 {
-            let len = spy_ref.read().unwrap().remote.values().len();
-            let mut min = num_nodes as u64;
-            for u in spy_ref.read().unwrap().remote.values() {
-                if min > *u {
-                    min = *u;
-                }
-            }
-            info!("converging... {} {}", len, min);
-            assert!(min <= num_nodes as u64);
-            if (num_nodes - 1) == len && min == (num_nodes as u64) {
+            let num = spy_ref.read().unwrap().convergence();
+            if num == num_nodes as u64 {
                 converged = true;
-                warn!("converged! {} {}", len, min);
                 break;
             }
             sleep(Duration::new(1, 0));
