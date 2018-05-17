@@ -299,9 +299,7 @@ impl Crdt {
     // max number of nodes that we could be converged to
     pub fn convergence(&self) -> u64 {
         let max = self.remote.values().len() as u64 + 1;
-        self.remote
-            .values()
-            .fold(max, |a, b| std::cmp::min(a, *b))
+        self.remote.values().fold(max, |a, b| std::cmp::min(a, *b))
     }
 
     fn random() -> u64 {
