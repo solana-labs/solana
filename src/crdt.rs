@@ -296,7 +296,7 @@ impl Crdt {
         Ok(())
     }
 
-    // number of nodes that we are converged to
+    // max number of nodes that we could be converged to
     pub fn convergence(&self) -> u64 {
         let min = self.remote.values().fold(std::u64::MAX, |a,b| std::cmp::min(a, *b)); 
         std::cmp::min(min, self.remote.values().len() as u64 + 1)
