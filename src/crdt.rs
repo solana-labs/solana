@@ -21,6 +21,7 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
 use signature::{PublicKey, Signature};
+use std;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{SocketAddr, UdpSocket};
@@ -194,7 +195,6 @@ impl Crdt {
         if nodes.len() < 1 {
             return Err(Error::CrdtTooSmall);
         }
-
         info!("nodes table {}", nodes.len());
         info!("blobs table {}", blobs.len());
         // enumerate all the blobs, those are the indices
@@ -293,6 +293,12 @@ impl Crdt {
             }
         }
         Ok(())
+    }
+
+    // max number of nodes that we could be converged to
+    pub fn convergence(&self) -> u64 {
+        let max = self.remote.values().len() as u64 + 1;
+        self.remote.values().fold(max, |a, b| std::cmp::min(a, *b))
     }
 
     fn random() -> u64 {
@@ -552,21 +558,16 @@ mod test {
             .map(|&(ref c, _)| Crdt::gossip(c.clone(), exit.clone()))
             .collect();
         let mut done = true;
-        for _ in 0..(num * 32) {
-            done = true;
+        for i in 0..(num * 32) {
+            done = false;
+            trace!("round {}", i);
             for &(ref c, _) in listen.iter() {
-                trace!(
-                    "done updates {} {}",
-                    c.read().unwrap().table.len(),
-                    c.read().unwrap().update_index
-                );
-                //make sure the number of updates doesn't grow unbounded
-                assert!(c.read().unwrap().update_index <= num as u64);
-                //make sure we got all the updates
-                if c.read().unwrap().table.len() != num {
-                    done = false;
+                if num == c.read().unwrap().convergence() as usize {
+                    done = true;
+                    break;
                 }
             }
+            //at least 1 node converged
             if done == true {
                 break;
             }
@@ -590,6 +591,7 @@ mod test {
     #[test]
     #[ignore]
     fn gossip_ring_test() {
+        logger::setup();
         run_gossip_topo(|listen| {
             let num = listen.len();
             for n in 0..num {
