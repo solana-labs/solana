@@ -224,7 +224,7 @@ impl Bank {
     }
 
     /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
+    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Event>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         let results: Vec<_> = trs.into_par_iter()
@@ -236,7 +236,7 @@ impl Bank {
             .map(|result| {
                 result.map(|tr| {
                     self.process_verified_transaction_credits(&tr);
-                    tr
+                    Event::Transaction(tr)
                 })
             })
             .collect()
@@ -256,10 +256,7 @@ impl Bank {
 
     pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
         let (trs, rest) = Self::partition_events(events);
-        let mut results: Vec<_> = self.process_verified_transactions(trs)
-            .into_iter()
-            .map(|x| x.map(Event::Transaction))
-            .collect();
+        let mut results: Vec<_> = self.process_verified_transactions(trs);
 
         for event in rest {
             results.push(self.process_verified_event(event));
