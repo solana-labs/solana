@@ -123,7 +123,6 @@ pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> Vec<Entry
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entry;
     use hash::hash;
     use packet::BlobRecycler;
     use signature::{KeyPair, KeyPairUtil};
@@ -150,7 +149,7 @@ mod tests {
         let keypair = KeyPair::new();
         let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, one));
         let events = vec![tr0.clone(); 10000];
-        let e0 = entry::create_entry(&zero, 0, events);
+        let e0 = Entry::new(&zero, 0, events);
 
         let entry_list = vec![e0.clone(); 1];
         let blob_recycler = BlobRecycler::default();

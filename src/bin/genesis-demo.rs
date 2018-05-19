@@ -8,7 +8,7 @@ extern crate untrusted;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::bank::MAX_ENTRY_IDS;
-use solana::entry::{create_entry, next_entry};
+use solana::entry::{next_entry, Entry};
 use solana::event::Event;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
@@ -61,7 +61,7 @@ fn main() {
     }
 
     eprintln!("Logging the creation of {} accounts...", num_accounts);
-    let entry = create_entry(&last_id, 0, events);
+    let entry = Entry::new(&last_id, 0, events);
     println!("{}", serde_json::to_string(&entry).unwrap());
 
     eprintln!("Creating {} empty entries...", MAX_ENTRY_IDS);

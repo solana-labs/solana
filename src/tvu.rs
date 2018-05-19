@@ -218,7 +218,7 @@ mod tests {
     use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
-    use entry;
+    use entry::Entry;
     use event::Event;
     use hash::{hash, Hash};
     use logger;
@@ -231,7 +231,6 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
-    use transaction::Transaction;
     use tvu::{test_node, Tvu};
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
@@ -320,11 +319,11 @@ mod tests {
             let bank = &tvu.bank;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
-            let entry0 = entry::create_entry(&cur_hash, i, vec![tr0]);
+            let entry0 = Entry::new(&cur_hash, i, vec![tr0]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
-            let tr1 = Transaction::new(
+            let tr1 = Event::new_transaction(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
@@ -332,8 +331,7 @@ mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
-            let entry1 =
-                entry::create_entry(&cur_hash, i + num_blobs, vec![Event::Transaction(tr1)]);
+            let entry1 = Entry::new(&cur_hash, i + num_blobs, vec![tr1]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 

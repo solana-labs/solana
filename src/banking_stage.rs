@@ -251,3 +251,58 @@ impl BankingStage {
 //        println!("{} tps", tps);
 //    }
 //}
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+    use self::test::Bencher;
+    use bank::*;
+    use banking_stage::BankingStage;
+    use event::Event;
+    use mint::Mint;
+    use packet::{to_packets, PacketRecycler};
+    use recorder::Signal;
+    use signature::{KeyPair, KeyPairUtil};
+    use std::iter;
+    use std::sync::Arc;
+    use std::sync::mpsc::channel;
+
+    #[bench]
+    fn stage_bench(bencher: &mut Bencher) {
+        let tx = 100_usize;
+        let mint = Mint::new(1_000_000_000);
+        let pubkey = KeyPair::new().pubkey();
+
+        let events: Vec<_> = (0..tx)
+            .map(|i| Event::new_transaction(&mint.keypair(), pubkey, i as i64, mint.last_id()))
+            .collect();
+
+        let (verified_sender, verified_receiver) = channel();
+        let (signal_sender, signal_receiver) = channel();
+        let packet_recycler = PacketRecycler::default();
+        let verified: Vec<_> = to_packets(&packet_recycler, events)
+            .into_iter()
+            .map(|x| {
+                let len = (*x).read().unwrap().packets.len();
+                (x, iter::repeat(1).take(len).collect())
+            })
+            .collect();
+
+        bencher.iter(move || {
+            let bank = Arc::new(Bank::new(&mint));
+            verified_sender.send(verified.clone()).unwrap();
+            BankingStage::process_packets(
+                bank.clone(),
+                &verified_receiver,
+                &signal_sender,
+                &packet_recycler,
+            ).unwrap();
+            let signal = signal_receiver.recv().unwrap();
+            if let Signal::Events(ref events) = signal {
+                assert_eq!(events.len(), tx);
+            } else {
+                assert!(false);
+            }
+        });
+    }
+}
