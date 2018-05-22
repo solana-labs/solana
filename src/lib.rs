@@ -19,7 +19,6 @@ pub mod recorder;
 pub mod replicate_stage;
 pub mod request;
 pub mod request_processor;
-pub mod request_replicator;
 pub mod request_stage;
 pub mod result;
 pub mod rpu;

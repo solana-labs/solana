@@ -8,7 +8,6 @@ use hash::Hash;
 use packet;
 use record_stage::RecordStage;
 use replicate_stage::ReplicateStage;
-use request_replicator::RequestReplicator;
 use result::Result;
 use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
@@ -112,9 +111,8 @@ impl Tvu {
             retransmit_sender,
         );
 
-        let request_replicator = RequestReplicator::new(obj.bank.clone());
         let replicate_stage = ReplicateStage::new(
-            request_replicator,
+            obj.bank.clone(),
             exit.clone(),
             window_receiver,
             blob_recycler.clone(),
