@@ -5,9 +5,9 @@ use bank::Bank;
 use ledger;
 use packet;
 use result::Result;
+use std::sync::Arc;
 use std::time::Duration;
 use streamer;
-use std::sync::Arc;
 
 pub struct RequestReplicator {
     bank: Arc<Bank>,
@@ -16,9 +16,7 @@ pub struct RequestReplicator {
 impl RequestReplicator {
     /// Create a new Tvu that wraps the given Bank.
     pub fn new(bank: Arc<Bank>) -> Self {
-        RequestReplicator {
-            bank: bank,
-        }
+        RequestReplicator { bank: bank }
     }
 
     /// Process verified blobs, already in order

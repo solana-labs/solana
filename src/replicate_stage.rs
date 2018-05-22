@@ -2,8 +2,8 @@
 
 use packet;
 use request_replicator::RequestReplicator;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{spawn, JoinHandle};
 use streamer;
 
@@ -12,14 +12,18 @@ pub struct ReplicateStage {
 }
 
 impl ReplicateStage {
-
-    pub fn new(request_replicator: RequestReplicator, exit: Arc<AtomicBool>, window_receiver: streamer::BlobReceiver, blob_recycler: packet::BlobRecycler) -> Self {
+    pub fn new(
+        request_replicator: RequestReplicator,
+        exit: Arc<AtomicBool>,
+        window_receiver: streamer::BlobReceiver,
+        blob_recycler: packet::BlobRecycler,
+    ) -> Self {
         let thread_hdl = spawn(move || loop {
             let e = request_replicator.replicate_requests(&window_receiver, &blob_recycler);
             if e.is_err() && exit.load(Ordering::Relaxed) {
                 break;
             }
         });
-        ReplicateStage{thread_hdl}
+        ReplicateStage { thread_hdl }
     }
 }
