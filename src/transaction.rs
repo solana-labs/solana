@@ -14,7 +14,6 @@ pub const PUB_KEY_OFFSET: usize = 80;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TransactionData {
     pub tokens: i64,
-    pub last_id: Hash,
     pub plan: Plan,
 }
 
@@ -23,6 +22,7 @@ pub struct Transaction {
     pub sig: Signature,
     pub from: PublicKey,
     pub data: TransactionData,
+    pub last_id: Hash,
 }
 
 impl Transaction {
@@ -32,12 +32,9 @@ impl Transaction {
         let plan = Plan::Pay(Payment { tokens, to });
         let mut tr = Transaction {
             sig: Signature::default(),
-            data: TransactionData {
-                plan,
-                tokens,
-                last_id,
-            },
-            from: from,
+            data: TransactionData { plan, tokens },
+            last_id,
+            from,
         };
         tr.sign(from_keypair);
         tr
@@ -57,12 +54,9 @@ impl Transaction {
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let mut tr = Transaction {
-            data: TransactionData {
-                plan,
-                tokens,
-                last_id,
-            },
-            from: from,
+            data: TransactionData { plan, tokens },
+            from,
+            last_id,
             sig: Signature::default(),
         };
         tr.sign(from_keypair);
@@ -70,7 +64,10 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        serialize(&(&self.data)).expect("serialize TransactionData in fn get_sign_data")
+        let mut data = serialize(&(&self.data)).expect("serialize TransactionData");
+        let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
+        data.extend_from_slice(&last_id_data);
+        data
     }
 
     /// Sign this transaction.
@@ -153,12 +150,9 @@ mod tests {
             to: Default::default(),
         });
         let claim0 = Transaction {
-            data: TransactionData {
-                plan,
-                tokens: 0,
-                last_id: Default::default(),
-            },
+            data: TransactionData { plan, tokens: 0 },
             from: Default::default(),
+            last_id: Default::default(),
             sig: Default::default(),
         };
         let buf = serialize(&claim0).unwrap();

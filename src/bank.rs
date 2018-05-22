@@ -170,7 +170,7 @@ impl Bank {
             return Err(BankError::AccountNotFound);
         }
 
-        if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
+        if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
             return Err(BankError::InvalidTransferSignature);
         }
 
@@ -179,7 +179,7 @@ impl Bank {
             let current = bal.load(Ordering::Relaxed) as i64;
 
             if current < tr.data.tokens {
-                self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
+                self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
                 return Err(BankError::InsufficientFunds);
             }
 
