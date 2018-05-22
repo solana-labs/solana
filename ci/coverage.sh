@@ -2,8 +2,16 @@
 
 cd $(dirname $0)/..
 
-source $HOME/.cargo/env
-rustup update
+if [[ -r ~/.cargo/env ]]; then
+  # Pick up local install of kcov/cargo-kcov
+  source ~/.cargo/env
+fi
+
+rustc --version
+cargo --version
+kcov --version
+cargo-kcov --version
+
 export RUST_BACKTRACE=1
 cargo build
 cargo kcov
