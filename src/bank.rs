@@ -160,7 +160,7 @@ impl Bank {
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
-        info!("Transaction {}", tr.data.tokens);
+        info!("Transaction {}", tr.contract.tokens);
         let bals = self.balances
             .read()
             .expect("'balances' read lock in process_verified_transaction_debits");
@@ -170,7 +170,7 @@ impl Bank {
             return Err(BankError::AccountNotFound);
         }
 
-        if !self.reserve_signature_with_last_id(&tr.sig, &tr.data.last_id) {
+        if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
             return Err(BankError::InvalidTransferSignature);
         }
 
@@ -178,14 +178,14 @@ impl Bank {
             let bal = option.expect("assignment of option to bal");
             let current = bal.load(Ordering::Relaxed) as i64;
 
-            if current < tr.data.tokens {
-                self.forget_signature_with_last_id(&tr.sig, &tr.data.last_id);
+            if current < tr.contract.tokens {
+                self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
                 return Err(BankError::InsufficientFunds);
             }
 
             let result = bal.compare_exchange(
                 current as isize,
-                (current - tr.data.tokens) as isize,
+                (current - tr.contract.tokens) as isize,
                 Ordering::Relaxed,
                 Ordering::Relaxed,
             );
@@ -201,7 +201,7 @@ impl Bank {
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
-        let mut plan = tr.data.plan.clone();
+        let mut plan = tr.contract.plan.clone();
         plan.apply_witness(&Witness::Timestamp(*self.last_time
             .read()
             .expect("timestamp creation in process_verified_transaction_credits")));

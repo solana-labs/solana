@@ -88,7 +88,7 @@ fn main() {
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
     let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
-        tr.data.plan.final_payment()
+        tr.contract.plan.final_payment()
     } else {
         None
     };
