@@ -15,6 +15,8 @@ pub mod mint;
 pub mod packet;
 pub mod plan;
 pub mod record_stage;
+pub mod request_replicator;
+pub mod replicate_stage;
 pub mod recorder;
 pub mod request;
 pub mod request_processor;

@@ -2,32 +2,22 @@
 //! by the leader.
 
 use bank::Bank;
-use banking_stage::BankingStage;
-use crdt::{Crdt, ReplicatedData};
-use hash::Hash;
 use ledger;
 use packet;
-use record_stage::RecordStage;
 use result::Result;
-use sig_verify_stage::SigVerifyStage;
-use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
-use write_stage::WriteStage;
+use std::sync::Arc;
 
 pub struct RequestReplicator {
     bank: Arc<Bank>,
 }
 
-impl Tvu {
+impl RequestReplicator {
     /// Create a new Tvu that wraps the given Bank.
-    pub fn new(bank: Bank) -> Self {
+    pub fn new(bank: Arc<Bank>) -> Self {
         RequestReplicator {
-            bank: Arc::new(bank),
+            bank: bank,
         }
     }
 
