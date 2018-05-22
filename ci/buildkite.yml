@@ -1,0 +1,14 @@
+steps:
+  - command: "ci/coverage.sh"
+    label: "coverage [public]"
+  - command: "ci/test-stable.sh"
+    label: "stable [public]"
+  - command: "ci/test-nightly.sh || true"
+    label: "nightly - FAILURES IGNORED [public]"
+  - command: "ci/test-ignored.sh || true"
+    label: "ignored - FAILURES IGNORED [public]"
+  - command: "ci/test-cuda.sh"
+    label: "cuda"
+  - wait
+  - command: "ci/publish.sh"
+    label: "publish release artifacts"
