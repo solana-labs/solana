@@ -16,6 +16,7 @@ pub mod packet;
 pub mod plan;
 pub mod record_stage;
 pub mod recorder;
+pub mod replicate_stage;
 pub mod request;
 pub mod request_processor;
 pub mod request_stage;
