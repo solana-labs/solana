@@ -55,6 +55,7 @@ fn main() {
     let gossip_addr = format!("0.0.0.0:{}", port + 1);
     let replicate_addr = format!("0.0.0.0:{}", port + 2);
     let events_addr = format!("0.0.0.0:{}", port + 3);
+    eprintln!("events_addr: {:?}", events_addr);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a log file");

@@ -15,9 +15,10 @@ use std::net::{SocketAddr, UdpSocket};
 use transaction::Transaction;
 
 pub struct ThinClient {
-    pub addr: SocketAddr,
-    pub requests_socket: UdpSocket,
-    pub events_socket: UdpSocket,
+    requests_addr: SocketAddr,
+    requests_socket: UdpSocket,
+    events_addr: SocketAddr,
+    events_socket: UdpSocket,
     last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
@@ -27,10 +28,16 @@ impl ThinClient {
     /// Create a new ThinClient that will interface with Rpu
     /// over `requests_socket` and `events_socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking ThinClient methods.
-    pub fn new(addr: SocketAddr, requests_socket: UdpSocket, events_socket: UdpSocket) -> Self {
+    pub fn new(
+        requests_addr: SocketAddr,
+        requests_socket: UdpSocket,
+        events_addr: SocketAddr,
+        events_socket: UdpSocket,
+    ) -> Self {
         let client = ThinClient {
-            addr: addr,
+            requests_addr,
             requests_socket,
+            events_addr,
             events_socket,
             last_id: None,
             transaction_count: 0,
@@ -70,7 +77,7 @@ impl ThinClient {
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let event = Event::Transaction(tr);
         let data = serialize(&event).expect("serialize Transaction in pub fn transfer_signed");
-        self.events_socket.send_to(&data, &self.addr)
+        self.events_socket.send_to(&data, &self.events_addr)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -94,7 +101,7 @@ impl ThinClient {
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
         self.requests_socket
-            .send_to(&data, &self.addr)
+            .send_to(&data, &self.requests_addr)
             .expect("buffer error in pub fn get_balance");
         let mut done = false;
         while !done {
@@ -116,7 +123,7 @@ impl ThinClient {
         let data =
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
         self.requests_socket
-            .send_to(&data, &self.addr)
+            .send_to(&data, &self.requests_addr)
             .expect("buffer error in pub fn transaction_count");
         let mut done = false;
         while !done {
@@ -137,12 +144,11 @@ impl ThinClient {
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
         self.requests_socket
-            .send_to(&data, &self.addr)
+            .send_to(&data, &self.requests_addr)
             .expect("buffer error in pub fn get_last_id");
         let mut done = false;
         while !done {
             let resp = self.recv_response().expect("get_last_id response");
-            info!("recv_response {:?}", resp);
             if let &Response::LastId { .. } = &resp {
                 done = true;
             }
@@ -150,6 +156,22 @@ impl ThinClient {
         }
         ok(self.last_id.expect("some last_id"))
     }
+}
+
+#[cfg(test)]
+pub fn poll_get_balance(client: &mut ThinClient, pubkey: &PublicKey) -> io::Result<i64> {
+    use std::time::Instant;
+
+    let mut balance;
+    let now = Instant::now();
+    loop {
+        balance = client.get_balance(pubkey);
+        if balance.is_ok() || now.elapsed().as_secs() > 1 {
+            break;
+        }
+    }
+
+    balance
 }
 
 #[cfg(test)]
@@ -169,12 +191,10 @@ mod tests {
     use std::thread::JoinHandle;
     use std::thread::sleep;
     use std::time::Duration;
-    use std::time::Instant;
     use streamer::default_window;
     use tvu::{self, Tvu};
 
     #[test]
-    #[ignore]
     fn test_thin_client() {
         logger::setup();
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -183,6 +203,7 @@ mod tests {
             .set_read_timeout(Some(Duration::new(1, 0)))
             .unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let events_addr = events_socket.local_addr().unwrap();
         let addr = requests_socket.local_addr().unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
@@ -220,22 +241,12 @@ mod tests {
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut client = ThinClient::new(addr, requests_socket, events_socket);
+        let mut client = ThinClient::new(addr, requests_socket, events_addr, events_socket);
         let last_id = client.get_last_id().wait().unwrap();
         let _sig = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        let mut balance;
-        let now = Instant::now();
-        loop {
-            balance = client.get_balance(&bob_pubkey);
-            if balance.is_ok() {
-                break;
-            }
-            if now.elapsed().as_secs() > 0 {
-                break;
-            }
-        }
+        let balance = poll_get_balance(&mut client, &bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         for t in server.thread_hdls {
@@ -244,8 +255,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_bad_sig() {
+        logger::setup();
         let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
@@ -258,6 +269,7 @@ mod tests {
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+        let events_addr = events_socket.local_addr().unwrap();
 
         let server = Server::new(
             bank,
@@ -279,10 +291,8 @@ mod tests {
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
         let events_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let mut client = ThinClient::new(serve_addr, requests_socket, events_socket);
+        let mut client = ThinClient::new(serve_addr, requests_socket, events_addr, events_socket);
         let last_id = client.get_last_id().wait().unwrap();
-
-        trace!("doing stuff");
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
@@ -295,10 +305,9 @@ mod tests {
         tr2.data.plan = Plan::new_payment(502, bob_pubkey);
         let _sig = client.transfer_signed(tr2).unwrap();
 
-        assert_eq!(client.get_balance(&bob_pubkey).unwrap(), 500);
-        trace!("exiting");
+        let balance = poll_get_balance(&mut client, &bob_pubkey);
+        assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        trace!("joining threads");
         for t in server.thread_hdls {
             t.join().unwrap();
         }
@@ -405,6 +414,7 @@ mod tests {
         local.set_port(0);
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
+        let events_addr = leader.4.local_addr().unwrap();
 
         let server = Server::new(
             leader_bank,
@@ -435,7 +445,12 @@ mod tests {
                 .unwrap();
             let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-            let mut client = ThinClient::new(leader.0.serve_addr, requests_socket, events_socket);
+            let mut client = ThinClient::new(
+                leader.0.serve_addr,
+                requests_socket,
+                events_addr,
+                events_socket,
+            );
             trace!("getting leader last_id");
             let last_id = client.get_last_id().wait().unwrap();
             info!("executing leader transer");
@@ -455,7 +470,8 @@ mod tests {
                 .unwrap();
             let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-            let mut client = ThinClient::new(*serve_addr, requests_socket, events_socket);
+            let mut client =
+                ThinClient::new(*serve_addr, requests_socket, events_addr, events_socket);
             for i in 0..10 {
                 trace!("getting replicant balance {} {}/10", *serve_addr, i);
                 if let Ok(bal) = client.get_balance(&bob_pubkey) {
