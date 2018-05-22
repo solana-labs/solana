@@ -76,7 +76,7 @@ mod tests {
     fn test_create_events() {
         let mut events = Mint::new(100).create_events().into_iter();
         if let Event::Transaction(tr) = events.next().unwrap() {
-            if let Plan::Pay(payment) = tr.data.plan {
+            if let Plan::Pay(payment) = tr.contract.plan {
                 assert_eq!(tr.from, payment.to);
             }
         }

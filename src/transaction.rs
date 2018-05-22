@@ -12,7 +12,7 @@ pub const SIG_OFFSET: usize = 8;
 pub const PUB_KEY_OFFSET: usize = 80;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct TransactionData {
+pub struct Contract {
     pub tokens: i64,
     pub plan: Plan,
 }
@@ -21,7 +21,7 @@ pub struct TransactionData {
 pub struct Transaction {
     pub sig: Signature,
     pub from: PublicKey,
-    pub data: TransactionData,
+    pub contract: Contract,
     pub last_id: Hash,
 }
 
@@ -32,7 +32,7 @@ impl Transaction {
         let plan = Plan::Pay(Payment { tokens, to });
         let mut tr = Transaction {
             sig: Signature::default(),
-            data: TransactionData { plan, tokens },
+            contract: Contract { plan, tokens },
             last_id,
             from,
         };
@@ -54,7 +54,7 @@ impl Transaction {
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let mut tr = Transaction {
-            data: TransactionData { plan, tokens },
+            contract: Contract { plan, tokens },
             from,
             last_id,
             sig: Signature::default(),
@@ -64,7 +64,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&(&self.data)).expect("serialize TransactionData");
+        let mut data = serialize(&(&self.contract)).expect("serialize Contract");
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
         data
@@ -81,7 +81,7 @@ impl Transaction {
     }
 
     pub fn verify_plan(&self) -> bool {
-        self.data.plan.verify(self.data.tokens)
+        self.contract.plan.verify(self.contract.tokens)
     }
 }
 
@@ -150,7 +150,7 @@ mod tests {
             to: Default::default(),
         });
         let claim0 = Transaction {
-            data: TransactionData { plan, tokens: 0 },
+            contract: Contract { plan, tokens: 0 },
             from: Default::default(),
             last_id: Default::default(),
             sig: Default::default(),
@@ -166,9 +166,9 @@ mod tests {
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
         let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
-        tr.data.tokens = 1_000_000; // <-- attack, part 1!
-        if let Plan::Pay(ref mut payment) = tr.data.plan {
-            payment.tokens = tr.data.tokens; // <-- attack, part 2!
+        tr.contract.tokens = 1_000_000; // <-- attack, part 1!
+        if let Plan::Pay(ref mut payment) = tr.contract.plan {
+            payment.tokens = tr.contract.tokens; // <-- attack, part 2!
         };
         assert!(tr.verify_plan());
         assert!(!tr.verify_sig());
@@ -182,7 +182,7 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
-        if let Plan::Pay(ref mut payment) = tr.data.plan {
+        if let Plan::Pay(ref mut payment) = tr.contract.plan {
             payment.to = thief_keypair.pubkey(); // <-- attack!
         };
         assert!(tr.verify_plan());
@@ -204,13 +204,13 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Plan::Pay(ref mut payment) = tr.data.plan {
+        if let Plan::Pay(ref mut payment) = tr.contract.plan {
             payment.tokens = 2; // <-- attack!
         }
         assert!(!tr.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Pay(ref mut payment) = tr.data.plan {
+        if let Plan::Pay(ref mut payment) = tr.contract.plan {
             payment.tokens = 0; // <-- whoops!
         }
         assert!(!tr.verify_plan());
