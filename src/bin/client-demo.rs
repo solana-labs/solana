@@ -34,7 +34,7 @@ fn print_usage(program: &str, opts: Options) {
 
 fn main() {
     let mut threads = 4usize;
-    let mut addr: String = "127.0.0.1:8000".to_string();
+    let mut server_addr: String = "127.0.0.1:8000".to_string();
     let mut requests_addr: String = "127.0.0.1:8010".to_string();
 
     let mut opts = Options::new();
@@ -57,7 +57,7 @@ fn main() {
         return;
     }
     if matches.opt_present("s") {
-        addr = matches.opt_str("s").unwrap();
+        server_addr = matches.opt_str("s").unwrap();
     }
     if matches.opt_present("c") {
         requests_addr = matches.opt_str("c").unwrap();
@@ -94,7 +94,16 @@ fn main() {
         .set_read_timeout(Some(Duration::new(5, 0)))
         .unwrap();
     let events_socket = UdpSocket::bind(&events_addr).unwrap();
-    let mut client = ThinClient::new(addr.parse().unwrap(), requests_socket, events_socket);
+    let requests_addr: SocketAddr = server_addr.parse().unwrap();
+    let requests_port = requests_addr.port();
+    let mut events_server_addr = requests_addr.clone();
+    events_server_addr.set_port(requests_port + 3);
+    let mut client = ThinClient::new(
+        requests_addr,
+        requests_socket,
+        events_server_addr,
+        events_socket,
+    );
 
     println!("Get last ID...");
     let last_id = client.get_last_id().wait().unwrap();
@@ -138,17 +147,22 @@ fn main() {
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
         println!("Transferring 1 unit {} times... to", trs.len());
-        let mut requests_addr: SocketAddr = requests_addr.parse().unwrap();
-        requests_addr.set_port(0);
-        let requests_socket = UdpSocket::bind(requests_addr).unwrap();
+        let requests_addr: SocketAddr = server_addr.parse().unwrap();
+        let mut requests_cb_addr = requests_addr.clone();
+        requests_cb_addr.set_port(0);
+        let requests_socket = UdpSocket::bind(requests_cb_addr).unwrap();
         requests_socket
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
         let mut events_addr: SocketAddr = requests_addr.clone();
-        let requests_port = events_addr.port();
-        events_addr.set_port(requests_port + 1);
+        events_addr.set_port(0);
         let events_socket = UdpSocket::bind(&events_addr).unwrap();
-        let client = ThinClient::new(addr.parse().unwrap(), requests_socket, events_socket);
+        let client = ThinClient::new(
+            requests_addr,
+            requests_socket,
+            events_server_addr,
+            events_socket,
+        );
         for tr in trs {
             client.transfer_signed(tr.clone()).unwrap();
         }

@@ -235,7 +235,6 @@ mod tests {
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
-    #[ignore]
     fn test_replicate() {
         logger::setup();
         let (leader_data, leader_gossip, _, leader_serve, _) = test_node();

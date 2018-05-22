@@ -53,6 +53,10 @@ pub fn receiver(
     recycler: PacketRecycler,
     packet_sender: PacketSender,
 ) -> JoinHandle<()> {
+    let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
+    if res.is_err() {
+        panic!("streamer::receiver set_read_timeout error");
+    }
     spawn(move || {
         let _ = recv_loop(&sock, &exit, &recycler, &packet_sender);
         ()
