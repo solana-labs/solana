@@ -650,12 +650,14 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let event = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
         let rep_data = ReplicatedData::new(
             pubkey_me,
             read.local_addr().unwrap(),
             send.local_addr().unwrap(),
             serve.local_addr().unwrap(),
+            event.local_addr().unwrap(),
         );
         let mut crdt_me = Crdt::new(rep_data);
         let me_id = crdt_me.my_data().id;
@@ -712,21 +714,17 @@ mod test {
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
         let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let event = UdpSocket::bind("127.0.0.1:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
+            event.local_addr().unwrap(),
         );
         let crdt = Crdt::new(d);
-        trace!(
-            "id: {} gossip: {} replicate: {} serve: {}",
-            crdt.my_data().id[0],
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-        );
+        trace!("data: {:?}", d);
         (Arc::new(RwLock::new(crdt)), gossip, replicate, serve)
     }
 

@@ -1,5 +1,23 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
 //! 5-stage transaction validation pipeline in software.
+//! 1. streamer
+//! - Incoming blobs are picked up from the replicate socket.
+//! 2. verifier
+//! - TODO Blobs are sent to the GPU, and while the memory is there the PoH stream is verified
+//! along with the ecdsa signature for the blob and each signature in all the transactions.
+//! 3.a retransmit
+//! - Blobs originating from the parent (leader atm is the only parent), are retransmit to all the
+//! peers in the crdt.  Peers is everyone who is not me or the leader that has a known replicate
+//! address.
+//! 3.b window
+//! - Verified blobs are placed into a window, indexed by the counter set by the leader. This could
+//! be the PoH counter if its monitonically increasing in each blob.  Easure coding is used to
+//! recover any missing packets, and requests are made at random to peers and parents to retransmit
+//! a missing packet.
+//! 4. accountant
+//! - Contigous blobs are sent to the accountant for processing transactions
+//! 5. validator
+//! - TODO Validation messages are sent back to the leader
 
 use bank::Bank;
 use banking_stage::BankingStage;
@@ -20,48 +38,27 @@ use streamer;
 use write_stage::WriteStage;
 
 pub struct Tvu {
-    bank: Arc<Bank>,
-    start_hash: Hash,
-    tick_duration: Option<Duration>,
+    pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Tvu {
-    /// Create a new Tvu that wraps the given Bank.
-    pub fn new(bank: Bank, start_hash: Hash, tick_duration: Option<Duration>) -> Self {
-        Tvu {
-            bank: Arc::new(bank),
-            start_hash,
-            tick_duration,
-        }
-    }
-
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the bank state.
     /// # Arguments
-    /// * `obj` - The bank state.
+    /// * `bank` - The bank state.
     /// * `me` - my configuration
+    /// * `gossip` - my gosisp socket
+    /// * `replicte` - my replicte socket
     /// * `leader` - leader configuration
     /// * `exit` - The exit signal.
-    /// # Remarks
-    /// The pipeline is constructed as follows:
-    /// 1. receive blobs from the network, these are out of order
-    /// 2. verify blobs, PoH, signatures (TODO)
-    /// 3. reconstruct contiguous window
-    ///     a. order the blobs
-    ///     b. use erasure coding to reconstruct missing blobs
-    ///     c. ask the network for missing blobs, if erasure coding is insufficient
-    ///     d. make sure that the blobs PoH sequences connect (TODO)
-    /// 4. process the transaction state machine
-    /// 5. respond with the hash of the state back to the leader
-    pub fn serve(
-        obj: &Arc<Tvu>,
+    pub fn new(
+        bank: Arc<Bank>,
         me: ReplicatedData,
         gossip: UdpSocket,
-        requests_socket: UdpSocket,
         replicate: UdpSocket,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
-    ) -> Result<Vec<JoinHandle<()>>> {
+    ) -> Self {
         //replicate pipeline
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         crdt.write()
@@ -118,39 +115,7 @@ impl Tvu {
             blob_recycler.clone(),
         );
 
-        //serve pipeline
-        // make sure we are on the same interface
-        let mut local = requests_socket.local_addr()?;
-        local.set_port(0);
-
-        let packet_recycler = packet::PacketRecycler::default();
-        let (packet_sender, packet_receiver) = channel();
-        let t_packet_receiver = streamer::receiver(
-            requests_socket,
-            exit.clone(),
-            packet_recycler.clone(),
-            packet_sender,
-        );
-
-        let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
-
-        let banking_stage = BankingStage::new(
-            obj.bank.clone(),
-            exit.clone(),
-            sig_verify_stage.verified_receiver,
-            packet_recycler.clone(),
-        );
-
-        let record_stage = RecordStage::new(
-            banking_stage.signal_receiver,
-            &obj.start_hash,
-            obj.tick_duration,
-        );
-
-        let write_stage =
-            WriteStage::new_drain(obj.bank.clone(), exit.clone(), record_stage.entry_receiver);
-
-        let mut threads = vec![
+        let threads = vec![
             //replicate threads
             t_blob_receiver,
             t_retransmit,
@@ -164,7 +129,7 @@ impl Tvu {
             write_stage.thread_hdl,
         ];
         threads.extend(sig_verify_stage.thread_hdls.into_iter());
-        Ok(threads)
+        Tvu{threads}
     }
 }
 
@@ -185,6 +150,7 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
         gossip.local_addr().unwrap(),
         replicate.local_addr().unwrap(),
         requests_socket.local_addr().unwrap(),
+        events_socket.local_addr().unwrap(),
     );
     (d, gossip, replicate, requests_socket, events_socket)
 }
@@ -215,7 +181,7 @@ mod tests {
     fn test_replicate() {
         logger::setup();
         let (leader_data, leader_gossip, _, leader_serve, _) = test_node();
-        let (target1_data, target1_gossip, target1_replicate, target1_serve, _) = test_node();
+        let (target1_data, target1_gossip, target1_replicate, _, target1_events) = test_node();
         let (target2_data, target2_gossip, target2_replicate, _, _) = test_node();
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -273,7 +239,7 @@ mod tests {
             &tvu,
             target1_data,
             target1_gossip,
-            target1_serve,
+            target1_events,
             target1_replicate,
             leader_data,
             exit.clone(),

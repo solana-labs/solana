@@ -31,7 +31,7 @@ use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
 
 /// Structure to be replicated by the network
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReplicatedData {
     pub id: PublicKey,
     sig: Signature,
@@ -42,7 +42,9 @@ pub struct ReplicatedData {
     /// address to connect to for replication
     pub replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
-    pub serve_addr: SocketAddr,
+    pub requests_addr: SocketAddr,
+    /// events address
+    pub events_addr: SocketAddr,
     /// current leader identity
     current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -56,7 +58,8 @@ impl ReplicatedData {
         id: PublicKey,
         gossip_addr: SocketAddr,
         replicate_addr: SocketAddr,
-        serve_addr: SocketAddr,
+        requests_addr: SocketAddr,
+        events_addr: SocketAddr,
     ) -> ReplicatedData {
         ReplicatedData {
             id,
@@ -64,7 +67,8 @@ impl ReplicatedData {
             version: 0,
             gossip_addr,
             replicate_addr,
-            serve_addr,
+            requests_addr,
+            events_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -515,12 +519,14 @@ mod test {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let events = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
+            events.local_addr().unwrap(),
         );
         let crdt = Crdt::new(d);
         trace!(
@@ -632,6 +638,7 @@ mod test {
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
         );
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());

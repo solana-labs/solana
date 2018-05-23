@@ -211,6 +211,7 @@ mod tests {
             gossip.local_addr().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
             requests_socket.local_addr().unwrap(),
+            events_addr,
         );
 
         let alice = Mint::new(10_000);
@@ -326,6 +327,7 @@ mod tests {
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
+            events_socket.local_addr().unwrap(),
         );
         (leader, gossip, serve, replicate, events_socket)
     }
@@ -364,7 +366,7 @@ mod tests {
         let daddr = "0.0.0.0:0".parse().unwrap();
         let me = spy.id.clone();
         spy.replicate_addr = daddr;
-        spy.serve_addr = daddr;
+        spy.requests_addr = daddr;
         let mut spy_crdt = Crdt::new(spy);
         spy_crdt.insert(&leader);
         spy_crdt.set_leader(leader.id);
@@ -393,7 +395,7 @@ mod tests {
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .map(|x| x.serve_addr)
+            .map(|x| x.requests_addr)
             .collect();
         v.clone()
     }
@@ -446,7 +448,7 @@ mod tests {
             let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
             let mut client = ThinClient::new(
-                leader.0.serve_addr,
+                leader.0.requests_addr,
                 requests_socket,
                 events_addr,
                 events_socket,
