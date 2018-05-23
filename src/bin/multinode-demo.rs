@@ -108,7 +108,7 @@ fn main() {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
-    let mut client = mk_client(&client_addr, &leader);
+    let mut client = mk_client(&mut client_addr, &leader);
 
     println!("Get last ID...");
     let last_id = client.get_last_id().wait().unwrap();
@@ -146,7 +146,7 @@ fn main() {
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
         println!("Transferring 1 unit {} times... to", trs.len());
-        let client = mk_client(&client_addr, &leader);
+        let client = mk_client(&mut client_addr, &leader);
         for tr in trs {
             client.transfer_signed(tr.clone()).unwrap();
         }
@@ -168,7 +168,7 @@ fn main() {
     }
     for val in validators {
         println!("Checking balance on {} ...",  val.events_addr);
-        let mut client = mk_client(&client_addr, &val);
+        let mut client = mk_client(&mut client_addr, &val);
         let mut tx_count = client.transaction_count();
         duration = now.elapsed();
         let txs = tx_count - initial_tx_count;
@@ -183,14 +183,14 @@ fn main() {
     }
 }
 
-fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> ThinClient {
-    let mut c = client_addr.clone();
-    c.set_port(0);
+fn mk_client(client_addr: &mut SocketAddr, r: &ReplicatedData) -> ThinClient {
+    let port = client_addr.port():
+    let c = client_addr.clone();
     let events_socket = UdpSocket::bind(c).unwrap();
     let mut addr = events_socket.local_addr().unwrap();
-    let port = addr.port();
     addr.set_port(port + 1);
     let requests_socket = UdpSocket::bind(addr).unwrap();
+    client_addr.set_port(port + 2);
     ThinClient::new(
         r.requests_addr,
         requests_socket,
@@ -216,6 +216,7 @@ fn converge(
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
 ) -> Vec<ReplicatedData> {
+    let daddr = "0.0.0.0:0".parse().unwrap();
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node(client_addr);
