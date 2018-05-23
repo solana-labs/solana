@@ -192,7 +192,6 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use streamer::default_window;
-    use tvu::{self, Tvu};
 
     #[test]
     fn test_thin_client() {
@@ -224,7 +223,7 @@ mod tests {
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
-        let server = Server::new(
+        let server = Server::leader(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -258,21 +257,20 @@ mod tests {
     #[test]
     fn test_bad_sig() {
         logger::setup();
-        let (leader_data, leader_gossip, _, leader_serve, _leader_events) = tvu::test_node();
+        let leader = TestNode::new();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let serve_addr = leader_serve.local_addr().unwrap();
-
-        let mut local = leader_serve.local_addr().unwrap();
+        let serve_addr = leader.data.requests_addr;
+        let mut local = serve_addr.local_addr().unwrap();
         local.set_port(0);
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast_socket = UdpSocket::bind(local).unwrap();
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
         let events_addr = events_socket.local_addr().unwrap();
 
-        let server = Server::new(
+        let server = Server::leader(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
@@ -313,23 +311,33 @@ mod tests {
             t.join().unwrap();
         }
     }
-
-    fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        serve.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let pubkey = KeyPair::new().pubkey();
-        let leader = ReplicatedData::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-            events_socket.local_addr().unwrap(),
-        );
-        (leader, gossip, serve, replicate, events_socket)
+    struct TestNode {
+        data: ReplicatedData,
+        gossip: UdpSocket,
+        requests: UdpSocket,
+        replicate: UdpSocket,
+        event: UdpSocket,
+        respond: UdpSocket,
+        broadcast: UdpSocket,
+    }
+    impl TestNode {
+        fn new() -> TestNode {
+            let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let event = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let pubkey = KeyPair::new().pubkey();
+            let data = ReplicatedData::new(
+                pubkey,
+                gossip.local_addr().unwrap(),
+                replicate.local_addr().unwrap(),
+                requests.local_addr().unwrap(),
+                event.local_addr().unwrap(),
+            );
+            TestNode {data, gossip, requests, replicate, event, respond, broadcast }
+        }
     }
 
     fn replicant(
@@ -338,21 +346,19 @@ mod tests {
         alice: &Mint,
         threads: &mut Vec<JoinHandle<()>>,
     ) {
-        let replicant = test_node();
-        let replicant_bank = {
-            let bank = Bank::new(&alice);
-            Arc::new(Tvu::new(bank, alice.last_id(), None))
-        };
-        let mut ts = Tvu::serve(
-            &replicant_bank,
-            replicant.0.clone(),
-            replicant.1,
-            replicant.2,
-            replicant.3,
+        let replicant = TestNode::new();
+        let replicant_bank = Bank::new(&alice);
+        let mut ts = Server::validator(
+            replicant_bank,
+            replicant.data.clone(),
+            replicant.requests,
+            replicant.respond,
+            replicant.replicate,
+            replicant.gossip,
             leader.clone(),
             exit.clone(),
-        ).unwrap();
-        threads.append(&mut ts);
+        );
+        threads.append(&mut ts.thread_hdls);
     }
 
     fn converge(
@@ -362,7 +368,7 @@ mod tests {
         threads: &mut Vec<JoinHandle<()>>,
     ) -> Vec<SocketAddr> {
         //lets spy on the network
-        let (mut spy, spy_gossip, _, _, _) = test_node();
+        let mut spy = test_node();
         let daddr = "0.0.0.0:0".parse().unwrap();
         let me = spy.id.clone();
         spy.replicate_addr = daddr;
@@ -418,7 +424,7 @@ mod tests {
         let respond_socket = UdpSocket::bind(local.clone()).unwrap();
         let events_addr = leader.4.local_addr().unwrap();
 
-        let server = Server::new(
+        let server = Server::leader(
             leader_bank,
             alice.last_id(),
             None,
