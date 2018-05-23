@@ -149,7 +149,7 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use chrono::prelude::*;
@@ -166,36 +166,38 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
+    use std::net::UdpSocket;
     use streamer;
-    use tvu::{test_node, Tvu};
+    use crdt::ReplicatedData;
+    use tvu::Tvu;
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
     fn test_replicate() {
         logger::setup();
-        let (leader_data, leader_gossip, _, leader_serve, _) = test_node();
-        let (target1_data, target1_gossip, target1_replicate, _, target1_events) = test_node();
-        let (target2_data, target2_gossip, target2_replicate, _, _) = test_node();
+        let leader = TestNode::new();
+        let target1 = TestNode::new();
+        let target2 = TestNode::new();
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader
-        let mut crdt_l = Crdt::new(leader_data.clone());
-        crdt_l.set_leader(leader_data.id);
+        let mut crdt_l = Crdt::new(leader.data.clone());
+        crdt_l.set_leader(leader.data.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
         let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
         let window1 = streamer::default_window();
-        let t_l_listen = Crdt::listen(cref_l, window1, leader_gossip, exit.clone());
+        let t_l_listen = Crdt::listen(cref_l, window1, leader.gossip, exit.clone());
 
         //start crdt2
-        let mut crdt2 = Crdt::new(target2_data.clone());
-        crdt2.insert(&leader_data);
-        crdt2.set_leader(leader_data.id);
-        let leader_id = leader_data.id;
+        let mut crdt2 = Crdt::new(target2.data.clone());
+        crdt2.insert(&leader.data);
+        crdt2.set_leader(leader.data.id);
+        let leader_id = leader.data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
         let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
         let window2 = streamer::default_window();
-        let t2_listen = Crdt::listen(cref2, window2, target2_gossip, exit.clone());
+        let t2_listen = Crdt::listen(cref2, window2, target2.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -206,14 +208,14 @@ mod tests {
         let t_receiver = streamer::blob_receiver(
             exit.clone(),
             recv_recycler.clone(),
-            target2_replicate,
+            target2.replicate,
             s_reader,
         ).unwrap();
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
-            leader_serve,
+            leader.requests,
             exit.clone(),
             resp_recycler.clone(),
             r_responder,
@@ -221,15 +223,14 @@ mod tests {
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let replicate_addr = target1_data.replicate_addr;
+        let replicate_addr = target1.data.replicate_addr;
         let bank = Arc::new(Bank::new(&mint));
         let tvu = Tvu::new(
             bank,
-            target1_data,
-            target1_gossip,
-            target1_events,
-            target1_replicate,
-            leader_data,
+            target1.data,
+            target1.gossip,
+            target1.replicate,
+            leader.data,
             exit.clone(),
         );
 
@@ -301,5 +302,33 @@ mod tests {
         t_responder.join().expect("join");
         t_l_gossip.join().expect("join");
         t_l_listen.join().expect("join");
+    }
+    pub struct TestNode {
+        pub data: ReplicatedData,
+        pub gossip: UdpSocket,
+        pub requests: UdpSocket,
+        pub replicate: UdpSocket,
+        pub event: UdpSocket,
+        pub respond: UdpSocket,
+        pub broadcast: UdpSocket,
+    }
+    impl TestNode {
+        pub fn new() -> TestNode {
+            let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let event = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let pubkey = KeyPair::new().pubkey();
+            let data = ReplicatedData::new(
+                pubkey,
+                gossip.local_addr().unwrap(),
+                replicate.local_addr().unwrap(),
+                requests.local_addr().unwrap(),
+                event.local_addr().unwrap(),
+            );
+            TestNode {data, gossip, requests, replicate, event, respond, broadcast }
+        }
     }
 }
