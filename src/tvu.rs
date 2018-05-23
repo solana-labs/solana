@@ -119,7 +119,9 @@ impl Tvu {
             t_gossip,
             t_listen,
         ];
-        Tvu{thread_hdls: threads}
+        Tvu {
+            thread_hdls: threads,
+        }
     }
 }
 
@@ -154,6 +156,7 @@ pub mod tests {
     use bincode::serialize;
     use chrono::prelude::*;
     use crdt::Crdt;
+    use crdt::ReplicatedData;
     use entry::Entry;
     use event::Event;
     use hash::{hash, Hash};
@@ -162,13 +165,12 @@ pub mod tests {
     use packet::BlobRecycler;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
+    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use std::net::UdpSocket;
     use streamer;
-    use crdt::ReplicatedData;
     use tvu::Tvu;
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
@@ -328,7 +330,15 @@ pub mod tests {
                 requests.local_addr().unwrap(),
                 event.local_addr().unwrap(),
             );
-            TestNode {data, gossip, requests, replicate, event, respond, broadcast }
+            TestNode {
+                data,
+                gossip,
+                requests,
+                replicate,
+                event,
+                respond,
+                broadcast,
+            }
         }
     }
 }

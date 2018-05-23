@@ -222,7 +222,12 @@ mod tests {
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut client = ThinClient::new(leader.data.requests_addr, requests_socket, leader.data.events_addr, events_socket);
+        let mut client = ThinClient::new(
+            leader.data.requests_addr,
+            requests_socket,
+            leader.data.events_addr,
+            events_socket,
+        );
         let last_id = client.get_last_id().wait().unwrap();
         let _sig = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
@@ -264,7 +269,12 @@ mod tests {
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader.data.requests_addr, requests_socket, leader.data.events_addr, events_socket);
+        let mut client = ThinClient::new(
+            leader.data.requests_addr,
+            requests_socket,
+            leader.data.events_addr,
+            events_socket,
+        );
         let last_id = client.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
