@@ -204,16 +204,16 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let server = Server::leader(
+        let server = Server::new_leader(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
             leader.data.clone(),
-            leader.requests,
-            leader.event,
-            leader.broadcast,
-            leader.respond,
-            leader.gossip,
+            leader.sockets.requests,
+            leader.sockets.event,
+            leader.sockets.broadcast,
+            leader.sockets.respond,
+            leader.sockets.gossip,
             exit.clone(),
             sink(),
         );
@@ -249,16 +249,16 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let server = Server::leader(
+        let server = Server::new_leader(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
             leader.data.clone(),
-            leader.requests,
-            leader.event,
-            leader.broadcast,
-            leader.respond,
-            leader.gossip,
+            leader.sockets.requests,
+            leader.sockets.event,
+            leader.sockets.broadcast,
+            leader.sockets.respond,
+            leader.sockets.gossip,
             exit.clone(),
             sink(),
         );
@@ -303,13 +303,13 @@ mod tests {
     ) {
         let replicant = TestNode::new();
         let replicant_bank = Bank::new(&alice);
-        let mut ts = Server::validator(
+        let mut ts = Server::new_validator(
             replicant_bank,
             replicant.data.clone(),
-            replicant.requests,
-            replicant.respond,
-            replicant.replicate,
-            replicant.gossip,
+            replicant.sockets.requests,
+            replicant.sockets.respond,
+            replicant.sockets.replicate,
+            replicant.sockets.gossip,
             leader.clone(),
             exit.clone(),
         );
@@ -334,7 +334,7 @@ mod tests {
 
         let spy_ref = Arc::new(RwLock::new(spy_crdt));
         let spy_window = default_window();
-        let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy.gossip, exit.clone());
+        let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy.sockets.gossip, exit.clone());
         let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
         //wait for the network to converge
         let mut converged = false;
@@ -373,16 +373,16 @@ mod tests {
 
         let leader_bank = Bank::new(&alice);
         let events_addr = leader.data.events_addr;
-        let server = Server::leader(
+        let server = Server::new_leader(
             leader_bank,
             alice.last_id(),
             None,
             leader.data.clone(),
-            leader.requests,
-            leader.event,
-            leader.broadcast,
-            leader.respond,
-            leader.gossip,
+            leader.sockets.requests,
+            leader.sockets.event,
+            leader.sockets.broadcast,
+            leader.sockets.respond,
+            leader.sockets.gossip,
             exit.clone(),
             sink(),
         );
