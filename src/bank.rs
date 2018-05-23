@@ -24,9 +24,9 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
-    AccountNotFound,
-    InsufficientFunds,
-    InvalidTransferSignature,
+    AccountNotFound(PublicKey),
+    InsufficientFunds(PublicKey),
+    InvalidTransferSignature(Signature),
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -167,11 +167,11 @@ impl Bank {
         let option = bals.get(&tr.from);
 
         if option.is_none() {
-            return Err(BankError::AccountNotFound);
+            return Err(BankError::AccountNotFound(tr.from));
         }
 
         if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
-            return Err(BankError::InvalidTransferSignature);
+            return Err(BankError::InvalidTransferSignature(tr.sig));
         }
 
         loop {
@@ -180,7 +180,7 @@ impl Bank {
 
             if current < tr.contract.tokens {
                 self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
-                return Err(BankError::InsufficientFunds);
+                return Err(BankError::InsufficientFunds(tr.from));
             }
 
             let result = bal.compare_exchange(
@@ -427,9 +427,10 @@ mod tests {
     fn test_account_not_found() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
+        let keypair = KeyPair::new();
         assert_eq!(
-            bank.transfer(1, &KeyPair::new(), mint.pubkey(), mint.last_id()),
-            Err(BankError::AccountNotFound)
+            bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
+            Err(BankError::AccountNotFound(keypair.pubkey()))
         );
         assert_eq!(bank.transaction_count(), 0);
     }
@@ -444,7 +445,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(
             bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::InsufficientFunds)
+            Err(BankError::InsufficientFunds(mint.pubkey()))
         );
         assert_eq!(bank.transaction_count(), 1);
 
