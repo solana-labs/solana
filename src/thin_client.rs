@@ -366,7 +366,6 @@ mod tests {
         ret.clone()
     }
     #[test]
-    #[ignore]
     fn test_multi_node() {
         logger::setup();
         const N: usize = 5;
@@ -414,12 +413,12 @@ mod tests {
             );
             trace!("getting leader last_id");
             let last_id = client.get_last_id().wait().unwrap();
-            info!("executing leader transer");
+            info!("executing leader transfer");
             let _sig = client
                 .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
                 .unwrap();
             trace!("getting leader balance");
-            client.get_balance(&bob_pubkey).unwrap()
+            poll_get_balance(&mut client, &bob_pubkey).unwrap()
         };
         assert_eq!(leader_balance, 500);
         //verify replicant has the same balance
