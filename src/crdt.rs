@@ -46,7 +46,7 @@ pub struct ReplicatedData {
     /// events address
     pub events_addr: SocketAddr,
     /// current leader identity
-    current_leader_id: PublicKey,
+    pub current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
     last_verified_hash: Hash,
     /// last verified count, always increasing
@@ -197,6 +197,7 @@ impl Crdt {
             })
             .collect();
         if nodes.len() < 1 {
+            warn!("crdt too small");
             return Err(Error::CrdtTooSmall);
         }
         info!("nodes table {}", nodes.len());
@@ -347,6 +348,7 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
         if options.len() < 1 {
+            trace!("crdt too small for gossip");
             return Err(Error::CrdtTooSmall);
         }
         let n = (Self::random() as usize) % options.len();
@@ -370,6 +372,7 @@ impl Crdt {
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
         let r = serialize(&req)?;
+        trace!("sending gossip request to {}", remote_gossip_addr);
         sock.send_to(&r, remote_gossip_addr)?;
         Ok(())
     }
@@ -440,6 +443,7 @@ impl Crdt {
     ) -> Result<()> {
         //TODO cache connections
         let mut buf = vec![0u8; 1024 * 64];
+        trace!("recv_from on {}", sock.local_addr().unwrap());
         let (amt, src) = sock.recv_from(&mut buf)?;
         trace!("got request from {}", src);
         buf.resize(amt, 0);

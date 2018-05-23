@@ -17,6 +17,10 @@ name = "solana-client-demo"
 path = "src/bin/client-demo.rs"
 
 [[bin]]
+name = "solana-multinode-demo"
+path = "src/bin/multinode-demo.rs"
+
+[[bin]]
 name = "solana-testnode"
 path = "src/bin/testnode.rs"
 
@@ -65,3 +69,4 @@ getopts = "^0.2"
 isatty = "0.1"
 futures = "0.1"
 rand = "0.4.2"
+pnet = "^0.21.0"
