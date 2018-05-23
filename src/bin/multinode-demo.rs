@@ -161,6 +161,9 @@ fn main() {
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (txs * 1_000_000_000) as f64 / ns as f64;
         println!("{} tps", tps);
+        if txs == transactions.len() {
+            break;
+        }
         sleep(Duration::new(1, 0));
     }
     for val in validators {
@@ -216,7 +219,6 @@ fn converge(
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node(client_addr);
-    let me = spy.id.clone();
     let mut spy_crdt = Crdt::new(spy);
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
