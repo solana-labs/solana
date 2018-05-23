@@ -11,7 +11,7 @@
 //! peers in the crdt.  Peers is everyone who is not me or the leader that has a known replicate
 //! address.
 //! 3.b window
-//! - Verified blobs are placed into a window, indexed by the counter set by the leader. This could
+//! - Verified blobs are placed into a window, indexed by the counter set by the leader.sockets. This could
 //! be the PoH counter if its monitonically increasing in each blob.  Easure coding is used to
 //! recover any missing packets, and requests are made at random to peers and parents to retransmit
 //! a missing packet.
@@ -189,7 +189,7 @@ pub mod tests {
         let cref_l = Arc::new(RwLock::new(crdt_l));
         let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
         let window1 = streamer::default_window();
-        let t_l_listen = Crdt::listen(cref_l, window1, leader.gossip, exit.clone());
+        let t_l_listen = Crdt::listen(cref_l, window1, leader.sockets.gossip, exit.clone());
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2.data.clone());
@@ -199,7 +199,7 @@ pub mod tests {
         let cref2 = Arc::new(RwLock::new(crdt2));
         let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
         let window2 = streamer::default_window();
-        let t2_listen = Crdt::listen(cref2, window2, target2.gossip, exit.clone());
+        let t2_listen = Crdt::listen(cref2, window2, target2.sockets.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -210,14 +210,14 @@ pub mod tests {
         let t_receiver = streamer::blob_receiver(
             exit.clone(),
             recv_recycler.clone(),
-            target2.replicate,
+            target2.sockets.replicate,
             s_reader,
         ).unwrap();
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
-            leader.requests,
+            leader.sockets.requests,
             exit.clone(),
             resp_recycler.clone(),
             r_responder,
@@ -230,8 +230,8 @@ pub mod tests {
         let tvu = Tvu::new(
             bank.clone(),
             target1.data,
-            target1.gossip,
-            target1.replicate,
+            target1.sockets.gossip,
+            target1.sockets.replicate,
             leader.data,
             exit.clone(),
         );
@@ -305,14 +305,17 @@ pub mod tests {
         t_l_gossip.join().expect("join");
         t_l_listen.join().expect("join");
     }
-    pub struct TestNode {
-        pub data: ReplicatedData,
+    pub struct Sockets {
         pub gossip: UdpSocket,
         pub requests: UdpSocket,
         pub replicate: UdpSocket,
         pub event: UdpSocket,
         pub respond: UdpSocket,
         pub broadcast: UdpSocket,
+    }
+    pub struct TestNode {
+        pub data: ReplicatedData,
+        pub sockets: Sockets,
     }
     impl TestNode {
         pub fn new() -> TestNode {
@@ -331,13 +334,15 @@ pub mod tests {
                 event.local_addr().unwrap(),
             );
             TestNode {
-                data,
-                gossip,
-                requests,
-                replicate,
-                event,
-                respond,
-                broadcast,
+                data: data,
+                sockets: Sockets {
+                    gossip,
+                    requests,
+                    replicate,
+                    event,
+                    respond,
+                    broadcast,
+                }
             }
         }
     }

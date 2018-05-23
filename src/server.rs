@@ -18,7 +18,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn leader<W: Write + Send + 'static>(
+    pub fn new_leader<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
         tick_duration: Option<Duration>,
@@ -49,7 +49,7 @@ impl Server {
         thread_hdls.extend(tpu.thread_hdls);
         Server { thread_hdls }
     }
-    pub fn validator(
+    pub fn new_validator(
         bank: Bank,
         me: ReplicatedData,
         requests_socket: UdpSocket,
