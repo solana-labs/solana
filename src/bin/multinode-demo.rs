@@ -184,7 +184,7 @@ fn main() {
 }
 
 fn mk_client(client_addr: &mut SocketAddr, r: &ReplicatedData) -> ThinClient {
-    let port = client_addr.port():
+    let port = client_addr.port();
     let c = client_addr.clone();
     let events_socket = UdpSocket::bind(c).unwrap();
     let mut addr = events_socket.local_addr().unwrap();
