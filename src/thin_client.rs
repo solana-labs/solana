@@ -334,7 +334,12 @@ mod tests {
 
         let spy_ref = Arc::new(RwLock::new(spy_crdt));
         let spy_window = default_window();
-        let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy.sockets.gossip, exit.clone());
+        let t_spy_listen = Crdt::listen(
+            spy_ref.clone(),
+            spy_window,
+            spy.sockets.gossip,
+            exit.clone(),
+        );
         let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
         //wait for the network to converge
         let mut converged = false;
