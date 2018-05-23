@@ -44,7 +44,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("c", "", "client address", "host");
+    opts.optopt("c", "", "client address", "host:port");
     opts.optopt("t", "", "number of threads", &format!("{}", threads));
     opts.optopt(
         "n",
