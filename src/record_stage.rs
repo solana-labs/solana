@@ -1,12 +1,29 @@
-//! The `record_stage` implements the Record stage of the TPU.
-//! It manages a thread containing a Proof of History Recorder.
+//! The `record_stage` module provides an object for generating a Proof of History.
+//! It records Event items on behalf of its users. It continuously generates
+//! new hashes, only stopping to check if it has been sent an Event item. It
+//! tags each Event with an Entry, and sends it back. The Entry includes the
+//! Event, the latest hash, and the number of hashes since the last event.
+//! The resulting stream of entries represents ordered events in time.
 
 use entry::Entry;
+use event::Event;
 use hash::Hash;
-use recorder::{ExitReason, Recorder, Signal};
+use recorder::Recorder;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
+
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
+pub enum Signal {
+    Tick,
+    Events(Vec<Event>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExitReason {
+    RecvDisconnected,
+    SendDisconnected,
+}
 
 pub struct RecordStage {
     pub entry_receiver: Receiver<Entry>,
@@ -14,44 +31,67 @@ pub struct RecordStage {
 }
 
 impl RecordStage {
+    /// A background thread that will continue tagging received Event messages and
+    /// sending back Entry messages until either the receiver or sender channel is closed.
     pub fn new(
         event_receiver: Receiver<Signal>,
         start_hash: &Hash,
         tick_duration: Option<Duration>,
     ) -> Self {
         let (entry_sender, entry_receiver) = channel();
-        let thread_hdl =
-            Self::create_recorder(*start_hash, tick_duration, event_receiver, entry_sender);
-        RecordStage {
-            entry_receiver,
-            thread_hdl,
-        }
-    }
+        let start_hash = start_hash.clone();
 
-    /// A background thread that will continue tagging received Event messages and
-    /// sending back Entry messages until either the receiver or sender channel is closed.
-    fn create_recorder(
-        start_hash: Hash,
-        tick_duration: Option<Duration>,
-        receiver: Receiver<Signal>,
-        sender: Sender<Entry>,
-    ) -> JoinHandle<ExitReason> {
-        spawn(move || {
-            let mut recorder = Recorder::new(receiver, sender, start_hash);
+        let thread_hdl = spawn(move || {
+            let mut recorder = Recorder::new(start_hash);
             let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
             loop {
-                if let Err(err) = recorder.process_events(duration_data) {
+                if let Err(err) = Self::process_events(
+                    &mut recorder,
+                    duration_data,
+                    &event_receiver,
+                    &entry_sender,
+                ) {
                     return err;
                 }
                 if duration_data.is_some() {
                     recorder.hash();
                 }
             }
-        })
+        });
+
+        RecordStage {
+            entry_receiver,
+            thread_hdl,
+        }
     }
 
-    pub fn receive(self: &Self) -> Result<Entry, TryRecvError> {
-        self.entry_receiver.try_recv()
+    pub fn process_events(
+        recorder: &mut Recorder,
+        duration_data: Option<(Instant, Duration)>,
+        receiver: &Receiver<Signal>,
+        sender: &Sender<Entry>,
+    ) -> Result<(), ExitReason> {
+        loop {
+            if let Some((start_time, tick_duration)) = duration_data {
+                if let Some(entry) = recorder.tick(start_time, tick_duration) {
+                    sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                }
+            }
+            match receiver.try_recv() {
+                Ok(signal) => match signal {
+                    Signal::Tick => {
+                        let entry = recorder.record(vec![]);
+                        sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                    }
+                    Signal::Events(events) => {
+                        let entry = recorder.record(events);
+                        sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                    }
+                },
+                Err(TryRecvError::Empty) => return Ok(()),
+                Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
+            };
+        }
     }
 }
 
@@ -59,6 +99,8 @@ impl RecordStage {
 mod tests {
     use super::*;
     use ledger::Block;
+    use signature::{KeyPair, KeyPairUtil};
+    use std::sync::mpsc::channel;
     use std::thread::sleep;
 
     #[test]
@@ -101,6 +143,21 @@ mod tests {
             record_stage.thread_hdl.join().unwrap(),
             ExitReason::SendDisconnected
         );
+    }
+
+    #[test]
+    fn test_events() {
+        let (input, signal_receiver) = channel();
+        let zero = Hash::default();
+        let record_stage = RecordStage::new(signal_receiver, &zero, None);
+        let alice_keypair = KeyPair::new();
+        let bob_pubkey = KeyPair::new().pubkey();
+        let event0 = Event::new_transaction(&alice_keypair, bob_pubkey, 1, zero);
+        let event1 = Event::new_transaction(&alice_keypair, bob_pubkey, 2, zero);
+        input.send(Signal::Events(vec![event0, event1])).unwrap();
+        drop(input);
+        let entries: Vec<_> = record_stage.entry_receiver.iter().collect();
+        assert_eq!(entries.len(), 1);
     }
 
     #[test]
