@@ -115,7 +115,6 @@ fn main() {
     println!("Got last ID {:?}", last_id);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
-    let tokens_per_user = 1_000;
 
     println!("Creating keypairs...");
     let txs = demo.num_accounts / 2;
