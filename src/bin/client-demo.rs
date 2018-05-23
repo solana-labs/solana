@@ -110,15 +110,13 @@ fn main() {
     println!("Got last ID {:?}", last_id);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
-    let tokens_per_user = 1_000;
 
-    let users = rnd.gen_n_keys(demo.num_accounts, tokens_per_user);
+    let keys = rnd.gen_n_keys(demo.num_accounts);
 
     println!("Creating keypairs...");
     let txs = demo.num_accounts / 2;
-    let keypairs: Vec<_> = users
-        .into_par_iter()
-        .map(|(pkcs8, _)| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
+    let keypairs: Vec<_> = keys.into_par_iter()
+        .map(|pkcs8| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
         .collect();
     let keypair_pairs: Vec<_> = keypairs.chunks(2).collect();
 

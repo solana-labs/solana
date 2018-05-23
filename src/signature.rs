@@ -78,15 +78,14 @@ impl GenKeys {
             .collect()
     }
 
-    pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
+    pub fn gen_n_keys(&self, n_keys: i64) -> Vec<Vec<u8>> {
         let seeds = self.gen_n_seeds(n_keys);
 
         seeds
             .into_par_iter()
             .map(|seed| {
                 let new: GenKeys = GenKeys::new(&seed[..]);
-                let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
-                (pkcs8, tokens_per_user)
+                KeyPair::generate_pkcs8(&new).unwrap().to_vec()
             })
             .collect()
     }
@@ -123,11 +122,11 @@ mod tests {
         let rnd = GenKeys::new(seed);
         let rnd2 = GenKeys::new(seed);
 
-        let users1 = rnd.gen_n_keys(50, 1);
-        let users2 = rnd2.gen_n_keys(50, 1);
+        let users1 = rnd.gen_n_keys(50);
+        let users2 = rnd2.gen_n_keys(50);
 
-        let users1_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users1.iter().cloned());
-        let users2_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users2.iter().cloned());
+        let users1_set: HashSet<Vec<u8>> = HashSet::from_iter(users1.iter().cloned());
+        let users2_set: HashSet<Vec<u8>> = HashSet::from_iter(users2.iter().cloned());
         assert_eq!(users1_set, users2_set);
     }
 }
@@ -145,6 +144,6 @@ mod bench {
     fn bench_gen_keys(b: &mut Bencher) {
         let seed: &[_] = &[1, 2, 3, 4];
         let rnd = GenKeys::new(seed);
-        b.iter(|| rnd.gen_n_keys(1000, 1));
+        b.iter(|| rnd.gen_n_keys(1000));
     }
 }
