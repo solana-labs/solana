@@ -11,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tpu::Tpu;
+use tvu::Tvu;
 
 pub struct Server {
     pub thread_hdls: Vec<JoinHandle<()>>,
@@ -70,7 +71,7 @@ impl Server {
             leader_repl_data,
             exit.clone(),
         );
-        thread_hdls.extend(tpu.thread_hdls);
+        thread_hdls.extend(tvu.thread_hdls);
         Server { thread_hdls }
     }
 }

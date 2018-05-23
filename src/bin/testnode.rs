@@ -140,7 +140,7 @@ fn main() {
     let respond_socket = UdpSocket::bind(local.clone()).unwrap();
 
     eprintln!("starting server...");
-    let server = Server::new(
+    let server = Server::leader(
         bank,
         last_id,
         Some(Duration::from_millis(1000)),

@@ -4,7 +4,8 @@
 //! - Incoming blobs are picked up from the replicate socket.
 //! 2. verifier
 //! - TODO Blobs are sent to the GPU, and while the memory is there the PoH stream is verified
-//! along with the ecdsa signature for the blob and each signature in all the transactions.
+//! along with the ecdsa signature for the blob and each signature in all the transactions.  Blobs
+//! with errors are dropped, or marked for slashing.
 //! 3.a retransmit
 //! - Blobs originating from the parent (leader atm is the only parent), are retransmit to all the
 //! peers in the crdt.  Peers is everyone who is not me or the leader that has a known replicate
@@ -20,22 +21,15 @@
 //! - TODO Validation messages are sent back to the leader
 
 use bank::Bank;
-use banking_stage::BankingStage;
 use crdt::{Crdt, ReplicatedData};
-use hash::Hash;
 use packet;
-use record_stage::RecordStage;
 use replicate_stage::ReplicateStage;
-use result::Result;
-use sig_verify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
-use std::time::Duration;
 use streamer;
-use write_stage::WriteStage;
 
 pub struct Tvu {
     pub thread_hdls: Vec<JoinHandle<()>>,
@@ -71,10 +65,11 @@ impl Tvu {
         let window = streamer::default_window();
         let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
 
+        // TODO pull this socket out through the public interface
         // make sure we are on the same interface
-        let mut local = replicate.local_addr()?;
+        let mut local = replicate.local_addr().expect("tvu: get local address");
         local.set_port(0);
-        let write = UdpSocket::bind(local)?;
+        let write = UdpSocket::bind(local).expect("tvu: bind to local socket");
 
         let blob_recycler = packet::BlobRecycler::default();
         let (blob_sender, blob_receiver) = channel();
@@ -83,7 +78,7 @@ impl Tvu {
             blob_recycler.clone(),
             replicate,
             blob_sender.clone(),
-        )?;
+        ).expect("tvu: blob receiver creation");
         let (window_sender, window_receiver) = channel();
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -109,7 +104,7 @@ impl Tvu {
         );
 
         let replicate_stage = ReplicateStage::new(
-            obj.bank.clone(),
+            bank.clone(),
             exit.clone(),
             window_receiver,
             blob_recycler.clone(),
@@ -123,15 +118,13 @@ impl Tvu {
             replicate_stage.thread_hdl,
             t_gossip,
             t_listen,
-            //serve threads
-            t_packet_receiver,
-            banking_stage.thread_hdl,
-            write_stage.thread_hdl,
         ];
-        threads.extend(sig_verify_stage.thread_hdls.into_iter());
-        Tvu{threads}
+        Tvu{thread_hdls: threads}
     }
 }
+
+#[cfg(test)]
+use std::time::Duration;
 
 #[cfg(test)]
 pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
@@ -228,22 +221,17 @@ mod tests {
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let bank = Bank::new(&mint);
-        let tvu = Arc::new(Tvu::new(
-            bank,
-            mint.last_id(),
-            Some(Duration::from_millis(30)),
-        ));
         let replicate_addr = target1_data.replicate_addr;
-        let threads = Tvu::serve(
-            &tvu,
+        let bank = Arc::new(Bank::new(&mint));
+        let tvu = Tvu::new(
+            bank,
             target1_data,
             target1_gossip,
             target1_events,
             target1_replicate,
             leader_data,
             exit.clone(),
-        ).unwrap();
+        );
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
@@ -257,8 +245,6 @@ mod tests {
             let mut w = b.write().unwrap();
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
-
-            let bank = &tvu.bank;
 
             let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
             let entry0 = Entry::new(&cur_hash, i, vec![tr0]);
@@ -299,7 +285,6 @@ mod tests {
             msgs.push(msg);
         }
 
-        let bank = &tvu.bank;
         let alice_balance = bank.get_balance(&mint.keypair().pubkey()).unwrap();
         assert_eq!(alice_balance, alice_ref_balance);
 
@@ -307,7 +292,7 @@ mod tests {
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
-        for t in threads {
+        for t in tvu.thread_hdls {
             t.join().expect("join");
         }
         t2_gossip.join().expect("join");
