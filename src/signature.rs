@@ -9,7 +9,6 @@ use ring::rand::SecureRandom;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use std::cell::RefCell;
-use std::mem;
 use untrusted;
 
 pub type KeyPair = Ed25519KeyPair;
@@ -57,9 +56,9 @@ pub struct GenKeys {
 }
 
 impl GenKeys {
-    pub fn new(seed_values: &[u8]) -> GenKeys {
-        let seed: &[u8] = &seed_values[..];
-        let rng: ChaChaRng = SeedableRng::from_seed(unsafe { mem::transmute(seed) });
+    pub fn new(seed: &[u8]) -> GenKeys {
+        let seed32: Vec<_> = seed.iter().map(|&x| x as u32).collect();
+        let rng = ChaChaRng::from_seed(&seed32);
         GenKeys {
             generator: RefCell::new(rng),
         }
@@ -69,24 +68,17 @@ impl GenKeys {
         KeyPair::generate_pkcs8(self).unwrap().to_vec()
     }
 
-    pub fn gen_n_seeds(&self, n_seeds: i64) -> Vec<[u8; 16]> {
+    pub fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 16]> {
         let mut rng = self.generator.borrow_mut();
-
-        (0..n_seeds)
-            .into_iter()
-            .map(|_| rng.gen::<[u8; 16]>())
-            .collect()
+        (0..n).map(|_| rng.gen()).collect()
     }
 
-    pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
-        let seeds = self.gen_n_seeds(n_keys);
-
-        seeds
+    pub fn gen_n_keypairs(&self, n: i64) -> Vec<KeyPair> {
+        self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| {
-                let new: GenKeys = GenKeys::new(&seed[..]);
-                let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
-                (pkcs8, tokens_per_user)
+                let pkcs8 = GenKeys::new(&seed).new_key();
+                KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8)).unwrap()
             })
             .collect()
     }
@@ -104,31 +96,30 @@ impl SecureRandom for GenKeys {
 mod tests {
     use super::*;
     use std::collections::HashSet;
-    use std::iter::FromIterator;
 
     #[test]
-    fn test_new_key_is_redundant() {
-        let seed: &[_] = &[1, 2, 3, 4];
-        let rnd = GenKeys::new(seed);
-        let rnd2 = GenKeys::new(seed);
+    fn test_new_key_is_deterministic() {
+        let seed = [1, 2, 3, 4];
+        let rng0 = GenKeys::new(&seed);
+        let rng1 = GenKeys::new(&seed);
 
         for _ in 0..100 {
-            assert_eq!(rnd.new_key(), rnd2.new_key());
+            assert_eq!(rng0.new_key(), rng1.new_key());
         }
     }
 
+    fn gen_n_pubkeys(seed: &[u8], n: i64) -> HashSet<PublicKey> {
+        GenKeys::new(&seed)
+            .gen_n_keypairs(n)
+            .into_iter()
+            .map(|x| x.pubkey())
+            .collect()
+    }
+
     #[test]
-    fn test_gen_n_keys() {
-        let seed: &[_] = &[1, 2, 3, 4];
-        let rnd = GenKeys::new(seed);
-        let rnd2 = GenKeys::new(seed);
-
-        let users1 = rnd.gen_n_keys(50, 1);
-        let users2 = rnd2.gen_n_keys(50, 1);
-
-        let users1_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users1.iter().cloned());
-        let users2_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users2.iter().cloned());
-        assert_eq!(users1_set, users2_set);
+    fn test_gen_n_pubkeys_deterministic() {
+        let seed = [1, 2, 3, 4];
+        assert_eq!(gen_n_pubkeys(&seed, 50), gen_n_pubkeys(&seed, 50));
     }
 }
 
@@ -145,6 +136,6 @@ mod bench {
     fn bench_gen_keys(b: &mut Bencher) {
         let seed: &[_] = &[1, 2, 3, 4];
         let rnd = GenKeys::new(seed);
-        b.iter(|| rnd.gen_n_keys(1000, 1));
+        b.iter(|| rnd.gen_n_keys(1000));
     }
 }
