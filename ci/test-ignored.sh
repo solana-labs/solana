@@ -2,7 +2,8 @@
 
 cd $(dirname $0)/..
 
-source $HOME/.cargo/env
-rustup update
+rustc --version
+cargo --version
+
 export RUST_BACKTRACE=1
 cargo test -- --ignored
