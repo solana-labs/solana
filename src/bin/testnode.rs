@@ -14,6 +14,7 @@ use solana::entry::Entry;
 use solana::event::Event;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
+use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, stdout, Read};
@@ -97,7 +98,11 @@ fn main() {
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
     let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
-        tr.contract.plan.final_payment()
+        if let Instruction::NewContract(contract) = &tr.instruction {
+            contract.plan.final_payment()
+        } else {
+            None
+        }
     } else {
         None
     };

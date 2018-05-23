@@ -18,10 +18,17 @@ pub struct Contract {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub enum Instruction {
+    NewContract(Contract),
+    ApplyTimestamp(DateTime<Utc>),
+    ApplySignature(Signature),
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     pub sig: Signature,
     pub from: PublicKey,
-    pub contract: Contract,
+    pub instruction: Instruction,
     pub last_id: Hash,
 }
 
@@ -30,9 +37,10 @@ impl Transaction {
     pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
         let from = from_keypair.pubkey();
         let plan = Plan::Pay(Payment { tokens, to });
+        let instruction = Instruction::NewContract(Contract { plan, tokens });
         let mut tr = Transaction {
             sig: Signature::default(),
-            contract: Contract { plan, tokens },
+            instruction,
             last_id,
             from,
         };
@@ -53,8 +61,9 @@ impl Transaction {
             (Condition::Timestamp(dt), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
+        let instruction = Instruction::NewContract(Contract { plan, tokens });
         let mut tr = Transaction {
-            contract: Contract { plan, tokens },
+            instruction,
             from,
             last_id,
             sig: Signature::default(),
@@ -64,7 +73,7 @@ impl Transaction {
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&(&self.contract)).expect("serialize Contract");
+        let mut data = serialize(&(&self.instruction)).expect("serialize Contract");
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
         data
@@ -81,7 +90,11 @@ impl Transaction {
     }
 
     pub fn verify_plan(&self) -> bool {
-        self.contract.plan.verify(self.contract.tokens)
+        if let Instruction::NewContract(contract) = &self.instruction {
+            contract.plan.verify(contract.tokens)
+        } else {
+            true
+        }
     }
 }
 
@@ -149,8 +162,9 @@ mod tests {
             tokens: 0,
             to: Default::default(),
         });
+        let instruction = Instruction::NewContract(Contract { plan, tokens: 0 });
         let claim0 = Transaction {
-            contract: Contract { plan, tokens: 0 },
+            instruction,
             from: Default::default(),
             last_id: Default::default(),
             sig: Default::default(),
@@ -166,10 +180,12 @@ mod tests {
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
         let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
-        tr.contract.tokens = 1_000_000; // <-- attack, part 1!
-        if let Plan::Pay(ref mut payment) = tr.contract.plan {
-            payment.tokens = tr.contract.tokens; // <-- attack, part 2!
-        };
+        if let Instruction::NewContract(contract) = &mut tr.instruction {
+            contract.tokens = 1_000_000; // <-- attack, part 1!
+            if let Plan::Pay(ref mut payment) = contract.plan {
+                payment.tokens = contract.tokens; // <-- attack, part 2!
+            }
+        }
         assert!(tr.verify_plan());
         assert!(!tr.verify_sig());
     }
@@ -182,9 +198,11 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
-        if let Plan::Pay(ref mut payment) = tr.contract.plan {
-            payment.to = thief_keypair.pubkey(); // <-- attack!
-        };
+        if let Instruction::NewContract(contract) = &mut tr.instruction {
+            if let Plan::Pay(ref mut payment) = contract.plan {
+                payment.to = thief_keypair.pubkey(); // <-- attack!
+            }
+        }
         assert!(tr.verify_plan());
         assert!(!tr.verify_sig());
     }
@@ -204,14 +222,18 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Plan::Pay(ref mut payment) = tr.contract.plan {
-            payment.tokens = 2; // <-- attack!
+        if let Instruction::NewContract(contract) = &mut tr.instruction {
+            if let Plan::Pay(ref mut payment) = contract.plan {
+                payment.tokens = 2; // <-- attack!
+            }
         }
         assert!(!tr.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Plan::Pay(ref mut payment) = tr.contract.plan {
-            payment.tokens = 0; // <-- whoops!
+        if let Instruction::NewContract(contract) = &mut tr.instruction {
+            if let Plan::Pay(ref mut payment) = contract.plan {
+                payment.tokens = 0; // <-- whoops!
+            }
         }
         assert!(!tr.verify_plan());
     }

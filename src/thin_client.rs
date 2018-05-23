@@ -192,6 +192,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use streamer::default_window;
+    use transaction::Instruction;
     use tvu::tests::TestNode;
 
     #[test]
@@ -284,8 +285,10 @@ mod tests {
         let last_id = client.get_last_id().wait().unwrap();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        tr2.contract.tokens = 502;
-        tr2.contract.plan = Plan::new_payment(502, bob_pubkey);
+        if let Instruction::NewContract(contract) = &mut tr2.instruction {
+            contract.tokens = 502;
+            contract.plan = Plan::new_payment(502, bob_pubkey);
+        }
         let _sig = client.transfer_signed(tr2).unwrap();
 
         let balance = poll_get_balance(&mut client, &bob_pubkey);

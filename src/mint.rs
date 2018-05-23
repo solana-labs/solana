@@ -71,13 +71,16 @@ mod tests {
     use super::*;
     use ledger::Block;
     use plan::Plan;
+    use transaction::Instruction;
 
     #[test]
     fn test_create_events() {
         let mut events = Mint::new(100).create_events().into_iter();
         if let Event::Transaction(tr) = events.next().unwrap() {
-            if let Plan::Pay(payment) = tr.contract.plan {
-                assert_eq!(tr.from, payment.to);
+            if let Instruction::NewContract(contract) = tr.instruction {
+                if let Plan::Pay(payment) = contract.plan {
+                    assert_eq!(tr.from, payment.to);
+                }
             }
         }
         assert_eq!(events.next(), None);

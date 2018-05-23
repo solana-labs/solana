@@ -18,7 +18,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
-use transaction::Transaction;
+use transaction::{Instruction, Transaction};
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
@@ -160,7 +160,9 @@ impl Bank {
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
-        info!("Transaction {}", tr.contract.tokens);
+        if let Instruction::NewContract(contract) = &tr.instruction {
+            info!("Transaction {}", contract.tokens);
+        }
         let bals = self.balances
             .read()
             .expect("'balances' read lock in process_verified_transaction_debits");
@@ -175,20 +177,24 @@ impl Bank {
         }
 
         loop {
-            let bal = option.expect("assignment of option to bal");
-            let current = bal.load(Ordering::Relaxed) as i64;
+            let result = if let Instruction::NewContract(contract) = &tr.instruction {
+                let bal = option.expect("assignment of option to bal");
+                let current = bal.load(Ordering::Relaxed) as i64;
 
-            if current < tr.contract.tokens {
-                self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
-                return Err(BankError::InsufficientFunds(tr.from));
-            }
+                if current < contract.tokens {
+                    self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
+                    return Err(BankError::InsufficientFunds(tr.from));
+                }
 
-            let result = bal.compare_exchange(
-                current as isize,
-                (current - tr.contract.tokens) as isize,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            );
+                bal.compare_exchange(
+                    current as isize,
+                    (current - contract.tokens) as isize,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
+            } else {
+                Ok(0)
+            };
 
             match result {
                 Ok(_) => {
@@ -201,18 +207,28 @@ impl Bank {
     }
 
     pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
-        let mut plan = tr.contract.plan.clone();
-        plan.apply_witness(&Witness::Timestamp(*self.last_time
-            .read()
-            .expect("timestamp creation in process_verified_transaction_credits")));
+        match &tr.instruction {
+            Instruction::NewContract(contract) => {
+                let mut plan = contract.plan.clone();
+                plan.apply_witness(&Witness::Timestamp(*self.last_time
+                    .read()
+                    .expect("timestamp creation in process_verified_transaction_credits")));
 
-        if let Some(ref payment) = plan.final_payment() {
-            apply_payment(&self.balances, payment);
-        } else {
-            let mut pending = self.pending
-                .write()
-                .expect("'pending' write lock in process_verified_transaction_credits");
-            pending.insert(tr.sig, plan);
+                if let Some(ref payment) = plan.final_payment() {
+                    apply_payment(&self.balances, payment);
+                } else {
+                    let mut pending = self.pending
+                        .write()
+                        .expect("'pending' write lock in process_verified_transaction_credits");
+                    pending.insert(tr.sig, plan);
+                }
+            }
+            Instruction::ApplyTimestamp(dt) => {
+                let _ = self.process_verified_timestamp(tr.from, *dt);
+            }
+            Instruction::ApplySignature(tx_sig) => {
+                let _ = self.process_verified_sig(tr.from, *tx_sig);
+            }
         }
     }
 
