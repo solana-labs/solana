@@ -7,6 +7,7 @@ use chrono::prelude::*;
 use signature::PublicKey;
 use std::mem;
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Witness {
     Timestamp(DateTime<Utc>),
     Signature(PublicKey),
