@@ -723,8 +723,8 @@ mod test {
             serve.local_addr().unwrap(),
             event.local_addr().unwrap(),
         );
-        let crdt = Crdt::new(d);
         trace!("data: {:?}", d);
+        let crdt = Crdt::new(d);
         (Arc::new(RwLock::new(crdt)), gossip, replicate, serve)
     }
 

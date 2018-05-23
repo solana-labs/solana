@@ -208,7 +208,7 @@ mod tests {
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
-            leader.data,
+            leader.data.clone(),
             leader.requests,
             leader.event,
             leader.broadcast,
@@ -243,13 +243,12 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let events_addr = leader.data.events_addr;
 
         let server = Server::leader(
             bank,
             alice.last_id(),
             Some(Duration::from_millis(30)),
-            leader.data,
+            leader.data.clone(),
             leader.requests,
             leader.event,
             leader.broadcast,
@@ -265,7 +264,7 @@ mod tests {
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
         let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader.data.requests_addr, requests_socket, events_addr, events_socket);
+        let mut client = ThinClient::new(leader.data.requests_addr, requests_socket, leader.data.events_addr, events_socket);
         let last_id = client.get_last_id().wait().unwrap();
 
         let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
@@ -368,7 +367,7 @@ mod tests {
             leader_bank,
             alice.last_id(),
             None,
-            leader.data,
+            leader.data.clone(),
             leader.requests,
             leader.event,
             leader.broadcast,
