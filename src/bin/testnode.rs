@@ -14,7 +14,6 @@ use solana::entry::Entry;
 use solana::event::Event;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
-use solana::tvu::Tvu;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, stdout, Read};
@@ -41,9 +40,9 @@ fn main() {
     opts.optopt("s", "", "save", "save my identity to path.json");
     opts.optflag("h", "help", "print help");
     opts.optopt(
-        "r",
+        "v",
         "",
-        "replicator",
+        "validator",
         "run as replicate with path to leader.json",
     );
     let args: Vec<String> = env::args().collect();
@@ -131,12 +130,11 @@ fn main() {
     // port range that we open on aws
     let mut repl_data = make_repl_data(&bind_addr);
     let threads = if matches.opt_present("r") {
-        eprintln!("starting replicator... {}", repl_data.serve_addr);
+        eprintln!("starting validator... {}", repl_data.requests_addr);
         let path = matches.opt_str("r").unwrap();
         let file = File::open(path).expect("file");
         let leader = serde_json::from_reader(file).expect("parse");
-        let tvu = Arc::new(Tvu::new(bank, last_id, Some(Duration::from_millis(1000))));
-        Server::new_validator(
+        let s = Server::new_validator(
             bank,
             repl_data.clone(),
             UdpSocket::bind(repl_data.requests_addr).unwrap(),
@@ -145,9 +143,10 @@ fn main() {
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
             leader,
             exit.clone(),
-        ).unwrap()
+        );
+        s.thread_hdls
     } else {
-        eprintln!("starting leader... {}", repl_data.serve_addr);
+        eprintln!("starting leader... {}", repl_data.requests_addr);
         repl_data.current_leader_id = repl_data.id.clone();
         let server = Server::new_leader(
             bank,
@@ -175,6 +174,7 @@ fn main() {
         t.join().expect("join");
     }
 }
+
 fn next_port(server_addr: &SocketAddr, nxt: u16) -> SocketAddr {
     let mut gossip_addr = server_addr.clone();
     gossip_addr.set_port(server_addr.port() + nxt);
@@ -182,10 +182,18 @@ fn next_port(server_addr: &SocketAddr, nxt: u16) -> SocketAddr {
 }
 
 fn make_repl_data(bind_addr: &SocketAddr) -> ReplicatedData {
-    let b_gossip_addr = next_port(&bind_addr, 1);
-    let b_replicate_addr = next_port(&bind_addr, 2);
+    let events_addr = bind_addr.clone();
+    let gossip_addr = next_port(&bind_addr, 1);
+    let replicate_addr = next_port(&bind_addr, 2);
+    let requests_addr = next_port(&bind_addr, 3);
     let pubkey = KeyPair::new().pubkey();
-    ReplicatedData::new(pubkey, b_gossip_addr, b_replicate_addr, bind_addr.clone())
+    ReplicatedData::new(
+        pubkey,
+        gossip_addr,
+        replicate_addr,
+        requests_addr,
+        events_addr,
+    )
 }
 
 fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {

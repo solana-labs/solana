@@ -46,7 +46,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("c", "", "client address", "host:port");
+    opts.optopt("c", "", "client address", "host");
     opts.optopt("t", "", "number of threads", &format!("{}", threads));
     opts.optopt(
         "n",
@@ -85,8 +85,8 @@ fn main() {
     let leader: ReplicatedData = read_leader(leader);
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let addrs = converge(
-        &mut client_addr,
+    let validators = converge(
+        &client_addr,
         &leader,
         signal.clone(),
         num_nodes + 2,
@@ -110,7 +110,7 @@ fn main() {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
-    let mut client = mk_client(&mut client_addr, leader.serve_addr);
+    let mut client = mk_client(&client_addr, &leader);
 
     println!("Get last ID...");
     let last_id = client.get_last_id().wait().unwrap();
@@ -151,12 +151,10 @@ fn main() {
     println!("Transfering {} transactions in {} batches", txs, threads);
     let now = Instant::now();
     let sz = transactions.len() / threads;
-    let chunks: Vec<_> = transactions.chunks(sz).enumerate().collect();
-    chunks.into_par_iter().for_each(|(i, trs)| {
-        let mut addr = client_addr.clone();
-        addr.set_port(client_addr.port() + (4 * (1 + i)) as u16);
+    let chunks: Vec<_> = transactions.chunks(sz).collect();
+    chunks.into_par_iter().for_each(|trs| {
         println!("Transferring 1 unit {} times... to", trs.len());
-        let client = mk_client(&mut addr, leader.serve_addr);
+        let client = mk_client(&client_addr, &leader);
         for tr in trs {
             client.transfer_signed(tr.clone()).unwrap();
         }
@@ -173,15 +171,15 @@ fn main() {
         println!("{} tps", tps);
         sleep(Duration::new(1, 0));
     }
-    for addr in addrs {
-        let mut client = mk_client(&mut client_addr, addr);
+    for val in validators {
+        let mut client = mk_client(&client_addr, &val);
         let mut tx_count = client.transaction_count();
         duration = now.elapsed();
         let txs = tx_count - initial_tx_count;
-        println!("Transactions processed {} on {}", txs, addr);
+        println!("Transactions processed {} on {}", txs, val.events_addr);
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-        println!("{} tps on {}", tps, addr);
+        println!("{} tps on {}", tps, val.events_addr);
     }
     signal.store(true, Ordering::Relaxed);
     for t in c_threads {
@@ -189,44 +187,41 @@ fn main() {
     }
 }
 
-fn mk_client(client_addr: &mut SocketAddr, addr: SocketAddr) -> ThinClient {
-    let client_port = client_addr.port();
-    println!("Binding to {}", client_addr);
-    let request_addr: SocketAddr = client_addr.clone();
-    let requests_socket = UdpSocket::bind(request_addr).unwrap();
-    requests_socket
-        .set_read_timeout(Some(Duration::new(5, 0)))
-        .unwrap();
-    let events_addr: SocketAddr = {
-        let mut e = client_addr.clone();
-        e.set_port(client_port + 1);
-        e
-    };
-    let events_socket = UdpSocket::bind(&events_addr).unwrap();
-    client_addr.set_port(client_port + 2);
-    ThinClient::new(addr, requests_socket, events_socket)
+fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> ThinClient {
+    let mut c = client_addr.clone();
+    c.set_port(0);
+    let events_socket = UdpSocket::bind(c).unwrap();
+    let mut addr = events_socket.local_addr().unwrap();
+    let port = addr.port();
+    addr.set_port(port + 1);
+    let requests_socket = UdpSocket::bind(addr).unwrap();
+    ThinClient::new(
+        r.requests_addr,
+        requests_socket,
+        r.events_addr,
+        events_socket,
+    )
 }
 
-fn spy_node(s: &mut SocketAddr) -> (ReplicatedData, UdpSocket) {
-    let addr = s.clone();
-    let port = s.port();
-    s.set_port(port + 1);
+fn spy_node(client_addr: &SocketAddr) -> (ReplicatedData, UdpSocket) {
+    let mut addr = client_addr.clone();
+    addr.set_port(0);
     let gossip = UdpSocket::bind(addr).unwrap();
     let daddr = "0.0.0.0:0".parse().unwrap();
     let pubkey = KeyPair::new().pubkey();
-    let leader = ReplicatedData::new(pubkey, gossip.local_addr().unwrap(), daddr, daddr);
-    (leader, gossip)
+    let node = ReplicatedData::new(pubkey, gossip.local_addr().unwrap(), daddr, daddr, daddr);
+    (node, gossip)
 }
 
 fn converge(
-    s: &mut SocketAddr,
+    client_addr: &SocketAddr,
     leader: &ReplicatedData,
     exit: Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
-) -> Vec<SocketAddr> {
+) -> Vec<ReplicatedData> {
     //lets spy on the network
-    let (spy, spy_gossip) = spy_node(s);
+    let (spy, spy_gossip) = spy_node(client_addr);
     let me = spy.id.clone();
     let mut spy_crdt = Crdt::new(spy);
     spy_crdt.insert(&leader);
@@ -247,14 +242,14 @@ fn converge(
     }
     threads.push(t_spy_listen);
     threads.push(t_spy_gossip);
-    let v: Vec<SocketAddr> = spy_ref
+    let v: Vec<ReplicatedData> = spy_ref
         .read()
         .unwrap()
         .table
         .values()
         .into_iter()
         .filter(|x| x.id != me)
-        .map(|x| x.serve_addr)
+        .map(|x| x.clone())
         .collect();
     v.clone()
 }

@@ -321,7 +321,7 @@ mod tests {
         exit: Arc<AtomicBool>,
         num_nodes: usize,
         threads: &mut Vec<JoinHandle<()>>,
-    ) -> Vec<SocketAddr> {
+    ) -> Vec<ReplicatedData> {
         //lets spy on the network
         let mut spy = TestNode::new();
         let daddr = "0.0.0.0:0".parse().unwrap();
@@ -354,16 +354,16 @@ mod tests {
         assert!(converged);
         threads.push(t_spy_listen);
         threads.push(t_spy_gossip);
-        let v: Vec<SocketAddr> = spy_ref
+        let ret: Vec<_> = spy_ref
             .read()
             .unwrap()
             .table
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .map(|x| x.requests_addr)
+            .map(|x| x.clone())
             .collect();
-        v.clone()
+        ret.clone()
     }
     #[test]
     #[ignore]
@@ -377,7 +377,6 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_bank = Bank::new(&alice);
-        let events_addr = leader.data.events_addr;
         let server = Server::new_leader(
             leader_bank,
             alice.last_id(),
@@ -425,17 +424,21 @@ mod tests {
         assert_eq!(leader_balance, 500);
         //verify replicant has the same balance
         let mut success = 0usize;
-        for serve_addr in addrs.iter() {
+        for rd in addrs.iter() {
             let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             requests_socket
                 .set_read_timeout(Some(Duration::new(1, 0)))
                 .unwrap();
             let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-            let mut client =
-                ThinClient::new(*serve_addr, requests_socket, events_addr, events_socket);
+            let mut client = ThinClient::new(
+                rd.requests_addr,
+                requests_socket,
+                rd.events_addr,
+                events_socket,
+            );
             for i in 0..10 {
-                trace!("getting replicant balance {} {}/10", *serve_addr, i);
+                trace!("getting replicant balance {} {}/10", rd.requests_addr, i);
                 if let Ok(bal) = client.get_balance(&bob_pubkey) {
                     trace!("replicant balance {}", bal);
                     if bal == leader_balance {
