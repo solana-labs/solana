@@ -161,7 +161,7 @@ fn main() {
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (txs * 1_000_000_000) as f64 / ns as f64;
         println!("{} tps", tps);
-        if txs == transactions.len() {
+        if txs == transactions.len() as u64 {
             break;
         }
         sleep(Duration::new(1, 0));
