@@ -342,7 +342,7 @@ pub mod tests {
                     event,
                     respond,
                     broadcast,
-                }
+                },
             }
         }
     }
