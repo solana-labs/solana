@@ -197,7 +197,7 @@ impl Crdt {
             })
             .collect();
         if nodes.len() < 1 {
-            warn!("crdt to small");
+            warn!("crdt too small");
             return Err(Error::CrdtTooSmall);
         }
         info!("nodes table {}", nodes.len());
@@ -348,7 +348,7 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
         if options.len() < 1 {
-            trace!("crdt to small for gossip");
+            trace!("crdt too small for gossip");
             return Err(Error::CrdtTooSmall);
         }
         let n = (Self::random() as usize) % options.len();
