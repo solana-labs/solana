@@ -226,7 +226,7 @@ pub mod tests {
         let replicate_addr = target1.data.replicate_addr;
         let bank = Arc::new(Bank::new(&mint));
         let tvu = Tvu::new(
-            bank,
+            bank.clone(),
             target1.data,
             target1.gossip,
             target1.replicate,
