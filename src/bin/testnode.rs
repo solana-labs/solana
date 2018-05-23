@@ -129,9 +129,9 @@ fn main() {
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
     let mut repl_data = make_repl_data(&bind_addr);
-    let threads = if matches.opt_present("r") {
+    let threads = if matches.opt_present("v") {
         eprintln!("starting validator... {}", repl_data.requests_addr);
-        let path = matches.opt_str("r").unwrap();
+        let path = matches.opt_str("v").unwrap();
         let file = File::open(path).expect("file");
         let leader = serde_json::from_reader(file).expect("parse");
         let s = Server::new_validator(
