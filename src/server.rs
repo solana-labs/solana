@@ -17,7 +17,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new<W: Write + Send + 'static>(
+    pub fn leader<W: Write + Send + 'static>(
         bank: Bank,
         start_hash: Hash,
         tick_duration: Option<Duration>,
@@ -26,7 +26,7 @@ impl Server {
         events_socket: UdpSocket,
         broadcast_socket: UdpSocket,
         respond_socket: UdpSocket,
-        gossip: UdpSocket,
+        gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
@@ -34,7 +34,6 @@ impl Server {
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
         thread_hdls.extend(rpu.thread_hdls);
-
         let tpu = Tpu::new(
             bank.clone(),
             start_hash,
@@ -42,12 +41,36 @@ impl Server {
             me,
             events_socket,
             broadcast_socket,
-            gossip,
+            gossip_socket,
             exit.clone(),
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls);
-
+        Server { thread_hdls }
+    }
+    pub fn validator(
+        bank: Bank,
+        me: ReplicatedData,
+        requests_socket: UdpSocket,
+        respond_socket: UdpSocket,
+        replicate_socket: UdpSocket,
+        gossip_socket: UdpSocket,
+        leader_repl_data: ReplicatedData,
+        exit: Arc<AtomicBool>,
+    ) -> Self {
+        let bank = Arc::new(bank);
+        let mut thread_hdls = vec![];
+        let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
+        thread_hdls.extend(rpu.thread_hdls);
+        let tvu = Tvu::new(
+            bank.clone(),
+            me,
+            gossip_socket,
+            replicate_socket,
+            leader_repl_data,
+            exit.clone(),
+        );
+        thread_hdls.extend(tpu.thread_hdls);
         Server { thread_hdls }
     }
 }
