@@ -6,7 +6,7 @@ use event::Event;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
-use recorder::Signal;
+use record_stage::Signal;
 use result::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -123,7 +123,7 @@ impl BankingStage {
 //use event::Event;
 //use hash::Hash;
 //use record_stage::RecordStage;
-//use recorder::Signal;
+//use record_stage::Signal;
 //use result::Result;
 //use std::sync::mpsc::{channel, Sender};
 //use std::sync::{Arc, Mutex};
@@ -261,7 +261,7 @@ mod bench {
     use event::Event;
     use mint::Mint;
     use packet::{to_packets, PacketRecycler};
-    use recorder::Signal;
+    use record_stage::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::iter;
     use std::sync::Arc;
