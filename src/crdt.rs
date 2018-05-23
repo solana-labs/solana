@@ -502,7 +502,7 @@ impl Crdt {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crdt::{Crdt, ReplicatedData};
     use logger;
     use packet::Blob;

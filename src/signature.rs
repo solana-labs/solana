@@ -72,27 +72,23 @@ impl GenKeys {
     pub fn gen_n_seeds(&self, n_seeds: i64) -> Vec<[u8; 16]> {
         let mut rng = self.generator.borrow_mut();
 
-        let seeds = (0..n_seeds)
+        (0..n_seeds)
             .into_iter()
-            .map(|_| {
-                let seed: [u8; 16] = rng.gen();
-                seed
-            })
-            .collect();
-        seeds
+            .map(|_| rng.gen::<[u8; 16]>())
+            .collect()
     }
 
     pub fn gen_n_keys(&self, n_keys: i64, tokens_per_user: i64) -> Vec<(Vec<u8>, i64)> {
-        let keys = self.gen_n_seeds(n_keys);
+        let seeds = self.gen_n_seeds(n_keys);
 
-        let users: Vec<_> = keys.into_par_iter()
+        seeds
+            .into_par_iter()
             .map(|seed| {
                 let new: GenKeys = GenKeys::new(&seed[..]);
                 let pkcs8 = KeyPair::generate_pkcs8(&new).unwrap().to_vec();
                 (pkcs8, tokens_per_user)
             })
-            .collect();
-        users
+            .collect()
     }
 }
 
@@ -104,21 +100,11 @@ impl SecureRandom for GenKeys {
     }
 }
 
-#[cfg(all(feature = "unstable", test))]
+#[cfg(test)]
 mod tests {
-    extern crate test;
-
-    use self::test::Bencher;
     use super::*;
     use std::collections::HashSet;
     use std::iter::FromIterator;
-
-    #[bench]
-    fn bench_gen_keys(b: &mut Bencher) {
-        let seed: &[_] = &[1, 2, 3, 4];
-        let rnd = GenKeys::new(seed);
-        b.iter(|| rnd.gen_n_keys(1000, 1));
-    }
 
     #[test]
     fn test_new_key_is_redundant() {
@@ -143,5 +129,22 @@ mod tests {
         let users1_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users1.iter().cloned());
         let users2_set: HashSet<(Vec<u8>, i64)> = HashSet::from_iter(users2.iter().cloned());
         assert_eq!(users1_set, users2_set);
+    }
+}
+
+#[cfg(all(feature = "unstable", test))]
+mod bench {
+    extern crate test;
+
+    use self::test::Bencher;
+    use super::*;
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+
+    #[bench]
+    fn bench_gen_keys(b: &mut Bencher) {
+        let seed: &[_] = &[1, 2, 3, 4];
+        let rnd = GenKeys::new(seed);
+        b.iter(|| rnd.gen_n_keys(1000, 1));
     }
 }
