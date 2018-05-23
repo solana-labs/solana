@@ -131,6 +131,7 @@ fn main() {
         gossip_sock.local_addr().unwrap(),
         replicate_sock.local_addr().unwrap(),
         serve_sock.local_addr().unwrap(),
+        events_sock.local_addr().unwrap(),
     );
 
     let mut local = serve_sock.local_addr().unwrap();
