@@ -4,14 +4,13 @@ extern crate isatty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
-extern crate untrusted;
 
 use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::mint::MintDemo;
-use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
+use solana::signature::{GenKeys, KeyPairUtil};
 use solana::thin_client::ThinClient;
 use solana::transaction::Transaction;
 use std::env;
@@ -21,7 +20,6 @@ use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
-use untrusted::Input;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
@@ -111,13 +109,9 @@ fn main() {
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
 
-    let keys = rnd.gen_n_keys(demo.num_accounts);
-
     println!("Creating keypairs...");
     let txs = demo.num_accounts / 2;
-    let keypairs: Vec<_> = keys.into_par_iter()
-        .map(|pkcs8| KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap())
-        .collect();
+    let keypairs = rnd.gen_n_keypairs(demo.num_accounts);
     let keypair_pairs: Vec<_> = keypairs.chunks(2).collect();
 
     println!("Signing transactions...");

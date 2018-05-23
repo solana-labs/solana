@@ -1,9 +1,7 @@
 extern crate isatty;
 extern crate rayon;
-extern crate ring;
 extern crate serde_json;
 extern crate solana;
-extern crate untrusted;
 
 use isatty::stdin_isatty;
 use rayon::prelude::*;
@@ -11,10 +9,9 @@ use solana::bank::MAX_ENTRY_IDS;
 use solana::entry::{next_entry, Entry};
 use solana::event::Event;
 use solana::mint::MintDemo;
-use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
+use solana::signature::{GenKeys, KeyPairUtil};
 use std::io::{stdin, Read};
 use std::process::exit;
-use untrusted::Input;
 
 // Generate a ledger with lots and lots of accounts.
 fn main() {
@@ -39,16 +36,16 @@ fn main() {
     let num_accounts = demo.num_accounts;
     let tokens_per_user = 1_000;
 
-    let keys = rnd.gen_n_keys(num_accounts);
+    let keypairs = rnd.gen_n_keypairs(num_accounts);
 
     let mint_keypair = demo.mint.keypair();
     let last_id = demo.mint.last_id();
 
     eprintln!("Signing {} transactions...", num_accounts);
-    let events: Vec<_> = keys.into_par_iter()
-        .map(|pkcs8| {
+    let events: Vec<_> = keypairs
+        .into_par_iter()
+        .map(|rando| {
             let last_id = demo.mint.last_id();
-            let rando = KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap();
             Event::new_transaction(&mint_keypair, rando.pubkey(), tokens_per_user, last_id)
         })
         .collect();
