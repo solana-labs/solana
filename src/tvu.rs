@@ -154,7 +154,6 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
 pub mod tests {
     use bank::Bank;
     use bincode::serialize;
-    use chrono::prelude::*;
     use crdt::Crdt;
     use crdt::ReplicatedData;
     use entry::Entry;
@@ -249,8 +248,7 @@ pub mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let tr0 = Event::new_timestamp(&bob_keypair, Utc::now(), cur_hash);
-            let entry0 = Entry::new(&cur_hash, i, vec![tr0]);
+            let entry0 = Entry::new(&cur_hash, i, vec![]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
