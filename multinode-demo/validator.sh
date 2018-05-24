@@ -1,6 +1,7 @@
 #!/bin/bash
 cd /home/ubuntu/solana
 git pull
+scp  ubuntu@18.206.1.146:~/solana/mint-demo.json .
 scp  ubuntu@18.206.1.146:~/solana/leader.json .
 scp  ubuntu@18.206.1.146:~/solana/genesis.log .
 scp  ubuntu@18.206.1.146:~/solana/libcuda_verify_ed25519.a .
