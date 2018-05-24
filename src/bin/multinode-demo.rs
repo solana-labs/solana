@@ -156,7 +156,7 @@ fn main() {
     });
 
     println!("Sampling tps every second...",);
-    for _ in 0..20 {
+    for i in 0..100 {
         let tx_count = client.transaction_count();
         duration = now.elapsed();
         now = Instant::now();
@@ -167,6 +167,9 @@ fn main() {
         let tps = (txs * 1_000_000_000) as f64 / ns as f64;
         println!("{} tps", tps);
         if txs == transactions.len() as u64 {
+            break;
+        }
+        if i > 20 && txs == 0 {
             break;
         }
         sleep(Duration::new(1, 0));

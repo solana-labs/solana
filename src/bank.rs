@@ -161,7 +161,7 @@ impl Bank {
     /// funds and isn't a duplicate.
     pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
         if let Instruction::NewContract(contract) = &tr.instruction {
-            info!("Transaction {}", contract.tokens);
+            trace!("Transaction {}", contract.tokens);
         }
         let bals = self.balances
             .read()
@@ -243,6 +243,7 @@ impl Bank {
     pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
+        info!("processing Transactions {}", trs.len());
         let results: Vec<_> = trs.into_par_iter()
             .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
