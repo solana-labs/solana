@@ -348,7 +348,7 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
         if options.len() < 1 {
-            trace!("crdt too small for gossip");
+            info!("crdt too small for gossip");
             return Err(Error::CrdtTooSmall);
         }
         let n = (Self::random() as usize) % options.len();
@@ -497,7 +497,13 @@ impl Crdt {
         sock.set_read_timeout(Some(Duration::new(2, 0)))
             .expect("'sock.set_read_timeout' in crdt.rs");
         spawn(move || loop {
-            let _ = Self::run_listen(&obj, &window, &sock);
+            let e = Self::run_listen(&obj, &window, &sock);
+            if e.is_err() {
+                info!(
+                    "run_listen timeout, table size: {}",
+                    obj.read().unwrap().table.len()
+                );
+            }
             if exit.load(Ordering::Relaxed) {
                 return;
             }
