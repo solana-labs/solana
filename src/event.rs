@@ -34,7 +34,7 @@ impl Event {
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
-    pub fn new_timestamp(from: &KeyPair, dt: DateTime<Utc>) -> Self {
+    pub fn new_timestamp(from: &KeyPair, dt: DateTime<Utc>, _last_id: Hash) -> Self {
         let sign_data = serialize(&dt).expect("serialize 'dt' in pub fn new_timestamp");
         let sig = Signature::clone_from_slice(from.sign(&sign_data).as_ref());
         Event::Timestamp {
@@ -45,7 +45,7 @@ impl Event {
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(from: &KeyPair, tx_sig: Signature) -> Self {
+    pub fn new_signature(from: &KeyPair, tx_sig: Signature, _last_id: Hash) -> Self {
         let sig = Signature::clone_from_slice(from.sign(&tx_sig).as_ref());
         Event::Signature {
             from: from.pubkey(),
@@ -75,7 +75,8 @@ mod tests {
 
     #[test]
     fn test_event_verify() {
-        assert!(Event::new_timestamp(&KeyPair::new(), Utc::now()).verify());
-        assert!(Event::new_signature(&KeyPair::new(), Signature::default()).verify());
+        let zero = Hash::default();
+        assert!(Event::new_timestamp(&KeyPair::new(), Utc::now(), zero).verify());
+        assert!(Event::new_signature(&KeyPair::new(), Signature::default(), zero).verify());
     }
 }
