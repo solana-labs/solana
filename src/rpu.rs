@@ -36,7 +36,6 @@ impl Rpu {
         let request_processor = RequestProcessor::new(bank.clone());
         let request_stage = RequestStage::new(
             request_processor,
-            exit.clone(),
             packet_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),

@@ -43,7 +43,7 @@ impl Tpu {
             packet_sender,
         );
 
-        let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
+        let sig_verify_stage = SigVerifyStage::new(packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
         let banking_stage = BankingStage::new(
@@ -58,7 +58,6 @@ impl Tpu {
 
         let write_stage = WriteStage::new(
             bank.clone(),
-            exit.clone(),
             blob_recycler.clone(),
             Mutex::new(writer),
             record_stage.entry_receiver,
