@@ -69,13 +69,12 @@ fn main() {
     if matches.opt_present("l") {
         leader = matches.opt_str("l").unwrap();
     }
-    let client_addr: Arc<RwLock<SocketAddr>> =
-        if matches.opt_present("c") {
-            let addr = matches.opt_str("c").unwrap().parse().unwrap();
-            Arc::new(RwLock::new(addr))
-        } else  {
-            Arc::new(RwLock::new("127.0.0.1:8010".parse().unwrap()))
-        };
+    let client_addr: Arc<RwLock<SocketAddr>> = if matches.opt_present("c") {
+        let addr = matches.opt_str("c").unwrap().parse().unwrap();
+        Arc::new(RwLock::new(addr))
+    } else {
+        Arc::new(RwLock::new("127.0.0.1:8010".parse().unwrap()))
+    };
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
@@ -170,7 +169,7 @@ fn main() {
         sleep(Duration::new(1, 0));
     }
     for val in validators {
-        println!("Checking balance on {} ...",  val.events_addr);
+        println!("Checking balance on {} ...", val.events_addr);
         let mut client = mk_client(&client_addr, &val);
         let mut tx_count = client.transaction_count();
         duration = now.elapsed();
