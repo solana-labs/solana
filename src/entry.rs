@@ -2,9 +2,9 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use event::Event;
 use hash::{extend_and_hash, hash, Hash};
 use rayon::prelude::*;
+use transaction::Transaction;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
 /// of hashes performed since the previous entry.  The `id` field is the result
@@ -21,12 +21,12 @@ use rayon::prelude::*;
 pub struct Entry {
     pub num_hashes: u64,
     pub id: Hash,
-    pub events: Vec<Event>,
+    pub events: Vec<Transaction>,
 }
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(start_hash: &Hash, cur_hashes: u64, events: Vec<Event>) -> Self {
+    pub fn new(start_hash: &Hash, cur_hashes: u64, events: Vec<Transaction>) -> Self {
         let num_hashes = cur_hashes + if events.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &events);
         Entry {
@@ -37,7 +37,7 @@ impl Entry {
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
-    pub fn new_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Event>) -> Self {
+    pub fn new_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Transaction>) -> Self {
         let entry = Self::new(start_hash, *cur_hashes, events);
         *start_hash = entry.id;
         *cur_hashes = 0;
@@ -57,24 +57,20 @@ impl Entry {
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the event is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
-        self.events.par_iter().all(|event| event.verify())
+        self.events.par_iter().all(|event| event.verify_plan())
             && self.id == next_hash(start_hash, self.num_hashes, &self.events)
     }
 }
 
-fn add_event_data(hash_data: &mut Vec<u8>, event: &Event) {
-    match *event {
-        Event::Transaction(ref tr) => {
-            hash_data.push(0u8);
-            hash_data.extend_from_slice(&tr.sig);
-        }
-    }
+fn add_event_data(hash_data: &mut Vec<u8>, tr: &Transaction) {
+    hash_data.push(0u8);
+    hash_data.extend_from_slice(&tr.sig);
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the event contains
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.
-pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
+pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Transaction]) -> Hash {
     let mut id = *start_hash;
     for _ in 1..num_hashes {
         id = hash(&id);
@@ -96,7 +92,7 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Event]) -> Hash {
 }
 
 /// Creates the next Tick or Event Entry `num_hashes` after `start_hash`.
-pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Event>) -> Entry {
+pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Transaction>) -> Entry {
     Entry {
         num_hashes,
         id: next_hash(start_hash, num_hashes, &events),
@@ -109,7 +105,6 @@ mod tests {
     use super::*;
     use chrono::prelude::*;
     use entry::Entry;
-    use event::Event;
     use hash::hash;
     use signature::{KeyPair, KeyPairUtil};
     use transaction::Transaction;
@@ -130,8 +125,8 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Event::new_transaction(&keypair, keypair.pubkey(), 0, zero);
-        let tr1 = Event::new_transaction(&keypair, keypair.pubkey(), 1, zero);
+        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        let tr1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -147,12 +142,8 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Event::Transaction(Transaction::new_timestamp(&keypair, Utc::now(), zero));
-        let tr1 = Event::Transaction(Transaction::new_signature(
-            &keypair,
-            Default::default(),
-            zero,
-        ));
+        let tr0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
+        let tr1 = Transaction::new_signature(&keypair, Default::default(), zero);
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 

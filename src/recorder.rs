@@ -2,9 +2,9 @@
 //! It records Event items on behalf of its users.
 
 use entry::Entry;
-use event::Event;
 use hash::{hash, Hash};
 use std::time::{Duration, Instant};
+use transaction::Transaction;
 
 pub struct Recorder {
     last_hash: Hash,
@@ -26,7 +26,7 @@ impl Recorder {
         self.num_hashes += 1;
     }
 
-    pub fn record(&mut self, events: Vec<Event>) -> Entry {
+    pub fn record(&mut self, events: Vec<Transaction>) -> Entry {
         Entry::new_mut(&mut self.last_hash, &mut self.num_hashes, events)
     }
 

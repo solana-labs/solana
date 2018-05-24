@@ -11,7 +11,6 @@ use pnet::datalink;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
-use solana::event::Event;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Instruction;
@@ -97,7 +96,7 @@ fn main() {
     // fields are the same. That entry should be treated as a deposit, not a
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
-    let Event::Transaction(ref tr) = entry1.events[0];
+    let tr = &entry1.events[0];
     let deposit = if let Instruction::NewContract(contract) = &tr.instruction {
         contract.plan.final_payment()
     } else {
@@ -115,7 +114,7 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = bank.process_verified_events(entry.events);
+        let results = bank.process_verified_transactions(entry.events);
         for result in results {
             if let Err(e) = result {
                 eprintln!("failed to process event {:?}", e);

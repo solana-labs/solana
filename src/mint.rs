@@ -1,7 +1,6 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
 use entry::Entry;
-use event::Event;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use signature::{KeyPair, KeyPairUtil, PublicKey};
@@ -47,10 +46,10 @@ impl Mint {
         self.pubkey
     }
 
-    pub fn create_events(&self) -> Vec<Event> {
+    pub fn create_events(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
         let tr = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
-        vec![Event::Transaction(tr)]
+        vec![tr]
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
@@ -76,7 +75,7 @@ mod tests {
     #[test]
     fn test_create_events() {
         let mut events = Mint::new(100).create_events().into_iter();
-        let Event::Transaction(tr) = events.next().unwrap();
+        let tr = events.next().unwrap();
         if let Instruction::NewContract(contract) = tr.instruction {
             if let Plan::Pay(payment) = contract.plan {
                 assert_eq!(tr.from, payment.to);

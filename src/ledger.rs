@@ -3,7 +3,6 @@
 
 use bincode::{deserialize, serialize_into};
 use entry::{next_entry, Entry};
-use event::Event;
 use hash::Hash;
 use packet;
 use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
@@ -12,6 +11,7 @@ use std::cmp::min;
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::mem::size_of;
+use transaction::Transaction;
 
 pub trait Block {
     /// Verifies the hashes and counts of a slice of events are all consistent.
@@ -27,7 +27,11 @@ impl Block for [Entry] {
 }
 
 /// Create a vector of Entries of length `event_set.len()` from `start_hash` hash, `num_hashes`, and `event_set`.
-pub fn next_entries(start_hash: &Hash, num_hashes: u64, event_set: Vec<Vec<Event>>) -> Vec<Entry> {
+pub fn next_entries(
+    start_hash: &Hash,
+    num_hashes: u64,
+    event_set: Vec<Vec<Transaction>>,
+) -> Vec<Entry> {
     let mut id = *start_hash;
     let mut entries = vec![];
     for event_list in &event_set {
@@ -50,7 +54,7 @@ pub fn process_entry_list_into_blobs(
         let mut entries: Vec<Vec<Entry>> = Vec::new();
         let mut total = 0;
         for i in &list[start..] {
-            total += size_of::<Event>() * i.events.len();
+            total += size_of::<Transaction>() * i.events.len();
             total += size_of::<Entry>();
             if total >= BLOB_DATA_SIZE {
                 break;
@@ -60,7 +64,7 @@ pub fn process_entry_list_into_blobs(
         // See if we need to split the events
         if end <= start {
             let mut event_start = 0;
-            let num_events_per_blob = BLOB_DATA_SIZE / size_of::<Event>();
+            let num_events_per_blob = BLOB_DATA_SIZE / size_of::<Transaction>();
             let total_entry_chunks =
                 (list[end].events.len() + num_events_per_blob - 1) / num_events_per_blob;
             trace!(
@@ -147,7 +151,7 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero);
         let keypair = KeyPair::new();
-        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, one));
+        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
         let events = vec![tr0.clone(); 10000];
         let e0 = Entry::new(&zero, 0, events);
 
@@ -165,7 +169,7 @@ mod tests {
         let mut id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
-        let tr0 = Event::Transaction(Transaction::new(&keypair, keypair.pubkey(), 1, next_id));
+        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
         let events = vec![tr0.clone(); 5];
         let event_set = vec![events.clone(); 5];
         let entries0 = next_entries(&id, 0, event_set);

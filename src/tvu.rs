@@ -157,7 +157,6 @@ pub mod tests {
     use crdt::Crdt;
     use crdt::ReplicatedData;
     use entry::Entry;
-    use event::Event;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
@@ -170,6 +169,7 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
+    use transaction::Transaction;
     use tvu::Tvu;
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
@@ -252,7 +252,7 @@ pub mod tests {
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
-            let tr1 = Event::new_transaction(
+            let tr1 = Transaction::new(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
