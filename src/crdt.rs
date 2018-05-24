@@ -480,7 +480,9 @@ impl Crdt {
                 let me = obj.read().unwrap().my_data().clone();
                 trace!(
                     "received RequestWindowIndex {} {} myaddr {}",
-                    ix, from.replicate_addr, me.replicate_addr
+                    ix,
+                    from.replicate_addr,
+                    me.replicate_addr
                 );
                 assert_ne!(from.replicate_addr, me.replicate_addr);
                 let _ = Self::run_window_request(window, sock, &from, ix);
