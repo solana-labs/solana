@@ -68,14 +68,6 @@ fn add_event_data(hash_data: &mut Vec<u8>, event: &Event) {
             hash_data.push(0u8);
             hash_data.extend_from_slice(&tr.sig);
         }
-        Event::Signature { ref sig, .. } => {
-            hash_data.push(1u8);
-            hash_data.extend_from_slice(sig);
-        }
-        Event::Timestamp { ref sig, .. } => {
-            hash_data.push(2u8);
-            hash_data.extend_from_slice(sig);
-        }
     }
 }
 
@@ -120,6 +112,7 @@ mod tests {
     use event::Event;
     use hash::hash;
     use signature::{KeyPair, KeyPairUtil};
+    use transaction::Transaction;
 
     #[test]
     fn test_entry_verify() {
@@ -154,8 +147,12 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Event::new_timestamp(&keypair, Utc::now(), zero);
-        let tr1 = Event::new_signature(&keypair, Default::default(), zero);
+        let tr0 = Event::Transaction(Transaction::new_timestamp(&keypair, Utc::now(), zero));
+        let tr1 = Event::Transaction(Transaction::new_signature(
+            &keypair,
+            Default::default(),
+            zero,
+        ));
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
