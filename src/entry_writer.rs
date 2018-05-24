@@ -62,10 +62,10 @@ impl<'a> EntryWriter<'a> {
     ) -> Result<()> {
         let mut q = VecDeque::new();
         let list = self.write_entries(writer, entry_receiver)?;
-        info!("New blobs? {}", list.len());
+        trace!("New blobs? {}", list.len());
         ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
         if !q.is_empty() {
-            info!("broadcasting {}", q.len());
+            trace!("broadcasting {}", q.len());
             broadcast.send(q)?;
         }
         Ok(())
