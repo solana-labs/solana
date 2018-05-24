@@ -33,11 +33,12 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+    fn new_from_instruction(
+        from_keypair: &KeyPair,
+        instruction: Instruction,
+        last_id: Hash,
+    ) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan::Pay(Payment { tokens, to });
-        let instruction = Instruction::NewContract(Contract { plan, tokens });
         let mut tr = Transaction {
             sig: Signature::default(),
             instruction,
@@ -46,6 +47,25 @@ impl Transaction {
         };
         tr.sign(from_keypair);
         tr
+    }
+
+    /// Create and sign a new Transaction. Used for unit-testing.
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+        let plan = Plan::Pay(Payment { tokens, to });
+        let instruction = Instruction::NewContract(Contract { plan, tokens });
+        Self::new_from_instruction(from_keypair, instruction, last_id)
+    }
+
+    /// Create and sign a new Witness Timestamp. Used for unit-testing.
+    pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: Hash) -> Self {
+        let instruction = Instruction::ApplyTimestamp(dt);
+        Self::new_from_instruction(from_keypair, instruction, last_id)
+    }
+
+    /// Create and sign a new Witness Signature. Used for unit-testing.
+    pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
+        let instruction = Instruction::ApplySignature(tx_sig);
+        Self::new_from_instruction(from_keypair, instruction, last_id)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
