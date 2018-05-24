@@ -4,7 +4,6 @@ use ecdsa;
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
@@ -18,9 +17,9 @@ pub struct SigVerifyStage {
 }
 
 impl SigVerifyStage {
-    pub fn new(exit: Arc<AtomicBool>, packet_receiver: Receiver<SharedPackets>) -> Self {
+    pub fn new(packet_receiver: Receiver<SharedPackets>) -> Self {
         let (verified_sender, verified_receiver) = channel();
-        let thread_hdls = Self::verifier_services(exit, packet_receiver, verified_sender);
+        let thread_hdls = Self::verifier_services(packet_receiver, verified_sender);
         SigVerifyStage {
             thread_hdls,
             verified_receiver,
@@ -70,27 +69,25 @@ impl SigVerifyStage {
     }
 
     fn verifier_service(
-        exit: Arc<AtomicBool>,
         packet_receiver: Arc<Mutex<streamer::PacketReceiver>>,
         verified_sender: Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             let e = Self::verifier(&packet_receiver.clone(), &verified_sender.clone());
-            if e.is_err() && exit.load(Ordering::Relaxed) {
+            if e.is_err() {
                 break;
             }
         })
     }
 
     fn verifier_services(
-        exit: Arc<AtomicBool>,
         packet_receiver: streamer::PacketReceiver,
         verified_sender: Sender<Vec<(SharedPackets, Vec<u8>)>>,
     ) -> Vec<JoinHandle<()>> {
         let sender = Arc::new(Mutex::new(verified_sender));
         let receiver = Arc::new(Mutex::new(packet_receiver));
         (0..4)
-            .map(|_| Self::verifier_service(exit.clone(), receiver.clone(), sender.clone()))
+            .map(|_| Self::verifier_service(receiver.clone(), sender.clone()))
             .collect()
     }
 }
