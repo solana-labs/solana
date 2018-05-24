@@ -4,7 +4,6 @@ use packet;
 use packet::SharedPackets;
 use request_processor::RequestProcessor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread::{spawn, JoinHandle};
 use streamer;
@@ -18,7 +17,6 @@ pub struct RequestStage {
 impl RequestStage {
     pub fn new(
         request_processor: RequestProcessor,
-        exit: Arc<AtomicBool>,
         packet_receiver: Receiver<SharedPackets>,
         packet_recycler: packet::PacketRecycler,
         blob_recycler: packet::BlobRecycler,
@@ -34,9 +32,7 @@ impl RequestStage {
                 &blob_recycler,
             );
             if e.is_err() {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
+                break;
             }
         });
         RequestStage {
