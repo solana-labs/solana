@@ -10,8 +10,10 @@ use record_stage::Signal;
 use result::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{spawn, JoinHandle};
+use std::time::Duration;
 use std::time::Instant;
 use timing;
 
@@ -23,6 +25,7 @@ pub struct BankingStage {
 impl BankingStage {
     pub fn new(
         bank: Arc<Bank>,
+        exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: packet::PacketRecycler,
     ) -> Self {
@@ -35,7 +38,9 @@ impl BankingStage {
                 &packet_recycler,
             );
             if e.is_err() {
-                break;
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
             }
         });
         BankingStage {
@@ -61,8 +66,9 @@ impl BankingStage {
         signal_sender: &Sender<Signal>,
         packet_recycler: &packet::PacketRecycler,
     ) -> Result<()> {
+        let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
-        let mms = verified_receiver.recv()?;
+        let mms = verified_receiver.recv_timeout(timer)?;
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(

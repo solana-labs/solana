@@ -48,6 +48,7 @@ impl Tpu {
         let blob_recycler = packet::BlobRecycler::default();
         let banking_stage = BankingStage::new(
             bank.clone(),
+            exit.clone(),
             sig_verify_stage.verified_receiver,
             packet_recycler.clone(),
         );
