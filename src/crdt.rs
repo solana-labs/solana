@@ -176,7 +176,7 @@ impl Crdt {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking during IO
             let robj = obj.read().expect("'obj' read lock in pub fn broadcast");
-            info!("broadcast table {}", robj.table.len());
+            trace!("broadcast table {}", robj.table.len());
             let cloned_table: Vec<ReplicatedData> = robj.table.values().cloned().collect();
             (robj.table[&robj.me].clone(), cloned_table)
         };
@@ -191,7 +191,7 @@ impl Crdt {
                     //filter nodes that are not listening
                     false
                 } else {
-                    info!("broadcast node {}", v.replicate_addr);
+                    trace!("broadcast node {}", v.replicate_addr);
                     true
                 }
             })
@@ -200,8 +200,8 @@ impl Crdt {
             warn!("crdt too small");
             return Err(Error::CrdtTooSmall);
         }
-        info!("nodes table {}", nodes.len());
-        info!("blobs table {}", blobs.len());
+        trace!("nodes table {}", nodes.len());
+        trace!("blobs table {}", blobs.len());
         // enumerate all the blobs, those are the indices
         // transmit them to nodes, starting from a different node
         let orders: Vec<_> = blobs
@@ -214,7 +214,7 @@ impl Crdt {
                     .skip((*transmit_index as usize) % nodes.len()),
             )
             .collect();
-        info!("orders table {}", orders.len());
+        trace!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
             .map(|((i, b), v)| {
@@ -225,13 +225,13 @@ impl Crdt {
                 blob.set_index(*transmit_index + i as u64)
                     .expect("set_index in pub fn broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
-                info!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                trace!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
-                info!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                trace!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
                 e
             })
             .collect();
-        info!("broadcast results {}", errs.len());
+        trace!("broadcast results {}", errs.len());
         for e in errs {
             match e {
                 Err(e) => {
@@ -279,7 +279,7 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                info!(
+                trace!(
                     "retransmit blob {} to {}",
                     rblob.get_index().unwrap(),
                     v.replicate_addr
@@ -478,7 +478,7 @@ impl Crdt {
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
-                info!(
+                trace!(
                     "received RequestWindowIndex {} {} myaddr {}",
                     ix, from.replicate_addr, me.replicate_addr
                 );
