@@ -173,6 +173,7 @@ fn repair_window(
     *times += 1;
     //if times flips from all 1s 7 -> 8, 15 -> 16, we retry otherwise return Ok
     if *times & (*times - 1) != 0 {
+        trace!("repair_window counter {} {}", *times, *consumed);
         return Ok(());
     }
     info!("repair_window request {} {}", *consumed, *received);
