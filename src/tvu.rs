@@ -105,7 +105,6 @@ impl Tvu {
 
         let replicate_stage = ReplicateStage::new(
             bank.clone(),
-            exit.clone(),
             window_receiver,
             blob_recycler.clone(),
         );

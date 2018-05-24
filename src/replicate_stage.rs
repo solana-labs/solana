@@ -5,7 +5,6 @@ use ledger;
 use packet;
 use result::Result;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use streamer;
@@ -37,13 +36,12 @@ impl ReplicateStage {
 
     pub fn new(
         bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
         window_receiver: streamer::BlobReceiver,
         blob_recycler: packet::BlobRecycler,
     ) -> Self {
         let thread_hdl = spawn(move || loop {
             let e = Self::replicate_requests(&bank, &window_receiver, &blob_recycler);
-            if e.is_err() && exit.load(Ordering::Relaxed) {
+            if e.is_err() {
                 break;
             }
         });
