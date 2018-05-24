@@ -97,12 +97,9 @@ fn main() {
     // fields are the same. That entry should be treated as a deposit, not a
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
-    let deposit = if let Event::Transaction(ref tr) = entry1.events[0] {
-        if let Instruction::NewContract(contract) = &tr.instruction {
-            contract.plan.final_payment()
-        } else {
-            None
-        }
+    let Event::Transaction(ref tr) = entry1.events[0];
+    let deposit = if let Instruction::NewContract(contract) = &tr.instruction {
+        contract.plan.final_payment()
     } else {
         None
     };

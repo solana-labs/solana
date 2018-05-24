@@ -259,15 +259,13 @@ impl Bank {
     }
 
     fn partition_events(events: Vec<Event>) -> (Vec<Transaction>, Vec<Event>) {
-        let mut trs = vec![];
-        let mut rest = vec![];
-        for event in events {
-            match event {
-                Event::Transaction(tr) => trs.push(tr),
-                _ => rest.push(event),
-            }
-        }
-        (trs, rest)
+        (
+            events
+                .into_iter()
+                .map(|Event::Transaction(tr)| tr)
+                .collect(),
+            vec![],
+        )
     }
 
     pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
@@ -367,8 +365,6 @@ impl Bank {
     pub fn process_verified_event(&self, event: Event) -> Result<Event> {
         match event {
             Event::Transaction(ref tr) => self.process_verified_transaction(tr),
-            Event::Signature { from, tx_sig, .. } => self.process_verified_sig(from, tx_sig),
-            Event::Timestamp { from, dt, .. } => self.process_verified_timestamp(from, dt),
         }?;
         Ok(event)
     }
