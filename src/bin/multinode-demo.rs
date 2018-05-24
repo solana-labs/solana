@@ -139,11 +139,12 @@ fn main() {
         nsps / 1_000_f64
     );
 
-    let initial_tx_count = client.transaction_count();
+    let first_count = client.transaction_count();
+    let mut initial_tx_count = first_count;
     println!("initial count {}", initial_tx_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
-    let now = Instant::now();
+    let mut now = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
@@ -154,11 +155,13 @@ fn main() {
         }
     });
 
-    println!("Waiting for transactions to complete...",);
-    for _ in 0..10 {
-        let mut tx_count = client.transaction_count();
+    println!("Sampling tps every second...",);
+    for _ in 0..20 {
+        let tx_count = client.transaction_count();
         duration = now.elapsed();
+        now = Instant::now();
         let txs = tx_count - initial_tx_count;
+        initial_tx_count = tx_count;
         println!("Transactions processed {}", txs);
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (txs * 1_000_000_000) as f64 / ns as f64;
@@ -171,13 +174,12 @@ fn main() {
     for val in validators {
         println!("Checking balance on {} ...", val.events_addr);
         let mut client = mk_client(&client_addr, &val);
-        let mut tx_count = client.transaction_count();
-        duration = now.elapsed();
-        let txs = tx_count - initial_tx_count;
-        println!("Transactions processed {} on {}", txs, val.events_addr);
-        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-        let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-        println!("{} tps on {}", tps, val.events_addr);
+        let tx_count = client.transaction_count();
+        let txs = tx_count - first_count;
+        println!(
+            "Total Transactions processed {} on {}",
+            txs, val.events_addr
+        );
     }
     signal.store(true, Ordering::Relaxed);
     for t in c_threads {

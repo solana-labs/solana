@@ -342,7 +342,7 @@ fn broadcast(
     let mut blobs = dq.into_iter().collect();
     /// appends codes to the list of blobs allowing us to reconstruct the stream
     #[cfg(feature = "erasure")]
-    erasure::generate_codes(blobs);
+    erasure::generate_coding(re, blobs, consumed);
     Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
     // keep the cache of blobs that are broadcast
     {
