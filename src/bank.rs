@@ -7,7 +7,6 @@ extern crate libc;
 
 use chrono::prelude::*;
 use entry::Entry;
-use event::Event;
 use hash::Hash;
 use mint::Mint;
 use plan::{Payment, Plan, Witness};
@@ -259,34 +258,10 @@ impl Bank {
             .collect()
     }
 
-    fn partition_events(events: Vec<Event>) -> (Vec<Transaction>, Vec<Event>) {
-        (
-            events
-                .into_iter()
-                .map(|Event::Transaction(tr)| tr)
-                .collect(),
-            vec![],
-        )
-    }
-
-    pub fn process_verified_events(&self, events: Vec<Event>) -> Vec<Result<Event>> {
-        let (trs, rest) = Self::partition_events(events);
-        let mut results: Vec<_> = self.process_verified_transactions(trs)
-            .into_iter()
-            .map(|x| x.map(Event::Transaction))
-            .collect();
-
-        for event in rest {
-            results.push(self.process_verified_event(event));
-        }
-
-        results
-    }
-
     pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
         for entry in entries {
             self.register_entry_id(&entry.id);
-            for result in self.process_verified_events(entry.events) {
+            for result in self.process_verified_transactions(entry.events) {
                 result?;
             }
         }
@@ -360,14 +335,6 @@ impl Bank {
         }
 
         Ok(())
-    }
-
-    /// Process an Transaction or Witness that has already been verified.
-    pub fn process_verified_event(&self, event: Event) -> Result<Event> {
-        match event {
-            Event::Transaction(ref tr) => self.process_verified_transaction(tr),
-        }?;
-        Ok(event)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of

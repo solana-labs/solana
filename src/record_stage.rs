@@ -6,17 +6,17 @@
 //! The resulting stream of entries represents ordered events in time.
 
 use entry::Entry;
-use event::Event;
 use hash::Hash;
 use recorder::Recorder;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread::{spawn, JoinHandle};
 use std::time::{Duration, Instant};
+use transaction::Transaction;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
-    Events(Vec<Event>),
+    Events(Vec<Transaction>),
 }
 
 pub struct RecordStage {
@@ -140,8 +140,8 @@ mod tests {
         let record_stage = RecordStage::new(signal_receiver, &zero, None);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
-        let event0 = Event::new_transaction(&alice_keypair, bob_pubkey, 1, zero);
-        let event1 = Event::new_transaction(&alice_keypair, bob_pubkey, 2, zero);
+        let event0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
+        let event1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
         input.send(Signal::Events(vec![event0, event1])).unwrap();
         drop(input);
         let entries: Vec<_> = record_stage.entry_receiver.iter().collect();

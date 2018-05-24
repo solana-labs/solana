@@ -7,9 +7,9 @@ use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::bank::MAX_ENTRY_IDS;
 use solana::entry::{next_entry, Entry};
-use solana::event::Event;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPairUtil};
+use solana::transaction::Transaction;
 use std::io::{stdin, Read};
 use std::process::exit;
 
@@ -46,7 +46,7 @@ fn main() {
         .into_par_iter()
         .map(|rando| {
             let last_id = demo.mint.last_id();
-            Event::new_transaction(&mint_keypair, rando.pubkey(), tokens_per_user, last_id)
+            Transaction::new(&mint_keypair, rando.pubkey(), tokens_per_user, last_id)
         })
         .collect();
 

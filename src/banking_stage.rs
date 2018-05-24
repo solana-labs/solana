@@ -1,8 +1,7 @@
-//! The `banking_stage` processes Event messages.
+//! The `banking_stage` processes Transaction messages.
 
 use bank::Bank;
 use bincode::deserialize;
-use event::Event;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
@@ -16,6 +15,7 @@ use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
+use transaction::Transaction;
 
 pub struct BankingStage {
     pub thread_hdl: JoinHandle<()>,
@@ -49,7 +49,7 @@ impl BankingStage {
         }
     }
 
-    fn deserialize_events(p: &packet::Packets) -> Vec<Option<(Event, SocketAddr)>> {
+    fn deserialize_events(p: &packet::Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
         p.packets
             .par_iter()
             .map(|x| {
@@ -86,7 +86,7 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(event, ver)| match event {
                     None => None,
-                    Some((event, _addr)) => if event.verify() && ver != 0 {
+                    Some((event, _addr)) => if event.verify_plan() && ver != 0 {
                         Some(event)
                     } else {
                         None
@@ -95,7 +95,7 @@ impl BankingStage {
                 .collect();
 
             debug!("process_events");
-            let results = bank.process_verified_events(events);
+            let results = bank.process_verified_transactions(events);
             let events = results.into_iter().filter_map(|x| x.ok()).collect();
             signal_sender.send(Signal::Events(events))?;
             debug!("done process_events");
@@ -120,7 +120,6 @@ impl BankingStage {
 
 //use bank::Bank;
 //use entry::Entry;
-//use event::Event;
 //use hash::Hash;
 //use record_stage::RecordStage;
 //use record_stage::Signal;
@@ -128,11 +127,11 @@ impl BankingStage {
 //use std::sync::mpsc::{channel, Sender};
 //use std::sync::{Arc, Mutex};
 //use std::time::Duration;
+//use transaction::Transaction;
 //
 //#[cfg(test)]
 //mod tests {
 //    use bank::Bank;
-//    use event::Event;
 //    use event_processor::EventProcessor;
 //    use mint::Mint;
 //    use signature::{KeyPair, KeyPairUtil};
@@ -152,12 +151,12 @@ impl BankingStage {
 //        // Process a batch that includes a transaction that receives two tokens.
 //        let alice = KeyPair::new();
 //        let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
-//        let events = vec![Event::Transaction(tr)];
+//        let events = vec![tr];
 //        let entry0 = event_processor.process_events(events).unwrap();
 //
 //        // Process a second batch that spends one of those tokens.
 //        let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
-//        let events = vec![Event::Transaction(tr)];
+//        let events = vec![tr];
 //        let entry1 = event_processor.process_events(events).unwrap();
 //
 //        // Collect the ledger and feed it to a new bank.
@@ -170,7 +169,7 @@ impl BankingStage {
 //        for entry in entries {
 //            assert!(
 //                bank
-//                    .process_verified_events(entry.events)
+//                    .process_verified_transactions(entry.events)
 //                    .into_iter()
 //                    .all(|x| x.is_ok())
 //            );
@@ -229,15 +228,10 @@ impl BankingStage {
 //            })
 //            .collect();
 //
-//        let events: Vec<_> = transactions
-//            .into_iter()
-//            .map(|tr| Event::Transaction(tr))
-//            .collect();
-//
 //        let event_processor = EventProcessor::new(bank, &mint.last_id(), None);
 //
 //        let now = Instant::now();
-//        assert!(event_processor.process_events(events).is_ok());
+//        assert!(event_processor.process_events(transactions).is_ok());
 //        let duration = now.elapsed();
 //        let sec = duration.as_secs() as f64 + duration.subsec_nanos() as f64 / 1_000_000_000.0;
 //        let tps = txs as f64 / sec;
@@ -246,7 +240,7 @@ impl BankingStage {
 //        drop(event_processor.historian_input);
 //        let entries: Vec<Entry> = event_processor.output.lock().unwrap().iter().collect();
 //        assert_eq!(entries.len(), 1);
-//        assert_eq!(entries[0].events.len(), txs as usize);
+//        assert_eq!(entries[0].transactions.len(), txs as usize);
 //
 //        println!("{} tps", tps);
 //    }
@@ -258,7 +252,6 @@ mod bench {
     use self::test::Bencher;
     use bank::*;
     use banking_stage::BankingStage;
-    use event::Event;
     use mint::Mint;
     use packet::{to_packets, PacketRecycler};
     use record_stage::Signal;
@@ -266,6 +259,7 @@ mod bench {
     use std::iter;
     use std::sync::Arc;
     use std::sync::mpsc::channel;
+    use transaction::Transaction;
 
     #[bench]
     fn stage_bench(bencher: &mut Bencher) {
@@ -274,7 +268,7 @@ mod bench {
         let pubkey = KeyPair::new().pubkey();
 
         let events: Vec<_> = (0..tx)
-            .map(|i| Event::new_transaction(&mint.keypair(), pubkey, i as i64, mint.last_id()))
+            .map(|i| Transaction::new(&mint.keypair(), pubkey, i as i64, mint.last_id()))
             .collect();
 
         let (verified_sender, verified_receiver) = channel();

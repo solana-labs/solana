@@ -2,7 +2,7 @@ use packet::{Packet, SharedPackets};
 use std::mem::size_of;
 use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 
-pub const TX_OFFSET: usize = 4;
+pub const TX_OFFSET: usize = 0;
 
 #[cfg(feature = "cuda")]
 #[repr(C)]
@@ -144,7 +144,6 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 mod tests {
     use bincode::serialize;
     use ecdsa;
-    use event::Event;
     use packet::{Packet, Packets, SharedPackets};
     use std::sync::RwLock;
     use transaction::Transaction;
@@ -154,13 +153,13 @@ mod tests {
     fn test_layout() {
         let tr = test_tx();
         let tx = serialize(&tr).unwrap();
-        let packet = serialize(&Event::Transaction(tr)).unwrap();
+        let packet = serialize(&tr).unwrap();
         assert_matches!(memfind(&packet, &tx), Some(ecdsa::TX_OFFSET));
         assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
     }
 
     fn make_packet_from_transaction(tr: Transaction) -> Packet {
-        let tx = serialize(&Event::Transaction(tr)).unwrap();
+        let tx = serialize(&tr).unwrap();
         let mut packet = Packet::default();
         packet.meta.size = tx.len();
         packet.data[..packet.meta.size].copy_from_slice(&tx);
