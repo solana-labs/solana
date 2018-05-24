@@ -19,15 +19,9 @@ pub enum Signal {
     Events(Vec<Event>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum ExitReason {
-    RecvDisconnected,
-    SendDisconnected,
-}
-
 pub struct RecordStage {
     pub entry_receiver: Receiver<Entry>,
-    pub thread_hdl: JoinHandle<ExitReason>,
+    pub thread_hdl: JoinHandle<()>,
 }
 
 impl RecordStage {
@@ -45,13 +39,13 @@ impl RecordStage {
             let mut recorder = Recorder::new(start_hash);
             let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
             loop {
-                if let Err(err) = Self::process_events(
+                if let Err(_) = Self::process_events(
                     &mut recorder,
                     duration_data,
                     &event_receiver,
                     &entry_sender,
                 ) {
-                    return err;
+                    return;
                 }
                 if duration_data.is_some() {
                     recorder.hash();
@@ -70,26 +64,26 @@ impl RecordStage {
         duration_data: Option<(Instant, Duration)>,
         receiver: &Receiver<Signal>,
         sender: &Sender<Entry>,
-    ) -> Result<(), ExitReason> {
+    ) -> Result<(), ()> {
         loop {
             if let Some((start_time, tick_duration)) = duration_data {
                 if let Some(entry) = recorder.tick(start_time, tick_duration) {
-                    sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                    sender.send(entry).or(Err(()))?;
                 }
             }
             match receiver.try_recv() {
                 Ok(signal) => match signal {
                     Signal::Tick => {
                         let entry = recorder.record(vec![]);
-                        sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                        sender.send(entry).or(Err(()))?;
                     }
                     Signal::Events(events) => {
                         let entry = recorder.record(events);
-                        sender.send(entry).or(Err(ExitReason::SendDisconnected))?;
+                        sender.send(entry).or(Err(()))?;
                     }
                 },
                 Err(TryRecvError::Empty) => return Ok(()),
-                Err(TryRecvError::Disconnected) => return Err(ExitReason::RecvDisconnected),
+                Err(TryRecvError::Disconnected) => return Err(()),
             };
         }
     }
@@ -124,10 +118,7 @@ mod tests {
         assert_eq!(entry2.num_hashes, 0);
 
         drop(input);
-        assert_eq!(
-            record_stage.thread_hdl.join().unwrap(),
-            ExitReason::RecvDisconnected
-        );
+        assert_eq!(record_stage.thread_hdl.join().unwrap(), ());
 
         assert!([entry0, entry1, entry2].verify(&zero));
     }
@@ -139,10 +130,7 @@ mod tests {
         let record_stage = RecordStage::new(event_receiver, &zero, None);
         drop(record_stage.entry_receiver);
         input.send(Signal::Tick).unwrap();
-        assert_eq!(
-            record_stage.thread_hdl.join().unwrap(),
-            ExitReason::SendDisconnected
-        );
+        assert_eq!(record_stage.thread_hdl.join().unwrap(), ());
     }
 
     #[test]

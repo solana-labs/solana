@@ -81,6 +81,7 @@ impl Tpu {
         let mut thread_hdls = vec![
             t_receiver,
             banking_stage.thread_hdl,
+            record_stage.thread_hdl,
             write_stage.thread_hdl,
             t_gossip,
             t_listen,
