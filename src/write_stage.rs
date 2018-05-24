@@ -33,7 +33,7 @@ impl WriteStage {
                 &entry_receiver,
             );
             if e.is_err() {
-                info!("broadcast_service error");
+                error!("broadcast_service error");
                 break;
             }
         });
@@ -54,7 +54,7 @@ impl WriteStage {
             loop {
                 let e = entry_writer.drain_entries(&entry_receiver);
                 if e.is_err() {
-                    info!("drain_service error");
+                    error!("drain_service error");
                     break;
                 }
             }
