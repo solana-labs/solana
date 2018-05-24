@@ -249,7 +249,7 @@ pub mod tests {
             w.set_index(i).unwrap();
             w.set_id(leader_id).unwrap();
 
-            let tr0 = Event::new_timestamp(&bob_keypair, Utc::now());
+            let tr0 = Event::new_timestamp(&bob_keypair, Utc::now(), cur_hash);
             let entry0 = Entry::new(&cur_hash, i, vec![tr0]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);

@@ -154,8 +154,8 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Event::new_timestamp(&keypair, Utc::now());
-        let tr1 = Event::new_signature(&keypair, Default::default());
+        let tr0 = Event::new_timestamp(&keypair, Utc::now(), zero);
+        let tr1 = Event::new_signature(&keypair, Default::default(), zero);
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
