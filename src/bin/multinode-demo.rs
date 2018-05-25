@@ -162,11 +162,11 @@ fn main() {
             let tx_count = client.transaction_count();
             let duration = now.elapsed();
             now = Instant::now();
-            let txs = tx_count - initial_tx_count;
+            let sample = tx_count - initial_tx_count;
             initial_tx_count = tx_count;
-            println!("{}: Transactions processed {}", val.events_addr, txs);
+            println!("{}: Transactions processed {}", val.events_addr, sample);
             let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-            let tps = (txs * 1_000_000_000) as f64 / ns as f64;
+            let tps = (sample * 1_000_000_000) as f64 / ns as f64;
             println!("{}: {} tps", val.events_addr, tps);
             let total = tx_count - first_count;
             println!(
@@ -176,7 +176,7 @@ fn main() {
             if total == transactions.len() as u64 {
                 break;
             }
-            if i > 20 && txs == 0 {
+            if i > 20 && sample == 0 {
                 break;
             }
             sleep(Duration::new(1, 0));
