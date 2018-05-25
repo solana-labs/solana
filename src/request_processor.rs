@@ -1,4 +1,4 @@
-//! The `request_stage` processes thin client Request messages.
+//! The `request_processor` processes thin client Request messages.
 
 use bank::Bank;
 use bincode::{deserialize, serialize};
