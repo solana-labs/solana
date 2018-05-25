@@ -7,7 +7,7 @@ if [[ -z "$BUILDKITE_TAG" ]]; then
   exit 0
 fi
 
-if [[ -z "$CRATES_IO_TOKEN" ]];
+if [[ -z "$CRATES_IO_TOKEN" ]]; then
   echo CRATES_IO_TOKEN undefined
   exit 1
 fi
