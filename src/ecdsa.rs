@@ -51,10 +51,17 @@ fn verify_packet(packet: &Packet) -> u8 {
     ).is_ok() as u8
 }
 
+fn batch_size(batches: &Vec<SharedPackets>) -> usize {
+    batches
+        .iter()
+        .map(|p| p.read().unwrap().packets.len())
+        .fold(0, |x, y| x + y)
+}
+
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
-
+    info!("CPU ECDSA for {}", batch_size(batches));
     batches
         .into_par_iter()
         .map(|p| {
@@ -72,6 +79,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
 
+    info!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
     let mut locks = Vec::new();
