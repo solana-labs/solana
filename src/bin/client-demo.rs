@@ -137,8 +137,8 @@ fn main() {
     let now = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
-    chunks.into_par_iter().for_each(|trs| {
-        println!("Transferring 1 unit {} times... to", trs.len());
+    chunks.into_par_iter().for_each(|txs| {
+        println!("Transferring 1 unit {} times... to", txs.len());
         let requests_addr: SocketAddr = server_addr.parse().unwrap();
         let mut requests_cb_addr = requests_addr.clone();
         requests_cb_addr.set_port(0);
@@ -155,8 +155,8 @@ fn main() {
             transactions_addr,
             transactions_socket,
         );
-        for tr in trs {
-            client.transfer_signed(tr.clone()).unwrap();
+        for tx in txs {
+            client.transfer_signed(tx.clone()).unwrap();
         }
     });
 

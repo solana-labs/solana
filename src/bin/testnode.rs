@@ -96,8 +96,8 @@ fn main() {
     // fields are the same. That entry should be treated as a deposit, not a
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
-    let tr = &entry1.transactions[0];
-    let deposit = if let Instruction::NewContract(contract) = &tr.instruction {
+    let tx = &entry1.transactions[0];
+    let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
         contract.plan.final_payment()
     } else {
         None

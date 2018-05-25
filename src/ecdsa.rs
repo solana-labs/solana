@@ -151,24 +151,24 @@ mod tests {
 
     #[test]
     fn test_layout() {
-        let tr = test_tx();
-        let tx = serialize(&tr).unwrap();
-        let packet = serialize(&tr).unwrap();
-        assert_matches!(memfind(&packet, &tx), Some(ecdsa::TX_OFFSET));
+        let tx = test_tx();
+        let tx_bytes = serialize(&tx).unwrap();
+        let packet = serialize(&tx).unwrap();
+        assert_matches!(memfind(&packet, &tx_bytes), Some(ecdsa::TX_OFFSET));
         assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
     }
 
-    fn make_packet_from_transaction(tr: Transaction) -> Packet {
-        let tx = serialize(&tr).unwrap();
+    fn make_packet_from_transaction(tx: Transaction) -> Packet {
+        let tx_bytes = serialize(&tx).unwrap();
         let mut packet = Packet::default();
-        packet.meta.size = tx.len();
-        packet.data[..packet.meta.size].copy_from_slice(&tx);
+        packet.meta.size = tx_bytes.len();
+        packet.data[..packet.meta.size].copy_from_slice(&tx_bytes);
         return packet;
     }
 
     fn test_verify_n(n: usize, modify_data: bool) {
-        let tr = test_tx();
-        let mut packet = make_packet_from_transaction(tr);
+        let tx = test_tx();
+        let mut packet = make_packet_from_transaction(tx);
 
         // jumble some data to test failure
         if modify_data {

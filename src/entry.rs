@@ -66,9 +66,9 @@ impl Entry {
     }
 }
 
-fn add_transaction_data(hash_data: &mut Vec<u8>, tr: &Transaction) {
+fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
     hash_data.push(0u8);
-    hash_data.extend_from_slice(&tr.sig);
+    hash_data.extend_from_slice(&tx.sig);
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains

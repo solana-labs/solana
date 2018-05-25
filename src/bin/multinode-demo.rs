@@ -145,11 +145,11 @@ fn main() {
     println!("Transfering {} transactions in {} batches", txs, threads);
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
-    chunks.into_par_iter().for_each(|trs| {
-        println!("Transferring 1 unit {} times... to", trs.len());
+    chunks.into_par_iter().for_each(|txs| {
+        println!("Transferring 1 unit {} times... to", txs.len());
         let client = mk_client(&client_addr, &leader);
-        for tr in trs {
-            client.transfer_signed(tr.clone()).unwrap();
+        for tx in txs {
+            client.transfer_signed(tx.clone()).unwrap();
         }
     });
 

@@ -158,31 +158,31 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    pub fn process_verified_transaction_debits(&self, tr: &Transaction) -> Result<()> {
-        if let Instruction::NewContract(contract) = &tr.instruction {
+    pub fn process_verified_transaction_debits(&self, tx: &Transaction) -> Result<()> {
+        if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
         }
         let bals = self.balances
             .read()
             .expect("'balances' read lock in process_verified_transaction_debits");
-        let option = bals.get(&tr.from);
+        let option = bals.get(&tx.from);
 
         if option.is_none() {
-            return Err(BankError::AccountNotFound(tr.from));
+            return Err(BankError::AccountNotFound(tx.from));
         }
 
-        if !self.reserve_signature_with_last_id(&tr.sig, &tr.last_id) {
-            return Err(BankError::InvalidTransferSignature(tr.sig));
+        if !self.reserve_signature_with_last_id(&tx.sig, &tx.last_id) {
+            return Err(BankError::InvalidTransferSignature(tx.sig));
         }
 
         loop {
-            let result = if let Instruction::NewContract(contract) = &tr.instruction {
+            let result = if let Instruction::NewContract(contract) = &tx.instruction {
                 let bal = option.expect("assignment of option to bal");
                 let current = bal.load(Ordering::Relaxed) as i64;
 
                 if current < contract.tokens {
-                    self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
-                    return Err(BankError::InsufficientFunds(tr.from));
+                    self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                    return Err(BankError::InsufficientFunds(tx.from));
                 }
 
                 bal.compare_exchange(
@@ -205,8 +205,8 @@ impl Bank {
         }
     }
 
-    pub fn process_verified_transaction_credits(&self, tr: &Transaction) {
-        match &tr.instruction {
+    pub fn process_verified_transaction_credits(&self, tx: &Transaction) {
+        match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let mut plan = contract.plan.clone();
                 plan.apply_witness(&Witness::Timestamp(*self.last_time
@@ -219,22 +219,22 @@ impl Bank {
                     let mut pending = self.pending
                         .write()
                         .expect("'pending' write lock in process_verified_transaction_credits");
-                    pending.insert(tr.sig, plan);
+                    pending.insert(tx.sig, plan);
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
-                let _ = self.process_verified_timestamp(tr.from, *dt);
+                let _ = self.process_verified_timestamp(tx.from, *dt);
             }
             Instruction::ApplySignature(tx_sig) => {
-                let _ = self.process_verified_sig(tr.from, *tx_sig);
+                let _ = self.process_verified_sig(tx.from, *tx_sig);
             }
         }
     }
 
     /// Process a Transaction that has already been verified.
-    pub fn process_verified_transaction(&self, tr: &Transaction) -> Result<()> {
-        self.process_verified_transaction_debits(tr)?;
-        self.process_verified_transaction_credits(tr);
+    pub fn process_verified_transaction(&self, tx: &Transaction) -> Result<()> {
+        self.process_verified_transaction_debits(tx)?;
+        self.process_verified_transaction_credits(tx);
         Ok(())
     }
 
@@ -244,15 +244,15 @@ impl Bank {
         // in parallel deterministically.
         info!("processing Transactions {}", trs.len());
         let results: Vec<_> = trs.into_par_iter()
-            .map(|tr| self.process_verified_transaction_debits(&tr).map(|_| tr))
+            .map(|tx| self.process_verified_transaction_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         results
             .into_par_iter()
             .map(|result| {
-                result.map(|tr| {
-                    self.process_verified_transaction_credits(&tr);
-                    tr
+                result.map(|tx| {
+                    self.process_verified_transaction_credits(&tx);
+                    tx
                 })
             })
             .collect()
@@ -346,9 +346,9 @@ impl Bank {
         to: PublicKey,
         last_id: Hash,
     ) -> Result<Signature> {
-        let tr = Transaction::new(keypair, to, n, last_id);
-        let sig = tr.sig;
-        self.process_verified_transaction(&tr).map(|_| sig)
+        let tx = Transaction::new(keypair, to, n, last_id);
+        let sig = tx.sig;
+        self.process_verified_transaction(&tx).map(|_| sig)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -362,9 +362,9 @@ impl Bank {
         dt: DateTime<Utc>,
         last_id: Hash,
     ) -> Result<Signature> {
-        let tr = Transaction::new_on_date(keypair, to, dt, n, last_id);
-        let sig = tr.sig;
-        self.process_verified_transaction(&tr).map(|_| sig)
+        let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
+        let sig = tx.sig;
+        self.process_verified_transaction(&tx).map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
@@ -590,16 +590,16 @@ mod bench {
             .map(|i| {
                 // Seed the 'from' account.
                 let rando0 = KeyPair::new();
-                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
-                bank.process_verified_transaction(&tr).unwrap();
+                let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
+                bank.process_verified_transaction(&tx).unwrap();
 
                 // Seed the 'to' account and a cell for its signature.
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 bank.register_entry_id(&last_id);
 
                 let rando1 = KeyPair::new();
-                let tr = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
-                bank.process_verified_transaction(&tr).unwrap();
+                let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
+                bank.process_verified_transaction(&tx).unwrap();
 
                 // Finally, return a transaction that's unique
                 Transaction::new(&rando0, rando1.pubkey(), 1, last_id)

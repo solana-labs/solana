@@ -149,13 +149,13 @@ impl BankingStage {
 //
 //        // Process a batch that includes a transaction that receives two tokens.
 //        let alice = KeyPair::new();
-//        let tr = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
-//        let transactions = vec![tr];
+//        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+//        let transactions = vec![tx];
 //        let entry0 = banking_stage.process_transactions(transactions).unwrap();
 //
 //        // Process a second batch that spends one of those tokens.
-//        let tr = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
-//        let transactions = vec![tr];
+//        let tx = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+//        let transactions = vec![tx];
 //        let entry1 = banking_stage.process_transactions(transactions).unwrap();
 //
 //        // Collect the ledger and feed it to a new bank.
@@ -214,12 +214,12 @@ impl BankingStage {
 //
 //                // Seed the 'from' account.
 //                let rando0 = KeyPair::new();
-//                let tr = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-//                bank.process_verified_transaction(&tr).unwrap();
+//                let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
+//                bank.process_verified_transaction(&tx).unwrap();
 //
 //                let rando1 = KeyPair::new();
-//                let tr = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-//                bank.process_verified_transaction(&tr).unwrap();
+//                let tx = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
+//                bank.process_verified_transaction(&tx).unwrap();
 //
 //                // Finally, return a transaction that's unique
 //                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)

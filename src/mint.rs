@@ -48,8 +48,8 @@ impl Mint {
 
     pub fn create_transactions(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
-        let tr = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
-        vec![tr]
+        let tx = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
+        vec![tx]
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
@@ -75,10 +75,10 @@ mod tests {
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
-        let tr = transactions.next().unwrap();
-        if let Instruction::NewContract(contract) = tr.instruction {
+        let tx = transactions.next().unwrap();
+        if let Instruction::NewContract(contract) = tx.instruction {
             if let Plan::Pay(payment) = contract.plan {
-                assert_eq!(tr.from, payment.to);
+                assert_eq!(tx.from, payment.to);
             }
         }
         assert_eq!(transactions.next(), None);
