@@ -1,3 +1,4 @@
+extern crate env_logger;
 extern crate getopts;
 extern crate isatty;
 extern crate pnet;
@@ -49,6 +50,7 @@ fn get_ip_addr() -> Option<IpAddr> {
 }
 
 fn main() {
+    env_logger::init().unwrap();
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
 
