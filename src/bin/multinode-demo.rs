@@ -164,15 +164,12 @@ fn main() {
             now = Instant::now();
             let txs = tx_count - initial_tx_count;
             initial_tx_count = tx_count;
-            println!("Transactions processed {} on {}", txs, val.events_addr);
+            println!("{}: Transactions processed {}", val.events_addr, txs);
             let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
             let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-            println!("{} tps", tps);
+            println!("{}: {} tps", val.events_addr, tps);
             let txs = tx_count - first_count;
-            println!(
-                "Total Transactions processed {} on {}",
-                txs, val.events_addr
-            );
+            println!("{}: Total Transactions processed {}", val.events_addr, txs);
             if txs == transactions.len() as u64 {
                 break;
             }
