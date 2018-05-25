@@ -7,7 +7,7 @@ use crdt::{Crdt, ReplicatedData};
 use hash::Hash;
 use packet;
 use record_stage::RecordStage;
-use sig_verify_stage::SigVerifyStage;
+use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -43,13 +43,13 @@ impl Tpu {
             packet_sender,
         );
 
-        let sig_verify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
+        let sigverify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
 
         let blob_recycler = packet::BlobRecycler::default();
         let banking_stage = BankingStage::new(
             bank.clone(),
             exit.clone(),
-            sig_verify_stage.verified_receiver,
+            sigverify_stage.verified_receiver,
             packet_recycler.clone(),
         );
 
@@ -87,7 +87,7 @@ impl Tpu {
             t_listen,
             t_broadcast,
         ];
-        thread_hdls.extend(sig_verify_stage.thread_hdls.into_iter());
+        thread_hdls.extend(sigverify_stage.thread_hdls.into_iter());
         Tpu { thread_hdls }
     }
 }

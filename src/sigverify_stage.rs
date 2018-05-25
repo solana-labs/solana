@@ -1,9 +1,9 @@
 //! The `sig_verify_stage` implements the signature verification stage of the TPU.
 
-use ecdsa;
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::Result;
+use sigverify;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,7 @@ impl SigVerifyStage {
     }
 
     fn verify_batch(batch: Vec<SharedPackets>) -> Vec<(SharedPackets, Vec<u8>)> {
-        let r = ecdsa::ed25519_verify(&batch);
+        let r = sigverify::ed25519_verify(&batch);
         batch.into_iter().zip(r).collect()
     }
 
