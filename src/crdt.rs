@@ -16,7 +16,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hash::Hash;
-use packet::SharedBlob;
+use packet::{SharedBlob, BLOB_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
@@ -226,6 +226,7 @@ impl Crdt {
                     .expect("set_index in pub fn broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                assert!(blob.meta.size < BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
                 trace!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
                 e
@@ -285,6 +286,7 @@ impl Crdt {
                     v.replicate_addr
                 );
                 //TODO profile this, may need multiple sockets for par_iter
+                assert!(rblob.meta.size < BLOB_SIZE);
                 s.send_to(&rblob.data[..rblob.meta.size], &v.replicate_addr)
             })
             .collect();
@@ -327,14 +329,16 @@ impl Crdt {
     }
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
-        if self.table.len() <= 1 {
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let valid: Vec<_> = self.table
+            .values()
+            .filter(|r| r.id != self.me && r.replicate_addr != daddr)
+            .collect();
+        if valid.is_empty() {
             return Err(Error::CrdtTooSmall);
         }
-        let mut n = (Self::random() as usize) % self.table.len();
-        while self.table.values().nth(n).unwrap().id == self.me {
-            n = (Self::random() as usize) % self.table.len();
-        }
-        let addr = self.table.values().nth(n).unwrap().gossip_addr.clone();
+        let n = (Self::random() as usize) % valid.len();
+        let addr = valid[n].gossip_addr.clone();
         let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix);
         let out = serialize(&req)?;
         Ok((addr, out))
@@ -431,6 +435,7 @@ impl Crdt {
                 "responding RequestWindowIndex {} {}",
                 ix, from.replicate_addr
             );
+            assert!(outblob.len() < BLOB_SIZE);
             sock.send_to(&outblob, from.replicate_addr)?;
         }
         Ok(())
@@ -442,7 +447,7 @@ impl Crdt {
         sock: &UdpSocket,
     ) -> Result<()> {
         //TODO cache connections
-        let mut buf = vec![0u8; 1024 * 64];
+        let mut buf = vec![0u8; BLOB_SIZE];
         trace!("recv_from on {}", sock.local_addr().unwrap());
         let (amt, src) = sock.recv_from(&mut buf)?;
         trace!("got request from {}", src);
@@ -451,7 +456,7 @@ impl Crdt {
         match r {
             // TODO sigverify these
             Protocol::RequestUpdates(v, reqdata) => {
-                trace!("RequestUpdates {}", v);
+                trace!("RequestUpdates {} from {}", v, src);
                 let addr = reqdata.gossip_addr;
                 // only lock for this call, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = obj.read()
@@ -464,12 +469,13 @@ impl Crdt {
                 obj.write()
                     .expect("'obj' write lock in RequestUpdates")
                     .insert(&reqdata);
+                assert!(rsp.len() < BLOB_SIZE);
                 sock.send_to(&rsp, addr)
                     .expect("'sock.send_to' in RequestUpdates");
                 trace!("send_to done!");
             }
             Protocol::ReceiveUpdates(from, ups, data) => {
-                trace!("ReceivedUpdates");
+                trace!("ReceivedUpdates {} from {}", ups, src);
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
                     .apply_updates(from, ups, &data);

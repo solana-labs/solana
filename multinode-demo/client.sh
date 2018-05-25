@@ -1,7 +1,5 @@
 #!/bin/bash
-cd /home/ubuntu/solana
-#git pull
-export RUST_LOG=solana::crdt=trace
-# scp  ubuntu@18.206.1.146:~/solana/leader.json .
-# scp  ubuntu@18.206.1.146:~/solana/mint-demo.json .
-cat mint-demo.json | cargo run --release --bin solana-multinode-demo -- -l leader.json -c 10.0.5.179:8100 -n 3
+export RUST_LOG=solana=info
+rsync -v -e ssh $1:~/solana/leader.json .
+rsync -v -e ssh $1:~/solana/mint-demo.json .
+cat mint-demo.json | cargo run --release --bin solana-client-demo -- -l leader.json -c 8100 -n 1

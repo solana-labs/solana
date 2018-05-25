@@ -16,12 +16,12 @@ use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
-use std::io::{stdin, stdout, Read};
+use std::io::{stdin, Read};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+//use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
@@ -38,6 +38,7 @@ fn main() {
     opts.optopt("b", "", "bind", "bind to port or address");
     opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optopt("s", "", "save", "save my identity to path.json");
+    opts.optopt("l", "", "load", "load my identity to path.json");
     opts.optflag("h", "help", "print help");
     opts.optopt(
         "v",
@@ -130,6 +131,12 @@ fn main() {
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
     let mut repl_data = make_repl_data(&bind_addr);
+    if matches.opt_present("l") {
+        let path = matches.opt_str("l").unwrap();
+        if let Ok(file) = File::open(path) {
+            repl_data = serde_json::from_reader(file).expect("parse");
+        }
+    }
     let threads = if matches.opt_present("v") {
         eprintln!("starting validator... {}", repl_data.requests_addr);
         let path = matches.opt_str("v").unwrap();
@@ -149,10 +156,12 @@ fn main() {
     } else {
         eprintln!("starting leader... {}", repl_data.requests_addr);
         repl_data.current_leader_id = repl_data.id.clone();
+        let file = File::create("leader.log").expect("leader.log create");
         let server = Server::new_leader(
             bank,
             last_id,
-            Some(Duration::from_millis(1000)),
+            //Some(Duration::from_millis(1000)),
+            None,
             repl_data.clone(),
             UdpSocket::bind(repl_data.requests_addr).unwrap(),
             UdpSocket::bind(repl_data.transactions_addr).unwrap(),
@@ -160,7 +169,7 @@ fn main() {
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
             exit.clone(),
-            stdout(),
+            file,
         );
         server.thread_hdls
     };
@@ -169,7 +178,7 @@ fn main() {
         let file = File::create(path).expect("file");
         serde_json::to_writer(file, &repl_data).expect("serialize");
     }
-    eprintln!("Ready. Listening on {}", bind_addr);
+    eprintln!("Ready. Listening on {}", repl_data.events_addr);
 
     for t in threads {
         t.join().expect("join");

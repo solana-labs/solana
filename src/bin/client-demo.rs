@@ -1,6 +1,7 @@
 extern crate futures;
 extern crate getopts;
 extern crate isatty;
+extern crate pnet;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
@@ -8,6 +9,7 @@ extern crate solana;
 use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
+use pnet::datalink;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::mint::MintDemo;
@@ -18,7 +20,7 @@ use solana::transaction::Transaction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, Read};
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -36,6 +38,17 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
+fn get_ip_addr() -> Option<IpAddr> {
+    for iface in datalink::interfaces() {
+        for p in iface.ips {
+            if !p.ip().is_loopback() && !p.ip().is_multicast() {
+                return Some(p.ip());
+            }
+        }
+    }
+    None
+}
+
 fn main() {
     let mut threads = 4usize;
     let mut num_nodes = 10usize;
@@ -43,7 +56,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("c", "", "client address", "host:port");
+    opts.optopt("c", "", "client port", "port");
     opts.optopt("t", "", "number of threads", &format!("{}", threads));
     opts.optopt(
         "n",
@@ -69,12 +82,13 @@ fn main() {
     if matches.opt_present("l") {
         leader = matches.opt_str("l").unwrap();
     }
-    let client_addr: Arc<RwLock<SocketAddr>> = if matches.opt_present("c") {
-        let addr = matches.opt_str("c").unwrap().parse().unwrap();
-        Arc::new(RwLock::new(addr))
-    } else {
-        Arc::new(RwLock::new("127.0.0.1:8010".parse().unwrap()))
-    };
+    let mut addr: SocketAddr = "127.0.0.1:8010".parse().unwrap();
+    if matches.opt_present("c") {
+        let port = matches.opt_str("c").unwrap().parse().unwrap();
+        addr.set_port(port);
+    }
+    addr.set_ip(get_ip_addr().unwrap());
+    let client_addr: Arc<RwLock<SocketAddr>> = Arc::new(RwLock::new(addr));
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
@@ -230,7 +244,6 @@ fn converge(
     let mut spy_crdt = Crdt::new(spy);
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
-
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
     let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy_gossip, exit.clone());

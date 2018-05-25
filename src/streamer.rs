@@ -3,7 +3,7 @@
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets};
+use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE};
 use result::{Error, Result};
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
@@ -177,10 +177,11 @@ fn repair_window(
         trace!("repair_window counter {} {}", *times, *consumed);
         return Ok(());
     }
-    info!("repair_window request {} {}", *consumed, *received);
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     for (to, req) in reqs {
         //todo cache socket
+        info!("repair_window request {} {} {}", *consumed, *received, to);
+        assert!(req.len() < BLOB_SIZE);
         sock.send_to(&req, to)?;
     }
     Ok(())
@@ -510,6 +511,7 @@ mod bench {
             let mut num = 0;
             for p in msgs_.read().unwrap().packets.iter() {
                 let a = p.meta.addr();
+                assert!(p.meta.size < packet::BLOB_SIZE);
                 send.send_to(&p.data[..p.meta.size], &a).unwrap();
                 num += 1;
             }
