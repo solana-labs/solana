@@ -236,6 +236,34 @@ pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPac
     return out;
 }
 
+pub fn to_blob<T: Serialize>(
+    resp: T,
+    rsp_addr: SocketAddr,
+    blob_recycler: &BlobRecycler,
+) -> Result<SharedBlob> {
+    let blob = blob_recycler.allocate();
+    {
+        let mut b = blob.write().unwrap();
+        let v = serialize(&resp)?;
+        let len = v.len();
+        b.data[..len].copy_from_slice(&v);
+        b.meta.size = len;
+        b.meta.set_addr(&rsp_addr);
+    }
+    Ok(blob)
+}
+
+pub fn to_blobs<T: Serialize>(
+    rsps: Vec<(T, SocketAddr)>,
+    blob_recycler: &BlobRecycler,
+) -> Result<VecDeque<SharedBlob>> {
+    let mut blobs = VecDeque::new();
+    for (resp, rsp_addr) in rsps {
+        blobs.push_back(to_blob(resp, rsp_addr, blob_recycler)?);
+    }
+    Ok(blobs)
+}
+
 const BLOB_INDEX_END: usize = size_of::<u64>();
 const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
 
