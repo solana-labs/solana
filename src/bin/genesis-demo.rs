@@ -42,7 +42,7 @@ fn main() {
     let last_id = demo.mint.last_id();
 
     eprintln!("Signing {} transactions...", num_accounts);
-    let events: Vec<_> = keypairs
+    let transactions: Vec<_> = keypairs
         .into_par_iter()
         .map(|rando| {
             let last_id = demo.mint.last_id();
@@ -55,7 +55,7 @@ fn main() {
     }
 
     eprintln!("Logging the creation of {} accounts...", num_accounts);
-    let entry = Entry::new(&last_id, 0, events);
+    let entry = Entry::new(&last_id, 0, transactions);
     println!("{}", serde_json::to_string(&entry).unwrap());
 
     eprintln!("Creating {} empty entries...", MAX_ENTRY_IDS);

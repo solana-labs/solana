@@ -26,8 +26,8 @@ impl Recorder {
         self.num_hashes += 1;
     }
 
-    pub fn record(&mut self, events: Vec<Transaction>) -> Entry {
-        Entry::new_mut(&mut self.last_hash, &mut self.num_hashes, events)
+    pub fn record(&mut self, transactions: Vec<Transaction>) -> Entry {
+        Entry::new_mut(&mut self.last_hash, &mut self.num_hashes, transactions)
     }
 
     pub fn tick(&mut self, start_time: Instant, tick_duration: Duration) -> Option<Entry> {

@@ -261,7 +261,7 @@ impl Bank {
     pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
         for entry in entries {
             self.register_entry_id(&entry.id);
-            for result in self.process_verified_transactions(entry.events) {
+            for result in self.process_verified_transactions(entry.transactions) {
                 result?;
             }
         }
@@ -468,7 +468,7 @@ mod tests {
         bank.process_verified_timestamp(mint.pubkey(), dt).unwrap();
         assert_eq!(bank.get_balance(&pubkey), Some(1));
 
-        // tx count is still 1, because we chose not to count timestamp events
+        // tx count is still 1, because we chose not to count timestamp transactions
         // tx count.
         assert_eq!(bank.transaction_count(), 1);
 
@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_event_signature() {
+    fn test_duplicate_transaction_signature() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let sig = Signature::default();
@@ -581,7 +581,7 @@ mod bench {
     use signature::KeyPairUtil;
 
     #[bench]
-    fn process_verified_event_bench(bencher: &mut Bencher) {
+    fn process_verified_transaction_bench(bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
         let bank = Bank::new(&mint);
         // Create transactions between unrelated parties.

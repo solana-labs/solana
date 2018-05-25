@@ -46,7 +46,7 @@ impl Mint {
         self.pubkey
     }
 
-    pub fn create_events(&self) -> Vec<Transaction> {
+    pub fn create_transactions(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
         let tr = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
         vec![tr]
@@ -54,7 +54,7 @@ impl Mint {
 
     pub fn create_entries(&self) -> Vec<Entry> {
         let e0 = Entry::new(&self.seed(), 0, vec![]);
-        let e1 = Entry::new(&e0.id, 0, self.create_events());
+        let e1 = Entry::new(&e0.id, 0, self.create_transactions());
         vec![e0, e1]
     }
 }
@@ -73,15 +73,15 @@ mod tests {
     use transaction::Instruction;
 
     #[test]
-    fn test_create_events() {
-        let mut events = Mint::new(100).create_events().into_iter();
-        let tr = events.next().unwrap();
+    fn test_create_transactions() {
+        let mut transactions = Mint::new(100).create_transactions().into_iter();
+        let tr = transactions.next().unwrap();
         if let Instruction::NewContract(contract) = tr.instruction {
             if let Plan::Pay(payment) = contract.plan {
                 assert_eq!(tr.from, payment.to);
             }
         }
-        assert_eq!(events.next(), None);
+        assert_eq!(transactions.next(), None);
     }
 
     #[test]

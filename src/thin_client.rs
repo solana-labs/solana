@@ -16,8 +16,8 @@ use transaction::Transaction;
 pub struct ThinClient {
     requests_addr: SocketAddr,
     requests_socket: UdpSocket,
-    events_addr: SocketAddr,
-    events_socket: UdpSocket,
+    transactions_addr: SocketAddr,
+    transactions_socket: UdpSocket,
     last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
@@ -25,19 +25,19 @@ pub struct ThinClient {
 
 impl ThinClient {
     /// Create a new ThinClient that will interface with Rpu
-    /// over `requests_socket` and `events_socket`. To receive responses, the caller must bind `socket`
+    /// over `requests_socket` and `transactions_socket`. To receive responses, the caller must bind `socket`
     /// to a public address before invoking ThinClient methods.
     pub fn new(
         requests_addr: SocketAddr,
         requests_socket: UdpSocket,
-        events_addr: SocketAddr,
-        events_socket: UdpSocket,
+        transactions_addr: SocketAddr,
+        transactions_socket: UdpSocket,
     ) -> Self {
         let client = ThinClient {
             requests_addr,
             requests_socket,
-            events_addr,
-            events_socket,
+            transactions_addr,
+            transactions_socket,
             last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
@@ -75,7 +75,8 @@ impl ThinClient {
     /// does not wait for a response.
     pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
         let data = serialize(&tr).expect("serialize Transaction in pub fn transfer_signed");
-        self.events_socket.send_to(&data, &self.events_addr)
+        self.transactions_socket
+            .send_to(&data, &self.transactions_addr)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -209,7 +210,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader.data.clone(),
             leader.sockets.requests,
-            leader.sockets.event,
+            leader.sockets.transaction,
             leader.sockets.broadcast,
             leader.sockets.respond,
             leader.sockets.gossip,
@@ -219,13 +220,13 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let mut client = ThinClient::new(
             leader.data.requests_addr,
             requests_socket,
-            leader.data.events_addr,
-            events_socket,
+            leader.data.transactions_addr,
+            transactions_socket,
         );
         let last_id = client.get_last_id().wait().unwrap();
         let _sig = client
@@ -254,7 +255,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader.data.clone(),
             leader.sockets.requests,
-            leader.sockets.event,
+            leader.sockets.transaction,
             leader.sockets.broadcast,
             leader.sockets.respond,
             leader.sockets.gossip,
@@ -267,12 +268,12 @@ mod tests {
         requests_socket
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
             leader.data.requests_addr,
             requests_socket,
-            leader.data.events_addr,
-            events_socket,
+            leader.data.transactions_addr,
+            transactions_socket,
         );
         let last_id = client.get_last_id().wait().unwrap();
 
@@ -383,7 +384,7 @@ mod tests {
             None,
             leader.data.clone(),
             leader.sockets.requests,
-            leader.sockets.event,
+            leader.sockets.transaction,
             leader.sockets.broadcast,
             leader.sockets.respond,
             leader.sockets.gossip,
@@ -424,13 +425,13 @@ mod tests {
         requests_socket
             .set_read_timeout(Some(Duration::new(1, 0)))
             .unwrap();
-        let events_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         ThinClient::new(
             leader.requests_addr,
             requests_socket,
-            leader.events_addr,
-            events_socket,
+            leader.transactions_addr,
+            transactions_socket,
         )
     }
 

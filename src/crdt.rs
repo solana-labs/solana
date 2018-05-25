@@ -43,8 +43,8 @@ pub struct ReplicatedData {
     pub replicate_addr: SocketAddr,
     /// address to connect to when this node is leader
     pub requests_addr: SocketAddr,
-    /// events address
-    pub events_addr: SocketAddr,
+    /// transactions address
+    pub transactions_addr: SocketAddr,
     /// current leader identity
     pub current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -59,7 +59,7 @@ impl ReplicatedData {
         gossip_addr: SocketAddr,
         replicate_addr: SocketAddr,
         requests_addr: SocketAddr,
-        events_addr: SocketAddr,
+        transactions_addr: SocketAddr,
     ) -> ReplicatedData {
         ReplicatedData {
             id,
@@ -68,7 +68,7 @@ impl ReplicatedData {
             gossip_addr,
             replicate_addr,
             requests_addr,
-            events_addr,
+            transactions_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -531,14 +531,14 @@ mod tests {
         let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let serve = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let events = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let d = ReplicatedData::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
             serve.local_addr().unwrap(),
-            events.local_addr().unwrap(),
+            transactions.local_addr().unwrap(),
         );
         let crdt = Crdt::new(d);
         trace!(
