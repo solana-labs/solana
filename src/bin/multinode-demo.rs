@@ -129,7 +129,7 @@ fn main() {
         .into_par_iter()
         .map(|chunk| Transaction::new(&chunk[0], chunk[1].pubkey(), 1, last_id))
         .collect();
-    let mut duration = now.elapsed();
+    let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
@@ -140,11 +140,9 @@ fn main() {
     );
 
     let first_count = client.transaction_count();
-    let mut initial_tx_count = first_count;
-    println!("initial count {}", initial_tx_count);
+    println!("initial count {}", first_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
-    let mut now = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|trs| {
@@ -156,34 +154,34 @@ fn main() {
     });
 
     println!("Sampling tps every second...",);
-    for i in 0..100 {
-        let tx_count = client.transaction_count();
-        duration = now.elapsed();
-        now = Instant::now();
-        let txs = tx_count - initial_tx_count;
-        initial_tx_count = tx_count;
-        println!("Transactions processed {}", txs);
-        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-        let tps = (txs * 1_000_000_000) as f64 / ns as f64;
-        println!("{} tps", tps);
-        if txs == transactions.len() as u64 {
-            break;
-        }
-        if i > 20 && txs == 0 {
-            break;
-        }
-        sleep(Duration::new(1, 0));
-    }
-    for val in validators {
-        println!("Checking balance on {} ...", val.events_addr);
+    validators.into_par_iter().for_each(|val| {
         let mut client = mk_client(&client_addr, &val);
-        let tx_count = client.transaction_count();
-        let txs = tx_count - first_count;
-        println!(
-            "Total Transactions processed {} on {}",
-            txs, val.events_addr
-        );
-    }
+        let mut now = Instant::now();
+        let mut initial_tx_count = client.transaction_count();
+        for i in 0..100 {
+            let tx_count = client.transaction_count();
+            let duration = now.elapsed();
+            now = Instant::now();
+            let txs = tx_count - initial_tx_count;
+            initial_tx_count = tx_count;
+            println!("Transactions processed {} on {}", txs, val.events_addr);
+            let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+            let tps = (txs * 1_000_000_000) as f64 / ns as f64;
+            println!("{} tps", tps);
+            let txs = tx_count - first_count;
+            println!(
+                "Total Transactions processed {} on {}",
+                txs, val.events_addr
+            );
+            if txs == transactions.len() as u64 {
+                break;
+            }
+            if i > 20 && txs == 0 {
+                break;
+            }
+            sleep(Duration::new(1, 0));
+        }
+    });
     signal.store(true, Ordering::Relaxed);
     for t in c_threads {
         t.join().unwrap();
