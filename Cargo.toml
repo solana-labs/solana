@@ -1,14 +1,14 @@
 [package]
 name = "solana"
-description = "High Performance Blockchain"
-version = "0.5.0"
+description = "The World's Fastest Blockchain"
+version = "0.6.0-alpha"
 documentation = "https://docs.rs/solana"
-homepage = "http://solana.io/"
+homepage = "http://solana.com/"
 repository = "https://github.com/solana-labs/solana"
 authors = [
-    "Anatoly Yakovenko <anatoly@solana.io>",
-    "Greg Fitzgerald <greg@solana.io>",
-    "Stephen Akridge <stephen@solana.io>",
+    "Anatoly Yakovenko <anatoly@solana.com>",
+    "Greg Fitzgerald <greg@solana.com>",
+    "Stephen Akridge <stephen@solana.com>",
 ]
 license = "Apache-2.0"
 
