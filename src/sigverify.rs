@@ -55,7 +55,7 @@ fn batch_size(batches: &Vec<SharedPackets>) -> usize {
     batches
         .iter()
         .map(|p| p.read().unwrap().packets.len())
-        .fold(0, |x, y| x + y)
+        .sum()
 }
 
 #[cfg(not(feature = "cuda"))]

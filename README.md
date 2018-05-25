@@ -47,46 +47,52 @@ used later in this demo.
     $ cat mint-demo.json | cargo run --release --bin solana-genesis-demo > genesis.log
 ```
 
-Now you can start the server:
+Before you start the server, make sure you know the IP address of the machine ou want to be the leader for the demo, and make sure that udp ports 8000-10000 are open on all the machines you wan to test with.  Now you can start the server:
 
 ```bash
-    $ cat genesis.log | cargo run --release --bin solana-fullnode > transactions0.log
+    $ cat ./multinode-demo/leader.sh
+    #!/bin/bash
+    export RUST_LOG=solana=info
+    sudo sysctl -w net.core.rmem_max=26214400
+    cat genesis.log leader.log | cargo run --release --features cuda --bin solana-testnode -- -s leader.json -l leader.json -b 8000 -d 2>&1 | tee leader-tee.log
+    $ ./multinode-demo/leader.sh
 ```
 
 Wait a few seconds for the server to initialize. It will print "Ready." when it's safe
 to start sending it transactions.
 
+Now you can start some validators:
+
+```bash
+	$ cat ./multinode-demo/validator.sh
+	#!/bin/bash
+	rsync -v -e ssh $1:~/solana/mint-demo.json .
+	rsync -v -e ssh $1:~/solana/leader.json .
+	rsync -v -e ssh $1:~/solana/genesis.log .
+	rsync -v -e ssh $1:~/solana/leader.log .
+	rsync -v -e ssh $1:~/solana/libcuda_verify_ed25519.a .
+	export RUST_LOG=solana=info
+	sudo sysctl -w net.core.rmem_max=26214400
+	cat genesis.log leader.log | cargo run --release --features cuda --bin solana-testnode -- -l validator.json -s validator.json -v leader.json -b 9000 -d 2>&1 | tee validator-tee.log
+    $ ./multinode-demo/validator.sh ubuntu@10.0.1.51 #The leader machine
+```
+
+
 Then, in a separate shell, let's execute some transactions. Note we pass in
 the JSON configuration file here, not the genesis ledger.
+>>>>>>> logs
 
 ```bash
-    $ cat mint-demo.json | cargo run --release --bin solana-client-demo
+    $ cat ./multinode-demo/client.sh
+    #!/bin/bash
+    export RUST_LOG=solana=info
+    rsync -v -e ssh $1:~/solana/leader.json .
+    rsync -v -e ssh $1:~/solana/mint-demo.json .
+    cat mint-demo.json | cargo run --release --bin solana-full-node -- -l leader.json -c 8100 -n 1
+    $ ./multinode-demo/client.sh ubuntu@10.0.1.51 #The leader machine
 ```
 
-Now kill the server with Ctrl-C, and take a look at the ledger. You should
-see something similar to:
-
-```json
-{"num_hashes":27,"id":[0, "..."],"event":"Tick"}
-{"num_hashes":3,"id":[67, "..."],"event":{"Transaction":{"tokens":42}}}
-{"num_hashes":27,"id":[0, "..."],"event":"Tick"}
-```
-
-Now restart the server from where we left off. Pass it both the genesis ledger, and
-the transaction ledger.
-
-```bash
-    $ cat genesis.log transactions0.log | cargo run --release --bin solana-fullnode > transactions1.log
-```
-
-Lastly, run the client demo again, and verify that all funds were spent in the
-previous round, and so no additional transactions are added.
-
-```bash
-    $ cat mint-demo.json | cargo run --release --bin solana-client-demo
-```
-
-Stop the server again, and verify there are only Tick entries, and no Transaction entries.
+Try starting a more validators and reruning the client demo!
 
 Developing
 ===
