@@ -348,7 +348,7 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
         if options.len() < 1 {
-            info!("crdt too small for gossip");
+            trace!("crdt too small for gossip");
             return Err(Error::CrdtTooSmall);
         }
         let n = (Self::random() as usize) % options.len();
