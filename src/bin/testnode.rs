@@ -96,7 +96,7 @@ fn main() {
     // fields are the same. That entry should be treated as a deposit, not a
     // transfer to oneself.
     let entry1: Entry = entries.next().unwrap();
-    let tr = &entry1.events[0];
+    let tr = &entry1.transactions[0];
     let deposit = if let Instruction::NewContract(contract) = &tr.instruction {
         contract.plan.final_payment()
     } else {
@@ -114,10 +114,10 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = bank.process_verified_transactions(entry.events);
+        let results = bank.process_verified_transactions(entry.transactions);
         for result in results {
             if let Err(e) = result {
-                eprintln!("failed to process event {:?}", e);
+                eprintln!("failed to process transaction {:?}", e);
                 exit(1);
             }
         }
@@ -155,7 +155,7 @@ fn main() {
             Some(Duration::from_millis(1000)),
             repl_data.clone(),
             UdpSocket::bind(repl_data.requests_addr).unwrap(),
-            UdpSocket::bind(repl_data.events_addr).unwrap(),
+            UdpSocket::bind(repl_data.transactions_addr).unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
@@ -183,7 +183,7 @@ fn next_port(server_addr: &SocketAddr, nxt: u16) -> SocketAddr {
 }
 
 fn make_repl_data(bind_addr: &SocketAddr) -> ReplicatedData {
-    let events_addr = bind_addr.clone();
+    let transactions_addr = bind_addr.clone();
     let gossip_addr = next_port(&bind_addr, 1);
     let replicate_addr = next_port(&bind_addr, 2);
     let requests_addr = next_port(&bind_addr, 3);
@@ -193,7 +193,7 @@ fn make_repl_data(bind_addr: &SocketAddr) -> ReplicatedData {
         gossip_addr,
         replicate_addr,
         requests_addr,
-        events_addr,
+        transactions_addr,
     )
 }
 

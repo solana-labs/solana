@@ -164,14 +164,17 @@ fn main() {
             now = Instant::now();
             let sample = tx_count - initial_tx_count;
             initial_tx_count = tx_count;
-            println!("{}: Transactions processed {}", val.events_addr, sample);
+            println!(
+                "{}: Transactions processed {}",
+                val.transactions_addr, sample
+            );
             let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
             let tps = (sample * 1_000_000_000) as f64 / ns as f64;
-            println!("{}: {} tps", val.events_addr, tps);
+            println!("{}: {} tps", val.transactions_addr, tps);
             let total = tx_count - first_count;
             println!(
                 "{}: Total Transactions processed {}",
-                val.events_addr, total
+                val.transactions_addr, total
             );
             if total == transactions.len() as u64 {
                 break;
@@ -191,15 +194,15 @@ fn main() {
 fn mk_client(locked_addr: &Arc<RwLock<SocketAddr>>, r: &ReplicatedData) -> ThinClient {
     let mut addr = locked_addr.write().unwrap();
     let port = addr.port();
-    let events_socket = UdpSocket::bind(addr.clone()).unwrap();
+    let transactions_socket = UdpSocket::bind(addr.clone()).unwrap();
     addr.set_port(port + 1);
     let requests_socket = UdpSocket::bind(addr.clone()).unwrap();
     addr.set_port(port + 2);
     ThinClient::new(
         r.requests_addr,
         requests_socket,
-        r.events_addr,
-        events_socket,
+        r.transactions_addr,
+        transactions_socket,
     )
 }
 

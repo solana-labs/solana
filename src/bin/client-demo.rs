@@ -64,9 +64,9 @@ fn main() {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
 
-    let mut events_addr: SocketAddr = requests_addr.parse().unwrap();
-    let requests_port = events_addr.port();
-    events_addr.set_port(requests_port + 1);
+    let mut transactions_addr: SocketAddr = requests_addr.parse().unwrap();
+    let requests_port = transactions_addr.port();
+    transactions_addr.set_port(requests_port + 1);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a json file");
@@ -91,16 +91,16 @@ fn main() {
     requests_socket
         .set_read_timeout(Some(Duration::new(5, 0)))
         .unwrap();
-    let events_socket = UdpSocket::bind(&events_addr).unwrap();
+    let transactions_socket = UdpSocket::bind(&transactions_addr).unwrap();
     let requests_addr: SocketAddr = server_addr.parse().unwrap();
     let requests_port = requests_addr.port();
-    let mut events_server_addr = requests_addr.clone();
-    events_server_addr.set_port(requests_port + 3);
+    let mut transactions_addr = requests_addr.clone();
+    transactions_addr.set_port(requests_port + 3);
     let mut client = ThinClient::new(
         requests_addr,
         requests_socket,
-        events_server_addr,
-        events_socket,
+        transactions_addr,
+        transactions_socket,
     );
 
     println!("Get last ID...");
@@ -146,14 +146,14 @@ fn main() {
         requests_socket
             .set_read_timeout(Some(Duration::new(5, 0)))
             .unwrap();
-        let mut events_addr: SocketAddr = requests_addr.clone();
-        events_addr.set_port(0);
-        let events_socket = UdpSocket::bind(&events_addr).unwrap();
+        let mut transactions_addr: SocketAddr = requests_addr.clone();
+        transactions_addr.set_port(0);
+        let transactions_socket = UdpSocket::bind(&transactions_addr).unwrap();
         let client = ThinClient::new(
             requests_addr,
             requests_socket,
-            events_server_addr,
-            events_socket,
+            transactions_addr,
+            transactions_socket,
         );
         for tr in trs {
             client.transfer_signed(tr.clone()).unwrap();

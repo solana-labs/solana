@@ -14,7 +14,6 @@ use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use streamer;
 use timing;
-use transaction::Transaction;
 
 pub struct RequestProcessor {
     bank: Arc<Bank>,
@@ -63,20 +62,7 @@ impl RequestProcessor {
             .collect()
     }
 
-    fn deserialize_requests(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
-        p.packets
-            .par_iter()
-            .map(|x| {
-                deserialize(&x.data[0..x.meta.size])
-                    .map(|req| (req, x.meta.addr()))
-                    .ok()
-            })
-            .collect()
-    }
-
-    // Copy-paste of deserialize_requests() because I can't figure out how to
-    // route the lifetimes in a generic version.
-    pub fn deserialize_events(p: &packet::Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
+    pub fn deserialize_requests(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
         p.packets
             .par_iter()
             .map(|x| {

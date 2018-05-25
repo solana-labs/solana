@@ -2,8 +2,8 @@
 //! It records Event items on behalf of its users. It continuously generates
 //! new hashes, only stopping to check if it has been sent an Event item. It
 //! tags each Event with an Entry, and sends it back. The Entry includes the
-//! Event, the latest hash, and the number of hashes since the last event.
-//! The resulting stream of entries represents ordered events in time.
+//! Event, the latest hash, and the number of hashes since the last transaction.
+//! The resulting stream of entries represents ordered transactions in time.
 
 use entry::Entry;
 use hash::Hash;
@@ -28,7 +28,7 @@ impl RecordStage {
     /// A background thread that will continue tagging received Event messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     pub fn new(
-        event_receiver: Receiver<Signal>,
+        transaction_receiver: Receiver<Signal>,
         start_hash: &Hash,
         tick_duration: Option<Duration>,
     ) -> Self {
@@ -39,10 +39,10 @@ impl RecordStage {
             let mut recorder = Recorder::new(start_hash);
             let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
             loop {
-                if let Err(_) = Self::process_events(
+                if let Err(_) = Self::process_transactions(
                     &mut recorder,
                     duration_data,
-                    &event_receiver,
+                    &transaction_receiver,
                     &entry_sender,
                 ) {
                     return;
@@ -59,7 +59,7 @@ impl RecordStage {
         }
     }
 
-    pub fn process_events(
+    pub fn process_transactions(
         recorder: &mut Recorder,
         duration_data: Option<(Instant, Duration)>,
         receiver: &Receiver<Signal>,
@@ -77,8 +77,8 @@ impl RecordStage {
                         let entry = recorder.record(vec![]);
                         sender.send(entry).or(Err(()))?;
                     }
-                    Signal::Events(events) => {
-                        let entry = recorder.record(events);
+                    Signal::Events(transactions) => {
+                        let entry = recorder.record(transactions);
                         sender.send(entry).or(Err(()))?;
                     }
                 },
@@ -99,15 +99,15 @@ mod tests {
 
     #[test]
     fn test_historian() {
-        let (input, event_receiver) = channel();
+        let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(event_receiver, &zero, None);
+        let record_stage = RecordStage::new(tx_receiver, &zero, None);
 
-        input.send(Signal::Tick).unwrap();
+        tx_sender.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        input.send(Signal::Tick).unwrap();
+        tx_sender.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
-        input.send(Signal::Tick).unwrap();
+        tx_sender.send(Signal::Tick).unwrap();
 
         let entry0 = record_stage.entry_receiver.recv().unwrap();
         let entry1 = record_stage.entry_receiver.recv().unwrap();
@@ -117,7 +117,7 @@ mod tests {
         assert_eq!(entry1.num_hashes, 0);
         assert_eq!(entry2.num_hashes, 0);
 
-        drop(input);
+        drop(tx_sender);
         assert_eq!(record_stage.thread_hdl.join().unwrap(), ());
 
         assert!([entry0, entry1, entry2].verify(&zero));
@@ -125,25 +125,25 @@ mod tests {
 
     #[test]
     fn test_historian_closed_sender() {
-        let (input, event_receiver) = channel();
+        let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(event_receiver, &zero, None);
+        let record_stage = RecordStage::new(tx_receiver, &zero, None);
         drop(record_stage.entry_receiver);
-        input.send(Signal::Tick).unwrap();
+        tx_sender.send(Signal::Tick).unwrap();
         assert_eq!(record_stage.thread_hdl.join().unwrap(), ());
     }
 
     #[test]
-    fn test_events() {
-        let (input, signal_receiver) = channel();
+    fn test_transactions() {
+        let (tx_sender, signal_receiver) = channel();
         let zero = Hash::default();
         let record_stage = RecordStage::new(signal_receiver, &zero, None);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
-        let event0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
-        let event1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
-        input.send(Signal::Events(vec![event0, event1])).unwrap();
-        drop(input);
+        let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
+        let tx1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
+        tx_sender.send(Signal::Events(vec![tx0, tx1])).unwrap();
+        drop(tx_sender);
         let entries: Vec<_> = record_stage.entry_receiver.iter().collect();
         assert_eq!(entries.len(), 1);
     }
@@ -151,12 +151,12 @@ mod tests {
     #[test]
     #[ignore]
     fn test_ticking_historian() {
-        let (input, event_receiver) = channel();
+        let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(event_receiver, &zero, Some(Duration::from_millis(20)));
+        let record_stage = RecordStage::new(tx_receiver, &zero, Some(Duration::from_millis(20)));
         sleep(Duration::from_millis(900));
-        input.send(Signal::Tick).unwrap();
-        drop(input);
+        tx_sender.send(Signal::Tick).unwrap();
+        drop(tx_sender);
         let entries: Vec<Entry> = record_stage.entry_receiver.iter().collect();
         assert!(entries.len() > 1);
 

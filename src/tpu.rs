@@ -28,7 +28,7 @@ impl Tpu {
         start_hash: Hash,
         tick_duration: Option<Duration>,
         me: ReplicatedData,
-        events_socket: UdpSocket,
+        transactions_socket: UdpSocket,
         broadcast_socket: UdpSocket,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
@@ -37,7 +37,7 @@ impl Tpu {
         let packet_recycler = packet::PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
-            events_socket,
+            transactions_socket,
             exit.clone(),
             packet_recycler.clone(),
             packet_sender,

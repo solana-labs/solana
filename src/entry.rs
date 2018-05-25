@@ -8,7 +8,7 @@ use transaction::Transaction;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
 /// of hashes performed since the previous entry.  The `id` field is the result
-/// of hashing `id` from the previous entry `num_hashes` times.  The `events`
+/// of hashing `id` from the previous entry `num_hashes` times.  The `transactions`
 /// field points to Events that took place shortly after `id` was generated.
 ///
 /// If you divide `num_hashes` by the amount of time it takes to generate a new hash, you
@@ -21,65 +21,69 @@ use transaction::Transaction;
 pub struct Entry {
     pub num_hashes: u64,
     pub id: Hash,
-    pub events: Vec<Transaction>,
+    pub transactions: Vec<Transaction>,
 }
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(start_hash: &Hash, cur_hashes: u64, events: Vec<Transaction>) -> Self {
-        let num_hashes = cur_hashes + if events.is_empty() { 0 } else { 1 };
-        let id = next_hash(start_hash, 0, &events);
+    pub fn new(start_hash: &Hash, cur_hashes: u64, transactions: Vec<Transaction>) -> Self {
+        let num_hashes = cur_hashes + if transactions.is_empty() { 0 } else { 1 };
+        let id = next_hash(start_hash, 0, &transactions);
         Entry {
             num_hashes,
             id,
-            events,
+            transactions,
         }
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
-    pub fn new_mut(start_hash: &mut Hash, cur_hashes: &mut u64, events: Vec<Transaction>) -> Self {
-        let entry = Self::new(start_hash, *cur_hashes, events);
+    pub fn new_mut(
+        start_hash: &mut Hash,
+        cur_hashes: &mut u64,
+        transactions: Vec<Transaction>,
+    ) -> Self {
+        let entry = Self::new(start_hash, *cur_hashes, transactions);
         *start_hash = entry.id;
         *cur_hashes = 0;
         entry
     }
 
-    /// Creates a Entry from the number of hashes `num_hashes` since the previous event
+    /// Creates a Entry from the number of hashes `num_hashes` since the previous transaction
     /// and that resulting `id`.
     pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
         Entry {
             num_hashes,
             id: *id,
-            events: vec![],
+            transactions: vec![],
         }
     }
 
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
-    /// If the event is not a Tick, then hash that as well.
+    /// If the transaction is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
-        self.events.par_iter().all(|event| event.verify_plan())
-            && self.id == next_hash(start_hash, self.num_hashes, &self.events)
+        self.transactions.par_iter().all(|tx| tx.verify_plan())
+            && self.id == next_hash(start_hash, self.num_hashes, &self.transactions)
     }
 }
 
-fn add_event_data(hash_data: &mut Vec<u8>, tr: &Transaction) {
+fn add_transaction_data(hash_data: &mut Vec<u8>, tr: &Transaction) {
     hash_data.push(0u8);
     hash_data.extend_from_slice(&tr.sig);
 }
 
-/// Creates the hash `num_hashes` after `start_hash`. If the event contains
+/// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.
-pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Transaction]) -> Hash {
+pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
     let mut id = *start_hash;
     for _ in 1..num_hashes {
         id = hash(&id);
     }
 
-    // Hash all the event data
+    // Hash all the transaction data
     let mut hash_data = vec![];
-    for event in events {
-        add_event_data(&mut hash_data, event);
+    for tx in transactions {
+        add_transaction_data(&mut hash_data, tx);
     }
 
     if !hash_data.is_empty() {
@@ -92,11 +96,11 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, events: &[Transaction]) -> 
 }
 
 /// Creates the next Tick or Event Entry `num_hashes` after `start_hash`.
-pub fn next_entry(start_hash: &Hash, num_hashes: u64, events: Vec<Transaction>) -> Entry {
+pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     Entry {
         num_hashes,
-        id: next_hash(start_hash, num_hashes, &events),
-        events: events,
+        id: next_hash(start_hash, num_hashes, &transactions),
+        transactions,
     }
 }
 
@@ -120,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn test_event_reorder_attack() {
+    fn test_transaction_reorder_attack() {
         let zero = Hash::default();
 
         // First, verify entries
@@ -130,9 +134,9 @@ mod tests {
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
-        // Next, swap two events and ensure verification fails.
-        e0.events[0] = tr1; // <-- attack
-        e0.events[1] = tr0;
+        // Next, swap two transactions and ensure verification fails.
+        e0.transactions[0] = tr1; // <-- attack
+        e0.transactions[1] = tr0;
         assert!(!e0.verify(&zero));
     }
 
@@ -147,9 +151,9 @@ mod tests {
         let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
         assert!(e0.verify(&zero));
 
-        // Next, swap two witness events and ensure verification fails.
-        e0.events[0] = tr1; // <-- attack
-        e0.events[1] = tr0;
+        // Next, swap two witness transactions and ensure verification fails.
+        e0.transactions[0] = tr1; // <-- attack
+        e0.transactions[1] = tr0;
         assert!(!e0.verify(&zero));
     }
 

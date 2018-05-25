@@ -132,7 +132,7 @@ use std::time::Duration;
 pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
     use signature::{KeyPair, KeyPairUtil};
 
-    let events_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let transactions_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
     let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
     let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -145,9 +145,9 @@ pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocke
         gossip.local_addr().unwrap(),
         replicate.local_addr().unwrap(),
         requests_socket.local_addr().unwrap(),
-        events_socket.local_addr().unwrap(),
+        transactions_socket.local_addr().unwrap(),
     );
-    (d, gossip, replicate, requests_socket, events_socket)
+    (d, gossip, replicate, requests_socket, transactions_socket)
 }
 
 #[cfg(test)]
@@ -307,7 +307,7 @@ pub mod tests {
         pub gossip: UdpSocket,
         pub requests: UdpSocket,
         pub replicate: UdpSocket,
-        pub event: UdpSocket,
+        pub transaction: UdpSocket,
         pub respond: UdpSocket,
         pub broadcast: UdpSocket,
     }
@@ -319,7 +319,7 @@ pub mod tests {
         pub fn new() -> TestNode {
             let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
             let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let event = UdpSocket::bind("0.0.0.0:0").unwrap();
+            let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
             let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
             let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
             let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -329,7 +329,7 @@ pub mod tests {
                 gossip.local_addr().unwrap(),
                 replicate.local_addr().unwrap(),
                 requests.local_addr().unwrap(),
-                event.local_addr().unwrap(),
+                transaction.local_addr().unwrap(),
             );
             TestNode {
                 data: data,
@@ -337,7 +337,7 @@ pub mod tests {
                     gossip,
                     requests,
                     replicate,
-                    event,
+                    transaction,
                     respond,
                     broadcast,
                 },

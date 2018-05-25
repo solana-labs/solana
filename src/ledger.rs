@@ -14,7 +14,7 @@ use std::mem::size_of;
 use transaction::Transaction;
 
 pub trait Block {
-    /// Verifies the hashes and counts of a slice of events are all consistent.
+    /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
 }
 
@@ -26,17 +26,17 @@ impl Block for [Entry] {
     }
 }
 
-/// Create a vector of Entries of length `event_set.len()` from `start_hash` hash, `num_hashes`, and `event_set`.
+/// Create a vector of Entries of length `transaction_batches.len()` from `start_hash` hash, `num_hashes`, and `transaction_batches`.
 pub fn next_entries(
     start_hash: &Hash,
     num_hashes: u64,
-    event_set: Vec<Vec<Transaction>>,
+    transaction_batches: Vec<Vec<Transaction>>,
 ) -> Vec<Entry> {
     let mut id = *start_hash;
     let mut entries = vec![];
-    for event_list in &event_set {
-        let events = event_list.clone();
-        let entry = next_entry(&id, num_hashes, events);
+    for transactions in &transaction_batches {
+        let transactions = transactions.clone();
+        let entry = next_entry(&id, num_hashes, transactions);
         id = entry.id;
         entries.push(entry);
     }
@@ -54,33 +54,37 @@ pub fn process_entry_list_into_blobs(
         let mut entries: Vec<Vec<Entry>> = Vec::new();
         let mut total = 0;
         for i in &list[start..] {
-            total += size_of::<Transaction>() * i.events.len();
+            total += size_of::<Transaction>() * i.transactions.len();
             total += size_of::<Entry>();
             if total >= BLOB_DATA_SIZE {
                 break;
             }
             end += 1;
         }
-        // See if we need to split the events
+        // See if we need to split the transactions
         if end <= start {
-            let mut event_start = 0;
-            let num_events_per_blob = BLOB_DATA_SIZE / size_of::<Transaction>();
-            let total_entry_chunks =
-                (list[end].events.len() + num_events_per_blob - 1) / num_events_per_blob;
+            let mut transaction_start = 0;
+            let num_transactions_per_blob = BLOB_DATA_SIZE / size_of::<Transaction>();
+            let total_entry_chunks = (list[end].transactions.len() + num_transactions_per_blob - 1)
+                / num_transactions_per_blob;
             trace!(
-                "splitting events end: {} total_chunks: {}",
+                "splitting transactions end: {} total_chunks: {}",
                 end,
                 total_entry_chunks
             );
             for _ in 0..total_entry_chunks {
-                let event_end = min(event_start + num_events_per_blob, list[end].events.len());
+                let transaction_end = min(
+                    transaction_start + num_transactions_per_blob,
+                    list[end].transactions.len(),
+                );
                 let mut entry = Entry {
                     num_hashes: list[end].num_hashes,
                     id: list[end].id,
-                    events: list[end].events[event_start..event_end].to_vec(),
+                    transactions: list[end].transactions[transaction_start..transaction_end]
+                        .to_vec(),
                 };
                 entries.push(vec![entry]);
-                event_start = event_end;
+                transaction_start = transaction_end;
             }
             end += 1;
         } else {
@@ -112,7 +116,7 @@ pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> Vec<Entry
         for entry in entries {
             if entry.id == last_id {
                 if let Some(last_entry) = entries_to_apply.last_mut() {
-                    last_entry.events.extend(entry.events);
+                    last_entry.transactions.extend(entry.transactions);
                 }
             } else {
                 last_id = entry.id;
@@ -152,8 +156,8 @@ mod tests {
         let one = hash(&zero);
         let keypair = KeyPair::new();
         let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let events = vec![tr0.clone(); 10000];
-        let e0 = Entry::new(&zero, 0, events);
+        let transactions = vec![tr0.clone(); 10000];
+        let e0 = Entry::new(&zero, 0, transactions);
 
         let entry_list = vec![e0.clone(); 1];
         let blob_recycler = BlobRecycler::default();
@@ -170,15 +174,15 @@ mod tests {
         let next_id = hash(&id);
         let keypair = KeyPair::new();
         let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
-        let events = vec![tr0.clone(); 5];
-        let event_set = vec![events.clone(); 5];
-        let entries0 = next_entries(&id, 0, event_set);
+        let transactions = vec![tr0.clone(); 5];
+        let transaction_batches = vec![transactions.clone(); 5];
+        let entries0 = next_entries(&id, 0, transaction_batches);
 
         assert_eq!(entries0.len(), 5);
 
         let mut entries1 = vec![];
         for _ in 0..5 {
-            let entry = next_entry(&id, 0, events.clone());
+            let entry = next_entry(&id, 0, transactions.clone());
             id = entry.id;
             entries1.push(entry);
         }
@@ -193,7 +197,7 @@ mod bench {
     use ledger::*;
 
     #[bench]
-    fn event_bench(bencher: &mut Bencher) {
+    fn next_entries_bench(bencher: &mut Bencher) {
         let start_hash = Hash::default();
         let entries = next_entries(&start_hash, 10_000, vec![vec![]; 8]);
         bencher.iter(|| {
