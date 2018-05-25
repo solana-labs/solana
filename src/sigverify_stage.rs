@@ -1,4 +1,4 @@
-//! The `sig_verify_stage` implements the signature verification stage of the TPU.
+//! The `sigverify_stage` implements the signature verification stage of the TPU.
 
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
