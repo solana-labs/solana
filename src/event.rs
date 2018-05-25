@@ -25,7 +25,7 @@ impl Event {
     /// spending plan is valid.
     pub fn verify(&self) -> bool {
         match *self {
-            Event::Transaction(ref tr) => tr.verify_sig(),
+            Event::Transaction(ref tr) => tr.verify_plan(),
         }
     }
 }
