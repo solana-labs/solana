@@ -4,9 +4,10 @@ use bincode::{deserialize, serialize};
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
-use request::{Request, Response};
+use request::Request;
 use request_processor::RequestProcessor;
 use result::Result;
+use serde::Serialize;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -36,8 +37,8 @@ impl RequestStage {
     }
 
     /// Split Request list into verified transactions and the rest
-    fn serialize_response(
-        resp: Response,
+    fn serialize_response<T: Serialize>(
+        resp: T,
         rsp_addr: SocketAddr,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<packet::SharedBlob> {
@@ -53,8 +54,8 @@ impl RequestStage {
         Ok(blob)
     }
 
-    fn serialize_responses(
-        rsps: Vec<(Response, SocketAddr)>,
+    fn serialize_responses<T: Serialize>(
+        rsps: Vec<(T, SocketAddr)>,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<VecDeque<packet::SharedBlob>> {
         let mut blobs = VecDeque::new();
