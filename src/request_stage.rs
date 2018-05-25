@@ -1,14 +1,12 @@
 //! The `request_stage` processes thin client Request messages.
 
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
 use result::Result;
-use serde::Serialize;
-use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,35 +32,6 @@ impl RequestStage {
                     .ok()
             })
             .collect()
-    }
-
-    /// Split Request list into verified transactions and the rest
-    fn serialize_response<T: Serialize>(
-        resp: T,
-        rsp_addr: SocketAddr,
-        blob_recycler: &packet::BlobRecycler,
-    ) -> Result<packet::SharedBlob> {
-        let blob = blob_recycler.allocate();
-        {
-            let mut b = blob.write().unwrap();
-            let v = serialize(&resp)?;
-            let len = v.len();
-            b.data[..len].copy_from_slice(&v);
-            b.meta.size = len;
-            b.meta.set_addr(&rsp_addr);
-        }
-        Ok(blob)
-    }
-
-    fn serialize_responses<T: Serialize>(
-        rsps: Vec<(T, SocketAddr)>,
-        blob_recycler: &packet::BlobRecycler,
-    ) -> Result<VecDeque<packet::SharedBlob>> {
-        let mut blobs = VecDeque::new();
-        for (resp, rsp_addr) in rsps {
-            blobs.push_back(Self::serialize_response(resp, rsp_addr, blob_recycler)?);
-        }
-        Ok(blobs)
     }
 
     pub fn process_request_packets(
@@ -91,7 +60,7 @@ impl RequestStage {
 
             let rsps = request_processor.process_requests(reqs);
 
-            let blobs = Self::serialize_responses(rsps, blob_recycler)?;
+            let blobs = packet::to_blobs(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 info!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
