@@ -377,6 +377,7 @@ fn broadcast(
         dq.append(&mut nq);
     }
     let mut blobs = dq.into_iter().collect();
+
     // appends codes to the list of blobs allowing us to reconstruct the stream
     #[cfg(feature = "erasure")]
     {
@@ -385,7 +386,8 @@ fn broadcast(
             _ => {}
         }
     }
-    Crdt::broadcast(crdt, &blobs, &sock, transmit_index)?;
+
+    Crdt::index_blobs(crdt, &blobs, transmit_index)?;
     // keep the cache of blobs that are broadcast
     {
         let mut win = window.write().unwrap();
@@ -412,6 +414,8 @@ fn broadcast(
             win[pos] = Some(b);
         }
     }
+
+    Crdt::broadcast(crdt, &window, &sock, transmit_index)?;
     Ok(())
 }
 
