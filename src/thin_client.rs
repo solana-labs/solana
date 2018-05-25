@@ -73,8 +73,8 @@ impl ThinClient {
 
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
-    pub fn transfer_signed(&self, tr: Transaction) -> io::Result<usize> {
-        let data = serialize(&tr).expect("serialize Transaction in pub fn transfer_signed");
+    pub fn transfer_signed(&self, tx: Transaction) -> io::Result<usize> {
+        let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
             .send_to(&data, &self.transactions_addr)
     }
@@ -87,9 +87,9 @@ impl ThinClient {
         to: PublicKey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
-        let tr = Transaction::new(keypair, to, n, *last_id);
-        let sig = tr.sig;
-        self.transfer_signed(tr).map(|_| sig)
+        let tx = Transaction::new(keypair, to, n, *last_id);
+        let sig = tx.sig;
+        self.transfer_signed(tx).map(|_| sig)
     }
 
     /// Request the balance of the user holding `pubkey`. This method blocks
@@ -277,9 +277,9 @@ mod tests {
         );
         let last_id = client.get_last_id().wait().unwrap();
 
-        let tr = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
+        let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
-        let _sig = client.transfer_signed(tr).unwrap();
+        let _sig = client.transfer_signed(tx).unwrap();
 
         let last_id = client.get_last_id().wait().unwrap();
 

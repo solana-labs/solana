@@ -378,17 +378,17 @@ mod test {
 
     #[test]
     fn test_to_packets() {
-        let tr = Request::GetTransactionCount;
+        let tx = Request::GetTransactionCount;
         let re = PacketRecycler::default();
-        let rv = to_packets(&re, vec![tr.clone(); 1]);
+        let rv = to_packets(&re, vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), 1);
 
-        let rv = to_packets(&re, vec![tr.clone(); NUM_PACKETS]);
+        let rv = to_packets(&re, vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
 
-        let rv = to_packets(&re, vec![tr.clone(); NUM_PACKETS + 1]);
+        let rv = to_packets(&re, vec![tx.clone(); NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);

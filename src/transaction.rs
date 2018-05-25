@@ -39,14 +39,14 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let mut tr = Transaction {
+        let mut tx = Transaction {
             sig: Signature::default(),
             instruction,
             last_id,
             from,
         };
-        tr.sign(from_keypair);
-        tr
+        tx.sign(from_keypair);
+        tx
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -82,14 +82,14 @@ impl Transaction {
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        let mut tr = Transaction {
+        let mut tx = Transaction {
             instruction,
             from,
             last_id,
             sig: Signature::default(),
         };
-        tr.sign(from_keypair);
-        tr
+        tx.sign(from_keypair);
+        tx
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
@@ -140,12 +140,12 @@ pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
 
 /// Verify a batch of signatures.
 pub fn verify_signatures(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.verify_sig())
+    transactions.par_iter().all(|tx| tx.verify_sig())
 }
 
 /// Verify a batch of spending plans.
 pub fn verify_plans(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tr| tr.verify_plan())
+    transactions.par_iter().all(|tx| tx.verify_plan())
 }
 
 /// Verify a batch of transactions.
@@ -199,15 +199,15 @@ mod tests {
         let zero = Hash::default();
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
-        let mut tr = Transaction::new(&keypair, pubkey, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tr.instruction {
+        let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
+        if let Instruction::NewContract(contract) = &mut tx.instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
             if let Plan::Pay(ref mut payment) = contract.plan {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
             }
         }
-        assert!(tr.verify_plan());
-        assert!(!tr.verify_sig());
+        assert!(tx.verify_plan());
+        assert!(!tx.verify_sig());
     }
 
     #[test]
@@ -217,23 +217,23 @@ mod tests {
         let thief_keypair = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
-        let mut tr = Transaction::new(&keypair0, pubkey1, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tr.instruction {
+        let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
+        if let Instruction::NewContract(contract) = &mut tx.instruction {
             if let Plan::Pay(ref mut payment) = contract.plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
-        assert!(tr.verify_plan());
-        assert!(!tr.verify_sig());
+        assert!(tx.verify_plan());
+        assert!(!tx.verify_sig());
     }
     #[test]
     fn test_layout() {
-        let tr = test_tx();
-        let sign_data = tr.get_sign_data();
-        let tx = serialize(&tr).unwrap();
-        assert_matches!(memfind(&tx, &sign_data), Some(SIGNED_DATA_OFFSET));
-        assert_matches!(memfind(&tx, &tr.sig), Some(SIG_OFFSET));
-        assert_matches!(memfind(&tx, &tr.from), Some(PUB_KEY_OFFSET));
+        let tx = test_tx();
+        let sign_data = tx.get_sign_data();
+        let tx_bytes = serialize(&tx).unwrap();
+        assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.sig), Some(SIG_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.from), Some(PUB_KEY_OFFSET));
     }
 
     #[test]
@@ -241,21 +241,21 @@ mod tests {
         let keypair0 = KeyPair::new();
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
-        let mut tr = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Instruction::NewContract(contract) = &mut tr.instruction {
+        let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
+        if let Instruction::NewContract(contract) = &mut tx.instruction {
             if let Plan::Pay(ref mut payment) = contract.plan {
                 payment.tokens = 2; // <-- attack!
             }
         }
-        assert!(!tr.verify_plan());
+        assert!(!tx.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Instruction::NewContract(contract) = &mut tr.instruction {
+        if let Instruction::NewContract(contract) = &mut tx.instruction {
             if let Plan::Pay(ref mut payment) = contract.plan {
                 payment.tokens = 0; // <-- whoops!
             }
         }
-        assert!(!tr.verify_plan());
+        assert!(!tx.verify_plan());
     }
 
     #[test]
