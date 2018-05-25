@@ -17,10 +17,6 @@ name = "solana-client-demo"
 path = "src/bin/client-demo.rs"
 
 [[bin]]
-name = "solana-multinode-demo"
-path = "src/bin/multinode-demo.rs"
-
-[[bin]]
 name = "solana-testnode"
 path = "src/bin/testnode.rs"
 
