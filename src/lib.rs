@@ -2,7 +2,6 @@
 pub mod bank;
 pub mod banking_stage;
 pub mod crdt;
-pub mod ecdsa;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
@@ -22,8 +21,9 @@ pub mod request_stage;
 pub mod result;
 pub mod rpu;
 pub mod server;
-pub mod sig_verify_stage;
 pub mod signature;
+pub mod sigverify;
+pub mod sigverify_stage;
 pub mod streamer;
 pub mod thin_client;
 pub mod timing;

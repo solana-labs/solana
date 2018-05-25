@@ -143,8 +143,8 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use ecdsa;
     use packet::{Packet, Packets, SharedPackets};
+    use sigverify;
     use std::sync::RwLock;
     use transaction::Transaction;
     use transaction::{memfind, test_tx};
@@ -154,7 +154,7 @@ mod tests {
         let tx = test_tx();
         let tx_bytes = serialize(&tx).unwrap();
         let packet = serialize(&tx).unwrap();
-        assert_matches!(memfind(&packet, &tx_bytes), Some(ecdsa::TX_OFFSET));
+        assert_matches!(memfind(&packet, &tx_bytes), Some(sigverify::TX_OFFSET));
         assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
     }
 
@@ -185,7 +185,7 @@ mod tests {
         let batches = vec![shared_packets.clone(), shared_packets.clone()];
 
         // verify packets
-        let ans = ecdsa::ed25519_verify(&batches);
+        let ans = sigverify::ed25519_verify(&batches);
 
         // check result
         let ref_ans = if modify_data { 0u8 } else { 1u8 };
