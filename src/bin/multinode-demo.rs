@@ -168,9 +168,12 @@ fn main() {
             let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
             let tps = (txs * 1_000_000_000) as f64 / ns as f64;
             println!("{}: {} tps", val.events_addr, tps);
-            let txs = tx_count - first_count;
-            println!("{}: Total Transactions processed {}", val.events_addr, txs);
-            if txs == transactions.len() as u64 {
+            let total = tx_count - first_count;
+            println!(
+                "{}: Total Transactions processed {}",
+                val.events_addr, total
+            );
+            if total == transactions.len() as u64 {
                 break;
             }
             if i > 20 && txs == 0 {
