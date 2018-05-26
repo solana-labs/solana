@@ -23,6 +23,10 @@ steps:
         user: "998:997" # buildkite-agent:buildkite-agent
   - command: "ci/test-ignored.sh || true"
     label: "ignored - FAILURES IGNORED [public]"
+    plugins:
+      docker#v1.1.1:
+        image: "rust"
+        user: "998:997" # buildkite-agent:buildkite-agent
   - command: "ci/test-cuda.sh"
     label: "cuda"
   - wait
