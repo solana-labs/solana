@@ -14,7 +14,7 @@ cargo-kcov --version
 
 export RUST_BACKTRACE=1
 cargo build
-cargo kcov
+cargo kcov --lib
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
