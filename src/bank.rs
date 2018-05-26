@@ -581,7 +581,7 @@ mod bench {
     use signature::KeyPairUtil;
 
     #[bench]
-    fn process_verified_transaction_bench(bencher: &mut Bencher) {
+    fn bench_process_verified_transaction(bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
         let bank = Bank::new(&mint);
         // Create transactions between unrelated parties.

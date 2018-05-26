@@ -278,7 +278,7 @@ mod bench {
     use transaction::*;
 
     #[bench]
-    fn verify_signatures_bench(bencher: &mut Bencher) {
+    fn bench_verify_signatures(bencher: &mut Bencher) {
         let alice_keypair = KeyPair::new();
         let last_id = Hash::default();
         let transactions: Vec<_> = (0..64)

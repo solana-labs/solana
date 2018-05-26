@@ -192,7 +192,7 @@ impl BankingStage {
 //    use transaction::Transaction;
 //
 //    #[bench]
-//    fn process_transactions_bench(_bencher: &mut Bencher) {
+//    fn bench_process_transactions(_bencher: &mut Bencher) {
 //        let mint = Mint::new(100_000_000);
 //        let bank = Bank::new(&mint);
 //        // Create transactions between unrelated parties.
@@ -260,7 +260,7 @@ mod bench {
     use transaction::Transaction;
 
     #[bench]
-    fn stage_bench(bencher: &mut Bencher) {
+    fn bench_stage(bencher: &mut Bencher) {
         let tx = 100_usize;
         let mint = Mint::new(1_000_000_000);
         let pubkey = KeyPair::new().pubkey();

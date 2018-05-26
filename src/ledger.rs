@@ -197,7 +197,7 @@ mod bench {
     use ledger::*;
 
     #[bench]
-    fn next_entries_bench(bencher: &mut Bencher) {
+    fn bench_next_entries(bencher: &mut Bencher) {
         let start_hash = Hash::default();
         let entries = next_entries(&start_hash, 10_000, vec![vec![]; 8]);
         bencher.iter(|| {
