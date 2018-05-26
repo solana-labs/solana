@@ -178,7 +178,7 @@ fn main() {
         let file = File::create(path).expect("file");
         serde_json::to_writer(file, &repl_data).expect("serialize");
     }
-    eprintln!("Ready. Listening on {}", repl_data.events_addr);
+    eprintln!("Ready. Listening on {}", repl_data.transactions_addr);
 
     for t in threads {
         t.join().expect("join");
