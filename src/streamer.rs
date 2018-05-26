@@ -378,15 +378,6 @@ fn broadcast(
     }
     let mut blobs = dq.into_iter().collect();
 
-    // appends codes to the list of blobs allowing us to reconstruct the stream
-    #[cfg(feature = "erasure")]
-    {
-        match  erasure::generate_coding(recycler, &mut window.write().unwrap(), *transmit_index as usize) {
-            Err(_e) => { return Err(Error::GenericError) }
-            _ => {}
-        }
-    }
-
     Crdt::index_blobs(crdt, &blobs, transmit_index)?;
     // keep the cache of blobs that are broadcast
     {
@@ -412,6 +403,15 @@ fn broadcast(
             trace!("caching {} at {}", ix, pos);
             assert!(win[pos].is_none());
             win[pos] = Some(b);
+        }
+    }
+
+    // appends codes to the list of blobs allowing us to reconstruct the stream
+    #[cfg(feature = "erasure")]
+    {
+        match  erasure::generate_coding(recycler, &mut window.write().unwrap(), *transmit_index as usize) {
+            Err(_e) => { return Err(Error::GenericError) }
+            _ => {}
         }
     }
 
