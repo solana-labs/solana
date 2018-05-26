@@ -24,6 +24,7 @@ use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
 use packet;
 use replicate_stage::ReplicateStage;
+use signature::{KeyPair, KeyPairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -125,12 +126,54 @@ impl Tvu {
     }
 }
 
-#[cfg(test)]
-use std::time::Duration;
+pub struct Sockets {
+    pub gossip: UdpSocket,
+    pub requests: UdpSocket,
+    pub replicate: UdpSocket,
+    pub transaction: UdpSocket,
+    pub respond: UdpSocket,
+    pub broadcast: UdpSocket,
+}
+
+pub struct TestNode {
+    pub data: ReplicatedData,
+    pub sockets: Sockets,
+}
+
+impl TestNode {
+    pub fn new() -> TestNode {
+        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let pubkey = KeyPair::new().pubkey();
+        let data = ReplicatedData::new(
+            pubkey,
+            gossip.local_addr().unwrap(),
+            replicate.local_addr().unwrap(),
+            requests.local_addr().unwrap(),
+            transaction.local_addr().unwrap(),
+        );
+        TestNode {
+            data: data,
+            sockets: Sockets {
+                gossip,
+                requests,
+                replicate,
+                transaction,
+                respond,
+                broadcast,
+            },
+        }
+    }
+}
 
 #[cfg(test)]
 pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
     use signature::{KeyPair, KeyPairUtil};
+    use std::time::Duration;
 
     let transactions_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -155,7 +198,6 @@ pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use crdt::Crdt;
-    use crdt::ReplicatedData;
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
@@ -163,14 +205,13 @@ pub mod tests {
     use packet::BlobRecycler;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
-    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
     use transaction::Transaction;
-    use tvu::Tvu;
+    use tvu::{TestNode, Tvu};
 
     /// Test that mesasge sent from leader to target1 and repliated to target2
     #[test]
@@ -302,46 +343,5 @@ pub mod tests {
         t_responder.join().expect("join");
         t_l_gossip.join().expect("join");
         t_l_listen.join().expect("join");
-    }
-    pub struct Sockets {
-        pub gossip: UdpSocket,
-        pub requests: UdpSocket,
-        pub replicate: UdpSocket,
-        pub transaction: UdpSocket,
-        pub respond: UdpSocket,
-        pub broadcast: UdpSocket,
-    }
-    pub struct TestNode {
-        pub data: ReplicatedData,
-        pub sockets: Sockets,
-    }
-    impl TestNode {
-        pub fn new() -> TestNode {
-            let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let pubkey = KeyPair::new().pubkey();
-            let data = ReplicatedData::new(
-                pubkey,
-                gossip.local_addr().unwrap(),
-                replicate.local_addr().unwrap(),
-                requests.local_addr().unwrap(),
-                transaction.local_addr().unwrap(),
-            );
-            TestNode {
-                data: data,
-                sockets: Sockets {
-                    gossip,
-                    requests,
-                    replicate,
-                    transaction,
-                    respond,
-                    broadcast,
-                },
-            }
-        }
     }
 }
