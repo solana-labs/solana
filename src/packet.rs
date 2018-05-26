@@ -173,7 +173,7 @@ impl Packets {
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
-        //  * block on the socket until its readable
+        //  * block on the socket until it's readable
         //  * set the socket to non blocking
         //  * read until it fails
         //  * set it back to blocking before returning
@@ -304,7 +304,7 @@ impl Blob {
         let mut v = VecDeque::new();
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
-        //  * block on the socket until its readable
+        //  * block on the socket until it's readable
         //  * set the socket to non blocking
         //  * read until it fails
         //  * set it back to blocking before returning

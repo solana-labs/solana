@@ -1,4 +1,5 @@
-//! The `streamer` module defines a set of services for effecently pulling data from udp sockets.
+//! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
+//!
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
@@ -220,11 +221,11 @@ fn recv_window(
             );
             if p.get_id().expect("get_id in fn recv_window") == leader_id {
                 //TODO
-                //need to copy the retransmited blob
+                //need to copy the retransmitted blob
                 //otherwise we get into races with which thread
                 //should do the recycling
                 //
-                //a better absraction would be to recycle when the blob
+                //a better abstraction would be to recycle when the blob
                 //is dropped via a weakref to the recycler
                 let nv = recycler.allocate();
                 {
