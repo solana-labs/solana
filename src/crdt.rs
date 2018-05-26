@@ -299,10 +299,10 @@ impl Crdt {
             return Err(Error::CrdtTooSmall);
         }
         trace!("nodes table {}", nodes.len());
-        trace!("blobs table {}", blobs.len());
         // enumerate all the blobs, those are the indices
         // transmit them to nodes, starting from a different node
-        let orders: Vec<_> = blobs
+        let window_l = window.write().unwrap();
+        let orders: Vec<_> = window_l[(*transmit_index as usize)..]
             .iter()
             .enumerate()
             .zip(
@@ -315,10 +315,11 @@ impl Crdt {
         trace!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
-            .map(|((i, b), v)| {
+            .map(|((_i, b), v)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
-                let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
+                let bl = b.clone().unwrap();
+                let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
                 assert!(blob.meta.size < BLOB_SIZE);
