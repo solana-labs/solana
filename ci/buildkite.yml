@@ -21,8 +21,8 @@ steps:
       docker#v1.1.1:
         image: "rustlang/rust:nightly"
         user: "998:997" # buildkite-agent:buildkite-agent
-  - command: "ci/test-ignored.sh || true"
-    label: "ignored - FAILURES IGNORED [public]"
+  - command: "ci/test-ignored.sh"
+    label: "ignored [public]"
     plugins:
       docker#v1.1.1:
         image: "rust"
