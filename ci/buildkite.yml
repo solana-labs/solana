@@ -1,6 +1,6 @@
 steps:
   - command: "ci/coverage.sh"
-    label: "coverage"
+    label: "coverage [public]"
     # TODO: Run coverage in a docker image rather than assuming kcov/cargo-kcov
     #       is installed on the build agent...
     #plugins:
@@ -8,7 +8,7 @@ steps:
     #    image: "rust"
     #    user: "998:997" # buildkite-agent:buildkite-agent
     #    environment:
-    #      - CODECOV_TOKEN=$CODECOV_TOKEN
+    #      - CODECOV_TOKEN
   - command: "ci/test-stable.sh"
     label: "stable [public]"
     plugins:
@@ -37,5 +37,5 @@ steps:
         image: "rust"
         user: "998:997" # buildkite-agent:buildkite-agent
         environment:
-          - BUILDKITE_TAG=$BUILDKITE_TAG
-          - CRATES_IO_TOKEN=$CRATES_IO_TOKEN
+          - BUILDKITE_TAG
+          - CRATES_IO_TOKEN
