@@ -7,12 +7,12 @@
 //! along with the ecdsa signature for the blob and each signature in all the transactions.  Blobs
 //! with errors are dropped, or marked for slashing.
 //! 3.a retransmit
-//! - Blobs originating from the parent (leader atm is the only parent), are retransmit to all the
+//! - Blobs originating from the parent (leader, at the moment, is the only parent), are retransmit to all the
 //! peers in the crdt.  Peers is everyone who is not me or the leader that has a known replicate
 //! address.
 //! 3.b window
 //! - Verified blobs are placed into a window, indexed by the counter set by the leader.sockets. This could
-//! be the PoH counter if its monitonically increasing in each blob.  Easure coding is used to
+//! be the PoH counter if its monotonically increasing in each blob.  Erasure coding is used to
 //! recover any missing packets, and requests are made at random to peers and parents to retransmit
 //! a missing packet.
 //! 4. accountant
@@ -42,8 +42,8 @@ impl Tvu {
     /// # Arguments
     /// * `bank` - The bank state.
     /// * `me` - my configuration
-    /// * `gossip` - my gosisp socket
-    /// * `replicte` - my replicte socket
+    /// * `gossip` - my gossisp socket
+    /// * `replicate` - my replicate socket
     /// * `leader` - leader configuration
     /// * `exit` - The exit signal.
     pub fn new(
@@ -213,7 +213,7 @@ pub mod tests {
     use transaction::Transaction;
     use tvu::{TestNode, Tvu};
 
-    /// Test that mesasge sent from leader to target1 and repliated to target2
+    /// Test that message sent from leader to target1 and replicated to target2
     #[test]
     fn test_replicate() {
         logger::setup();
