@@ -537,7 +537,8 @@ mod bench {
             }
         })
     }
-    fn run_streamer_bench() -> Result<()> {
+
+    fn bench_streamer_with_result() -> Result<()> {
         let read = UdpSocket::bind("127.0.0.1:0")?;
         read.set_read_timeout(Some(Duration::new(1, 0)))?;
 
@@ -572,8 +573,8 @@ mod bench {
         Ok(())
     }
     #[bench]
-    pub fn streamer_bench(_bench: &mut Bencher) {
-        run_streamer_bench().unwrap();
+    pub fn bench_streamer(_bench: &mut Bencher) {
+        bench_streamer_with_result().unwrap();
     }
 }
 
