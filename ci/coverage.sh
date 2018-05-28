@@ -19,8 +19,8 @@ cargo kcov --lib
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
-  exit 1
+else
+  bash <(curl -s https://codecov.io/bash)
 fi
 
-bash <(curl -s https://codecov.io/bash)
 exit 0
