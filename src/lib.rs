@@ -3,6 +3,7 @@ pub mod bank;
 pub mod banking_stage;
 pub mod budget;
 pub mod crdt;
+pub mod data_replicator;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]

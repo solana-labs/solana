@@ -56,7 +56,6 @@ impl Tpu {
             Mutex::new(writer),
             record_stage.entry_receiver,
         );
-
         let mut thread_hdls = vec![
             fetch_stage.thread_hdl,
             banking_stage.thread_hdl,

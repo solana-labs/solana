@@ -6,14 +6,15 @@ extern crate solana;
 
 use futures::Future;
 use solana::bank::Bank;
+use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
+use solana::data_replicator::DataReplicator;
 use solana::logger;
 use solana::mint::Mint;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
-use solana::tvu::TestNode;
 use std::io;
 use std::io::sink;
 use std::net::UdpSocket;
@@ -59,16 +60,15 @@ fn converge(
     let mut spy_crdt = Crdt::new(spy.data);
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
-
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
-    let t_spy_listen = Crdt::listen(
+    let dr = DataReplicator::new(
         spy_ref.clone(),
         spy_window,
         spy.sockets.gossip,
-        exit.clone(),
-    );
-    let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
+        spy.sockets.gossip_send,
+        exit,
+    ).unwrap();
     //wait for the network to converge
     let mut converged = false;
     for _ in 0..30 {
@@ -80,8 +80,7 @@ fn converge(
         sleep(Duration::new(1, 0));
     }
     assert!(converged);
-    threads.push(t_spy_listen);
-    threads.push(t_spy_gossip);
+    threads.extend(dr.thread_hdls.into_iter());
     let v: Vec<ReplicatedData> = spy_ref
         .read()
         .unwrap()
