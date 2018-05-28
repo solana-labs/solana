@@ -1,32 +1,12 @@
 steps:
   - command: "ci/coverage.sh"
     name: "coverage [public]"
-    # TODO: Run coverage in a docker image rather than assuming kcov/cargo-kcov
-    #       is installed on the build agent...
-    #plugins:
-    #  docker#v1.1.1:
-    #    image: "rust"
-    #    user: "998:997" # buildkite-agent:buildkite-agent
-    #    environment:
-    #      - CODECOV_TOKEN
-  - command: "ci/test-stable.sh"
+  - command: "ci/docker-run.sh rust ci/test-stable.sh"
     name: "stable [public]"
-    plugins:
-      docker#v1.1.1:
-        image: "rust"
-        user: "998:997" # buildkite-agent:buildkite-agent
-  - command: "ci/test-nightly.sh || true"
+  - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh || true"
     name: "nightly - FAILURES IGNORED [public]"
-    plugins:
-      docker#v1.1.1:
-        image: "rustlang/rust:nightly"
-        user: "998:997" # buildkite-agent:buildkite-agent
-  - command: "ci/test-ignored.sh"
+  - command: "ci/docker-run.sh rust ci/test-ignored.sh"
     name: "ignored [public]"
-    plugins:
-      docker#v1.1.1:
-        image: "rust"
-        user: "998:997" # buildkite-agent:buildkite-agent
   - command: "ci/test-cuda.sh"
     name: "cuda"
   - command: "ci/shellcheck.sh"
@@ -34,10 +14,3 @@ steps:
   - wait
   - command: "ci/publish.sh"
     name: "publish release artifacts"
-    plugins:
-      docker#v1.1.1:
-        image: "rust"
-        user: "998:997" # buildkite-agent:buildkite-agent
-        environment:
-          - BUILDKITE_TAG
-          - CRATES_IO_TOKEN

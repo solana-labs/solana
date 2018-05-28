@@ -2,20 +2,15 @@
 
 cd "$(dirname "$0")/.."
 
-if [[ -r ~/.cargo/env ]]; then
-  # Pick up local install of kcov/cargo-kcov
-  # shellcheck disable=SC1090
-  source ~/.cargo/env
-fi
+ci/docker-run.sh evilmachines/rust-cargo-kcov \
+  bash -exc "\
+    export RUST_BACKTRACE=1; \
+    cargo build --verbose; \
+    cargo kcov --lib --verbose; \
+  "
 
-rustc --version
-cargo --version
-kcov --version
-cargo-kcov --version
-
-export RUST_BACKTRACE=1
-cargo build
-cargo kcov --lib
+echo Coverage report:
+ls -l target/cov/index.html
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
