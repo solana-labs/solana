@@ -235,29 +235,25 @@ impl Crdt {
         transmit_index: &mut u64,
     ) -> Result<()> {
         let me: ReplicatedData = {
-            // copy to avoid locking during IO
-            let robj = obj.read().expect("'obj' read lock in pub fn broadcast");
+            let robj = obj.read().expect("'obj' read lock in crdt::index_blobs");
             info!("broadcast table {}", robj.table.len());
             robj.table[&robj.me].clone()
         };
 
         // enumerate all the blobs, those are the indices
-        let orders: Vec<_> = blobs
-            .iter()
-            .enumerate()
-            .collect();
+        let orders: Vec<_> = blobs.iter().enumerate().collect();
         info!("orders table {}", orders.len());
-        let _ : Vec<_> = orders
+        let _: Vec<_> = orders
             .into_iter()
             .map(|(i, b)| {
                 // only leader should be broadcasting
-                let mut blob = b.write().expect("'b' write lock in pub fn broadcast");
+                let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
                 blob.set_id(me.id).expect("set_id in pub fn broadcast");
                 blob.set_index(*transmit_index + i as u64)
                     .expect("set_index in pub fn broadcast");
-                //TODO profile this, may need multiple sockets for par_iter
             })
             .collect();
+        info!("set blobs index");
 
         Ok(())
     }
@@ -298,27 +294,29 @@ impl Crdt {
             warn!("crdt too small");
             return Err(Error::CrdtTooSmall);
         }
-        trace!("nodes table {}", nodes.len());
-        // enumerate all the blobs, those are the indices
+        info!("nodes table {}", nodes.len());
+
+        // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
+        let mut orders = Vec::new();
         let window_l = window.write().unwrap();
-        let orders: Vec<_> = window_l[(*transmit_index as usize)..]
-            .iter()
-            .enumerate()
-            .zip(
-                nodes
-                    .iter()
-                    .cycle()
-                    .skip((*transmit_index as usize) % nodes.len()),
-            )
-            .collect();
-        trace!("orders table {}", orders.len());
+        let mut i = (*transmit_index as usize) % window_l.len();
+        loop {
+            if window_l[i].is_none() || orders.len() >= window_l.len() {
+                break;
+            }
+            orders.push((window_l[i].clone(), nodes[i % nodes.len()]));
+            i += 1;
+            i %= window_l.len();
+        }
+
+        info!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
-            .map(|((_i, b), v)| {
+            .map(|(b, v)| {
                 // only leader should be broadcasting
                 assert!(me.current_leader_id != v.id);
-                let bl = b.clone().unwrap();
+                let bl = b.unwrap();
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
@@ -328,7 +326,7 @@ impl Crdt {
                 e
             })
             .collect();
-        trace!("broadcast results {}", errs.len());
+        info!("broadcast results {}", errs.len());
         for e in errs {
             match e {
                 Err(e) => {

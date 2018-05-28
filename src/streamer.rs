@@ -378,6 +378,11 @@ fn broadcast(
     }
     let mut blobs = dq.into_iter().collect();
 
+    // Insert the coding blobs into the blob stream
+    #[cfg(feature = "erasure")]
+    erasure::add_coding_blobs(recycler, &mut blobs, *transmit_index);
+
+    // Index the blobs
     Crdt::index_blobs(crdt, &blobs, transmit_index)?;
     // keep the cache of blobs that are broadcast
     {
@@ -406,15 +411,16 @@ fn broadcast(
         }
     }
 
-    // appends codes to the list of blobs allowing us to reconstruct the stream
+    // Fill in the coding blob data from the window data blobs
     #[cfg(feature = "erasure")]
     {
-        match  erasure::generate_coding(recycler, &mut window.write().unwrap(), *transmit_index as usize) {
-            Err(_e) => { return Err(Error::GenericError) }
+        match erasure::generate_coding(&mut window.write().unwrap(), *transmit_index as usize) {
+            Err(_e) => return Err(Error::GenericError),
             _ => {}
         }
     }
 
+    // Send blobs out from the window
     Crdt::broadcast(crdt, &window, &sock, transmit_index)?;
     Ok(())
 }
