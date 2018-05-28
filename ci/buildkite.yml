@@ -29,6 +29,8 @@ steps:
         user: "998:997" # buildkite-agent:buildkite-agent
   - command: "ci/test-cuda.sh"
     label: "cuda"
+  - command: "ci/shellcheck.sh"
+    label: "shellcheck [public]"
   - wait
   - command: "ci/publish.sh"
     label: "publish release artifacts"
