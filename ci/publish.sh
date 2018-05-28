@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-cd $(dirname $0)/..
+cd "$(dirname "$0")/.."
 
 if [[ -z "$BUILDKITE_TAG" ]]; then
   # Skip publish if this is not a tagged release
