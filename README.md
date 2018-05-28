@@ -129,6 +129,11 @@ Run the test suite:
 $ cargo test
 ```
 
+To emulate all the tests that will run on a Pull Request, run:
+```bash
+$ ./ci/run-local.sh
+```
+
 Debugging
 ---
 
@@ -169,8 +174,10 @@ Code coverage
 To generate code coverage statistics, run kcov via Docker:
 
 ```bash
-$ docker run -it --rm --security-opt seccomp=unconfined --volume "$PWD:/volume" elmtai/docker-rust-kcov
+$ ./ci/coverage.sh
 ```
+The coverage report will be written to `./target/cov/index.html`
+
 
 Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer
 productivity metric. When a developer makes a change to the codebase, presumably it's a *solution* to
