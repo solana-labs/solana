@@ -22,9 +22,9 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
+use data_replicator::DataReplicator;
 use packet;
 use replicate_stage::ReplicateStage;
-use signature::{KeyPair, KeyPairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
@@ -49,7 +49,7 @@ impl Tvu {
     pub fn new(
         bank: Arc<Bank>,
         me: ReplicatedData,
-        gossip: UdpSocket,
+        gossip_listen_socket: UdpSocket,
         replicate: UdpSocket,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
@@ -62,9 +62,15 @@ impl Tvu {
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&leader);
-        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let window = streamer::default_window();
-        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip, exit.clone());
+        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+        let data_replicator = DataReplicator::new(
+            crdt.clone(),
+            window.clone(),
+            gossip_listen_socket,
+            gossip_send_socket,
+            exit.clone(),
+        ).expect("DataReplicator::new");
 
         // TODO pull this socket out through the public interface
         // make sure we are on the same interface
@@ -111,108 +117,52 @@ impl Tvu {
             blob_recycler.clone(),
         );
 
-        let threads = vec![
+        let mut threads = vec![
             //replicate threads
             t_blob_receiver,
             t_retransmit,
             t_window,
             replicate_stage.thread_hdl,
-            t_gossip,
-            t_listen,
         ];
+        threads.extend(data_replicator.thread_hdls.into_iter());
         Tvu {
             thread_hdls: threads,
         }
     }
 }
 
-pub struct Sockets {
-    pub gossip: UdpSocket,
-    pub requests: UdpSocket,
-    pub replicate: UdpSocket,
-    pub transaction: UdpSocket,
-    pub respond: UdpSocket,
-    pub broadcast: UdpSocket,
-}
-
-pub struct TestNode {
-    pub data: ReplicatedData,
-    pub sockets: Sockets,
-}
-
-impl TestNode {
-    pub fn new() -> TestNode {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let pubkey = KeyPair::new().pubkey();
-        let data = ReplicatedData::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            requests.local_addr().unwrap(),
-            transaction.local_addr().unwrap(),
-        );
-        TestNode {
-            data: data,
-            sockets: Sockets {
-                gossip,
-                requests,
-                replicate,
-                transaction,
-                respond,
-                broadcast,
-            },
-        }
-    }
-}
-
-#[cfg(test)]
-pub fn test_node() -> (ReplicatedData, UdpSocket, UdpSocket, UdpSocket, UdpSocket) {
-    use signature::{KeyPair, KeyPairUtil};
-    use std::time::Duration;
-
-    let transactions_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let requests_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    requests_socket
-        .set_read_timeout(Some(Duration::new(1, 0)))
-        .unwrap();
-    let pubkey = KeyPair::new().pubkey();
-    let d = ReplicatedData::new(
-        pubkey,
-        gossip.local_addr().unwrap(),
-        replicate.local_addr().unwrap(),
-        requests_socket.local_addr().unwrap(),
-        transactions_socket.local_addr().unwrap(),
-    );
-    (d, gossip, replicate, requests_socket, transactions_socket)
-}
-
 #[cfg(test)]
 pub mod tests {
     use bank::Bank;
     use bincode::serialize;
-    use crdt::Crdt;
+    use crdt::{Crdt, TestNode};
+    use data_replicator::DataReplicator;
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
     use packet::BlobRecycler;
+    use result::Result;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
+    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
     use transaction::Transaction;
-    use tvu::{TestNode, Tvu};
+    use tvu::Tvu;
 
+    fn new_replicator(
+        crdt: Arc<RwLock<Crdt>>,
+        listen: UdpSocket,
+        exit: Arc<AtomicBool>,
+    ) -> Result<DataReplicator> {
+        let window = streamer::default_window();
+        let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+        DataReplicator::new(crdt, window, listen, send_sock, exit)
+    }
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]
     fn test_replicate() {
@@ -227,9 +177,7 @@ pub mod tests {
         crdt_l.set_leader(leader.data.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
-        let t_l_gossip = Crdt::gossip(cref_l.clone(), exit.clone());
-        let window1 = streamer::default_window();
-        let t_l_listen = Crdt::listen(cref_l, window1, leader.sockets.gossip, exit.clone());
+        let dr_l = new_replicator(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2.data.clone());
@@ -237,9 +185,7 @@ pub mod tests {
         crdt2.set_leader(leader.data.id);
         let leader_id = leader.data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
-        let t2_gossip = Crdt::gossip(cref2.clone(), exit.clone());
-        let window2 = streamer::default_window();
-        let t2_listen = Crdt::listen(cref2, window2, target2.sockets.gossip, exit.clone());
+        let dr_2 = new_replicator(cref2, target2.sockets.gossip, exit.clone()).unwrap();
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -337,11 +283,13 @@ pub mod tests {
         for t in tvu.thread_hdls {
             t.join().expect("join");
         }
-        t2_gossip.join().expect("join");
-        t2_listen.join().expect("join");
+        for t in dr_l.thread_hdls {
+            t.join().expect("join");
+        }
+        for t in dr_2.thread_hdls {
+            t.join().expect("join");
+        }
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
-        t_l_gossip.join().expect("join");
-        t_l_listen.join().expect("join");
     }
 }

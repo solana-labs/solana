@@ -177,18 +177,18 @@ mod tests {
     use super::*;
     use bank::Bank;
     use budget::Budget;
+    use crdt::TestNode;
     use futures::Future;
     use logger;
     use mint::Mint;
     use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::{Instruction, Plan};
-    use tvu::TestNode;
 
     #[test]
     fn test_thin_client() {

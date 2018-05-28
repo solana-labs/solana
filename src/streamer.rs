@@ -106,6 +106,7 @@ pub fn responder(
 //TODO, we would need to stick block authentication before we create the
 //window.
 fn recv_blobs(recycler: &BlobRecycler, sock: &UdpSocket, s: &BlobSender) -> Result<()> {
+    trace!("receiving on {}", sock.local_addr().unwrap());
     let dq = Blob::recv_from(recycler, sock)?;
     if !dq.is_empty() {
         s.send(dq)?;
@@ -584,7 +585,6 @@ mod bench {
 #[cfg(test)]
 mod test {
     use crdt::{Crdt, ReplicatedData};
-    use logger;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
     use signature::KeyPair;
     use signature::KeyPairUtil;
@@ -595,10 +595,9 @@ mod test {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
     use std::time::Duration;
-    use streamer::{blob_receiver, receiver, responder, retransmitter, window};
     use streamer::{default_window, BlobReceiver, PacketReceiver};
+    use streamer::{blob_receiver, receiver, responder, window};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -734,112 +733,5 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         t_window.join().expect("join");
-    }
-
-    fn test_node() -> (Arc<RwLock<Crdt>>, UdpSocket, UdpSocket, UdpSocket) {
-        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let serve = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let transaction = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let pubkey = KeyPair::new().pubkey();
-        let d = ReplicatedData::new(
-            pubkey,
-            gossip.local_addr().unwrap(),
-            replicate.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-            transaction.local_addr().unwrap(),
-        );
-        trace!("data: {:?}", d);
-        let crdt = Crdt::new(d);
-        (Arc::new(RwLock::new(crdt)), gossip, replicate, serve)
-    }
-
-    #[test]
-    #[ignore]
-    //retransmit from leader to replicate target
-    pub fn retransmit() {
-        logger::setup();
-        trace!("retransmit test start");
-        let exit = Arc::new(AtomicBool::new(false));
-        let (crdt_leader, sock_gossip_leader, _, sock_leader) = test_node();
-        let (crdt_target, sock_gossip_target, sock_replicate_target, _) = test_node();
-        let leader_data = crdt_leader.read().unwrap().my_data().clone();
-        crdt_leader.write().unwrap().insert(&leader_data);
-        crdt_leader.write().unwrap().set_leader(leader_data.id);
-        let t_crdt_leader_g = Crdt::gossip(crdt_leader.clone(), exit.clone());
-        let window_leader = Arc::new(RwLock::new(vec![]));
-        let t_crdt_leader_l = Crdt::listen(
-            crdt_leader.clone(),
-            window_leader,
-            sock_gossip_leader,
-            exit.clone(),
-        );
-
-        crdt_target.write().unwrap().insert(&leader_data);
-        crdt_target.write().unwrap().set_leader(leader_data.id);
-        let t_crdt_target_g = Crdt::gossip(crdt_target.clone(), exit.clone());
-        let window_target = Arc::new(RwLock::new(vec![]));
-        let t_crdt_target_l = Crdt::listen(
-            crdt_target.clone(),
-            window_target,
-            sock_gossip_target,
-            exit.clone(),
-        );
-        //leader retransmitter
-        let (s_retransmit, r_retransmit) = channel();
-        let blob_recycler = BlobRecycler::default();
-        let saddr = sock_leader.local_addr().unwrap();
-        let t_retransmit = retransmitter(
-            sock_leader,
-            exit.clone(),
-            crdt_leader.clone(),
-            blob_recycler.clone(),
-            r_retransmit,
-        );
-
-        //target receiver
-        let (s_blob_receiver, r_blob_receiver) = channel();
-        let t_receiver = blob_receiver(
-            exit.clone(),
-            blob_recycler.clone(),
-            sock_replicate_target,
-            s_blob_receiver,
-        ).unwrap();
-        for _ in 0..10 {
-            let done = crdt_target.read().unwrap().update_index == 2
-                && crdt_leader.read().unwrap().update_index == 2;
-            if done {
-                break;
-            }
-            let timer = Duration::new(1, 0);
-            sleep(timer);
-        }
-
-        //send the data through
-        let mut bq = VecDeque::new();
-        let b = blob_recycler.allocate();
-        b.write().unwrap().meta.size = 10;
-        bq.push_back(b);
-        s_retransmit.send(bq).unwrap();
-        let timer = Duration::new(5, 0);
-        trace!("Waiting for timeout");
-        let mut oq = r_blob_receiver.recv_timeout(timer).unwrap();
-        assert_eq!(oq.len(), 1);
-        let o = oq.pop_front().unwrap();
-        let ro = o.read().unwrap();
-        assert_eq!(ro.meta.size, 10);
-        assert_eq!(ro.meta.addr(), saddr);
-        exit.store(true, Ordering::Relaxed);
-        let threads = vec![
-            t_receiver,
-            t_retransmit,
-            t_crdt_target_g,
-            t_crdt_target_l,
-            t_crdt_leader_g,
-            t_crdt_leader_l,
-        ];
-        for t in threads {
-            t.join().unwrap();
-        }
     }
 }

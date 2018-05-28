@@ -180,10 +180,10 @@ impl Packets {
         socket.set_nonblocking(false)?;
         for p in &mut self.packets {
             p.meta.size = 0;
-            trace!("receiving");
+            trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    debug!("got {:?} messages", i);
+                    debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }
                 Err(e) => {
@@ -250,6 +250,7 @@ pub fn to_blob<T: Serialize>(
         // the raw bytes are being serialized and sent, this isn't the
         // right interface, and we should create a separate path for
         // sending request responses in the RPU
+        assert!(len < BLOB_SIZE);
         b.data[..len].copy_from_slice(&v);
         b.meta.size = len;
         b.meta.set_addr(&rsp_addr);
@@ -283,7 +284,8 @@ impl Blob {
         self.data[..BLOB_INDEX_END].clone_from_slice(&wtr);
         Ok(())
     }
-
+    /// sender id, we use this for identifying if its a blob from the leader that we should
+    /// retransmit.  eventually blobs should have a signature that we can use ffor spam filtering
     pub fn get_id(&self) -> Result<PublicKey> {
         let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
         Ok(e)
@@ -317,9 +319,10 @@ impl Blob {
             let r = re.allocate();
             {
                 let mut p = r.write().expect("'r' write lock in pub fn recv_from");
+                trace!("receiving on {}", socket.local_addr().unwrap());
                 match socket.recv_from(&mut p.data) {
                     Err(_) if i > 0 => {
-                        trace!("got {:?} messages", i);
+                        trace!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                         break;
                     }
                     Err(e) => {

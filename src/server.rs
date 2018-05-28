@@ -2,6 +2,7 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
+use data_replicator::DataReplicator;
 use hash::Hash;
 use packet;
 use rpu::Rpu;
@@ -51,19 +52,26 @@ impl Server {
         thread_hdls.extend(tpu.thread_hdls);
 
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
         let window = streamer::default_window();
-        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip_socket, exit.clone());
+        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+        let data_replicator = DataReplicator::new(
+            crdt.clone(),
+            window.clone(),
+            gossip_socket,
+            gossip_send_socket,
+            exit.clone(),
+        ).expect("DataReplicator::new");
+        thread_hdls.extend(data_replicator.thread_hdls);
 
         let t_broadcast = streamer::broadcaster(
             broadcast_socket,
             exit.clone(),
-            crdt.clone(),
+            crdt,
             window,
             blob_recycler.clone(),
             tpu.blob_receiver,
         );
-        thread_hdls.extend(vec![t_gossip, t_listen, t_broadcast]);
+        thread_hdls.extend(vec![t_broadcast]);
 
         Server { thread_hdls }
     }

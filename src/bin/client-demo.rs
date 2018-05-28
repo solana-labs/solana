@@ -12,6 +12,7 @@ use isatty::stdin_isatty;
 use pnet::datalink;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
+use solana::data_replicator::DataReplicator;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
@@ -245,9 +246,15 @@ fn converge(
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
-    let spy_window = default_window();
-    let t_spy_listen = Crdt::listen(spy_ref.clone(), spy_window, spy_gossip, exit.clone());
-    let t_spy_gossip = Crdt::gossip(spy_ref.clone(), exit.clone());
+    let window = default_window();
+    let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+    let data_replicator = DataReplicator::new(
+        spy_ref.clone(),
+        window.clone(),
+        spy_gossip,
+        gossip_send_socket,
+        exit.clone(),
+    ).expect("DataReplicator::new");
     //wait for the network to converge
     for _ in 0..30 {
         let min = spy_ref.read().unwrap().convergence();
@@ -257,8 +264,7 @@ fn converge(
         }
         sleep(Duration::new(1, 0));
     }
-    threads.push(t_spy_listen);
-    threads.push(t_spy_gossip);
+    threads.extend(data_replicator.thread_hdls.into_iter());
     let v: Vec<ReplicatedData> = spy_ref
         .read()
         .unwrap()
