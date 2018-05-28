@@ -12,8 +12,8 @@ if [[ -z "$CRATES_IO_TOKEN" ]]; then
   exit 1
 fi
 
-cargo package
 # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
-cargo publish --token "$CRATES_IO_TOKEN"
+ci/docker-run.sh rust \
+  bash -exc "cargo package; cargo publish --token $CRATES_IO_TOKEN"
 
 exit 0
