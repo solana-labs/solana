@@ -1,9 +1,10 @@
 #!/bin/bash -e
 
-cd $(dirname $0)/..
+cd "$(dirname "$0")/.."
 
 if [[ -r ~/.cargo/env ]]; then
   # Pick up local install of kcov/cargo-kcov
+  # shellcheck disable=SC1090
   source ~/.cargo/env
 fi
 
