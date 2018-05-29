@@ -158,7 +158,7 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    pub fn process_transaction_debits(&self, tx: &Transaction) -> Result<()> {
+    fn process_transaction_debits(&self, tx: &Transaction) -> Result<()> {
         if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
         }
@@ -205,7 +205,7 @@ impl Bank {
         }
     }
 
-    pub fn process_transaction_credits(&self, tx: &Transaction) {
+    fn process_transaction_credits(&self, tx: &Transaction) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let mut plan = contract.plan.clone();
@@ -226,13 +226,13 @@ impl Bank {
                 let _ = self.process_timestamp(tx.from, *dt);
             }
             Instruction::ApplySignature(tx_sig) => {
-                let _ = self.process_sig(tx.from, *tx_sig);
+                let _ = self.process_signature(tx.from, *tx_sig);
             }
         }
     }
 
     /// Process a Transaction.
-    pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
+    fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         self.process_transaction_debits(tx)?;
         self.process_transaction_credits(tx);
         Ok(())
@@ -269,10 +269,10 @@ impl Bank {
     }
 
     /// Process a Witness Signature.
-    fn process_sig(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
+    fn process_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending
             .write()
-            .expect("write() in process_sig")
+            .expect("write() in process_signature")
             .entry(tx_sig)
         {
             e.get_mut().apply_witness(&Witness::Signature(from));
@@ -512,14 +512,14 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), None);
 
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
-        bank.process_sig(mint.pubkey(), sig).unwrap();
+        bank.process_signature(mint.pubkey(), sig).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), Some(1));
         assert_eq!(bank.get_balance(&pubkey), None);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.process_sig(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        bank.process_signature(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
         assert_ne!(bank.get_balance(&mint.pubkey()), Some(2));
     }
 
