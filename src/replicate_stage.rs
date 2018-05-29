@@ -24,9 +24,9 @@ impl ReplicateStage {
         let timer = Duration::new(1, 0);
         let blobs = verified_receiver.recv_timeout(timer)?;
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
-        let res = bank.process_verified_entries(entries);
+        let res = bank.process_entries(entries);
         if res.is_err() {
-            error!("process_verified_entries {} {:?}", blobs.len(), res);
+            error!("process_entries {} {:?}", blobs.len(), res);
         }
         res?;
         for blob in blobs {

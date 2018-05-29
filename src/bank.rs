@@ -158,13 +158,13 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    pub fn process_verified_transaction_debits(&self, tx: &Transaction) -> Result<()> {
+    pub fn process_transaction_debits(&self, tx: &Transaction) -> Result<()> {
         if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
         }
         let bals = self.balances
             .read()
-            .expect("'balances' read lock in process_verified_transaction_debits");
+            .expect("'balances' read lock in process_transaction_debits");
         let option = bals.get(&tx.from);
 
         if option.is_none() {
@@ -205,74 +205,74 @@ impl Bank {
         }
     }
 
-    pub fn process_verified_transaction_credits(&self, tx: &Transaction) {
+    pub fn process_transaction_credits(&self, tx: &Transaction) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let mut plan = contract.plan.clone();
                 plan.apply_witness(&Witness::Timestamp(*self.last_time
                     .read()
-                    .expect("timestamp creation in process_verified_transaction_credits")));
+                    .expect("timestamp creation in process_transaction_credits")));
 
                 if let Some(ref payment) = plan.final_payment() {
                     apply_payment(&self.balances, payment);
                 } else {
                     let mut pending = self.pending
                         .write()
-                        .expect("'pending' write lock in process_verified_transaction_credits");
+                        .expect("'pending' write lock in process_transaction_credits");
                     pending.insert(tx.sig, plan);
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
-                let _ = self.process_verified_timestamp(tx.from, *dt);
+                let _ = self.process_timestamp(tx.from, *dt);
             }
             Instruction::ApplySignature(tx_sig) => {
-                let _ = self.process_verified_sig(tx.from, *tx_sig);
+                let _ = self.process_sig(tx.from, *tx_sig);
             }
         }
     }
 
-    /// Process a Transaction that has already been verified.
-    pub fn process_verified_transaction(&self, tx: &Transaction) -> Result<()> {
-        self.process_verified_transaction_debits(tx)?;
-        self.process_verified_transaction_credits(tx);
+    /// Process a Transaction.
+    pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
+        self.process_transaction_debits(tx)?;
+        self.process_transaction_credits(tx);
         Ok(())
     }
 
-    /// Process a batch of verified transactions.
-    pub fn process_verified_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
+    /// Process a batch of transactions.
+    pub fn process_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         info!("processing Transactions {}", trs.len());
         let results: Vec<_> = trs.into_par_iter()
-            .map(|tx| self.process_verified_transaction_debits(&tx).map(|_| tx))
+            .map(|tx| self.process_transaction_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         results
             .into_par_iter()
             .map(|result| {
                 result.map(|tx| {
-                    self.process_verified_transaction_credits(&tx);
+                    self.process_transaction_credits(&tx);
                     tx
                 })
             })
             .collect()
     }
 
-    pub fn process_verified_entries(&self, entries: Vec<Entry>) -> Result<()> {
+    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<()> {
         for entry in entries {
             self.register_entry_id(&entry.id);
-            for result in self.process_verified_transactions(entry.transactions) {
+            for result in self.process_transactions(entry.transactions) {
                 result?;
             }
         }
         Ok(())
     }
 
-    /// Process a Witness Signature that has already been verified.
-    fn process_verified_sig(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
+    /// Process a Witness Signature.
+    fn process_sig(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending
             .write()
-            .expect("write() in process_verified_sig")
+            .expect("write() in process_sig")
             .entry(tx_sig)
         {
             e.get_mut().apply_witness(&Witness::Signature(from));
@@ -285,8 +285,8 @@ impl Bank {
         Ok(())
     }
 
-    /// Process a Witness Timestamp that has already been verified.
-    fn process_verified_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+    /// Process a Witness Timestamp.
+    fn process_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // If this is the first timestamp we've seen, it probably came from the genesis block,
         // so we'll trust it.
         if *self.last_time
@@ -319,7 +319,7 @@ impl Bank {
         // double-spend if it enters before the modified plan is removed from 'pending'.
         let mut pending = self.pending
             .write()
-            .expect("'pending' write lock in process_verified_timestamp");
+            .expect("'pending' write lock in process_timestamp");
         for (key, plan) in pending.iter_mut() {
             plan.apply_witness(&Witness::Timestamp(*self.last_time
                 .read()
@@ -348,7 +348,7 @@ impl Bank {
     ) -> Result<Signature> {
         let tx = Transaction::new(keypair, to, n, last_id);
         let sig = tx.sig;
-        self.process_verified_transaction(&tx).map(|_| sig)
+        self.process_transaction(&tx).map(|_| sig)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -364,7 +364,7 @@ impl Bank {
     ) -> Result<Signature> {
         let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tx.sig;
-        self.process_verified_transaction(&tx).map(|_| sig)
+        self.process_transaction(&tx).map(|_| sig)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
@@ -465,14 +465,14 @@ mod tests {
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
-        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap();
+        bank.process_timestamp(mint.pubkey(), dt).unwrap();
         assert_eq!(bank.get_balance(&pubkey), Some(1));
 
         // tx count is still 1, because we chose not to count timestamp transactions
         // tx count.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
+        bank.process_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
         assert_ne!(bank.get_balance(&pubkey), Some(2));
     }
 
@@ -482,7 +482,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        bank.process_verified_timestamp(mint.pubkey(), dt).unwrap();
+        bank.process_timestamp(mint.pubkey(), dt).unwrap();
 
         // It's now past now, so this transfer should be processed immediately.
         bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
@@ -512,14 +512,14 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), None);
 
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
-        bank.process_verified_sig(mint.pubkey(), sig).unwrap();
+        bank.process_sig(mint.pubkey(), sig).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), Some(1));
         assert_eq!(bank.get_balance(&pubkey), None);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.process_verified_sig(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        bank.process_sig(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
         assert_ne!(bank.get_balance(&mint.pubkey()), Some(2));
     }
 
@@ -563,7 +563,7 @@ mod tests {
         let tr0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tr1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let trs = vec![tr0, tr1];
-        let results = bank.process_verified_transactions(trs);
+        let results = bank.process_transactions(trs);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
@@ -581,7 +581,7 @@ mod bench {
     use signature::KeyPairUtil;
 
     #[bench]
-    fn bench_process_verified_transaction(bencher: &mut Bencher) {
+    fn bench_process_transaction(bencher: &mut Bencher) {
         let mint = Mint::new(100_000_000);
         let bank = Bank::new(&mint);
         // Create transactions between unrelated parties.
@@ -591,7 +591,7 @@ mod bench {
                 // Seed the 'from' account.
                 let rando0 = KeyPair::new();
                 let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
-                bank.process_verified_transaction(&tx).unwrap();
+                bank.process_transaction(&tx).unwrap();
 
                 // Seed the 'to' account and a cell for its signature.
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
@@ -599,7 +599,7 @@ mod bench {
 
                 let rando1 = KeyPair::new();
                 let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
-                bank.process_verified_transaction(&tx).unwrap();
+                bank.process_transaction(&tx).unwrap();
 
                 // Finally, return a transaction that's unique
                 Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
@@ -612,7 +612,7 @@ mod bench {
             }
 
             assert!(
-                bank.process_verified_transactions(transactions.clone())
+                bank.process_transactions(transactions.clone())
                     .iter()
                     .all(|x| x.is_ok())
             );
