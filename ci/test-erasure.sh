@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+set -o xtrace
+
 cd $(dirname $0)/..
 
 if [[ -z "$libgf_complete_URL" ]]; then
