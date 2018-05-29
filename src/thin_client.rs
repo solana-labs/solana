@@ -179,7 +179,7 @@ mod tests {
     use futures::Future;
     use logger;
     use mint::Mint;
-    use plan::Plan;
+    use plan::Budget;
     use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
@@ -282,7 +282,7 @@ mod tests {
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         if let Instruction::NewContract(contract) = &mut tr2.instruction {
             contract.tokens = 502;
-            contract.plan = Plan::new_payment(502, bob_pubkey);
+            contract.plan = Budget::new_payment(502, bob_pubkey);
         }
         let _sig = client.transfer_signed(tr2).unwrap();
 

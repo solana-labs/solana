@@ -69,7 +69,7 @@ pub struct MintDemo {
 mod tests {
     use super::*;
     use ledger::Block;
-    use plan::Plan;
+    use plan::Budget;
     use transaction::Instruction;
 
     #[test]
@@ -77,7 +77,7 @@ mod tests {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
         if let Instruction::NewContract(contract) = tx.instruction {
-            if let Plan::Pay(payment) = contract.plan {
+            if let Budget::Pay(payment) = contract.plan {
                 assert_eq!(tx.from, payment.to);
             }
         }

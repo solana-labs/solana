@@ -9,7 +9,7 @@ use chrono::prelude::*;
 use entry::Entry;
 use hash::Hash;
 use mint::Mint;
-use plan::{Payment, PaymentPlan, Plan, Witness};
+use plan::{Budget, Payment, PaymentPlan, Witness};
 use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
@@ -32,7 +32,7 @@ pub type Result<T> = result::Result<T, BankError>;
 
 pub struct Bank {
     balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
-    pending: RwLock<HashMap<Signature, Plan>>,
+    pending: RwLock<HashMap<Signature, Budget>>,
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
     last_time: RwLock<DateTime<Utc>>,

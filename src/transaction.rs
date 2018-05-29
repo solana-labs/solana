@@ -3,7 +3,7 @@
 use bincode::serialize;
 use chrono::prelude::*;
 use hash::Hash;
-use plan::{Condition, Payment, PaymentPlan, Plan};
+use plan::{Budget, Condition, Payment, PaymentPlan};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
@@ -13,7 +13,7 @@ pub const PUB_KEY_OFFSET: usize = 80;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
     pub tokens: i64,
-    pub plan: Plan,
+    pub plan: Budget,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -50,7 +50,7 @@ impl Transaction {
 
     /// Create and sign a new Transaction. Used for unit-testing.
     pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
-        let plan = Plan::Pay(Payment { tokens, to });
+        let plan = Budget::Pay(Payment { tokens, to });
         let instruction = Instruction::NewContract(Contract { plan, tokens });
         Self::new_from_instruction(from_keypair, instruction, last_id)
     }
@@ -76,7 +76,7 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let plan = Plan::Race(
+        let plan = Budget::Race(
             (Condition::Timestamp(dt), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let plan = Plan::Pay(Payment {
+        let plan = Budget::Pay(Payment {
             tokens: 0,
             to: Default::default(),
         });
@@ -186,7 +186,7 @@ mod tests {
         let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
         if let Instruction::NewContract(contract) = &mut tx.instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
-            if let Plan::Pay(ref mut payment) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.plan {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
             }
         }
@@ -203,7 +203,7 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
         if let Instruction::NewContract(contract) = &mut tx.instruction {
-            if let Plan::Pay(ref mut payment) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -227,7 +227,7 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
         if let Instruction::NewContract(contract) = &mut tx.instruction {
-            if let Plan::Pay(ref mut payment) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.plan {
                 payment.tokens = 2; // <-- attack!
             }
         }
@@ -235,7 +235,7 @@ mod tests {
 
         // Also, ensure all branchs of the plan spend all tokens
         if let Instruction::NewContract(contract) = &mut tx.instruction {
-            if let Plan::Pay(ref mut payment) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.plan {
                 payment.tokens = 0; // <-- whoops!
             }
         }
