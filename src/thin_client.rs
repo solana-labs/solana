@@ -176,10 +176,10 @@ impl ThinClient {
 mod tests {
     use super::*;
     use bank::Bank;
+    use budget::Budget;
     use futures::Future;
     use logger;
     use mint::Mint;
-    use plan::Budget;
     use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;

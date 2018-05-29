@@ -5,11 +5,12 @@
 
 extern crate libc;
 
+use budget::Budget;
 use chrono::prelude::*;
 use entry::Entry;
 use hash::Hash;
 use mint::Mint;
-use plan::{Budget, Payment, PaymentPlan, Witness};
+use plan::{Payment, PaymentPlan, Witness};
 use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;

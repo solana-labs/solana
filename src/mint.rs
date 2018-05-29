@@ -68,8 +68,8 @@ pub struct MintDemo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use budget::Budget;
     use ledger::Block;
-    use plan::Budget;
     use transaction::Instruction;
 
     #[test]

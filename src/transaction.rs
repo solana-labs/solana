@@ -1,9 +1,10 @@
 //! The `transaction` module provides functionality for creating log transactions.
 
 use bincode::serialize;
+use budget::{Budget, Condition};
 use chrono::prelude::*;
 use hash::Hash;
-use plan::{Budget, Condition, Payment, PaymentPlan};
+use plan::{Payment, PaymentPlan};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
