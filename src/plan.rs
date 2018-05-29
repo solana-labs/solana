@@ -1,4 +1,4 @@
-//! The `plan` module provides a domain-specific language for payment plans. Users create Plan objects that
+//! The `plan` module provides a domain-specific language for payment plans. Users create Budget objects that
 //! are given to an interpreter. The interpreter listens for `Witness` transactions,
 //! which it uses to reduce the payment plan. When the plan is reduced to a
 //! `Payment`, the payment is executed.
@@ -50,26 +50,26 @@ pub trait PaymentPlan {
 
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Plan {
+pub enum Budget {
     Pay(Payment),
     After(Condition, Payment),
     Race((Condition, Payment), (Condition, Payment)),
 }
 
-impl Plan {
+impl Budget {
     /// Create the simplest spending plan - one that pays `tokens` to PublicKey.
     pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
-        Plan::Pay(Payment { tokens, to })
+        Budget::Pay(Payment { tokens, to })
     }
 
     /// Create a spending plan that pays `tokens` to `to` after being witnessed by `from`.
     pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(Condition::Signature(from), Payment { tokens, to })
+        Budget::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     /// Create a spending plan that pays `tokens` to `to` after the given DateTime.
     pub fn new_future_payment(dt: DateTime<Utc>, tokens: i64, to: PublicKey) -> Self {
-        Plan::After(Condition::Timestamp(dt), Payment { tokens, to })
+        Budget::After(Condition::Timestamp(dt), Payment { tokens, to })
     }
 
     /// Create a spending plan that pays `tokens` to `to` after the given DateTime
@@ -80,18 +80,18 @@ impl Plan {
         tokens: i64,
         to: PublicKey,
     ) -> Self {
-        Plan::Race(
+        Budget::Race(
             (Condition::Timestamp(dt), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         )
     }
 }
 
-impl PaymentPlan for Plan {
+impl PaymentPlan for Budget {
     /// Return Payment if the spending plan requires no additional Witnesses.
     fn final_payment(&self) -> Option<Payment> {
         match *self {
-            Plan::Pay(ref payment) => Some(payment.clone()),
+            Budget::Pay(ref payment) => Some(payment.clone()),
             _ => None,
         }
     }
@@ -99,10 +99,10 @@ impl PaymentPlan for Plan {
     /// Return true if the plan spends exactly `spendable_tokens`.
     fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
-            Plan::Pay(ref payment) | Plan::After(_, ref payment) => {
+            Budget::Pay(ref payment) | Budget::After(_, ref payment) => {
                 payment.tokens == spendable_tokens
             }
-            Plan::Race(ref a, ref b) => {
+            Budget::Race(ref a, ref b) => {
                 a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
             }
         }
@@ -112,14 +112,14 @@ impl PaymentPlan for Plan {
     /// If so, modify the plan in-place.
     fn apply_witness(&mut self, witness: &Witness) {
         let new_payment = match *self {
-            Plan::After(ref cond, ref payment) if cond.is_satisfied(witness) => Some(payment),
-            Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(witness) => Some(payment),
-            Plan::Race(_, (ref cond, ref payment)) if cond.is_satisfied(witness) => Some(payment),
+            Budget::After(ref cond, ref payment) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Race((ref cond, ref payment), _) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Race(_, (ref cond, ref payment)) if cond.is_satisfied(witness) => Some(payment),
             _ => None,
         }.cloned();
 
         if let Some(payment) = new_payment {
-            mem::replace(self, Plan::Pay(payment));
+            mem::replace(self, Budget::Pay(payment));
         }
     }
 }
@@ -148,10 +148,10 @@ mod tests {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let from = PublicKey::default();
         let to = PublicKey::default();
-        assert!(Plan::new_payment(42, to).verify(42));
-        assert!(Plan::new_authorized_payment(from, 42, to).verify(42));
-        assert!(Plan::new_future_payment(dt, 42, to).verify(42));
-        assert!(Plan::new_cancelable_future_payment(dt, from, 42, to).verify(42));
+        assert!(Budget::new_payment(42, to).verify(42));
+        assert!(Budget::new_authorized_payment(from, 42, to).verify(42));
+        assert!(Budget::new_future_payment(dt, 42, to).verify(42));
+        assert!(Budget::new_cancelable_future_payment(dt, from, 42, to).verify(42));
     }
 
     #[test]
@@ -159,9 +159,9 @@ mod tests {
         let from = PublicKey::default();
         let to = PublicKey::default();
 
-        let mut plan = Plan::new_authorized_payment(from, 42, to);
+        let mut plan = Budget::new_authorized_payment(from, 42, to);
         plan.apply_witness(&Witness::Signature(from));
-        assert_eq!(plan, Plan::new_payment(42, to));
+        assert_eq!(plan, Budget::new_payment(42, to));
     }
 
     #[test]
@@ -169,9 +169,9 @@ mod tests {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let to = PublicKey::default();
 
-        let mut plan = Plan::new_future_payment(dt, 42, to);
+        let mut plan = Budget::new_future_payment(dt, 42, to);
         plan.apply_witness(&Witness::Timestamp(dt));
-        assert_eq!(plan, Plan::new_payment(42, to));
+        assert_eq!(plan, Budget::new_payment(42, to));
     }
 
     #[test]
@@ -180,12 +180,12 @@ mod tests {
         let from = PublicKey::default();
         let to = PublicKey::default();
 
-        let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
+        let mut plan = Budget::new_cancelable_future_payment(dt, from, 42, to);
         plan.apply_witness(&Witness::Timestamp(dt));
-        assert_eq!(plan, Plan::new_payment(42, to));
+        assert_eq!(plan, Budget::new_payment(42, to));
 
-        let mut plan = Plan::new_cancelable_future_payment(dt, from, 42, to);
+        let mut plan = Budget::new_cancelable_future_payment(dt, from, 42, to);
         plan.apply_witness(&Witness::Signature(from));
-        assert_eq!(plan, Plan::new_payment(42, from));
+        assert_eq!(plan, Budget::new_payment(42, from));
     }
 }
