@@ -11,6 +11,8 @@ steps:
     name: "cuda"
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
+  - command: "ci/test-erasure.sh"
+    name: "erasure"
   - wait
   - command: "ci/publish.sh"
     name: "publish release artifacts"
