@@ -30,28 +30,6 @@ pub enum BankError {
 
 pub type Result<T> = result::Result<T, BankError>;
 
-/// Commit funds to the 'to' party.
-fn apply_payment(balances: &RwLock<HashMap<PublicKey, AtomicIsize>>, payment: &Payment) {
-    // First we check balances with a read lock to maximize potential parallelization.
-    if balances
-        .read()
-        .expect("'balances' read lock in apply_payment")
-        .contains_key(&payment.to)
-    {
-        let bals = balances.read().expect("'balances' read lock");
-        bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
-    } else {
-        // Now we know the key wasn't present a nanosecond ago, but it might be there
-        // by the time we aquire a write lock, so we'll have to check again.
-        let mut bals = balances.write().expect("'balances' write lock");
-        if bals.contains_key(&payment.to) {
-            bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
-        } else {
-            bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
-        }
-    }
-}
-
 pub struct Bank {
     balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
     pending: RwLock<HashMap<Signature, Plan>>,
@@ -64,16 +42,16 @@ pub struct Bank {
 impl Bank {
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
-        let balances = RwLock::new(HashMap::new());
-        apply_payment(&balances, deposit);
-        Bank {
-            balances,
+        let bank = Bank {
+            balances: RwLock::new(HashMap::new()),
             pending: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
             time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
             transaction_count: AtomicUsize::new(0),
-        }
+        };
+        bank.apply_payment(deposit);
+        bank
     }
 
     /// Create an Bank with only a Mint. Typically used by unit tests.
@@ -85,6 +63,28 @@ impl Bank {
         let bank = Self::new_from_deposit(&deposit);
         bank.register_entry_id(&mint.last_id());
         bank
+    }
+
+    /// Commit funds to the 'to' party.
+    fn apply_payment(&self, payment: &Payment) {
+        // First we check balances with a read lock to maximize potential parallelization.
+        if self.balances
+            .read()
+            .expect("'balances' read lock in apply_payment")
+            .contains_key(&payment.to)
+        {
+            let bals = self.balances.read().expect("'balances' read lock");
+            bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+        } else {
+            // Now we know the key wasn't present a nanosecond ago, but it might be there
+            // by the time we aquire a write lock, so we'll have to check again.
+            let mut bals = self.balances.write().expect("'balances' write lock");
+            if bals.contains_key(&payment.to) {
+                bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+            } else {
+                bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+            }
+        }
     }
 
     /// Return the last entry ID registered
@@ -214,7 +214,7 @@ impl Bank {
                     .expect("timestamp creation in apply_credits")));
 
                 if let Some(ref payment) = plan.final_payment() {
-                    apply_payment(&self.balances, payment);
+                    self.apply_payment(payment);
                 } else {
                     let mut pending = self.pending
                         .write()
@@ -277,7 +277,7 @@ impl Bank {
         {
             e.get_mut().apply_witness(&Witness::Signature(from));
             if let Some(payment) = e.get().final_payment() {
-                apply_payment(&self.balances, &payment);
+                self.apply_payment(&payment);
                 e.remove_entry();
             }
         };
@@ -325,7 +325,7 @@ impl Bank {
                 .read()
                 .expect("'last_time' read lock when creating timestamp")));
             if let Some(ref payment) = plan.final_payment() {
-                apply_payment(&self.balances, payment);
+                self.apply_payment(payment);
                 completed.push(key.clone());
             }
         }
