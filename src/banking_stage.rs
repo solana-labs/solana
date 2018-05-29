@@ -95,7 +95,7 @@ impl BankingStage {
                 .collect();
 
             debug!("process_transactions");
-            let results = bank.process_verified_transactions(transactions);
+            let results = bank.process_transactions(transactions);
             let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
             signal_sender.send(Signal::Events(transactions))?;
             debug!("done process_transactions");
@@ -168,7 +168,7 @@ impl BankingStage {
 //        for entry in entries {
 //            assert!(
 //                bank
-//                    .process_verified_transactions(entry.transactions)
+//                    .process_transactions(entry.transactions)
 //                    .into_iter()
 //                    .all(|x| x.is_ok())
 //            );
@@ -215,11 +215,11 @@ impl BankingStage {
 //                // Seed the 'from' account.
 //                let rando0 = KeyPair::new();
 //                let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
-//                bank.process_verified_transaction(&tx).unwrap();
+//                bank.process_transaction(&tx).unwrap();
 //
 //                let rando1 = KeyPair::new();
 //                let tx = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
-//                bank.process_verified_transaction(&tx).unwrap();
+//                bank.process_transaction(&tx).unwrap();
 //
 //                // Finally, return a transaction that's unique
 //                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)

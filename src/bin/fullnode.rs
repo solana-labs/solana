@@ -115,7 +115,7 @@ fn main() {
     let mut last_id = entry1.id;
     for entry in entries {
         last_id = entry.id;
-        let results = bank.process_verified_transactions(entry.transactions);
+        let results = bank.process_transactions(entry.transactions);
         for result in results {
             if let Err(e) = result {
                 eprintln!("failed to process transaction {:?}", e);
