@@ -4,7 +4,6 @@ use bincode::serialize;
 use chrono::prelude::*;
 use hash::Hash;
 use plan::{Condition, Payment, Plan};
-use rayon::prelude::*;
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
@@ -138,21 +137,6 @@ pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
     None
 }
 
-/// Verify a batch of signatures.
-pub fn verify_signatures(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tx| tx.verify_sig())
-}
-
-/// Verify a batch of spending plans.
-pub fn verify_plans(transactions: &[Transaction]) -> bool {
-    transactions.par_iter().all(|tx| tx.verify_plan())
-}
-
-/// Verify a batch of transactions.
-pub fn verify_transactions(transactions: &[Transaction]) -> bool {
-    verify_signatures(transactions) && verify_plans(transactions)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,40 +240,5 @@ mod tests {
             }
         }
         assert!(!tx.verify_plan());
-    }
-
-    #[test]
-    fn test_verify_transactions() {
-        let alice_keypair = KeyPair::new();
-        let bob_pubkey = KeyPair::new().pubkey();
-        let carol_pubkey = KeyPair::new().pubkey();
-        let last_id = Hash::default();
-        let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, last_id);
-        let tx1 = Transaction::new(&alice_keypair, carol_pubkey, 1, last_id);
-        let transactions = vec![tx0, tx1];
-        assert!(verify_transactions(&transactions));
-    }
-}
-
-#[cfg(all(feature = "unstable", test))]
-mod bench {
-    extern crate test;
-    use self::test::Bencher;
-    use transaction::*;
-
-    #[bench]
-    fn bench_verify_signatures(bencher: &mut Bencher) {
-        let alice_keypair = KeyPair::new();
-        let last_id = Hash::default();
-        let transactions: Vec<_> = (0..64)
-            .into_par_iter()
-            .map(|_| {
-                let rando_pubkey = KeyPair::new().pubkey();
-                Transaction::new(&alice_keypair, rando_pubkey, 1, last_id)
-            })
-            .collect();
-        bencher.iter(|| {
-            assert!(verify_signatures(&transactions));
-        });
     }
 }
