@@ -479,7 +479,7 @@ pub fn retransmitter(
 mod bench {
     extern crate test;
     use self::test::Bencher;
-    use packet::{Packet, PacketRecycler, PACKET_DATA_SIZE};
+    use packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
     use result::Result;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -511,7 +511,7 @@ mod bench {
             let mut num = 0;
             for p in msgs_.read().unwrap().packets.iter() {
                 let a = p.meta.addr();
-                assert!(p.meta.size < packet::BLOB_SIZE);
+                assert!(p.meta.size < BLOB_SIZE);
                 send.send_to(&p.data[..p.meta.size], &a).unwrap();
                 num += 1;
             }
