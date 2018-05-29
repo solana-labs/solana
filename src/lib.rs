@@ -13,7 +13,7 @@ pub mod ledger;
 pub mod logger;
 pub mod mint;
 pub mod packet;
-pub mod plan;
+pub mod payment_plan;
 pub mod record_stage;
 pub mod recorder;
 pub mod replicate_stage;
