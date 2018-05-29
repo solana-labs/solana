@@ -13,23 +13,6 @@ pub enum Witness {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Condition {
-    Timestamp(DateTime<Utc>),
-    Signature(PublicKey),
-}
-
-impl Condition {
-    /// Return true if the given Witness satisfies this Condition.
-    pub fn is_satisfied(&self, witness: &Witness) -> bool {
-        match (self, witness) {
-            (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
-            (&Condition::Timestamp(ref dt), &Witness::Timestamp(ref last_time)) => dt <= last_time,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
     pub tokens: i64,
     pub to: PublicKey,
