@@ -3,22 +3,22 @@
 
 use bank::Bank;
 use banking_stage::BankingStage;
+use fetch_stage::FetchStage;
 use hash::Hash;
-use packet;
+use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use streamer;
+use streamer::BlobReceiver;
 use write_stage::WriteStage;
 
 pub struct Tpu {
-    pub blob_receiver: streamer::BlobReceiver,
+    pub blob_receiver: BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -28,20 +28,16 @@ impl Tpu {
         start_hash: Hash,
         tick_duration: Option<Duration>,
         transactions_socket: UdpSocket,
-        blob_recycler: packet::BlobRecycler,
+        blob_recycler: BlobRecycler,
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
-        let packet_recycler = packet::PacketRecycler::default();
-        let (packet_sender, packet_receiver) = channel();
-        let t_receiver = streamer::receiver(
-            transactions_socket,
-            exit.clone(),
-            packet_recycler.clone(),
-            packet_sender,
-        );
+        let packet_recycler = PacketRecycler::default();
 
-        let sigverify_stage = SigVerifyStage::new(exit.clone(), packet_receiver);
+        let fetch_stage =
+            FetchStage::new(transactions_socket, exit.clone(), packet_recycler.clone());
+
+        let sigverify_stage = SigVerifyStage::new(exit.clone(), fetch_stage.packet_receiver);
 
         let banking_stage = BankingStage::new(
             bank.clone(),
@@ -61,16 +57,15 @@ impl Tpu {
             record_stage.entry_receiver,
         );
 
-        let blob_receiver = write_stage.blob_receiver;
         let mut thread_hdls = vec![
-            t_receiver,
+            fetch_stage.thread_hdl,
             banking_stage.thread_hdl,
             record_stage.thread_hdl,
             write_stage.thread_hdl,
         ];
         thread_hdls.extend(sigverify_stage.thread_hdls.into_iter());
         Tpu {
-            blob_receiver,
+            blob_receiver: write_stage.blob_receiver,
             thread_hdls,
         }
     }
