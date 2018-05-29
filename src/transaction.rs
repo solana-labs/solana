@@ -56,6 +56,7 @@ pub struct Transaction {
     pub from: PublicKey,
     pub instruction: Instruction,
     pub last_id: Hash,
+    pub fee: i64,
 }
 
 impl Transaction {
@@ -63,6 +64,7 @@ impl Transaction {
         from_keypair: &KeyPair,
         instruction: Instruction,
         last_id: Hash,
+        fee: i64,
     ) -> Self {
         let from = from_keypair.pubkey();
         let mut tx = Transaction {
@@ -70,29 +72,45 @@ impl Transaction {
             instruction,
             last_id,
             from,
+            fee,
         };
         tx.sign(from_keypair);
         tx
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
-        let budget = Budget::Pay(Payment { tokens, to });
+    pub fn new_taxed(
+        from_keypair: &KeyPair,
+        to: PublicKey,
+        tokens: i64,
+        fee: i64,
+        last_id: Hash,
+    ) -> Self {
+        let payment = Payment {
+            tokens: tokens - fee,
+            to,
+        };
+        let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        Self::new_from_instruction(from_keypair, instruction, last_id)
+        Self::new_from_instruction(from_keypair, instruction, last_id, fee)
+    }
+
+    /// Create and sign a new Transaction. Used for unit-testing.
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+        Self::new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
     pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: Hash) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
-        Self::new_from_instruction(from_keypair, instruction, last_id)
+        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
     pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
         let instruction = Instruction::ApplySignature(tx_sig);
-        Self::new_from_instruction(from_keypair, instruction, last_id)
+        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -110,20 +128,17 @@ impl Transaction {
         );
         let plan = Plan::Budget(budget);
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        let mut tx = Transaction {
-            instruction,
-            from,
-            last_id,
-            sig: Signature::default(),
-        };
-        tx.sign(from_keypair);
-        tx
+        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
     fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.instruction)).expect("serialize Contract");
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
+
+        let fee_data = serialize(&(&self.fee)).expect("serialize last_id");
+        data.extend_from_slice(&fee_data);
+
         data
     }
 
@@ -139,7 +154,7 @@ impl Transaction {
 
     pub fn verify_plan(&self) -> bool {
         if let Instruction::NewContract(contract) = &self.instruction {
-            contract.plan.verify(contract.tokens)
+            contract.plan.verify(contract.tokens - self.fee)
         } else {
             true
         }
@@ -190,6 +205,16 @@ mod tests {
     }
 
     #[test]
+    fn test_transfer_with_fee() {
+        let zero = Hash::default();
+        let keypair0 = KeyPair::new();
+        let keypair1 = KeyPair::new();
+        let pubkey1 = keypair1.pubkey();
+        let tx0 = Transaction::new_taxed(&keypair0, pubkey1, 42, 1, zero);
+        assert!(tx0.verify_plan());
+    }
+
+    #[test]
     fn test_serialize_claim() {
         let budget = Budget::Pay(Payment {
             tokens: 0,
@@ -202,6 +227,7 @@ mod tests {
             from: Default::default(),
             last_id: Default::default(),
             sig: Default::default(),
+            fee: 0,
         };
         let buf = serialize(&claim0).unwrap();
         let claim1: Transaction = deserialize(&buf).unwrap();
