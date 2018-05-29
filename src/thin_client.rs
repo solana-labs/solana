@@ -187,7 +187,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::Instruction;
+    use transaction::{Instruction, Plan};
     use tvu::TestNode;
 
     #[test]
@@ -282,7 +282,7 @@ mod tests {
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         if let Instruction::NewContract(contract) = &mut tr2.instruction {
             contract.tokens = 502;
-            contract.plan = Budget::new_payment(502, bob_pubkey);
+            contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
         let _sig = client.transfer_signed(tr2).unwrap();
 

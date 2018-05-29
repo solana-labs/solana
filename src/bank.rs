@@ -5,7 +5,6 @@
 
 extern crate libc;
 
-use budget::Budget;
 use chrono::prelude::*;
 use entry::Entry;
 use hash::Hash;
@@ -18,7 +17,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
-use transaction::{Instruction, Transaction};
+use transaction::{Instruction, Plan, Transaction};
 
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
@@ -33,7 +32,7 @@ pub type Result<T> = result::Result<T, BankError>;
 
 pub struct Bank {
     balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
-    pending: RwLock<HashMap<Signature, Budget>>,
+    pending: RwLock<HashMap<Signature, Plan>>,
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
     time_sources: RwLock<HashSet<PublicKey>>,
     last_time: RwLock<DateTime<Utc>>,
