@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 pub mod bank;
 pub mod banking_stage;
+pub mod budget;
 pub mod crdt;
 pub mod entry;
 pub mod entry_writer;
