@@ -162,8 +162,8 @@ mod tests {
     fn test_claim() {
         let keypair = KeyPair::new();
         let zero = Hash::default();
-        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
-        assert!(tr0.verify_plan());
+        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
+        assert!(tx0.verify_plan());
     }
 
     #[test]
@@ -172,8 +172,8 @@ mod tests {
         let keypair0 = KeyPair::new();
         let keypair1 = KeyPair::new();
         let pubkey1 = keypair1.pubkey();
-        let tr0 = Transaction::new(&keypair0, pubkey1, 42, zero);
-        assert!(tr0.verify_plan());
+        let tx0 = Transaction::new(&keypair0, pubkey1, 42, zero);
+        assert!(tx0.verify_plan());
     }
 
     #[test]
@@ -264,9 +264,9 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let carol_pubkey = KeyPair::new().pubkey();
         let last_id = Hash::default();
-        let tr0 = Transaction::new(&alice_keypair, bob_pubkey, 1, last_id);
-        let tr1 = Transaction::new(&alice_keypair, carol_pubkey, 1, last_id);
-        let transactions = vec![tr0, tr1];
+        let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, last_id);
+        let tx1 = Transaction::new(&alice_keypair, carol_pubkey, 1, last_id);
+        let transactions = vec![tx0, tx1];
         assert!(verify_transactions(&transactions));
     }
 }
