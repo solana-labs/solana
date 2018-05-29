@@ -9,7 +9,7 @@ use chrono::prelude::*;
 use entry::Entry;
 use hash::Hash;
 use mint::Mint;
-use plan::{Payment, PaymentPlan, Witness};
+use payment_plan::{Payment, PaymentPlan, Witness};
 use rayon::prelude::*;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;

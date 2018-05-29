@@ -11,7 +11,7 @@ use pnet::datalink;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
-use solana::plan::PaymentPlan;
+use solana::payment_plan::PaymentPlan;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Instruction;

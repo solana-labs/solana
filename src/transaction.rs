@@ -4,7 +4,7 @@ use bincode::serialize;
 use budget::{Budget, Condition};
 use chrono::prelude::*;
 use hash::Hash;
-use plan::{Payment, PaymentPlan, Witness};
+use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
