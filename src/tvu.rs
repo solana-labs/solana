@@ -293,7 +293,7 @@ pub mod tests {
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
-            let tr1 = Transaction::new(
+            let tx0 = Transaction::new(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
@@ -301,7 +301,7 @@ pub mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
-            let entry1 = Entry::new(&cur_hash, i + num_blobs, vec![tr1]);
+            let entry1 = Entry::new(&cur_hash, i + num_blobs, vec![tx0]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 

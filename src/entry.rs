@@ -129,14 +129,14 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
-        let tr1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
-        e0.transactions[0] = tr1; // <-- attack
-        e0.transactions[1] = tr0;
+        e0.transactions[0] = tx1; // <-- attack
+        e0.transactions[1] = tx0;
         assert!(!e0.verify(&zero));
     }
 
@@ -146,14 +146,14 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tr0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
-        let tr1 = Transaction::new_signature(&keypair, Default::default(), zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tr0.clone(), tr1.clone()]);
+        let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
+        let tx1 = Transaction::new_signature(&keypair, Default::default(), zero);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two witness transactions and ensure verification fails.
-        e0.transactions[0] = tr1; // <-- attack
-        e0.transactions[1] = tr0;
+        e0.transactions[0] = tx1; // <-- attack
+        e0.transactions[1] = tx0;
         assert!(!e0.verify(&zero));
     }
 

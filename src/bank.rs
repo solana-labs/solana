@@ -239,11 +239,11 @@ impl Bank {
     }
 
     /// Process a batch of transactions.
-    pub fn process_transactions(&self, trs: Vec<Transaction>) -> Vec<Result<Transaction>> {
+    pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
-        info!("processing Transactions {}", trs.len());
-        let results: Vec<_> = trs.into_par_iter()
+        info!("processing Transactions {}", txs.len());
+        let results: Vec<_> = txs.into_par_iter()
             .map(|tx| self.apply_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
@@ -560,10 +560,10 @@ mod tests {
         let mint = Mint::new(2);
         let bank = Bank::new(&mint);
         let keypair = KeyPair::new();
-        let tr0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
-        let tr1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
-        let trs = vec![tr0, tr1];
-        let results = bank.process_transactions(trs);
+        let tx0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
+        let tx1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
+        let txs = vec![tx0, tx1];
+        let results = bank.process_transactions(txs);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.

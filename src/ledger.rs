@@ -155,8 +155,8 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero);
         let keypair = KeyPair::new();
-        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let transactions = vec![tr0.clone(); 10000];
+        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
+        let transactions = vec![tx0.clone(); 10000];
         let e0 = Entry::new(&zero, 0, transactions);
 
         let entry_list = vec![e0.clone(); 1];
@@ -173,8 +173,8 @@ mod tests {
         let mut id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
-        let tr0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
-        let transactions = vec![tr0.clone(); 5];
+        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+        let transactions = vec![tx0.clone(); 5];
         let transaction_batches = vec![transactions.clone(); 5];
         let entries0 = next_entries(&id, 0, transaction_batches);
 
