@@ -1,15 +1,17 @@
 //! The `server` module hosts all the server microservices.
 
 use bank::Bank;
-use crdt::ReplicatedData;
+use crdt::{Crdt, ReplicatedData};
 use hash::Hash;
+use packet;
 use rpu::Rpu;
 use std::io::Write;
 use std::net::UdpSocket;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use streamer;
 use tpu::Tpu;
 use tvu::Tvu;
 
@@ -35,18 +37,34 @@ impl Server {
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
         thread_hdls.extend(rpu.thread_hdls);
+
+        let blob_recycler = packet::BlobRecycler::default();
         let tpu = Tpu::new(
             bank.clone(),
             start_hash,
             tick_duration,
-            me,
             transactions_socket,
-            broadcast_socket,
-            gossip_socket,
+            blob_recycler.clone(),
             exit.clone(),
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls);
+
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let t_gossip = Crdt::gossip(crdt.clone(), exit.clone());
+        let window = streamer::default_window();
+        let t_listen = Crdt::listen(crdt.clone(), window.clone(), gossip_socket, exit.clone());
+
+        let t_broadcast = streamer::broadcaster(
+            broadcast_socket,
+            exit.clone(),
+            crdt.clone(),
+            window,
+            blob_recycler.clone(),
+            tpu.blob_receiver,
+        );
+        thread_hdls.extend(vec![t_gossip, t_listen, t_broadcast]);
+
         Server { thread_hdls }
     }
     pub fn new_validator(
