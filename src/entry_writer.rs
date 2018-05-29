@@ -2,7 +2,7 @@
 
 use bank::Bank;
 use entry::Entry;
-use ledger;
+use ledger::Block;
 use packet;
 use result::Result;
 use serde_json;
@@ -63,7 +63,7 @@ impl<'a> EntryWriter<'a> {
         let mut q = VecDeque::new();
         let list = self.write_entries(writer, entry_receiver)?;
         trace!("New blobs? {}", list.len());
-        ledger::process_entry_list_into_blobs(&list, blob_recycler, &mut q);
+        list.to_blobs(blob_recycler, &mut q);
         if !q.is_empty() {
             trace!("broadcasting {}", q.len());
             broadcast.send(q)?;
