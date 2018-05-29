@@ -3,7 +3,7 @@
 use bincode::serialize;
 use chrono::prelude::*;
 use hash::Hash;
-use plan::{Condition, Payment, Plan};
+use plan::{Condition, Payment, PaymentPlan, Plan};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;

@@ -36,6 +36,18 @@ pub struct Payment {
     pub to: PublicKey,
 }
 
+pub trait PaymentPlan {
+    /// Return Payment if the spending plan requires no additional Witnesses.
+    fn final_payment(&self) -> Option<Payment>;
+
+    /// Return true if the plan spends exactly `spendable_tokens`.
+    fn verify(&self, spendable_tokens: i64) -> bool;
+
+    /// Apply a witness to the spending plan to see if the plan can be reduced.
+    /// If so, modify the plan in-place.
+    fn apply_witness(&mut self, witness: &Witness);
+}
+
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
@@ -73,9 +85,11 @@ impl Plan {
             (Condition::Signature(from), Payment { tokens, to: from }),
         )
     }
+}
 
+impl PaymentPlan for Plan {
     /// Return Payment if the spending plan requires no additional Witnesses.
-    pub fn final_payment(&self) -> Option<Payment> {
+    fn final_payment(&self) -> Option<Payment> {
         match *self {
             Plan::Pay(ref payment) => Some(payment.clone()),
             _ => None,
@@ -83,7 +97,7 @@ impl Plan {
     }
 
     /// Return true if the plan spends exactly `spendable_tokens`.
-    pub fn verify(&self, spendable_tokens: i64) -> bool {
+    fn verify(&self, spendable_tokens: i64) -> bool {
         match *self {
             Plan::Pay(ref payment) | Plan::After(_, ref payment) => {
                 payment.tokens == spendable_tokens
@@ -96,7 +110,7 @@ impl Plan {
 
     /// Apply a witness to the spending plan to see if the plan can be reduced.
     /// If so, modify the plan in-place.
-    pub fn apply_witness(&mut self, witness: &Witness) {
+    fn apply_witness(&mut self, witness: &Witness) {
         let new_payment = match *self {
             Plan::After(ref cond, ref payment) if cond.is_satisfied(witness) => Some(payment),
             Plan::Race((ref cond, ref payment), _) if cond.is_satisfied(witness) => Some(payment),
