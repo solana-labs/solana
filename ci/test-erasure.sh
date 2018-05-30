@@ -14,10 +14,13 @@ if [[ -z "$libJerasure_URL" ]]; then
   exit 1
 fi
 
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64
-export PATH=$PATH:/usr/local/cuda/bin
 curl -X GET -o libJerasure.so "$libJerasure_URL"
-curl -X GET -o libgf_complete.so "$libgf_complete"
+curl -X GET -o libgf_complete.so "$libgf_complete_URL"
+
+ln -s libJerasure.so libJerasure.so.2
+ln -s libJerasure.so libJerasure.so.2.0.0
+ln -s libgf_complete.so libgf_complete.so.1.0.0
+export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
 
 source $HOME/.cargo/env
 cargo test --features="erasure"
