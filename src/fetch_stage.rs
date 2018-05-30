@@ -2,9 +2,9 @@
 
 use packet;
 use std::net::UdpSocket;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use streamer;
 

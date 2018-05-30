@@ -19,8 +19,8 @@ use std::io::sink;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
 use std::thread::sleep;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 fn validator(
