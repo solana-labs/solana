@@ -150,8 +150,7 @@ pub fn crdt_retransmit() {
     trace!("waiting to converge:");
     let mut done = false;
     for _ in 0..30 {
-        done = c1.read().unwrap().table.len() == 3
-            && c2.read().unwrap().table.len() == 3
+        done = c1.read().unwrap().table.len() == 3 && c2.read().unwrap().table.len() == 3
             && c3.read().unwrap().table.len() == 3;
         if done {
             break;
