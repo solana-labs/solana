@@ -6,7 +6,7 @@ use packet;
 use result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 use streamer;
 
@@ -41,12 +41,15 @@ impl ReplicateStage {
         window_receiver: streamer::BlobReceiver,
         blob_recycler: packet::BlobRecycler,
     ) -> Self {
-        let thread_hdl = spawn(move || loop {
-            let e = Self::replicate_requests(&bank, &window_receiver, &blob_recycler);
-            if e.is_err() && exit.load(Ordering::Relaxed) {
-                break;
-            }
-        });
+        let thread_hdl = Builder::new()
+            .name("solana-replicate-stage".to_string())
+            .spawn(move || loop {
+                let e = Self::replicate_requests(&bank, &window_receiver, &blob_recycler);
+                if e.is_err() && exit.load(Ordering::Relaxed) {
+                    break;
+                }
+            })
+            .unwrap();
         ReplicateStage { thread_hdl }
     }
 }

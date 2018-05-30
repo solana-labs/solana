@@ -9,7 +9,7 @@ use entry::Entry;
 use hash::Hash;
 use recorder::Recorder;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::thread::{spawn, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use transaction::Transaction;
 
@@ -35,23 +35,26 @@ impl RecordStage {
         let (entry_sender, entry_receiver) = channel();
         let start_hash = start_hash.clone();
 
-        let thread_hdl = spawn(move || {
-            let mut recorder = Recorder::new(start_hash);
-            let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
-            loop {
-                if let Err(_) = Self::process_transactions(
-                    &mut recorder,
-                    duration_data,
-                    &transaction_receiver,
-                    &entry_sender,
-                ) {
-                    return;
+        let thread_hdl = Builder::new()
+            .name("solana-record-stage".to_string())
+            .spawn(move || {
+                let mut recorder = Recorder::new(start_hash);
+                let duration_data = tick_duration.map(|dur| (Instant::now(), dur));
+                loop {
+                    if let Err(_) = Self::process_transactions(
+                        &mut recorder,
+                        duration_data,
+                        &transaction_receiver,
+                        &entry_sender,
+                    ) {
+                        return;
+                    }
+                    if duration_data.is_some() {
+                        recorder.hash();
+                    }
                 }
-                if duration_data.is_some() {
-                    recorder.hash();
-                }
-            }
-        });
+            })
+            .unwrap();
 
         RecordStage {
             entry_receiver,
