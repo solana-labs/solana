@@ -170,11 +170,18 @@ fn find_next_missing(
 fn repair_window(
     locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
     crdt: &Arc<RwLock<Crdt>>,
+    _recycler: &BlobRecycler,
     last: &mut usize,
     times: &mut usize,
     consumed: &mut usize,
     received: &mut usize,
 ) -> Result<()> {
+    #[cfg(feature = "erasure")]
+    {
+        if erasure::recover(_recycler, &mut locked_window.write().unwrap(), *consumed).is_err() {
+            info!("erasure::recover failed");
+        }
+    }
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     //exponential backoff
     if *last != *consumed {
@@ -353,6 +360,7 @@ pub fn window(
                 let _ = repair_window(
                     &window,
                     &crdt,
+                    &recycler,
                     &mut last,
                     &mut times,
                     &mut consumed,
