@@ -665,7 +665,7 @@ mod tests {
         assert_eq!(crdt.table[&d.id].version, 2);
     }
     fn sorted(ls: &Vec<ReplicatedData>) -> Vec<ReplicatedData> {
-        let mut copy: Vec<_> = ls.iter().map(|x| x.clone()).collect();
+        let mut copy: Vec<_> = ls.iter().cloned().collect();
         copy.sort_by(|x, y| x.id.cmp(&y.id));
         copy
     }
