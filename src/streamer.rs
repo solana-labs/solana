@@ -59,7 +59,7 @@ pub fn receiver(
         panic!("streamer::receiver set_read_timeout error");
     }
     Builder::new()
-        .name("receiver".to_string())
+        .name("solana-receiver".to_string())
         .spawn(move || {
             let _ = recv_loop(&sock, &exit, &recycler, &packet_sender);
             ()
@@ -100,7 +100,7 @@ pub fn responder(
     r: BlobReceiver,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name("responder".to_string())
+        .name("solana-responder".to_string())
         .spawn(move || loop {
             if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
                 break;
@@ -131,7 +131,7 @@ pub fn blob_receiver(
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))?;
     let t = Builder::new()
-        .name("blob_receiver".to_string())
+        .name("solana-blob_receiver".to_string())
         .spawn(move || loop {
             if exit.load(Ordering::Relaxed) {
                 break;
@@ -330,7 +330,7 @@ pub fn window(
     retransmit: BlobSender,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name("window".to_string())
+        .name("solana-window".to_string())
         .spawn(move || {
             let mut consumed = 0;
             let mut received = 0;
@@ -428,7 +428,7 @@ pub fn broadcaster(
     r: BlobReceiver,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name("retransmitter".to_string())
+        .name("solana-broadcaster".to_string())
         .spawn(move || {
             let mut transmit_index = 0;
             loop {
@@ -479,7 +479,7 @@ pub fn retransmitter(
     r: BlobReceiver,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name("retransmitter".to_string())
+        .name("solana-retransmitter".to_string())
         .spawn(move || {
             trace!("retransmitter started");
             loop {
