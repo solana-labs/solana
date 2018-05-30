@@ -46,8 +46,14 @@ impl Tpu {
             packet_recycler.clone(),
         );
 
-        let record_stage =
-            RecordStage::new(banking_stage.signal_receiver, &start_hash, tick_duration);
+        let record_stage = match tick_duration {
+            Some(tick_duration) => RecordStage::new_with_clock(
+                banking_stage.signal_receiver,
+                &start_hash,
+                tick_duration,
+            ),
+            None => RecordStage::new(banking_stage.signal_receiver, &start_hash),
+        };
 
         let write_stage = WriteStage::new(
             bank.clone(),
