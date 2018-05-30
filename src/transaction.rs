@@ -154,7 +154,8 @@ impl Transaction {
 
     pub fn verify_plan(&self) -> bool {
         if let Instruction::NewContract(contract) = &self.instruction {
-            contract.plan.verify(contract.tokens - self.fee)
+            self.fee >= 0 && self.fee <= contract.tokens
+                && contract.plan.verify(contract.tokens - self.fee)
         } else {
             true
         }
@@ -208,10 +209,10 @@ mod tests {
     fn test_transfer_with_fee() {
         let zero = Hash::default();
         let keypair0 = KeyPair::new();
-        let keypair1 = KeyPair::new();
-        let pubkey1 = keypair1.pubkey();
-        let tx0 = Transaction::new_taxed(&keypair0, pubkey1, 42, 1, zero);
-        assert!(tx0.verify_plan());
+        let pubkey1 = KeyPair::new().pubkey();
+        assert!(Transaction::new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
+        assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
+        assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
     }
 
     #[test]
