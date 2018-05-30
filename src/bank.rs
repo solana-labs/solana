@@ -26,6 +26,7 @@ pub enum BankError {
     AccountNotFound(PublicKey),
     InsufficientFunds(PublicKey),
     InvalidTxSignature(Signature),
+    InvalidTxLastId(Hash),
     InvalidTxTokens,
 }
 
@@ -95,29 +96,29 @@ impl Bank {
         last_item.0
     }
 
-    fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
+    fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> Result<()> {
         if signatures
             .read()
             .expect("'signatures' read lock")
             .contains(sig)
         {
-            return false;
+            return Err(BankError::InvalidTxSignature(*sig));
         }
         signatures
             .write()
             .expect("'signatures' write lock")
             .insert(*sig);
-        true
+        Ok(())
     }
 
-    fn forget_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> bool {
+    fn forget_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) {
         signatures
             .write()
             .expect("'signatures' write lock in forget_signature")
-            .remove(sig)
+            .remove(sig);
     }
 
-    fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
+    fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) {
         if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in forget_signature_with_last_id")
@@ -125,12 +126,11 @@ impl Bank {
             .rev()
             .find(|x| x.0 == *last_id)
         {
-            return Self::forget_signature(&entry.1, sig);
+            Self::forget_signature(&entry.1, sig);
         }
-        return false;
     }
 
-    fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> bool {
+    fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
         if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in reserve_signature_with_last_id")
@@ -140,7 +140,7 @@ impl Bank {
         {
             return Self::reserve_signature(&entry.1, sig);
         }
-        false
+        Err(BankError::InvalidTxLastId(*last_id))
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -175,9 +175,7 @@ impl Bank {
             return Err(BankError::AccountNotFound(tx.from));
         }
 
-        if !self.reserve_signature_with_last_id(&tx.sig, &tx.last_id) {
-            return Err(BankError::InvalidTxSignature(tx.sig));
-        }
+        self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
 
         loop {
             let result = if let Instruction::NewContract(contract) = &tx.instruction {
@@ -544,8 +542,14 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let sig = Signature::default();
-        assert!(bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
-        assert!(!bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
+        assert!(
+            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+                .is_ok()
+        );
+        assert_eq!(
+            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
+            Err(BankError::InvalidTxSignature(sig))
+        );
     }
 
     #[test]
@@ -553,9 +557,13 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &mint.last_id());
-        assert!(bank.forget_signature_with_last_id(&sig, &mint.last_id()));
-        assert!(!bank.forget_signature_with_last_id(&sig, &mint.last_id()));
+        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+            .unwrap();
+        bank.forget_signature_with_last_id(&sig, &mint.last_id());
+        assert!(
+            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -568,7 +576,10 @@ mod tests {
             bank.register_entry_id(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
-        assert!(!bank.reserve_signature_with_last_id(&sig, &mint.last_id()));
+        assert_eq!(
+            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
+            Err(BankError::InvalidTxLastId(mint.last_id()))
+        );
     }
 
     #[test]
