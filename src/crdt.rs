@@ -29,7 +29,7 @@ use std::io::Cursor;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::{sleep, spawn, JoinHandle};
+use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender};
 
@@ -425,18 +425,21 @@ impl Crdt {
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        spawn(move || loop {
-            let _ = Self::run_gossip(&obj, &blob_sender, &blob_recycler);
-            if exit.load(Ordering::Relaxed) {
-                return;
-            }
-            //TODO this should be a tuned parameter
-            sleep(
-                obj.read()
-                    .expect("'obj' read lock in pub fn gossip")
-                    .timeout,
-            );
-        })
+        Builder::new()
+            .name("solana-gossip".to_string())
+            .spawn(move || loop {
+                let _ = Self::run_gossip(&obj, &blob_sender, &blob_recycler);
+                if exit.load(Ordering::Relaxed) {
+                    return;
+                }
+                //TODO this should be a tuned parameter
+                sleep(
+                    obj.read()
+                        .expect("'obj' read lock in pub fn gossip")
+                        .timeout,
+                );
+            })
+            .unwrap()
     }
     fn run_window_request(
         window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
@@ -571,24 +574,27 @@ impl Crdt {
         response_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        spawn(move || loop {
-            let e = Self::run_listen(
-                &obj,
-                &window,
-                &blob_recycler,
-                &requests_receiver,
-                &response_sender,
-            );
-            if e.is_err() {
-                info!(
-                    "run_listen timeout, table size: {}",
-                    obj.read().unwrap().table.len()
+        Builder::new()
+            .name("solana-listen".to_string())
+            .spawn(move || loop {
+                let e = Self::run_listen(
+                    &obj,
+                    &window,
+                    &blob_recycler,
+                    &requests_receiver,
+                    &response_sender,
                 );
-            }
-            if exit.load(Ordering::Relaxed) {
-                return;
-            }
-        })
+                if e.is_err() {
+                    info!(
+                        "run_listen timeout, table size: {}",
+                        obj.read().unwrap().table.len()
+                    );
+                }
+                if exit.load(Ordering::Relaxed) {
+                    return;
+                }
+            })
+            .unwrap()
     }
 }
 
