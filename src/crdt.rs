@@ -241,18 +241,13 @@ impl Crdt {
         };
 
         // enumerate all the blobs, those are the indices
-        let orders: Vec<_> = blobs.iter().enumerate().collect();
-        info!("orders table {}", orders.len());
-        let _: Vec<_> = orders
-            .into_iter()
-            .map(|(i, b)| {
-                // only leader should be broadcasting
-                let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
-                blob.set_id(me.id).expect("set_id in pub fn broadcast");
-                blob.set_index(*transmit_index + i as u64)
-                    .expect("set_index in pub fn broadcast");
-            })
-            .collect();
+        for (i, b) in blobs.iter().enumerate() {
+            // only leader should be broadcasting
+            let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
+            blob.set_id(me.id).expect("set_id in pub fn broadcast");
+            blob.set_index(*transmit_index + i as u64)
+                .expect("set_index in pub fn broadcast");
+        }
         info!("set blobs index");
 
         Ok(())

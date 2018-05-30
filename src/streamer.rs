@@ -414,9 +414,9 @@ fn broadcast(
     // Fill in the coding blob data from the window data blobs
     #[cfg(feature = "erasure")]
     {
-        match erasure::generate_coding(&mut window.write().unwrap(), *transmit_index as usize) {
-            Err(_e) => return Err(Error::GenericError),
-            _ => {}
+        if erasure::generate_coding(&mut window.write().unwrap(), *transmit_index as usize).is_err()
+        {
+            return Err(Error::GenericError);
         }
     }
 
