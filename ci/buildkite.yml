@@ -9,8 +9,8 @@ steps:
     name: "ignored [public]"
   - command: "ci/test-cuda.sh"
     name: "cuda"
-  - command: "ci/shellcheck.sh"
-    name: "shellcheck [public] || true"
+  - command: "ci/shellcheck.sh || true"
+    name: "shellcheck [public]"
   - wait
   - command: "ci/publish.sh"
     name: "publish release artifacts"
