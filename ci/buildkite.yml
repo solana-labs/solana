@@ -10,7 +10,7 @@ steps:
   - command: "ci/test-cuda.sh"
     name: "cuda"
   - command: "ci/shellcheck.sh"
-    name: "shellcheck [public]"
+    name: "shellcheck [public] || true"
   - wait
   - command: "ci/publish.sh"
     name: "publish release artifacts"
