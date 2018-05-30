@@ -326,8 +326,7 @@ impl Crdt {
     }
     fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<ReplicatedData>) {
         //trace!("get updates since {}", v);
-        let data = self
-            .table
+        let data = self.table
             .values()
             .filter(|x| self.local[&x.id] > v)
             .cloned()
@@ -339,8 +338,7 @@ impl Crdt {
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         let daddr = "0.0.0.0:0".parse().unwrap();
-        let valid: Vec<_> = self
-            .table
+        let valid: Vec<_> = self.table
             .values()
             .filter(|r| r.id != self.me && r.replicate_addr != daddr)
             .collect();
@@ -393,8 +391,7 @@ impl Crdt {
 
         // Lock the object only to do this operation and not for any longer
         // especially not when doing the `sock.send_to`
-        let (remote_gossip_addr, req) = obj
-            .read()
+        let (remote_gossip_addr, req) = obj.read()
             .expect("'obj' read lock in fn run_gossip")
             .gossip_request()?;
         // TODO this will get chatty, so we need to first ask for number of updates since
@@ -486,8 +483,7 @@ impl Crdt {
                 trace!("RequestUpdates {}", v);
                 let addr = reqdata.gossip_addr;
                 // only lock for this call, dont lock during IO `sock.send_to` or `sock.recv_from`
-                let (from, ups, data) = obj
-                    .read()
+                let (from, ups, data) = obj.read()
                     .expect("'obj' read lock in RequestUpdates")
                     .get_updates_since(v);
                 trace!("get updates since response {} {}", v, data.len());
@@ -558,8 +554,7 @@ impl Crdt {
         while let Ok(mut more) = requests_receiver.try_recv() {
             reqs.append(&mut more);
         }
-        let resp: VecDeque<_> = reqs
-            .iter()
+        let resp: VecDeque<_> = reqs.iter()
             .filter_map(|b| Self::handle_blob(obj, window, blob_recycler, &b.read().unwrap()))
             .collect();
         response_sender.send(resp)?;

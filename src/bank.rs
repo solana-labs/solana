@@ -70,8 +70,7 @@ impl Bank {
     /// Commit funds to the 'to' party.
     fn apply_payment(&self, payment: &Payment) {
         // First we check balances with a read lock to maximize potential parallelization.
-        if self
-            .balances
+        if self.balances
             .read()
             .expect("'balances' read lock in apply_payment")
             .contains_key(&payment.to)
@@ -120,8 +119,7 @@ impl Bank {
     }
 
     fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) {
-        if let Some(entry) = self
-            .last_ids
+        if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in forget_signature_with_last_id")
             .iter()
@@ -133,8 +131,7 @@ impl Bank {
     }
 
     fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
-        if let Some(entry) = self
-            .last_ids
+        if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in reserve_signature_with_last_id")
             .iter()
@@ -151,8 +148,7 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_entry_id(&self, last_id: &Hash) {
-        let mut last_ids = self
-            .last_ids
+        let mut last_ids = self.last_ids
             .write()
             .expect("'last_ids' write lock in register_entry_id");
         if last_ids.len() >= MAX_ENTRY_IDS {
@@ -170,8 +166,7 @@ impl Bank {
                 return Err(BankError::NegativeTokens);
             }
         }
-        let bals = self
-            .balances
+        let bals = self.balances
             .read()
             .expect("'balances' read lock in apply_debits");
         let option = bals.get(&tx.from);
@@ -216,18 +211,14 @@ impl Bank {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let mut plan = contract.plan.clone();
-                plan.apply_witness(&Witness::Timestamp(
-                    *self
-                        .last_time
-                        .read()
-                        .expect("timestamp creation in apply_credits"),
-                ));
+                plan.apply_witness(&Witness::Timestamp(*self.last_time
+                    .read()
+                    .expect("timestamp creation in apply_credits")));
 
                 if let Some(ref payment) = plan.final_payment() {
                     self.apply_payment(payment);
                 } else {
-                    let mut pending = self
-                        .pending
+                    let mut pending = self.pending
                         .write()
                         .expect("'pending' write lock in apply_credits");
                     pending.insert(tx.sig, plan);
@@ -254,8 +245,7 @@ impl Bank {
         // Run all debits first to filter out any transactions that can't be processed
         // in parallel deterministically.
         info!("processing Transactions {}", txs.len());
-        let results: Vec<_> = txs
-            .into_par_iter()
+        let results: Vec<_> = txs.into_par_iter()
             .map(|tx| self.apply_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
@@ -282,8 +272,7 @@ impl Bank {
 
     /// Process a Witness Signature.
     fn apply_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        if let Occupied(mut e) = self
-            .pending
+        if let Occupied(mut e) = self.pending
             .write()
             .expect("write() in apply_signature")
             .entry(tx_sig)
@@ -302,8 +291,7 @@ impl Bank {
     fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // If this is the first timestamp we've seen, it probably came from the genesis block,
         // so we'll trust it.
-        if *self
-            .last_time
+        if *self.last_time
             .read()
             .expect("'last_time' read lock on first timestamp check")
             == Utc.timestamp(0, 0)
@@ -314,8 +302,7 @@ impl Bank {
                 .insert(from);
         }
 
-        if self
-            .time_sources
+        if self.time_sources
             .read()
             .expect("'time_sources' read lock")
             .contains(&from)
@@ -332,17 +319,13 @@ impl Bank {
 
         // Hold 'pending' write lock until the end of this function. Otherwise another thread can
         // double-spend if it enters before the modified plan is removed from 'pending'.
-        let mut pending = self
-            .pending
+        let mut pending = self.pending
             .write()
             .expect("'pending' write lock in apply_timestamp");
         for (key, plan) in pending.iter_mut() {
-            plan.apply_witness(&Witness::Timestamp(
-                *self
-                    .last_time
-                    .read()
-                    .expect("'last_time' read lock when creating timestamp"),
-            ));
+            plan.apply_witness(&Witness::Timestamp(*self.last_time
+                .read()
+                .expect("'last_time' read lock when creating timestamp")));
             if let Some(ref payment) = plan.final_payment() {
                 self.apply_payment(payment);
                 completed.push(key.clone());
@@ -387,8 +370,7 @@ impl Bank {
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
-        let bals = self
-            .balances
+        let bals = self.balances
             .read()
             .expect("'balances' read lock in get_balance");
         bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
@@ -530,8 +512,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank
-            .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
+        let sig = bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
         // Assert the debit counts as a transaction.

@@ -29,8 +29,7 @@ fn recv_loop(
         let msgs = re.allocate();
         let msgs_ = msgs.clone();
         loop {
-            match msgs
-                .write()
+            match msgs.write()
                 .expect("write lock in fn recv_loop")
                 .recv_from(sock)
             {
@@ -201,8 +200,7 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let leader_id = crdt
-        .read()
+    let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
         .id;
