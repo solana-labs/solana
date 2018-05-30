@@ -149,6 +149,7 @@ impl Transaction {
     }
 
     pub fn verify_sig(&self) -> bool {
+        warn!("transaction signature verification called");
         self.sig.verify(&self.from, &self.get_sign_data())
     }
 
