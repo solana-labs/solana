@@ -24,8 +24,8 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
 use std::thread::sleep;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 

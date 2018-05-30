@@ -8,9 +8,9 @@ use rayon::prelude::*;
 use record_stage::Signal;
 use result::Result;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -255,8 +255,8 @@ mod bench {
     use record_stage::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::iter;
-    use std::sync::Arc;
     use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use transaction::Transaction;
 
     #[bench]

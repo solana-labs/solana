@@ -80,9 +80,9 @@ mod tests {
     use std::io::Write;
     use std::net::SocketAddr;
     use std::panic;
+    use std::sync::mpsc::channel;
     use std::sync::mpsc::RecvError;
     use std::sync::mpsc::RecvTimeoutError;
-    use std::sync::mpsc::channel;
     use std::thread;
 
     fn addr_parse_error() -> Result<SocketAddr> {

@@ -597,8 +597,8 @@ mod test {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use streamer::{default_window, BlobReceiver, PacketReceiver};
     use streamer::{blob_receiver, receiver, responder, retransmitter, window};
+    use streamer::{default_window, BlobReceiver, PacketReceiver};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {

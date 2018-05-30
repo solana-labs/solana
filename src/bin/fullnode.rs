@@ -20,8 +20,8 @@ use std::fs::File;
 use std::io::{stdin, Read};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::process::exit;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 //use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
