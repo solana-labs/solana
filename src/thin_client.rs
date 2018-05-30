@@ -184,8 +184,8 @@ mod tests {
     use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
     use transaction::{Instruction, Plan};
