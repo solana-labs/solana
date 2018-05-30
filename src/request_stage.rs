@@ -43,7 +43,7 @@ impl RequestStage {
     ) -> Result<()> {
         let (batch, batch_len) = streamer::recv_batch(packet_receiver)?;
 
-        info!(
+        debug!(
             "@{:?} request_stage: processing: {}",
             timing::timestamp(),
             batch_len
@@ -70,7 +70,7 @@ impl RequestStage {
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
-        info!(
+        debug!(
             "@{:?} done process batches: {} time: {:?}ms reqs: {} reqs/s: {}",
             timing::timestamp(),
             batch_len,
