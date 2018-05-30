@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 if [[ -z "$1" ]]; then
-  echo "usage: $0 [leader machine]"
+  echo "usage: $0 [network path to solana repo on leader machine]"
   exit 1
 fi
 
@@ -9,10 +9,10 @@ LEADER="$1"
 
 set -x
 
-rsync -v -e ssh "$LEADER:~/solana/mint-demo.json" .
-rsync -v -e ssh "$LEADER:~/solana/leader.json" .
-rsync -v -e ssh "$LEADER:~/solana/genesis.log" .
-rsync -v -e ssh "$LEADER:~/solana/libcuda_verify_ed25519.a" .
+rsync -v -e ssh "$LEADER/mint-demo.json" .
+rsync -v -e ssh "$LEADER/leader.json" .
+rsync -v -e ssh "$LEADER/genesis.log" .
+rsync -v -e ssh "$LEADER/libcuda_verify_ed25519.a" .
 
 export RUST_LOG=solana=info
 

@@ -66,13 +66,13 @@ Now you can start some validators:
 ```bash
 $ cat ./multinode-demo/validator.sh
 #!/bin/bash
-rsync -v -e ssh $1:~/solana/mint-demo.json .
-rsync -v -e ssh $1:~/solana/leader.json .
-rsync -v -e ssh $1:~/solana/genesis.log .
+rsync -v -e ssh $1/mint-demo.json .
+rsync -v -e ssh $1/leader.json .
+rsync -v -e ssh $1/genesis.log .
 export RUST_LOG=solana=info
 sudo sysctl -w net.core.rmem_max=26214400
 cat genesis.log | cargo run --release --bin solana-fullnode -- -l validator.json -s validator.json -v leader.json -b 9000 -d 2>&1 | tee validator-tee.log
-$ ./multinode-demo/validator.sh ubuntu@10.0.1.51 #The leader machine
+$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana #The leader machine
 ```
 
 
@@ -83,10 +83,10 @@ the JSON configuration file here, not the genesis ledger.
 $ cat ./multinode-demo/client.sh
 #!/bin/bash
 export RUST_LOG=solana=info
-rsync -v -e ssh $1:~/solana/leader.json .
-rsync -v -e ssh $1:~/solana/mint-demo.json .
+rsync -v -e ssh $1/leader.json .
+rsync -v -e ssh $1/mint-demo.json .
 cat mint-demo.json | cargo run --release --bin solana-client-demo -- -l leader.json -c 8100 -n 1
-$ ./multinode-demo/client.sh ubuntu@10.0.1.51 #The leader machine
+$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana #The leader machine
 ```
 
 Try starting a more validators and reruning the client demo and change the `-n 1` option in `client.sh`!
