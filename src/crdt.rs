@@ -236,7 +236,7 @@ impl Crdt {
     ) -> Result<()> {
         let me: ReplicatedData = {
             let robj = obj.read().expect("'obj' read lock in crdt::index_blobs");
-            info!("broadcast table {}", robj.table.len());
+            debug!("broadcast table {}", robj.table.len());
             robj.table[&robj.me].clone()
         };
 
@@ -248,7 +248,6 @@ impl Crdt {
             blob.set_index(*transmit_index + i as u64)
                 .expect("set_index in pub fn broadcast");
         }
-        info!("set blobs index");
 
         Ok(())
     }
@@ -289,7 +288,7 @@ impl Crdt {
             warn!("crdt too small");
             return Err(Error::CrdtTooSmall);
         }
-        info!("nodes table {}", nodes.len());
+        trace!("nodes table {}", nodes.len());
 
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
@@ -305,7 +304,7 @@ impl Crdt {
             i %= window_l.len();
         }
 
-        info!("orders table {}", orders.len());
+        trace!("orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
             .map(|(b, v)| {
@@ -321,7 +320,7 @@ impl Crdt {
                 e
             })
             .collect();
-        info!("broadcast results {}", errs.len());
+        trace!("broadcast results {}", errs.len());
         for e in errs {
             match e {
                 Err(e) => {

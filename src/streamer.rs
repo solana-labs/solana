@@ -179,7 +179,7 @@ fn repair_window(
     #[cfg(feature = "erasure")]
     {
         if erasure::recover(_recycler, &mut locked_window.write().unwrap(), *consumed).is_err() {
-            info!("erasure::recover failed");
+            trace!("erasure::recover failed");
         }
     }
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
