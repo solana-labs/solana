@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
@@ -30,19 +30,22 @@ impl BankingStage {
         packet_recycler: packet::PacketRecycler,
     ) -> Self {
         let (signal_sender, signal_receiver) = channel();
-        let thread_hdl = spawn(move || loop {
-            let e = Self::process_packets(
-                bank.clone(),
-                &verified_receiver,
-                &signal_sender,
-                &packet_recycler,
-            );
-            if e.is_err() {
-                if exit.load(Ordering::Relaxed) {
-                    break;
+        let thread_hdl = Builder::new()
+            .name("solana-banking-stage".to_string())
+            .spawn(move || loop {
+                let e = Self::process_packets(
+                    bank.clone(),
+                    &verified_receiver,
+                    &signal_sender,
+                    &packet_recycler,
+                );
+                if e.is_err() {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
                 }
-            }
-        });
+            })
+            .unwrap();
         BankingStage {
             thread_hdl,
             signal_receiver,

@@ -8,7 +8,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
-use std::thread::{spawn, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use streamer;
 
 pub struct WriteStage {
@@ -26,19 +26,22 @@ impl WriteStage {
         entry_receiver: Receiver<Entry>,
     ) -> Self {
         let (blob_sender, blob_receiver) = channel();
-        let thread_hdl = spawn(move || loop {
-            let entry_writer = EntryWriter::new(&bank);
-            let _ = entry_writer.write_and_send_entries(
-                &blob_sender,
-                &blob_recycler,
-                &writer,
-                &entry_receiver,
-            );
-            if exit.load(Ordering::Relaxed) {
-                info!("broadcat_service exiting");
-                break;
-            }
-        });
+        let thread_hdl = Builder::new()
+            .name("solana-writer".to_string())
+            .spawn(move || loop {
+                let entry_writer = EntryWriter::new(&bank);
+                let _ = entry_writer.write_and_send_entries(
+                    &blob_sender,
+                    &blob_recycler,
+                    &writer,
+                    &entry_receiver,
+                );
+                if exit.load(Ordering::Relaxed) {
+                    info!("broadcat_service exiting");
+                    break;
+                }
+            })
+            .unwrap();
 
         WriteStage {
             thread_hdl,
@@ -52,16 +55,19 @@ impl WriteStage {
         entry_receiver: Receiver<Entry>,
     ) -> Self {
         let (_blob_sender, blob_receiver) = channel();
-        let thread_hdl = spawn(move || {
-            let entry_writer = EntryWriter::new(&bank);
-            loop {
-                let _ = entry_writer.drain_entries(&entry_receiver);
-                if exit.load(Ordering::Relaxed) {
-                    info!("drain_service exiting");
-                    break;
+        let thread_hdl = Builder::new()
+            .name("solana-drain".to_string())
+            .spawn(move || {
+                let entry_writer = EntryWriter::new(&bank);
+                loop {
+                    let _ = entry_writer.drain_entries(&entry_receiver);
+                    if exit.load(Ordering::Relaxed) {
+                        info!("drain_service exiting");
+                        break;
+                    }
                 }
-            }
-        });
+            })
+            .unwrap();
 
         WriteStage {
             thread_hdl,

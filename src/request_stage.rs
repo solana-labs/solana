@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{Builder, JoinHandle};
 use std::time::Instant;
 use streamer;
 use timing;
@@ -90,20 +90,23 @@ impl RequestStage {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
         let (blob_sender, blob_receiver) = channel();
-        let thread_hdl = spawn(move || loop {
-            let e = Self::process_request_packets(
-                &request_processor_,
-                &packet_receiver,
-                &blob_sender,
-                &packet_recycler,
-                &blob_recycler,
-            );
-            if e.is_err() {
-                if exit.load(Ordering::Relaxed) {
-                    break;
+        let thread_hdl = Builder::new()
+            .name("solana-request-stage".to_string())
+            .spawn(move || loop {
+                let e = Self::process_request_packets(
+                    &request_processor_,
+                    &packet_receiver,
+                    &blob_sender,
+                    &packet_recycler,
+                    &blob_recycler,
+                );
+                if e.is_err() {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
+                    }
                 }
-            }
-        });
+            })
+            .unwrap();
         RequestStage {
             thread_hdl,
             blob_receiver,
