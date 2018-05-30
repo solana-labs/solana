@@ -25,7 +25,8 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 pub enum BankError {
     AccountNotFound(PublicKey),
     InsufficientFunds(PublicKey),
-    InvalidTransferSignature(Signature),
+    InvalidTxSignature(Signature),
+    InvalidTxTokens,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -161,6 +162,9 @@ impl Bank {
     fn apply_debits(&self, tx: &Transaction) -> Result<()> {
         if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
+            if contract.tokens < 0 {
+                return Err(BankError::InvalidTxTokens);
+            }
         }
         let bals = self.balances
             .read()
@@ -172,7 +176,7 @@ impl Bank {
         }
 
         if !self.reserve_signature_with_last_id(&tx.sig, &tx.last_id) {
-            return Err(BankError::InvalidTransferSignature(tx.sig));
+            return Err(BankError::InvalidTxSignature(tx.sig));
         }
 
         loop {
@@ -401,6 +405,18 @@ mod tests {
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_500);
         assert_eq!(bank.transaction_count(), 2);
+    }
+
+    #[test]
+    fn test_invalid_tokens() {
+        let mint = Mint::new(1);
+        let pubkey = KeyPair::new().pubkey();
+        let bank = Bank::new(&mint);
+        assert_eq!(
+            bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id()),
+            Err(BankError::InvalidTxTokens)
+        );
+        assert_eq!(bank.transaction_count(), 0);
     }
 
     #[test]
