@@ -4,6 +4,8 @@ extern crate isatty;
 extern crate pnet;
 extern crate serde_json;
 extern crate solana;
+#[macro_use]
+extern crate log;
 
 use getopts::Options;
 use isatty::stdin_isatty;
@@ -134,8 +136,12 @@ fn main() {
     let mut repl_data = make_repl_data(&bind_addr);
     if matches.opt_present("l") {
         let path = matches.opt_str("l").unwrap();
-        if let Ok(file) = File::open(path) {
-            repl_data = serde_json::from_reader(file).expect("parse");
+        if let Ok(file) = File::open(path.clone()) {
+            if let Ok(data) = serde_json::from_reader(file) {
+                repl_data = data;
+            } else {
+                warn!("failed to parse leader {}, generating new identity", path);
+            }
         }
     }
     let threads = if matches.opt_present("v") {
