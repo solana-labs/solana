@@ -25,9 +25,9 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 pub enum BankError {
     AccountNotFound(PublicKey),
     InsufficientFunds(PublicKey),
-    InvalidTxSignature(Signature),
-    InvalidTxLastId(Hash),
-    InvalidTxTokens,
+    DuplicateSiganture(Signature),
+    LastIdNotFound(Hash),
+    NegativeTokens,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -102,7 +102,7 @@ impl Bank {
             .expect("'signatures' read lock")
             .contains(sig)
         {
-            return Err(BankError::InvalidTxSignature(*sig));
+            return Err(BankError::DuplicateSiganture(*sig));
         }
         signatures
             .write()
@@ -140,7 +140,7 @@ impl Bank {
         {
             return Self::reserve_signature(&entry.1, sig);
         }
-        Err(BankError::InvalidTxLastId(*last_id))
+        Err(BankError::LastIdNotFound(*last_id))
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -163,7 +163,7 @@ impl Bank {
         if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
             if contract.tokens < 0 {
-                return Err(BankError::InvalidTxTokens);
+                return Err(BankError::NegativeTokens);
             }
         }
         let bals = self.balances
@@ -412,7 +412,7 @@ mod tests {
         let bank = Bank::new(&mint);
         assert_eq!(
             bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::InvalidTxTokens)
+            Err(BankError::NegativeTokens)
         );
         assert_eq!(bank.transaction_count(), 0);
     }
@@ -548,7 +548,7 @@ mod tests {
         );
         assert_eq!(
             bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::InvalidTxSignature(sig))
+            Err(BankError::DuplicateSiganture(sig))
         );
     }
 
@@ -578,7 +578,7 @@ mod tests {
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
             bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::InvalidTxLastId(mint.last_id()))
+            Err(BankError::LastIdNotFound(mint.last_id()))
         );
     }
 
