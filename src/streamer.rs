@@ -273,6 +273,7 @@ fn recv_window(
         //if we get different blocks at the same index
         //that is a network failure/attack
         trace!("window w: {} size: {}", w, p.meta.size);
+        drop(p);
         {
             let mut window = locked_window.write().unwrap();
             if window[w].is_none() {
@@ -290,12 +291,15 @@ fn recv_window(
                 if window[k].is_none() {
                     break;
                 }
-                let w_l1 = window[k].clone().unwrap();
-                let w_l2 = w_l1.read().unwrap();
-                if (w_l2.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0 {
-                    break;
+                let mut is_coding = false;
+                if let &Some(ref cblob) = &window[k] {
+                    if (cblob.read().expect("blob read lock for flags streamer::window").get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0 {
+                        is_coding = true;
+                    }
                 }
-                contq.push_back(window[k].clone().expect("clone in fn recv_window"));
+                if !is_coding {
+                    contq.push_back(window[k].clone().expect("clone in fn recv_window"));
+                }
                 window[k] = None;
                 *consumed += 1;
             }
