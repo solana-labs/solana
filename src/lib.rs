@@ -29,7 +29,6 @@ pub mod sigverify;
 pub mod sigverify_stage;
 pub mod streamer;
 pub mod thin_client;
-pub mod thin_client1;
 pub mod timing;
 pub mod tpu;
 pub mod transaction;
