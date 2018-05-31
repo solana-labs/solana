@@ -12,6 +12,7 @@ const NUM_DATA: usize = NUM_CODED - MAX_MISSING;
 pub enum ErasureError {
     NotEnoughBlocksToDecode,
     DecodeError,
+    EncodeError,
     InvalidBlockSize,
 }
 
@@ -229,7 +230,9 @@ pub fn generate_coding(window: &mut Vec<Option<SharedBlob>>, consumed: usize) ->
         let w_l = window[n].clone().unwrap();
         w_l.write().unwrap().meta.size = max_data_size;
         let flags = w_l.write().unwrap().get_flags().unwrap();
-        w_l.write().unwrap().set_flags(flags | BLOB_FLAG_IS_CODING);
+        if w_l.write().unwrap().set_flags(flags | BLOB_FLAG_IS_CODING).is_err() {
+            return Err(ErasureError::EncodeError);
+        }
         coding_blobs.push(
             window[n]
                 .clone()
