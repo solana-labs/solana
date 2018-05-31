@@ -106,7 +106,6 @@ fn test_multi_node() {
     let leader_bank = Bank::new(&alice);
     let server = Server::new_leader(
         leader_bank,
-        alice.last_id(),
         None,
         leader.data.clone(),
         leader.sockets.requests,

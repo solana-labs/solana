@@ -115,9 +115,7 @@ fn main() {
 
     eprintln!("processing entries...");
 
-    let mut last_id = entry1.id;
     for entry in entries {
-        last_id = entry.id;
         let results = bank.process_transactions(entry.transactions);
         for result in results {
             if let Err(e) = result {
@@ -125,7 +123,7 @@ fn main() {
                 exit(1);
             }
         }
-        bank.register_entry_id(&last_id);
+        bank.register_entry_id(&entry.id);
     }
 
     eprintln!("creating networking stack...");
@@ -166,7 +164,6 @@ fn main() {
         let file = File::create("leader.log").expect("leader.log create");
         let server = Server::new_leader(
             bank,
-            last_id,
             //Some(Duration::from_millis(1000)),
             None,
             repl_data.clone(),

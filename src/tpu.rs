@@ -4,7 +4,6 @@
 use bank::Bank;
 use banking_stage::BankingStage;
 use fetch_stage::FetchStage;
-use hash::Hash;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use sigverify_stage::SigVerifyStage;
@@ -25,7 +24,6 @@ pub struct Tpu {
 impl Tpu {
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
-        start_hash: Hash,
         tick_duration: Option<Duration>,
         transactions_socket: UdpSocket,
         blob_recycler: BlobRecycler,
@@ -49,10 +47,10 @@ impl Tpu {
         let record_stage = match tick_duration {
             Some(tick_duration) => RecordStage::new_with_clock(
                 banking_stage.signal_receiver,
-                &start_hash,
+                &bank.last_id(),
                 tick_duration,
             ),
-            None => RecordStage::new(banking_stage.signal_receiver, &start_hash),
+            None => RecordStage::new(banking_stage.signal_receiver, &bank.last_id()),
         };
 
         let write_stage = WriteStage::new(
