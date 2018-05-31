@@ -1,4 +1,3 @@
-extern crate futures;
 extern crate getopts;
 extern crate isatty;
 extern crate pnet;
@@ -6,7 +5,6 @@ extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use pnet::datalink;
