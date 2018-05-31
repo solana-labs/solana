@@ -9,7 +9,7 @@ extern crate log;
 use getopts::Options;
 use isatty::stdin_isatty;
 use solana::bank::Bank;
-use solana::crdt::{get_ip_addr, parse_port_or_addr, ReplicatedData};
+use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
 use solana::payment_plan::PaymentPlan;
 use solana::server::Server;
@@ -17,7 +17,7 @@ use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, Read};
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -35,8 +35,6 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     env_logger::init().unwrap();
     let mut opts = Options::new();
-    opts.optopt("b", "", "bind", "bind to port or address");
-    opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optopt("l", "", "load", "load my identity to path.json");
     opts.optflag("h", "help", "print help");
     opts.optopt(
@@ -58,14 +56,6 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
-    let bind_addr: SocketAddr = {
-        let mut bind_addr = parse_port_or_addr(matches.opt_str("b"));
-        if matches.opt_present("d") {
-            let ip = get_ip_addr().unwrap();
-            bind_addr.set_ip(ip);
-        }
-        bind_addr
-    };
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a log file");
         exit(1);
@@ -115,8 +105,7 @@ fn main() {
     eprintln!("creating networking stack...");
 
     let exit = Arc::new(AtomicBool::new(false));
-    // we need all the receiving sockets to be bound within the expected
-    // port range that we open on aws
+    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
     let mut repl_data = ReplicatedData::new_leader(&bind_addr);
     if matches.opt_present("l") {
         let path = matches.opt_str("l").unwrap();
