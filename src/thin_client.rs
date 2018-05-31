@@ -4,7 +4,6 @@
 //! unstable and may change in future releases.
 
 use bincode::{deserialize, serialize};
-use futures::future::{ok, FutureResult};
 use hash::Hash;
 use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
@@ -138,7 +137,7 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> FutureResult<Hash, ()> {
+    pub fn get_last_id(&mut self) -> Hash {
         info!("get_last_id");
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
@@ -153,7 +152,7 @@ impl ThinClient {
             }
             self.process_response(resp);
         }
-        ok(self.last_id.expect("some last_id"))
+        self.last_id.expect("some last_id")
     }
 
     pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
@@ -178,7 +177,6 @@ mod tests {
     use bank::Bank;
     use budget::Budget;
     use crdt::TestNode;
-    use futures::Future;
     use logger;
     use mint::Mint;
     use server::Server;
@@ -223,7 +221,7 @@ mod tests {
             leader.data.transactions_addr,
             transactions_socket,
         );
-        let last_id = client.get_last_id().wait().unwrap();
+        let last_id = client.get_last_id();
         let _sig = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
@@ -269,13 +267,13 @@ mod tests {
             leader.data.transactions_addr,
             transactions_socket,
         );
-        let last_id = client.get_last_id().wait().unwrap();
+        let last_id = client.get_last_id();
 
         let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
         let _sig = client.transfer_signed(tx).unwrap();
 
-        let last_id = client.get_last_id().wait().unwrap();
+        let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         if let Instruction::NewContract(contract) = &mut tr2.instruction {

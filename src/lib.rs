@@ -50,8 +50,6 @@ extern crate serde_json;
 extern crate sha2;
 extern crate untrusted;
 
-extern crate futures;
-
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
