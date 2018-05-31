@@ -271,6 +271,9 @@ pub fn to_blobs<T: Serialize>(
 
 const BLOB_INDEX_END: usize = size_of::<u64>();
 const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
+const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
+
+pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
@@ -297,14 +300,27 @@ impl Blob {
         Ok(())
     }
 
+    pub fn get_flags(&self) -> Result<u32> {
+        let mut rdr = io::Cursor::new(&self.data[BLOB_ID_END..BLOB_FLAGS_END]);
+        let r = rdr.read_u32::<LittleEndian>()?;
+        Ok(r)
+    }
+
+    pub fn set_flags(&mut self, ix: u32) -> Result<()> {
+        let mut wtr = vec![];
+        wtr.write_u32::<LittleEndian>(ix)?;
+        self.data[BLOB_ID_END..BLOB_FLAGS_END].clone_from_slice(&wtr);
+        Ok(())
+    }
+
     pub fn data(&self) -> &[u8] {
-        &self.data[BLOB_ID_END..]
+        &self.data[BLOB_FLAGS_END..]
     }
     pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data[BLOB_ID_END..]
+        &mut self.data[BLOB_FLAGS_END..]
     }
     pub fn set_size(&mut self, size: usize) {
-        self.meta.size = size + BLOB_ID_END;
+        self.meta.size = size + BLOB_FLAGS_END;
     }
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<VecDeque<SharedBlob>> {
         let mut v = VecDeque::new();
