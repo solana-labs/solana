@@ -1,7 +1,6 @@
 extern crate env_logger;
 extern crate getopts;
 extern crate isatty;
-extern crate pnet;
 extern crate serde_json;
 extern crate solana;
 #[macro_use]
@@ -9,18 +8,16 @@ extern crate log;
 
 use getopts::Options;
 use isatty::stdin_isatty;
-use pnet::datalink;
 use solana::bank::Bank;
-use solana::crdt::ReplicatedData;
+use solana::crdt::{get_ip_addr, parse_port_or_addr, ReplicatedData};
 use solana::entry::Entry;
 use solana::payment_plan::PaymentPlan;
 use solana::server::Server;
-use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, Read};
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -121,7 +118,7 @@ fn main() {
     let exit = Arc::new(AtomicBool::new(false));
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
-    let mut repl_data = make_repl_data(&bind_addr);
+    let mut repl_data = ReplicatedData::new_leader(&bind_addr);
     if matches.opt_present("l") {
         let path = matches.opt_str("l").unwrap();
         if let Ok(file) = File::open(path.clone()) {
@@ -177,63 +174,4 @@ fn main() {
     for t in threads {
         t.join().expect("join");
     }
-}
-
-fn next_port(server_addr: &SocketAddr, nxt: u16) -> SocketAddr {
-    let mut gossip_addr = server_addr.clone();
-    gossip_addr.set_port(server_addr.port() + nxt);
-    gossip_addr
-}
-
-fn make_repl_data(bind_addr: &SocketAddr) -> ReplicatedData {
-    let transactions_addr = bind_addr.clone();
-    let gossip_addr = next_port(&bind_addr, 1);
-    let replicate_addr = next_port(&bind_addr, 2);
-    let requests_addr = next_port(&bind_addr, 3);
-    let pubkey = KeyPair::new().pubkey();
-    ReplicatedData::new(
-        pubkey,
-        gossip_addr,
-        replicate_addr,
-        requests_addr,
-        transactions_addr,
-    )
-}
-
-fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
-    let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
-    if let Some(addrstr) = optstr {
-        if let Ok(port) = addrstr.parse() {
-            let mut addr = daddr.clone();
-            addr.set_port(port);
-            addr
-        } else if let Ok(addr) = addrstr.parse() {
-            addr
-        } else {
-            daddr
-        }
-    } else {
-        daddr
-    }
-}
-
-fn get_ip_addr() -> Option<IpAddr> {
-    for iface in datalink::interfaces() {
-        for p in iface.ips {
-            if !p.ip().is_loopback() && !p.ip().is_multicast() {
-                return Some(p.ip());
-            }
-        }
-    }
-    None
-}
-
-#[test]
-fn test_parse_port_or_addr() {
-    let p1 = parse_port_or_addr(Some("9000".to_string()));
-    assert_eq!(p1.port(), 9000);
-    let p2 = parse_port_or_addr(Some("127.0.0.1:7000".to_string()));
-    assert_eq!(p2.port(), 7000);
-    let p3 = parse_port_or_addr(None);
-    assert_eq!(p3.port(), 8000);
 }

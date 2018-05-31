@@ -17,6 +17,7 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
+use pnet::datalink;
 use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
@@ -26,12 +27,40 @@ use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io::Cursor;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender};
+
+pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
+    let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
+    if let Some(addrstr) = optstr {
+        if let Ok(port) = addrstr.parse() {
+            let mut addr = daddr.clone();
+            addr.set_port(port);
+            addr
+        } else if let Ok(addr) = addrstr.parse() {
+            addr
+        } else {
+            daddr
+        }
+    } else {
+        daddr
+    }
+}
+
+pub fn get_ip_addr() -> Option<IpAddr> {
+    for iface in datalink::interfaces() {
+        for p in iface.ips {
+            if !p.ip().is_loopback() && !p.ip().is_multicast() {
+                return Some(p.ip());
+            }
+        }
+    }
+    None
+}
 
 /// Structure to be replicated by the network
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -76,6 +105,27 @@ impl ReplicatedData {
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
         }
+    }
+
+    fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
+        let mut nxt_addr = addr.clone();
+        nxt_addr.set_port(addr.port() + nxt);
+        nxt_addr
+    }
+
+    pub fn new_leader(bind_addr: &SocketAddr) -> Self {
+        let transactions_addr = bind_addr.clone();
+        let gossip_addr = Self::next_port(&bind_addr, 1);
+        let replicate_addr = Self::next_port(&bind_addr, 2);
+        let requests_addr = Self::next_port(&bind_addr, 3);
+        let pubkey = KeyPair::new().pubkey();
+        ReplicatedData::new(
+            pubkey,
+            gossip_addr,
+            replicate_addr,
+            requests_addr,
+            transactions_addr,
+        )
     }
 }
 
@@ -647,8 +697,18 @@ impl TestNode {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{Crdt, ReplicatedData};
+    use crdt::{parse_port_or_addr, Crdt, ReplicatedData};
     use signature::{KeyPair, KeyPairUtil};
+
+    #[test]
+    fn test_parse_port_or_addr() {
+        let p1 = parse_port_or_addr(Some("9000".to_string()));
+        assert_eq!(p1.port(), 9000);
+        let p2 = parse_port_or_addr(Some("127.0.0.1:7000".to_string()));
+        assert_eq!(p2.port(), 7000);
+        let p3 = parse_port_or_addr(None);
+        assert_eq!(p3.port(), 8000);
+    }
 
     /// Test that insert drops messages that are older
     #[test]
