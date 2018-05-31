@@ -1,10 +1,8 @@
 #[macro_use]
 extern crate log;
 extern crate bincode;
-extern crate futures;
 extern crate solana;
 
-use futures::Future;
 use solana::bank::Bank;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
@@ -167,7 +165,7 @@ fn tx_and_retry_get_balance(
 ) -> io::Result<i64> {
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
-    let last_id = client.get_last_id().wait().unwrap();
+    let last_id = client.get_last_id();
     info!("executing leader transer");
     let _sig = client
         .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
