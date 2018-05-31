@@ -37,7 +37,6 @@ fn main() {
     let mut opts = Options::new();
     opts.optopt("b", "", "bind", "bind to port or address");
     opts.optflag("d", "dyn", "detect network address dynamically");
-    opts.optopt("s", "", "save", "save my identity to path.json");
     opts.optopt("l", "", "load", "load my identity to path.json");
     opts.optflag("h", "help", "print help");
     opts.optopt(
@@ -164,11 +163,6 @@ fn main() {
         );
         server.thread_hdls
     };
-    if matches.opt_present("s") {
-        let path = matches.opt_str("s").unwrap();
-        let file = File::create(path).expect("file");
-        serde_json::to_writer(file, &repl_data).expect("serialize");
-    }
     eprintln!("Ready. Listening on {}", repl_data.transactions_addr);
 
     for t in threads {
