@@ -19,7 +19,7 @@ use solana::transaction::Transaction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, Read};
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -50,13 +50,13 @@ fn get_ip_addr() -> Option<IpAddr> {
 
 fn main() {
     let mut threads = 4usize;
-    let mut num_nodes = 10usize;
-    let mut leader = "leader.json".to_string();
+    let mut num_nodes = 0usize;
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
     opts.optopt("c", "", "client port", "port");
     opts.optopt("t", "", "number of threads", &format!("{}", threads));
+    opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optopt(
         "n",
         "",
@@ -78,15 +78,14 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
-    if matches.opt_present("l") {
-        leader = matches.opt_str("l").unwrap();
-    }
-    let mut addr: SocketAddr = "127.0.0.1:8010".parse().unwrap();
+    let mut addr: SocketAddr = "0.0.0.0:8010".parse().unwrap();
     if matches.opt_present("c") {
         let port = matches.opt_str("c").unwrap().parse().unwrap();
         addr.set_port(port);
     }
-    addr.set_ip(get_ip_addr().unwrap());
+    if matches.opt_present("d") {
+        addr.set_ip(get_ip_addr().unwrap());
+    }
     let client_addr: Arc<RwLock<SocketAddr>> = Arc::new(RwLock::new(addr));
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
@@ -95,7 +94,13 @@ fn main() {
         num_nodes = matches.opt_str("n").unwrap().parse().expect("integer");
     }
 
-    let leader: ReplicatedData = read_leader(leader);
+    let leader = if matches.opt_present("l") {
+        read_leader(matches.opt_str("l").unwrap())
+    } else {
+        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        ReplicatedData::new_leader(&server_addr)
+    };
+
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
     let validators = converge(
@@ -237,6 +242,10 @@ fn converge(
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
 ) -> Vec<ReplicatedData> {
+    if num_nodes <= 2 {
+        return vec![];
+    }
+
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node(client_addr);
