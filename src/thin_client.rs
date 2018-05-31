@@ -258,6 +258,47 @@ mod tests {
     }
 
     #[test]
+    fn test_get_last_ids() {
+        logger::setup();
+        let leader = TestNode::new();
+
+        let mint = Mint::new(10_000);
+        let bank = Bank::new(&mint);
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let server = Server::new_leader(
+            bank,
+            None,
+            leader.data.clone(),
+            leader.sockets.requests,
+            leader.sockets.transaction,
+            leader.sockets.broadcast,
+            leader.sockets.respond,
+            leader.sockets.gossip,
+            exit.clone(),
+            sink(),
+        );
+        sleep(Duration::from_millis(900));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        let mut client = ThinClient::new(
+            leader.data.requests_addr,
+            requests_socket,
+            leader.data.transactions_addr,
+            transactions_socket,
+        );
+        let last_ids = client.get_last_ids();
+        assert_eq!(last_ids.len(), 1);
+
+        exit.store(true, Ordering::Relaxed);
+        for t in server.thread_hdls {
+            t.join().unwrap();
+        }
+    }
+
+    #[test]
     fn test_bad_sig() {
         logger::setup();
         let leader = TestNode::new();
