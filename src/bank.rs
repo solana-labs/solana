@@ -265,10 +265,10 @@ impl Bank {
         I: IntoIterator<Item = Entry>,
     {
         for entry in entries {
-            self.register_entry_id(&entry.id);
             for result in self.process_transactions(entry.transactions) {
                 result?;
             }
+            self.register_entry_id(&entry.id);
         }
         Ok(())
     }
