@@ -1,6 +1,7 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use counter::Counter;
 use result::{Error, Result};
 use serde::Serialize;
 use signature::PublicKey;
@@ -9,7 +10,9 @@ use std::fmt;
 use std::io;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Instant;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -169,6 +172,7 @@ impl<T: Default> Recycler<T> {
 
 impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
+        static mut COUNTER: Counter = create_counter!("packets", 10);
         self.packets.resize(NUM_PACKETS, Packet::default());
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
@@ -178,11 +182,13 @@ impl Packets {
         //  * read until it fails
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
+        let mut start = Instant::now();
         for p in &mut self.packets {
             p.meta.size = 0;
             trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
+                    inc_counter!(COUNTER, i, start);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }
@@ -194,6 +200,7 @@ impl Packets {
                     p.meta.size = nrecv;
                     p.meta.set_addr(&from);
                     if i == 0 {
+                        start = Instant::now();
                         socket.set_nonblocking(true)?;
                     }
                 }

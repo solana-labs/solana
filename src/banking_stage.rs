@@ -4,13 +4,14 @@
 
 use bank::Bank;
 use bincode::deserialize;
+use counter::Counter;
 use packet;
 use packet::SharedPackets;
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::Result;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
@@ -94,6 +95,8 @@ impl BankingStage {
             timing::duration_as_ms(&recv_start.elapsed()),
             mms.len(),
         );
+        let count = mms.iter().map(|x| x.1.len()).sum();
+        static mut COUNTER: Counter = create_counter!("banking_stage_process_packets", 1);
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
@@ -129,6 +132,7 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
+        inc_counter!(COUNTER, count, proc_start);
         Ok(())
     }
 }

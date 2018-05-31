@@ -7,6 +7,8 @@
 //!
 
 #![cfg_attr(feature = "unstable", feature(test))]
+#[macro_use]
+pub mod counter;
 pub mod bank;
 pub mod banking_stage;
 pub mod budget;
