@@ -202,7 +202,6 @@ mod tests {
 
         let server = Server::new_leader(
             bank,
-            alice.last_id(),
             Some(Duration::from_millis(30)),
             leader.data.clone(),
             leader.sockets.requests,
@@ -247,7 +246,6 @@ mod tests {
 
         let server = Server::new_leader(
             bank,
-            alice.last_id(),
             Some(Duration::from_millis(30)),
             leader.data.clone(),
             leader.sockets.requests,

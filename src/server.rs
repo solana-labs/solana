@@ -3,7 +3,6 @@
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
 use data_replicator::DataReplicator;
-use hash::Hash;
 use packet;
 use rpu::Rpu;
 use std::io::Write;
@@ -23,7 +22,6 @@ pub struct Server {
 impl Server {
     pub fn new_leader<W: Write + Send + 'static>(
         bank: Bank,
-        start_hash: Hash,
         tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
@@ -42,7 +40,6 @@ impl Server {
         let blob_recycler = packet::BlobRecycler::default();
         let tpu = Tpu::new(
             bank.clone(),
-            start_hash,
             tick_duration,
             transactions_socket,
             blob_recycler.clone(),
