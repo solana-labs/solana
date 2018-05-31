@@ -4,8 +4,11 @@
 //! offloaded to the GPU.
 //!
 
+use counter::Counter;
 use packet::{Packet, SharedPackets};
 use std::mem::size_of;
+use std::sync::atomic::AtomicUsize;
+use std::time::Instant;
 use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 
 pub const TX_OFFSET: usize = 0;
@@ -67,8 +70,11 @@ fn batch_size(batches: &Vec<SharedPackets>) -> usize {
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
+    static mut COUNTER: Counter = create_counter!("ed25519_verify", 1);
+    let start = Instant::now();
+    let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
-    batches
+    let rv = batches
         .into_par_iter()
         .map(|p| {
             p.read()
@@ -78,13 +84,17 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
                 .map(verify_packet)
                 .collect()
         })
-        .collect()
+        .collect();
+    inc_counter!(COUNTER, count, start);
+    rv
 }
 
 #[cfg(feature = "cuda")]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
-
+    static mut COUNTER: Counter = create_counter!("ed25519_verify_cuda", 1);
+    let start = Instant::now();
+    let count = batch_size(batches);
     info!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
@@ -143,6 +153,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
             num += 1;
         }
     }
+    inc_counter!(COUNTER, count, start);
     rvs
 }
 
