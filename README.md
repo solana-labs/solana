@@ -47,15 +47,25 @@ $ echo 1000000000 | cargo run --release --bin solana-mint-demo > mint-demo.json
 $ cat mint-demo.json | cargo run --release --bin solana-genesis-demo > genesis.log
 ```
 
-Before you start the server, make sure you know the IP address of the machine ou want to be the leader for the demo, and make sure that udp ports 8000-10000 are open on all the machines you want to test with.  Running this command the first time will generate an identity for the leader `leader.json`.  Now you can start the server:
+Before you start the server, make sure you know the IP address of the machine you
+want to be the leader for the demo, and make sure that udp ports 8000-10000 are
+open on all the machines you want to test with.
+
+Generate a leader configuration file with:
+
+```bash
+cargo run --release --bin solana-fullnode-config > leader.json
+```
+
+Now start the server:
 
 ```bash
 $ cat ./multinode-demo/leader.sh
 #!/bin/bash
 export RUST_LOG=solana=info
 sudo sysctl -w net.core.rmem_max=26214400
-cat genesis.log | cargo run --release --bin solana-fullnode -- -s leader.json -l leader.json -b 8000 -d 2>&1 | tee leader-tee.log
-$ ./multinode-demo/leader.sh
+cat genesis.log | cargo run --release --bin solana-fullnode -- -l leader.json
+$ ./multinode-demo/leader.sh > leader-txs.log
 ```
 
 Wait a few seconds for the server to initialize. It will print "Ready." when it's safe
@@ -71,8 +81,8 @@ rsync -v -e ssh $1/leader.json .
 rsync -v -e ssh $1/genesis.log .
 export RUST_LOG=solana=info
 sudo sysctl -w net.core.rmem_max=26214400
-cat genesis.log | cargo run --release --bin solana-fullnode -- -l validator.json -s validator.json -v leader.json -b 9000 -d 2>&1 | tee validator-tee.log
-$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana #The leader machine
+cat genesis.log | cargo run --release --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d
+$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana > validator-txs.log #The leader machine
 ```
 
 
@@ -164,7 +174,7 @@ $ cargo +nightly bench --features="unstable"
 To run the benchmarks on Linux with GPU optimizations enabled:
 
 ```bash
-$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.5.0/libcuda_verify_ed25519.a
+$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.6.0/libcuda_verify_ed25519.a
 $ cargo +nightly bench --features="unstable,cuda"
 ```
 
