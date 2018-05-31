@@ -3,7 +3,7 @@
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE};
+use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE, BLOB_FLAG_IS_CODING};
 use result::{Error, Result};
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
@@ -288,6 +288,11 @@ fn recv_window(
                 let k = *consumed % WINDOW_SIZE;
                 trace!("k: {} consumed: {}", k, *consumed);
                 if window[k].is_none() {
+                    break;
+                }
+                let w_l1 = window[k].clone().unwrap();
+                let w_l2 = w_l1.read().unwrap();
+                if (w_l2.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0 {
                     break;
                 }
                 contq.push_back(window[k].clone().expect("clone in fn recv_window"));
