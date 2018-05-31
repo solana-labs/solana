@@ -41,33 +41,37 @@ fn main() {
     let mint_keypair = demo.mint.keypair();
     let last_id = demo.mint.last_id();
 
-    eprintln!("Signing {} transactions...", num_accounts);
-    let transactions: Vec<_> = keypairs
-        .into_par_iter()
-        .map(|rando| {
-            let last_id = demo.mint.last_id();
-            Transaction::new(&mint_keypair, rando.pubkey(), tokens_per_user, last_id)
-        })
-        .collect();
-
     for entry in demo.mint.create_entries() {
         println!("{}", serde_json::to_string(&entry).unwrap());
     }
 
-    eprintln!("Logging the creation of {} accounts...", num_accounts);
-    let entry = Entry::new(&last_id, 0, transactions);
-    println!("{}", serde_json::to_string(&entry).unwrap());
-
     eprintln!("Creating {} empty entries...", MAX_ENTRY_IDS);
+
     // Offer client lots of entry IDs to use for each transaction's last_id.
     let mut last_id = last_id;
+    let mut last_ids = vec![];
     for _ in 0..MAX_ENTRY_IDS {
         let entry = next_entry(&last_id, 1, vec![]);
         last_id = entry.id;
+        last_ids.push(last_id);
         let serialized = serde_json::to_string(&entry).unwrap_or_else(|e| {
             eprintln!("failed to serialize: {}", e);
             exit(1);
         });
         println!("{}", serialized);
     }
+
+    eprintln!("Creating {} transactions...", num_accounts);
+    let transactions: Vec<_> = keypairs
+        .into_par_iter()
+        .enumerate()
+        .map(|(i, rando)| {
+            let last_id = last_ids[i % MAX_ENTRY_IDS];
+            Transaction::new(&mint_keypair, rando.pubkey(), tokens_per_user, last_id)
+        })
+        .collect();
+
+    eprintln!("Logging the creation of {} accounts...", num_accounts);
+    let entry = Entry::new(&last_id, 0, transactions);
+    println!("{}", serde_json::to_string(&entry).unwrap());
 }

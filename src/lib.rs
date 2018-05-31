@@ -50,8 +50,6 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate sha2;
 extern crate untrusted;
-
-extern crate futures;
 extern crate mio;
 
 #[cfg(test)]

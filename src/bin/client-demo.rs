@@ -1,4 +1,3 @@
-extern crate futures;
 extern crate getopts;
 extern crate isatty;
 extern crate pnet;
@@ -6,7 +5,6 @@ extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use futures::Future;
 use getopts::Options;
 use isatty::stdin_isatty;
 use pnet::datalink;
@@ -128,7 +126,7 @@ fn main() {
     let mut client = mk_client(&client_addr, &leader);
 
     println!("Get last ID...");
-    let last_id = client.get_last_id().wait().unwrap();
+    let last_id = client.get_last_id();
     println!("Got last ID {:?}", last_id);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
