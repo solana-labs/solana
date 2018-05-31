@@ -50,7 +50,7 @@ fn get_ip_addr() -> Option<IpAddr> {
 
 fn main() {
     let mut threads = 4usize;
-    let mut num_nodes = 0usize;
+    let mut num_nodes = 1usize;
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
@@ -164,7 +164,11 @@ fn main() {
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
     chunks.into_par_iter().for_each(|txs| {
-        println!("Transferring 1 unit {} times... to", txs.len());
+        println!(
+            "Transferring 1 unit {} times... to {:?}",
+            txs.len(),
+            leader.transactions_addr
+        );
         let client = mk_client(&client_addr, &leader);
         for tx in txs {
             client.transfer_signed(tx.clone()).unwrap();
@@ -242,10 +246,6 @@ fn converge(
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
 ) -> Vec<ReplicatedData> {
-    if num_nodes <= 2 {
-        return vec![];
-    }
-
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node(client_addr);
