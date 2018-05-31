@@ -260,7 +260,10 @@ impl Bank {
             .collect()
     }
 
-    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<()> {
+    pub fn process_entries<I>(&self, entries: I) -> Result<()>
+    where
+        I: IntoIterator<Item = Entry>,
+    {
         for entry in entries {
             self.register_entry_id(&entry.id);
             for result in self.process_transactions(entry.transactions) {
