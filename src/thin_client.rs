@@ -17,7 +17,7 @@ pub struct ThinClient {
     requests_socket: UdpSocket,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
-    last_id: Option<Hash>,
+    last_ids: Vec<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
 }
@@ -37,7 +37,7 @@ impl ThinClient {
             requests_socket,
             transactions_addr,
             transactions_socket,
-            last_id: None,
+            last_ids: vec![],
             transaction_count: 0,
             balances: HashMap::new(),
         };
@@ -61,7 +61,11 @@ impl ThinClient {
             }
             Response::LastId { id } => {
                 info!("Response last_id {:?}", id);
-                self.last_id = Some(id);
+                self.last_ids = vec![id];
+            }
+            Response::LastIds { ids } => {
+                info!("Response last_ids {:?}", ids);
+                self.last_ids = ids;
             }
             Response::TransactionCount { transaction_count } => {
                 info!("Response transaction count {:?}", transaction_count);
@@ -152,7 +156,27 @@ impl ThinClient {
             }
             self.process_response(resp);
         }
-        self.last_id.expect("some last_id")
+        *self.last_ids.last().expect("some last_id")
+    }
+
+    /// Request the last Entry ID from the server. This method blocks
+    /// until the server sends a response.
+    pub fn get_last_ids(&mut self) -> Vec<Hash> {
+        info!("get_last_id");
+        let req = Request::GetLastIds;
+        let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
+        self.requests_socket
+            .send_to(&data, &self.requests_addr)
+            .expect("buffer error in pub fn get_last_id");
+        let mut done = false;
+        while !done {
+            let resp = self.recv_response().expect("get_last_id response");
+            if let &Response::LastIds { .. } = &resp {
+                done = true;
+            }
+            self.process_response(resp);
+        }
+        self.last_ids.clone()
     }
 
     pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
