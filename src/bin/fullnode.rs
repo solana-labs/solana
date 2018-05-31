@@ -114,17 +114,7 @@ fn main() {
     bank.register_entry_id(&entry1.id);
 
     eprintln!("processing entries...");
-
-    for entry in entries {
-        let results = bank.process_transactions(entry.transactions);
-        for result in results {
-            if let Err(e) = result {
-                eprintln!("failed to process transaction {:?}", e);
-                exit(1);
-            }
-        }
-        bank.register_entry_id(&entry.id);
-    }
+    bank.process_entries(entries).expect("process_entries");
 
     eprintln!("creating networking stack...");
 
