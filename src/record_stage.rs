@@ -187,7 +187,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_clock() {
         let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
