@@ -78,7 +78,7 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
-    let mut addr: SocketAddr = "0.0.0.0:8010".parse().unwrap();
+    let mut addr: SocketAddr = "0.0.0.0:8100".parse().unwrap();
     if matches.opt_present("c") {
         let port = matches.opt_str("c").unwrap().parse().unwrap();
         addr.set_port(port);
