@@ -3,7 +3,7 @@
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE, BLOB_FLAG_IS_CODING};
+use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE};
 use result::{Error, Result};
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
@@ -178,11 +178,10 @@ fn repair_window(
 ) -> Result<()> {
     #[cfg(feature = "erasure")]
     {
-        if erasure::recover(_recycler, &mut locked_window.write().unwrap(), *consumed).is_err() {
+        if erasure::recover(_recycler, &mut locked_window.write().unwrap(), *consumed, *received).is_err() {
             trace!("erasure::recover failed");
         }
     }
-    let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     //exponential backoff
     if *last != *consumed {
         *times = 0;
@@ -194,6 +193,7 @@ fn repair_window(
         trace!("repair_window counter {} {}", *times, *consumed);
         return Ok(());
     }
+    let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     for (to, req) in reqs {
         //todo cache socket
@@ -293,7 +293,7 @@ fn recv_window(
                 }
                 let mut is_coding = false;
                 if let &Some(ref cblob) = &window[k] {
-                    if (cblob.read().expect("blob read lock for flags streamer::window").get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0 {
+                    if cblob.read().expect("blob read lock for flags streamer::window").is_coding() {
                         is_coding = true;
                     }
                 }
@@ -330,7 +330,15 @@ fn print_window(
                 } else if v.is_none() {
                     "0"
                 } else {
-                    "1"
+                    if let &Some(ref cblob) = &v {
+                        if cblob.read().unwrap().is_coding() {
+                            "C"
+                        } else {
+                            "1"
+                        }
+                    } else {
+                        "0"
+                    }
                 }
             })
             .collect();
