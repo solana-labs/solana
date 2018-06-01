@@ -305,6 +305,19 @@ fn recv_window(
             }
         }
     }
+    print_window(locked_window, *consumed);
+    trace!("sending contq.len: {}", contq.len());
+    if !contq.is_empty() {
+        trace!("sending contq.len: {}", contq.len());
+        s.send(contq)?;
+    }
+    Ok(())
+}
+
+fn print_window(
+    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    consumed: usize,
+    ) {
     {
         let buf: Vec<_> = locked_window
             .read()
@@ -312,8 +325,7 @@ fn recv_window(
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                if i == (*consumed % WINDOW_SIZE) {
-                    assert!(v.is_none());
+                if i == (consumed % WINDOW_SIZE) {
                     "_"
                 } else if v.is_none() {
                     "0"
@@ -322,14 +334,8 @@ fn recv_window(
                 }
             })
             .collect();
-        trace!("WINDOW: {}", buf.join(""));
+        info!("WINDOW ({}): {}", consumed, buf.join(""));
     }
-    trace!("sending contq.len: {}", contq.len());
-    if !contq.is_empty() {
-        trace!("sending contq.len: {}", contq.len());
-        s.send(contq)?;
-    }
-    Ok(())
 }
 
 pub fn default_window() -> Arc<RwLock<Vec<Option<SharedBlob>>>> {
@@ -393,7 +399,11 @@ fn broadcast(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq);
     }
-    let mut blobs = dq.into_iter().collect();
+    let mut blobs: Vec<_> = dq.into_iter().collect();
+
+    let blobs_len = blobs.len();
+    info!("broadcast blobs.len: {}", blobs_len);
+    print_window(window, *transmit_index as usize);
 
     // Insert the coding blobs into the blob stream
     #[cfg(feature = "erasure")]
@@ -431,7 +441,7 @@ fn broadcast(
     // Fill in the coding blob data from the window data blobs
     #[cfg(feature = "erasure")]
     {
-        if erasure::generate_coding(&mut window.write().unwrap(), *transmit_index as usize).is_err()
+        if erasure::generate_coding(&mut window.write().unwrap(), *transmit_index as usize, blobs_len).is_err()
         {
             return Err(Error::GenericError);
         }
