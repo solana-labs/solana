@@ -19,8 +19,23 @@ Introduction
 
 It's possible for a centralized database to process 710,000 transactions per second on a standard gigabit network if the transactions are, on average, no more than 176 bytes. A centralized database can also replicate itself and maintain high availability without significantly compromising that transaction rate using the distributed system technique known as Optimistic Concurrency Control [H.T.Kung, J.T.Robinson (1981)]. At Solana, we're demonstrating that these same theoretical limits apply just as well to blockchain on an adversarial network. The key ingredient? Finding a way to share time when nodes can't trust one-another. Once nodes can trust time, suddenly ~40 years of distributed systems research becomes applicable to blockchain! Furthermore, and much to our surprise, it can implemented using a mechanism that has existed in Bitcoin since day one. The Bitcoin feature is called nLocktime and it can be used to postdate transactions using block height instead of a timestamp. As a Bitcoin client, you'd use block height instead of a timestamp if you don't trust the network. Block height turns out to be an instance of what's being called a Verifiable Delay Function in cryptography circles. It's a cryptographically secure way to say time has passed. In Solana, we use a far more granular verifiable delay function, a SHA 256 hash chain, to checkpoint the ledger and coordinate consensus. With it, we implement Optimistic Concurrency Control and are now well in route towards that theoretical limit of 710,000 transactions per second.
 
-Running the demo
+
+Testnet Demos
 ===
+
+The Solana repo contains all the scripts you might need to spin up your own
+local testnet. Depending on what you're looking to achieve, you may want to
+run a different variation, as the full-fledged, performance-enhanced
+multinode testnet is considerably more complex to set up than a Rust-only,
+singlenode testnode.  If you are looking to develop high-level features, such
+as experimenting with smart contracts, save yourself some setup headaches and
+stick to the Rust-only singlenode demo.  If you're doing performance optimization
+of the transaction pipeline, consider the enhanced singlenode demo. If you're
+doing consensus work, you'll need at least a Rust-only multinode demo. If you want
+to reproduce our TPS metrics, run the enhanced multinode demo.
+
+For all four variations, you'd need the latest Rust toolchain and the Solana
+source code:
 
 First, install Rust's package manager Cargo.
 
@@ -36,6 +51,19 @@ $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
+The demo code is sometimes broken between releases as we add new low-level
+features, so if this is your first time running the demo, you'll improve
+your odds of success if you check out the
+[latest release](https://github.com/solana-labs/solana/releases)
+before proceeding:
+
+```bash
+$ git checkout v0.6.0
+```
+
+Singlenode Testnet
+---
+
 The fullnode server is initialized with a ledger from stdin and
 generates new ledger entries on stdout. To create the input ledger, we'll need
 to create *the mint* and use it to generate a *genesis ledger*. It's done in
@@ -47,7 +75,7 @@ $ echo 1000000000 | cargo run --release --bin solana-mint-demo > mint-demo.json
 $ cat mint-demo.json | cargo run --release --bin solana-genesis-demo > genesis.log
 ```
 
-Before you start the server, make sure you know the IP address of the machine you
+Before you start a fullnode, make sure you know the IP address of the machine you
 want to be the leader for the demo, and make sure that udp ports 8000-10000 are
 open on all the machines you want to test with.
 
@@ -68,10 +96,15 @@ cat genesis.log | cargo run --release --bin solana-fullnode -- -l leader.json
 $ ./multinode-demo/leader.sh > leader-txs.log
 ```
 
+To run a performance-enhanced fullnode, add `--features=cuda`. See the [Benchmarking](#Benchmarking) section for details.
+
 Wait a few seconds for the server to initialize. It will print "Ready." when it's safe
 to start sending it transactions.
 
-Now you can start some validators:
+Multinode Testnet
+---
+
+To run a multinode testnet, after starting a leader node, spin up some validator nodes:
 
 ```bash
 $ cat ./multinode-demo/validator.sh
@@ -85,8 +118,13 @@ cat genesis.log | cargo run --release --bin solana-fullnode -- -l validator.json
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana > validator-txs.log #The leader machine
 ```
 
+As mentioned with the leader node, run a performance-enhanced validator fullnode by adding `--features=cuda`. See the [Benchmarking](#Benchmarking) section for details.
 
-Then, in a separate shell, let's execute some transactions. Note we pass in
+
+Testnet Client Demo
+---
+
+Now that your singlenode or multinode testnet is up and running, in a separate shell, let's send it some transactions! Note we pass in
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
@@ -99,7 +137,14 @@ cat mint-demo.json | cargo run --release --bin solana-client-demo -- -l leader.j
 $ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana #The leader machine
 ```
 
-To enable cuda, downlaod the cuda library (see [Benchmarking](#Benchmarking)) and add `--features=cuda` to the leader and validator scripts.
+What just happened? The client demo spins up several threads to send 500,000 transactions
+to the testnet as quickly as it can. The client then pings the testnet periodically to see
+how many transactions it processed in that time. Take note that the demo intentionally
+floods the network with UDP packets, such that the network will almost certainly drop a
+bunch of them. This ensures the testnet has an opportunity to reach 710k TPS. The client
+demo completes after it has convinced itself the testnet won't process any additional
+transactions. You should see several TPS measurements printed to the screen. In the
+multinode variation, you'll see TPS measurements for each validator node as well.
 
 Developing
 ===
