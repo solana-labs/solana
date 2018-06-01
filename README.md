@@ -92,14 +92,20 @@ $ cat ./multinode-demo/leader.sh
 #!/bin/bash
 export RUST_LOG=solana=info
 sudo sysctl -w net.core.rmem_max=26214400
-cat genesis.log | cargo run --release --bin solana-fullnode -- -l leader.json
+cargo run --release --bin solana-fullnode -- -l leader.json < genesis.log
 $ ./multinode-demo/leader.sh > leader-txs.log
 ```
 
-To run a performance-enhanced fullnode, add `--features=cuda`. See the [Benchmarking](#Benchmarking) section for details.
+To run a performance-enhanced fullnode on Linux, download `libcuda_verify_ed25519.a`. Enable
+it by adding `--features=cuda` to the line that runs `solana-fullnode` in `leader.sh`.
 
-Wait a few seconds for the server to initialize. It will print "Ready." when it's safe
-to start sending it transactions.
+```bash
+$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.6.0/libcuda_verify_ed25519.a
+cargo run --release --features=cuda --bin solana-fullnode -- -l leader.json < genesis.log
+```
+
+Wait a few seconds for the server to initialize. It will print "Ready." when it's ready to
+receive transactions.
 
 Multinode Testnet
 ---
@@ -114,11 +120,16 @@ rsync -v -e ssh $1/leader.json .
 rsync -v -e ssh $1/genesis.log .
 export RUST_LOG=solana=info
 sudo sysctl -w net.core.rmem_max=26214400
-cat genesis.log | cargo run --release --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d
+cargo run --release --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d < genesis.log
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana > validator-txs.log #The leader machine
 ```
 
-As mentioned with the leader node, run a performance-enhanced validator fullnode by adding `--features=cuda`. See the [Benchmarking](#Benchmarking) section for details.
+As with the leader node, you can run a performance-enhanced validator fullnode by adding
+`--features=cuda` to the line that runs `solana-fullnode` in `validator.sh`.
+
+```bash
+cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d < genesis.log
+```
 
 
 Testnet Client Demo
@@ -212,13 +223,6 @@ Run the benchmarks:
 
 ```bash
 $ cargo +nightly bench --features="unstable"
-```
-
-To run the benchmarks on Linux with GPU optimizations enabled:
-
-```bash
-$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.6.0/libcuda_verify_ed25519.a
-$ cargo +nightly bench --features="unstable,cuda"
 ```
 
 Code coverage
