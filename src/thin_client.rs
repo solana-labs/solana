@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::io;
 use std::net::SocketAddr;
 use transaction::Transaction;
-use std::sync::mpsc::{Sender, TryRecvError, channel};
+use std::sync::mpsc::{Sender, RecvError, TryRecvError, channel};
 use std::thread;
 use mio::net::UdpSocket;
 use mio::{Events, Ready, Poll, PollOpt, Token};
@@ -130,13 +130,12 @@ impl ThinClient {
         self.sender.send((Message::Requests(req), response_sender)).expect("send request to thread");
         let handle = thread::spawn(move || {
             loop{
-                match response_receiver.try_recv() {
+                match response_receiver.recv() {
                     Ok(response) => {
                         info!("recv_response {:?}", response);
                         return response;
                     },
-                    Err(TryRecvError::Empty) =>{},
-                    Err(TryRecvError::Disconnected) => {},
+                    Err(RecvError) =>{},
                 };
             }
         });
@@ -153,13 +152,12 @@ impl ThinClient {
         self.sender.send((Message::Requests(req), response_sender)).expect("send request to thread");
         let handle = thread::spawn(move || {
             loop{
-                match response_receiver.try_recv() {
+                match response_receiver.recv() {
                     Ok(response) => {
                         info!("recv_response {:?}", response);
                         return response;
                     },
-                    Err(TryRecvError::Empty) =>{},
-                    Err(TryRecvError::Disconnected) => {},
+                    Err(RecvError) =>{},
                 };
             }
         });
@@ -176,13 +174,12 @@ impl ThinClient {
         self.sender.send((Message::Requests(req), response_sender)).expect("send request to thread");
         let handle = thread::spawn(move || {
             loop{
-                match response_receiver.try_recv() {
+                match response_receiver.recv() {
                     Ok(response) => {
                         info!("recv_response {:?}", response);
                         return response;
                     },
-                    Err(TryRecvError::Empty) =>{},
-                    Err(TryRecvError::Disconnected) => {},
+                    Err(RecvError) =>{},
                 };
             }
         });
