@@ -313,6 +313,15 @@ impl Blob {
         Ok(())
     }
 
+    pub fn is_coding(&self) -> bool {
+        return (self.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0;
+    }
+
+    pub fn set_coding(&mut self) -> Result<()> {
+        let flags = self.get_flags().unwrap();
+        self.set_flags(flags | BLOB_FLAG_IS_CODING)
+    }
+
     pub fn data(&self) -> &[u8] {
         &self.data[BLOB_FLAGS_END..]
     }

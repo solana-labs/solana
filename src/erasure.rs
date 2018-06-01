@@ -1,6 +1,6 @@
 // Support erasure coding
 
-use packet::{BlobRecycler, SharedBlob, BLOB_FLAG_IS_CODING};
+use packet::{BlobRecycler, SharedBlob};
 use std::result;
 
 //TODO(sakridge) pick these values
@@ -235,8 +235,7 @@ pub fn generate_coding(window: &mut Vec<Option<SharedBlob>>, consumed: usize, nu
             }
             let w_l = window[n].clone().unwrap();
             w_l.write().unwrap().meta.size = max_data_size;
-            let flags = w_l.write().unwrap().get_flags().unwrap();
-            if w_l.write().unwrap().set_flags(flags | BLOB_FLAG_IS_CODING).is_err() {
+            if w_l.write().unwrap().set_coding().is_err() {
                 return Err(ErasureError::EncodeError);
             }
             coding_blobs.push(
@@ -271,74 +270,90 @@ pub fn recover(
     re: &BlobRecycler,
     window: &mut Vec<Option<SharedBlob>>,
     consumed: usize,
+    received: usize,
 ) -> Result<()> {
     //recover with erasure coding
-    let mut data_missing = 0;
-    let mut coded_missing = 0;
-    let block_start = consumed - (consumed % NUM_CODED);
-    let coding_start = block_start + NUM_DATA;
-    let coding_end = block_start + NUM_CODED;
-    /*info!(
-        "recover: block_start: {} coding_start: {} coding_end: {}",
-        block_start,
-        coding_start,
-        coding_end
-    );*/
-    for i in block_start..coding_end {
-        let n = i % window.len();
-        if window[n].is_none() {
-            if i >= coding_start {
-                coded_missing += 1;
-            } else {
-                data_missing += 1;
-            }
-        }
+    if received <= consumed {
+        return Ok(());
     }
-    if data_missing > 0 {
-        if (data_missing + coded_missing) <= MAX_MISSING {
-            trace!("recovering: data: {} coding: {}", data_missing, coded_missing);
-            let mut blobs: Vec<SharedBlob> = Vec::new();
-            let mut locks = Vec::new();
-            let mut data_ptrs: Vec<&mut [u8]> = Vec::new();
-            let mut coding_ptrs: Vec<&[u8]> = Vec::new();
-            let mut erasures: Vec<i32> = Vec::new();
-            for i in block_start..coding_end {
-                let j = i % window.len();
-                let mut b = &mut window[j];
-                if b.is_some() {
-                    blobs.push(b.clone().expect("'blobs' arr in pb fn recover"));
-                    continue;
-                }
-                let n = re.allocate();
-                *b = Some(n.clone());
-                //mark the missing memory
-                blobs.push(n);
-                erasures.push(i as i32);
-            }
-            erasures.push(-1);
-            trace!("erasures: {:?}", erasures);
-            //lock everything
-            for b in &blobs {
-                locks.push(b.write().expect("'locks' arr in pb fn recover"));
-            }
-            for (i, l) in locks.iter_mut().enumerate() {
-                if i >= NUM_DATA {
-                    trace!("pushing coding: {}", i);
-                    coding_ptrs.push(&l.data);
-                } else {
-                    trace!("pushing data: {}", i);
-                    data_ptrs.push(&mut l.data);
-                }
-            }
-            trace!(
-                "coding_ptrs.len: {} data_ptrs.len {}",
-                coding_ptrs.len(),
-                data_ptrs.len()
-            );
-            decode_blocks(data_ptrs.as_mut_slice(), &coding_ptrs, &erasures)?;
-        } else {
-            return Err(ErasureError::NotEnoughBlocksToDecode);
+    let num_blocks = (received - consumed) / NUM_CODED;
+    let mut block_start = consumed - (consumed % NUM_CODED);
+
+    if num_blocks > 0 {
+        debug!("num_blocks: {} received: {} consumed: {}", num_blocks, received, consumed);
+    }
+
+    for i in 0..num_blocks {
+        if i > 100 {
+            break;
         }
+        let mut data_missing = 0;
+        let mut coded_missing = 0;
+        let coding_start = block_start + NUM_DATA;
+        let coding_end = block_start + NUM_CODED;
+        trace!(
+            "recover: block_start: {} coding_start: {} coding_end: {}",
+            block_start,
+            coding_start,
+            coding_end
+        );
+        for i in block_start..coding_end {
+            let n = i % window.len();
+            if window[n].is_none() {
+                if i >= coding_start {
+                    coded_missing += 1;
+                } else {
+                    data_missing += 1;
+                }
+            }
+        }
+        if (data_missing + coded_missing) != NUM_CODED {
+            trace!("recovering: data: {} coding: {}", data_missing, coded_missing);
+        }
+        if data_missing > 0 {
+            if (data_missing + coded_missing) <= MAX_MISSING {
+                let mut blobs: Vec<SharedBlob> = Vec::new();
+                let mut locks = Vec::new();
+                let mut data_ptrs: Vec<&mut [u8]> = Vec::new();
+                let mut coding_ptrs: Vec<&[u8]> = Vec::new();
+                let mut erasures: Vec<i32> = Vec::new();
+                for i in block_start..coding_end {
+                    let j = i % window.len();
+                    let mut b = &mut window[j];
+                    if b.is_some() {
+                        blobs.push(b.clone().expect("'blobs' arr in pb fn recover"));
+                        continue;
+                    }
+                    let n = re.allocate();
+                    *b = Some(n.clone());
+                    //mark the missing memory
+                    blobs.push(n);
+                    erasures.push((i - block_start) as i32);
+                }
+                erasures.push(-1);
+                trace!("erasures: {:?}", erasures);
+                //lock everything
+                for b in &blobs {
+                    locks.push(b.write().expect("'locks' arr in pb fn recover"));
+                }
+                for (i, l) in locks.iter_mut().enumerate() {
+                    if i >= NUM_DATA {
+                        trace!("pushing coding: {}", i);
+                        coding_ptrs.push(&l.data);
+                    } else {
+                        trace!("pushing data: {}", i);
+                        data_ptrs.push(&mut l.data);
+                    }
+                }
+                trace!(
+                    "coding_ptrs.len: {} data_ptrs.len {}",
+                    coding_ptrs.len(),
+                    data_ptrs.len()
+                );
+                decode_blocks(data_ptrs.as_mut_slice(), &coding_ptrs, &erasures)?;
+            }
+        }
+        block_start += NUM_CODED;
     }
     Ok(())
 }
@@ -446,6 +461,7 @@ mod test {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let crdt = Arc::new(RwLock::new(crdt::Crdt::new(d.clone())));
 
@@ -481,7 +497,7 @@ mod test {
         window[erase_offset] = None;
 
         // Recover it from coding
-        assert!(erasure::recover(&blob_recycler, &mut window, offset).is_ok());
+        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
@@ -522,7 +538,7 @@ mod test {
         window_l0.write().unwrap().data[0] = 55;
         println!("** after-nulling:");
         print_window(&window);
-        assert!(erasure::recover(&blob_recycler, &mut window, offset).is_ok());
+        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
         println!("** after-restore:");
         print_window(&window);
         let window_l = window[offset + 1].clone().unwrap();
