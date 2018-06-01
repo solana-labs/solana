@@ -13,4 +13,4 @@ rsync -v -e ssh "$LEADER/leader.json" .
 rsync -v -e ssh "$LEADER/mint-demo.json" .
 
 cargo run --release --bin solana-client-demo -- \
-  -l leader.json -c 8100 -n 1 < mint-demo.json 2>&1 | tee client.log
+  -l leader.json < mint-demo.json 2>&1 | tee client.log
