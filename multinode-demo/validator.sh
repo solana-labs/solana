@@ -12,7 +12,6 @@ set -x
 rsync -v -e ssh "$LEADER/mint-demo.json" .
 rsync -v -e ssh "$LEADER/leader.json" .
 rsync -v -e ssh "$LEADER/genesis.log" .
-rsync -v -e ssh "$LEADER/libcuda_verify_ed25519.a" .
 
 export RUST_LOG=solana=info
 
