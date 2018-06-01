@@ -8,6 +8,7 @@ use signature::PublicKey;
 pub enum Request {
     GetBalance { key: PublicKey },
     GetLastId,
+    GetLastIds,
     GetTransactionCount,
 }
 
@@ -22,5 +23,6 @@ impl Request {
 pub enum Response {
     Balance { key: PublicKey, val: Option<i64> },
     LastId { id: Hash },
+    LastIds { ids: Vec<Hash> },
     TransactionCount { transaction_count: u64 },
 }

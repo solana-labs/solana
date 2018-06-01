@@ -34,6 +34,12 @@ impl RequestProcessor {
                 info!("Response::LastId {:?}", rsp);
                 Some(rsp)
             }
+            Request::GetLastIds => {
+                let ids = self.bank.last_ids();
+                let rsp = (Response::LastIds { ids }, rsp_addr);
+                info!("Response::LastIds {:?}", rsp);
+                Some(rsp)
+            }
             Request::GetTransactionCount => {
                 let transaction_count = self.bank.transaction_count() as u64;
                 let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);

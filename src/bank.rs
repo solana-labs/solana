@@ -96,6 +96,12 @@ impl Bank {
         last_item.0
     }
 
+    /// Return all recent entry IDs. The last item is the most recent.
+    pub fn last_ids(&self) -> Vec<Hash> {
+        let last_ids = self.last_ids.read().expect("'last_ids' read lock");
+        last_ids.iter().map(|x| x.0).collect()
+    }
+
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> Result<()> {
         if signatures
             .read()

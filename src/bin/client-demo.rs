@@ -130,9 +130,10 @@ fn main() {
     });
     let mut client = mk_client(&client_addr, &leader);
 
-    println!("Get last ID...");
-    let last_id = client.get_last_id();
-    println!("Got last ID {:?}", last_id);
+    println!("Get last IDs...");
+    let last_ids = client.get_last_ids();
+    let last_ids = &last_ids[1024..]; // Ignore the oldest ones, since they'd get rejected after new entries are added.
+    println!("Got last IDs {:?}", last_ids);
 
     let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
 
@@ -145,7 +146,10 @@ fn main() {
     let now = Instant::now();
     let transactions: Vec<_> = keypair_pairs
         .into_par_iter()
-        .map(|chunk| Transaction::new(&chunk[0], chunk[1].pubkey(), 1, last_id))
+        .enumerate()
+        .map(|(i, pair)| {
+            Transaction::new(&pair[0], pair[1].pubkey(), 1, last_ids[i % last_ids.len()])
+        })
         .collect();
     let duration = now.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
