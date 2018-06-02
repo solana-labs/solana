@@ -77,6 +77,9 @@ pub struct ReplicatedData {
     pub requests_addr: SocketAddr,
     /// transactions address
     pub transactions_addr: SocketAddr,
+    /// repair address, we use this to jump ahead of the packets
+    /// destined to the replciate_addr
+    pub repair_addr: SocketAddr,
     /// current leader identity
     pub current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -390,7 +393,7 @@ impl Crdt {
         let daddr = "0.0.0.0:0".parse().unwrap();
         let valid: Vec<_> = self.table
             .values()
-            .filter(|r| r.id != self.me && r.replicate_addr != daddr)
+            .filter(|r| r.id != self.me && r.repair_addr != daddr)
             .collect();
         if valid.is_empty() {
             return Err(Error::CrdtTooSmall);
@@ -509,7 +512,7 @@ impl Crdt {
                     let sz = rblob.meta.size;
                     outblob.meta.size = sz;
                     outblob.data[..sz].copy_from_slice(&rblob.data[..sz]);
-                    outblob.meta.set_addr(&from.replicate_addr);
+                    outblob.meta.set_addr(&from.repair_addr);
                     //TODO, set the sender id to the requester so we dont retransmit
                     //come up with a cleaner solution for this when sender signatures are checked
                     outblob.set_id(from.id).expect("blob set_id");
@@ -518,7 +521,7 @@ impl Crdt {
             }
         } else {
             assert!(window.read().unwrap()[pos].is_none());
-            info!("failed RequestWindowIndex {} {}", ix, from.replicate_addr);
+            info!("failed RequestWindowIndex {} {}", ix, from.repair_addr);
         }
         None
     }
@@ -580,10 +583,10 @@ impl Crdt {
                 trace!(
                     "received RequestWindowIndex {} {} myaddr {}",
                     ix,
-                    from.replicate_addr,
-                    me.replicate_addr
+                    from.repair_addr,
+                    me.repair_addr
                 );
-                assert_ne!(from.replicate_addr, me.replicate_addr);
+                assert_ne!(from.repair_addr, me.repair_addr);
                 Self::run_window_request(&window, &from, ix, blob_recycler)
             }
             Err(_) => {
