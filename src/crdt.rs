@@ -859,6 +859,7 @@ mod tests {
         let mut one = false;
         let mut two = false;
         while !one || !two {
+            //this randomly picks an option, so eventually it should pick both
             let rv = crdt.window_index_request(0).unwrap();
             if rv.0 == "127.0.0.2:1234".parse().unwrap() {
                 one = true;
