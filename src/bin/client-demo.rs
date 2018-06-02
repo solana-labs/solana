@@ -235,7 +235,14 @@ fn spy_node(client_addr: &Arc<RwLock<SocketAddr>>) -> (ReplicatedData, UdpSocket
     addr.set_port(port + 1);
     let daddr = "0.0.0.0:0".parse().unwrap();
     let pubkey = KeyPair::new().pubkey();
-    let node = ReplicatedData::new(pubkey, gossip.local_addr().unwrap(), daddr, daddr, daddr);
+    let node = ReplicatedData::new(
+        pubkey,
+        gossip.local_addr().unwrap(),
+        daddr,
+        daddr,
+        daddr,
+        daddr,
+    );
     (node, gossip)
 }
 

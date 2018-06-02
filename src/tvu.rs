@@ -129,6 +129,7 @@ impl Tvu {
             t_blob_receiver,
             t_retransmit,
             t_window,
+            t_repair_receiver,
             replicate_stage.thread_hdl,
         ];
         threads.extend(data_replicator.thread_hdls.into_iter());
@@ -225,6 +226,7 @@ pub mod tests {
             target1.data,
             target1.sockets.gossip,
             target1.sockets.replicate,
+            target1.sockets.repair,
             leader.data,
             exit.clone(),
         );

@@ -129,6 +129,7 @@ fn main() {
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind(repl_data.replicate_addr).unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
+            UdpSocket::bind(repl_data.repair_addr).unwrap(),
             leader,
             exit.clone(),
         );

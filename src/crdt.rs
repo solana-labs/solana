@@ -95,6 +95,7 @@ impl ReplicatedData {
         replicate_addr: SocketAddr,
         requests_addr: SocketAddr,
         transactions_addr: SocketAddr,
+        repair_addr: SocketAddr,
     ) -> ReplicatedData {
         ReplicatedData {
             id,
@@ -104,6 +105,7 @@ impl ReplicatedData {
             replicate_addr,
             requests_addr,
             transactions_addr,
+            repair_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -121,6 +123,7 @@ impl ReplicatedData {
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
         let requests_addr = Self::next_port(&bind_addr, 3);
+        let repair_addr = Self::next_port(&bind_addr, 4);
         let pubkey = KeyPair::new().pubkey();
         ReplicatedData::new(
             pubkey,
@@ -128,6 +131,7 @@ impl ReplicatedData {
             replicate_addr,
             requests_addr,
             transactions_addr,
+            repair_addr,
         )
     }
 }
@@ -659,6 +663,7 @@ pub struct Sockets {
     pub transaction: UdpSocket,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
+    pub repair: UdpSocket,
 }
 
 pub struct TestNode {
@@ -675,6 +680,7 @@ impl TestNode {
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let data = ReplicatedData::new(
             pubkey,
@@ -682,6 +688,7 @@ impl TestNode {
             replicate.local_addr().unwrap(),
             requests.local_addr().unwrap(),
             transaction.local_addr().unwrap(),
+            repair.local_addr().unwrap(),
         );
         TestNode {
             data: data,
@@ -693,6 +700,7 @@ impl TestNode {
                 transaction,
                 respond,
                 broadcast,
+                repair,
             },
         }
     }
@@ -722,6 +730,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
@@ -746,6 +755,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let d2 = ReplicatedData::new(
             KeyPair::new().pubkey(),
@@ -753,6 +763,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let d3 = ReplicatedData::new(
             KeyPair::new().pubkey(),
@@ -760,6 +771,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let mut crdt = Crdt::new(d1.clone());
         let (key, ix, ups) = crdt.get_updates_since(0);

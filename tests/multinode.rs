@@ -37,6 +37,7 @@ fn validator(
         validator.sockets.respond,
         validator.sockets.replicate,
         validator.sockets.gossip,
+        validator.sockets.repair,
         leader.clone(),
         exit.clone(),
     );

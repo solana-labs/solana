@@ -602,10 +602,8 @@ mod bench {
 
 #[cfg(test)]
 mod test {
-    use crdt::{Crdt, ReplicatedData};
+    use crdt::{Crdt, TestNode};
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
-    use signature::KeyPair;
-    use signature::KeyPairUtil;
     use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
@@ -688,29 +686,21 @@ mod test {
 
     #[test]
     pub fn window_send_test() {
-        let pubkey_me = KeyPair::new().pubkey();
-        let read = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let addr = read.local_addr().unwrap();
-        let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let serve = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let transaction = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let tn = TestNode::new();
         let exit = Arc::new(AtomicBool::new(false));
-        let rep_data = ReplicatedData::new(
-            pubkey_me,
-            read.local_addr().unwrap(),
-            send.local_addr().unwrap(),
-            serve.local_addr().unwrap(),
-            transaction.local_addr().unwrap(),
-        );
-        let mut crdt_me = Crdt::new(rep_data);
+        let mut crdt_me = Crdt::new(tn.data.clone());
         let me_id = crdt_me.my_data().id;
         crdt_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(crdt_me));
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            blob_receiver(exit.clone(), resp_recycler.clone(), read, s_reader).unwrap();
+        let t_receiver = blob_receiver(
+            exit.clone(),
+            resp_recycler.clone(),
+            tn.sockets.gossip,
+            s_reader,
+        ).unwrap();
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
@@ -724,7 +714,12 @@ mod test {
             s_retransmit,
         );
         let (s_responder, r_responder) = channel();
-        let t_responder = responder(send, exit.clone(), resp_recycler.clone(), r_responder);
+        let t_responder = responder(
+            tn.sockets.replicate,
+            exit.clone(),
+            resp_recycler.clone(),
+            r_responder,
+        );
         let mut msgs = VecDeque::new();
         for v in 0..10 {
             let i = 9 - v;
@@ -735,7 +730,7 @@ mod test {
             w.set_id(me_id).unwrap();
             assert_eq!(i, w.get_index().unwrap());
             w.meta.size = PACKET_DATA_SIZE;
-            w.meta.set_addr(&addr);
+            w.meta.set_addr(&tn.data.gossip_addr);
             msgs.push_back(b_);
         }
         s_responder.send(msgs).expect("send");

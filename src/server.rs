@@ -79,6 +79,7 @@ impl Server {
         respond_socket: UdpSocket,
         replicate_socket: UdpSocket,
         gossip_socket: UdpSocket,
+        repair_socket: UdpSocket,
         leader_repl_data: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -91,6 +92,7 @@ impl Server {
             me,
             gossip_socket,
             replicate_socket,
+            repair_socket,
             leader_repl_data,
             exit.clone(),
         );
