@@ -157,7 +157,7 @@ fn main() {
         nsps / 1_000_f64
     );
 
-    let first_count = client.transaction_count();
+    let first_count = client.get_transaction_count();
     println!("initial count {}", first_count);
 
     println!("Transfering {} transactions in {} batches", txs, threads);
@@ -179,9 +179,9 @@ fn main() {
     validators.into_par_iter().for_each(|val| {
         let mut client = mk_client(&client_addr, &val);
         let mut now = Instant::now();
-        let mut initial_tx_count = client.transaction_count();
+        let mut initial_tx_count = client.get_transaction_count();
         for i in 0..100 {
-            let tx_count = client.transaction_count();
+            let tx_count = client.get_transaction_count();
             let duration = now.elapsed();
             now = Instant::now();
             let sample = tx_count - initial_tx_count;
@@ -216,15 +216,15 @@ fn main() {
 fn mk_client(locked_addr: &Arc<RwLock<SocketAddr>>, r: &ReplicatedData) -> ThinClient {
     let mut addr = locked_addr.write().unwrap();
     let port = addr.port();
-    let transactions_socket = UdpSocket::bind(addr.clone()).unwrap();
+    let transactions_addr = addr.clone();
     addr.set_port(port + 1);
-    let requests_socket = UdpSocket::bind(addr.clone()).unwrap();
+    let requests_addr = addr.clone();
     addr.set_port(port + 2);
     ThinClient::new(
         r.requests_addr,
-        requests_socket,
+        requests_addr,
         r.transactions_addr,
-        transactions_socket,
+        transactions_addr,
     )
 }
 
