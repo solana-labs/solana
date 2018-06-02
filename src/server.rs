@@ -100,3 +100,34 @@ impl Server {
         Server { thread_hdls }
     }
 }
+#[cfg(test)]
+mod tests {
+    use bank::Bank;
+    use crdt::TestNode;
+    use mint::Mint;
+    use server::Server;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    #[test]
+    fn validator_exit() {
+        let tn = TestNode::new();
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let exit = Arc::new(AtomicBool::new(false));
+        let v = Server::new_validator(
+            bank,
+            tn.data.clone(),
+            tn.sockets.requests,
+            tn.sockets.respond,
+            tn.sockets.replicate,
+            tn.sockets.gossip,
+            tn.sockets.repair,
+            tn.data,
+            exit.clone(),
+        );
+        exit.store(true, Ordering::Relaxed);
+        for t in v.thread_hdls {
+            t.join().unwrap();
+        }
+    }
+}
