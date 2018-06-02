@@ -51,6 +51,7 @@ impl Tvu {
         me: ReplicatedData,
         gossip_listen_socket: UdpSocket,
         replicate: UdpSocket,
+        repair_socket: UdpSocket,
         leader: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -96,6 +97,12 @@ impl Tvu {
             blob_recycler.clone(),
             retransmit_receiver,
         );
+        let t_repair_receiver = streamer::blob_receiver(
+            exit.clone(),
+            blob_recycler.clone(),
+            repair_socket,
+            blob_sender.clone(),
+        ).expect("tvu: blob repair receiver fail");
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -122,6 +129,7 @@ impl Tvu {
             t_blob_receiver,
             t_retransmit,
             t_window,
+            t_repair_receiver,
             replicate_stage.thread_hdl,
         ];
         threads.extend(data_replicator.thread_hdls.into_iter());
@@ -218,6 +226,7 @@ pub mod tests {
             target1.data,
             target1.sockets.gossip,
             target1.sockets.replicate,
+            target1.sockets.repair,
             leader.data,
             exit.clone(),
         );

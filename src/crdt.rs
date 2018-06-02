@@ -77,6 +77,9 @@ pub struct ReplicatedData {
     pub requests_addr: SocketAddr,
     /// transactions address
     pub transactions_addr: SocketAddr,
+    /// repair address, we use this to jump ahead of the packets
+    /// destined to the replciate_addr
+    pub repair_addr: SocketAddr,
     /// current leader identity
     pub current_leader_id: PublicKey,
     /// last verified hash that was submitted to the leader
@@ -92,6 +95,7 @@ impl ReplicatedData {
         replicate_addr: SocketAddr,
         requests_addr: SocketAddr,
         transactions_addr: SocketAddr,
+        repair_addr: SocketAddr,
     ) -> ReplicatedData {
         ReplicatedData {
             id,
@@ -101,6 +105,7 @@ impl ReplicatedData {
             replicate_addr,
             requests_addr,
             transactions_addr,
+            repair_addr,
             current_leader_id: PublicKey::default(),
             last_verified_hash: Hash::default(),
             last_verified_count: 0,
@@ -118,6 +123,7 @@ impl ReplicatedData {
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
         let requests_addr = Self::next_port(&bind_addr, 3);
+        let repair_addr = Self::next_port(&bind_addr, 4);
         let pubkey = KeyPair::new().pubkey();
         ReplicatedData::new(
             pubkey,
@@ -125,6 +131,7 @@ impl ReplicatedData {
             replicate_addr,
             requests_addr,
             transactions_addr,
+            repair_addr,
         )
     }
 }
@@ -390,7 +397,7 @@ impl Crdt {
         let daddr = "0.0.0.0:0".parse().unwrap();
         let valid: Vec<_> = self.table
             .values()
-            .filter(|r| r.id != self.me && r.replicate_addr != daddr)
+            .filter(|r| r.id != self.me && r.repair_addr != daddr)
             .collect();
         if valid.is_empty() {
             return Err(Error::CrdtTooSmall);
@@ -509,7 +516,7 @@ impl Crdt {
                     let sz = rblob.meta.size;
                     outblob.meta.size = sz;
                     outblob.data[..sz].copy_from_slice(&rblob.data[..sz]);
-                    outblob.meta.set_addr(&from.replicate_addr);
+                    outblob.meta.set_addr(&from.repair_addr);
                     //TODO, set the sender id to the requester so we dont retransmit
                     //come up with a cleaner solution for this when sender signatures are checked
                     outblob.set_id(from.id).expect("blob set_id");
@@ -518,7 +525,7 @@ impl Crdt {
             }
         } else {
             assert!(window.read().unwrap()[pos].is_none());
-            info!("failed RequestWindowIndex {} {}", ix, from.replicate_addr);
+            info!("failed RequestWindowIndex {} {}", ix, from.repair_addr);
         }
         None
     }
@@ -580,10 +587,10 @@ impl Crdt {
                 trace!(
                     "received RequestWindowIndex {} {} myaddr {}",
                     ix,
-                    from.replicate_addr,
-                    me.replicate_addr
+                    from.repair_addr,
+                    me.repair_addr
                 );
-                assert_ne!(from.replicate_addr, me.replicate_addr);
+                assert_ne!(from.repair_addr, me.repair_addr);
                 Self::run_window_request(&window, &from, ix, blob_recycler)
             }
             Err(_) => {
@@ -656,6 +663,7 @@ pub struct Sockets {
     pub transaction: UdpSocket,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
+    pub repair: UdpSocket,
 }
 
 pub struct TestNode {
@@ -672,6 +680,7 @@ impl TestNode {
         let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let data = ReplicatedData::new(
             pubkey,
@@ -679,6 +688,7 @@ impl TestNode {
             replicate.local_addr().unwrap(),
             requests.local_addr().unwrap(),
             transaction.local_addr().unwrap(),
+            repair.local_addr().unwrap(),
         );
         TestNode {
             data: data,
@@ -690,6 +700,7 @@ impl TestNode {
                 transaction,
                 respond,
                 broadcast,
+                repair,
             },
         }
     }
@@ -698,6 +709,7 @@ impl TestNode {
 #[cfg(test)]
 mod tests {
     use crdt::{parse_port_or_addr, Crdt, ReplicatedData};
+    use result::Error;
     use signature::{KeyPair, KeyPairUtil};
 
     #[test]
@@ -719,6 +731,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
@@ -736,6 +749,15 @@ mod tests {
         copy
     }
     #[test]
+    fn replicated_data_new_leader() {
+        let d1 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d1.gossip_addr, "127.0.0.1:1235".parse().unwrap());
+        assert_eq!(d1.replicate_addr, "127.0.0.1:1236".parse().unwrap());
+        assert_eq!(d1.requests_addr, "127.0.0.1:1237".parse().unwrap());
+        assert_eq!(d1.transactions_addr, "127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d1.repair_addr, "127.0.0.1:1238".parse().unwrap());
+    }
+    #[test]
     fn update_test() {
         let d1 = ReplicatedData::new(
             KeyPair::new().pubkey(),
@@ -743,6 +765,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let d2 = ReplicatedData::new(
             KeyPair::new().pubkey(),
@@ -750,6 +773,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let d3 = ReplicatedData::new(
             KeyPair::new().pubkey(),
@@ -757,6 +781,7 @@ mod tests {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
         );
         let mut crdt = Crdt::new(d1.clone());
         let (key, ix, ups) = crdt.get_updates_since(0);
@@ -784,5 +809,65 @@ mod tests {
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
     }
+    /// Test that insert drops messages that are older
+    #[test]
+    fn window_index_request() {
+        let me = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        let mut crdt = Crdt::new(me.clone());
+        let rv = crdt.window_index_request(0);
+        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let rv = crdt.window_index_request(0);
+        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.2:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let rv = crdt.window_index_request(0).unwrap();
+        assert_eq!(nxt.gossip_addr, "127.0.0.2:1234".parse().unwrap());
+        assert_eq!(rv.0, "127.0.0.2:1234".parse().unwrap());
 
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.3:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let mut one = false;
+        let mut two = false;
+        while !one || !two {
+            //this randomly picks an option, so eventually it should pick both
+            let rv = crdt.window_index_request(0).unwrap();
+            if rv.0 == "127.0.0.2:1234".parse().unwrap() {
+                one = true;
+            }
+            if rv.0 == "127.0.0.3:1234".parse().unwrap() {
+                two = true;
+            }
+        }
+        assert!(one && two);
+    }
 }
