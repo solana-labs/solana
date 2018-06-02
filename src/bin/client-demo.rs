@@ -175,38 +175,63 @@ fn main() {
         }
     });
 
+    let sample_period = 1; // in seconds
     println!("Sampling tps every second...",);
-    validators.into_par_iter().for_each(|val| {
-        let mut client = mk_client(&client_addr, &val);
-        let mut now = Instant::now();
-        let mut initial_tx_count = client.transaction_count();
-        for i in 0..100 {
-            let tx_count = client.transaction_count();
-            let duration = now.elapsed();
-            now = Instant::now();
-            let sample = tx_count - initial_tx_count;
-            initial_tx_count = tx_count;
-            println!(
-                "{}: Transactions processed {}",
-                val.transactions_addr, sample
-            );
-            let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-            let tps = (sample * 1_000_000_000) as f64 / ns as f64;
-            println!("{}: {} tps", val.transactions_addr, tps);
-            let total = tx_count - first_count;
-            println!(
-                "{}: Total Transactions processed {}",
-                val.transactions_addr, total
-            );
-            if total == transactions.len() as u64 {
-                break;
+    let maxes: Vec<_> = validators
+        .into_par_iter()
+        .map(|val| {
+            let mut client = mk_client(&client_addr, &val);
+            let mut now = Instant::now();
+            let mut initial_tx_count = client.transaction_count();
+            let mut max_tps = 0.0;
+            let mut total = 0;
+            for i in 0..100 {
+                let tx_count = client.transaction_count();
+                let duration = now.elapsed();
+                now = Instant::now();
+                let sample = tx_count - initial_tx_count;
+                initial_tx_count = tx_count;
+                println!(
+                    "{}: Transactions processed {}",
+                    val.transactions_addr, sample
+                );
+                let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+                let tps = (sample * 1_000_000_000) as f64 / ns as f64;
+                if tps > max_tps {
+                    max_tps = tps;
+                }
+                println!("{}: {} tps", val.transactions_addr, tps);
+                total = tx_count - first_count;
+                println!(
+                    "{}: Total Transactions processed {}",
+                    val.transactions_addr, total
+                );
+                if total == transactions.len() as u64 {
+                    break;
+                }
+                if i > 20 && sample == 0 {
+                    break;
+                }
+                sleep(Duration::new(sample_period, 0));
             }
-            if i > 20 && sample == 0 {
-                break;
-            }
-            sleep(Duration::new(1, 0));
+            (max_tps, total)
+        })
+        .collect();
+    let mut max_of_maxes = 0.0;
+    let mut total_txs = 0;
+    for (max, txs) in &maxes {
+        if *max > max_of_maxes {
+            max_of_maxes = *max;
         }
-    });
+        total_txs += *txs;
+    }
+    println!(
+        "\nHighest TPS: {} sampling period {}s total transactions: {} clients: {}",
+        max_of_maxes,
+        sample_period,
+        total_txs,
+        maxes.len()
+    );
     signal.store(true, Ordering::Relaxed);
     for t in c_threads {
         t.join().unwrap();

@@ -100,7 +100,7 @@ To run a performance-enhanced fullnode on Linux, download `libcuda_verify_ed2551
 it by adding `--features=cuda` to the line that runs `solana-fullnode` in `leader.sh`.
 
 ```bash
-$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.6.0/libcuda_verify_ed25519.a
+$ wget https://solana-build-artifacts.s3.amazonaws.com/v0.5.0/libcuda_verify_ed25519.a
 cargo run --release --features=cuda --bin solana-fullnode -- -l leader.json < genesis.log
 ```
 
