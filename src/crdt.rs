@@ -748,6 +748,15 @@ mod tests {
         copy
     }
     #[test]
+    fn replicated_data_new_leader() {
+        let d1 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d1.gossip_addr, "127.0.0.1:1235".parse().unwrap());
+        assert_eq!(d1.replicate_addr, "127.0.0.1:1236".parse().unwrap());
+        assert_eq!(d1.requests_addr, "127.0.0.1:1237".parse().unwrap());
+        assert_eq!(d1.transactions_addr, "127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d1.repair_addr, "127.0.0.1:1238".parse().unwrap());
+    }
+    #[test]
     fn update_test() {
         let d1 = ReplicatedData::new(
             KeyPair::new().pubkey(),
