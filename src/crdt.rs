@@ -709,6 +709,7 @@ impl TestNode {
 #[cfg(test)]
 mod tests {
     use crdt::{parse_port_or_addr, Crdt, ReplicatedData};
+    use result::Error;
     use signature::{KeyPair, KeyPairUtil};
 
     #[test]
@@ -808,5 +809,64 @@ mod tests {
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
     }
+    /// Test that insert drops messages that are older
+    #[test]
+    fn window_index_request() {
+        let me = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        let mut crdt = Crdt::new(me.clone());
+        let rv = crdt.window_index_request(0);
+        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let rv = crdt.window_index_request(0);
+        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.2:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let rv = crdt.window_index_request(0).unwrap();
+        assert_eq!(nxt.gossip_addr, "127.0.0.2:1234".parse().unwrap());
+        assert_eq!(rv.0, "127.0.0.2:1234".parse().unwrap());
 
+        let nxt = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.3:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        crdt.insert(&nxt);
+        let mut one = false;
+        let mut two = false;
+        while !one || !two {
+            let rv = crdt.window_index_request(0).unwrap();
+            if rv.0 == "127.0.0.2:1234".parse().unwrap() {
+                one = true;
+            }
+            if rv.0 == "127.0.0.3:1234".parse().unwrap() {
+                two = true;
+            }
+        }
+        assert!(one && two);
+    }
 }
