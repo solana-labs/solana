@@ -9,7 +9,7 @@ use transaction::Transaction;
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
 /// of hashes performed since the previous entry.  The `id` field is the result
 /// of hashing `id` from the previous entry `num_hashes` times.  The `transactions`
-/// field points to Events that took place shortly after `id` was generated.
+/// field points to Transactions that took place shortly after `id` was generated.
 ///
 /// If you divide `num_hashes` by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last Entry. Since processing power increases
@@ -95,7 +95,7 @@ pub fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction
     }
 }
 
-/// Creates the next Tick or Event Entry `num_hashes` after `start_hash`.
+/// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     Entry {
         num_hashes,

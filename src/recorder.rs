@@ -1,5 +1,5 @@
 //! The `recorder` module provides an object for generating a Proof of History.
-//! It records Event items on behalf of its users.
+//! It records Transaction items on behalf of its users.
 
 use entry::Entry;
 use hash::{hash, Hash};
