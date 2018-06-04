@@ -457,6 +457,8 @@ fn broadcast(
         }
     }
 
+    *receive_index += blobs_len as u64;
+
     // Send blobs out from the window
     Crdt::broadcast(crdt, &window, &sock, transmit_index)?;
     Ok(())
