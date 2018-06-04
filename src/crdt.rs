@@ -581,6 +581,8 @@ impl Crdt {
                 None
             }
             Ok(Protocol::RequestWindowIndex(from, ix)) => {
+                //TODO this doesn't depend on CRDT module, can be moved
+                //but we are using the listen thread to service these request
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
@@ -716,6 +718,7 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
+    use streamer::default_window;
 
     #[test]
     fn test_parse_port_or_addr() {
@@ -726,8 +729,6 @@ mod tests {
         let p3 = parse_port_or_addr(None);
         assert_eq!(p3.port(), 8000);
     }
-
-    /// Test that insert drops messages that are older
     #[test]
     fn insert_test() {
         let mut d = ReplicatedData::new(
@@ -814,7 +815,6 @@ mod tests {
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
     }
-    /// Test that insert drops messages that are older
     #[test]
     fn window_index_request() {
         let me = ReplicatedData::new(
@@ -875,7 +875,6 @@ mod tests {
         }
         assert!(one && two);
     }
-    /// Test that insert drops messages that are older
     #[test]
     fn gossip_request() {
         let me = ReplicatedData::new(
@@ -921,7 +920,10 @@ mod tests {
         let mut one = false;
         let mut two = false;
         for _ in 0..5 {
-            let rv = reader.recv_timeout(Duration::new(1, 0)).unwrap();
+            let mut rv = reader.recv_timeout(Duration::new(1, 0)).unwrap();
+            while let Ok(mut more) = reader.try_recv() {
+                rv.append(&mut more);
+            }
             assert!(rv.len() > 0);
             for i in rv.iter() {
                 if i.read().unwrap().meta.addr() == nxt1.gossip_addr {
@@ -941,5 +943,32 @@ mod tests {
         thread.join().unwrap();
         //created requests to both
         assert!(one && two);
+    }
+
+    #[test]
+    fn run_window_request() {
+        let window = default_window();
+        let me = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        let recycler = BlobRecycler::default();
+        let rv = Crdt::run_window_request(&window, &me, 0, &recycler);
+        assert!(rv.is_none());
+        let out = recycler.allocate();
+        out.write().unwrap().meta.size = 200;
+        window.write().unwrap()[0] = Some(out);
+        let rv = Crdt::run_window_request(&window, &me, 0, &recycler);
+        assert!(rv.is_some());
+        let v = rv.unwrap();
+        //test we copied the blob
+        assert_eq!(v.read().unwrap().meta.size, 200);
+        let len = window.read().unwrap().len() as u64;
+        let rv = Crdt::run_window_request(&window, &me, len, &recycler);
+        assert!(rv.is_none());
     }
 }
