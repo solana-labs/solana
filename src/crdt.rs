@@ -232,7 +232,7 @@ impl Crdt {
     pub fn index_blobs(
         obj: &Arc<RwLock<Self>>,
         blobs: &Vec<SharedBlob>,
-        transmit_index: &mut u64,
+        receive_index: &mut u64,
     ) -> Result<()> {
         let me: ReplicatedData = {
             let robj = obj.read().expect("'obj' read lock in crdt::index_blobs");
@@ -245,9 +245,11 @@ impl Crdt {
             // only leader should be broadcasting
             let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
             blob.set_id(me.id).expect("set_id in pub fn broadcast");
-            blob.set_index(*transmit_index + i as u64)
+            blob.set_index(*receive_index + i as u64)
                 .expect("set_index in pub fn broadcast");
         }
+
+        *receive_index += blobs.len() as u64;
 
         Ok(())
     }
