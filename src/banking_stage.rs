@@ -293,7 +293,7 @@ mod bench {
                 &packet_recycler,
             ).unwrap();
             let signal = signal_receiver.recv().unwrap();
-            if let Signal::Events(ref transactions) = signal {
+            if let Signal::Events(transactions) = signal {
                 assert_eq!(transactions.len(), tx);
             } else {
                 assert!(false);

@@ -105,7 +105,7 @@ impl ThinClient {
         while !done {
             let resp = self.recv_response()?;
             trace!("recv_response {:?}", resp);
-            if let &Response::Balance { ref key, .. } = &resp {
+            if let Response::Balance { key, .. } = &resp {
                 done = key == pubkey;
             }
             self.process_response(resp);

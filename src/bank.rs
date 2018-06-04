@@ -215,8 +215,8 @@ impl Bank {
                     .read()
                     .expect("timestamp creation in apply_credits")));
 
-                if let Some(ref payment) = plan.final_payment() {
-                    self.apply_payment(payment);
+                if let Some(payment) = plan.final_payment() {
+                    self.apply_payment(&payment);
                 } else {
                     let mut pending = self.pending
                         .write()
@@ -329,8 +329,8 @@ impl Bank {
             plan.apply_witness(&Witness::Timestamp(*self.last_time
                 .read()
                 .expect("'last_time' read lock when creating timestamp")));
-            if let Some(ref payment) = plan.final_payment() {
-                self.apply_payment(payment);
+            if let Some(payment) = plan.final_payment() {
+                self.apply_payment(&payment);
                 completed.push(key.clone());
             }
         }

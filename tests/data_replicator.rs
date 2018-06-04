@@ -45,7 +45,7 @@ where
     for i in 0..(num * 32) {
         done = false;
         trace!("round {}", i);
-        for &(ref c, _, _) in listen.iter() {
+        for (c, _, _) in &listen {
             if num == c.read().unwrap().convergence() as usize {
                 done = true;
                 break;
