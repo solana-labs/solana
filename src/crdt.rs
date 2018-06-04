@@ -875,6 +875,8 @@ mod tests {
         }
         assert!(one && two);
     }
+
+    /// test that gossip requests are eventually generated for all nodes
     #[test]
     fn gossip_request() {
         let me = ReplicatedData::new(
@@ -911,7 +913,8 @@ mod tests {
             "127.0.0.1:1238".parse().unwrap(),
         );
         crdt.insert(&nxt2);
-
+        // check that the service works
+        // and that it eventually produces a request for both nodes
         let (sender, reader) = channel();
         let recycler = BlobRecycler::default();
         let exit = Arc::new(AtomicBool::new(false));
@@ -945,6 +948,7 @@ mod tests {
         assert!(one && two);
     }
 
+    /// test window requests respond with the right blob, and do not overrun
     #[test]
     fn run_window_request() {
         let window = default_window();
