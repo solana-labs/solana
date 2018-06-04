@@ -249,8 +249,6 @@ impl Crdt {
                 .expect("set_index in pub fn broadcast");
         }
 
-        *receive_index += blobs.len() as u64;
-
         Ok(())
     }
 
