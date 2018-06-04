@@ -1,8 +1,8 @@
 //! The `record_stage` module provides an object for generating a Proof of History.
-//! It records Event items on behalf of its users. It continuously generates
-//! new hashes, only stopping to check if it has been sent an Event item. It
-//! tags each Event with an Entry, and sends it back. The Entry includes the
-//! Event, the latest hash, and the number of hashes since the last transaction.
+//! It records Transaction items on behalf of its users. It continuously generates
+//! new hashes, only stopping to check if it has been sent an Transaction item. It
+//! tags each Transaction with an Entry, and sends it back. The Entry includes the
+//! Transaction, the latest hash, and the number of hashes since the last transaction.
 //! The resulting stream of entries represents ordered transactions in time.
 
 use entry::Entry;
@@ -16,7 +16,7 @@ use transaction::Transaction;
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
-    Events(Vec<Transaction>),
+    Transactions(Vec<Transaction>),
 }
 
 pub struct RecordStage {
@@ -25,7 +25,7 @@ pub struct RecordStage {
 }
 
 impl RecordStage {
-    /// A background thread that will continue tagging received Event messages and
+    /// A background thread that will continue tagging received Transaction messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
     pub fn new(signal_receiver: Receiver<Signal>, start_hash: &Hash) -> Self {
         let (entry_sender, entry_receiver) = channel();
@@ -85,7 +85,7 @@ impl RecordStage {
         recorder: &mut Recorder,
         sender: &Sender<Entry>,
     ) -> Result<(), ()> {
-        let txs = if let Signal::Events(txs) = signal {
+        let txs = if let Signal::Transactions(txs) = signal {
             txs
         } else {
             vec![]
@@ -180,7 +180,9 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
         let tx1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
-        tx_sender.send(Signal::Events(vec![tx0, tx1])).unwrap();
+        tx_sender
+            .send(Signal::Transactions(vec![tx0, tx1]))
+            .unwrap();
         drop(tx_sender);
         let entries: Vec<_> = record_stage.entry_receiver.iter().collect();
         assert_eq!(entries.len(), 1);

@@ -100,7 +100,7 @@ impl BankingStage {
             debug!("process_transactions");
             let results = bank.process_transactions(transactions);
             let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
-            signal_sender.send(Signal::Events(transactions))?;
+            signal_sender.send(Signal::Transactions(transactions))?;
             debug!("done process_transactions");
 
             packet_recycler.recycle(msgs);
@@ -293,7 +293,7 @@ mod bench {
                 &packet_recycler,
             ).unwrap();
             let signal = signal_receiver.recv().unwrap();
-            if let Signal::Events(transactions) = signal {
+            if let Signal::Transactions(transactions) = signal {
                 assert_eq!(transactions.len(), tx);
             } else {
                 assert!(false);
