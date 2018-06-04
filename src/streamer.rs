@@ -270,7 +270,7 @@ fn recv_window(
             let mut window = locked_window.write().unwrap();
             if window[w].is_none() {
                 window[w] = Some(b_);
-            } else if let &Some(ref cblob) = &window[w] {
+            } else if let Some(cblob) = &window[w] {
                 if cblob.read().unwrap().get_index().unwrap() != pix as u64 {
                     warn!("overrun blob at index {:}", w);
                 } else {

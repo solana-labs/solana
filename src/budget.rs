@@ -18,8 +18,8 @@ impl Condition {
     /// Return true if the given Witness satisfies this Condition.
     pub fn is_satisfied(&self, witness: &Witness) -> bool {
         match (self, witness) {
-            (&Condition::Signature(ref pubkey), &Witness::Signature(ref from)) => pubkey == from,
-            (&Condition::Timestamp(ref dt), &Witness::Timestamp(ref last_time)) => dt <= last_time,
+            (Condition::Signature(pubkey), Witness::Signature(from)) => pubkey == from,
+            (Condition::Timestamp(dt), Witness::Timestamp(last_time)) => dt <= last_time,
             _ => false,
         }
     }
@@ -67,31 +67,27 @@ impl Budget {
 impl PaymentPlan for Budget {
     /// Return Payment if the budget requires no additional Witnesses.
     fn final_payment(&self) -> Option<Payment> {
-        match *self {
-            Budget::Pay(ref payment) => Some(payment.clone()),
+        match self {
+            Budget::Pay(payment) => Some(payment.clone()),
             _ => None,
         }
     }
 
     /// Return true if the budget spends exactly `spendable_tokens`.
     fn verify(&self, spendable_tokens: i64) -> bool {
-        match *self {
-            Budget::Pay(ref payment) | Budget::After(_, ref payment) => {
-                payment.tokens == spendable_tokens
-            }
-            Budget::Race(ref a, ref b) => {
-                a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
-            }
+        match self {
+            Budget::Pay(payment) | Budget::After(_, payment) => payment.tokens == spendable_tokens,
+            Budget::Race(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
     /// Apply a witness to the budget to see if the budget can be reduced.
     /// If so, modify the budget in-place.
     fn apply_witness(&mut self, witness: &Witness) {
-        let new_payment = match *self {
-            Budget::After(ref cond, ref payment) if cond.is_satisfied(witness) => Some(payment),
-            Budget::Race((ref cond, ref payment), _) if cond.is_satisfied(witness) => Some(payment),
-            Budget::Race(_, (ref cond, ref payment)) if cond.is_satisfied(witness) => Some(payment),
+        let new_payment = match self {
+            Budget::After(cond, payment) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Race((cond, payment), _) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Race(_, (cond, payment)) if cond.is_satisfied(witness) => Some(payment),
             _ => None,
         }.cloned();
 

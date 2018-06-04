@@ -505,7 +505,7 @@ impl Crdt {
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         let pos = (ix as usize) % window.read().unwrap().len();
-        if let &Some(ref blob) = &window.read().unwrap()[pos] {
+        if let Some(blob) = &window.read().unwrap()[pos] {
             let rblob = blob.read().unwrap();
             let blob_ix = rblob.get_index().expect("run_window_request get_index");
             if blob_ix == ix {
