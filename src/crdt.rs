@@ -922,7 +922,8 @@ mod tests {
         let thread = Crdt::gossip(obj, recycler, sender, exit.clone());
         let mut one = false;
         let mut two = false;
-        for _ in 0..5 {
+        for _ in 0..30 {
+            //50% chance each try that we get a repeat
             let mut rv = reader.recv_timeout(Duration::new(1, 0)).unwrap();
             while let Ok(mut more) = reader.try_recv() {
                 rv.append(&mut more);
