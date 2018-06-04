@@ -889,7 +889,21 @@ mod tests {
         let mut crdt = Crdt::new(me.clone());
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtTooSmall));
-        let nxt = ReplicatedData::new(
+        let nxt1 = ReplicatedData::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.2:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+
+        crdt.insert(&nxt1);
+
+        let rv = crdt.gossip_request().unwrap();
+        assert_eq!(rv.0, nxt1.gossip_addr);
+
+        let nxt2 = ReplicatedData::new(
             KeyPair::new().pubkey(),
             "127.0.0.3:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -897,20 +911,35 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        crdt.insert(&nxt);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.gossip_addr);
+        crdt.insert(&nxt2);
+
         let (sender, reader) = channel();
         let recycler = BlobRecycler::default();
         let exit = Arc::new(AtomicBool::new(false));
         let obj = Arc::new(RwLock::new(crdt));
         let thread = Crdt::gossip(obj, recycler, sender, exit.clone());
-        let rv = reader.recv_timeout(Duration::new(1, 0)).unwrap();
-        assert!(rv.len() > 0);
-        for i in rv.iter() {
-            assert_eq!(i.read().unwrap().meta.addr(), nxt.gossip_addr);
+        let mut one = false;
+        let mut two = false;
+        for _ in 0..5 {
+            let rv = reader.recv_timeout(Duration::new(1, 0)).unwrap();
+            assert!(rv.len() > 0);
+            for i in rv.iter() {
+                if i.read().unwrap().meta.addr() == nxt1.gossip_addr {
+                    one = true;
+                } else if i.read().unwrap().meta.addr() == nxt2.gossip_addr {
+                    two = true;
+                } else {
+                    //unexpected request
+                    assert!(false);
+                }
+            }
+            if one && two {
+                break;
+            }
         }
         exit.store(true, Ordering::Relaxed);
         thread.join().unwrap();
+        //created requests to both
+        assert!(one && two);
     }
 }
