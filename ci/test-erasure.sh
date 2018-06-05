@@ -2,7 +2,7 @@
 
 set -o xtrace
 
-cd "$(dirname $0)/.."
+cd "$(dirname "$0")/.."
 
 if [[ -z "${libgf_complete_URL:-}" ]]; then
   echo libgf_complete_URL undefined
