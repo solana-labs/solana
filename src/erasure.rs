@@ -74,14 +74,22 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
     let mut data_arg = Vec::new();
     for block in data {
         if block_len != block.len() {
-            trace!("data block size incorrect {} expected {}", block.len(), block_len);
+            trace!(
+                "data block size incorrect {} expected {}",
+                block.len(),
+                block_len
+            );
             return Err(ErasureError::InvalidBlockSize);
         }
         data_arg.push(block.as_ptr());
     }
     for mut block in coding {
         if block_len != block.len() {
-            trace!("coding block size incorrect {} expected {}", block.len(), block_len);
+            trace!(
+                "coding block size incorrect {} expected {}",
+                block.len(),
+                block_len
+            );
             return Err(ErasureError::InvalidBlockSize);
         }
         coding_arg.push(block.as_mut_ptr());
@@ -182,13 +190,15 @@ pub fn add_coding_blobs(recycler: &BlobRecycler, blobs: &mut Vec<SharedBlob>, co
 }
 
 // Generate coding blocks in window starting from consumed
-pub fn generate_coding(window: &mut Vec<Option<SharedBlob>>, consumed: usize, num_blobs: usize) -> Result<()> {
-
+pub fn generate_coding(
+    window: &mut Vec<Option<SharedBlob>>,
+    consumed: usize,
+    num_blobs: usize,
+) -> Result<()> {
     let mut block_start = consumed - (consumed % NUM_CODED);
 
     for i in consumed..consumed + num_blobs {
         if (i % NUM_CODED) == (NUM_CODED - 1) {
-
             let mut data_blobs = Vec::new();
             let mut coding_blobs = Vec::new();
             let mut data_locks = Vec::new();
@@ -262,8 +272,14 @@ pub fn generate_coding(window: &mut Vec<Option<SharedBlob>>, consumed: usize, nu
             }
 
             generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
-            debug!("consumed: {} data: {}:{} coding: {}:{}", consumed,
-                   block_start, block_start + NUM_DATA, coding_start, coding_end);
+            debug!(
+                "consumed: {} data: {}:{} coding: {}:{}",
+                consumed,
+                block_start,
+                block_start + NUM_DATA,
+                coding_start,
+                coding_end
+            );
             block_start += NUM_CODED;
         }
     }
@@ -288,7 +304,10 @@ pub fn recover(
     let mut block_start = consumed - (consumed % NUM_CODED);
 
     if num_blocks > 0 {
-        debug!("num_blocks: {} received: {} consumed: {}", num_blocks, received, consumed);
+        debug!(
+            "num_blocks: {} received: {} consumed: {}",
+            num_blocks, received, consumed
+        );
     }
 
     for i in 0..num_blocks {
@@ -316,11 +335,17 @@ pub fn recover(
             }
         }
         if (data_missing + coded_missing) != NUM_CODED && (data_missing + coded_missing) != 0 {
-            debug!("1: start: {} recovering: data: {} coding: {}", block_start, data_missing, coded_missing);
+            debug!(
+                "1: start: {} recovering: data: {} coding: {}",
+                block_start, data_missing, coded_missing
+            );
         }
         if data_missing > 0 {
             if (data_missing + coded_missing) <= MAX_MISSING {
-                debug!("2: recovering: data: {} coding: {}", data_missing, coded_missing);
+                debug!(
+                    "2: recovering: data: {} coding: {}",
+                    data_missing, coded_missing
+                );
                 let mut blobs: Vec<SharedBlob> = Vec::new();
                 let mut locks = Vec::new();
                 let mut erasures: Vec<i32> = Vec::new();
@@ -348,7 +373,12 @@ pub fn recover(
                     erasures.push((i - block_start) as i32);
                 }
                 erasures.push(-1);
-                trace!("erasures: {:?} data_size: {} header_size: {}", erasures, size.unwrap(), BLOB_HEADER_SIZE);
+                trace!(
+                    "erasures: {:?} data_size: {} header_size: {}",
+                    erasures,
+                    size.unwrap(),
+                    BLOB_HEADER_SIZE
+                );
                 //lock everything
                 for b in &blobs {
                     locks.push(b.write().expect("'locks' arr in pb fn recover"));
@@ -377,7 +407,12 @@ pub fn recover(
                     let data_size = locks[idx].get_data_size().unwrap() - BLOB_HEADER_SIZE as u64;
                     locks[idx].meta = meta.clone().unwrap();
                     locks[idx].set_size(data_size as usize);
-                    trace!("erasures[{}] size: {} data[0]: {}", *i, data_size, locks[idx].data()[0]);
+                    trace!(
+                        "erasures[{}] size: {} data[0]: {}",
+                        *i,
+                        data_size,
+                        locks[idx].data()[0]
+                    );
                 }
             }
         }
@@ -388,13 +423,13 @@ pub fn recover(
 
 #[cfg(test)]
 mod test {
+    use crdt;
     use erasure;
     use logger;
     use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE};
-    use crdt;
-    use std::sync::{Arc, RwLock};
     use signature::KeyPair;
     use signature::KeyPairUtil;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     pub fn test_coding() {
@@ -452,7 +487,11 @@ mod test {
             if w.is_some() {
                 let window_l1 = w.clone().unwrap();
                 let window_l2 = window_l1.read().unwrap();
-                print!("index: {:?} meta.size: {} data: ", window_l2.get_index(), window_l2.meta.size);
+                print!(
+                    "index: {:?} meta.size: {} data: ",
+                    window_l2.get_index(),
+                    window_l2.meta.size
+                );
                 for i in 0..8 {
                     print!("{} ", window_l2.data()[i]);
                 }
