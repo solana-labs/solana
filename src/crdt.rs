@@ -260,6 +260,7 @@ impl Crdt {
         window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
         s: &UdpSocket,
         transmit_index: &mut u64,
+        received_index: u64,
     ) -> Result<()> {
         let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
             // copy to avoid locking during IO
@@ -294,14 +295,12 @@ impl Crdt {
         // transmit them to nodes, starting from a different node
         let mut orders = Vec::new();
         let window_l = window.write().unwrap();
-        let mut i = (*transmit_index as usize) % window_l.len();
-        loop {
-            if window_l[i].is_none() || orders.len() >= window_l.len() {
-                break;
-            }
-            orders.push((window_l[i].clone(), nodes[i % nodes.len()]));
-            i += 1;
-            i %= window_l.len();
+        for i in *transmit_index..received_index {
+            let is = i as usize;
+            let k = is % window_l.len();
+            assert!(window_l[k].is_some());
+
+            orders.push((window_l[k].clone(), nodes[is % nodes.len()]));
         }
 
         trace!("orders table {}", orders.len());
@@ -313,7 +312,9 @@ impl Crdt {
                 let bl = b.unwrap();
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
-                trace!("broadcast {} to {}", blob.meta.size, v.replicate_addr);
+                trace!("broadcast idx: {} sz: {} to {} coding: {}",
+                      blob.get_index().unwrap(), blob.meta.size,
+                      v.replicate_addr, blob.is_coding());
                 assert!(blob.meta.size < BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
                 trace!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
