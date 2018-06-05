@@ -4,8 +4,8 @@ use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE};
 use std::result;
 
 //TODO(sakridge) pick these values
-const NUM_CODED: usize = 20;
-const MAX_MISSING: usize = 4;
+pub const NUM_CODED: usize = 20;
+pub const MAX_MISSING: usize = 4;
 const NUM_DATA: usize = NUM_CODED - MAX_MISSING;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -315,11 +315,12 @@ pub fn recover(
                 }
             }
         }
-        if (data_missing + coded_missing) != NUM_CODED {
-            trace!("recovering: data: {} coding: {}", data_missing, coded_missing);
+        if (data_missing + coded_missing) != NUM_CODED && (data_missing + coded_missing) != 0 {
+            debug!("1: start: {} recovering: data: {} coding: {}", block_start, data_missing, coded_missing);
         }
         if data_missing > 0 {
             if (data_missing + coded_missing) <= MAX_MISSING {
+                debug!("2: recovering: data: {} coding: {}", data_missing, coded_missing);
                 let mut blobs: Vec<SharedBlob> = Vec::new();
                 let mut locks = Vec::new();
                 let mut erasures: Vec<i32> = Vec::new();
