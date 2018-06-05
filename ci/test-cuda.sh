@@ -15,7 +15,7 @@ if [[ ! -r $LIB ]]; then
 fi
 
 # shellcheck disable=SC1090    # <-- shellcheck can't follow ~
-source $HOME/.cargo/env
+source ~/.cargo/env
 export RUST_BACKTRACE=1
 cargo test --features=cuda
 
