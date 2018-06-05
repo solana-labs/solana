@@ -268,6 +268,12 @@ fn recv_window(
         if pix > *received {
             *received = pix;
         }
+        // Got a blob which has already been consumed, skip it
+        // probably from a repair window request
+        if pix < *consumed {
+            info!("received: {} but older than consumed: {} skipping..", pix, *consumed);
+            continue;
+        }
         let w = pix % WINDOW_SIZE;
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
@@ -299,9 +305,18 @@ fn recv_window(
                 }
                 if !is_coding {
                     contq.push_back(window[k].clone().expect("clone in fn recv_window"));
+                    *consumed += 1;
+                } else {
+                    let block_start = *consumed - (*consumed % erasure::NUM_CODED);
+                    let coding_end = block_start + erasure::NUM_CODED;
+                    // We've received all this block's data blobs, go and null out the window now
+                    for j in block_start..coding_end {
+                        window[j % WINDOW_SIZE] = None;
+                    }
+
+                    *consumed += erasure::MAX_MISSING;
+                    info!("skipping processing coding blob k: {} consumed: {}", k, *consumed);
                 }
-                window[k] = None;
-                *consumed += 1;
             }
         }
     }
