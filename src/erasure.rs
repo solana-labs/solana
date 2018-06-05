@@ -165,7 +165,8 @@ pub fn add_coding_blobs(recycler: &BlobRecycler, blobs: &mut Vec<SharedBlob>, co
                 let new_blob = recycler.allocate();
                 let new_blob_clone = new_blob.clone();
                 let mut new_blob_l = new_blob_clone.write().unwrap();
-                new_blob_l.meta.size = new_blob_l.data().len();
+                new_blob_l.set_size(0);
+                new_blob_l.set_coding().unwrap();
                 drop(new_blob_l);
                 blobs.insert((i - consumed) as usize, new_blob);
                 added += 1;
@@ -186,7 +187,7 @@ pub fn generate_coding(window: &mut Vec<Option<SharedBlob>>, consumed: usize, nu
     let mut block_start = consumed - (consumed % NUM_CODED);
 
     for i in consumed..consumed + num_blobs {
-        if i != 0 && (i % (NUM_CODED - 1)) == 0 {
+        if (i % NUM_CODED) == (NUM_CODED - 1) {
 
             let mut data_blobs = Vec::new();
             let mut coding_blobs = Vec::new();
