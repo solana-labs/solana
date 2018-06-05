@@ -319,19 +319,27 @@ fn recv_window(
                 if !is_coding {
                     contq.push_back(window[k].clone().expect("clone in fn recv_window"));
                     *consumed += 1;
-                } else {
-                    let block_start = *consumed - (*consumed % erasure::NUM_CODED);
-                    let coding_end = block_start + erasure::NUM_CODED;
-                    // We've received all this block's data blobs, go and null out the window now
-                    for j in block_start..coding_end {
-                        window[j % WINDOW_SIZE] = None;
-                    }
 
-                    *consumed += erasure::MAX_MISSING;
-                    debug!(
-                        "skipping processing coding blob k: {} consumed: {}",
-                        k, *consumed
-                    );
+                    #[cfg(not(feature = "erasure"))]
+                    {
+                        window[k] = None;
+                    }
+                } else {
+                    #[cfg(feature = "erasure")]
+                    {
+                        let block_start = *consumed - (*consumed % erasure::NUM_CODED);
+                        let coding_end = block_start + erasure::NUM_CODED;
+                        // We've received all this block's data blobs, go and null out the window now
+                        for j in block_start..coding_end {
+                            window[j % WINDOW_SIZE] = None;
+                        }
+
+                        *consumed += erasure::MAX_MISSING;
+                        debug!(
+                            "skipping processing coding blob k: {} consumed: {}",
+                            k, *consumed
+                        );
+                    }
                 }
             }
         }
