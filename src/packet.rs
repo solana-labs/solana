@@ -275,7 +275,9 @@ const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
 const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
 
 macro_rules! align {
-    ($x:expr, $align: expr) => ($x + ($align - 1) & !($align - 1));
+    ($x:expr, $align:expr) => {
+        $x + ($align - 1) & !($align - 1)
+    };
 }
 
 pub const BLOB_FLAG_IS_CODING: u32 = 0x1;

@@ -178,7 +178,13 @@ fn repair_window(
 ) -> Result<()> {
     #[cfg(feature = "erasure")]
     {
-        if erasure::recover(_recycler, &mut locked_window.write().unwrap(), *consumed, *received).is_err() {
+        if erasure::recover(
+            _recycler,
+            &mut locked_window.write().unwrap(),
+            *consumed,
+            *received,
+        ).is_err()
+        {
             trace!("erasure::recover failed");
         }
     }
@@ -271,7 +277,10 @@ fn recv_window(
         // Got a blob which has already been consumed, skip it
         // probably from a repair window request
         if pix < *consumed {
-            info!("received: {} but older than consumed: {} skipping..", pix, *consumed);
+            debug!(
+                "received: {} but older than consumed: {} skipping..",
+                pix, *consumed
+            );
             continue;
         }
         let w = pix % WINDOW_SIZE;
@@ -299,7 +308,11 @@ fn recv_window(
                 }
                 let mut is_coding = false;
                 if let &Some(ref cblob) = &window[k] {
-                    if cblob.read().expect("blob read lock for flags streamer::window").is_coding() {
+                    if cblob
+                        .read()
+                        .expect("blob read lock for flags streamer::window")
+                        .is_coding()
+                    {
                         is_coding = true;
                     }
                 }
@@ -315,7 +328,10 @@ fn recv_window(
                     }
 
                     *consumed += erasure::MAX_MISSING;
-                    info!("skipping processing coding blob k: {} consumed: {}", k, *consumed);
+                    debug!(
+                        "skipping processing coding blob k: {} consumed: {}",
+                        k, *consumed
+                    );
                 }
             }
         }
@@ -329,10 +345,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(
-    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
-    consumed: usize,
-    ) {
+fn print_window(locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>, consumed: usize) {
     {
         let buf: Vec<_> = locked_window
             .read()
@@ -357,7 +370,7 @@ fn print_window(
                 }
             })
             .collect();
-        info!("WINDOW ({}): {}", consumed, buf.join(""));
+        debug!("WINDOW ({}): {}", consumed, buf.join(""));
     }
 }
 
@@ -466,7 +479,11 @@ fn broadcast(
     // Fill in the coding blob data from the window data blobs
     #[cfg(feature = "erasure")]
     {
-        if erasure::generate_coding(&mut window.write().unwrap(), *receive_index as usize, blobs_len).is_err()
+        if erasure::generate_coding(
+            &mut window.write().unwrap(),
+            *receive_index as usize,
+            blobs_len,
+        ).is_err()
         {
             return Err(Error::GenericError);
         }
@@ -505,7 +522,15 @@ pub fn broadcaster(
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
-                let _ = broadcast(&crdt, &window, &recycler, &r, &sock, &mut transmit_index, &mut receive_index);
+                let _ = broadcast(
+                    &crdt,
+                    &window,
+                    &recycler,
+                    &r,
+                    &sock,
+                    &mut transmit_index,
+                    &mut receive_index,
+                );
             }
         })
         .unwrap()

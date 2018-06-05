@@ -312,9 +312,13 @@ impl Crdt {
                 let bl = b.unwrap();
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
-                trace!("broadcast idx: {} sz: {} to {} coding: {}",
-                      blob.get_index().unwrap(), blob.meta.size,
-                      v.replicate_addr, blob.is_coding());
+                trace!(
+                    "broadcast idx: {} sz: {} to {} coding: {}",
+                    blob.get_index().unwrap(),
+                    blob.meta.size,
+                    v.replicate_addr,
+                    blob.is_coding()
+                );
                 assert!(blob.meta.size < BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.replicate_addr);
                 trace!("done broadcast {} to {}", blob.meta.size, v.replicate_addr);
