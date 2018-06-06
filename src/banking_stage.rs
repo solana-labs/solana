@@ -1,4 +1,6 @@
-//! The `banking_stage` processes Transaction messages.
+//! The `banking_stage` processes Transaction messages. It is intended to be used
+//! to contruct a software pipeline. The stage uses all available CPU cores and
+//! can do its processing in parallel with signature verification on the GPU.
 
 use bank::Bank;
 use bincode::deserialize;
@@ -17,12 +19,20 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
+/// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
+    /// Handle to the stage's thread.
     pub thread_hdl: JoinHandle<()>,
+
+    /// Output receiver for the following stage.
     pub signal_receiver: Receiver<Signal>,
 }
 
 impl BankingStage {
+    /// Create the stage using `bank`. Exit when either `exit` is set or
+    /// when `verified_receiver` or the stage's output receiver is dropped.
+    /// Discard input packets using `packet_recycler` to minimize memory
+    /// allocations in a previous stage such as the `fetch_stage`.
     pub fn new(
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
@@ -52,6 +62,8 @@ impl BankingStage {
         }
     }
 
+    /// Convert the transactions from a blob of binary data to a vector of transactions and
+    /// an unused `SocketAddr` that could be used to send a response.
     fn deserialize_transactions(p: &packet::Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
         p.packets
             .par_iter()
@@ -63,6 +75,8 @@ impl BankingStage {
             .collect()
     }
 
+    /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
+    /// Discard packets via `packet_recycler`.
     fn process_packets(
         bank: Arc<Bank>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
