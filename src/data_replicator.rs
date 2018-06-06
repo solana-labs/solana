@@ -1,3 +1,5 @@
+//! The `data_replicator` module implements the replication threads.
+
 use crdt;
 use packet;
 use result::Result;
