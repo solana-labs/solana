@@ -1,3 +1,6 @@
+//! The `logger` module provides a setup function for `env_logger`. Its only function,
+//! `setup()` may be called multiple times.
+
 use std::sync::{Once, ONCE_INIT};
 extern crate env_logger;
 

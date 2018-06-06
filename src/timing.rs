@@ -1,3 +1,4 @@
+//! The `timing` module provides std::time utility functions.
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
