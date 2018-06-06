@@ -1,9 +1,10 @@
 [package]
 name = "solana"
-description = "Blockchain Rebuilt for Scale"
-version = "0.6.0"
+description = "Blockchain, Rebuilt for Scale"
+version = "0.6.1"
 documentation = "https://docs.rs/solana"
 homepage = "http://solana.com/"
+readme = "README.md"
 repository = "https://github.com/solana-labs/solana"
 authors = [
     "Anatoly Yakovenko <anatoly@solana.com>",
