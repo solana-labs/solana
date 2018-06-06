@@ -8,9 +8,13 @@ use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::PublicKey;
 use std::mem;
 
+/// A data type representing a `Witness` that the payment plan is waiting on.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
+    /// Wait for a `Timestamp` `Witness` at or after the given `DateTime`.
     Timestamp(DateTime<Utc>),
+
+    /// Wait for a `Signature` `Witness` from `PublicKey`.
     Signature(PublicKey),
 }
 
@@ -25,11 +29,18 @@ impl Condition {
     }
 }
 
+/// A data type reprsenting a payment plan.
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Budget {
+    /// Make a payment.
     Pay(Payment),
+
+    /// Make a payment after some condition.
     After(Condition, Payment),
+
+    /// Either make a payment after one condition or a different payment after another
+    /// condition, which ever condition is satisfied first.
     Race((Condition, Payment), (Condition, Payment)),
 }
 
