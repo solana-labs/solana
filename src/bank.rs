@@ -1,6 +1,6 @@
-//! The `bank` module tracks client balances, and the progress of pending
-//! transactions. It offers a high-level public API that signs transactions
-//! on behalf of the caller, and a private low-level API for when they have
+//! The `bank` module tracks client balances and the progress of smart
+//! contracts. It offers a high-level API that signs transactions
+//! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
 extern crate libc;
@@ -19,25 +19,69 @@ use std::sync::atomic::{AtomicIsize, AtomicUsize, Ordering};
 use std::sync::RwLock;
 use transaction::{Instruction, Plan, Transaction};
 
+/// The number of most recent `last_id` values that the bank will track the signatures
+/// of. Once the bank discards a `last_id`, it will reject any transactions that use
+/// that `last_id` in a transaction. Lowering this value reduces memory consumption,
+/// but requires clients to update its `last_id` more frequently. Raising the value
+/// lengthens the time a client must wait to be certain a missing transaction will
+/// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = 1024 * 4;
 
+/// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
+    /// Attempt to debit from `PublicKey`, but no found no record of a prior credit.
     AccountNotFound(PublicKey),
+
+    /// The requested debit from `PublicKey` has the potential to draw the balance
+    /// below zero. This can occur when a debit and credit are processed in parallel.
+    /// The bank may reject the debit or push it to a future entry.
     InsufficientFunds(PublicKey),
+
+    /// The bank has seen `Signature` before. This can occur under normal operation
+    /// when a UDP packet is duplicated, as a user error from a client not updating
+    /// its `last_id`, or as a double-spend attack.
     DuplicateSiganture(Signature),
+
+    /// The bank has not seen the given `last_id` or the transaction is too old and
+    /// the `last_id` has been discarded.
     LastIdNotFound(Hash),
+
+    /// The transaction is invalid and has requested a debit or credit of negative
+    /// tokens.
     NegativeTokens,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
 
+/// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
+    /// A map of account public keys to the balance in that account.
     balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
+
+    /// A map of smart contract transaction signatures to what remains of its payment
+    /// plan. Each transaction that targets the plan should cause it to be reduced.
+    /// Once it cannot be reduced, final payments are made and it is discarded.
     pending: RwLock<HashMap<Signature, Plan>>,
+
+    /// A FIFO queue of `last_id` items, where each item is a set of signatures
+    /// that have been processed using that `last_id`. The bank uses this data to
+    /// reject transactions with signatures its seen before as well as `last_id`
+    /// values that are so old that its `last_id` has been pulled out of the queue.
     last_ids: RwLock<VecDeque<(Hash, RwLock<HashSet<Signature>>)>>,
+
+    /// The set of trusted timekeepers. A Timestamp transaction from a `PublicKey`
+    /// outside this set will be discarded. Note that if validators do not have the
+    /// same set as leaders, they may interpret the ledger differently.
     time_sources: RwLock<HashSet<PublicKey>>,
+
+    /// The most recent timestamp from a trusted timekeeper. This timestamp is applied
+    /// to every smart contract when it enters the system. If it is waiting on a
+    /// timestamp witness before that timestamp, the bank will execute it immediately.
     last_time: RwLock<DateTime<Utc>>,
+
+    /// The number of transactions the bank has processed without error since the
+    /// start of the ledger.
     transaction_count: AtomicUsize,
 }
 
@@ -67,7 +111,7 @@ impl Bank {
         bank
     }
 
-    /// Commit funds to the 'to' party.
+    /// Commit funds to the `payment.to` party.
     fn apply_payment(&self, payment: &Payment) {
         // First we check balances with a read lock to maximize potential parallelization.
         if self.balances
@@ -89,13 +133,14 @@ impl Bank {
         }
     }
 
-    /// Return the last entry ID registered
+    /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
         let last_ids = self.last_ids.read().expect("'last_ids' read lock");
         let last_item = last_ids.iter().last().expect("empty 'last_ids' list");
         last_item.0
     }
 
+    /// Store the given signature. The bank will reject any transaction with the same signature.
     fn reserve_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) -> Result<()> {
         if signatures
             .read()
@@ -111,14 +156,16 @@ impl Bank {
         Ok(())
     }
 
-    fn forget_signature(signatures: &RwLock<HashSet<Signature>>, sig: &Signature) {
+    /// Forget the given `signature` because its transaction was rejected.
+    fn forget_signature(signatures: &RwLock<HashSet<Signature>>, signature: &Signature) {
         signatures
             .write()
             .expect("'signatures' write lock in forget_signature")
-            .remove(sig);
+            .remove(signature);
     }
 
-    fn forget_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) {
+    /// Forget the given `signature` with `last_id` because the transaction was rejected.
+    fn forget_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) {
         if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in forget_signature_with_last_id")
@@ -126,11 +173,11 @@ impl Bank {
             .rev()
             .find(|x| x.0 == *last_id)
         {
-            Self::forget_signature(&entry.1, sig);
+            Self::forget_signature(&entry.1, signature);
         }
     }
 
-    fn reserve_signature_with_last_id(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
+    fn reserve_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) -> Result<()> {
         if let Some(entry) = self.last_ids
             .read()
             .expect("'last_ids' read lock in reserve_signature_with_last_id")
@@ -138,7 +185,7 @@ impl Bank {
             .rev()
             .find(|x| x.0 == *last_id)
         {
-            return Self::reserve_signature(&entry.1, sig);
+            return Self::reserve_signature(&entry.1, signature);
         }
         Err(BankError::LastIdNotFound(*last_id))
     }
@@ -207,6 +254,8 @@ impl Bank {
         }
     }
 
+    /// Apply only a transaction's credits. Credits from multiple transactions
+    /// may safely be applied in parallel.
     fn apply_credits(&self, tx: &Transaction) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
@@ -233,17 +282,17 @@ impl Bank {
         }
     }
 
-    /// Process a Transaction.
+    /// Process a Transaction. If it contains a payment plan that requires a witness
+    /// to progress, the payment plan will be stored in the bank.
     fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         self.apply_debits(tx)?;
         self.apply_credits(tx);
         Ok(())
     }
 
-    /// Process a batch of transactions.
+    /// Process a batch of transactions. It runs all debits first to filter out any
+    /// transactions that can't be processed in parallel deterministically.
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
-        // Run all debits first to filter out any transactions that can't be processed
-        // in parallel deterministically.
         info!("processing Transactions {}", txs.len());
         let results: Vec<_> = txs.into_par_iter()
             .map(|tx| self.apply_debits(&tx).map(|_| tx))
@@ -260,6 +309,7 @@ impl Bank {
             .collect()
     }
 
+    /// Process an ordered list of entries.
     pub fn process_entries<I>(&self, entries: I) -> Result<()>
     where
         I: IntoIterator<Item = Entry>,
@@ -273,7 +323,8 @@ impl Bank {
         Ok(())
     }
 
-    /// Process a Witness Signature.
+    /// Process a Witness Signature. Any payment plans waiting on this signature
+    /// will progress one step.
     fn apply_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self.pending
             .write()
@@ -290,7 +341,8 @@ impl Bank {
         Ok(())
     }
 
-    /// Process a Witness Timestamp.
+    /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
+    /// will progress one step.
     fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // If this is the first timestamp we've seen, it probably came from the genesis block,
         // so we'll trust it.
@@ -392,7 +444,7 @@ mod tests {
     use signature::KeyPairUtil;
 
     #[test]
-    fn test_bank() {
+    fn test_two_payments_to_one_party() {
         let mint = Mint::new(10_000);
         let pubkey = KeyPair::new().pubkey();
         let bank = Bank::new(&mint);
@@ -409,7 +461,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_tokens() {
+    fn test_negative_tokens() {
         let mint = Mint::new(1);
         let pubkey = KeyPair::new().pubkey();
         let bank = Bank::new(&mint);
@@ -433,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_transfer() {
+    fn test_insufficient_funds() {
         let mint = Mint::new(11_000);
         let bank = Bank::new(&mint);
         let pubkey = KeyPair::new().pubkey();
@@ -570,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn test_max_entry_ids() {
+    fn test_reject_old_last_id() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let sig = Signature::default();
