@@ -1,4 +1,6 @@
-//! The `write_stage` module implements write stage of the RPU.
+//! The `write_stage` module implements the TPU's write stage. It
+//! writes entries to the given writer, which is typically a file or
+//! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
 use entry::Entry;
