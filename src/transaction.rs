@@ -11,8 +11,10 @@ pub const SIGNED_DATA_OFFSET: usize = 112;
 pub const SIG_OFFSET: usize = 8;
 pub const PUB_KEY_OFFSET: usize = 80;
 
+/// The type of payment plan. Each item must implement the PaymentPlan trait.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Plan {
+    /// The builtin contract language Budget.
     Budget(Budget),
 }
 
@@ -37,29 +39,49 @@ impl PaymentPlan for Plan {
     }
 }
 
+/// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
+    /// The number of tokens allocated to the `Plan` and any transaction fees.
     pub tokens: i64,
     pub plan: Plan,
 }
 
+/// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
+    /// Declare and instanstansiate `Contract`.
     NewContract(Contract),
+
+    /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
+
+    /// Tell the payment plan that the `NewContract` with `Signature` has been
+    /// signed by the containing transaction's `PublicKey`.
     ApplySignature(Signature),
 }
 
+/// An instruction signed by a client with `PublicKey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
+    /// A digital signature of `instruction`, `last_id` and `fee`, signed by `PublicKey`.
     pub sig: Signature,
+
+    /// The `PublicKey` of the entity that signed the transaction data.
     pub from: PublicKey,
+
+    /// The action the server should take.
     pub instruction: Instruction,
+
+    /// The ID of a recent ledger entry.
     pub last_id: Hash,
+
+    /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
 }
 
 impl Transaction {
+    /// Create a signed transaction from the given `Instruction`.
     fn new_from_instruction(
         from_keypair: &KeyPair,
         instruction: Instruction,
@@ -131,6 +153,7 @@ impl Transaction {
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
+    /// Get the transaction data to sign.
     fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.instruction)).expect("serialize Contract");
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
@@ -148,11 +171,13 @@ impl Transaction {
         self.sig = Signature::clone_from_slice(keypair.sign(&sign_data).as_ref());
     }
 
+    /// Verify only the transaction signature.
     pub fn verify_sig(&self) -> bool {
         warn!("transaction signature verification called");
         self.sig.verify(&self.from, &self.get_sign_data())
     }
 
+    /// Verify only the payment plan.
     pub fn verify_plan(&self) -> bool {
         if let Instruction::NewContract(contract) = &self.instruction {
             self.fee >= 0 && self.fee <= contract.tokens
