@@ -1,5 +1,7 @@
 //! The `rpu` module implements the Request Processing Unit, a
-//! 5-stage transaction processing pipeline in software.
+//! 3-stage transaction processing pipeline in software. It listens
+//! for `Request` messages from clients and replies with `Response`
+//! messages.
 
 use bank::Bank;
 use packet;
