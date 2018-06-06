@@ -6,18 +6,27 @@
 use chrono::prelude::*;
 use signature::PublicKey;
 
+/// The types of events a payment plan can process.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Witness {
+    /// The current time.
     Timestamp(DateTime<Utc>),
+
+    /// A siganture from PublicKey.
     Signature(PublicKey),
 }
 
+/// Some amount of tokens that should be sent to the `to` `PublicKey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
+    /// Amount to be paid.
     pub tokens: i64,
+
+    /// The `PublicKey` that `tokens` should be paid to.
     pub to: PublicKey,
 }
 
+/// Interface to smart contracts.
 pub trait PaymentPlan {
     /// Return Payment if the payment plan requires no additional Witnesses.
     fn final_payment(&self) -> Option<Payment>;
