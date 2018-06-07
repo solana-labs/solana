@@ -2,6 +2,26 @@
 //! 3-stage transaction processing pipeline in software. It listens
 //! for `Request` messages from clients and replies with `Response`
 //! messages.
+//!
+//! ```text
+//!                             .------.
+//!                             | Bank |
+//!                             `---+--`
+//!                                 |
+//!              .------------------|-------------------.
+//!              |  RPU             |                   |
+//!              |                  v                   |
+//!  .---------. |  .-------.  .---------.  .---------. |   .---------.
+//!  |  Alice  |--->|       |  |         |  |         +---->|  Alice  |
+//!  `---------` |  | Fetch |  | Request |  | Respond | |   `---------`
+//!              |  | Stage |->|  Stage  |->|  Stage  | |
+//!  .---------. |  |       |  |         |  |         | |   .---------.
+//!  |   Bob   |--->|       |  |         |  |         +---->|   Bob   |
+//!  `---------` |  `-------`  `---------`  `---------` |   `---------`
+//!              |                                      |
+//!              |                                      |
+//!              `--------------------------------------`
+//! ```
 
 use bank::Bank;
 use packet;
