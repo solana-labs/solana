@@ -58,7 +58,7 @@ your odds of success if you check out the
 before proceeding:
 
 ```bash
-$ git checkout v0.6.0
+$ git checkout v0.6.1
 ```
 
 Singlenode Testnet
