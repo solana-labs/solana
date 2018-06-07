@@ -58,6 +58,7 @@ pub type Result<T> = result::Result<T, BankError>;
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
     balances: RwLock<HashMap<PublicKey, AtomicIsize>>,
+    //balances: RwLock<HashMap<PublicKey, RwLock<i64>>>,
 
     /// A map of smart contract transaction signatures to what remains of its payment
     /// plan. Each transaction that targets the plan should cause it to be reduced.
@@ -120,15 +121,19 @@ impl Bank {
             .contains_key(&payment.to)
         {
             let bals = self.balances.read().expect("'balances' read lock");
-            bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+            //bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+            *bals[&payment.to].write().unwrap() += payment.tokens;
+            //trace!("updated balance to {}", bals[&payment.to].load(Ordering::Relaxed));
         } else {
             // Now we know the key wasn't present a nanosecond ago, but it might be there
             // by the time we aquire a write lock, so we'll have to check again.
             let mut bals = self.balances.write().expect("'balances' write lock");
             if bals.contains_key(&payment.to) {
-                bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
+                *bals[&payment.to].write().unwrap() += payment.tokens;
+                //bals[&payment.to].fetch_add(payment.tokens as isize, Ordering::Relaxed);
             } else {
-                bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+                //bals.insert(payment.to, AtomicIsize::new(payment.tokens as isize));
+                bals.insert(payment.to, RwLock::new(payment.tokens));
             }
         }
     }
@@ -204,9 +209,34 @@ impl Bank {
         last_ids.push_back((*last_id, RwLock::new(HashSet::new())));
     }
 
+    pub fn apply_debits(&self, tr: &Transaction) -> Result<()> {
+
+        let bals = self.balances.read().unwrap();
+
+        // Hold a write lock before the condition check, so that a debit can't occur
+        // between checking the balance and the withdraw.
+        let option = bals.get(&tr.from);
+        if option.is_none() {
+            return Err(BankError::AccountNotFound(tr.from));
+        }
+        let mut bal = option.unwrap().write().unwrap();
+
+        self.reserve_signature_with_last_id(&tr.sig, &tr.last_id)?;
+
+        if let Instruction::NewContract(contract) = &tr.instruction {
+            if *bal < contract.tokens {
+                self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
+                return Err(BankError::InsufficientFunds(tr.from));
+            }
+
+            *bal -= contract.tokens;
+        };
+        Ok(())
+    }
+
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    fn apply_debits(&self, tx: &Transaction) -> Result<()> {
+    /*fn apply_debits(&self, tx: &Transaction) -> Result<()> {
         if let Instruction::NewContract(contract) = &tx.instruction {
             trace!("Transaction {}", contract.tokens);
             if contract.tokens < 0 {
@@ -252,7 +282,7 @@ impl Bank {
                 Err(_) => continue,
             };
         }
-    }
+    }*/
 
     /// Apply only a transaction's credits. Credits from multiple transactions
     /// may safely be applied in parallel.
@@ -430,7 +460,8 @@ impl Bank {
         let bals = self.balances
             .read()
             .expect("'balances' read lock in get_balance");
-        bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
+        //bals.get(pubkey).map(|x| x.load(Ordering::Relaxed) as i64)
+        bals.get(pubkey).map(|x| *x.read().unwrap())
     }
 
     pub fn transaction_count(&self) -> usize {
