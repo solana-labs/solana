@@ -1,3 +1,9 @@
+//! The `sigverify` module provides digital signature verification functions.
+//! By default, signatures are verified in parallel using all available CPU
+//! cores.  When `--features=cuda` is enabled, signature verification is
+//! offloaded to the GPU.
+//!
+
 use packet::{Packet, SharedPackets};
 use std::mem::size_of;
 use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};

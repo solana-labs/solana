@@ -12,6 +12,7 @@ use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use transaction::Transaction;
 
+/// An object for querying and sending transactions to the network.
 pub struct ThinClient {
     requests_addr: SocketAddr,
     requests_socket: UdpSocket,
