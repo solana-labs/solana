@@ -159,7 +159,6 @@ pub struct Crdt {
     pub remote: HashMap<PublicKey, u64>,
     pub update_index: u64,
     pub me: PublicKey,
-    timeout: Duration,
 }
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
@@ -184,7 +183,6 @@ impl Crdt {
             remote: HashMap::new(),
             me: me.id,
             update_index: 1,
-            timeout: Duration::from_millis(100),
         };
         g.local.insert(me.id, g.update_index);
         g.table.insert(me.id, me);
@@ -510,7 +508,6 @@ impl Crdt {
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let timeout = obj.read().unwrap().timeout.clone();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || loop {
@@ -518,8 +515,9 @@ impl Crdt {
                 if exit.load(Ordering::Relaxed) {
                     return;
                 }
-                //TODO this should be a tuned parameter
-                sleep(timeout);
+                //TODO: possibly tune this parameter
+                //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
+                sleep(Duration::from_millis(100));
             })
             .unwrap()
     }
