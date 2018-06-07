@@ -13,7 +13,6 @@ pub mod bank;
 pub mod banking_stage;
 pub mod budget;
 pub mod crdt;
-pub mod data_replicator;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
@@ -23,6 +22,7 @@ pub mod hash;
 pub mod ledger;
 pub mod logger;
 pub mod mint;
+pub mod ncp;
 pub mod packet;
 pub mod payment_plan;
 pub mod record_stage;

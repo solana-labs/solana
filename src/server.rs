@@ -2,7 +2,7 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
-use data_replicator::DataReplicator;
+use ncp::Ncp;
 use packet;
 use rpu::Rpu;
 use std::io::Write;
@@ -75,14 +75,14 @@ impl Server {
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         let window = streamer::default_window();
         let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let data_replicator = DataReplicator::new(
+        let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
             gossip_socket,
             gossip_send_socket,
             exit.clone(),
-        ).expect("DataReplicator::new");
-        thread_hdls.extend(data_replicator.thread_hdls);
+        ).expect("Ncp::new");
+        thread_hdls.extend(ncp.thread_hdls);
 
         let t_broadcast = streamer::broadcaster(
             broadcast_socket,

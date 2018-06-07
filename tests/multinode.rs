@@ -6,9 +6,9 @@ extern crate solana;
 use solana::bank::Bank;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
-use solana::data_replicator::DataReplicator;
 use solana::logger;
 use solana::mint::Mint;
+use solana::ncp::Ncp;
 use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
@@ -61,7 +61,7 @@ fn converge(
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
-    let dr = DataReplicator::new(
+    let dr = Ncp::new(
         spy_ref.clone(),
         spy_window,
         spy.sockets.gossip,
