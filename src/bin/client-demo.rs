@@ -11,8 +11,8 @@ use isatty::stdin_isatty;
 use pnet::datalink;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
-use solana::data_replicator::DataReplicator;
 use solana::mint::MintDemo;
+use solana::ncp::Ncp;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
@@ -290,7 +290,7 @@ fn converge(
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let window = default_window();
     let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-    let data_replicator = DataReplicator::new(
+    let ncp = Ncp::new(
         spy_ref.clone(),
         window.clone(),
         spy_gossip,
@@ -316,7 +316,7 @@ fn converge(
         }
         sleep(Duration::new(1, 0));
     }
-    threads.extend(data_replicator.thread_hdls.into_iter());
+    threads.extend(ncp.thread_hdls.into_iter());
     rv
 }
 

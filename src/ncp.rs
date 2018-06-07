@@ -1,4 +1,4 @@
-//! The `data_replicator` module implements the replication threads.
+//! The `ncp` module implements the network control plane.
 
 use crdt;
 use packet;
@@ -10,22 +10,22 @@ use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use streamer;
 
-pub struct DataReplicator {
+pub struct Ncp {
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl DataReplicator {
+impl Ncp {
     pub fn new(
         crdt: Arc<RwLock<crdt::Crdt>>,
         window: Arc<RwLock<Vec<Option<packet::SharedBlob>>>>,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<DataReplicator> {
+    ) -> Result<Ncp> {
         let blob_recycler = packet::BlobRecycler::default();
         let (request_sender, request_receiver) = channel();
         trace!(
-            "DataReplicator: id: {:?}, listening on: {:?}",
+            "Ncp: id: {:?}, listening on: {:?}",
             &crdt.read().unwrap().me[..4],
             gossip_listen_socket.local_addr().unwrap()
         );
@@ -52,14 +52,14 @@ impl DataReplicator {
         );
         let t_gossip = crdt::Crdt::gossip(crdt.clone(), blob_recycler, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
-        Ok(DataReplicator { thread_hdls })
+        Ok(Ncp { thread_hdls })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crdt::{Crdt, TestNode};
-    use data_replicator::DataReplicator;
+    use ncp::Ncp;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, RwLock};
 
@@ -71,7 +71,7 @@ mod tests {
         let crdt = Crdt::new(tn.data.clone());
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
-        let d = DataReplicator::new(
+        let d = Ncp::new(
             c.clone(),
             w,
             tn.sockets.gossip,

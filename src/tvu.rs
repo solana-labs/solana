@@ -22,7 +22,7 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
-use data_replicator::DataReplicator;
+use ncp::Ncp;
 use packet;
 use replicate_stage::ReplicateStage;
 use std::net::UdpSocket;
@@ -65,13 +65,13 @@ impl Tvu {
             .insert(&leader);
         let window = streamer::default_window();
         let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let data_replicator = DataReplicator::new(
+        let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
             gossip_listen_socket,
             gossip_send_socket,
             exit.clone(),
-        ).expect("DataReplicator::new");
+        ).expect("Ncp::new");
 
         // TODO pull this socket out through the public interface
         // make sure we are on the same interface
@@ -132,7 +132,7 @@ impl Tvu {
             t_repair_receiver,
             replicate_stage.thread_hdl,
         ];
-        threads.extend(data_replicator.thread_hdls.into_iter());
+        threads.extend(ncp.thread_hdls.into_iter());
         Tvu {
             thread_hdls: threads,
         }
@@ -144,11 +144,11 @@ pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use crdt::{Crdt, TestNode};
-    use data_replicator::DataReplicator;
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
     use mint::Mint;
+    use ncp::Ncp;
     use packet::BlobRecycler;
     use result::Result;
     use signature::{KeyPair, KeyPairUtil};
@@ -166,10 +166,10 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<DataReplicator> {
+    ) -> Result<Ncp> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        DataReplicator::new(crdt, window, listen, send_sock, exit)
+        Ncp::new(crdt, window, listen, send_sock, exit)
     }
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]

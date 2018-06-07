@@ -5,8 +5,8 @@ extern crate solana;
 
 use rayon::iter::*;
 use solana::crdt::{Crdt, TestNode};
-use solana::data_replicator::DataReplicator;
 use solana::logger;
+use solana::ncp::Ncp;
 use solana::packet::Blob;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,12 +14,12 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, DataReplicator, UdpSocket) {
+fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
     let tn = TestNode::new();
     let crdt = Crdt::new(tn.data.clone());
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
-    let d = DataReplicator::new(
+    let d = Ncp::new(
         c.clone(),
         w,
         tn.sockets.gossip,
@@ -35,7 +35,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, DataReplicator, UdpSo
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(topo: F)
 where
-    F: Fn(&Vec<(Arc<RwLock<Crdt>>, DataReplicator, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<RwLock<Crdt>>, Ncp, UdpSocket)>) -> (),
 {
     let num: usize = 5;
     let exit = Arc::new(AtomicBool::new(false));
