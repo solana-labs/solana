@@ -297,9 +297,9 @@ fn converge(
         gossip_send_socket,
         exit.clone(),
     ).expect("DataReplicator::new");
-    //wait for the network to converge
     let mut rv = vec![];
-    for _ in 0..60 {
+    //wait for the network to converge, 30 seconds should be plenty
+    for _ in 0..30 {
         let v: Vec<ReplicatedData> = spy_ref
             .read()
             .unwrap()
