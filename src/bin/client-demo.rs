@@ -109,9 +109,10 @@ fn main() {
         &client_addr,
         &leader,
         signal.clone(),
-        num_nodes + 2,
+        num_nodes,
         &mut c_threads,
     );
+    assert_eq!(validators.len(), num_nodes);
 
     if stdin_isatty() {
         eprintln!("nothing found on stdin, expected a json file");
@@ -297,25 +298,26 @@ fn converge(
         exit.clone(),
     ).expect("DataReplicator::new");
     //wait for the network to converge
-    for _ in 0..30 {
-        let min = spy_ref.read().unwrap().convergence();
-        if num_nodes as u64 == min {
-            println!("converged!");
+    let mut rv = vec![];
+    for _ in 0..60 {
+        let v: Vec<ReplicatedData> = spy_ref
+            .read()
+            .unwrap()
+            .table
+            .values()
+            .into_iter()
+            .filter(|x| x.requests_addr != daddr)
+            .map(|x| x.clone())
+            .collect();
+        if v.len() >= num_nodes {
+            println!("CONVERGED!");
+            rv.extend(v.into_iter());
             break;
         }
         sleep(Duration::new(1, 0));
     }
     threads.extend(data_replicator.thread_hdls.into_iter());
-    let v: Vec<ReplicatedData> = spy_ref
-        .read()
-        .unwrap()
-        .table
-        .values()
-        .into_iter()
-        .filter(|x| x.requests_addr != daddr)
-        .map(|x| x.clone())
-        .collect();
-    v.clone()
+    rv
 }
 
 fn read_leader(path: String) -> ReplicatedData {

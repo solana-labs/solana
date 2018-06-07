@@ -132,7 +132,7 @@ Now that your singlenode or multinode testnet is up and running, in a separate s
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
-$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana #The leader machine
+$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 2 #The leader machine and the total number of nodes in the network
 ```
 
 What just happened? The client demo spins up several threads to send 500,000 transactions
