@@ -510,6 +510,7 @@ impl Crdt {
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        let timeout = obj.read().unwrap().timeout.clone();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || loop {
@@ -518,11 +519,7 @@ impl Crdt {
                     return;
                 }
                 //TODO this should be a tuned parameter
-                sleep(
-                    obj.read()
-                        .expect("'obj' read lock in pub fn gossip")
-                        .timeout,
-                );
+                sleep(timeout);
             })
             .unwrap()
     }
@@ -568,7 +565,7 @@ impl Crdt {
         match deserialize(&blob.data[..blob.meta.size]) {
             // TODO sigverify these
             Ok(Protocol::RequestUpdates(v, reqdata)) => {
-                trace!("RequestUpdates {}", v);
+                info!("RequestUpdates {}", v);
                 let addr = reqdata.gossip_addr;
                 // only lock for this call, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = obj.read()
