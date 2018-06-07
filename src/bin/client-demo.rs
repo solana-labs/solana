@@ -307,7 +307,7 @@ fn converge(
             .values()
             .into_iter()
             .filter(|x| x.requests_addr != daddr)
-            .map(|x| x.clone())
+            .cloned()
             .collect();
         if v.len() >= num_nodes {
             println!("CONVERGED!");
