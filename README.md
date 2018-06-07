@@ -82,7 +82,7 @@ open on all the machines you want to test with.
 Generate a leader configuration file with:
 
 ```bash
-cargo run --release --bin solana-fullnode-config > leader.json
+cargo run --release --bin solana-fullnode-config -- -d > leader.json
 ```
 
 Now start the server:
@@ -111,6 +111,12 @@ Multinode Testnet
 ---
 
 To run a multinode testnet, after starting a leader node, spin up some validator nodes:
+
+Generate the validator's configuration file:
+
+```bash
+cargo run --release --bin solana-fullnode-config -- -d > validator.json
+```
 
 ```bash
 $ cat ./multinode-demo/validator.sh
