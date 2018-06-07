@@ -210,6 +210,17 @@ to see the debug and info sections for streamer and server respectively. General
 we are using debug for infrequent debug messages, trace for potentially frequent messages and
 info for performance-related logging.
 
+Attaching to a running process with gdb
+
+```
+$ sudo gdb
+attach <PID>
+set logging on
+thread apply all bt
+```
+
+This will dump all the threads stack traces into gdb.txt
+
 Benchmarking
 ---
 
