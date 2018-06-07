@@ -41,7 +41,7 @@ pub enum Budget {
 
     /// Either make a payment after one condition or a different payment after another
     /// condition, which ever condition is satisfied first.
-    Race((Condition, Payment), (Condition, Payment)),
+    Or((Condition, Payment), (Condition, Payment)),
 }
 
 impl Budget {
@@ -68,7 +68,7 @@ impl Budget {
         tokens: i64,
         to: PublicKey,
     ) -> Self {
-        Budget::Race(
+        Budget::Or(
             (Condition::Timestamp(dt), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         )
@@ -88,7 +88,7 @@ impl PaymentPlan for Budget {
     fn verify(&self, spendable_tokens: i64) -> bool {
         match self {
             Budget::Pay(payment) | Budget::After(_, payment) => payment.tokens == spendable_tokens,
-            Budget::Race(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
+            Budget::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
@@ -97,8 +97,8 @@ impl PaymentPlan for Budget {
     fn apply_witness(&mut self, witness: &Witness) {
         let new_payment = match self {
             Budget::After(cond, payment) if cond.is_satisfied(witness) => Some(payment),
-            Budget::Race((cond, payment), _) if cond.is_satisfied(witness) => Some(payment),
-            Budget::Race(_, (cond, payment)) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Or((cond, payment), _) if cond.is_satisfied(witness) => Some(payment),
+            Budget::Or(_, (cond, payment)) if cond.is_satisfied(witness) => Some(payment),
             _ => None,
         }.cloned();
 

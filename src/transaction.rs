@@ -144,7 +144,7 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let budget = Budget::Race(
+        let budget = Budget::Or(
             (Condition::Timestamp(dt), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
