@@ -1,2 +1,5 @@
 ignore:
   - "src/bin" 
+coverage:
+  status:
+    patch: off
