@@ -20,7 +20,7 @@ pub struct Server {
 }
 
 impl Server {
-    /// Create a server instance acting as leader.
+    /// Create a server instance acting as a leader.
     ///
     /// ```text
     ///              .---------------------.
@@ -97,11 +97,11 @@ impl Server {
         Server { thread_hdls }
     }
 
-    /// Create a server instance acting as validator.
+    /// Create a server instance acting as a validator.
     ///
     /// ```text
     ///               .-------------------------------.
-    ///               |            Validator          |
+    ///               | Validator                     |
     ///               |                               |
     ///   .--------.  |            .-----.            |
     ///   |        |-------------->|     |            |
@@ -116,7 +116,7 @@ impl Server {
     ///               |               ^               |
     ///    .--------. |               |               |    .------------.
     ///    |        | |  .-----.   .--+--.   .-----.  |    |            |
-    ///    | Leader |----| NCP +-->| TVU +-->| NCP +------>| Validators |
+    ///    | Leader |--->| NCP +-->| TVU +-->| NCP +------>| Validators |
     ///    |        | |  `-----`   `-----`   `-----`  |    |            |
     ///    `--------` |                               |    `------------`
     ///               `-------------------------------`
