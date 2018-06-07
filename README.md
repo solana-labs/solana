@@ -88,11 +88,6 @@ cargo run --release --bin solana-fullnode-config -- -d > leader.json
 Now start the server:
 
 ```bash
-$ cat ./multinode-demo/leader.sh
-#!/bin/bash
-export RUST_LOG=solana=info
-sudo sysctl -w net.core.rmem_max=26214400
-cargo run --release --bin solana-fullnode -- -l leader.json < genesis.log
 $ ./multinode-demo/leader.sh > leader-txs.log
 ```
 
@@ -119,14 +114,6 @@ cargo run --release --bin solana-fullnode-config -- -d > validator.json
 ```
 
 ```bash
-$ cat ./multinode-demo/validator.sh
-#!/bin/bash
-rsync -v -e ssh $1/mint-demo.json .
-rsync -v -e ssh $1/leader.json .
-rsync -v -e ssh $1/genesis.log .
-export RUST_LOG=solana=info
-sudo sysctl -w net.core.rmem_max=26214400
-cargo run --release --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d < genesis.log
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana > validator-txs.log #The leader machine
 ```
 
@@ -134,7 +121,7 @@ As with the leader node, you can run a performance-enhanced validator fullnode b
 `--features=cuda` to the line that runs `solana-fullnode` in `validator.sh`.
 
 ```bash
-cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json -b 9000 -d < genesis.log
+cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json < genesis.log
 ```
 
 
@@ -145,12 +132,6 @@ Now that your singlenode or multinode testnet is up and running, in a separate s
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
-$ cat ./multinode-demo/client.sh
-#!/bin/bash
-export RUST_LOG=solana=info
-rsync -v -e ssh $1/leader.json .
-rsync -v -e ssh $1/mint-demo.json .
-cat mint-demo.json | cargo run --release --bin solana-client-demo -- -l leader.json
 $ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana #The leader machine
 ```
 
