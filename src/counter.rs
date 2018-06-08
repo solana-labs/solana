@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use timing;
 
 pub struct Counter {
     pub name: &'static str,
@@ -34,8 +35,6 @@ impl Counter {
         let nanos = self.nanos.fetch_add(total as usize, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         if times % self.lograte == 0 && times > 0 {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-            let now_ms = now.as_secs() * 1_000 + now.subsec_nanos() as u64 / 1_000_000;
             info!(
                 "COUNTER:{{\"name:\":\"{}\", \"counts\": {}, \"nanos\": {}, \"samples\": {} \"rate\": {}, \"now\": {}}}",
                 self.name,
@@ -43,7 +42,7 @@ impl Counter {
                 nanos,
                 times,
                 counts as f64 * 1e9 / nanos as f64,
-                now_ms,
+                timing::timestamp(),
             );
         }
     }
