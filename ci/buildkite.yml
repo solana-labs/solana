@@ -9,10 +9,14 @@ steps:
     name: "ignored [public]"
   - command: "ci/test-cuda.sh"
     name: "cuda"
+    agents:
+      - "queue=cuda"
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
   - command: "ci/test-erasure.sh"
     name: "erasure"
+    agents:
+      - "queue=cuda"
   - wait
   - command: "ci/publish.sh"
     name: "publish release artifacts"
