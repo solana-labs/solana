@@ -224,9 +224,13 @@ impl Packets {
     }
 }
 
-pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPackets> {
+pub fn to_packets_chunked<T: Serialize>(
+    r: &PacketRecycler,
+    xs: Vec<T>,
+    chunks: usize,
+) -> Vec<SharedPackets> {
     let mut out = vec![];
-    for x in xs.chunks(NUM_PACKETS) {
+    for x in xs.chunks(chunks) {
         let p = r.allocate();
         p.write()
             .unwrap()
@@ -241,6 +245,10 @@ pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPac
         out.push(p);
     }
     return out;
+}
+
+pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPackets> {
+    to_packets_chunked(r, xs, NUM_PACKETS)
 }
 
 pub fn to_blob<T: Serialize>(

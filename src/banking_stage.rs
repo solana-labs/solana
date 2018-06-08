@@ -271,8 +271,9 @@ mod bench {
     use self::test::Bencher;
     use bank::*;
     use banking_stage::BankingStage;
+    use logger;
     use mint::Mint;
-    use packet::{to_packets, PacketRecycler};
+    use packet::{to_packets_chunked, PacketRecycler};
     use record_stage::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::iter;
@@ -282,18 +283,30 @@ mod bench {
 
     #[bench]
     fn bench_stage(bencher: &mut Bencher) {
-        let tx = 100_usize;
-        let mint = Mint::new(1_000_000_000);
-        let pubkey = KeyPair::new().pubkey();
+        logger::setup();
+        let tx = 20_000_usize;
+        let mint = Mint::new(1_000_000_000_000);
+        let mut pubkeys = Vec::new();
+        let num_keys = 8;
+        for _ in 0..num_keys {
+            pubkeys.push(KeyPair::new().pubkey());
+        }
 
         let transactions: Vec<_> = (0..tx)
-            .map(|i| Transaction::new(&mint.keypair(), pubkey, i as i64, mint.last_id()))
+            .map(|i| {
+                Transaction::new(
+                    &mint.keypair(),
+                    pubkeys[i % num_keys],
+                    i as i64,
+                    mint.last_id(),
+                )
+            })
             .collect();
 
         let (verified_sender, verified_receiver) = channel();
         let (signal_sender, signal_receiver) = channel();
         let packet_recycler = PacketRecycler::default();
-        let verified: Vec<_> = to_packets(&packet_recycler, transactions)
+        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions, tx)
             .into_iter()
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();
@@ -310,12 +323,16 @@ mod bench {
                 &signal_sender,
                 &packet_recycler,
             ).unwrap();
-            let signal = signal_receiver.recv().unwrap();
-            if let Signal::Transactions(transactions) = signal {
-                assert_eq!(transactions.len(), tx);
-            } else {
-                assert!(false);
+            let mut total = 0;
+            for _ in 0..verified.len() {
+                let signal = signal_receiver.recv().unwrap();
+                if let Signal::Transactions(transactions) = signal {
+                    total += transactions.len();
+                } else {
+                    assert!(false);
+                }
             }
+            assert_eq!(total, tx);
         });
     }
 }
