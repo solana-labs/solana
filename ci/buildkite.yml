@@ -1,22 +1,30 @@
 steps:
   - command: "ci/coverage.sh"
     name: "coverage [public]"
+    timeout_in_minutes: 20
   - command: "ci/docker-run.sh rust ci/test-stable.sh"
     name: "stable [public]"
+    timeout_in_minutes: 20
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh || true"
     name: "nightly - FAILURES IGNORED [public]"
+    timeout_in_minutes: 20
   - command: "ci/docker-run.sh rust ci/test-ignored.sh"
     name: "ignored [public]"
+    timeout_in_minutes: 20
   - command: "ci/test-cuda.sh"
     name: "cuda"
+    timeout_in_minutes: 20
     agents:
       - "queue=cuda"
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
+    timeout_in_minutes: 20
   - command: "ci/test-erasure.sh"
     name: "erasure"
+    timeout_in_minutes: 20
     agents:
       - "queue=cuda"
   - wait
   - command: "ci/publish.sh"
+    timeout_in_minutes: 20
     name: "publish release artifacts"
