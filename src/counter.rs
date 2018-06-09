@@ -36,7 +36,7 @@ impl Counter {
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         if times % self.lograte == 0 && times > 0 {
             info!(
-                "COUNTER:{{\"name:\":\"{}\", \"counts\": {}, \"nanos\": {}, \"samples\": {} \"rate\": {}, \"now\": {}}}",
+                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"nanos\": {}, \"samples\": {}, \"rate\": {}, \"now\": {}}}",
                 self.name,
                 counts,
                 nanos,
