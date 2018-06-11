@@ -56,9 +56,8 @@ pub struct GenKeys {
 }
 
 impl GenKeys {
-    pub fn new(seed: &[u8]) -> GenKeys {
-        let seed32: Vec<_> = seed.iter().map(|&x| x as u32).collect();
-        let rng = ChaChaRng::from_seed(&seed32);
+    pub fn new(seed: [u8; 32]) -> GenKeys {
+        let rng = ChaChaRng::from_seed(seed);
         GenKeys {
             generator: RefCell::new(rng),
         }
@@ -68,7 +67,7 @@ impl GenKeys {
         KeyPair::generate_pkcs8(self).unwrap().to_vec()
     }
 
-    pub fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 16]> {
+    pub fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 32]> {
         let mut rng = self.generator.borrow_mut();
         (0..n).map(|_| rng.gen()).collect()
     }
@@ -77,7 +76,7 @@ impl GenKeys {
         self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| {
-                let pkcs8 = GenKeys::new(&seed).new_key();
+                let pkcs8 = GenKeys::new(seed).new_key();
                 KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8)).unwrap()
             })
             .collect()
@@ -87,7 +86,7 @@ impl GenKeys {
 impl SecureRandom for GenKeys {
     fn fill(&self, dest: &mut [u8]) -> Result<(), Unspecified> {
         let mut rng = self.generator.borrow_mut();
-        rng.fill_bytes(dest);
+        rng.fill(dest);
         Ok(())
     }
 }
@@ -99,17 +98,17 @@ mod tests {
 
     #[test]
     fn test_new_key_is_deterministic() {
-        let seed = [1, 2, 3, 4];
-        let rng0 = GenKeys::new(&seed);
-        let rng1 = GenKeys::new(&seed);
+        let seed = [0u8; 32];
+        let rng0 = GenKeys::new(seed);
+        let rng1 = GenKeys::new(seed);
 
         for _ in 0..100 {
             assert_eq!(rng0.new_key(), rng1.new_key());
         }
     }
 
-    fn gen_n_pubkeys(seed: &[u8], n: i64) -> HashSet<PublicKey> {
-        GenKeys::new(&seed)
+    fn gen_n_pubkeys(seed: [u8; 32], n: i64) -> HashSet<PublicKey> {
+        GenKeys::new(seed)
             .gen_n_keypairs(n)
             .into_iter()
             .map(|x| x.pubkey())
@@ -118,8 +117,8 @@ mod tests {
 
     #[test]
     fn test_gen_n_pubkeys_deterministic() {
-        let seed = [1, 2, 3, 4];
-        assert_eq!(gen_n_pubkeys(&seed, 50), gen_n_pubkeys(&seed, 50));
+        let seed = [0u8; 32];
+        assert_eq!(gen_n_pubkeys(seed, 50), gen_n_pubkeys(seed, 50));
     }
 }
 

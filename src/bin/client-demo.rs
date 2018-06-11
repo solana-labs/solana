@@ -137,7 +137,9 @@ fn main() {
     let last_id = client.get_last_id();
     println!("Got last ID {:?}", last_id);
 
-    let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&demo.mint.keypair().public_key_bytes()[..32]);
+    let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
     let txs = demo.num_accounts / 2;

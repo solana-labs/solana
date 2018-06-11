@@ -32,7 +32,9 @@ fn main() {
         exit(1);
     });
 
-    let rnd = GenKeys::new(demo.mint.keypair().public_key_bytes());
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&demo.mint.keypair().public_key_bytes()[..32]);
+    let rnd = GenKeys::new(seed);
     let num_accounts = demo.num_accounts;
     let tokens_per_user = 1_000;
 
