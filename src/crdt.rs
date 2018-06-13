@@ -21,8 +21,7 @@ use pnet::datalink;
 use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
-use signature::{KeyPair, KeyPairUtil};
-use signature::{PublicKey, Signature};
+use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -132,6 +131,17 @@ impl ReplicatedData {
             requests_addr,
             transactions_addr,
             repair_addr,
+        )
+    }
+    pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
+        let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
+        ReplicatedData::new(
+            PublicKey::default(),
+            gossip_addr,
+            daddr.clone(),
+            daddr.clone(),
+            daddr.clone(),
+            daddr,
         )
     }
 }
@@ -411,7 +421,7 @@ impl Crdt {
         //trace!("get updates since {}", v);
         let data = self.table
             .values()
-            .filter(|x| self.local[&x.id] > v)
+            .filter(|x| x.id != PublicKey::default() && self.local[&x.id] > v)
             .cloned()
             .collect();
         let id = self.me;
@@ -829,7 +839,10 @@ mod tests {
         assert_eq!(key, d1.id);
         assert_eq!(ix, 3);
         assert_eq!(ups.len(), 3);
-        assert_eq!(sorted(&ups), sorted(&vec![d2.clone(), d1, d3]));
+        assert_eq!(
+            sorted(&ups),
+            sorted(&vec![d1.clone(), d2.clone(), d3.clone()])
+        );
         let mut crdt2 = Crdt::new(d2.clone());
         crdt2.apply_updates(key, ix, &ups);
         assert_eq!(crdt2.table.values().len(), 3);
@@ -837,6 +850,10 @@ mod tests {
             sorted(&crdt2.table.values().map(|x| x.clone()).collect()),
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
+        let d4 = ReplicatedData::new_entry_point("127.0.0.4:1234".parse().unwrap());
+        crdt.insert(&d4);
+        let (_key, _ix, ups) = crdt.get_updates_since(0);
+        assert_eq!(sorted(&ups), sorted(&vec![d2.clone(), d1, d3]));
     }
     #[test]
     fn window_index_request() {
@@ -927,14 +944,7 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt1.gossip_addr);
 
-        let nxt2 = ReplicatedData::new(
-            KeyPair::new().pubkey(),
-            "127.0.0.3:1234".parse().unwrap(),
-            "127.0.0.1:1235".parse().unwrap(),
-            "127.0.0.1:1236".parse().unwrap(),
-            "127.0.0.1:1237".parse().unwrap(),
-            "127.0.0.1:1238".parse().unwrap(),
-        );
+        let nxt2 = ReplicatedData::new_entry_point("127.0.0.3:1234".parse().unwrap());
         crdt.insert(&nxt2);
         // check that the service works
         // and that it eventually produces a request for both nodes
