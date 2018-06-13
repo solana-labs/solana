@@ -64,6 +64,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    #[ignore]
     // test that stage will exit when flag is set
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
