@@ -1,15 +1,15 @@
-extern crate isatty;
+extern crate atty;
 extern crate serde_json;
 extern crate solana;
 
-use isatty::stdin_isatty;
+use atty::{is, Stream};
 use solana::mint::Mint;
 use std::io;
 use std::process::exit;
 
 fn main() {
     let mut input_text = String::new();
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a token number");
         exit(1);
     }
