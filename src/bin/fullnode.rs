@@ -1,13 +1,13 @@
 extern crate env_logger;
 extern crate getopts;
-extern crate isatty;
+extern crate atty;
 extern crate serde_json;
 extern crate solana;
 #[macro_use]
 extern crate log;
 
 use getopts::Options;
-use isatty::stdin_isatty;
+use atty::{is, Stream};
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
@@ -56,7 +56,7 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a log file");
         exit(1);
     }

@@ -1,9 +1,9 @@
-extern crate isatty;
+extern crate atty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use isatty::stdin_isatty;
+use atty::{is, Stream};
 use rayon::prelude::*;
 use solana::bank::MAX_ENTRY_IDS;
 use solana::entry::{next_entry, Entry};
@@ -15,7 +15,7 @@ use std::process::exit;
 
 // Generate a ledger with lots and lots of accounts.
 fn main() {
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
         exit(1);
     }

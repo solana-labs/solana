@@ -1,13 +1,13 @@
 extern crate env_logger;
 extern crate getopts;
-extern crate isatty;
+extern crate atty;
 extern crate pnet;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
 use getopts::Options;
-use isatty::stdin_isatty;
+use atty::{is, Stream};
 use pnet::datalink;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
@@ -114,7 +114,7 @@ fn main() {
     );
     assert_eq!(validators.len(), num_nodes);
 
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
         exit(1);
     }
