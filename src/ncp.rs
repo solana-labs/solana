@@ -66,6 +66,8 @@ mod tests {
     #[test]
     #[ignore]
     // test that stage will exit when flag is set
+    // TODO: Troubleshoot Docker-based coverage build and re-enabled
+    // this test. It is probably failing due to too many threads.
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = TestNode::new();
