@@ -1,14 +1,14 @@
+extern crate atty;
 extern crate futures;
 extern crate getopts;
-extern crate isatty;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 extern crate untrusted;
 
+use atty::{is, Stream};
 use futures::Future;
 use getopts::Options;
-use isatty::stdin_isatty;
 use rayon::prelude::*;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
@@ -70,7 +70,7 @@ fn main() {
     let requests_port = events_addr.port();
     events_addr.set_port(requests_port + 1);
 
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
         exit(1);
     }

@@ -1,11 +1,11 @@
+extern crate atty;
 extern crate env_logger;
 extern crate getopts;
-extern crate isatty;
 extern crate serde_json;
 extern crate solana;
 
+use atty::{is, Stream};
 use getopts::Options;
-use isatty::stdin_isatty;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
@@ -16,8 +16,8 @@ use std::env;
 use std::io::{stdin, stdout, Read};
 use std::net::UdpSocket;
 use std::process::exit;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
@@ -56,7 +56,7 @@ fn main() {
     let replicate_addr = format!("0.0.0.0:{}", port + 2);
     let events_addr = format!("0.0.0.0:{}", port + 3);
 
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a log file");
         exit(1);
     }

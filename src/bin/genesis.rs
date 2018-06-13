@@ -1,16 +1,16 @@
 //! A command-line executable for generating the chain's genesis block.
 
-extern crate isatty;
+extern crate atty;
 extern crate serde_json;
 extern crate solana;
 
-use isatty::stdin_isatty;
+use atty::{is, Stream};
 use solana::mint::Mint;
 use std::io::{stdin, Read};
 use std::process::exit;
 
 fn main() {
-    if stdin_isatty() {
+    if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
         exit(1);
     }
