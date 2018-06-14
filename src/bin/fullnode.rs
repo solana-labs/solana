@@ -1,13 +1,13 @@
+extern crate atty;
 extern crate env_logger;
 extern crate getopts;
-extern crate atty;
 extern crate serde_json;
 extern crate solana;
 #[macro_use]
 extern crate log;
 
-use getopts::Options;
 use atty::{is, Stream};
+use getopts::Options;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
