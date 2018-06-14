@@ -121,17 +121,19 @@ impl ThinClient {
         let req = Request::GetTransactionCount;
         let data =
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
-        self.requests_socket
-            .send_to(&data, &self.requests_addr)
-            .expect("buffer error in pub fn transaction_count");
         let mut done = false;
         while !done {
-            let resp = self.recv_response().expect("transaction count dropped");
-            info!("recv_response {:?}", resp);
-            if let &Response::TransactionCount { .. } = &resp {
-                done = true;
+            self.requests_socket
+                .send_to(&data, &self.requests_addr)
+                .expect("buffer error in pub fn transaction_count");
+
+            if let Ok(resp) = self.recv_response() {
+                info!("recv_response {:?}", resp);
+                if let &Response::TransactionCount { .. } = &resp {
+                    done = true;
+                }
+                self.process_response(resp);
             }
-            self.process_response(resp);
         }
         self.transaction_count
     }
@@ -142,16 +144,18 @@ impl ThinClient {
         info!("get_last_id");
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
-        self.requests_socket
-            .send_to(&data, &self.requests_addr)
-            .expect("buffer error in pub fn get_last_id");
         let mut done = false;
         while !done {
-            let resp = self.recv_response().expect("get_last_id response");
-            if let &Response::LastId { .. } = &resp {
-                done = true;
+            self.requests_socket
+                .send_to(&data, &self.requests_addr)
+                .expect("buffer error in pub fn get_last_id");
+
+            if let Ok(resp) = self.recv_response() {
+                if let &Response::LastId { .. } = &resp {
+                    done = true;
+                }
+                self.process_response(resp);
             }
-            self.process_response(resp);
         }
         self.last_id.expect("some last_id")
     }
