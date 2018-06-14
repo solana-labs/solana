@@ -85,11 +85,11 @@ impl Tpu {
             record_stage.entry_receiver,
         );
         let mut thread_hdls = vec![
-            fetch_stage.thread_hdl,
             banking_stage.thread_hdl,
             record_stage.thread_hdl,
             write_stage.thread_hdl,
         ];
+        thread_hdls.extend(fetch_stage.thread_hdls.into_iter());
         thread_hdls.extend(sigverify_stage.thread_hdls.into_iter());
         Tpu {
             blob_receiver: write_stage.blob_receiver,

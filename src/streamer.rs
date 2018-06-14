@@ -18,6 +18,7 @@ pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
 pub type PacketSender = mpsc::Sender<SharedPackets>;
 pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
 pub type BlobReceiver = mpsc::Receiver<VecDeque<SharedBlob>>;
+pub type Window = Arc<RwLock<Vec<Option<SharedBlob>>>>;
 
 fn recv_loop(
     sock: &UdpSocket,

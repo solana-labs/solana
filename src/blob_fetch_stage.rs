@@ -1,4 +1,4 @@
-//! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
+//! The `blob_fetch_stage` pulls blobs from UDP sockets and sends it to a channel.
 
 use packet;
 use std::net::UdpSocket;
@@ -8,39 +8,39 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use streamer;
 
-pub struct FetchStage {
-    pub packet_receiver: streamer::PacketReceiver,
+pub struct BlobFetchStage {
+    pub blob_receiver: streamer::BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl FetchStage {
+impl BlobFetchStage {
     pub fn new(
         socket: UdpSocket,
         exit: Arc<AtomicBool>,
-        packet_recycler: packet::PacketRecycler,
+        blob_recycler: packet::BlobRecycler,
     ) -> Self {
-        Self::new_multi_socket(vec![socket], exit, packet_recycler)
+        Self::new_multi_socket(vec![socket], exit, blob_recycler)
     }
     pub fn new_multi_socket(
         sockets: Vec<UdpSocket>,
         exit: Arc<AtomicBool>,
-        packet_recycler: packet::PacketRecycler,
+        blob_recycler: packet::BlobRecycler,
     ) -> Self {
-        let (packet_sender, packet_receiver) = channel();
+        let (blob_sender, blob_receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| {
-                streamer::receiver(
+                streamer::blob_receiver(
                     socket,
                     exit.clone(),
-                    packet_recycler.clone(),
-                    packet_sender.clone(),
+                    blob_recycler.clone(),
+                    blob_sender.clone(),
                 )
             })
             .collect();
 
-        FetchStage {
-            packet_receiver,
+        BlobFetchStage {
+            blob_receiver,
             thread_hdls,
         }
     }
