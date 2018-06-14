@@ -16,6 +16,5 @@ export RUST_LOG=solana=info
 rsync -v -e ssh "$LEADER/leader.json" .
 rsync -v -e ssh "$LEADER/mint-demo.json" .
 
-#cargo run --release --bin solana-client-demo -- \
-./target/release/solana-client-demo \
+cargo run --release --bin solana-client-demo -- \
   -n $COUNT -l leader.json -d < mint-demo.json 2>&1 | tee client.log
