@@ -293,7 +293,7 @@ impl Bank {
     /// Process a batch of transactions. It runs all debits first to filter out any
     /// transactions that can't be processed in parallel deterministically.
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
-        info!("processing Transactions {}", txs.len());
+        debug!("processing Transactions {}", txs.len());
         let results: Vec<_> = txs.into_par_iter()
             .map(|tx| self.apply_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
