@@ -699,6 +699,7 @@ pub struct Sockets {
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
+    pub retransmit: UdpSocket,
 }
 
 pub struct TestNode {
@@ -716,6 +717,7 @@ impl TestNode {
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let data = ReplicatedData::new(
             pubkey,
@@ -736,6 +738,7 @@ impl TestNode {
                 respond,
                 broadcast,
                 repair,
+                retransmit,
             },
         }
     }

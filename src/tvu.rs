@@ -109,14 +109,15 @@ pub mod tests {
     use transaction::Transaction;
     use tvu::Tvu;
 
-    fn new_replicator(
+    fn new_ncp(
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<Ncp> {
+    ) -> Result<(Ncp, streamer::Window)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        Ncp::new(crdt, window, listen, send_sock, exit)
+        let ncp = Ncp::new(crdt, window.clone(), listen, send_sock, exit)?;
+        Ok((ncp, window))
     }
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]
@@ -132,7 +133,7 @@ pub mod tests {
         crdt_l.set_leader(leader.data.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
-        let dr_l = new_replicator(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
+        let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2.data.clone());
@@ -140,7 +141,7 @@ pub mod tests {
         crdt2.set_leader(leader.data.id);
         let leader_id = leader.data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
-        let dr_2 = new_replicator(cref2, target2.sockets.gossip, exit.clone()).unwrap();
+        let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone()).unwrap();
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -168,13 +169,21 @@ pub mod tests {
         let mint = Mint::new(starting_balance);
         let replicate_addr = target1.data.replicate_addr;
         let bank = Arc::new(Bank::new(&mint));
+
+        //start crdt1
+        let mut crdt1 = Crdt::new(target1.data.clone());
+        crdt1.insert(&leader.data);
+        crdt1.set_leader(leader.data.id);
+        let cref1 = Arc::new(RwLock::new(crdt1));
+        let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
+
         let tvu = Tvu::new(
             bank.clone(),
-            target1.data,
-            target1.sockets.gossip,
+            cref1,
+            dr_1.1,
             target1.sockets.replicate,
             target1.sockets.repair,
-            leader.data,
+            target1.sockets.retransmit,
             exit.clone(),
         );
 
@@ -239,10 +248,13 @@ pub mod tests {
         for t in tvu.thread_hdls {
             t.join().expect("join");
         }
-        for t in dr_l.thread_hdls {
+        for t in dr_l.0.thread_hdls {
             t.join().expect("join");
         }
-        for t in dr_2.thread_hdls {
+        for t in dr_2.0.thread_hdls {
+            t.join().expect("join");
+        }
+        for t in dr_1.0.thread_hdls {
             t.join().expect("join");
         }
         t_receiver.join().expect("join");
