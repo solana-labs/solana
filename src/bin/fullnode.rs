@@ -33,7 +33,7 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut opts = Options::new();
     opts.optopt("l", "", "load", "load my identity to path.json");
     opts.optflag("h", "help", "print help");

@@ -38,7 +38,7 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
 
