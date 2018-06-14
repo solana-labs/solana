@@ -21,16 +21,16 @@
 //! - TODO Validation messages are sent back to the leader
 
 use bank::Bank;
-use crdt::{Crdt, ReplicatedData};
-use ncp::Ncp;
+use blob_fetch_stage::BlobFetchStage;
+use crdt::Crdt;
 use packet;
 use replicate_stage::ReplicateStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use streamer;
+use window_stage::WindowStage;
 
 pub struct Tvu {
     pub thread_hdls: Vec<JoinHandle<()>>,
@@ -41,98 +41,45 @@ impl Tvu {
     /// on the bank state.
     /// # Arguments
     /// * `bank` - The bank state.
-    /// * `me` - my configuration
-    /// * `gossip` - my gossisp socket
-    /// * `replicate` - my replicate socket
-    /// * `leader` - leader configuration
+    /// * `crdt` - The crdt state.
+    /// * `window` - The window state.
+    /// * `replicate_socket` - my replicate socket
+    /// * `repair_socket` - my repair socket
+    /// * `retransmit_socket` - my retransmit socket
     /// * `exit` - The exit signal.
     pub fn new(
         bank: Arc<Bank>,
-        me: ReplicatedData,
-        gossip_listen_socket: UdpSocket,
-        replicate: UdpSocket,
+        crdt: Arc<RwLock<Crdt>>,
+        window: streamer::Window,
+        replicate_socket: UdpSocket,
         repair_socket: UdpSocket,
-        leader: ReplicatedData,
+        retransmit_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        //replicate pipeline
-        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
-        crdt.write()
-            .expect("'crdt' write lock in pub fn replicate")
-            .set_leader(leader.id);
-        crdt.write()
-            .expect("'crdt' write lock before insert() in pub fn replicate")
-            .insert(&leader);
-        let window = streamer::default_window();
-        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let ncp = Ncp::new(
-            crdt.clone(),
-            window.clone(),
-            gossip_listen_socket,
-            gossip_send_socket,
-            exit.clone(),
-        ).expect("Ncp::new");
-
-        // TODO pull this socket out through the public interface
-        // make sure we are on the same interface
-        let mut local = replicate.local_addr().expect("tvu: get local address");
-        local.set_port(0);
-        let write = UdpSocket::bind(local).expect("tvu: bind to local socket");
-
         let blob_recycler = packet::BlobRecycler::default();
-        let (blob_sender, blob_receiver) = channel();
-        let t_blob_receiver = streamer::blob_receiver(
+        let fetch_stage = BlobFetchStage::new_multi_socket(
+            vec![replicate_socket, repair_socket],
             exit.clone(),
             blob_recycler.clone(),
-            replicate,
-            blob_sender.clone(),
-        ).expect("tvu: blob receiver creation");
-        let (window_sender, window_receiver) = channel();
-        let (retransmit_sender, retransmit_receiver) = channel();
-
-        let t_retransmit = streamer::retransmitter(
-            write,
-            exit.clone(),
-            crdt.clone(),
-            blob_recycler.clone(),
-            retransmit_receiver,
         );
-        let t_repair_receiver = streamer::blob_receiver(
-            exit.clone(),
-            blob_recycler.clone(),
-            repair_socket,
-            blob_sender.clone(),
-        ).expect("tvu: blob repair receiver fail");
-
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
-        let t_window = streamer::window(
-            exit.clone(),
-            crdt.clone(),
+        let window_stage = WindowStage::new(
+            crdt,
             window,
-            blob_recycler.clone(),
-            blob_receiver,
-            window_sender,
-            retransmit_sender,
-        );
-
-        let replicate_stage = ReplicateStage::new(
-            bank.clone(),
+            retransmit_socket,
             exit.clone(),
-            window_receiver,
             blob_recycler.clone(),
+            fetch_stage.blob_receiver,
         );
 
-        let mut threads = vec![
-            //replicate threads
-            t_blob_receiver,
-            t_retransmit,
-            t_window,
-            t_repair_receiver,
-            replicate_stage.thread_hdl,
-        ];
-        threads.extend(ncp.thread_hdls.into_iter());
+        let replicate_stage =
+            ReplicateStage::new(bank, exit, window_stage.blob_receiver, blob_recycler);
+
+        let mut threads = vec![replicate_stage.thread_hdl];
+        threads.extend(fetch_stage.thread_hdls.into_iter());
+        threads.extend(window_stage.thread_hdls.into_iter());
         Tvu {
             thread_hdls: threads,
         }
@@ -162,14 +109,15 @@ pub mod tests {
     use transaction::Transaction;
     use tvu::Tvu;
 
-    fn new_replicator(
+    fn new_ncp(
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<Ncp> {
+    ) -> Result<(Ncp, streamer::Window)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        Ncp::new(crdt, window, listen, send_sock, exit)
+        let ncp = Ncp::new(crdt, window.clone(), listen, send_sock, exit)?;
+        Ok((ncp, window))
     }
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]
@@ -185,7 +133,7 @@ pub mod tests {
         crdt_l.set_leader(leader.data.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
-        let dr_l = new_replicator(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
+        let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2.data.clone());
@@ -193,7 +141,7 @@ pub mod tests {
         crdt2.set_leader(leader.data.id);
         let leader_id = leader.data.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
-        let dr_2 = new_replicator(cref2, target2.sockets.gossip, exit.clone()).unwrap();
+        let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone()).unwrap();
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -221,13 +169,21 @@ pub mod tests {
         let mint = Mint::new(starting_balance);
         let replicate_addr = target1.data.replicate_addr;
         let bank = Arc::new(Bank::new(&mint));
+
+        //start crdt1
+        let mut crdt1 = Crdt::new(target1.data.clone());
+        crdt1.insert(&leader.data);
+        crdt1.set_leader(leader.data.id);
+        let cref1 = Arc::new(RwLock::new(crdt1));
+        let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
+
         let tvu = Tvu::new(
             bank.clone(),
-            target1.data,
-            target1.sockets.gossip,
+            cref1,
+            dr_1.1,
             target1.sockets.replicate,
             target1.sockets.repair,
-            leader.data,
+            target1.sockets.retransmit,
             exit.clone(),
         );
 
@@ -292,10 +248,13 @@ pub mod tests {
         for t in tvu.thread_hdls {
             t.join().expect("join");
         }
-        for t in dr_l.thread_hdls {
+        for t in dr_l.0.thread_hdls {
             t.join().expect("join");
         }
-        for t in dr_2.thread_hdls {
+        for t in dr_2.0.thread_hdls {
+            t.join().expect("join");
+        }
+        for t in dr_1.0.thread_hdls {
             t.join().expect("join");
         }
         t_receiver.join().expect("join");

@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{BlobReceiver, BlobSender};
+use streamer::{BlobReceiver, BlobSender, Window};
 
 pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
     let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
@@ -265,7 +265,7 @@ impl Crdt {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
         obj: &Arc<RwLock<Self>>,
-        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: &Window,
         s: &UdpSocket,
         transmit_index: &mut u64,
         received_index: u64,
@@ -532,7 +532,7 @@ impl Crdt {
             .unwrap()
     }
     fn run_window_request(
-        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: &Window,
         from: &ReplicatedData,
         ix: u64,
         blob_recycler: &BlobRecycler,
@@ -566,7 +566,7 @@ impl Crdt {
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
-        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: &Window,
         blob_recycler: &BlobRecycler,
         blob: &Blob,
     ) -> Option<SharedBlob> {
@@ -638,7 +638,7 @@ impl Crdt {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: &Window,
         blob_recycler: &BlobRecycler,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
@@ -660,7 +660,7 @@ impl Crdt {
     }
     pub fn listen(
         obj: Arc<RwLock<Self>>,
-        window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: Window,
         blob_recycler: BlobRecycler,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
@@ -699,6 +699,7 @@ pub struct Sockets {
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
+    pub retransmit: UdpSocket,
 }
 
 pub struct TestNode {
@@ -716,6 +717,7 @@ impl TestNode {
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let data = ReplicatedData::new(
             pubkey,
@@ -736,6 +738,7 @@ impl TestNode {
                 respond,
                 broadcast,
                 repair,
+                retransmit,
             },
         }
     }

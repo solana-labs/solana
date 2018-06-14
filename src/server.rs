@@ -114,11 +114,16 @@ impl Server {
     ///               |            | Bank |           |
     ///               |            `------`           |
     ///               |               ^               |
-    ///    .--------. |               |               |    .------------.
-    ///    |        | |  .-----.   .--+--.   .-----.  |    |            |
-    ///    | Leader |--->| NCP +-->| TVU +-->| NCP +------>| Validators |
-    ///    |        | |  `-----`   `-----`   `-----`  |    |            |
-    ///    `--------` |                               |    `------------`
+    ///   .--------.  |               |               |    .------------.
+    ///   |        |  |            .--+--.            |    |            |
+    ///   | Leader |<------------->| TVU +<--------------->|            |
+    ///   |        |  |            `-----`            |    | Validators |
+    ///   |        |  |               ^               |    |            |
+    ///   |        |  |               |               |    |            |
+    ///   |        |  |            .--+--.            |    |            |
+    ///   |        |<------------->| NCP +<--------------->|            |
+    ///   |        |  |            `-----`            |    |            |
+    ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
     pub fn new_validator(
@@ -127,7 +132,7 @@ impl Server {
         requests_socket: UdpSocket,
         respond_socket: UdpSocket,
         replicate_socket: UdpSocket,
-        gossip_socket: UdpSocket,
+        gossip_listen_socket: UdpSocket,
         repair_socket: UdpSocket,
         leader_repl_data: ReplicatedData,
         exit: Arc<AtomicBool>,
@@ -136,16 +141,36 @@ impl Server {
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
         thread_hdls.extend(rpu.thread_hdls);
+
+        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        crdt.write()
+            .expect("'crdt' write lock in pub fn replicate")
+            .set_leader(leader_repl_data.id);
+        crdt.write()
+            .expect("'crdt' write lock before insert() in pub fn replicate")
+            .insert(&leader_repl_data);
+        let window = streamer::default_window();
+        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+        let retransmit_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+        let ncp = Ncp::new(
+            crdt.clone(),
+            window.clone(),
+            gossip_listen_socket,
+            gossip_send_socket,
+            exit.clone(),
+        ).expect("Ncp::new");
+
         let tvu = Tvu::new(
             bank.clone(),
-            me,
-            gossip_socket,
+            crdt.clone(),
+            window.clone(),
             replicate_socket,
             repair_socket,
-            leader_repl_data,
+            retransmit_socket,
             exit.clone(),
         );
         thread_hdls.extend(tvu.thread_hdls);
+        thread_hdls.extend(ncp.thread_hdls);
         Server { thread_hdls }
     }
 }

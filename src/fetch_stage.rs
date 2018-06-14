@@ -10,7 +10,7 @@ use streamer;
 
 pub struct FetchStage {
     pub packet_receiver: streamer::PacketReceiver,
-    pub thread_hdl: JoinHandle<()>,
+    pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl FetchStage {
@@ -19,13 +19,29 @@ impl FetchStage {
         exit: Arc<AtomicBool>,
         packet_recycler: packet::PacketRecycler,
     ) -> Self {
+        Self::new_multi_socket(vec![socket], exit, packet_recycler)
+    }
+    pub fn new_multi_socket(
+        sockets: Vec<UdpSocket>,
+        exit: Arc<AtomicBool>,
+        packet_recycler: packet::PacketRecycler,
+    ) -> Self {
         let (packet_sender, packet_receiver) = channel();
-        let thread_hdl =
-            streamer::receiver(socket, exit.clone(), packet_recycler.clone(), packet_sender);
+        let thread_hdls: Vec<_> = sockets
+            .into_iter()
+            .map(|socket| {
+                streamer::receiver(
+                    socket,
+                    exit.clone(),
+                    packet_recycler.clone(),
+                    packet_sender.clone(),
+                )
+            })
+            .collect();
 
         FetchStage {
             packet_receiver,
-            thread_hdl,
+            thread_hdls,
         }
     }
 }

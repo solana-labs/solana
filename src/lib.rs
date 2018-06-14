@@ -11,6 +11,7 @@
 pub mod counter;
 pub mod bank;
 pub mod banking_stage;
+pub mod blob_fetch_stage;
 pub mod budget;
 pub mod crdt;
 pub mod entry;
@@ -43,6 +44,7 @@ pub mod timing;
 pub mod tpu;
 pub mod transaction;
 pub mod tvu;
+pub mod window_stage;
 pub mod write_stage;
 extern crate bincode;
 extern crate byteorder;
