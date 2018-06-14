@@ -315,8 +315,10 @@ impl Bank {
         I: IntoIterator<Item = Entry>,
     {
         for entry in entries {
-            for result in self.process_transactions(entry.transactions) {
-                result?;
+            if !entry.transactions.is_empty() {
+                for result in self.process_transactions(entry.transactions) {
+                    result?;
+                }
             }
             self.register_entry_id(&entry.id);
         }
@@ -440,6 +442,7 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
+    use entry::next_entry;
     use hash::hash;
     use signature::KeyPairUtil;
 
@@ -650,6 +653,25 @@ mod tests {
 
         // Assert bad transactions aren't counted.
         assert_eq!(bank.transaction_count(), 1);
+    }
+
+    #[test]
+    fn test_process_empty_entry_is_registered() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let keypair = KeyPair::new();
+        let entry = next_entry(&mint.last_id(), 1, vec![]);
+        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
+
+        // First, ensure the TX is rejected because of the unregistered last ID
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(BankError::LastIdNotFound(entry.id))
+        );
+
+        // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
+        bank.process_entries(vec![entry]).unwrap();
+        assert!(bank.process_transaction(&tx).is_ok());
     }
 }
 
