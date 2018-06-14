@@ -144,7 +144,7 @@ pub fn blob_receiver(
 }
 
 fn find_next_missing(
-    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     consumed: &mut usize,
     received: &mut usize,
@@ -169,7 +169,7 @@ fn find_next_missing(
 }
 
 fn repair_window(
-    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     _recycler: &BlobRecycler,
     last: &mut usize,
@@ -212,7 +212,7 @@ fn repair_window(
 }
 
 fn recv_window(
-    locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut usize,
@@ -354,7 +354,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>, consumed: usize) {
+fn print_window(locked_window: &Window, consumed: usize) {
     {
         let buf: Vec<_> = locked_window
             .read()
@@ -383,14 +383,14 @@ fn print_window(locked_window: &Arc<RwLock<Vec<Option<SharedBlob>>>>, consumed: 
     }
 }
 
-pub fn default_window() -> Arc<RwLock<Vec<Option<SharedBlob>>>> {
+pub fn default_window() -> Window {
     Arc::new(RwLock::new(vec![None; WINDOW_SIZE]))
 }
 
 pub fn window(
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
-    window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    window: Window,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
@@ -433,7 +433,7 @@ pub fn window(
 
 fn broadcast(
     crdt: &Arc<RwLock<Crdt>>,
-    window: &Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    window: &Window,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -518,7 +518,7 @@ pub fn broadcaster(
     sock: UdpSocket,
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
-    window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
+    window: Window,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
