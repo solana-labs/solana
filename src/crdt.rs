@@ -54,7 +54,20 @@ pub fn get_ip_addr() -> Option<IpAddr> {
     for iface in datalink::interfaces() {
         for p in iface.ips {
             if !p.ip().is_loopback() && !p.ip().is_multicast() {
-                return Some(p.ip());
+                match p.ip() {
+                    IpAddr::V4(addr) => {
+                        if !addr.is_link_local() {
+                            return Some(p.ip());
+                        }
+                    }
+                    IpAddr::V6(_addr) => {
+                        // Select an ipv6 address if the config is selected
+                        #[cfg(feature = "ipv6")]
+                        {
+                            return Some(p.ip());
+                        }
+                    }
+                }
             }
         }
     }

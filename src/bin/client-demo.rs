@@ -8,9 +8,8 @@ extern crate solana;
 
 use atty::{is, Stream};
 use getopts::Options;
-use pnet::datalink;
 use rayon::prelude::*;
-use solana::crdt::{Crdt, ReplicatedData};
+use solana::crdt::{get_ip_addr, Crdt, ReplicatedData};
 use solana::mint::MintDemo;
 use solana::ncp::Ncp;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
@@ -36,17 +35,6 @@ fn print_usage(program: &str, opts: Options) {
     brief += "  Takes json formatted mint file to stdin.";
 
     print!("{}", opts.usage(&brief));
-}
-
-fn get_ip_addr() -> Option<IpAddr> {
-    for iface in datalink::interfaces() {
-        for p in iface.ips {
-            if !p.ip().is_loopback() && !p.ip().is_multicast() {
-                return Some(p.ip());
-            }
-        }
-    }
-    None
 }
 
 fn main() {
