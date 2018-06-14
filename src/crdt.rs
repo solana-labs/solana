@@ -270,8 +270,10 @@ impl Crdt {
             .iter()
             .filter_map(|(k, v)| {
                 if *k != self.me && (now - v) > limit {
+                    trace!("purging {:?} {}", &k[..4], v);
                     Some((*k).clone())
                 } else {
+                    trace!("purge skipped {:?} {}", &k[..4], v);
                     None
                 }
             })
@@ -1034,22 +1036,24 @@ mod tests {
 
     #[test]
     fn purge_test() {
-        let me = ReplicatedData::new_entry_point("127.0.0.1:1234".parse().unwrap());
+        let me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let mut crdt = Crdt::new(me.clone());
-        let nxt = ReplicatedData::new_entry_point("127.0.0.2:1234".parse().unwrap());
+        let nxt = ReplicatedData::new_leader(&"127.0.0.2:1234".parse().unwrap());
+        assert_ne!(me.id, nxt.id);
         crdt.insert(&nxt);
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.gossip_addr);
         let now = crdt.alive[&nxt.id];
+        let len = crdt.table.len() as u64;
         crdt.purge(now);
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.gossip_addr);
 
-        crdt.purge(now + GOSSIP_SLEEP_MILLIS * 4);
+        crdt.purge(now + len * GOSSIP_SLEEP_MILLIS * 4);
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.gossip_addr);
 
-        crdt.purge(now + GOSSIP_SLEEP_MILLIS * 4 + 1);
+        crdt.purge(now + len * GOSSIP_SLEEP_MILLIS * 4 + 1);
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtTooSmall));
     }
