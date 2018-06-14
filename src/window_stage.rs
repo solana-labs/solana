@@ -17,7 +17,7 @@ pub struct WindowStage {
 impl WindowStage {
     pub fn new(
         crdt: Arc<RwLock<Crdt>>,
-        window: Arc<RwLock<Option<SharedBlob>>>,
+        window: streamer::Window,
         retransmit_socket: UdpSocket,
         exit: Arc<AtomicBool>,
         blob_recycler: packet::BlobRecycler,

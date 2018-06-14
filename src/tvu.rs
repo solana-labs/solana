@@ -22,15 +22,15 @@
 
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
-use crdt::{Crdt, ReplicatedData};
+use crdt::Crdt;
 use packet;
 use replicate_stage::ReplicateStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use streamer;
+use window_stage::WindowStage;
 
 pub struct Tvu {
     pub thread_hdls: Vec<JoinHandle<()>>,
@@ -60,7 +60,7 @@ impl Tvu {
         let fetch_stage = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit.clone(),
-            blob_recycler,
+            blob_recycler.clone(),
         );
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -69,17 +69,13 @@ impl Tvu {
             crdt,
             window,
             retransmit_socket,
-            exit,
-            blob_recycler,
+            exit.clone(),
+            blob_recycler.clone(),
             fetch_stage.blob_receiver,
         );
 
-        let replicate_stage = ReplicateStage::new(
-            bank.clone(),
-            exit.clone(),
-            window_stage.blob_receiver,
-            blob_recycler.clone(),
-        );
+        let replicate_stage =
+            ReplicateStage::new(bank, exit, window_stage.blob_receiver, blob_recycler);
 
         let mut threads = vec![replicate_stage.thread_hdl];
         threads.extend(fetch_stage.thread_hdls.into_iter());

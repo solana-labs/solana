@@ -145,10 +145,10 @@ impl Server {
         let crdt = Arc::new(RwLock::new(Crdt::new(me)));
         crdt.write()
             .expect("'crdt' write lock in pub fn replicate")
-            .set_leader(leader.id);
+            .set_leader(leader_repl_data.id);
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
-            .insert(&leader);
+            .insert(&leader_repl_data);
         let window = streamer::default_window();
         let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
@@ -170,6 +170,7 @@ impl Server {
             exit.clone(),
         );
         thread_hdls.extend(tvu.thread_hdls);
+        thread_hdls.extend(ncp.thread_hdls);
         Server { thread_hdls }
     }
 }
