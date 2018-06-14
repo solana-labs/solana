@@ -1,13 +1,13 @@
+extern crate atty;
 extern crate env_logger;
 extern crate getopts;
-extern crate atty;
 extern crate pnet;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use getopts::Options;
 use atty::{is, Stream};
+use getopts::Options;
 use pnet::datalink;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
