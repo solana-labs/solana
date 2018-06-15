@@ -578,6 +578,7 @@ impl Crdt {
             .name("solana-gossip".to_string())
             .spawn(move || loop {
                 let _ = Self::run_gossip(&obj, &blob_sender, &blob_recycler);
+                obj.write().unwrap().purge(timestamp());
                 if exit.load(Ordering::Relaxed) {
                     return;
                 }
