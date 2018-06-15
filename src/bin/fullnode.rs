@@ -16,7 +16,7 @@ use solana::server::Server;
 use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
-use std::io::{stdin, Read};
+use std::io::{stdin, stdout, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
@@ -35,14 +35,16 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     env_logger::init();
     let mut opts = Options::new();
-    opts.optopt("l", "", "load", "load my identity to path.json");
     opts.optflag("h", "help", "print help");
+    opts.optopt("l", "", "run with the identity found in FILE", "FILE");
+    opts.optopt("v", "", "validate; find leader's identity in FILE", "FILE");
     opts.optopt(
-        "v",
+        "o",
         "",
-        "validator",
-        "run as replicate with path to leader.json",
+        "output log to FILE, defaults to stdout (ignored by validators)",
+        "FILE",
     );
+
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -137,7 +139,16 @@ fn main() {
     } else {
         eprintln!("starting leader... {}", repl_data.requests_addr);
         repl_data.current_leader_id = repl_data.id.clone();
-        let file = File::create("leader.log").expect("leader.log create");
+
+        let outfile: Box<Write + Send + 'static> = if matches.opt_present("o") {
+            let path = matches.opt_str("o").unwrap();
+            Box::new(
+                File::create(&path).expect(&format!("unable to open output file \"{}\"", path)),
+            )
+        } else {
+            Box::new(stdout())
+        };
+
         let server = Server::new_leader(
             bank,
             //Some(Duration::from_millis(1000)),
@@ -149,7 +160,7 @@ fn main() {
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
             exit.clone(),
-            file,
+            outfile,
         );
         server.thread_hdls
     };
