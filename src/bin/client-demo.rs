@@ -65,7 +65,7 @@ fn sample_tx_count(
         if tps > max_tps {
             max_tps = tps;
         }
-        println!("{}: {} tps", v.transactions_addr, tps);
+        println!("{}: {:.2} tps", v.transactions_addr, tps);
         total = tx_count - first_count;
         println!(
             "{}: Total Transactions processed {}",
@@ -106,9 +106,10 @@ fn generate_and_send_txs(
     let bsps = txs as f64 / ns as f64;
     let nsps = ns as f64 / txs as f64;
     println!(
-        "Done. {} thousand signatures per second, {}us per signature",
+        "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time",
         bsps * 1_000_000_f64,
-        nsps / 1_000_f64
+        nsps / 1_000_f64,
+        duration_as_ms(&duration),
     );
 
     println!("Transfering {} transactions in {} batches", txs, threads);
@@ -247,6 +248,8 @@ fn main() {
 
     println!("Sampling tps every second...",);
 
+    // Setup a thread per validator to sample every period
+    // collect the max transaction rate and total tx count seen
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
     let v_threads: Vec<_> = validators
@@ -264,6 +267,7 @@ fn main() {
         })
         .collect();
 
+    // generate and send transactions for the specified duration
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     while now.elapsed() < time {
@@ -278,11 +282,13 @@ fn main() {
         );
     }
 
+    // Stop the sampling threads so it will collect the stats
     signal.store(true, Ordering::Relaxed);
     for t in v_threads {
         t.join().unwrap();
     }
 
+    // Compute/report stats
     let mut max_of_maxes = 0.0;
     let mut total_txs = 0;
     for (max, txs) in maxes.read().unwrap().iter() {
@@ -292,13 +298,14 @@ fn main() {
         total_txs += *txs;
     }
     println!(
-        "\nHighest TPS: {} sampling period {}s total transactions: {} clients: {}",
+        "\nHighest TPS: {:.2} sampling period {}s total transactions: {} clients: {}",
         max_of_maxes,
         sample_period,
         total_txs,
         maxes.read().unwrap().len()
     );
 
+    // join the crdt client threads
     for t in c_threads {
         t.join().unwrap();
     }
