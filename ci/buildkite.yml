@@ -1,9 +1,10 @@
 steps:
-  - command: "ci/coverage.sh"
-    name: "coverage [public]"
-    timeout_in_minutes: 20
   - command: "ci/docker-run.sh rust ci/test-stable.sh"
     name: "stable [public]"
+    timeout_in_minutes: 20
+  - wait
+  - command: "ci/coverage.sh"
+    name: "coverage [public]"
     timeout_in_minutes: 20
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh || true"
     name: "nightly - FAILURES IGNORED [public]"
