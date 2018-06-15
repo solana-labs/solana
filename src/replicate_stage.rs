@@ -15,14 +15,14 @@ pub struct ReplicateStage {
 }
 
 impl ReplicateStage {
-    /// Process verified blobs, already in order
+    /// Process entry blobs, already in order
     fn replicate_requests(
         bank: &Arc<Bank>,
-        verified_receiver: &streamer::BlobReceiver,
+        blob_receiver: &streamer::BlobReceiver,
         blob_recycler: &packet::BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let blobs = verified_receiver.recv_timeout(timer)?;
+        let blobs = blob_receiver.recv_timeout(timer)?;
         let entries = ledger::reconstruct_entries_from_blobs(&blobs);
         let res = bank.process_entries(entries);
         if res.is_err() {
