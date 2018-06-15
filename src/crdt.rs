@@ -803,7 +803,7 @@ impl TestNode {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{parse_port_or_addr, Crdt, ReplicatedData, GOSSIP_SLEEP_MILLIS};
+    use crdt::{parse_port_or_addr, Crdt, ReplicatedData, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE};
     use packet::BlobRecycler;
     use result::Error;
     use signature::{KeyPair, KeyPairUtil};
@@ -1070,7 +1070,9 @@ mod tests {
         assert_ne!(nxt.id, nxt2.id);
         crdt.insert(&nxt2);
         let len = crdt.table.len() as u64;
-        assert_eq!(3, len);
+        assert!((MIN_TABLE_SIZE as u64) < len);
+        crdt.purge(now + len * GOSSIP_SLEEP_MILLIS * 4);
+        assert_eq!(len as usize, crdt.table.len());
         crdt.purge(now + len * GOSSIP_SLEEP_MILLIS * 4 + 1);
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.gossip_addr);
