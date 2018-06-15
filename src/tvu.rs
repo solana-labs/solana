@@ -24,28 +24,15 @@
 //!                                                | Bank |
 //!                                                `------`
 //! ```
-//
-// TODO: @aeyakovenko, these comments no longer refect the code in this module:
-// 1. streamer
-// - Incoming blobs are picked up from the replicate socket.
-// 2. verifier
-// - TODO Blobs are sent to the GPU, and while the memory is there the PoH stream is verified
-// along with the ecdsa signature for the blob and each signature in all the transactions.  Blobs
-// with errors are dropped, or marked for slashing.
-// 3.a retransmit
-// - Blobs originating from the parent (leader, at the moment, is the only parent), are retransmit to all the
-// peers in the crdt.  Peers is everyone who is not me or the leader that has a known replicate
-// address.
-// 3.b window
-// - Verified blobs are placed into a window, indexed by the counter set by the leader.sockets. This could
-// be the PoH counter if its monotonically increasing in each blob.  Erasure coding is used to
-// recover any missing packets, and requests are made at random to peers and parents to retransmit
-// a missing packet.
-// 4. accountant
-// - Contigous blobs are sent to the accountant for processing transactions
-// 5. validator
-// - TODO Validation messages are sent back to the leader
-//
+//!
+//! 1. Fetch Stage
+//! - Incoming blobs are picked up from the replicate socket and repair socket.
+//! 2. Window Stage
+//! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
+//! retransmits blobs that are in the queue.
+//! 3. Replicate Stage
+//! - Transactions in blobs are processed and applied to the bank.
+//! - TODO We need to verify the signatures in the blobs.
 
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
