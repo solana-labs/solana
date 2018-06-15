@@ -115,14 +115,20 @@ fn main() {
             if let Ok(data) = serde_json::from_reader(file) {
                 repl_data = data;
             } else {
-                warn!("failed to parse leader {}, generating new identity", path);
+                warn!("failed to parse {}, generating new identity", path);
             }
+        } else {
+            warn!("failed to read {}, generating new identity", path);
         }
     }
+
     let threads = if matches.opt_present("v") {
-        eprintln!("starting validator... {}", repl_data.requests_addr);
         let path = matches.opt_str("v").unwrap();
-        let file = File::open(path).expect("file");
+        eprintln!(
+            "starting validator... {} using {}",
+            repl_data.requests_addr, path
+        );
+        let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
         let leader = serde_json::from_reader(file).expect("parse");
         let s = Server::new_validator(
             bank,
