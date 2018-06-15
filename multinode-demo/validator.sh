@@ -11,7 +11,7 @@ set -x
 
 rsync -v -e ssh "$LEADER"/{mint-demo.json,leader.json,genesis.log} . || exit $?
 
-sudo sysctl -w net.core.rmem_max=26214400
+[[ $(uname) = Linux ]] && sudo sysctl -w net.core.rmem_max=26214400
 
 # if RUST_LOG is unset, default to info
 export RUST_LOG=${RUST_LOG:-solana=info}
