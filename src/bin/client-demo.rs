@@ -395,6 +395,6 @@ fn converge(
 }
 
 fn read_leader(path: String) -> ReplicatedData {
-    let file = File::open(path).expect("file");
-    serde_json::from_reader(file).expect("parse")
+    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
+    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }
