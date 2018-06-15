@@ -3,7 +3,8 @@
 //! 1. Fetch Stage
 //! - Incoming blobs are picked up from the replicate socket and repair socket.
 //! 2. Window Stage
-//! - Blobs are windowed until a contiguous chunk is available.
+//! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
+//! retransmits blobs that are in the queue.
 //! 3. Replicate Stage
 //! - Transactions in blobs are processed and applied to the bank.
 //! - TODO We need to verify the signatures in the blobs.
