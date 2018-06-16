@@ -1,7 +1,7 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
-use bincode::{deserialize, serialize_into};
+use bincode::{self, deserialize, serialize_into};
 use entry::{next_entry, Entry};
 use hash::Hash;
 use packet;
@@ -104,12 +104,12 @@ pub fn next_entries(
     entries
 }
 
-pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> Vec<Entry> {
+pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> bincode::Result<Vec<Entry>> {
     let mut entries_to_apply: Vec<Entry> = Vec::new();
     let mut last_id = Hash::default();
     for msgs in blobs {
         let blob = msgs.read().unwrap();
-        let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size]).unwrap();
+        let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size])?;
         for entry in entries {
             if entry.id == last_id {
                 if let Some(last_entry) = entries_to_apply.last_mut() {
@@ -120,9 +120,8 @@ pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> Vec<Entry
                 entries_to_apply.push(entry);
             }
         }
-        //TODO respond back to leader with hash of the state
     }
-    entries_to_apply
+    Ok(entries_to_apply)
 }
 
 #[cfg(test)]
@@ -131,6 +130,7 @@ mod tests {
     use hash::hash;
     use packet::BlobRecycler;
     use signature::{KeyPair, KeyPairUtil};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
 
     #[test]
@@ -161,7 +161,15 @@ mod tests {
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);
 
-        assert_eq!(reconstruct_entries_from_blobs(&blob_q), entries);
+        assert_eq!(reconstruct_entries_from_blobs(&blob_q).unwrap(), entries);
+    }
+
+    #[test]
+    fn test_bad_blobs_attack() {
+        let blob_recycler = BlobRecycler::default();
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        let blobs_q = packet::to_blobs(vec![(0, addr)], &blob_recycler).unwrap(); // <-- attack!
+        assert!(reconstruct_entries_from_blobs(&blobs_q).is_err());
     }
 
     #[test]
