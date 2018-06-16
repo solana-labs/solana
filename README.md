@@ -82,7 +82,7 @@ open on all the machines you want to test with.
 Generate a leader configuration file with:
 
 ```bash
-cargo run --release --bin solana-fullnode-config -- -d > leader.json
+$ cargo run --release --bin solana-fullnode-config -- -d > leader.json
 ```
 
 Now start the server:
@@ -96,7 +96,7 @@ it by adding `--features=cuda` to the line that runs `solana-fullnode` in `leade
 
 ```bash
 $ wget https://solana-build-artifacts.s3.amazonaws.com/v0.5.0/libcuda_verify_ed25519.a
-cargo run --release --features=cuda --bin solana-fullnode -- -l leader.json < genesis.log
+$ cargo run --release --features=cuda --bin solana-fullnode -- -l leader.json < genesis.log
 ```
 
 Wait a few seconds for the server to initialize. It will print "Ready." when it's ready to
@@ -110,7 +110,7 @@ To run a multinode testnet, after starting a leader node, spin up some validator
 Generate the validator's configuration file:
 
 ```bash
-cargo run --release --bin solana-fullnode-config -- -d > validator.json
+$ cargo run --release --bin solana-fullnode-config -- -d > validator.json
 ```
 
 ```bash
@@ -121,7 +121,7 @@ As with the leader node, you can run a performance-enhanced validator fullnode b
 `--features=cuda` to the line that runs `solana-fullnode` in `validator.sh`.
 
 ```bash
-cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json < genesis.log
+$ cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json < genesis.log
 ```
 
 
