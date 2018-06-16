@@ -261,10 +261,6 @@ pub fn to_blob<T: Serialize>(
         let mut b = blob.write().unwrap();
         let v = serialize(&resp)?;
         let len = v.len();
-        // TODO: we are not using .data_mut() method here because
-        // the raw bytes are being serialized and sent, this isn't the
-        // right interface, and we should create a separate path for
-        // sending request responses in the RPU
         assert!(len < BLOB_SIZE);
         b.data[..len].copy_from_slice(&v);
         b.meta.size = len;
