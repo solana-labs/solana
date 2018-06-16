@@ -23,7 +23,7 @@ impl ReplicateStage {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = blob_receiver.recv_timeout(timer)?;
-        let entries = ledger::reconstruct_entries_from_blobs(&blobs);
+        let entries = ledger::reconstruct_entries_from_blobs(&blobs)?;
         let res = bank.process_entries(entries);
         if res.is_err() {
             error!("process_entries {} {:?}", blobs.len(), res);
