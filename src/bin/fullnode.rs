@@ -106,7 +106,6 @@ fn main() {
 
     eprintln!("creating networking stack...");
 
-    let exit = Arc::new(AtomicBool::new(false));
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
     let mut repl_data = ReplicatedData::new_leader(&bind_addr);
     if matches.opt_present("l") {
@@ -115,13 +114,16 @@ fn main() {
             if let Ok(data) = serde_json::from_reader(file) {
                 repl_data = data;
             } else {
-                warn!("failed to parse {}, generating new identity", path);
+                eprintln!("failed to parse {}", path);
+                exit(1);
             }
         } else {
-            warn!("failed to read {}, generating new identity", path);
+            eprintln!("failed to read {}", path);
+            exit(1);
         }
     }
 
+    let exit = Arc::new(AtomicBool::new(false));
     let threads = if matches.opt_present("v") {
         let path = matches.opt_str("v").unwrap();
         eprintln!(
