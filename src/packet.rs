@@ -29,6 +29,7 @@ pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
+    pub num_retransmits: u64,
     pub addr: [u16; 8],
     pub port: u16,
     pub v6: bool,
