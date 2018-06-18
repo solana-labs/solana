@@ -2,15 +2,12 @@
 
 cd "$(dirname "$0")/.."
 
-ci/docker-run.sh evilmachines/rust-cargo-kcov \
-  bash -exc "\
-    export RUST_BACKTRACE=1; \
-    cargo build --verbose; \
-    cargo kcov --lib --verbose; \
-  "
+cargo install cargo-cov
+cargo cov test
+cargo cov report
 
 echo Coverage report:
-ls -l target/cov/index.html
+ls -l target/cov/report/index.html
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined

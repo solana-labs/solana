@@ -234,12 +234,21 @@ $ cargo +nightly bench --features="unstable"
 Code coverage
 ---
 
-To generate code coverage statistics, run kcov via Docker:
+To generate code coverage statistics, install cargo-cov. Note: the tool currently only works
+in Rust nightly.
 
 ```bash
-$ ./ci/coverage.sh
+$ cargo +nightly install cargo-cov
 ```
-The coverage report will be written to `./target/cov/index.html`
+
+Run cargo-cov and generate a report:
+
+```bash
+$ cargo +nightly cov test
+$ cargo +nightly cov report --open
+```
+
+The coverage report will be written to `./target/cov/report/index.html`
 
 
 Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer

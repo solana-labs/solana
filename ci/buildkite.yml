@@ -3,13 +3,6 @@ steps:
     name: "stable [public]"
     timeout_in_minutes: 20
   - wait
-  - command: "ci/coverage.sh"
-    name: "coverage [public]"
-    timeout_in_minutes: 20
-    retry:
-      automatic:
-      - exit_status: "*"
-        limit: 2
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
     timeout_in_minutes: 20
