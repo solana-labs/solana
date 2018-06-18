@@ -9,7 +9,7 @@ LEADER=$1
 
 set -x
 
-rsync -v -e ssh "$LEADER"/{mint-demo.json,leader.json,genesis.log} . || exit $?
+rsync -v "$LEADER"/{mint-demo.json,leader.json,genesis.log,tx-*.log} . || exit $?
 
 [[ $(uname) = Linux ]] && sudo sysctl -w net.core.rmem_max=26214400
 
@@ -17,4 +17,4 @@ rsync -v -e ssh "$LEADER"/{mint-demo.json,leader.json,genesis.log} . || exit $?
 export RUST_LOG=${RUST_LOG:-solana=info}
 
 cargo run --release --bin solana-fullnode -- \
-    -l validator.json -v leader.json < genesis.log
+    -l validator.json -v leader.json < genesis.log tx-*.log

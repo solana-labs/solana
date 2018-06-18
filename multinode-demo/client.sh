@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 if [[ -z $1 ]]; then
   printf 'usage: %s [network path to solana repo on leader machine] [number of nodes in the network if greater then 1]' "$0"
@@ -9,7 +9,7 @@ LEADER=$1
 COUNT=${2:-1}
 
 set -x
-rsync -v -e ssh "$LEADER"/{leader.json,mint-demo.json} .
+rsync -v "$LEADER"/{leader.json,mint-demo.json} . || exit $?
 
 # if RUST_LOG is unset, default to info
 export RUST_LOG=${RUST_LOG:-solana=info}
