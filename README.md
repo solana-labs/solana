@@ -110,7 +110,7 @@ To run a multinode testnet, after starting a leader node, spin up some validator
 Generate the validator's configuration file:
 
 ```bash
-$ cargo run --release --bin solana-fullnode-config -- -d > validator.json
+$ cargo run --release --bin solana-fullnode-config -- -b 9000 -d > validator.json
 ```
 
 ```bash
