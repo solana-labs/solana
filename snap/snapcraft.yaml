@@ -1,0 +1,34 @@
+name: solana
+version: git
+summary: Blockchain, Rebuilt for Scale
+description: |
+  710,000 tx/s with off-the-shelf hardware and no sharding.
+  Scales with Moore's Law.
+grade: devel
+confinement: strict
+
+apps:
+  fullnode:
+    command: solana-fullnode
+    plugs:
+      - network
+      - network-bind
+      - home
+  fullnode-config:
+    command: solana-fullnode-config
+    plugs:
+      - network
+      - network-bind
+  genesis:
+    command: solana-genesis
+  genesis-demo:
+    command: solana-genesis-demo
+  mint:
+    command: solana-mint
+  mint-demo:
+    command: solana-mint-demo
+
+parts:
+  solana:
+    plugin: rust
+    rust-channel: stable

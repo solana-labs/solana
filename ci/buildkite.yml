@@ -26,6 +26,9 @@ steps:
     agents:
       - "queue=cuda"
   - wait
-  - command: "ci/publish.sh"
+  - command: "ci/docker-run.sh snapcraft/xenial-amd64 ci/publish-snap.sh"
     timeout_in_minutes: 20
-    name: "publish release artifacts"
+    name: "publish snap"
+  - command: "ci/publish-crate.sh"
+    timeout_in_minutes: 20
+    name: "publish crate"
