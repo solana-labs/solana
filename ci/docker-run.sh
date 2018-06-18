@@ -19,7 +19,12 @@ fi
 docker pull "$IMAGE"
 shift
 
-ARGS=(--workdir /solana --volume "$PWD:/solana" --rm)
+ARGS=(
+  --workdir /solana
+  --volume "$PWD:/solana"
+  --env "HOME=/solana"
+  --rm
+)
 
 ARGS+=(--env "CARGO_HOME=/solana/.cargo")
 
@@ -35,6 +40,7 @@ ARGS+=(
   --env BUILDKITE_TAG
   --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
+  --env SNAPCRAFT_CREDENTIALS_KEY
 )
 
 set -x
