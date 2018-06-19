@@ -15,7 +15,7 @@ use solana::server::Server;
 use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdin, stdout, BufRead, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
@@ -62,41 +62,37 @@ fn main() {
         exit(1);
     }
 
-    let mut buffer = String::new();
-    let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
-    if num_bytes == 0 {
-        eprintln!("empty file on stdin, expected a log file");
-        exit(1);
-    }
-
     eprintln!("Initializing...");
-    let mut entries = buffer.lines().map(|line| {
-        serde_json::from_str(&line).unwrap_or_else(|e| {
+    let stdin = stdin();
+    let mut entries = stdin.lock().lines().map(|line| {
+        let entry: Entry = serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
             eprintln!("failed to parse json: {}", e);
             exit(1);
-        })
+        });
+        entry
     });
-
     eprintln!("done parsing...");
 
     // The first item in the ledger is required to be an entry with zero num_hashes,
     // which implies its id can be used as the ledger's seed.
-    let entry0 = entries.next().unwrap();
+    let entry0 = entries.next().expect("invalid ledger: empty");
 
     // The second item in the ledger is a special transaction where the to and from
     // fields are the same. That entry should be treated as a deposit, not a
     // transfer to oneself.
-    let entry1: Entry = entries.next().unwrap();
+    let entry1 = entries
+        .next()
+        .expect("invalid ledger: need at least 2 entries");
     let tx = &entry1.transactions[0];
     let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
         contract.plan.final_payment()
     } else {
         None
-    };
+    }.expect("invalid ledger, needs to start with a contract");
 
     eprintln!("creating bank...");
 
-    let bank = Bank::new_from_deposit(&deposit.unwrap());
+    let bank = Bank::new_from_deposit(&deposit);
     bank.register_entry_id(&entry0.id);
     bank.register_entry_id(&entry1.id);
 
