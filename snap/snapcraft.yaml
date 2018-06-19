@@ -5,11 +5,20 @@ description: |
   710,000 tx/s with off-the-shelf hardware and no sharding.
   Scales with Moore's Law.
 grade: devel
-confinement: strict
+
+# TODO: solana-perf-fullnode does not yet run with 'strict' confinement due to the
+# CUDA dependency, so use 'devmode' confinement for now
+confinement: devmode
 
 apps:
   fullnode:
     command: solana-fullnode
+    plugs:
+      - network
+      - network-bind
+      - home
+  fullnode-cuda:
+    command: solana-fullnode-cuda
     plugs:
       - network
       - network-bind
@@ -27,8 +36,39 @@ apps:
     command: solana-mint
   mint-demo:
     command: solana-mint-demo
+  client-demo:
+    command: solana-client-demo
 
 parts:
+  solana-perf-package:
+    plugin: dump
+    build-attributes: [no-system-libraries]
+    source: https://solana-perf.s3.amazonaws.com/master/x86_64-unknown-linux-gnu/solana-perf.tgz
+    prime:
+      - solana-perf-HEAD.txt
+  solana-cuda:
+    plugin: rust
+    rust-channel: stable
+    rust-features:
+      - erasure
+      - cuda
+    prime:
+      - bin/solana-fullnode-cuda
+      - usr/lib/libgf_complete.so.1
+      - usr/lib/libJerasure.so.2
+    override-build: |
+      cp -f $SNAPCRAFT_STAGE/libcuda_verify_ed25519.a .
+      cp -f $SNAPCRAFT_STAGE/libJerasure.so .
+      cp -f $SNAPCRAFT_STAGE/libgf_complete.so .
+      snapcraftctl build
+      mv $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode $SNAPCRAFT_PART_INSTALL
+      rm -rf $SNAPCRAFT_PART_INSTALL/bin/*
+      mv $SNAPCRAFT_PART_INSTALL/solana-fullnode $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode-cuda
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/
+      cp -f libJerasure.so $SNAPCRAFT_PART_INSTALL/usr/lib/libJerasure.so.2
+      cp -f libgf_complete.so $SNAPCRAFT_PART_INSTALL/usr/lib/libgf_complete.so.1
+    after:
+      - solana-perf-package
   solana:
     plugin: rust
     rust-channel: stable
