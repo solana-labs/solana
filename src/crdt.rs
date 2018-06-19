@@ -825,7 +825,6 @@ mod tests {
     use packet::BlobRecycler;
     use result::Error;
     use signature::{KeyPair, KeyPairUtil};
-    use std;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -1131,49 +1130,35 @@ mod tests {
     fn run_window_request_with_backoff() {
         let window = default_window();
 
-        let mut me = ReplicatedData::new(
-            KeyPair::new().pubkey(),
-            "127.0.0.1:1234".parse().unwrap(),
-            "127.0.0.1:1235".parse().unwrap(),
-            "127.0.0.1:1236".parse().unwrap(),
-            "127.0.0.1:1237".parse().unwrap(),
-            "127.0.0.1:1238".parse().unwrap(),
-        );
-
-        let mock_peer = ReplicatedData::new(
-            KeyPair::new().pubkey(),
-            "127.0.0.1:1234".parse().unwrap(),
-            "127.0.0.1:1235".parse().unwrap(),
-            "127.0.0.1:1236".parse().unwrap(),
-            "127.0.0.1:1237".parse().unwrap(),
-            "127.0.0.1:1238".parse().unwrap(),
-        );
-
+        let mut me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
         me.current_leader_id = me.id;
+
+        let mock_peer = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+
         let recycler = BlobRecycler::default();
-        let num_requests: u32 = 64;
 
         // Simulate handling a repair request from mock_peer
         let rv = Crdt::run_window_request(&window, &me, &mock_peer, 0, &recycler);
         assert!(rv.is_none());
-        let out = recycler.allocate();
-        out.write().unwrap().meta.size = 200;
-        window.write().unwrap()[0] = Some(out);
-        let range: std::ops::Range<u32> = 0..num_requests;
+        let blob = recycler.allocate();
+        let blob_size = 200;
+        blob.write().unwrap().meta.size = blob_size;
+        window.write().unwrap()[0] = Some(blob);
 
-        for i in range {
-            let rv = Crdt::run_window_request(&window, &me, &mock_peer, 0, &recycler);
-            assert!(rv.is_some());
-            let v = rv.unwrap();
-            let blob = v.read().unwrap();
+        let num_requests: u32 = 64;
+        for i in 0..num_requests {
+            let shared_blob =
+                Crdt::run_window_request(&window, &me, &mock_peer, 0, &recycler).unwrap();
+            let blob = shared_blob.read().unwrap();
             // Test we copied the blob
-            assert_eq!(blob.meta.size, 200);
+            assert_eq!(blob.meta.size, blob_size);
 
-            if i != 0 && !(i.is_power_of_two()) {
-                assert_eq!(blob.get_id().unwrap(), mock_peer.id);
+            let id = if i == 0 || i.is_power_of_two() {
+                me.id
             } else {
-                assert_eq!(blob.get_id().unwrap(), me.id);
-            }
+                mock_peer.id
+            };
+            assert_eq!(blob.get_id().unwrap(), id);
         }
     }
 }
