@@ -15,6 +15,11 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
+use choose_gossip_peer_strategy::{
+    ChooseGossipPeerStrategy,
+    ChooseRandomPeerStrategy,
+    ChooseWeightedPeerStrategy,
+};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -190,6 +195,7 @@ pub struct Crdt {
     pub alive: HashMap<PublicKey, u64>,
     pub update_index: u64,
     pub me: PublicKey,
+    external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>>,
 }
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
@@ -200,7 +206,7 @@ enum Protocol {
     RequestUpdates(u64, ReplicatedData),
     //TODO might need a since?
     /// from id, form's last update index, ReplicatedData
-    ReceiveUpdates(PublicKey, u64, Vec<ReplicatedData>),
+    ReceiveUpdates(PublicKey, u64, Vec<ReplicatedData>, Vec<(PublicKey, u64)>),
     /// ask for a missing index
     RequestWindowIndex(ReplicatedData, u64),
 }
@@ -213,6 +219,7 @@ impl Crdt {
             local: HashMap::new(),
             remote: HashMap::new(),
             alive: HashMap::new(),
+            external_liveness: HashMap::new(),
             me: me.id,
             update_index: 1,
         };
@@ -232,6 +239,14 @@ impl Crdt {
         me.current_leader_id = key;
         me.version += 1;
         self.insert(&me);
+    }
+
+    pub fn get_external_liveness_entry(
+        &self,
+        key: &PublicKey,
+    ) -> Option<&HashMap<PublicKey, u64>>
+    {
+        self.external_liveness.get(key)
     }
 
     pub fn insert(&mut self, v: &ReplicatedData) {
@@ -270,9 +285,11 @@ impl Crdt {
         if self.table.len() <= MIN_TABLE_SIZE {
             return;
         }
+
         //wait for 4x as long as it would randomly take to reach our node
         //assuming everyone is waiting the same amount of time as this node
         let limit = self.table.len() as u64 * GOSSIP_SLEEP_MILLIS * 4;
+
         let dead_ids: Vec<PublicKey> = self.alive
             .iter()
             .filter_map(|(&k, v)| {
@@ -285,11 +302,13 @@ impl Crdt {
                 }
             })
             .collect();
+
         for id in dead_ids.iter() {
             self.alive.remove(id);
             self.table.remove(id);
             self.remote.remove(id);
             self.local.remove(id);
+            self.external_liveness.remove(id);
         }
     }
 
@@ -473,6 +492,12 @@ impl Crdt {
         rdr.read_u64::<LittleEndian>()
             .expect("rdr.read_u64 in fn random")
     }
+
+    // TODO: fill in with real implmentation wonce staking is implemented
+    fn get_stake(id: PublicKey) -> f64 {
+        return 1.0;
+    }
+
     fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<ReplicatedData>) {
         //trace!("get updates since {}", v);
         let data = self.table
@@ -508,16 +533,32 @@ impl Crdt {
     /// * B - RequestUpdates protocol message
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
-        if options.len() < 1 {
-            trace!(
-                "crdt too small for gossip {:?} {}",
-                &self.me[..4],
-                self.table.len()
-            );
-            return Err(Error::CrdtTooSmall);
-        }
-        let n = (Self::random() as usize) % options.len();
-        let v = options[n].clone();
+
+        #[cfg(not(feature = "choose_gossip_peer_strategy"))]
+        let choose_peer_strategy = ChooseRandomPeerStrategy::new(&Self::random);
+
+        #[cfg(feature = "choose_gossip_peer_strategy")]
+        let choose_peer_strategy = ChooseWeightedPeerStrategy::new(
+            &self.remote,
+            &self.external_liveness,
+            &Self::get_stake,
+        );
+
+        let choose_peer_result = choose_peer_strategy.choose_peer(options);
+
+        let v = match choose_peer_result {
+            Ok(peer) => peer,
+            Err(Error::CrdtTooSmall) => {
+                trace!(
+                    "crdt too small for gossip {:?} {}",
+                    &self.me[..4],
+                    self.table.len()
+                );
+                return Err(Error::CrdtTooSmall);
+            },
+            Err(e) => return Err(e),
+        };
+
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
         trace!(
@@ -526,6 +567,7 @@ impl Crdt {
             &v.id[..4],
             v.gossip_addr
         );
+
         Ok((v.gossip_addr, req))
     }
 
@@ -543,6 +585,7 @@ impl Crdt {
         let (remote_gossip_addr, req) = obj.read()
             .expect("'obj' read lock in fn run_gossip")
             .gossip_request()?;
+
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
         let blob = to_blob(req, remote_gossip_addr, blob_recycler)?;
@@ -583,14 +626,43 @@ impl Crdt {
     /// * `from` - identity of the sender of the updates
     /// * `update_index` - the number of updates that `from` has completed and this set of `data` represents
     /// * `data` - the update data
-    fn apply_updates(&mut self, from: PublicKey, update_index: u64, data: &[ReplicatedData]) {
+    fn apply_updates(
+        &mut self, from: PublicKey,
+        update_index: u64,
+        data: &[ReplicatedData],
+        external_liveness: &[(PublicKey, u64)],
+    ){
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
         for v in data {
             self.insert(&v);
         }
+
+        for (pk, external_remote_index) in external_liveness.iter() {
+            let remote_entry = 
+                if let Some(v) = self.remote.get(pk) {
+                    *v
+                } else {
+                    0
+                };
+
+            if remote_entry >= *external_remote_index {
+                continue;
+            }
+
+            let liveness_entry = self.external_liveness.entry(*pk).or_insert(HashMap::new());
+            let peer_index = *liveness_entry.entry(from).or_insert(*external_remote_index);
+            if *external_remote_index > peer_index {
+                liveness_entry.insert(from, *external_remote_index);
+            }
+        }
+
         *self.remote.entry(from).or_insert(update_index) = update_index;
+
+        // Clear the remote liveness table for this node, b/c we've heard directly from them
+        // so we don't need to rely on rumors
+        self.external_liveness.remove(&from);
     }
 
     /// randomly pick a node and ask them for updates asynchronously
@@ -682,13 +754,14 @@ impl Crdt {
             Ok(Protocol::RequestUpdates(v, from_rd)) => {
                 trace!("RequestUpdates {}", v);
                 let addr = from_rd.gossip_addr;
-                // only lock for this call, dont lock during IO `sock.send_to` or `sock.recv_from`
-                let (from, ups, data) = obj.read()
-                    .expect("'obj' read lock in RequestUpdates")
-                    .get_updates_since(v);
+                let me = obj.read().unwrap();
+                // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
+                let (from, ups, data) = me.get_updates_since(v);
+                let external_liveness = me.remote.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                drop(me);
                 trace!("get updates since response {} {}", v, data.len());
                 let len = data.len();
-                let rsp = Protocol::ReceiveUpdates(from, ups, data);
+                let rsp = Protocol::ReceiveUpdates(from, ups, data, external_liveness);
                 obj.write().unwrap().insert(&from_rd);
                 if len < 1 {
                     let me = obj.read().unwrap();
@@ -713,11 +786,11 @@ impl Crdt {
                     None
                 }
             }
-            Ok(Protocol::ReceiveUpdates(from, ups, data)) => {
+            Ok(Protocol::ReceiveUpdates(from, ups, data, external_liveness)) => {
                 trace!("ReceivedUpdates {:?} {} {}", &from[0..4], ups, data.len());
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
-                    .apply_updates(from, ups, &data);
+                    .apply_updates(from, ups, &data, &external_liveness);
                 None
             }
             Ok(Protocol::RequestWindowIndex(from, ix)) => {
@@ -956,7 +1029,7 @@ mod tests {
             sorted(&vec![d1.clone(), d2.clone(), d3.clone()])
         );
         let mut crdt2 = Crdt::new(d2.clone());
-        crdt2.apply_updates(key, ix, &ups);
+        crdt2.apply_updates(key, ix, &ups, &vec![]);
         assert_eq!(crdt2.table.values().len(), 3);
         assert_eq!(
             sorted(&crdt2.table.values().map(|x| x.clone()).collect()),

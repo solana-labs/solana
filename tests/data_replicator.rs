@@ -183,3 +183,105 @@ pub fn crdt_retransmit() {
         t.join().unwrap();
     }
 }
+
+#[test]
+fn check_external_liveness_table() {
+    logger::setup();
+    let c1_c4_exit = Arc::new(AtomicBool::new(false));
+    let c2_c3_exit = Arc::new(AtomicBool::new(false));
+
+    trace!("c1:");
+    let (c1, dr1, _) = test_node(c1_c4_exit.clone());
+    trace!("c2:");
+    let (c2, dr2, _) = test_node(c2_c3_exit.clone());
+    trace!("c3:");
+    let (c3, dr3, _) = test_node(c2_c3_exit.clone());
+    trace!("c4:");
+    let (c4, dr4, _) = test_node(c1_c4_exit.clone());
+
+    let c1_data = c1.read().unwrap().my_data().clone();
+    c1.write().unwrap().set_leader(c1_data.id);
+
+    let c2_id = c2.read().unwrap().me;
+    let c3_id = c3.read().unwrap().me;
+    let c4_id = c4.read().unwrap().me;
+
+    // Insert the remote data about c4
+    let c2_index_for_c4 = 10;
+    c2.write().unwrap().remote.insert(c4_id, c2_index_for_c4);
+    let c3_index_for_c4 = 20;
+    c3.write().unwrap().remote.insert(c4_id, c3_index_for_c4);
+
+    // Set up the initial network topology
+    c2.write().unwrap().insert(&c1_data);
+    c3.write().unwrap().insert(&c1_data);
+
+    c2.write().unwrap().set_leader(c1_data.id);
+    c3.write().unwrap().set_leader(c1_data.id);
+
+    // Wait to converge
+    trace!("waiting to converge:");
+    let mut done = false;
+    for _ in 0..30 {
+        done = c1.read().unwrap().table.len() == 3 && c2.read().unwrap().table.len() == 3
+            && c3.read().unwrap().table.len() == 3;
+        if done {
+            break;
+        }
+        sleep(Duration::new(1, 0));
+    }
+    assert!(done);
+
+    // Validate c1's external liveness table, then release lock rc1
+    {
+        let rc1 = c1.read().unwrap();
+        let el = rc1.get_external_liveness_entry(&c4.read().unwrap().me);
+
+        // Make sure liveness table entry for c4 exists on node c1
+        assert!(el.is_some());
+        let liveness_map = el.unwrap();
+
+        // Make sure liveness table entry contains correct result for c2
+        let c2_index_result_for_c4 = liveness_map.get(&c2_id);
+        assert!(c2_index_result_for_c4.is_some());
+        assert!(*(c2_index_result_for_c4.unwrap()) == c2_index_for_c4);
+
+        // Make sure liveness table entry contains correct result for c3
+        let c3_index_result_for_c4 = liveness_map.get(&c3_id);
+        assert!(c3_index_result_for_c4.is_some());
+        assert!(*(c3_index_result_for_c4.unwrap()) == c3_index_for_c4);
+    }
+
+    // Shutdown validators c2 and c3
+    c2_c3_exit.store(true, Ordering::Relaxed);
+    let mut threads = vec![];
+    threads.extend(dr2.thread_hdls.into_iter());
+    threads.extend(dr3.thread_hdls.into_iter());
+
+    for t in threads.into_iter() {
+        t.join().unwrap();
+    }
+
+    // Allow communication between c1 and c4, make sure that c1's external_liveness table
+    // entry for c4 gets cleared
+    c4.write().unwrap().insert(&c1_data);
+    c4.write().unwrap().set_leader(c1_data.id);
+    for _ in 0..30 {
+        done = c1.read().unwrap().get_external_liveness_entry(&c4_id).is_none();
+        if done {
+            break;
+        }
+        sleep(Duration::new(1, 0));
+    }
+    assert!(done);
+
+    // Shutdown validators c1 and c4
+    c1_c4_exit.store(true, Ordering::Relaxed);
+    let mut threads = vec![];
+    threads.extend(dr1.thread_hdls.into_iter());
+    threads.extend(dr4.thread_hdls.into_iter());
+
+    for t in threads.into_iter() {
+        t.join().unwrap();
+    }
+}
