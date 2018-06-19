@@ -8,7 +8,8 @@ echo --- Delete all exited containers first
   set -x
   exited=$(docker ps -aq --no-trunc --filter "status=exited")
   if [[ -n "$exited" ]]; then
-    docker rm "$exited"
+    # shellcheck disable=SC2086 # Don't want to double quote "$exited"
+    docker rm $exited
   fi
 )
 
@@ -17,7 +18,8 @@ echo --- Delete untagged images
   set -x
   untagged=$(docker images | grep '<none>'| awk '{ print $3 }')
   if [[ -n "$untagged" ]]; then
-    docker rmi "$untagged"
+    # shellcheck disable=SC2086 # Don't want to double quote "$untagged"
+    docker rmi $untagged
   fi
 )
 
@@ -26,7 +28,8 @@ echo --- Delete all dangling images
   set -x
   dangling=$(docker images --filter 'dangling=true' -q --no-trunc | sort | uniq)
   if [[ -n "$dangling" ]]; then
-    docker rmi "$dangling"
+    # shellcheck disable=SC2086 # Don't want to double quote "$dangling"
+    docker rmi $dangling
   fi
 )
 
