@@ -37,6 +37,7 @@ ARGS+=(--user "$(id -u):$(id -g)")
 
 # Environment variables to propagate into the container
 ARGS+=(
+  --env BUILDKITE_BRANCH
   --env BUILDKITE_TAG
   --env CODECOV_TOKEN
   --env CRATES_IO_TOKEN
