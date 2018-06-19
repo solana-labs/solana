@@ -10,7 +10,10 @@ pub type Hash = GenericArray<u8, U32>;
 pub fn hash(val: &[u8]) -> Hash {
     let mut hasher = Sha256::default();
     hasher.input(val);
-    hasher.result()
+
+    // At the time of this writing, the sha2 library is stuck on an old version
+    // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
+    GenericArray::clone_from_slice(hasher.result().as_slice())
 }
 
 /// Return the hash of the given hash extended with the given value.
