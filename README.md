@@ -131,6 +131,20 @@ demo completes after it has convinced itself the testnet won't process any addit
 transactions. You should see several TPS measurements printed to the screen. In the
 multinode variation, you'll see TPS measurements for each validator node as well.
 
+Linux Snap
+---
+A Linux Solana [Snap](https://snapcraft.io/) is available, which can be used to
+easily get Solana running on supported Linux systems without building anything
+from source.  The `edge` Snap channel is updated daily with the latest
+development from the `master` branch.  To install:
+```bash
+$ sudo snap install solana --edge --devmode
+```
+(`--devmode` flag is required only for `solana.fullnode-cuda`)
+
+Once installed the usual Solana programs will be available as `solona.*` instead
+of `solana-*`.  For example, `solana.fullnode` instead of `solana-fullnode`.
+
 Developing
 ===
 
