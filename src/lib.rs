@@ -47,6 +47,7 @@ pub mod transaction;
 pub mod tvu;
 pub mod window_stage;
 pub mod write_stage;
+mod choose_gossip_peer_strategy;
 extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
