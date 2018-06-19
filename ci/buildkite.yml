@@ -32,3 +32,7 @@ steps:
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 20
     name: "publish crate"
+  - command: "ci/hoover.sh"
+    timeout_in_minutes: 20
+    name: "clean agent"
+
