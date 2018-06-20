@@ -828,6 +828,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
     use std::time::Duration;
     use streamer::default_window;
 
@@ -1087,6 +1088,10 @@ mod tests {
         assert_ne!(me.id, nxt2.id);
         assert_ne!(nxt.id, nxt2.id);
         crdt.insert(&nxt2);
+        while now == crdt.alive[&nxt2.id] {
+            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+            crdt.insert(&nxt2);
+        }
         let len = crdt.table.len() as u64;
         assert!((MIN_TABLE_SIZE as u64) < len);
         crdt.purge(now + len * GOSSIP_SLEEP_MILLIS * 4);
