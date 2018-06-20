@@ -14,20 +14,21 @@ use getopts::Options;
 use solana::crdt::get_ip_addr;
 use solana::drone::{Drone, DroneRequest};
 use solana::mint::MintDemo;
-use solana::signature::GenKeys;
+// use solana::signature::GenKeys;
+use std::env;
 use std::io::{stdin, Read};
 use std::net::SocketAddr;
-use std::env;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
-use tokio_codec::{Decoder, BytesCodec};
+use std::thread;
+// use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
+use tokio_codec::{BytesCodec, Decoder};
 
 fn print_usage(program: &str, opts: Options) {
-    // TODO: Write this help information
     let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
-    brief += "  This is dummy content and still needs updating\n";
+    brief += "  Run a Solana Drone to act as the custodian of the mint's remaining tokens\n";
 
     print!("{}", opts.usage(&brief));
 }
@@ -35,7 +36,12 @@ fn print_usage(program: &str, opts: Options) {
 fn main() {
     env_logger::init();
     let mut opts = Options::new();
-    opts.optopt("t", "", "time", "time slice over which to limit token requests to drone");
+    opts.optopt(
+        "t",
+        "",
+        "time",
+        "time slice over which to limit token requests to drone",
+    );
     opts.optopt("c", "", "cap", "request limit for time slice");
     opts.optflag("h", "help", "print help");
     let args: Vec<String> = env::args().collect();
@@ -53,16 +59,22 @@ fn main() {
     }
     let time_slice: Option<u64>;
     if matches.opt_present("t") {
-        time_slice = matches.opt_str("t").expect("unexpected string from input").parse().ok();
-    }
-    else {
+        time_slice = matches
+            .opt_str("t")
+            .expect("unexpected string from input")
+            .parse()
+            .ok();
+    } else {
         time_slice = None;
     }
     let request_cap: Option<u64>;
     if matches.opt_present("c") {
-        request_cap = matches.opt_str("c").expect("unexpected string from input").parse().ok();
-    }
-    else {
+        request_cap = matches
+            .opt_str("c")
+            .expect("unexpected string from input")
+            .parse()
+            .ok();
+    } else {
         request_cap = None;
     }
 
@@ -91,26 +103,44 @@ fn main() {
     transactions_addr.set_port(8000);
     let mut requests_addr = drone_addr.clone();
     requests_addr.set_port(8003);
-    let drone = Arc::new(Mutex::new(Drone::new(mint_keypair, drone_addr, transactions_addr, requests_addr, time_slice, request_cap)));
+    let drone = Arc::new(Mutex::new(Drone::new(
+        mint_keypair,
+        drone_addr,
+        transactions_addr,
+        requests_addr,
+        time_slice,
+        request_cap,
+    )));
+
+    let drone1 = drone.clone();
+    thread::spawn(move || loop {
+        let time = drone1.lock().unwrap().time_slice;
+        thread::sleep(time);
+        drone1.lock().unwrap().clear_request_count();
+    });
+
     let socket = TcpListener::bind(&drone_addr).unwrap();
-    println!("Listening on: {}", drone_addr);
+    println!("Drone started. Listening on: {}", drone_addr);
     let done = socket
         .incoming()
         .map_err(|e| println!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
-            let drone1 = drone.clone();
-            let client_ip = socket.peer_addr().expect("drone peer_addr").ip();
+            let drone2 = drone.clone();
+            // let client_ip = socket.peer_addr().expect("drone peer_addr").ip();
             let framed = BytesCodec::new().framed(socket);
             let (_writer, reader) = framed.split();
 
             let processor = reader
                 .for_each(move |bytes| {
-                    let req: DroneRequest = deserialize(&bytes).expect("deserialize packet in drone");
-                    println!("req: {:?}", req);
-                    let result = drone1.lock().unwrap().check_rate_limit(client_ip);
-                    println!("ip check: {:?}", result);
-                    let result1 = drone1.lock().unwrap().send_airdrop(req);
-                    println!("data: {:?}", result1);
+                    let req: DroneRequest =
+                        deserialize(&bytes).expect("deserialize packet in drone");
+                    println!("Airdrop requested...");
+                    // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
+                    let res1 = drone2.lock().unwrap().send_airdrop(req);
+                    match res1 {
+                        Ok(_) => println!("Airdrop sent!"),
+                        Err(_) => println!("Request limit reached for this time slice"),
+                    }
                     Ok(())
                 })
                 .and_then(|()| {
