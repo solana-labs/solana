@@ -36,7 +36,7 @@ fn main() {
     seed.copy_from_slice(&demo.mint.keypair().public_key_bytes()[..32]);
     let rnd = GenKeys::new(seed);
     let num_accounts = demo.num_accounts;
-    let tokens_per_user = 1_000;
+    let tokens_per_user = 500;
 
     let keypairs = rnd.gen_n_keypairs(num_accounts);
 
