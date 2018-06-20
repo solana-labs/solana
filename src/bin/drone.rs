@@ -27,7 +27,7 @@ use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
 fn print_usage(program: &str, opts: Options) {
-    let mut brief = format!("Usage: cat <transaction.log> | {} [options]\n\n", program);
+    let mut brief = format!("Usage: cat <mint-demo.json> | {} [options]\n\n", program);
     brief += "  Run a Solana Drone to act as the custodian of the mint's remaining tokens\n";
 
     print!("{}", opts.usage(&brief));

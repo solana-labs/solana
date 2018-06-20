@@ -43,7 +43,7 @@ path = "src/bin/mint-demo.rs"
 
 [[bin]]
 name = "solana-drone"
-path = "src/bin/drone-demo.rs"
+path = "src/bin/drone.rs"
 
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
