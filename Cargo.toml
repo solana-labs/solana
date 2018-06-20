@@ -41,6 +41,10 @@ path = "src/bin/mint.rs"
 name = "solana-mint-demo"
 path = "src/bin/mint-demo.rs"
 
+[[bin]]
+name = "solana-drone"
+path = "src/bin/drone-demo.rs"
+
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
@@ -70,3 +74,6 @@ getopts = "0.2"
 atty = "0.2"
 rand = "0.5.1"
 pnet = "0.21.0"
+tokio = "0.1"
+tokio-codec = "0.1"
+tokio-io = "0.1"
