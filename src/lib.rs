@@ -14,6 +14,7 @@ pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod budget;
 pub mod crdt;
+pub mod drone;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
