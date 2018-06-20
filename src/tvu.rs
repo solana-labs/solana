@@ -204,16 +204,11 @@ pub mod tests {
         let mut alice_ref_balance = starting_balance;
         let mut msgs = VecDeque::new();
         let mut cur_hash = Hash::default();
-        let num_blobs = 10;
+        let mut blob_id = 0;
+        let num_transfers = 10;
         let transfer_amount = 501;
         let bob_keypair = KeyPair::new();
-        for i in 0..num_blobs {
-            let b = resp_recycler.allocate();
-            let b_ = b.clone();
-            let mut w = b.write().unwrap();
-            w.set_index(i).unwrap();
-            w.set_id(leader_id).unwrap();
-
+        for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
@@ -226,19 +221,28 @@ pub mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
-            let entry1 = Entry::new(&cur_hash, i + num_blobs, vec![tx0]);
+            let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
             alice_ref_balance -= transfer_amount;
 
-            let serialized_entry = serialize(&vec![entry0, entry1]).unwrap();
+            for entry in vec![entry0, entry1] {
+                let b = resp_recycler.allocate();
+                let b_ = b.clone();
+                let mut w = b.write().unwrap();
+                w.set_index(blob_id).unwrap();
+                blob_id += 1;
+                w.set_id(leader_id).unwrap();
 
-            w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
-            w.set_size(serialized_entry.len());
-            w.meta.set_addr(&replicate_addr);
-            drop(w);
-            msgs.push_back(b_);
+                let serialized_entry = serialize(&entry).unwrap();
+
+                w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
+                w.set_size(serialized_entry.len());
+                w.meta.set_addr(&replicate_addr);
+                drop(w);
+                msgs.push_back(b_);
+            }
         }
 
         // send the blobs into the socket
@@ -246,10 +250,8 @@ pub mod tests {
 
         // receive retransmitted messages
         let timer = Duration::new(1, 0);
-        let mut msgs: Vec<_> = Vec::new();
         while let Ok(msg) = r_reader.recv_timeout(timer) {
             trace!("msg: {:?}", msg);
-            msgs.push(msg);
         }
 
         let alice_balance = bank.get_balance(&mint.keypair().pubkey()).unwrap();

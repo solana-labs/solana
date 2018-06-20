@@ -1,17 +1,16 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
-use bincode::{self, deserialize, serialize_into};
-use entry::{next_entry, Entry};
+use bincode::{self, deserialize, serialize_into, serialized_size};
+use entry::Entry;
 use hash::Hash;
-use packet;
-use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
+use packet::{self, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
 use rayon::prelude::*;
-use std::cmp::min;
 use std::collections::VecDeque;
 use std::io::Cursor;
-use std::mem::size_of;
 use transaction::Transaction;
+
+// a Block is a slice of Entries
 
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
@@ -27,110 +26,100 @@ impl Block for [Entry] {
     }
 
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>) {
-        let mut start = 0;
-        let mut end = 0;
-        while start < self.len() {
-            let mut entries: Vec<Vec<Entry>> = Vec::new();
-            let mut total = 0;
-            for i in &self[start..] {
-                total += size_of::<Transaction>() * i.transactions.len();
-                total += size_of::<Entry>();
-                if total >= BLOB_DATA_SIZE {
-                    break;
-                }
-                end += 1;
-            }
-            // See if we need to split the transactions
-            if end <= start {
-                let mut transaction_start = 0;
-                let num_transactions_per_blob = BLOB_DATA_SIZE / size_of::<Transaction>();
-                let total_entry_chunks = (self[end].transactions.len() + num_transactions_per_blob
-                    - 1) / num_transactions_per_blob;
-                trace!(
-                    "splitting transactions end: {} total_chunks: {}",
-                    end,
-                    total_entry_chunks
-                );
-                for _ in 0..total_entry_chunks {
-                    let transaction_end = min(
-                        transaction_start + num_transactions_per_blob,
-                        self[end].transactions.len(),
-                    );
-                    let mut entry = Entry {
-                        num_hashes: self[end].num_hashes,
-                        id: self[end].id,
-                        transactions: self[end].transactions[transaction_start..transaction_end]
-                            .to_vec(),
-                    };
-                    entries.push(vec![entry]);
-                    transaction_start = transaction_end;
-                }
-                end += 1;
-            } else {
-                entries.push(self[start..end].to_vec());
-            }
-
-            for entry in entries {
-                let b = blob_recycler.allocate();
-                let pos = {
-                    let mut bd = b.write().unwrap();
-                    let mut out = Cursor::new(bd.data_mut());
-                    serialize_into(&mut out, &entry).expect("failed to serialize output");
-                    out.position() as usize
-                };
-                assert!(pos < BLOB_SIZE);
-                b.write().unwrap().set_size(pos);
-                q.push_back(b);
-            }
-            start = end;
+        for entry in self {
+            let blob = blob_recycler.allocate();
+            let pos = {
+                let mut bd = blob.write().unwrap();
+                let mut out = Cursor::new(bd.data_mut());
+                serialize_into(&mut out, &entry).expect("failed to serialize output");
+                out.position() as usize
+            };
+            assert!(pos < BLOB_SIZE);
+            blob.write().unwrap().set_size(pos);
+            q.push_back(blob);
         }
     }
-}
-
-/// Create a vector of Entries of length `transaction_batches.len()` from `start_hash` hash, `num_hashes`, and `transaction_batches`.
-pub fn next_entries(
-    start_hash: &Hash,
-    num_hashes: u64,
-    transaction_batches: Vec<Vec<Transaction>>,
-) -> Vec<Entry> {
-    let mut id = *start_hash;
-    let mut entries = vec![];
-    for transactions in transaction_batches {
-        let entry = next_entry(&id, num_hashes, transactions);
-        id = entry.id;
-        entries.push(entry);
-    }
-    entries
 }
 
 pub fn reconstruct_entries_from_blobs(blobs: &VecDeque<SharedBlob>) -> bincode::Result<Vec<Entry>> {
-    let mut entries_to_apply: Vec<Entry> = Vec::new();
-    let mut last_id = Hash::default();
+    let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
     for msgs in blobs {
         let blob = msgs.read().unwrap();
-        let entries: Vec<Entry> = deserialize(&blob.data()[..blob.meta.size])?;
-        for entry in entries {
-            if entry.id == last_id {
-                if let Some(last_entry) = entries_to_apply.last_mut() {
-                    last_entry.transactions.extend(entry.transactions);
-                }
-            } else {
-                last_id = entry.id;
-                entries_to_apply.push(entry);
-            }
-        }
+        let entry: Entry = deserialize(&blob.data()[..blob.meta.size])?;
+        entries.push(entry);
     }
-    Ok(entries_to_apply)
+    Ok(entries)
+}
+
+/// Creates the next entries for given transactions, outputs
+/// updates start_hash to id of last Entry, sets cur_hashes to 0
+pub fn next_entries_mut(
+    start_hash: &mut Hash,
+    cur_hashes: &mut u64,
+    transactions: Vec<Transaction>,
+) -> Vec<Entry> {
+    if transactions.is_empty() {
+        vec![Entry::new_mut(start_hash, cur_hashes, transactions)]
+    } else {
+        let mut chunk_len = transactions.len();
+
+        // check for fit, make sure they can be serialized
+        while serialized_size(&Entry {
+            num_hashes: 0,
+            id: Hash::default(),
+            transactions: transactions[0..chunk_len].to_vec(),
+        }).unwrap() > BLOB_DATA_SIZE as u64
+        {
+            chunk_len /= 2;
+        }
+
+        let mut entries = Vec::with_capacity(transactions.len() / chunk_len + 1);
+
+        for chunk in transactions.chunks(chunk_len) {
+            entries.push(Entry::new_mut(start_hash, cur_hashes, chunk.to_vec()));
+        }
+        entries
+    }
+}
+
+/// Creates the next Entries for given transactions
+pub fn next_entries(
+    start_hash: &Hash,
+    cur_hashes: u64,
+    transactions: Vec<Transaction>,
+) -> Vec<Entry> {
+    let mut id = *start_hash;
+    let mut num_hashes = cur_hashes;
+    next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use entry::{next_entry, Entry};
     use hash::hash;
     use packet::BlobRecycler;
     use signature::{KeyPair, KeyPairUtil};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
+
+    /// Create a vector of Entries of length `transaction_batches.len()`
+    ///  from `start_hash` hash, `num_hashes`, and `transaction_batches`.
+    fn next_entries_batched(
+        start_hash: &Hash,
+        cur_hashes: u64,
+        transaction_batches: Vec<Vec<Transaction>>,
+    ) -> Vec<Entry> {
+        let mut id = *start_hash;
+        let mut entries = vec![];
+        let mut num_hashes = cur_hashes;
+
+        for transactions in transaction_batches {
+            let mut entry_batch = next_entries_mut(&mut id, &mut num_hashes, transactions);
+            entries.append(&mut entry_batch);
+        }
+        entries
+    }
 
     #[test]
     fn test_verify_slice() {
@@ -139,23 +128,22 @@ mod tests {
         assert!(vec![][..].verify(&zero)); // base case
         assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
         assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(next_entries(&zero, 0, vec![vec![]; 2])[..].verify(&zero)); // inductive step
+        assert!(next_entries_batched(&zero, 0, vec![vec![]; 2])[..].verify(&zero)); // inductive step
 
-        let mut bad_ticks = next_entries(&zero, 0, vec![vec![]; 2]);
+        let mut bad_ticks = next_entries_batched(&zero, 0, vec![vec![]; 2]);
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
 
     #[test]
-    fn test_entry_to_blobs() {
+    fn test_entries_to_blobs() {
         let zero = Hash::default();
         let one = hash(&zero);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let transactions = vec![tx0; 10000];
-        let e0 = Entry::new(&zero, 0, transactions);
+        let transactions = vec![tx0; 10_000];
+        let entries = next_entries(&zero, 0, transactions);
 
-        let entries = vec![e0];
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);
@@ -172,14 +160,16 @@ mod tests {
     }
 
     #[test]
-    fn test_next_entries() {
+    fn test_next_entries_batched() {
+        // this also tests next_entries, ugly, but is an easy way to do vec of vec (batch)
         let mut id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+
         let transactions = vec![tx0; 5];
         let transaction_batches = vec![transactions.clone(); 5];
-        let entries0 = next_entries(&id, 1, transaction_batches);
+        let entries0 = next_entries_batched(&id, 0, transaction_batches);
 
         assert_eq!(entries0.len(), 5);
 
@@ -197,14 +187,30 @@ mod tests {
 mod bench {
     extern crate test;
     use self::test::Bencher;
+    use hash::hash;
     use ledger::*;
+    use packet::BlobRecycler;
+    use signature::{KeyPair, KeyPairUtil};
+    use transaction::Transaction;
 
     #[bench]
-    fn bench_next_entries(bencher: &mut Bencher) {
-        let start_hash = Hash::default();
-        let entries = next_entries(&start_hash, 10_000, vec![vec![]; 8]);
+    fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
+        let zero = Hash::default();
+        let one = hash(&zero);
+        let keypair = KeyPair::new();
+        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
+        let transactions = vec![tx0; 10];
+        let entries = next_entries(&zero, 1, transactions);
+
+        let blob_recycler = BlobRecycler::default();
         bencher.iter(|| {
-            assert!(entries.verify(&start_hash));
+            let mut blob_q = VecDeque::new();
+            entries.to_blobs(&blob_recycler, &mut blob_q);
+            assert_eq!(reconstruct_entries_from_blobs(&blob_q).unwrap(), entries);
+            for blob in blob_q {
+                blob_recycler.recycle(blob);
+            }
         });
     }
+
 }
