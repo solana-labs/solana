@@ -168,8 +168,8 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
     use thin_client::ThinClient;
@@ -237,13 +237,7 @@ mod tests {
         let server_addr = addr.clone();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(
-            keypair,
-            addr,
-            server_addr,
-            time_slice,
-            request_cap,
-        );
+        let drone = Drone::new(keypair, addr, server_addr, time_slice, request_cap);
         assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
