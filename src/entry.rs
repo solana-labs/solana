@@ -2,7 +2,9 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
+use bincode::serialized_size;
 use hash::{extend_and_hash, hash, Hash};
+use packet::BLOB_DATA_SIZE;
 use rayon::prelude::*;
 use transaction::Transaction;
 
@@ -40,11 +42,13 @@ impl Entry {
     pub fn new(start_hash: &Hash, cur_hashes: u64, transactions: Vec<Transaction>) -> Self {
         let num_hashes = cur_hashes + if transactions.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &transactions);
-        Entry {
+        let entry = Entry {
             num_hashes,
             id,
             transactions,
-        }
+        };
+        assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
+        entry
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
@@ -56,6 +60,7 @@ impl Entry {
         let entry = Self::new(start_hash, *cur_hashes, transactions);
         *start_hash = entry.id;
         *cur_hashes = 0;
+        assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
         entry
     }
 
@@ -180,6 +185,12 @@ mod tests {
         let tick = next_entry(&zero, 0, vec![]);
         assert_eq!(tick.num_hashes, 0);
         assert_eq!(tick.id, zero);
+
+        let keypair = KeyPair::new();
+        let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
+        let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
+        assert_eq!(entry0.num_hashes, 1);
+        assert_eq!(entry0.id, next_hash(&zero, 1, &vec![tx0]));
     }
 
     #[test]
