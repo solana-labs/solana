@@ -31,6 +31,7 @@ extern "C" {
         signature_offset: u32,
         signed_message_offset: u32,
         signed_message_len_offset: u32,
+        packet_size: u32,
         out: *mut u8, //combined length of all the items in vecs
     ) -> u32;
 }
@@ -136,6 +137,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
             (TX_OFFSET + SIG_OFFSET) as u32,
             (TX_OFFSET + SIGNED_DATA_OFFSET) as u32,
             PACKET_DATA_SIZE as u32,
+            size_of::<Packet>() as u32,
             out.as_mut_ptr(),
         );
         if res != 0 {
