@@ -35,8 +35,7 @@ pub struct Drone {
     mint_keypair: KeyPair,
     ip_cache: Vec<IpAddr>,
     _airdrop_addr: SocketAddr,
-    transactions_addr: SocketAddr,
-    requests_addr: SocketAddr,
+    server_addr: SocketAddr,
     pub time_slice: Duration,
     request_cap: u64,
     pub request_current: u64,
@@ -46,8 +45,7 @@ impl Drone {
     pub fn new(
         mint_keypair: KeyPair,
         _airdrop_addr: SocketAddr,
-        transactions_addr: SocketAddr,
-        requests_addr: SocketAddr,
+        server_addr: SocketAddr,
         time_input: Option<u64>,
         request_cap_input: Option<u64>,
     ) -> Drone {
@@ -63,20 +61,21 @@ impl Drone {
             mint_keypair,
             ip_cache: Vec::new(),
             _airdrop_addr,
-            transactions_addr,
-            requests_addr,
+            server_addr,
             time_slice,
             request_cap,
             request_current: 0,
         }
     }
 
+    pub fn new_from_server_addr(&mut self, addr_type: ServerAddr) -> SocketAddr {
+        let mut new_addr = self.server_addr.clone();
+        new_addr.set_port(self.server_addr.port() + addr_type as u16);
+        new_addr
+    }
+
     pub fn check_request_count(&mut self) -> bool {
-        if self.request_current <= self.request_cap {
-            true
-        } else {
-            false
-        }
+        self.request_current <= self.request_cap
     }
 
     pub fn clear_request_count(&mut self) {
@@ -112,9 +111,9 @@ impl Drone {
             let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
             let mut client = ThinClient::new(
-                self.requests_addr,
+                self.new_from_server_addr(ServerAddr::RequestsAddr),
                 requests_socket,
-                self.transactions_addr,
+                self.new_from_server_addr(ServerAddr::TransactionsAddr),
                 transactions_socket,
             );
             let last_id = client.get_last_id();
@@ -149,6 +148,14 @@ impl Drone {
     }
 }
 
+pub enum ServerAddr {
+    TransactionsAddr,
+    GossipAddr,
+    ReplicateAddr,
+    RequestsAddr,
+    RepaidAddr,
+}
+
 #[cfg(test)]
 mod tests {
     use bank::Bank;
@@ -172,18 +179,8 @@ mod tests {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let mut transactions_addr = addr.clone();
-        transactions_addr.set_port(8000);
-        let mut requests_addr = addr.clone();
-        requests_addr.set_port(8003);
-        let mut drone = Drone::new(
-            keypair,
-            addr,
-            transactions_addr,
-            requests_addr,
-            None,
-            Some(3),
-        );
+        let server_addr = addr.clone();
+        let mut drone = Drone::new(keypair, addr, server_addr, None, Some(3));
         assert!(drone.check_request_count());
         drone.request_current = 4;
         assert!(!drone.check_request_count());
@@ -194,15 +191,12 @@ mod tests {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let mut transactions_addr = addr.clone();
-        transactions_addr.set_port(8000);
-        let mut requests_addr = addr.clone();
-        requests_addr.set_port(8003);
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let server_addr = addr.clone();
+        let mut drone = Drone::new(keypair, addr, server_addr, None, None);
         drone.request_current = drone.request_current + 256;
-        assert!(drone.request_current == 256);
+        assert_eq!(drone.request_current, 256);
         drone.clear_request_count();
-        assert!(drone.request_current == 0);
+        assert_eq!(drone.request_current, 0);
     }
 
     #[test]
@@ -210,11 +204,8 @@ mod tests {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let mut transactions_addr = addr.clone();
-        transactions_addr.set_port(8000);
-        let mut requests_addr = addr.clone();
-        requests_addr.set_port(8003);
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let server_addr = addr.clone();
+        let mut drone = Drone::new(keypair, addr, server_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -227,11 +218,8 @@ mod tests {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let mut transactions_addr = addr.clone();
-        transactions_addr.set_port(8000);
-        let mut requests_addr = addr.clone();
-        requests_addr.set_port(8003);
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let server_addr = addr.clone();
+        let mut drone = Drone::new(keypair, addr, server_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -246,17 +234,13 @@ mod tests {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let mut transactions_addr = addr.clone();
-        transactions_addr.set_port(8000);
-        let mut requests_addr = addr.clone();
-        requests_addr.set_port(8003);
+        let server_addr = addr.clone();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
         let drone = Drone::new(
             keypair,
             addr,
-            transactions_addr,
-            requests_addr,
+            server_addr,
             time_slice,
             request_cap,
         );
@@ -295,7 +279,6 @@ mod tests {
             alice.keypair(),
             addr,
             leader.data.transactions_addr,
-            leader.data.requests_addr,
             None,
             None,
         );

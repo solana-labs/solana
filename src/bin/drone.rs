@@ -99,15 +99,12 @@ fn main() {
 
     let mut drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
     drone_addr.set_ip(get_ip_addr().unwrap());
-    let mut transactions_addr = drone_addr.clone();
-    transactions_addr.set_port(8000);
-    let mut requests_addr = drone_addr.clone();
-    requests_addr.set_port(8003);
+    let mut server_addr = drone_addr.clone();
+    server_addr.set_port(8000);
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
         drone_addr,
-        transactions_addr,
-        requests_addr,
+        server_addr,
         time_slice,
         request_cap,
     )));
