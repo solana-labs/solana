@@ -109,6 +109,7 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
+    assert!(num_hashes > 0 || transactions.len() == 0);
     Entry {
         num_hashes,
         id: next_hash(start_hash, num_hashes, &transactions),
@@ -179,5 +180,14 @@ mod tests {
         let tick = next_entry(&zero, 0, vec![]);
         assert_eq!(tick.num_hashes, 0);
         assert_eq!(tick.id, zero);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_next_entry_panic() {
+        let zero = Hash::default();
+        let keypair = KeyPair::new();
+        let tx = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        next_entry(&zero, 0, vec![tx]);
     }
 }
