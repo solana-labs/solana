@@ -85,7 +85,7 @@ fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.  If num_hashes is zero and there's no transaction data,
-//  start_hash is returned.
+///  start_hash is returned.
 fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
     let mut id = *start_hash;
     for _ in 1..num_hashes {
