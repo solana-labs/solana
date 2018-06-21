@@ -23,8 +23,6 @@ steps:
   - command: "ci/test-erasure.sh"
     name: "erasure"
     timeout_in_minutes: 20
-    agents:
-      - "queue=cuda"
   - wait
   - command: "ci/publish-snap.sh"
     timeout_in_minutes: 20
