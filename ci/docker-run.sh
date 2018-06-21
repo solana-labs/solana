@@ -33,7 +33,9 @@ ARGS+=(--env "CARGO_HOME=/solana/.cargo")
 ARGS+=(--security-opt "seccomp=unconfined")
 
 # Ensure files are created with the current host uid/gid
-ARGS+=(--user "$(id -u):$(id -g)")
+if [[ -z "$SOLANA_DOCKER_RUN_NOSETUID" ]]; then
+  ARGS+=(--user "$(id -u):$(id -g)")
+fi
 
 # Environment variables to propagate into the container
 ARGS+=(
