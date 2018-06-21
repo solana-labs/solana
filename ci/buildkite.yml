@@ -20,7 +20,7 @@ steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
     timeout_in_minutes: 20
-  - command: "ci/test-erasure.sh"
+  - command: "ci/docker-run.sh rust ci/test-erasure.sh"
     name: "erasure"
     timeout_in_minutes: 20
   - wait
