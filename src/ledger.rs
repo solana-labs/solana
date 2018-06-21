@@ -95,8 +95,7 @@ pub fn next_entries(
 ) -> Vec<Entry> {
     let mut id = *start_hash;
     let mut entries = vec![];
-    for transactions in &transaction_batches {
-        let transactions = transactions.clone();
+    for transactions in transaction_batches {
         let entry = next_entry(&id, num_hashes, transactions);
         id = entry.id;
         entries.push(entry);
@@ -153,10 +152,10 @@ mod tests {
         let one = hash(&zero);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let transactions = vec![tx0.clone(); 10000];
+        let transactions = vec![tx0; 10000];
         let e0 = Entry::new(&zero, 0, transactions);
 
-        let entries = vec![e0.clone(); 1];
+        let entries = vec![e0];
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);
@@ -178,7 +177,7 @@ mod tests {
         let next_id = hash(&id);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
-        let transactions = vec![tx0.clone(); 5];
+        let transactions = vec![tx0; 5];
         let transaction_batches = vec![transactions.clone(); 5];
         let entries0 = next_entries(&id, 0, transaction_batches);
 
