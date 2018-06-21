@@ -179,13 +179,13 @@ mod tests {
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
         let transactions = vec![tx0; 5];
         let transaction_batches = vec![transactions.clone(); 5];
-        let entries0 = next_entries(&id, 0, transaction_batches);
+        let entries0 = next_entries(&id, 1, transaction_batches);
 
         assert_eq!(entries0.len(), 5);
 
         let mut entries1 = vec![];
         for _ in 0..5 {
-            let entry = next_entry(&id, 0, transactions.clone());
+            let entry = next_entry(&id, 1, transactions.clone());
             id = entry.id;
             entries1.push(entry);
         }
