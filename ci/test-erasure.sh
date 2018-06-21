@@ -8,8 +8,6 @@ cd "$(dirname "$0")/.."
 
 export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
 
-# shellcheck disable=SC1090    # <-- shellcheck can't follow ~
-source ~/.cargo/env
 cargo test --features="erasure"
 
 exit 0
