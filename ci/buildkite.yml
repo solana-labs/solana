@@ -26,7 +26,7 @@ steps:
     agents:
       - "queue=cuda"
   - wait
-  - command: "ci/docker-run.sh snapcraft/xenial-amd64 ci/publish-snap.sh"
+  - command: "ci/docker-run.sh solanalabs/snapcraft ci/publish-snap.sh"
     timeout_in_minutes: 20
     name: "publish snap"
   - command: "ci/publish-crate.sh"
