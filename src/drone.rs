@@ -13,7 +13,7 @@ use thin_client::ThinClient;
 use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = 10_000_000;
+pub const REQUEST_CAP: u64 = 150_000;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DroneRequest {
