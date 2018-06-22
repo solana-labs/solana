@@ -13,22 +13,14 @@ use thin_client::ThinClient;
 use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
-pub const REQUEST_CAP: u64 = 500;
-pub const SMALL_BATCH: i64 = 50;
-pub const TPS_BATCH: i64 = 5_000_000;
+pub const REQUEST_CAP: u64 = 10_000_000;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DroneRequest {
     GetAirdrop {
-        request_type: DroneRequestType,
+        airdrop_request_amount: u64,
         client_public_key: PublicKey,
     },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum DroneRequestType {
-    SmallBatch,
-    TPSBatch,
 }
 
 pub struct Drone {
@@ -74,7 +66,7 @@ impl Drone {
         new_addr
     }
 
-    pub fn check_request_count(&mut self) -> bool {
+    pub fn check_request_limit(&mut self) -> bool {
         self.request_current <= self.request_cap
     }
 
@@ -103,9 +95,8 @@ impl Drone {
     }
 
     pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<usize, io::Error> {
-        self.request_current += 1;
 
-        if self.check_request_count() {
+        if self.check_request_limit() {
             let tx: Transaction;
             let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
             let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -120,30 +111,21 @@ impl Drone {
 
             match req {
                 DroneRequest::GetAirdrop {
-                    request_type,
+                    airdrop_request_amount,
                     client_public_key,
-                } => match request_type {
-                    DroneRequestType::SmallBatch => {
-                        tx = Transaction::new(
-                            &self.mint_keypair,
-                            client_public_key,
-                            SMALL_BATCH,
-                            last_id,
-                        );
-                    }
-                    DroneRequestType::TPSBatch => {
-                        tx = Transaction::new(
-                            &self.mint_keypair,
-                            client_public_key,
-                            TPS_BATCH,
-                            last_id,
-                        );
-                    }
+                } => {
+                    self.request_current += airdrop_request_amount;
+                    tx = Transaction::new(
+                        &self.mint_keypair,
+                        client_public_key,
+                        airdrop_request_amount as i64,
+                        last_id,
+                    );
                 },
             }
             client.transfer_signed(tx)
         } else {
-            Err(Error::new(ErrorKind::Other, "request limit reached"))
+            Err(Error::new(ErrorKind::Other, "token limit reached"))
         }
     }
 }
@@ -160,8 +142,7 @@ pub enum ServerAddr {
 mod tests {
     use bank::Bank;
     use crdt::{get_ip_addr, TestNode};
-    use drone::{Drone, DroneRequest, DroneRequestType, REQUEST_CAP, SMALL_BATCH, TIME_SLICE,
-                TPS_BATCH};
+    use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use logger;
     use mint::Mint;
     use server::Server;
@@ -175,15 +156,15 @@ mod tests {
     use thin_client::ThinClient;
 
     #[test]
-    fn test_check_request_count() {
+    fn test_check_request_limit() {
         let keypair = KeyPair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let server_addr = addr.clone();
         let mut drone = Drone::new(keypair, addr, server_addr, None, Some(3));
-        assert!(drone.check_request_count());
+        assert!(drone.check_request_limit());
         drone.request_current = 4;
-        assert!(!drone.check_request_count());
+        assert!(!drone.check_request_limit());
     }
 
     #[test]
@@ -244,6 +225,9 @@ mod tests {
 
     #[test]
     fn test_send_airdrop() {
+        const SMALL_BATCH: i64 = 50;
+        const TPS_BATCH: i64 = 5_000_000;
+
         logger::setup();
         let leader = TestNode::new();
 
@@ -278,14 +262,14 @@ mod tests {
         );
 
         let bob_req = DroneRequest::GetAirdrop {
-            request_type: DroneRequestType::SmallBatch,
+            airdrop_request_amount: 50,
             client_public_key: bob_pubkey,
         };
         let bob_result = drone.send_airdrop(bob_req).expect("send airdrop test");
         assert!(bob_result > 0);
 
         let carlos_req = DroneRequest::GetAirdrop {
-            request_type: DroneRequestType::TPSBatch,
+            airdrop_request_amount: 5_000_000,
             client_public_key: carlos_pubkey,
         };
         let carlos_result = drone.send_airdrop(carlos_req).expect("send airdrop test");
@@ -302,11 +286,11 @@ mod tests {
         );
 
         let bob_balance = client.poll_get_balance(&bob_pubkey);
-        info!("Small batch balance: {:?}", bob_balance);
+        info!("Small request balance: {:?}", bob_balance);
         assert_eq!(bob_balance.unwrap(), SMALL_BATCH);
 
         let carlos_balance = client.poll_get_balance(&carlos_pubkey);
-        info!("TPS batch balance: {:?}", carlos_balance);
+        info!("TPS request balance: {:?}", carlos_balance);
         assert_eq!(carlos_balance.unwrap(), TPS_BATCH);
 
         exit.store(true, Ordering::Relaxed);
