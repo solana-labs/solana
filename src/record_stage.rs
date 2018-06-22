@@ -90,8 +90,15 @@ impl RecordStage {
         } else {
             vec![]
         };
-        let entry = recorder.record(txs);
-        sender.send(entry).map_err(|_| ())
+        let entries = recorder.record(txs);
+        let mut result = Ok(());
+        for entry in entries {
+            result = sender.send(entry).map_err(|_| ());
+            if result.is_err() {
+                break;
+            }
+        }
+        result
     }
 
     fn process_signals(
