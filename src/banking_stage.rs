@@ -274,17 +274,15 @@ mod bench {
     use logger;
     use mint::Mint;
     use packet::{to_packets_chunked, PacketRecycler};
+    use rayon::prelude::*;
     use record_stage::Signal;
     use signature::{KeyPair, KeyPairUtil};
     use std::iter;
     use std::sync::mpsc::{channel, Receiver};
     use std::sync::Arc;
     use transaction::Transaction;
-    use rayon::prelude::*;
 
-    fn check_txs(batches: usize,
-                 receiver: &Receiver<Signal>,
-                 ref_tx_count: usize) {
+    fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
         let mut total = 0;
         for _ in 0..batches {
             let signal = receiver.recv().unwrap();
@@ -306,8 +304,10 @@ mod bench {
         let num_dst_accounts = 8 * 1024;
         let num_src_accounts = 8 * 1024;
 
-        let srckeys: Vec<_> = (0..num_src_accounts).map(|_| { KeyPair::new() }).collect();
-        let dstkeys: Vec<_> = (0..num_dst_accounts).map(|_| { KeyPair::new().pubkey() }).collect();
+        let srckeys: Vec<_> = (0..num_src_accounts).map(|_| KeyPair::new()).collect();
+        let dstkeys: Vec<_> = (0..num_dst_accounts)
+            .map(|_| KeyPair::new().pubkey())
+            .collect();
 
         info!("created keys src: {} dst: {}", srckeys.len(), dstkeys.len());
 
