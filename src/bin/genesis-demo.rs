@@ -6,7 +6,8 @@ extern crate solana;
 use atty::{is, Stream};
 use rayon::prelude::*;
 use solana::bank::MAX_ENTRY_IDS;
-use solana::entry::{next_entry, Entry};
+use solana::entry::next_entry;
+use solana::ledger::next_entries;
 use solana::mint::MintDemo;
 use solana::signature::{GenKeys, KeyPairUtil};
 use solana::transaction::Transaction;
@@ -74,6 +75,8 @@ fn main() {
         .collect();
 
     eprintln!("Logging the creation of {} accounts...", num_accounts);
-    let entry = Entry::new(&last_id, 0, transactions);
-    println!("{}", serde_json::to_string(&entry).unwrap());
+    let entries = next_entries(&last_id, 0, transactions);
+    for entry in entries {
+        println!("{}", serde_json::to_string(&entry).unwrap());
+    }
 }
