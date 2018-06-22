@@ -11,6 +11,11 @@ grade: devel
 confinement: devmode
 
 apps:
+  drone:
+    command: solana-drone
+    plugs:
+      - network
+      - network-bind
   fullnode:
     command: solana-fullnode
     plugs:
