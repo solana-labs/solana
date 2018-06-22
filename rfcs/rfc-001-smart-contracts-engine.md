@@ -73,16 +73,19 @@ void finalize(
 ```
 The module_data structure is configued by the client, it contains the `struct solana_module` structure at the top, which defines how to calculate how much buffer to provide for each step.
 
-A client will create a transaction to create a new loader instance.
-* `Solana_NewLoader(Loader instance PubKey, proof of key ownership, space i need for my elf)`
+A client will create a transaction to create a new loader instance:
 
-A client will then do a bunch of transactions to load its elf into the loader instance they created.
-* `Loader_UploadElf(Loader instance PubKey, proof of key ownership, pos start, pos end, data)`
+`Solana_NewLoader(Loader instance PubKey, proof of key ownership, space I need for my elf)`
 
-* `Loader_NewInstance(Loader instance PubKey, proof of key ownership, Instance PubKey, proof of key owndership)`
+A client will then do a bunch of transactions to load its elf into the loader instance they created:
 
-A client will then do a bunch of transactions to load its elf into the loader instance they created.
-* `Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
+`Loader_UploadElf(Loader instance PubKey, proof of key ownership, pos start, pos end, data)`
+
+`Loader_NewInstance(Loader instance PubKey, proof of key ownership, Instance PubKey, proof of key owndership)`
+
+A client will then do a bunch of transactions to load its elf into the loader instance they created:
+
+`Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
 
 ```
 struct module_hdr {
@@ -95,16 +98,18 @@ struct module_hdr {
 };
 ```
 
-At this point the client may need to upload more R user data to the OS via some more transactions to the loader.
+At this point the client may need to upload more R user data to the OS via some more transactions to the loader:
 
-* `Instance_Start(Instance PubKey, proof of key owndership)`
+`Instance_Start(Instance PubKey, proof of key owndership)`
 
 At this point clients can start sending transactions to the instance
 
 ## Parallelizable Runtime
+
 To parallelize smart contract execution we plan on breaking up contracts into distinct interfaces, Map/Collect/Reduce/Finalize.
 
 ### Map and Collect
+
 ```
 struct transaction {
    struct transaction_msg msg;
