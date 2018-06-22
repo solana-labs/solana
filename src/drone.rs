@@ -277,7 +277,8 @@ mod tests {
         assert!(carlos_result > 0);
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
+        let transactions_socket =
+            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
             leader.data.requests_addr,
