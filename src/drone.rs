@@ -252,14 +252,14 @@ mod tests {
         );
         sleep(Duration::from_millis(900));
 
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
+        let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
+        addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
         let mut drone = Drone::new(
             alice.keypair(),
             addr,
             leader.data.transactions_addr,
             None,
-            None,
+            Some(5_000_050),
         );
 
         let bob_req = DroneRequest::GetAirdrop {
@@ -276,8 +276,8 @@ mod tests {
         let carlos_result = drone.send_airdrop(carlos_req).expect("send airdrop test");
         assert!(carlos_result > 0);
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
             leader.data.requests_addr,
