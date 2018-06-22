@@ -784,14 +784,21 @@ pub struct TestNode {
 
 impl TestNode {
     pub fn new() -> TestNode {
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut addr = transaction.local_addr().unwrap();
+        let port = addr.port();
+        addr.set_port(port + 1);
+        let gossip = UdpSocket::bind(addr.clone()).unwrap();
+        addr.set_port(port + 2);
+        let replicate = UdpSocket::bind(addr.clone()).unwrap();
+        addr.set_port(port + 3);
+        let requests = UdpSocket::bind(addr.clone()).unwrap();
+        addr.set_port(port + 4);
+        let repair = UdpSocket::bind(addr.clone()).unwrap();
+
+        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let pubkey = KeyPair::new().pubkey();
         let data = ReplicatedData::new(
