@@ -48,7 +48,7 @@ For 2, the BPF bytecode already easily maps to x86–64, arm64 and other instruc
 
 For 3, every load and store that is relative can be checked to be within the expected memory that is passed into the ELF.  Dynamic load and stores can do a runtime check against available memory, these will be slow and should be avoided.
 
-For 4, Statically linked PIC ELF with just a signle RX segment.  Effectively we are linking a shared object with `-fpic -target bpf` and a linker script to collect everything into a single RX segment.  Writable globals are not supported at the moment.
+For 4, Fully linked PIC ELF with just a signle RX segment. Effectively we are linking a shared object with `-fpic -target bpf` and with a linker script to collect everything into a single RX segment. Writable globals are not supported.
 
 ## Loader
 The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader expects the shared object to implement the following methods:
@@ -71,7 +71,7 @@ void finalize(
     struct reduce* reduce
 );
 ```
-The module_data structure is configued by the client, it contains the `struct solana_module` structure at the top, which defines how to calculate how much buffer to provide for each step.
+The module_data structure is configued by the client, it contains the `struct module_hdr` structure at the top, which defines how to calculate how much buffer to provide for each step.
 
 A client will create a transaction to create a new loader instance:
 
@@ -91,7 +91,7 @@ Once the instance has been created, the client may need to upload more user data
 
 ```
 struct module_hdr {
-    struct pubkey owner;
+    struct pub_key owner;
     uint32_t map_scratch_size;
     uint32_t map_data_size;
     uint32_t reduce_size;
