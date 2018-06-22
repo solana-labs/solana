@@ -16,11 +16,7 @@ rsync -v "$LEADER"/{mint-demo.json,leader.json,genesis.log,tx-*.log} . || exit $
 # if RUST_LOG is unset, default to info
 export RUST_LOG=${RUST_LOG:-solana=info}
 
-IPADDR="$(ifconfig  | grep 'inet addr:'| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $1}')"
-
-if [ -z "$IPADDR" ]; then
-    IPADDR="$(ifconfig  | grep 'inet '| grep -v '127.0.0.1' | cut -d: -f2 | awk '{ print $2}')"
-fi
+IPADDR="$(ifconfig | awk '/inet (addr)?/ {print $2}' | cut -d: -f2 | grep -v '127.0.0.1')"
 
 cargo run --release --bin solana-fullnode -- \
-    -l validator-$IPADDR.json -v leader.json < genesis.log tx-*.log
+    -l validator-"$IPADDR".json -v leader.json < genesis.log tx-*.log
