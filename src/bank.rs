@@ -28,7 +28,7 @@ use timing::duration_as_us;
 /// but requires clients to update its `last_id` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
-pub const MAX_ENTRY_IDS: usize = 1024 * 4;
+pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
