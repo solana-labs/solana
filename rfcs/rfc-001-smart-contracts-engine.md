@@ -1,6 +1,8 @@
 # Smart Contracts Engine
 
-Our approach to smart contract execution is based on how operating systems load and execute dynamic code in the kernel. 
+The goal of this RFC is to define a set of constraints for APIs and runtime such that we can safely execute our smart contracts safely on massively parallel hardware such as a GPU.
+
+## Toolchain Stack
 
      +---------------------+       +---------------------+
      |                     |       |                     |
@@ -24,17 +26,14 @@ Our approach to smart contract execution is based on how operating systems load 
      |   |            |    |       |   |            |    |
      |   +------------+    |       |   +------------+    |
      |                     |       |                     |
-     |      userspace      |       |       kernel        |
+     |        client       |       |       solana        |
      +---------------------+       +---------------------+
 
+                [Figure 1. Smart Contracts Stack]
 
-[Figure 1. Smart Contracts Stack]
+ In Figure 1. an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independnet shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
- In Figure 1. an untrusted client, or `Userspace` in Operating Systems terms, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to the Solana Bytecode object. This object file is a standard ELF. We use the section headers in the ELF format to annotate memory in the object such that the Kernel aka the Solana blockchain, can safely and efficiently load it for execution.
-
-The computationally expensive work of converting frontend languages into programs is done locally by the client. The output is a ELF with specific section headers and with a bytecode as its target that is designed for quick verification and conversion to the local machine instruction set that Solana is running on.
-
-## Solana Bytecode
+## Bytecode
 
 Our bytecode is based on Berkley Packet Filter. The requirements for BPF overlap almost exactly with the requirements we have
 
@@ -43,115 +42,161 @@ Our bytecode is based on Berkley Packet Filter. The requirements for BPF overlap
 3. Verified memory accesses
 4. Fast to load the object, verify the bytecode and JIT to local machine instruction set
 
-For 1, we can unroll the loops, and for any jumps back we can guard them with a check against the number of instruction that have been executed at this point.  If the limit is reached, the program yields.  This involves saving the stack and current instruction index to the RW segment of the elf.
+For 1, that means that loops are unrolled, and for any jumps back we can guard them with a check against the number of instruction that have been executed at this point.  If the limit is reached, the program yields its execution.  This involves saving the stack and current instruction index.
 
 For 2, the BPF bytecode already easily maps to x86–64, arm64 and other instruction sets. 
 
-For 3, every load and store that is PC relative can be checked to be within the ELF.  Dynamic load and stores can dynamically guard against load and stores to dynamic memory.
-For 4, Statically linked elf with just a signle R/RX/RW segments.  Effectively we are linking with `-static --nostd -target bpf` and a linker script to collect everything into a single spot.  The R segment is for read only instance data that is populated by the loader.
+For 3, every load and store that is relative can be checked to be within the expected memory that is passed into the ELF.  Dynamic load and stores can do a runtime check against available memory, these will be slow and should be avoided.
+
+For 4, Statically linked PIC ELF with just a signle RX segment.  Effectively we are linking a shared object with `-fpic -target bpf` and a linker script to collect everything into a single RX segment.  Writable globals are not supported at the moment.
 
 ## Loader
-The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data. 
+The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader expects the shared object to implement the following methods:
+```
+void map(const struct module_data *module_data, struct transaction* tx, uint8_t *scratch);
 
-       +----------------------+
-       |                      |
-       |  +----------------+  |
-       |  |    RX-code     |  |
-       |  +----------------+  |
-       |                      |
-       |  +----------------+  |
-       |  |     R-data     |  |
-       |  +----------------+  |
-       |                      |
-       |  +----------------+  |
-       |  |    RW-data     |  |
-       |  +----------------+  |
-       |         elf          |
-       +----------------------+
+void reduce(
+    const struct module_data *module_data,
+    const transaction *txs,
+    uint32_t num,
+    const struct reduce* reductions,
+    uint32_t num_rs,
+    struct reduce* reduced
+);
+
+void finalize(
+    const struct module_data *module_data,
+    const transaction *txs,
+    uint32_t num,
+    struct reduce* reduce
+);
+```
+The module_data structure is configued by the client, it contains the `struct solana_module` structure at the top, which defines how to calculate how much buffer to provide for each step.
 
 A client will create a transaction to create a new loader instance.
-* `NewLoaderAtPubKey(Loader instance PubKey, proof of key ownership, space i need for my elf)`
+* `Solana_NewLoader(Loader instance PubKey, proof of key ownership, space i need for my elf)`
 
 A client will then do a bunch of transactions to load its elf into the loader instance they created.
+* `Loader_UploadElf(Loader instance PubKey, proof of key ownership, pos start, pos end, data)`
 
-* `LoaderConfigureInstance(Loader instance PubKey, proof of key ownership, amount of space I need for R user data, user data)`
+* `Loader_NewInstance(Loader instance PubKey, proof of key ownership, Instance PubKey, proof of key owndership)`
+
+A client will then do a bunch of transactions to load its elf into the loader instance they created.
+* `Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
+```
+struct module_hdr {
+    struct pubkey owner;
+    uint32_t map_scratch_size;
+    uint32_t map_data_size;
+    uint32_t reduce_size;
+    uint32_t reduce_scratch_size;
+    uint32_t finalize_scratch_size;
+};
 
 At this point the client may need to upload more R user data to the OS via some more transactions to the loader.
 
-* `LoaderStart(Loader instance PubKey, proof of key owndership)`
+* `Instance_Start(Instance PubKey, proof of key owndership)`
 
-At htis point clients can start sending transactions to the instance
+At this point clients can start sending transactions to the instance
 
 ## Parallelizable Runtime
-To parallelize smart contract execution we plan on breaking up contracts into distinct sections, Map/Collect/Reduce/Finalize. These distinct sections are the interface between the ELF and the Kernel that is executing it. Memory is loaded into the symbols defined in these sections, and relevant constants are set.
+To parallelize smart contract execution we plan on breaking up contracts into distinct interfaces, Map/Collect/Reduce/Finalize.
+
+### Map and Collect
 ```
-struct Vote {
-   Address from;
-   uint64_t amount;
+struct transaction {
+   struct transaction_msg msg;
    uint8_t favorite;
 }
-struct Vote vote;
-void map(struct Transaction *tx)
+struct module_data {
+   struct module_hdr hdr;
+}
+void map(const struct module_data *module_data, struct transaction* tx, uint8_t *scratch)
 {
-    memmove(&vote.from, &tx.from, sizeof(vote.from));
-    vote.amount = tx.amount;
-    vote.favorite = tx.userdata[0];
-    collect(&vote, sizeof(vote));
+    //msg.userdata is a network protocol defined fixed size that is an input from the user via the transaction
+    tx->favorite = tx->msg.userdata[0];
+    collect(&tx->hdr);
 }
 ```
-The contract's object file implements a map function and lays out memory that is allocated per transaction. It then yields itself to a collect call that is schedule to run sometime later.
+
+The contract's object file implements a map function and lays out memory that is allocated per transaction. It then tells the runtime to collect this transaction for further processing if it's accepted by the contract. The mapped memory is stored as part of the transaction, and only transactions that succeed in a `collect` call will get accepted by this contract and move to the next stage.
+
+### Reduce
+
 ```
-void collect(void* data[], uint32_t sizes[], uint32_t num)
-{
-   used = sizeof(struct Vote) * votelen;
-   memmove(totals, vote, used);
-   reduce)
+struct reduce {
+    struct reduce_hdr hdr;
+    uint64_t votes[256];
+}
+void reduce(
+    const struct module_data *module_data,
+    const transaction *txs,
+    uint32_t num,
+    const struct reduce* reductions,
+    uint32_t num_rs,
+    struct reduce* reduced
+) {
+    struct reduce *reduced = (struct reduce*)scratch;
+    int i = 0;
+    for(int i = 0; i < num; ++i) {
+        struct Vote *v = collected(&txs[i]);
+        reduced->votes[txs[i].favorite] += txs[i].msg.amount;
+    }
+    for(int i = 0; i < num_rs; ++i) {
+        for(j = 0; j < 256; ++j) {
+            reduced->votes[j] += reductions[i].votes[j];
+        }
+    }
 }
 ```
-Reduce
+Reduce allows the contract to accumilate all the `collect` and `reduce` calls into a single structure.
+### Finalize
+Finalize is then called when some final condition occurs. This could be when the time expires on the contract, or from a direct call to finalize itself, such as finalize(reduce). 
 ```
-void reduce()
-{
-   int i;
-   for(i = 0; i < len; ++i) {
-      memmove(&totals[used/sizeof(struct Vote)], vote[i], sizes[i]);
-      used += sizes[i];
-   }
-   for(i = 0; i < rlen; ++i) {
-      memmove(&totals[used/sizeof(struct Vote)], rtotals[i], rsizes[i]);
-      used += rsizes[i];
-   }
-}
-```
-finalize is then called when some final condition occurs. This could be when the time expires on the contract, or from a direct call to finalize itself, such as yield(finalize). 
-```
-void finalize() {
-   int i;
-   uint64_t total = 0;
-   uint8_t max = 0;
-   uint32_t num = used/sizeof(struct Vote);
-   //scan all the votes and find out which uint8_t is the favorite
-   for(i = 0; i < num; ++i) {
-      struct Vote *v = &totals[i];
-      votes[v->favorite] += v->amount;
-      if votes[max] < votes[v->favorite] {
-          max = v->favorite
-      }
-      total += v->amount;
-   }
-   for(i = 0; i < num; ++i) {
-      struct Vote *v = &totals[i];
-      if v->favorite == max {
-          payout(v->from, total * v->amount / votes[max]);
-      }
-   }
+void finalize(
+    const struct module_data *module_data,
+    const transaction *txs,
+    uint32_t num,
+    struct reduce* reduce
+) {
+    int i, s = 0;
+    uint64_t total = 0;
+    uint8_t max = 0;
+    for(i = 0; i < 256; ++i) {
+        if reduce->votes[max] < reduce->votes[i] {
+            max = i;
+        }
+        total += reduce->votes[i];
+    }
+    //now we have to spend the transactions
+    for(i = 0; i < num; ++i) {
+        struct transaction *dst = &txs[i];
+        if txs[i]->favorite != max {
+            continue;
+        }
+        uint64_t award = total * dst.hdr->amount / reduced->votes[max];
+        for(; s < num; ++s) {
+            struct transaction *src = &txs[s];
+            if src->favorite == max {
+                continue;
+            }
+            uint64_t amt = MIN(src->hdr.amount, award);
+            //mark the src transaction as spent
+            spend(&src->hdr, amt, dst.hdr.from);
+            award -= amt;
+            if award == 0 {
+                break;
+            }
+        }
+    }
+    //spend the rounding errors on myself
+    for(; s < num; ++s) {
+        struct transaction *src = &txs[s];
+        spend(&src->hdr, src->hdr.amount, module_data->hdr.owner);
+    }
 }
 ```
 ## Notes
 1. There is no dynamic memory allocation. 
-2. You need to derive the maximum amount of memory you need based on the number of user inputs flowing through the contract.
-3. You need to tell the engine how much you are actually using so it saves that amount as persistent.
-4. Loops need to be unrolled, and the contract will need to yield back to itself with the loop context saved. This means the stack for each function is something we load/store just like any other memory defined in the ELF
-Other information about the kernel (current hash, contract address and balance, etc…) can be mapped into the elf as well.
-5. We can map more complex data structured as well, like maps and hashtables, lists etc…
-6. We can map instance configurable data as another section. So contracts can configure and create themselves.
+2. Transactions are tracked by the runtime and not the contract
+3. Transactions must be spent, if they are not spent the runtime can cancel and refund them minus fees
