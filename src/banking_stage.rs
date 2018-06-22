@@ -327,7 +327,7 @@ mod bench {
         let (verified_sender, verified_receiver) = channel();
         let (signal_sender, signal_receiver) = channel();
         let packet_recycler = PacketRecycler::default();
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions, tx)
+        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions, 192)
             .into_iter()
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();
