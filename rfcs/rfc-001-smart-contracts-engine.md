@@ -75,15 +75,17 @@ The module_data structure is configued by the client, it contains the `struct so
 
 A client will create a transaction to create a new loader instance:
 
-`Solana_NewLoader(Loader instance PubKey, proof of key ownership, space I need for my elf)`
+`Solana_NewLoader(Loader Instance PubKey, proof of key ownership, space I need for my elf)`
 
 A client will then do a bunch of transactions to load its elf into the loader instance they created:
 
-`Loader_UploadElf(Loader instance PubKey, proof of key ownership, pos start, pos end, data)`
+`Loader_UploadElf(Loader Instance PubKey, proof of key ownership, pos start, pos end, data)`
 
-`Loader_NewInstance(Loader instance PubKey, proof of key ownership, Instance PubKey, proof of key owndership)`
+At this point the client can create a new instance of the module with its own instance address:
 
-A client will then do a bunch of transactions to load its elf into the loader instance they created:
+`Loader_NewInstance(Loader Instance PubKey, proof of key ownership, Instance PubKey, proof of key ownership)`
+
+Once the instance has been created, the client may need to upload more user data to solana to configure this instance:
 
 `Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
 
@@ -98,11 +100,9 @@ struct module_hdr {
 };
 ```
 
-At this point the client may need to upload more R user data to the OS via some more transactions to the loader:
+Now clients can `start` the instance and send it transactions:
 
-`Instance_Start(Instance PubKey, proof of key owndership)`
-
-At this point clients can start sending transactions to the instance
+`Instance_Start(Instance PubKey, proof of key ownership)`
 
 ## Parallelizable Runtime
 
@@ -122,6 +122,7 @@ void map(const struct module_data *module_data, struct transaction* tx, uint8_t 
 {
     //msg.userdata is a network protocol defined fixed size that is an input from the user via the transaction
     tx->favorite = tx->msg.userdata[0];
+    //collect marks this transaction as accepted into the contract, if this is never called, the transaction is dropped
     collect(&tx->hdr);
 }
 ```
