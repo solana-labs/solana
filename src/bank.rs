@@ -116,6 +116,7 @@ impl Bank {
         bank
     }
 
+    /// Commit funds to the `payment.to` party.
     fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<PublicKey, i64>) {
         if balances.contains_key(&payment.to) {
             *balances.get_mut(&payment.to).unwrap() += payment.tokens;
@@ -186,23 +187,25 @@ impl Bank {
         last_ids.push_back(*last_id);
     }
 
-    pub fn apply_debits(&self, tr: &Transaction, bals: &mut HashMap<PublicKey, i64>) -> Result<()> {
-        let option = bals.get_mut(&tr.from);
+    /// Deduct tokens from the 'from' address the account has sufficient
+    /// funds and isn't a duplicate.
+    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<PublicKey, i64>) -> Result<()> {
+        let option = bals.get_mut(&tx.from);
         if option.is_none() {
-            return Err(BankError::AccountNotFound(tr.from));
+            return Err(BankError::AccountNotFound(tx.from));
         }
         let bal = option.unwrap();
 
-        self.reserve_signature_with_last_id(&tr.sig, &tr.last_id)?;
+        self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
 
-        if let Instruction::NewContract(contract) = &tr.instruction {
+        if let Instruction::NewContract(contract) = &tx.instruction {
             if contract.tokens < 0 {
                 return Err(BankError::NegativeTokens);
             }
 
             if *bal < contract.tokens {
-                self.forget_signature_with_last_id(&tr.sig, &tr.last_id);
-                return Err(BankError::InsufficientFunds(tr.from));
+                self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                return Err(BankError::InsufficientFunds(tx.from));
             }
 
             *bal -= contract.tokens;
@@ -210,6 +213,8 @@ impl Bank {
         Ok(())
     }
 
+    /// Apply only a transaction's credits. Credits from multiple transactions
+    /// may safely be applied in parallel.
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
@@ -276,16 +281,16 @@ impl Bank {
             txs_len
         );
 
-        let mut tr_count = 0;
+        let mut tx_count = 0;
         for r in &res {
             if r.is_ok() {
-                tr_count += 1;
+                tx_count += 1;
             } else {
                 info!("tx error: {:?}", r);
             }
         }
         self.transaction_count
-            .fetch_add(tr_count, Ordering::Relaxed);
+            .fetch_add(tx_count, Ordering::Relaxed);
         res
     }
 
