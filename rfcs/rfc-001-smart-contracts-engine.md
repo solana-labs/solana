@@ -83,6 +83,7 @@ A client will then do a bunch of transactions to load its elf into the loader in
 
 A client will then do a bunch of transactions to load its elf into the loader instance they created.
 * `Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
+
 ```
 struct module_hdr {
     struct pubkey owner;
@@ -92,6 +93,7 @@ struct module_hdr {
     uint32_t reduce_scratch_size;
     uint32_t finalize_scratch_size;
 };
+```
 
 At this point the client may need to upload more R user data to the OS via some more transactions to the loader.
 
@@ -150,8 +152,11 @@ void reduce(
 }
 ```
 Reduce allows the contract to accumilate all the `collect` and `reduce` calls into a single structure.
+
 ### Finalize
+
 Finalize is then called when some final condition occurs. This could be when the time expires on the contract, or from a direct call to finalize itself, such as finalize(reduce). 
+
 ```
 void finalize(
     const struct module_data *module_data,
@@ -196,7 +201,9 @@ void finalize(
     }
 }
 ```
+
 ## Notes
-1. There is no dynamic memory allocation. 
+
+1. There is no dynamic memory allocation.
 2. Transactions are tracked by the runtime and not the contract
 3. Transactions must be spent, if they are not spent the runtime can cancel and refund them minus fees
