@@ -66,8 +66,8 @@ impl Drone {
         new_addr
     }
 
-    pub fn check_request_limit(&mut self) -> bool {
-        self.request_current <= self.request_cap
+    pub fn check_request_limit(&mut self, request_amount: u64) -> bool {
+        (self.request_current + request_amount) <= self.request_cap
     }
 
     pub fn clear_request_count(&mut self) {
@@ -95,34 +95,35 @@ impl Drone {
     }
 
     pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<usize, io::Error> {
+        let tx: Transaction;
+        let request_amount: u64;
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        if self.check_request_limit() {
-            let tx: Transaction;
-            let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-            let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(
+            self.new_from_server_addr(ServerAddr::RequestsAddr),
+            requests_socket,
+            self.new_from_server_addr(ServerAddr::TransactionsAddr),
+            transactions_socket,
+        );
+        let last_id = client.get_last_id();
 
-            let mut client = ThinClient::new(
-                self.new_from_server_addr(ServerAddr::RequestsAddr),
-                requests_socket,
-                self.new_from_server_addr(ServerAddr::TransactionsAddr),
-                transactions_socket,
-            );
-            let last_id = client.get_last_id();
-
-            match req {
-                DroneRequest::GetAirdrop {
-                    airdrop_request_amount,
+        match req {
+            DroneRequest::GetAirdrop {
+                airdrop_request_amount,
+                client_public_key,
+            } => {
+                request_amount = airdrop_request_amount.clone();
+                tx = Transaction::new(
+                    &self.mint_keypair,
                     client_public_key,
-                } => {
-                    self.request_current += airdrop_request_amount;
-                    tx = Transaction::new(
-                        &self.mint_keypair,
-                        client_public_key,
-                        airdrop_request_amount as i64,
-                        last_id,
-                    );
-                },
+                    airdrop_request_amount as i64,
+                    last_id,
+                );
             }
+        }
+        if self.check_request_limit(request_amount) {
+            self.request_current += request_amount;
             client.transfer_signed(tx)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
@@ -162,9 +163,9 @@ mod tests {
         addr.set_ip(get_ip_addr().unwrap());
         let server_addr = addr.clone();
         let mut drone = Drone::new(keypair, addr, server_addr, None, Some(3));
-        assert!(drone.check_request_limit());
-        drone.request_current = 4;
-        assert!(!drone.check_request_limit());
+        assert!(drone.check_request_limit(1));
+        drone.request_current = 3;
+        assert!(!drone.check_request_limit(1));
     }
 
     #[test]
