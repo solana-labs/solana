@@ -1,5 +1,7 @@
 #!/bin/bash
-here=$(dirname $0)
+here=$(dirname "$0")
+
+# shellcheck source=/dev/null
 . "${here}"/myip.sh
 
 myip=$(myip) || exit $?
