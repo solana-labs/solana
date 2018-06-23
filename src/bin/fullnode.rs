@@ -36,7 +36,12 @@ fn main() {
     let mut opts = Options::new();
     opts.optflag("h", "help", "print help");
     opts.optopt("l", "", "run with the identity found in FILE", "FILE");
-    opts.optopt("v", "", "validate; find leader's identity in FILE", "FILE");
+    opts.optopt(
+        "t",
+        "",
+        "testnet; connec to the network at this gossip entry point",
+        "host:port",
+    );
     opts.optopt(
         "o",
         "",
@@ -119,14 +124,14 @@ fn main() {
     }
 
     let exit = Arc::new(AtomicBool::new(false));
-    let threads = if matches.opt_present("v") {
-        let path = matches.opt_str("v").unwrap();
+    let threads = if matches.opt_present("t") {
+        let testnet = matches.opt_str("t").unwrap();
         eprintln!(
-            "starting validator... {} using {}",
-            repl_data.requests_addr, path
+            "starting validator... {} connecting to {}",
+            repl_data.requests_addr, testnet
         );
-        let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
-        let leader = serde_json::from_reader(file).expect("parse");
+        let taddr = testnet.parse().unwrap();
+        let entry = ReplicatedData::new_entry_point(taddr);
         let s = Server::new_validator(
             bank,
             repl_data.clone(),
@@ -135,7 +140,7 @@ fn main() {
             UdpSocket::bind(repl_data.replicate_addr).unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
             UdpSocket::bind(repl_data.repair_addr).unwrap(),
-            leader,
+            entry,
             exit.clone(),
         );
         s.thread_hdls
