@@ -558,9 +558,8 @@ impl Crdt {
         let cur = self.table.values().filter(|x| x.current_leader_id != def);
         for v in cur {
             let cnt = table.entry(&v.current_leader_id).or_insert(0);
-            //let cnt = table.get_mut(&v.current_leader_id).unwrap();
             *cnt += 1;
-            println!("leader {:?} {}", &v.current_leader_id[..4], *cnt);
+            trace!("leader {:?} {}", &v.current_leader_id[..4], *cnt);
         }
         let mut sorted: Vec<_> = table.iter().collect();
         sorted.sort_by_key(|a| a.1);
@@ -855,6 +854,7 @@ impl TestNode {
 #[cfg(test)]
 mod tests {
     use crdt::{parse_port_or_addr, Crdt, ReplicatedData, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE};
+    use logger;
     use packet::BlobRecycler;
     use result::Error;
     use signature::{KeyPair, KeyPairUtil};
@@ -1203,6 +1203,7 @@ mod tests {
     /// delete this test after leader selection is correctly implemented
     #[test]
     fn test_update_leader() {
+        logger::setup();
         let me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let lead = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let lead2 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
