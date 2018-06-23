@@ -132,7 +132,7 @@ void reduce_r(
     const uint8_t *reduce_data[],
     int num,
     uint8_t *reduce_data,
-); 
+);
 ```
 
 ### Execution
@@ -140,19 +140,20 @@ void reduce_r(
 Transactions are batched and processed in parallel at each stage.
 ```
 +-----------+    +--------------+      +-----------+    +---------------+
-| sigverify |-+->| debit verify |---+->| execution |-+->| memory commit |
+| sigverify |-+->| debit commit |---+->| execution |-+->| memory commit |
 +-----------+ |  +--------------+   |  +-----------+ |  +---------------+
-              |                     |                |                   
-              |  +---------------+  |                |  +--------------+ 
-              |->| memory verify |->+                +->| debit commit | 
-                 +---------------+                   |  +--------------+ 
-                                                     |                   
-                                                     |  +----=----------+
+              |                     |                |
+              |  +---------------+  |                |  +--------------+
+              |->| memory verify |->+                +->| debit undo   |
+                 +---------------+                   |  +--------------+
+                                                     |
+                                                     |  +---------------+
                                                      +->| credit commit |
                                                         +---------------+
 
+
 ```
-The `debit verify` stage is very similar to `memory verify`.  Proof of key ownership is used to check if the callers key has some state allocated with the contract, then the memory is loaded and executed.  After execution stage, the dirty pages are written back by the contract.  Because know all the memory accesses during execution, we can batch transactions that do not interfere with each other.  We can also apply the debit and credit stages of the transaction.
+The `debit verify` stage is very similar to `memory verify`.  Proof of key ownership is used to check if the callers key has some state allocated with the contract, then the memory is loaded and executed.  After execution stage, the dirty pages are written back by the contract.  Because know all the memory accesses during execution, we can batch transactions that do not interfere with each other.  We can also apply the `debit undo` and `credit commit` stages of the transaction.  `debit undo` is run in case of an exception during contract execution, only transfers may be reversed, fees are commited to solana.
 
 ### GPU execution
 
