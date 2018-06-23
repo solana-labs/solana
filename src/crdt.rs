@@ -857,10 +857,7 @@ mod tests {
     use crdt::{parse_port_or_addr, Crdt, ReplicatedData, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE};
     use packet::BlobRecycler;
     use result::Error;
-    use signature::PublicKey;
     use signature::{KeyPair, KeyPairUtil};
-    use std::collections::HashMap;
-    use std::net::SocketAddr;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -1225,31 +1222,5 @@ mod tests {
         crdt.insert(&lead2);
         crdt.update_leader();
         assert_eq!(crdt.my_data().current_leader_id, lead2.id);
-    }
-    struct TestArrays {
-        pub v1: SocketAddr,
-        pub key2: PublicKey,
-        pub v3: SocketAddr,
-    }
-
-    #[test]
-    fn test_update_leader_keys() {
-        let key1 = TestArrays {
-            v1: "127.0.0.1:4124".parse().unwrap(),
-            key2: KeyPair::new().pubkey(),
-            v3: "224.245.124.012:4124".parse().unwrap(),
-        };
-        let key2 = TestArrays {
-            v1: "134.245.124.012:4000".parse().unwrap(),
-            key2: KeyPair::new().pubkey(),
-            v3: "244.245.124.124:4124".parse().unwrap(),
-        };
-        let mut table = HashMap::new();
-        table.entry(&key1.key2).or_insert(0);
-        for _ in 0..1000 {
-            let a = table.entry(&key2.key2).or_insert(0);
-            *a += 1;
-        }
-        assert_eq!(table.len(), 2);
     }
 }
