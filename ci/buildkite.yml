@@ -6,6 +6,10 @@ steps:
   - command: "ci/coverage.sh"
     name: "coverage [public]"
     timeout_in_minutes: 20
+    retry:
+      automatic:
+      - exit_status: "*"
+        limit: 2
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
     timeout_in_minutes: 20
@@ -15,6 +19,10 @@ steps:
   - command: "ci/test-cuda.sh"
     name: "cuda [public]"
     timeout_in_minutes: 20
+    retry:
+      automatic:
+      - exit_status: "*"
+        limit: 2
     agents:
       - "queue=cuda"
   - command: "ci/shellcheck.sh"
