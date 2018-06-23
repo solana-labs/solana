@@ -1214,6 +1214,7 @@ mod tests {
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
             let mut dum = ReplicatedData::new_entry_point("127.0.0.1:1234".parse().unwrap());
+            dum.id = KeyPair::new().pubkey();
             dum.current_leader_id = lead2.id;
             crdt.insert(&dum);
         }
