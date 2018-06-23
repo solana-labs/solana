@@ -85,7 +85,8 @@ $ ./multinode-demo/leader.sh
 ```
 
 To run a performance-enhanced fullnode on Linux, download `libcuda_verify_ed25519.a`. Enable
-it by adding `--features=cuda` to the line that runs `solana-fullnode` in `leader.sh`.
+it by adding `--features=cuda` to the line that runs `solana-fullnode` in
+`leader.sh`.  [CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on your system.
 
 ```bash
 $ ./fetch-perf-libs.sh
