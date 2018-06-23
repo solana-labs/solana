@@ -180,7 +180,8 @@ impl Transaction {
     /// Verify only the payment plan.
     pub fn verify_plan(&self) -> bool {
         if let Instruction::NewContract(contract) = &self.instruction {
-            self.fee >= 0 && self.fee <= contract.tokens
+            self.fee >= 0
+                && self.fee <= contract.tokens
                 && contract.plan.verify(contract.tokens - self.fee)
         } else {
             true
