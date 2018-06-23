@@ -2,10 +2,16 @@
 
 function myip()
 {
-  declare ipaddrs=(
-    $(curl -s ifconfig.co)                             # query interwebs
-    $(ifconfig | awk '/inet(6)? (addr:)?/ {print $2}') # machine interfaces
-  )
+  declare ipaddrs=( )
+
+  # query interwebs
+  mapfile -t ipaddrs < <(curl -s ifconfig.co)
+
+  # machine's interfaces
+  mapfile -t -O "${#ipaddrs[*]}" ipaddrs < \
+          <(ifconfig | awk '/inet(6)? (addr:)?/ {print $2}')
+
+  ipaddrs=( "${extips[@]}" "${ipaddrs[@]}" )
 
   if (( ! ${#ipaddrs[*]} ))
   then
