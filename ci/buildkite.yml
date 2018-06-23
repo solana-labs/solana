@@ -13,7 +13,7 @@ steps:
     name: "ignored [public]"
     timeout_in_minutes: 20
   - command: "ci/test-cuda.sh"
-    name: "cuda"
+    name: "cuda [public]"
     timeout_in_minutes: 20
     agents:
       - "queue=cuda"
@@ -21,7 +21,7 @@ steps:
     name: "shellcheck [public]"
     timeout_in_minutes: 20
   - command: "ci/docker-run.sh rust ci/test-erasure.sh"
-    name: "erasure"
+    name: "erasure [public]"
     timeout_in_minutes: 20
   - wait
   - command: "ci/publish-snap.sh"
