@@ -133,7 +133,7 @@ multinode variation, you'll see TPS measurements for each validator node as well
 
 Linux Snap
 ---
-A Linux Solana [Snap](https://snapcraft.io/) is available, which can be used to
+A Linux [Snap](https://snapcraft.io/) is available, which can be used to
 easily get Solana running on supported Linux systems without building anything
 from source.  The `edge` Snap channel is updated daily with the latest
 development from the `master` branch.  To install:
@@ -144,6 +144,12 @@ $ sudo snap install solana --edge --devmode
 
 Once installed the usual Solana programs will be available as `solona.*` instead
 of `solana-*`.  For example, `solana.fullnode` instead of `solana-fullnode`.
+
+Update to the latest version at any time with
+```bash
+$ snap info solana
+$ sudo snap refresh solana --devmode
+```
 
 Developing
 ===
