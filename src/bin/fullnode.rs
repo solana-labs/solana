@@ -39,7 +39,7 @@ fn main() {
     opts.optopt(
         "t",
         "",
-        "testnet; connec to the network at this gossip entry point",
+        "testnet; connect to the network at this gossip entry point",
         "HOST:PORT",
     );
     opts.optopt(
