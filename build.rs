@@ -11,5 +11,6 @@ fn main() {
     }
     if !env::var("CARGO_FEATURE_ERASURE").is_err() {
         println!("cargo:rustc-link-lib=dylib=Jerasure");
+        println!("cargo:rustc-link-lib=dylib=gf_complete");
     }
 }
