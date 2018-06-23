@@ -30,7 +30,7 @@ Please choose the IP address you want to advertise to the network:
 "
   done
 
-  while read -p "${prompt}
+  while read -r -p "${prompt}
 please enter a number [0 for default]: " which
   do
     [[ -z ${which} ]] && break;
@@ -46,7 +46,7 @@ please enter a number [0 for default]: " which
 
 }
 
-if [[ ${0} == ${BASH_SOURCE[0]} ]]
+if [[ ${0} == "${BASH_SOURCE[0]}" ]]
 then
     myip "$@"
 fi
