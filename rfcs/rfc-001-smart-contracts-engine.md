@@ -31,11 +31,11 @@ The goal of this RFC is to define a set of constraints for APIs and runtime such
 
                 [Figure 1. Smart Contracts Stack]
 
- In Figure 1. an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independnet shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
+In Figure 1. an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
 ## Bytecode
 
-Our bytecode is based on Berkley Packet Filter. The requirements for BPF overlap almost exactly with the requirements we have
+Our bytecode is based on Berkley Packet Filter. The requirements for BPF overlap almost exactly with the requirements we have:
 
 1. Deterministic amount of time to execute the code
 2. Bytecode that is portable between machine instruction sets
@@ -48,30 +48,12 @@ For 2, the BPF bytecode already easily maps to x86–64, arm64 and other instruc
 
 For 3, every load and store that is relative can be checked to be within the expected memory that is passed into the ELF.  Dynamic load and stores can do a runtime check against available memory, these will be slow and should be avoided.
 
-For 4, Fully linked PIC ELF with just a signle RX segment. Effectively we are linking a shared object with `-fpic -target bpf` and with a linker script to collect everything into a single RX segment. Writable globals are not supported.
+For 4, Fully linked PIC ELF with just a single RX segment. Effectively we are linking a shared object with `-fpic -target bpf` and with a linker script to collect everything into a single RX segment. Writable globals are not supported.
 
 ## Loader
-The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader expects the shared object to implement the following methods:
-```
-void map(const struct module_data *module_data, struct transaction* tx, uint8_t *scratch);
+The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader will verify the bytecode and that the object implements the expected entry points.
 
-void reduce(
-    const struct module_data *module_data,
-    const transaction *txs,
-    uint32_t num,
-    const struct reduce* reductions,
-    uint32_t num_rs,
-    struct reduce* reduced
-);
-
-void finalize(
-    const struct module_data *module_data,
-    const transaction *txs,
-    uint32_t num,
-    struct reduce* reduce
-);
-```
-The module_data structure is configued by the client, it contains the `struct module_hdr` structure at the top, which defines how to calculate how much buffer to provide for each step.
+Since there is only one RX segment, the context for the contract instance is passed into each entry point as well as the event data for that entry point.
 
 A client will create a transaction to create a new loader instance:
 
@@ -89,127 +71,108 @@ Once the instance has been created, the client may need to upload more user data
 
 `Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
 
-```
-struct module_hdr {
-    struct pub_key owner;
-    uint32_t map_scratch_size;
-    uint32_t map_data_size;
-    uint32_t reduce_size;
-    uint32_t reduce_scratch_size;
-    uint32_t finalize_scratch_size;
-};
-```
-
-Now clients can `start` the instance and send it transactions:
+Now clients can `start` the instance:
 
 `Instance_Start(Instance PubKey, proof of key ownership)`
 
-## Parallelizable Runtime
+## Runtime
 
-To parallelize smart contract execution we plan on breaking up contracts into distinct interfaces, Map/Collect/Reduce/Finalize.
+Our goal with the runtime is to have a general purpose execution environment that is highly parallelizable and doesn't require dynamic resource management.  Basically, we want to execute as many contracts as we can in parallel, and have them pass or fail without a destructive state change.
 
-### Map and Collect
+### State and Entry Point
+
+State is addressed by an account which is at the moment simply the PubKey.  Our goal is to eliminate dynamic memory allocation in the smart contract itself, so the contract is a function that takes a mapping of [(PubKey,State)] and returns [(PubKey, State')].  The output of keys is a subset of the input.  Three basic kinds of state exist:
+
+* Instance State
+* Participant State
+* Caller State
+
+There isn't any difference in how each is implemented, but conceptually Participant State is memory that is allocated for each participant in the contract.  Instance State is memory that is allocated for the contract itself, and Caller State is memory that the transactions caller has allocated.
+
+
+### Call
 
 ```
-struct transaction {
-   struct transaction_msg msg;
-   uint8_t favorite;
-}
-struct module_data {
-   struct module_hdr hdr;
-}
-void map(const struct module_data *module_data, struct transaction* tx, uint8_t *scratch)
-{
-    //msg.userdata is a network protocol defined fixed size that is an input from the user via the transaction
-    tx->favorite = tx->msg.userdata[0];
-    //collect marks this transaction as accepted into the contract, if this is never called, the transaction is dropped
-    collect(&tx->hdr);
-}
+void call(
+    const struct instance_data *data,
+    const uint8_t kind[],  //instance|participant|caller|read|write
+    const uint8_t *keys[],
+    uint8_t *data[],
+    int num,
+    uint8_t dirty[],        //dirty memory bits
+    uint8_t *userdata,      //current transaction data
+    struct ccall ccalls[],  //expected output ccalls
+    int num_out_ccalls,
+);
 ```
 
-The contract's object file implements a map function and lays out memory that is allocated per transaction. It then tells the runtime to collect this transaction for further processing if it's accepted by the contract. The mapped memory is stored as part of the transaction, and only transactions that succeed in a `collect` call will get accepted by this contract and move to the next stage.
+To call this operation, the transaction that is destined to the contract instance specifies what keyed state it should present to the `call` function.  To allocate the state memory, the client has to first call a function on the contract with the designed address that will own the state.
+
+* `Instance_Allocate(Instance PubKey, My PubKey, Proof of key ownership)`
+
+Any transaction can then call `call` on the contract with a set of keys.  It's up to the contract itself to manage owndership:
+
+* `Instance_Call(Instance PubKey, [Input PubKeys], proofs of ownership, userdata...)`
+
+The contract has read/write privileges to all the memory that is allocated.
+
+### CCall
+
+Within the `call` method, contracts can create their own `calls` to be scheduled in the future.
 
 ### Reduce
 
-```
-struct reduce {
-    struct reduce_hdr hdr;
-    uint64_t votes[256];
-}
-void reduce(
-    const struct module_data *module_data,
-    const transaction *txs,
-    uint32_t num,
-    const struct reduce* reductions,
-    uint32_t num_rs,
-    struct reduce* reduced
-) {
-    struct reduce *reduced = (struct reduce*)scratch;
-    int i = 0;
-    for(int i = 0; i < num; ++i) {
-        struct Vote *v = collected(&txs[i]);
-        reduced->votes[txs[i].favorite] += txs[i].msg.amount;
-    }
-    for(int i = 0; i < num_rs; ++i) {
-        for(j = 0; j < 256; ++j) {
-            reduced->votes[j] += reductions[i].votes[j];
-        }
-    }
-}
-```
-Reduce allows the contract to accumilate all the `collect` and `reduce` calls into a single structure.
-
-### Finalize
-
-Finalize is then called when some final condition occurs. This could be when the time expires on the contract, or from a direct call to finalize itself, such as finalize(reduce). 
+Some operations on the contract will require iteration over all the keys.  To make this parallelizable the iteration is broken up into reduce calls which are combined.
 
 ```
-void finalize(
-    const struct module_data *module_data,
-    const transaction *txs,
-    uint32_t num,
-    struct reduce* reduce
-) {
-    int i, s = 0;
-    uint64_t total = 0;
-    uint8_t max = 0;
-    for(i = 0; i < 256; ++i) {
-        if reduce->votes[max] < reduce->votes[i] {
-            max = i;
-        }
-        total += reduce->votes[i];
-    }
-    //now we have to spend the transactions
-    for(i = 0; i < num; ++i) {
-        struct transaction *dst = &txs[i];
-        if txs[i]->favorite != max {
-            continue;
-        }
-        uint64_t award = total * dst.hdr->amount / reduced->votes[max];
-        for(; s < num; ++s) {
-            struct transaction *src = &txs[s];
-            if src->favorite == max {
-                continue;
-            }
-            uint64_t amt = MIN(src->hdr.amount, award);
-            //mark the src transaction as spent
-            spend(&src->hdr, amt, dst.hdr.from);
-            award -= amt;
-            if award == 0 {
-                break;
-            }
-        }
-    }
-    //spend the rounding errors on myself
-    for(; s < num; ++s) {
-        struct transaction *src = &txs[s];
-        spend(&src->hdr, src->hdr.amount, module_data->hdr.owner);
-    }
-}
+void reduce_m(
+    const struct instance_data *data,
+    const uint8_t *keys[],
+    const uint8_t *data[],
+    int num,
+    uint8_t *reduce_data,
+);
+
+void reduce_r(
+    const struct instance_data *data,
+    const uint8_t *reduce_data[],
+    int num,
+    uint8_t *reduce_data,
+); 
 ```
+
+### Execution
+
+Transactions are batched and processed in parallel at each stage.
+
++-----------+    +--------------+    +---------------+    +-----------+  
+| sigverify |--->| debit verify |--->| memory verify |--->| execution |
++-----------+    +--------------+    +---------------+    +-----------+  
+
+Continued:
+
++-----------+    +---------------+
+| execution |-+->| memory commit |
++-----------+ |  +---------------+
+              |
+              |  +--------------+
+              +->| debit commit |
+              |  +--------------+
+              |
+              |  +----=----------+
+              +->| credit commit |
+                 +---------------+
+
+The `debit verify` stage is very similar to `memory verify`.  Proof of key ownership is used to check if the callers key has some state allocated with the contract, then the memory is loaded and executed.  After execution stage, the dirty pages are written back by the contract.  Because know all the memory accesses during execution, we can batch transactions that do not interfere with each other.  We can also appy the debit and credit stages of the transaction.
+
+
+### GPU execution
+
+A single contract can read and write to separate key pairs without interference.  These separate calls to the same contract can execute on the same GPU thread over different memory using different SIMD lanes.
 
 ## Notes
 
 1. There is no dynamic memory allocation.
-2. Transactions are tracked by the runtime and not the contract
-3. Transactions must be spent, if they are not spent the runtime can cancel and refund them minus fees
+2. Persistant Memory is allocated to a Key with ownership
+3. Contracts can `call` to update key owned state
+4. Contracts can `reduce` over the memory to aggregate state
