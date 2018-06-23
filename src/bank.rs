@@ -252,6 +252,7 @@ impl Bank {
     }
 
     /// Process a batch of transactions.
+    #[must_use]
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
         let bals = &mut self.balances.write().unwrap();
         debug!("processing Transactions {}", txs.len());
