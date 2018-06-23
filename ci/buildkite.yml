@@ -3,9 +3,9 @@ steps:
     name: "stable [public]"
     timeout_in_minutes: 20
   - wait
-  #- command: "ci/coverage.sh"
-  #  name: "coverage [public]"
-  #  timeout_in_minutes: 20
+  - command: "ci/coverage.sh"
+    name: "coverage [public]"
+    timeout_in_minutes: 20
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
     timeout_in_minutes: 20
@@ -24,11 +24,9 @@ steps:
     name: "erasure"
     timeout_in_minutes: 20
   - wait
-  #- command: "ci/publish-snap.sh"
-  #  timeout_in_minutes: 20
-  #  name: "publish snap"
-  #  agents:
-  #    - "queue=cuda"
+  - command: "ci/publish-snap.sh"
+    timeout_in_minutes: 20
+    name: "publish snap"
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 20
     name: "publish crate"
