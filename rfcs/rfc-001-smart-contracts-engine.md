@@ -101,8 +101,6 @@ void call(
     int num,
     uint8_t dirty[],        //dirty memory bits
     uint8_t *userdata,      //current transaction data
-    struct ccall ccalls[],  //expected output ccalls
-    int num_out_ccalls,
 );
 ```
 
@@ -115,10 +113,6 @@ Any transaction can then call `call` on the contract with a set of keys.  It's u
 * `Instance_Call(Instance PubKey, [Input PubKeys], proofs of ownership, userdata...)`
 
 The contract has read/write privileges to all the memory that is allocated.
-
-### CCall
-
-Within the `call` method, contracts can create their own `calls` to be scheduled in the future.
 
 ### Reduce
 
