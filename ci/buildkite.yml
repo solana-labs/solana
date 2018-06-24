@@ -31,14 +31,14 @@ steps:
   - command: "ci/docker-run.sh rust ci/test-erasure.sh"
     name: "erasure [public]"
     timeout_in_minutes: 20
-  - wait
-  - command: "ci/publish-snap.sh"
+  - command: "ci/snap.sh [public]"
     timeout_in_minutes: 20
-    name: "publish snap"
-  - command: "ci/publish-crate.sh"
+    name: "snap [public]"
+  - wait
+  - command: "ci/publish-crate.sh [public]"
     timeout_in_minutes: 20
     name: "publish crate"
-  - command: "ci/hoover.sh"
+  - command: "ci/hoover.sh [public]"
     timeout_in_minutes: 20
     name: "clean agent"
 
