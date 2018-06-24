@@ -225,6 +225,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_send_airdrop() {
         const SMALL_BATCH: i64 = 50;
         const TPS_BATCH: i64 = 5_000_000;
