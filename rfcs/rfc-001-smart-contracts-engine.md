@@ -1,6 +1,6 @@
 # Smart Contracts Engine
 
-The goal of this RFC is to define a set of constraints for APIs and runtime such that we can safely execute our smart contracts safely on massively parallel hardware such as a GPU.  Our runtime is built around an OS *syscall* primitive.  The difference in blockchain is that now the OS does a cryptographic check of memory region ownershp before accessing the memory in the kernel.
+The goal of this RFC is to define a set of constraints for APIs and runtime such that we can execute our smart contracts safely on massively parallel hardware such as a GPU.  Our runtime is built around an OS *syscall* primitive.  The difference in blockchain is that now the OS does a cryptographic check of memory region ownership before accessing the memory in the Solana kernel.
 
 ## Toolchain Stack
 
@@ -31,7 +31,7 @@ The goal of this RFC is to define a set of constraints for APIs and runtime such
 
                 [Figure 1. Smart Contracts Stack]
 
-In Figure 1. an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
+In Figure 1 an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
 ## Bytecode
 
@@ -77,7 +77,7 @@ Now clients can `start` the instance:
 
 ## Runtime
 
-Our goal with the runtime is to have a general purpose execution environment that is highly parallelizable and doesn't require dynamic resource management.  Basically, we want to execute as many contracts as we can in parallel, and have them pass or fail without a destructive state change.
+Our goal with the runtime is to have a general purpose execution environment that is highly parallelizable and doesn't require dynamic resource management. We want to execute as many contracts as we can in parallel, and have them pass or fail without a destructive state change.
 
 ### State and Entry Point
 
@@ -110,7 +110,7 @@ At its core, this is a system call that requires cryptographic proof of ownershi
 
 * `Instance_AllocateContext(Instance PubKey, My PubKey, Proof of key ownership)`
 
-Any transaction can then call `call` on the contract with a set of keys.  It's up to the contract itself to manage owndership:
+Any transaction can then call `call` on the contract with a set of keys.  It's up to the contract itself to manage ownership:
 
 * `Instance_Call(Instance PubKey, [Context PubKeys], proofs of ownership, userdata...)`
 
@@ -118,11 +118,11 @@ Contracts should be able to read any state that is part of solana, but only writ
 
 #### Caller State
 
-Caller `state` is memory allocated for the `call` that belongs to the PublicKey that is issuing the `call`.  This is the caller's context.
+Caller `state` is memory allocated for the `call` that belongs to the public key that is issuing the `call`.  This is the caller's context.
 
 #### Instance State
 
-Instance `state` is memory that belongs to this instance.  We may also need Module wide `state` as well.
+Instance `state` is memory that belongs to this contract instance.  We may also need module-wide `state` as well.
 
 #### Participant State
 
