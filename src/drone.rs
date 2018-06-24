@@ -152,7 +152,14 @@ mod tests {
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
         let requests_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, Some(3));
+        let mut drone = Drone::new(
+            keypair,
+            addr,
+            transactions_addr,
+            requests_addr,
+            None,
+            Some(3),
+        );
         assert!(drone.check_request_limit(1));
         drone.request_current = 3;
         assert!(!drone.check_request_limit(1));
@@ -213,7 +220,14 @@ mod tests {
         let requests_addr = "0.0.0.0:0".parse().unwrap();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(keypair, addr, transactions_addr, requests_addr, time_slice, request_cap);
+        let drone = Drone::new(
+            keypair,
+            addr,
+            transactions_addr,
+            requests_addr,
+            time_slice,
+            request_cap,
+        );
         assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
@@ -274,8 +288,7 @@ mod tests {
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
-        println!("trans: {:?}", leader.data.transactions_addr);
-        println!("req: {:?}", leader.data.requests_addr);
+
         let mut client = ThinClient::new(
             leader.data.requests_addr,
             requests_socket,
