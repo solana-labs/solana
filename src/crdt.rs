@@ -551,7 +551,7 @@ impl Crdt {
         blob_sender.send(q)?;
         Ok(())
     }
-    /// FIXME: This is obviously the wrong way to do this. Need to implement leader selection
+    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
     fn top_leader(&self) -> Option<PublicKey> {
         let mut table = HashMap::new();
         let def = PublicKey::default();
@@ -566,13 +566,13 @@ impl Crdt {
         sorted.last().map(|a| *(*(*a).0))
     }
 
-    /// FIXME: This is obviously the wrong way to do this. Need to implement leader selection
+    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
     /// A t-shirt for the first person to actually use this bad behavior to attack the alpha testnet
     fn update_leader(&mut self) {
-        if let Some(lid) = self.top_leader() {
-            if self.my_data().current_leader_id != lid {
-                if self.table.get(&lid).is_some() {
-                    self.set_leader(lid);
+        if let Some(leader_id) = self.top_leader() {
+            if self.my_data().current_leader_id != leader_id {
+                if self.table.get(&leader_id).is_some() {
+                    self.set_leader(leader_id);
                 }
             }
         }
@@ -614,8 +614,8 @@ impl Crdt {
                 let _ = obj.write().unwrap().update_leader();
                 let elapsed = timestamp() - start;
                 if GOSSIP_SLEEP_MILLIS > elapsed {
-                    let left = GOSSIP_SLEEP_MILLIS - elapsed;
-                    sleep(Duration::from_millis(left));
+                    let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
+                    sleep(Duration::from_millis(time_left));
                 }
             })
             .unwrap()
@@ -1199,30 +1199,30 @@ mod tests {
             assert_eq!(blob.get_id().unwrap(), id);
         }
     }
-    /// FIXME: This is obviously the wrong way to do this. Need to implement leader selection,
+    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection,
     /// delete this test after leader selection is correctly implemented
     #[test]
     fn test_update_leader() {
         logger::setup();
         let me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let lead = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let lead2 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let leader0 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let leader1 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let mut crdt = Crdt::new(me.clone());
-        assert_matches!(crdt.top_leader(), None);
-        crdt.set_leader(lead.id);
-        assert_eq!(crdt.top_leader().unwrap(), lead.id);
+        assert_eq!(crdt.top_leader(), None);
+        crdt.set_leader(leader0.id);
+        assert_eq!(crdt.top_leader().unwrap(), leader0.id);
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
             let mut dum = ReplicatedData::new_entry_point("127.0.0.1:1234".parse().unwrap());
             dum.id = KeyPair::new().pubkey();
-            dum.current_leader_id = lead2.id;
+            dum.current_leader_id = leader1.id;
             crdt.insert(&dum);
         }
-        assert_eq!(crdt.top_leader().unwrap(), lead2.id);
+        assert_eq!(crdt.top_leader().unwrap(), leader1.id);
         crdt.update_leader();
-        assert_eq!(crdt.my_data().current_leader_id, lead.id);
-        crdt.insert(&lead2);
+        assert_eq!(crdt.my_data().current_leader_id, leader0.id);
+        crdt.insert(&leader1);
         crdt.update_leader();
-        assert_eq!(crdt.my_data().current_leader_id, lead2.id);
+        assert_eq!(crdt.my_data().current_leader_id, leader1.id);
     }
 }

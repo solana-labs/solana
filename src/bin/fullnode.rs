@@ -125,13 +125,13 @@ fn main() {
 
     let exit = Arc::new(AtomicBool::new(false));
     let threads = if matches.opt_present("t") {
-        let testnet = matches.opt_str("t").unwrap();
+        let testnet_address_string = matches.opt_str("t").unwrap();
         eprintln!(
             "starting validator... {} connecting to {}",
-            repl_data.requests_addr, testnet
+            repl_data.requests_addr, testnet_address_string
         );
-        let taddr = testnet.parse().unwrap();
-        let entry = ReplicatedData::new_entry_point(taddr);
+        let testnet_addr = testnet_address_string.parse().unwrap();
+        let newtwork_entry_point = ReplicatedData::new_entry_point(testnet_addr);
         let s = Server::new_validator(
             bank,
             repl_data.clone(),
@@ -140,7 +140,7 @@ fn main() {
             UdpSocket::bind(repl_data.replicate_addr).unwrap(),
             UdpSocket::bind(repl_data.gossip_addr).unwrap(),
             UdpSocket::bind(repl_data.repair_addr).unwrap(),
-            entry,
+            newtwork_entry_point,
             exit.clone(),
         );
         s.thread_hdls
