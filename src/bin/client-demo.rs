@@ -1,7 +1,6 @@
 extern crate atty;
 extern crate env_logger;
 extern crate getopts;
-extern crate pnet;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
