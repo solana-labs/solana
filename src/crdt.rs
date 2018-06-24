@@ -561,9 +561,9 @@ impl Crdt {
             *cnt += 1;
             trace!("leader {:?} {}", &v.current_leader_id[..4], *cnt);
         }
-        let mut sorted: Vec<_> = table.iter().collect();
+        let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
         sorted.sort_by_key(|a| a.1);
-        sorted.last().map(|a| *(*(*a).0))
+        sorted.last().map(|a| *a.0)
     }
 
     /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
