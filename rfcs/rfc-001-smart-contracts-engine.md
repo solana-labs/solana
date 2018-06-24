@@ -1,6 +1,6 @@
 # Smart Contracts Engine
 
-The goal of this RFC is to define a set of constraints for APIs and runtime such that we can safely execute our smart contracts safely on massively parallel hardware such as a GPU.
+The goal of this RFC is to define a set of constraints for APIs and runtime such that we can safely execute our smart contracts safely on massively parallel hardware such as a GPU.  Our runtime is built around an OS *syscall* primitive.  The difference in blockchain is that now the OS does a cryptographic check of memory region ownershp before accessing the memory in the kernel.
 
 ## Toolchain Stack
 
@@ -104,15 +104,29 @@ void call(
 );
 ```
 
-To call this operation, the transaction that is destined to the contract instance specifies what keyed state it should present to the `call` function.  To allocate the state memory, the client has to first call a function on the contract with the designed address that will own the state.
+To call this operation, the transaction that is destined to the contract instance specifies what keyed state it should present to the `call` function.  To allocate the state memory or a call context, the client has to first call a function on the contract with the designed address that will own the state.
 
-* `Instance_Allocate(Instance PubKey, My PubKey, Proof of key ownership)`
+At its core, this is a system call that requires cryptographic proof of ownership of memory regions instead of an OS that checks page tables for access rights.
+
+* `Instance_AllocateContext(Instance PubKey, My PubKey, Proof of key ownership)`
 
 Any transaction can then call `call` on the contract with a set of keys.  It's up to the contract itself to manage owndership:
 
-* `Instance_Call(Instance PubKey, [Input PubKeys], proofs of ownership, userdata...)`
+* `Instance_Call(Instance PubKey, [Context PubKeys], proofs of ownership, userdata...)`
 
-The contract has read/write privileges to all the memory that is allocated.
+Contracts should be able to read any state that is part of solana, but only write to state that the contract allocated.
+
+#### Caller State
+
+Caller `state` is memory allocated for the `call` that belongs to the PublicKey that is issuing the `call`.  This is the caller's context.
+
+#### Instance State
+
+Instance `state` is memory that belongs to this instance.  We may also need Module wide `state` as well.
+
+#### Participant State
+
+Participant `state` is any other memory.  In some cases it may make sense to have these allocated as part of the call by the caller.
 
 ### Reduce
 
@@ -165,3 +179,4 @@ A single contract can read and write to separate key pairs without interference.
 2. Persistant Memory is allocated to a Key with ownership
 3. Contracts can `call` to update key owned state
 4. Contracts can `reduce` over the memory to aggregate state
+5. `call` is just a *syscall* that does a cryptographic check of memory owndershp
