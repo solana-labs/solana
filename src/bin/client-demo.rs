@@ -82,12 +82,12 @@ fn sample_tx_count(
 
 fn generate_and_send_txs(
     client: &mut ThinClient,
+    tx_clients: &Vec<ThinClient>,
     keypair_pairs: &Vec<&[KeyPair]>,
     leader: &ReplicatedData,
     txs: i64,
     last_id: &mut Hash,
     threads: usize,
-    client_addr: Arc<RwLock<SocketAddr>>,
 ) {
     println!(
         "Signing transactions... {} {}",
@@ -115,24 +115,33 @@ fn generate_and_send_txs(
     let transfer_start = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
-    chunks.into_par_iter().for_each(|txs| {
-        println!(
-            "Transferring 1 unit {} times... to {:?}",
-            txs.len(),
-            leader.transactions_addr
-        );
-        let client = mk_client(&client_addr, &leader);
-        for tx in txs {
-            client.transfer_signed(tx.clone()).unwrap();
-        }
-    });
+    chunks
+        .into_par_iter()
+        .zip(tx_clients)
+        .for_each(|(txs, client)| {
+            println!(
+                "Transferring 1 unit {} times... to {:?}",
+                txs.len(),
+                leader.transactions_addr
+            );
+            for tx in txs {
+                client.transfer_signed(tx.clone()).unwrap();
+            }
+        });
     println!(
         "Transfer done. {:?} ms {} tps",
         duration_as_ms(&transfer_start.elapsed()),
         txs as f32 / (duration_as_s(&transfer_start.elapsed()))
     );
 
-    *last_id = client.get_last_id();
+    loop {
+        let new_id = client.get_last_id();
+        if *last_id != new_id {
+            *last_id = new_id;
+            break;
+        }
+        sleep(Duration::from_millis(100));
+    }
 }
 
 fn main() {
@@ -266,18 +275,22 @@ fn main() {
         })
         .collect();
 
+    let clients = (0..threads)
+        .map(|_| mk_client(&client_addr, &leader))
+        .collect();
+
     // generate and send transactions for the specified duration
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     while now.elapsed() < time {
         generate_and_send_txs(
             &mut client,
+            &clients,
             &keypair_pairs,
             &leader,
             txs,
             &mut last_id,
             threads,
-            client_addr.clone(),
         );
     }
 
