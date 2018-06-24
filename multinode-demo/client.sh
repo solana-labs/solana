@@ -1,17 +1,22 @@
 #!/bin/bash
+#
+# usage: $0 <network path to solana repo on leader machine> <number of nodes in the network>"
+#
 
-if [[ -z $1 ]]; then
-    echo "usage: $0 [network path to solana repo on leader machine] <number of nodes in the network>"
-    exit 1
-fi
+here=$(dirname "$0")
+# shellcheck source=multinode-demo/common.sh
+source "$here"/common.sh
+SOLANA_CONFIG_DIR=config-client-demo
 
-LEADER=$1
-COUNT=${2:-1}
+leader=${1:-${here}/..}  # Default to local solana repo
+count=${2:-1}
 
-rsync -vz "$LEADER"/{leader.json,mint-demo.json} . || exit $?
+set -ex
+mkdir -p $SOLANA_CONFIG_DIR
+rsync -vz "$leader"/config/leader.json $SOLANA_CONFIG_DIR/
+rsync -vz "$leader"/config/mint-demo.json $SOLANA_CONFIG_DIR/
 
-# if RUST_LOG is unset, default to info
-export RUST_LOG=${RUST_LOG:-solana=info}
-
-cargo run --release --bin solana-client-demo -- \
-  -n "$COUNT" -l leader.json -d < mint-demo.json 2>&1 | tee client.log
+# shellcheck disable=SC2086 # $solana_client_demo should not be quoted
+exec $solana_client_demo \
+  -n "$count" -l $SOLANA_CONFIG_DIR/leader.json -d \
+  < $SOLANA_CONFIG_DIR/mint-demo.json 2>&1 | tee client-demo.log

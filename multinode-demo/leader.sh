@@ -1,28 +1,28 @@
 #!/bin/bash
+
 here=$(dirname "$0")
+# shellcheck source=multinode-demo/common.sh
+source "$here"/common.sh
 
-# shellcheck source=/dev/null
-. "${here}"/myip.sh
+if [[ -d "$SNAP" ]]; then
+  # Exit if mode is not yet configured
+  # (typically the case after the Snap is first installed)
+  [[ -n "$(snapctl get mode)" ]] || exit 0
+fi
 
-myip=$(myip) || exit $?
-
-[[ -f leader-"${myip}".json ]] || {
-  echo "I can't find a matching leader config file for \"${myip}\"...
-Please run ${here}/setup.sh first.
-"
+[[ -f "$SOLANA_CONFIG_DIR"/leader.json ]] || {
+  echo "$SOLANA_CONFIG_DIR/leader.json not found, run ${here}/setup.sh first"
   exit 1
 }
 
-# if RUST_LOG is unset, default to info
-export RUST_LOG=${RUST_LOG:-solana=info}
+if [[ -n "$SOLANA_CUDA" ]]; then
+  program="$solana_fullnode_cuda"
+else
+  program="$solana_fullnode"
+fi
 
-[[ $(uname) = Linux ]] && sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
-
-# this makes a leader.json file available alongside genesis, etc. for
-#  validators and clients
-cp leader-"${myip}".json leader.json
-
-cargo run --release --bin solana-fullnode -- \
-      -l leader-"${myip}".json \
-      < genesis.log tx-*.log \
-      > tx-"$(date -u +%Y%m%d%H%M%S%N)".log
+# shellcheck disable=SC2086 # $program should not be quoted
+exec $program \
+  -l "$SOLANA_CONFIG_DIR"/leader.json \
+  < "$SOLANA_CONFIG_DIR"/genesis.log "$SOLANA_CONFIG_DIR"/tx-*.log \
+  > "$SOLANA_CONFIG_DIR"/tx-"$(date -u +%Y%m%d%H%M%S%N)".log

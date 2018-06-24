@@ -84,13 +84,12 @@ Now start the server:
 $ ./multinode-demo/leader.sh
 ```
 
-To run a performance-enhanced fullnode on Linux, download `libcuda_verify_ed25519.a`. Enable
-it by adding `--features=cuda` to the line that runs `solana-fullnode` in
-`leader.sh`.  [CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on your system.
-
+To run a performance-enhanced fullnode on Linux,
+[CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
+your system:
 ```bash
 $ ./fetch-perf-libs.sh
-$ cargo run --release --features=cuda --bin solana-fullnode -- -l leader.json < genesis.log
+$ SOLANA_CUDA=1 ./multinode-demo/leader.sh
 ```
 
 Wait a few seconds for the server to initialize. It will print "Ready." when it's ready to
@@ -102,14 +101,15 @@ Multinode Testnet
 To run a multinode testnet, after starting a leader node, spin up some validator nodes:
 
 ```bash
-$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana #The leader machine
+$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
 ```
 
-As with the leader node, you can run a performance-enhanced validator fullnode by adding
-`--features=cuda` to the line that runs `solana-fullnode` in `validator.sh`.
-
+To run a performance-enhanced fullnode on Linux,
+[CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
+your system:
 ```bash
-$ cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json < genesis.log
+$ ./fetch-perf-libs.sh
+$ SOLANA_CUDA=1 ./multinode-demo/leader.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
 ```
 
 
@@ -151,6 +151,70 @@ Update to the latest version at any time with
 $ snap info solana
 $ sudo snap refresh solana --devmode
 ```
+
+### Daemon support
+The snap supports running a leader, validator or leader+drone node as a system
+daemon.
+
+Run `sudo snap get solana` to view the current daemon configuration, and
+`sudo snap logs -f solana` to view the daemon logs.
+
+Disable the daemon at any time by running:
+```bash
+$ sudo snap set solana mode=
+```
+
+Runtime configuration files for the daemon can be found in
+`/var/snap/solana/current/config`.
+
+#### Leader daemon
+```bash
+$ sudo snap set solana mode=leader
+```
+
+If CUDA is available:
+```bash
+$ sudo snap set solana mode=leader enable-cuda=1
+```
+
+`rsync` must be configured and running on the leader.
+
+1. Ensure rsync is installed with `sudo apt-get -y install rsync`
+2. Edit `/etc/rsyncd.conf` to include the following
+```
+[config]
+path = /var/snap/solana/current/config
+hosts allow = *
+read only = true
+```
+3. Run `sudo systemctl enable rsync; sudo systemctl start rsync`
+4. Test by running `rsync -Pzravv rsync://<ip-address-of-leader>/config
+solana-config` from another machine.  If the leader is running on a cloud
+provider it may be necessary to configure the Firewall rules to permit ingress
+to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000
+
+
+To run both the Leader and Drone:
+```bash
+$ sudo snap set solana mode=leader+drone
+```
+
+#### Validator daemon
+```bash
+$ sudo snap set solana mode=validator
+```
+If CUDA is available:
+```bash
+$ sudo snap set solana mode=validator enable-cuda=1
+```
+
+By default the validator will connect to **testnet.solana.com**, override
+the leader IP address by running:
+```bash
+$ sudo snap set solana mode=validator leader-address=127.0.0.1 #<-- change IP address
+```
+It's assumed that the leader will be running `rsync` configured as described in
+the previous **Leader daemon** section.
 
 Developing
 ===
