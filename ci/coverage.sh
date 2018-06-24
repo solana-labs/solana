@@ -2,6 +2,7 @@
 
 cd "$(dirname "$0")/.."
 
+cargo install cargo-cov
 cargo cov test
 cargo cov report
 
