@@ -11,17 +11,16 @@ extern crate tokio_io;
 use atty::{is, Stream as atty_stream};
 use bincode::deserialize;
 use getopts::Options;
-use solana::crdt::get_ip_addr;
+use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::{Drone, DroneRequest};
 use solana::mint::MintDemo;
-// use solana::signature::GenKeys;
 use std::env;
+use std::fs::File;
 use std::io::{stdin, Read};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
-// use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
@@ -43,6 +42,7 @@ fn main() {
         "time slice over which to limit token requests to drone",
     );
     opts.optopt("c", "", "cap", "request limit for time slice");
+    opts.optopt("l", "", "leader", "leader.json");
     opts.optflag("h", "help", "print help");
     let args: Vec<String> = env::args().collect();
     let matches = match opts.parse(&args[1..]) {
@@ -77,6 +77,12 @@ fn main() {
     } else {
         request_cap = None;
     }
+    let leader = if matches.opt_present("l") {
+        read_leader(matches.opt_str("l").unwrap())
+    } else {
+        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        ReplicatedData::new_leader(&server_addr)
+    };
 
     if is(atty_stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
@@ -99,12 +105,12 @@ fn main() {
 
     let mut drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
     drone_addr.set_ip(get_ip_addr().unwrap());
-    let mut server_addr = drone_addr.clone();
-    server_addr.set_port(8000);
+
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
         drone_addr,
-        server_addr,
+        leader.transactions_addr,
+        leader.requests_addr,
         time_slice,
         request_cap,
     )));
@@ -155,4 +161,8 @@ fn main() {
             tokio::spawn(processor)
         });
     tokio::run(done);
+}
+fn read_leader(path: String) -> ReplicatedData {
+    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
+    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }
