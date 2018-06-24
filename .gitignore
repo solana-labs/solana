@@ -2,3 +2,9 @@ Cargo.lock
 /target/
 **/*.rs.bk
 .cargo
+
+# node configuration files
+/config/
+/config-drone/
+/config-validator/
+/config-client-demo/

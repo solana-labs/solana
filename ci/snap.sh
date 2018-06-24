@@ -36,5 +36,8 @@ set -x
 echo --- build
 snapcraft
 
+source ci/upload_ci_artifact.sh
+upload_ci_artifact solana_*.snap
+
 echo --- publish
 $DRYRUN snapcraft push solana_*.snap --release $SNAP_CHANNEL

@@ -1,32 +1,54 @@
 #!/bin/bash
 here=$(dirname "$0")
+# shellcheck source=multinode-demo/common.sh
+source "$here"/common.sh
 
-# shellcheck source=/dev/null
-. "${here}"/myip.sh
-
-leader=$1
-
-[[ -z ${leader} ]] && {
-  echo "usage: $0 [network path to solana repo on leader machine]"
+usage() {
+  echo "usage: $0 [network path to solana repo on leader machine] [network ip address of leader]"
   exit 1
 }
 
-myip=$(myip) || exit $?
+if [[ "$1" = "-h" || -n "$3" ]]; then
+  usage
+fi
 
-[[ -f validator-"$myip".json ]] || {
-  echo "I can't find a matching validator config file for \"${myip}\"...
-Please run ${here}/setup.sh first.
-"
+if [[ -d "$SNAP" ]]; then
+  # Exit if mode is not yet configured
+  # (typically the case after the Snap is first installed)
+  [[ -n "$(snapctl get mode)" ]] || exit 0
+
+  # Select leader from the Snap configuration
+  leader_address="$(snapctl get leader-address)"
+  if [[ -z "$leader_address" ]]; then
+    # Assume drone is running on the same node as the leader by default
+    leader_address="localhost"
+  fi
+  leader=rsync://"$leader_address"
+else
+  leader=${1:-${here}/..}    # Default to local solana repo
+  leader_address=${2:-127.0.0.1}  # Default to local leader
+fi
+leader_port=8001
+
+if [[ -n "$SOLANA_CUDA" ]]; then
+  program="$solana_fullnode_cuda"
+else
+  program="$solana_fullnode"
+fi
+
+
+[[ -f "$SOLANA_CONFIG_DIR"/validator.json ]] || {
+  echo "$SOLANA_CONFIG_DIR/validator.json not found, run ${here}/setup.sh first"
   exit 1
 }
 
-rsync -vz "${leader}"/{mint-demo.json,leader.json,genesis.log,tx-*.log} . || exit $?
+set -ex
+SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
+rm -rf "$SOLANA_LEADER_CONFIG_DIR"
+rsync -vPrz "${leader}"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 
-[[ $(uname) = Linux ]] && sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
-
-# if RUST_LOG is unset, default to info
-export RUST_LOG=${RUST_LOG:-solana=info}
-
-cargo run --release --bin solana-fullnode -- \
-      -l validator-"${myip}".json -v leader.json \
-      < genesis.log tx-*.log
+# shellcheck disable=SC2086 # $program should not be quoted
+exec $program \
+  -l "$SOLANA_CONFIG_DIR"/validator.json -t "$leader_address:$leader_port" \
+  < "$SOLANA_LEADER_CONFIG_DIR"/genesis.log "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log

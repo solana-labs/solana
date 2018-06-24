@@ -10,6 +10,10 @@ grade: devel
 # CUDA dependency, so use 'devmode' confinement for now
 confinement: devmode
 
+hooks:
+  configure:
+    plugs: []
+
 apps:
   drone:
     command: solana-drone
@@ -44,7 +48,35 @@ apps:
   client-demo:
     command: solana-client-demo
 
+  daemon-validator:
+    daemon: simple
+    command: validator.sh
+
+  daemon-leader:
+    daemon: simple
+    command: leader.sh
+
+  daemon-drone:
+    daemon: simple
+    command: drone.sh
+
 parts:
+  solana-rsync:
+    plugin: nil
+    override-build: |
+      # TODO: build rsync from source instead of sneaking it in from the host
+      # system...
+      set -x
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp -av /usr/bin/rsync $SNAPCRAFT_PART_INSTALL/bin/
+
+  solana-scripts:
+    plugin: nil
+    override-build: |
+      set -x
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/bin/
+
   solana-cuda:
     plugin: rust
     rust-channel: stable

@@ -1,15 +1,27 @@
 #!/bin/bash
-here=$(dirname "$0")
-
-# shellcheck source=/dev/null
-. "${here}"/myip.sh
-
-myip=$(myip) || exit $?
 
 num_tokens=${1:-1000000000}
 
-cargo run --release --bin solana-mint-demo <<<"${num_tokens}" > mint-demo.json
-cargo run --release --bin solana-genesis-demo < mint-demo.json > genesis.log
+here=$(dirname "$0")
+# shellcheck source=multinode-demo/common.sh
+source "$here"/common.sh
 
-cargo run --release --bin solana-fullnode-config -- -d > leader-"${myip}".json
-cargo run --release --bin solana-fullnode-config -- -b 9000 -d > validator-"${myip}".json
+set -e
+
+echo "Cleaning $SOLANA_CONFIG_DIR"
+rm -rvf "$SOLANA_CONFIG_DIR"
+mkdir -p "$SOLANA_CONFIG_DIR"
+
+echo "Creating $SOLANA_CONFIG_DIR/mint-demo.json with $num_tokens tokens"
+$solana_mint_demo <<<"$num_tokens" > "$SOLANA_CONFIG_DIR"/mint-demo.json
+
+echo "Creating $SOLANA_CONFIG_DIR/genesis.log"
+$solana_genesis_demo < "$SOLANA_CONFIG_DIR"/mint-demo.json > "$SOLANA_CONFIG_DIR"/genesis.log
+
+echo "Creating $SOLANA_CONFIG_DIR/leader.json"
+$solana_fullnode_config -d > "$SOLANA_CONFIG_DIR"/leader.json
+
+echo "Creating $SOLANA_CONFIG_DIR/validator.json"
+$solana_fullnode_config -d -b 9000 > "$SOLANA_CONFIG_DIR"/validator.json
+
+ls -lh "$SOLANA_CONFIG_DIR/"
