@@ -17,7 +17,7 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
-use pnet::datalink;
+use pnet_datalink as datalink;
 use rayon::prelude::*;
 use result::{Error, Result};
 use ring::rand::{SecureRandom, SystemRandom};
