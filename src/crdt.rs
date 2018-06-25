@@ -15,11 +15,8 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
-use choose_gossip_peer_strategy::{
-    ChooseGossipPeerStrategy,
-    ChooseRandomPeerStrategy,
-    ChooseWeightedPeerStrategy,
-};
+use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseRandomPeerStrategy,
+                                  ChooseWeightedPeerStrategy};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -241,11 +238,7 @@ impl Crdt {
         self.insert(&me);
     }
 
-    pub fn get_external_liveness_entry(
-        &self,
-        key: &PublicKey,
-    ) -> Option<&HashMap<PublicKey, u64>>
-    {
+    pub fn get_external_liveness_entry(&self, key: &PublicKey) -> Option<&HashMap<PublicKey, u64>> {
         self.external_liveness.get(key)
     }
 
@@ -309,6 +302,9 @@ impl Crdt {
             self.remote.remove(id);
             self.local.remove(id);
             self.external_liveness.remove(id);
+            for map in self.external_liveness.values_mut() {
+                map.remove(id);
+            }
         }
     }
 
@@ -555,7 +551,7 @@ impl Crdt {
                     self.table.len()
                 );
                 return Err(Error::CrdtTooSmall);
-            },
+            }
             Err(e) => return Err(e),
         };
 
@@ -627,11 +623,12 @@ impl Crdt {
     /// * `update_index` - the number of updates that `from` has completed and this set of `data` represents
     /// * `data` - the update data
     fn apply_updates(
-        &mut self, from: PublicKey,
+        &mut self,
+        from: PublicKey,
         update_index: u64,
         data: &[ReplicatedData],
         external_liveness: &[(PublicKey, u64)],
-    ){
+    ) {
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
@@ -640,12 +637,11 @@ impl Crdt {
         }
 
         for (pk, external_remote_index) in external_liveness.iter() {
-            let remote_entry = 
-                if let Some(v) = self.remote.get(pk) {
-                    *v
-                } else {
-                    0
-                };
+            let remote_entry = if let Some(v) = self.remote.get(pk) {
+                *v
+            } else {
+                0
+            };
 
             if remote_entry >= *external_remote_index {
                 continue;
@@ -757,7 +753,10 @@ impl Crdt {
                 let me = obj.read().unwrap();
                 // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = me.get_updates_since(v);
-                let external_liveness = me.remote.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let external_liveness = me.remote
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
                 drop(me);
                 trace!("get updates since response {} {}", v, data.len());
                 let len = data.len();
