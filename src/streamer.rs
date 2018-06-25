@@ -29,19 +29,18 @@ fn recv_loop(
 ) -> Result<()> {
     loop {
         let msgs = re.allocate();
-        let msgs_ = msgs.clone();
         loop {
-            match msgs.write()
+            let result = msgs.write()
                 .expect("write lock in fn recv_loop")
-                .recv_from(sock)
-            {
+                .recv_from(sock);
+            match result {
                 Ok(()) => {
-                    channel.send(msgs_)?;
+                    channel.send(msgs)?;
                     break;
                 }
                 Err(_) => {
                     if exit.load(Ordering::Relaxed) {
-                        re.recycle(msgs_);
+                        re.recycle(msgs);
                         return Ok(());
                     }
                 }
@@ -760,12 +759,13 @@ mod test {
         let mut msgs = VecDeque::new();
         for i in 0..10 {
             let b = resp_recycler.allocate();
-            let b_ = b.clone();
-            let mut w = b.write().unwrap();
-            w.data[0] = i as u8;
-            w.meta.size = PACKET_DATA_SIZE;
-            w.meta.set_addr(&addr);
-            msgs.push_back(b_);
+            {
+                let mut w = b.write().unwrap();
+                w.data[0] = i as u8;
+                w.meta.size = PACKET_DATA_SIZE;
+                w.meta.set_addr(&addr);
+            }
+            msgs.push_back(b);
         }
         s_responder.send(msgs).expect("send");
         let mut num = 0;

@@ -166,6 +166,7 @@ impl<T: Default> Recycler<T> {
             .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
     }
     pub fn recycle(&self, msgs: Arc<RwLock<T>>) {
+        assert_eq!(Arc::strong_count(&msgs), 1); // Ensure this function holds that last reference.
         let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
         gc.push(msgs);
     }
