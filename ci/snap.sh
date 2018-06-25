@@ -13,7 +13,11 @@ else
   SNAP_CHANNEL=beta
 fi
 
-if [[ -n $SNAPCRAFT_CREDENTIALS_KEY ]]; then
+if [[ -z $DRYRUN ]]; then
+  [[ -n $SNAPCRAFT_CREDENTIALS_KEY ]] || {
+    echo SNAPCRAFT_CREDENTIALS_KEY not defined
+    exit 1;
+  }
   (
     openssl aes-256-cbc -d \
       -in ci/snapcraft.credentials.enc \
@@ -28,5 +32,9 @@ if [[ -n $SNAPCRAFT_CREDENTIALS_KEY ]]; then
 fi
 
 set -x
+
+echo --- build
 snapcraft
+
+echo --- publish
 $DRYRUN snapcraft push solana_*.snap --release $SNAP_CHANNEL

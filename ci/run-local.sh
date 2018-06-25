@@ -16,4 +16,4 @@ if [[ ! -x $BKRUN ]]; then
 fi
 
 set -x
-./ci/node_modules/.bin/bkrun ci/buildkite.yml
+exec ./ci/node_modules/.bin/bkrun ci/buildkite.yml

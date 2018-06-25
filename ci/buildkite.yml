@@ -2,15 +2,15 @@ steps:
   - command: "ci/docker-run.sh rust ci/test-stable.sh"
     name: "stable [public]"
     timeout_in_minutes: 20
+  - command: "ci/shellcheck.sh"
+    name: "shellcheck [public]"
+    timeout_in_minutes: 20
   - wait
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
     timeout_in_minutes: 20
-  - command: "ci/docker-run.sh rust ci/test-ignored.sh"
-    name: "ignored [public]"
-    timeout_in_minutes: 20
-  - command: "ci/test-cuda.sh"
-    name: "cuda [public]"
+  - command: "ci/test-stable-perf.sh"
+    name: "stable-perf [public]"
     timeout_in_minutes: 20
     retry:
       automatic:
@@ -18,12 +18,6 @@ steps:
         limit: 2
     agents:
       - "queue=cuda"
-  - command: "ci/shellcheck.sh"
-    name: "shellcheck [public]"
-    timeout_in_minutes: 20
-  - command: "ci/docker-run.sh rust ci/test-erasure.sh"
-    name: "erasure [public]"
-    timeout_in_minutes: 20
   - command: "ci/snap.sh [public]"
     timeout_in_minutes: 20
     name: "snap [public]"

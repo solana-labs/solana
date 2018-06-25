@@ -2,13 +2,17 @@
 
 cd "$(dirname "$0")/.."
 
+export RUST_BACKTRACE=1
 rustc --version
 cargo --version
 
-export RUST_BACKTRACE=1
-rustup component add rustfmt-preview
-cargo fmt -- --write-mode=diff
-cargo build --verbose
-cargo test --verbose
+_() {
+  echo "--- $*"
+  "$@"
+}
 
-exit 0
+_ rustup component add rustfmt-preview
+_ cargo fmt -- --write-mode=diff
+_ cargo build --verbose
+_ cargo test --verbose
+_ cargo test -- --ignored
