@@ -1,5 +1,7 @@
 # Consensus
 
+VERY WIP
+
 The goal of this RFC is to define the consensus algorithm used in solana.  This proposal covers a Proof of Stake algorithm that leverages Proof of History.  PoH is a permissionless clock for blockchain that is available before consensus.  This PoS approach leverages PoH to make strong assumptions about time between partitions.
 
 ## Version
@@ -112,3 +114,9 @@ Validators should select the first branch to reach finality, or the highest rank
 4. M validators observe 10% of the vote pool, finality is not reached
 5. M and K re-connect.
 6. M validators cancel their votes on K which are below K's `PoH count`
+
+### Leader Timeout
+1. Next rank node observes a timeout.
+2. Nodes receiving both PoH streams pick the higher rank node.
+3. 2, causes a partition, since nodes can only vote for 1 leader.
+4. Partition is resolved just like in the [Small Partition](#small-parition)
