@@ -86,6 +86,7 @@ impl Tvu {
             exit.clone(),
             blob_recycler.clone(),
             fetch_stage.blob_receiver,
+            bank.entry_count(),
         );
 
         let replicate_stage =
