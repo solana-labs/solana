@@ -6,6 +6,7 @@ use erasure;
 use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE};
 use result::{Error, Result};
 use std::collections::VecDeque;
+use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -452,10 +453,7 @@ fn broadcast(
 
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
-    let blobs_chunked: Vec<_> = blobs_vec
-        .chunks(WINDOW_SIZE)
-        .map(|x| x.to_vec())
-        .collect();
+    let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE).map(|x| x.to_vec());
 
     print_window(window, *receive_index as usize);
 
@@ -476,17 +474,15 @@ fn broadcast(
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix as usize) % WINDOW_SIZE;
-                if let Some(x) = &win[pos] {
+                if let Some(x) = mem::replace(&mut win[pos], None) {
                     trace!(
                         "popped {} at {}",
                         x.read().unwrap().get_index().unwrap(),
                         pos
                     );
-                    recycler.recycle(x.clone());
+                    recycler.recycle(x);
                 }
                 trace!("null {}", pos);
-                win[pos] = None;
-                assert!(win[pos].is_none());
             }
             while let Some(b) = blobs.pop() {
                 let ix = b.read().unwrap().get_index().expect("blob index");
