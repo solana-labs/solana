@@ -47,4 +47,4 @@ ARGS+=(
 )
 
 set -x
-docker run "${ARGS[@]}" "$IMAGE" "$@"
+exec docker run "${ARGS[@]}" "$IMAGE" "$@"

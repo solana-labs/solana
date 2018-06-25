@@ -2,13 +2,31 @@
 
 cd "$(dirname "$0")/.."
 
+export RUST_BACKTRACE=1
 rustc --version
 cargo --version
 
-export RUST_BACKTRACE=1
-cargo build --verbose --features unstable
-cargo test --verbose --features unstable
-cargo bench --verbose --features unstable
-ci/coverage.sh
+_() {
+  echo "--- $*"
+  "$@"
+}
 
-exit 0
+_ cargo build --verbose --features unstable
+_ cargo test --verbose --features unstable
+_ cargo bench --verbose --features unstable
+
+
+# Coverage ...
+_ cargo install --force cargo-cov
+_ cargo cov test
+_ cargo cov report
+
+echo --- Coverage report:
+ls -l target/cov/report/index.html
+
+if [[ -z "$CODECOV_TOKEN" ]]; then
+  echo CODECOV_TOKEN undefined
+else
+  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov gcov'
+fi
+
