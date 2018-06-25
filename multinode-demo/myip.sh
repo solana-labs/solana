@@ -2,16 +2,17 @@
 
 function myip()
 {
-  declare ipaddrs=( )
-
-  # query interwebs
-  mapfile -t ipaddrs < <(curl -s ifconfig.co)
-
-  # machine's interfaces
-  mapfile -t -O "${#ipaddrs[*]}" ipaddrs < \
-          <(ifconfig | awk '/inet(6)? (addr:)?/ {print $2}')
-
-  ipaddrs=( "${extips[@]}" "${ipaddrs[@]}" )
+  # shellcheck disable=SC2207
+  declare ipaddrs=(
+    # query interwebs
+    $(curl -s ifconfig.co)
+    # machine's interfaces
+    $(ifconfig |
+          awk '/inet addr:/ {gsub("addr:","",$2); print $2; next}
+               /inet6 addr:/ {gsub("/.*", "", $3); print $3; next}
+               /inet(6)? / {print $2}'
+    )
+  )
 
   if (( ! ${#ipaddrs[*]} ))
   then
