@@ -22,6 +22,7 @@ impl WindowStage {
         exit: Arc<AtomicBool>,
         blob_recycler: packet::BlobRecycler,
         fetch_stage_receiver: streamer::BlobReceiver,
+        entry_count: usize,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -41,6 +42,7 @@ impl WindowStage {
             fetch_stage_receiver,
             blob_sender,
             retransmit_sender,
+            entry_count,
         );
         let thread_hdls = vec![t_retransmit, t_window];
 

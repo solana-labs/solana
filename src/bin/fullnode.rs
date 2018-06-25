@@ -102,7 +102,8 @@ fn main() {
     bank.register_entry_id(&entry1.id);
 
     eprintln!("processing entries...");
-    bank.process_entries(entries).expect("process_entries");
+    let num_entries = bank.process_entries(entries).expect("process_entries");
+    eprintln!("processed {} entries...", num_entries);
 
     eprintln!("creating networking stack...");
 

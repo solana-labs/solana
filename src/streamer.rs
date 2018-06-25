@@ -395,13 +395,14 @@ pub fn window(
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
+    entry_count: usize,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
-            let mut consumed = 0;
-            let mut received = 0;
-            let mut last = 0;
+            let mut consumed = entry_count;
+            let mut received = entry_count;
+            let mut last = entry_count;
             let mut times = 0;
             loop {
                 if exit.load(Ordering::Relaxed) {
@@ -816,6 +817,7 @@ mod test {
             r_reader,
             s_window,
             s_retransmit,
+            0,
         );
         let (s_responder, r_responder) = channel();
         let t_responder = responder(
