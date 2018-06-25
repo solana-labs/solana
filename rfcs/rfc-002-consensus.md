@@ -15,7 +15,7 @@ version 0.1
 3. Leader executes valid transactions on its state
 4. Leader packages transactions into blobs
 5. Leader transmits blobs to validator nodes.
-    a. The set of 2/3+M by stake weight of nodes is rotated in round robin fashion.
+    a. The set of supermajority + `M` by stake weight of nodes is rotated in round robin fashion.
 6. Validators retransmit blobs to peers in their set and to further downstream nodes.
 7. Validators validate the transactions and execute them on their state.
 8. Validators compute the hash of the state.
@@ -25,7 +25,7 @@ version 0.1
 11. Validators observe their votes, and all the votes from the network.
 12. Validators continue voting if the supermajority of stake is observed in the vote for the same hash.
 
-Supermajority is defined as 2/3rds + 1 vote of the PoS stakes.
+Supermajority is defined as `2/3rds + 1` vote of the PoS stakes.
 
 ## Staking
 
@@ -90,16 +90,16 @@ The goal of this contract is to simulate economic cost of mining on a shorter br
 
 Leader selection is decided via a random seed.  The process is as follows:
 
-1. Periodically at a specific `PoH count` select the `2/3+1` validation vote signatures
+1. Periodically at a specific `PoH count` select the first vote signatures that create a supermajority from the previous round.
 2. append them together
 3. hash the string for `N` counts via a similar process as PoH itself.
 4. The resulting hash is the random seed for `M` counts, where M > N
 
 ## Leader Ranking and Rotation
 
-Leader's transmit for a count of `T`.  When `T` is reached all the validators should switch to the next ranked leader.  To rank leaders, the top `2/3rds + M` nodes are shuffled with the using the above calculated random seed.
+Leader's transmit for a count of `T`.  When `T` is reached all the validators should switch to the next ranked leader.  To rank leaders, the supermajority + `M` nodes are shuffled with the using the above calculated random seed.
 
-TBD: define a ranking for critical partitions without a node from `2/3rds + M` set.
+TBD: define a ranking for critical partitions without a node from supermajority + `M` set.
 
 ## Partition selection
 
