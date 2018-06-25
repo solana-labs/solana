@@ -1,6 +1,6 @@
 use crdt::ReplicatedData;
-use rand::thread_rng;
 use rand::distributions::{IndependentSample, Weighted, WeightedChoice};
+use rand::thread_rng;
 use result::{Error, Result};
 use signature::PublicKey;
 use std;
@@ -9,8 +9,7 @@ use std::collections::HashMap;
 pub const DEFAULT_WEIGHT: u32 = 1;
 
 pub trait ChooseGossipPeerStrategy {
-    fn choose_peer(&self, options: Vec<&ReplicatedData>) -> 
-        Result<ReplicatedData>;
+    fn choose_peer(&self, options: Vec<&ReplicatedData>) -> Result<ReplicatedData>;
 }
 
 pub struct ChooseRandomPeerStrategy<'a> {
@@ -18,7 +17,7 @@ pub struct ChooseRandomPeerStrategy<'a> {
 }
 
 impl<'a> ChooseRandomPeerStrategy<'a> {
-    pub fn new(random: &'a Fn() -> u64,) -> Self {
+    pub fn new(random: &'a Fn() -> u64) -> Self {
         ChooseRandomPeerStrategy { random }
     }
 }
@@ -45,9 +44,12 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
         remote: &'a HashMap<PublicKey, u64>,
         external_liveness: &'a HashMap<PublicKey, HashMap<PublicKey, u64>>,
         get_stake: &'a Fn(PublicKey) -> f64,
-    ) -> Self
-    {
-        ChooseWeightedPeerStrategy { remote, external_liveness, get_stake }
+    ) -> Self {
+        ChooseWeightedPeerStrategy {
+            remote,
+            external_liveness,
+            get_stake,
+        }
     }
 
     fn calculate_weighted_remote_index(&self, peer_id: PublicKey) -> u32 {
@@ -60,7 +62,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
         }
 
         let liveness_entry = self.external_liveness.get(&peer_id);
-        if liveness_entry.is_none(){
+        if liveness_entry.is_none() {
             return DEFAULT_WEIGHT;
         }
 
@@ -73,61 +75,55 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
         // Calculate the weighted average of the rumors
         let mut relevant_votes = vec![];
 
-        let total_stake = votes.iter().fold(
-            0.0, 
-            |total_stake, (&id, &vote)| {
-                let stake = (self.get_stake)(id);
-                // If the total stake is going to overflow u64, pick
-                // the larger of either the current total_stake, or the 
-                // new stake, this way we are guaranteed to get at least u64/2 
-                // sample of stake in our weighted calculation
-                if std::f64::MAX - total_stake < stake {
-                    if stake > total_stake {
-                        relevant_votes = vec![(stake, vote)];
-                        stake
-                    } else {
-                        total_stake
-                    }
+        let total_stake = votes.iter().fold(0.0, |total_stake, (&id, &vote)| {
+            let stake = (self.get_stake)(id);
+            // If the total stake is going to overflow u64, pick
+            // the larger of either the current total_stake, or the
+            // new stake, this way we are guaranteed to get at least u64/2
+            // sample of stake in our weighted calculation
+            if std::f64::MAX - total_stake < stake {
+                if stake > total_stake {
+                    relevant_votes = vec![(stake, vote)];
+                    stake
                 } else {
-                    relevant_votes.push((stake, vote));
-                    total_stake + stake
+                    total_stake
                 }
+            } else {
+                relevant_votes.push((stake, vote));
+                total_stake + stake
             }
-        );
+        });
 
-        let weighted_vote = relevant_votes.iter().fold(
-            0.0,
-            |sum, &(stake, vote)| {
-                if vote < last_seen_index {
-                    // This should never happen b/c we maintain the invariant that the indexes
-                    // in the external_liveness table are always greater than the corresponding 
-                    // indexes in the remote table, if the index exists in the remote table at all.
-                    
-                    // Case 1: Attempt to insert bigger index into the "external_liveness" table
-                    // happens after an insertion into the "remote" table. In this case, 
-                    // (see apply_updates()) function, we prevent the insertion if the entry
-                    // in the remote table >= the atempted insertion into the "external" liveness
-                    // table.
-                    
-                    // Case 2: Bigger index in the "external_liveness" table inserted before
-                    // a smaller insertion into the "remote" table. We clear the corresponding 
-                    // "external_liveness" table entry on all insertions into the  "remote" table
-                    // See apply_updates() function.
+        let weighted_vote = relevant_votes.iter().fold(0.0, |sum, &(stake, vote)| {
+            if vote < last_seen_index {
+                // This should never happen b/c we maintain the invariant that the indexes
+                // in the external_liveness table are always greater than the corresponding
+                // indexes in the remote table, if the index exists in the remote table at all.
 
-                    warn!("weighted peer index was smaller than local entry in remote table");
-                    return sum;
-                }
+                // Case 1: Attempt to insert bigger index into the "external_liveness" table
+                // happens after an insertion into the "remote" table. In this case,
+                // (see apply_updates()) function, we prevent the insertion if the entry
+                // in the remote table >= the atempted insertion into the "external" liveness
+                // table.
 
-                let vote_difference = (vote - last_seen_index) as f64;
-                let new_weight = vote_difference * (stake / total_stake);
+                // Case 2: Bigger index in the "external_liveness" table inserted before
+                // a smaller insertion into the "remote" table. We clear the corresponding
+                // "external_liveness" table entry on all insertions into the  "remote" table
+                // See apply_updates() function.
 
-                if std::f64::MAX - sum < new_weight {
-                    return f64::max(new_weight, sum);
-                }
+                warn!("weighted peer index was smaller than local entry in remote table");
+                return sum;
+            }
 
-                sum + new_weight
-            },
-        );
+            let vote_difference = (vote - last_seen_index) as f64;
+            let new_weight = vote_difference * (stake / total_stake);
+
+            if std::f64::MAX - sum < new_weight {
+                return f64::max(new_weight, sum);
+            }
+
+            sum + new_weight
+        });
 
         // Return u32 b/c the weighted sampling API from rand::distributions
         // only takes u32 for weights
@@ -136,8 +132,8 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
         }
 
         // If the weighted rumors we've heard about aren't any greater than
-        // what we've directly learned from the last time we communicated with the 
-        // peer (i.e. weighted_vote == 0), then return a weight of 1. 
+        // what we've directly learned from the last time we communicated with the
+        // peer (i.e. weighted_vote == 0), then return a weight of 1.
         // Otherwise, return the calculated weight.
         weighted_vote as u32 + DEFAULT_WEIGHT
     }
@@ -159,17 +155,19 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
         }
 
         let mut rng = thread_rng();
-        Ok(WeightedChoice::new(&mut weighted_peers).ind_sample(&mut rng).clone())
+        Ok(WeightedChoice::new(&mut weighted_peers)
+            .ind_sample(&mut rng)
+            .clone())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
     use logger;
     use signature::{KeyPair, KeyPairUtil, PublicKey};
     use std;
     use std::collections::HashMap;
-    use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
 
     fn get_stake(id: PublicKey) -> f64 {
         return 1.0;
@@ -185,13 +183,10 @@ mod tests {
         let remote: HashMap<PublicKey, u64> = HashMap::new();
         let external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
-        let weighted_strategy = ChooseWeightedPeerStrategy::new(
-            &remote,
-            &external_liveness,
-            &get_stake,
-        );
+        let weighted_strategy =
+            ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
-        // If external_liveness table doesn't contain this entry, 
+        // If external_liveness table doesn't contain this entry,
         // return the default weight
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
         assert_eq!(result, DEFAULT_WEIGHT);
@@ -209,17 +204,14 @@ mod tests {
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
         // If only the liveness table contains the entry, should return the
-        // weighted liveness entries 
-        let test_value : u32 = 5;
+        // weighted liveness entries
+        let test_value: u32 = 5;
         let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
         rumors.insert(key2, test_value as u64);
         external_liveness.insert(key1, rumors);
 
-        let weighted_strategy = ChooseWeightedPeerStrategy::new(
-            &remote,
-            &external_liveness,
-            &get_stake,
-        );
+        let weighted_strategy =
+            ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
         assert_eq!(result, test_value + DEFAULT_WEIGHT);
@@ -242,11 +234,8 @@ mod tests {
         rumors.insert(key2, test_value);
         external_liveness.insert(key1, rumors);
 
-        let weighted_strategy = ChooseWeightedPeerStrategy::new(
-            &remote,
-            &external_liveness,
-            &get_stake,
-        );
+        let weighted_strategy =
+            ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
         assert_eq!(result, std::u32::MAX);
@@ -262,7 +251,7 @@ mod tests {
         let mut remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
-        // Test many validators' rumors in external_liveness 
+        // Test many validators' rumors in external_liveness
         let num_peers = 10;
         let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
 
@@ -275,14 +264,11 @@ mod tests {
 
         external_liveness.insert(key1, rumors);
 
-        let weighted_strategy = ChooseWeightedPeerStrategy::new(
-            &remote,
-            &external_liveness,
-            &get_stake,
-        );
+        let weighted_strategy =
+            ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
-        assert_eq!(result, (num_peers/2) as u32);
+        assert_eq!(result, (num_peers / 2) as u32);
     }
 
     #[test]
@@ -295,7 +281,7 @@ mod tests {
         let mut remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
-        // Test many validators' rumors in external_liveness 
+        // Test many validators' rumors in external_liveness
         let num_peers = 10;
         let old_index = 20;
         let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
@@ -309,11 +295,8 @@ mod tests {
 
         external_liveness.insert(key1, rumors);
 
-        let weighted_strategy = ChooseWeightedPeerStrategy::new(
-            &remote,
-            &external_liveness,
-            &get_stake,
-        );
+        let weighted_strategy =
+            ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
 
