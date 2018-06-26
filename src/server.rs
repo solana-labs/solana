@@ -91,6 +91,7 @@ impl Server {
             window,
             blob_recycler.clone(),
             tpu.blob_receiver,
+            bank.entry_count(),
         );
         thread_hdls.extend(vec![t_broadcast]);
 
