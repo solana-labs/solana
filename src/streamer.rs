@@ -269,9 +269,10 @@ fn recv_window(
     //send a contiguous set of blocks
     let mut contq = VecDeque::new();
     while let Some(b) = dq.pop_front() {
-        let b_ = b.clone();
-        let p = b.write().expect("'b' write lock in fn recv_window");
-        let pix = p.get_index()? as usize;
+        let (pix, meta_size) = {
+            let p = b.write().expect("'b' write lock in fn recv_window");
+            (p.get_index()? as usize, p.meta.size)
+        };
         if pix > *received {
             *received = pix;
         }
@@ -288,12 +289,11 @@ fn recv_window(
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
         //that is a network failure/attack
-        trace!("window w: {} size: {}", w, p.meta.size);
-        drop(p);
+        trace!("window w: {} size: {}", w, meta_size);
         {
             let mut window = locked_window.write().unwrap();
             if window[w].is_none() {
-                window[w] = Some(b_);
+                window[w] = Some(b);
             } else if let Some(cblob) = &window[w] {
                 if cblob.read().unwrap().get_index().unwrap() != pix as u64 {
                     warn!("overrun blob at index {:}", w);
@@ -834,14 +834,15 @@ mod test {
         for v in 0..10 {
             let i = 9 - v;
             let b = resp_recycler.allocate();
-            let b_ = b.clone();
-            let mut w = b.write().unwrap();
-            w.set_index(i).unwrap();
-            w.set_id(me_id).unwrap();
-            assert_eq!(i, w.get_index().unwrap());
-            w.meta.size = PACKET_DATA_SIZE;
-            w.meta.set_addr(&tn.data.gossip_addr);
-            msgs.push_back(b_);
+            {
+                let mut w = b.write().unwrap();
+                w.set_index(i).unwrap();
+                w.set_id(me_id).unwrap();
+                assert_eq!(i, w.get_index().unwrap());
+                w.meta.size = PACKET_DATA_SIZE;
+                w.meta.set_addr(&tn.data.gossip_addr);
+            }
+            msgs.push_back(b);
         }
         s_responder.send(msgs).expect("send");
         let mut num = 0;
