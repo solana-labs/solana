@@ -42,6 +42,8 @@ pub struct Entry {
     ///  2. this Entry can be left out of the bank's entry_id cache for
     ///       purposes of duplicate rejection
     pub has_more: bool,
+
+    erasure_pad: [u8; 3],
 }
 
 impl Entry {
