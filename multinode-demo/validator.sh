@@ -28,5 +28,5 @@ rsync -vz "${leader}"/{mint-demo.json,leader.json,genesis.log,tx-*.log} . || exi
 export RUST_LOG=${RUST_LOG:-solana=info}
 
 cargo run --release --bin solana-fullnode -- \
-      -l validator-"${myip}".json -v leader.json \
+      -l validator-"${myip}".json -t leader.json \
       < genesis.log tx-*.log
