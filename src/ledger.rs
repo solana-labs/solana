@@ -8,8 +8,8 @@ use packet::{self, SharedBlob, BLOB_SIZE};
 use rayon::prelude::*;
 use std::collections::VecDeque;
 use std::io::Cursor;
-use transaction::Transaction;
 use std::sync::Arc;
+use transaction::Transaction;
 
 // a Block is a slice of Entries
 
