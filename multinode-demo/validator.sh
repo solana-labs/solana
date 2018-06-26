@@ -4,7 +4,11 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 usage() {
-  echo "usage: $0 [network path to solana repo on leader machine] [network ip address of leader]"
+  if [[ -n "$1" ]]; then
+    echo "$*"
+    echo
+  fi
+  echo "usage: $0 [rsync network path to solana repo on leader machine] [network ip address of leader]"
   exit 1
 }
 
@@ -20,13 +24,28 @@ if [[ -d "$SNAP" ]]; then
   # Select leader from the Snap configuration
   leader_address="$(snapctl get leader-address)"
   if [[ -z "$leader_address" ]]; then
-    # Assume drone is running on the same node as the leader by default
-    leader_address="localhost"
+    # Assume public testnet by default
+    leader_address=35.230.65.68  # testnet.solana.com
   fi
-  leader=rsync://"$leader_address"
+  leader="$leader_address"
 else
-  leader=${1:-${here}/..}    # Default to local solana repo
-  leader_address=${2:-127.0.0.1}  # Default to local leader
+  if [[ -n "$3" ]]; then
+    usage
+  fi
+
+  if [[ -z "$1" ]]; then
+    leader=${1:-${here}/..}    # Default to local solana repo
+    leader_address=${2:-127.0.0.1}  # Default to local leader
+  elif [[ -z "$2" ]]; then
+    leader="$1"
+    leader_address=$(dig +short "$1" | head -n1)
+    if [[ -z "$leader_address" ]]; then
+      usage "Error: unable to resolve IP address for $leader"
+    fi
+  else
+    leader="$1"
+    leader_address="$2"
+  fi
 fi
 leader_port=8001
 
@@ -42,10 +61,12 @@ fi
   exit 1
 }
 
+rsync_leader_url=$(rsync_url "$leader")
+
 set -ex
 SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
-rsync -vPrz "${leader}"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 
 # shellcheck disable=SC2086 # $program should not be quoted

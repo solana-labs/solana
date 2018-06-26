@@ -47,3 +47,22 @@ export RUST_BACKTRACE=1
 [[ $(uname) = Linux ]] && (set -x; sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null)
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
+
+rsync_url() { # adds the 'rsync://` prefix to URLs that need it
+  local url="$1"
+
+  if [[ "$url" =~ ^.*:.*$ ]]; then
+    # assume remote-shell transport when colon is present, use $url unmodified
+    echo "$url"
+    return
+  fi
+
+  if [[ -d "$url" ]]; then
+    # assume local directory if $url is a valid directory, use $url unmodified
+    echo "$url"
+    return
+  fi
+
+  # Default to rsync:// URL
+  echo "rsync://$url"
+}
