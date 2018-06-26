@@ -230,19 +230,19 @@ pub mod tests {
 
             for entry in vec![entry0, entry1] {
                 let b = resp_recycler.allocate();
-                let b_ = b.clone();
-                let mut w = b.write().unwrap();
-                w.set_index(blob_id).unwrap();
-                blob_id += 1;
-                w.set_id(leader_id).unwrap();
+                {
+                    let mut w = b.write().unwrap();
+                    w.set_index(blob_id).unwrap();
+                    blob_id += 1;
+                    w.set_id(leader_id).unwrap();
 
-                let serialized_entry = serialize(&entry).unwrap();
+                    let serialized_entry = serialize(&entry).unwrap();
 
-                w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
-                w.set_size(serialized_entry.len());
-                w.meta.set_addr(&replicate_addr);
-                drop(w);
-                msgs.push_back(b_);
+                    w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
+                    w.set_size(serialized_entry.len());
+                    w.meta.set_addr(&replicate_addr);
+                }
+                msgs.push_back(b);
             }
         }
 
