@@ -9,33 +9,65 @@ use std::collections::HashMap;
 pub const DEFAULT_WEIGHT: u32 = 1;
 
 pub trait ChooseGossipPeerStrategy {
-    fn choose_peer(&self, options: Vec<&ReplicatedData>) -> Result<ReplicatedData>;
+    fn choose_peer<'a>(&self, options: Vec<&'a ReplicatedData>) -> Result<&'a ReplicatedData>;
 }
 
 pub struct ChooseRandomPeerStrategy<'a> {
     random: &'a Fn() -> u64,
 }
 
-impl<'a> ChooseRandomPeerStrategy<'a> {
+// Given a source of randomness "random", this strategy will randomly pick a validator
+// from the input options. This strategy works in isolation, but doesn't leverage any
+// rumors from the rest of the gossip network to make more informed decisions about
+// which validators have more/less updates
+impl<'a, 'b> ChooseRandomPeerStrategy<'a> {
     pub fn new(random: &'a Fn() -> u64) -> Self {
         ChooseRandomPeerStrategy { random }
     }
 }
 
 impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
-    fn choose_peer(&self, options: Vec<&ReplicatedData>) -> Result<ReplicatedData> {
-        if options.len() < 1 {
+    fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
+        if options.is_empty() {
             return Err(Error::CrdtTooSmall);
         }
 
         let n = ((self.random)() as usize) % options.len();
-        Ok(options[n].clone())
+        Ok(options[n])
     }
 }
 
+// This strategy uses rumors accumulated from the rest of the network to weight 
+// the importance of communicating with a particular validator based on cumulative network 
+// perceiption of the number of updates the validator has to offer. A validator is randomly
+// picked based on a weighted sample from the pool of viable choices. The "weight", w, of a
+// particular validator "v" is calculated as follows:
+// 
+//  w = [Sum for all i in I_v: (rumor_v(i) - observed(v)) * stake(i)] / 
+//      [Sum for all i in I_v: Sum(stake(i))]
+//
+// where I_v is the set of all validators that returned a rumor about the update_index of
+// validator "v", stake(i) is the size of the stake of validator "i", observed(v) is the
+// observed update_index from the last direct communication validator "v", and 
+// rumor_v(i) is the rumored update_index of validator "v" propagated by fellow validator "i".
+
+// This could be a problem if there are validators with large stakes lying about their
+// observed updates. There could also be a problem in network partitions, or even just 
+// when certain validators are disproportionately active, where we hear more rumors about
+// certain clusters of nodes that then propagate more rumros about each other. Hopefully
+// this can be resolved with a good baseline DEFAULT_WEIGHT, or by implementing lockout 
+// periods for very active validators in the future. 
+
 pub struct ChooseWeightedPeerStrategy<'a> {
+    // The map of last directly observed update_index for each active validator.
+    // This is how we get observed(v) from the formula above.
     remote: &'a HashMap<PublicKey, u64>,
+    // The map of rumored update_index for each active validator. Using the formula above,
+    // to find rumor_v(i), we would first look up "v" in the outer map, then look up
+    // "i" in the inner map, i.e. look up external_liveness[v][i]
     external_liveness: &'a HashMap<PublicKey, HashMap<PublicKey, u64>>,
+    // A function returning the size of the stake for a particular validator, corresponds
+    // to stake(i) in the formula above.
     get_stake: &'a Fn(PublicKey) -> f64,
 }
 
@@ -96,7 +128,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 
         let weighted_vote = relevant_votes.iter().fold(0.0, |sum, &(stake, vote)| {
             if vote < last_seen_index {
-                // This should never happen b/c we maintain the invariant that the indexes
+                // This should never happen because we maintain the invariant that the indexes
                 // in the external_liveness table are always greater than the corresponding
                 // indexes in the remote table, if the index exists in the remote table at all.
 
@@ -140,7 +172,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 }
 
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
-    fn choose_peer(&self, options: Vec<&ReplicatedData>) -> Result<ReplicatedData> {
+    fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
         if options.len() < 1 {
             return Err(Error::CrdtTooSmall);
         }
@@ -148,16 +180,11 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
         let mut weighted_peers = vec![];
         for peer in options {
             let weight = self.calculate_weighted_remote_index(peer.id);
-            weighted_peers.push(Weighted {
-                weight: weight,
-                item: peer,
-            });
+            weighted_peers.push(Weighted { weight, item: peer });
         }
 
         let mut rng = thread_rng();
-        Ok(WeightedChoice::new(&mut weighted_peers)
-            .ind_sample(&mut rng)
-            .clone())
+        Ok(WeightedChoice::new(&mut weighted_peers).ind_sample(&mut rng))
     }
 }
 
@@ -300,7 +327,7 @@ mod tests {
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
 
-        // If nobody has seen a newer update then rever to default
+        // If nobody has seen a newer update then revert to default
         assert_eq!(result, DEFAULT_WEIGHT);
     }
 }

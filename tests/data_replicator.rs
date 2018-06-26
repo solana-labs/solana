@@ -185,7 +185,7 @@ pub fn crdt_retransmit() {
 }
 
 #[test]
-fn check_external_liveness_table() {
+fn test_external_liveness_table() {
     logger::setup();
     let c1_c4_exit = Arc::new(AtomicBool::new(false));
     let c2_c3_exit = Arc::new(AtomicBool::new(false));
@@ -223,7 +223,8 @@ fn check_external_liveness_table() {
     trace!("waiting to converge:");
     let mut done = false;
     for _ in 0..30 {
-        done = c1.read().unwrap().table.len() == 3 && c2.read().unwrap().table.len() == 3
+        done = c1.read().unwrap().table.len() == 3
+            && c2.read().unwrap().table.len() == 3
             && c3.read().unwrap().table.len() == 3;
         if done {
             break;
@@ -244,12 +245,12 @@ fn check_external_liveness_table() {
         // Make sure liveness table entry contains correct result for c2
         let c2_index_result_for_c4 = liveness_map.get(&c2_id);
         assert!(c2_index_result_for_c4.is_some());
-        assert!(*(c2_index_result_for_c4.unwrap()) == c2_index_for_c4);
+        assert_eq!(*(c2_index_result_for_c4.unwrap()), c2_index_for_c4);
 
         // Make sure liveness table entry contains correct result for c3
         let c3_index_result_for_c4 = liveness_map.get(&c3_id);
         assert!(c3_index_result_for_c4.is_some());
-        assert!(*(c3_index_result_for_c4.unwrap()) == c3_index_for_c4);
+        assert_eq!(*(c3_index_result_for_c4.unwrap()), c3_index_for_c4);
     }
 
     // Shutdown validators c2 and c3
@@ -258,7 +259,7 @@ fn check_external_liveness_table() {
     threads.extend(dr2.thread_hdls.into_iter());
     threads.extend(dr3.thread_hdls.into_iter());
 
-    for t in threads.into_iter() {
+    for t in threads {
         t.join().unwrap();
     }
 
@@ -267,7 +268,10 @@ fn check_external_liveness_table() {
     c4.write().unwrap().insert(&c1_data);
     c4.write().unwrap().set_leader(c1_data.id);
     for _ in 0..30 {
-        done = c1.read().unwrap().get_external_liveness_entry(&c4_id).is_none();
+        done = c1.read()
+            .unwrap()
+            .get_external_liveness_entry(&c4_id)
+            .is_none();
         if done {
             break;
         }
@@ -281,7 +285,7 @@ fn check_external_liveness_table() {
     threads.extend(dr1.thread_hdls.into_iter());
     threads.extend(dr4.thread_hdls.into_iter());
 
-    for t in threads.into_iter() {
+    for t in threads {
         t.join().unwrap();
     }
 }

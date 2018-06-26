@@ -15,8 +15,9 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
-use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseRandomPeerStrategy,
-                                  ChooseWeightedPeerStrategy};
+use choose_gossip_peer_strategy::{
+    ChooseGossipPeerStrategy, ChooseRandomPeerStrategy, ChooseWeightedPeerStrategy,
+};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -489,9 +490,9 @@ impl Crdt {
             .expect("rdr.read_u64 in fn random")
     }
 
-    // TODO: fill in with real implmentation wonce staking is implemented
+    // TODO: fill in with real implmentation once staking is implemented
     fn get_stake(id: PublicKey) -> f64 {
-        return 1.0;
+        1.0
     }
 
     fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<ReplicatedData>) {
@@ -530,10 +531,6 @@ impl Crdt {
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
         let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
 
-        #[cfg(not(feature = "choose_gossip_peer_strategy"))]
-        let choose_peer_strategy = ChooseRandomPeerStrategy::new(&Self::random);
-
-        #[cfg(feature = "choose_gossip_peer_strategy")]
         let choose_peer_strategy = ChooseWeightedPeerStrategy::new(
             &self.remote,
             &self.external_liveness,
@@ -636,7 +633,7 @@ impl Crdt {
             self.insert(&v);
         }
 
-        for (pk, external_remote_index) in external_liveness.iter() {
+        for (pk, external_remote_index) in external_liveness {
             let remote_entry = if let Some(v) = self.remote.get(pk) {
                 *v
             } else {
