@@ -88,10 +88,28 @@ pub fn next_entries_mut(
             chunk_len /= 2;
         }
 
-        let mut entries = Vec::with_capacity(transactions.len() / chunk_len + 1);
+        let mut num_chunks = if transactions.len() % chunk_len == 0 {
+            transactions.len() / chunk_len
+        } else {
+            transactions.len() / chunk_len + 1
+        };
+
+        let mut entries = Vec::with_capacity(num_chunks);
 
         for chunk in transactions.chunks(chunk_len) {
-            entries.push(Entry::new_mut(start_hash, cur_hashes, chunk.to_vec(), true));
+            num_chunks -= 1;
+            entries.push(Entry::new_mut(
+                start_hash,
+                cur_hashes,
+                chunk.to_vec(),
+                num_chunks > 0,
+            ));
+            println!(
+                "transactions.len() = {}, chunk_len {}, num_chunks {}",
+                transactions.len(),
+                chunk_len,
+                num_chunks,
+            );
         }
         entries
     }
@@ -118,24 +136,6 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
 
-    /// Create a vector of Entries of length `transaction_batches.len()`
-    ///  from `start_hash` hash, `num_hashes`, and `transaction_batches`.
-    fn next_entries_batched(
-        start_hash: &Hash,
-        cur_hashes: u64,
-        transaction_batches: Vec<Vec<Transaction>>,
-    ) -> Vec<Entry> {
-        let mut id = *start_hash;
-        let mut entries = vec![];
-        let mut num_hashes = cur_hashes;
-
-        for transactions in transaction_batches {
-            let mut entry_batch = next_entries_mut(&mut id, &mut num_hashes, transactions);
-            entries.append(&mut entry_batch);
-        }
-        entries
-    }
-
     #[test]
     fn test_verify_slice() {
         let zero = Hash::default();
@@ -143,9 +143,9 @@ mod tests {
         assert!(vec![][..].verify(&zero)); // base case
         assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
         assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(next_entries_batched(&zero, 0, vec![vec![]; 2])[..].verify(&zero)); // inductive step
+        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
 
-        let mut bad_ticks = next_entries_batched(&zero, 0, vec![vec![]; 2]);
+        let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
@@ -178,26 +178,41 @@ mod tests {
     }
 
     #[test]
-    fn test_next_entries_batched() {
-        // this also tests next_entries, ugly, but is an easy way to do vec of vec (batch)
-        let mut id = Hash::default();
+    fn test_next_entries() {
+        let id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
 
-        let transactions = vec![tx0; 5];
-        let transaction_batches = vec![transactions.clone(); 5];
-        let entries0 = next_entries_batched(&id, 0, transaction_batches);
+        // NOTE: if Entry grows to larger than a transaction, the code below falls over
+        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
 
-        assert_eq!(entries0.len(), 5);
+        // verify no split
+        let transactions = vec![tx0.clone(); threshold];
+        let entries0 = next_entries(&id, 0, transactions.clone());
+        assert_eq!(entries0.len(), 1);
+        assert!(entries0.verify(&id));
 
-        let mut entries1 = vec![];
-        for _ in 0..5 {
-            let entry = next_entry(&id, 1, transactions.clone());
-            id = entry.id;
-            entries1.push(entry);
-        }
-        assert_eq!(entries0, entries1);
+        // verify the split
+        let transactions = vec![tx0.clone(); threshold * 2];
+        let entries0 = next_entries(&id, 0, transactions.clone());
+        assert_eq!(entries0.len(), 2);
+        assert!(entries0[0].has_more);
+        assert!(!entries0[entries0.len() - 1].has_more);
+
+        assert!(entries0.verify(&id));
+        // test hand-construction... brittle, changes if split method changes... ?
+        //        let mut entries1 = vec![];
+        //        entries1.push(Entry::new(&id, 1, transactions[..threshold].to_vec(), true));
+        //        id = entries1[0].id;
+        //        entries1.push(Entry::new(
+        //            &id,
+        //            1,
+        //            transactions[threshold..].to_vec(),
+        //            false,
+        //        ));
+        //
+        //        assert_eq!(entries0, entries1);
     }
 }
 
