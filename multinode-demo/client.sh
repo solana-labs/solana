@@ -19,4 +19,4 @@ rsync -vz "$leader"/config/mint-demo.json $SOLANA_CONFIG_DIR/
 # shellcheck disable=SC2086 # $solana_client_demo should not be quoted
 exec $solana_client_demo \
   -n "$count" -l $SOLANA_CONFIG_DIR/leader.json -d \
-  < $SOLANA_CONFIG_DIR/mint-demo.json 2>&1 | tee client-demo.log
+  < $SOLANA_CONFIG_DIR/mint-demo.json
