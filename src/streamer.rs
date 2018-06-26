@@ -533,12 +533,13 @@ pub fn broadcaster(
     window: Window,
     recycler: BlobRecycler,
     r: BlobReceiver,
+    entry_count: usize,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-broadcaster".to_string())
         .spawn(move || {
-            let mut transmit_index = 0;
-            let mut receive_index = 0;
+            let mut transmit_index = entry_count as u64;
+            let mut receive_index = entry_count as u64;
             loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
