@@ -331,7 +331,12 @@ fn recv_window(
                         let block_start = *consumed - (*consumed % erasure::NUM_CODED);
                         let coding_end = block_start + erasure::NUM_CODED;
                         // We've received all this block's data blobs, go and null out the window now
-                        for j in block_start..coding_end {
+                        for j in block_start..*consumed {
+                            if let Some(b) = mem::replace(&mut window[j % WINDOW_SIZE], None) {
+                                recycler.recycle(b);
+                            }
+                        }
+                        for j in *consumed..coding_end {
                             window[j % WINDOW_SIZE] = None;
                         }
 

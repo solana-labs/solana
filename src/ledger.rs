@@ -9,6 +9,7 @@ use rayon::prelude::*;
 use std::collections::VecDeque;
 use std::io::Cursor;
 use transaction::Transaction;
+use std::sync::Arc;
 
 // a Block is a slice of Entries
 
@@ -52,7 +53,11 @@ pub fn reconstruct_entries_from_blobs(
             let msg = blob.read().unwrap();
             deserialize(&msg.data()[..msg.meta.size])
         };
-        blob_recycler.recycle(blob);
+        // if erasure is enabled, the window may hold a reference to the blob
+        // to be able to perform erasure decoding for missing blobs
+        if Arc::strong_count(&blob) == 1 {
+            blob_recycler.recycle(blob);
+        }
 
         match entry {
             Ok(entry) => entries.push(entry),
