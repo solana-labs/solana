@@ -13,7 +13,7 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod budget;
-mod choose_gossip_peer_strategy;
+pub mod choose_gossip_peer_strategy;
 pub mod crdt;
 pub mod drone;
 pub mod entry;

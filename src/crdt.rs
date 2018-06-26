@@ -15,9 +15,7 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
-use choose_gossip_peer_strategy::{
-    ChooseGossipPeerStrategy, ChooseRandomPeerStrategy, ChooseWeightedPeerStrategy,
-};
+use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -491,7 +489,7 @@ impl Crdt {
     }
 
     // TODO: fill in with real implmentation once staking is implemented
-    fn get_stake(id: PublicKey) -> f64 {
+    fn get_stake(_id: PublicKey) -> f64 {
         1.0
     }
 

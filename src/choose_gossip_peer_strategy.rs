@@ -1,5 +1,5 @@
 use crdt::ReplicatedData;
-use rand::distributions::{IndependentSample, Weighted, WeightedChoice};
+use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::{Error, Result};
 use signature::PublicKey;
@@ -184,7 +184,7 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
         }
 
         let mut rng = thread_rng();
-        Ok(WeightedChoice::new(&mut weighted_peers).ind_sample(&mut rng))
+        Ok(WeightedChoice::new(&mut weighted_peers).sample(&mut rng))
     }
 }
 
@@ -196,8 +196,8 @@ mod tests {
     use std;
     use std::collections::HashMap;
 
-    fn get_stake(id: PublicKey) -> f64 {
-        return 1.0;
+    fn get_stake(_id: PublicKey) -> f64 {
+        1.0
     }
 
     #[test]
@@ -315,7 +315,7 @@ mod tests {
 
         remote.insert(key1, old_index);
 
-        for i in 0..num_peers {
+        for _i in 0..num_peers {
             let pk = KeyPair::new().pubkey();
             rumors.insert(pk, old_index);
         }
