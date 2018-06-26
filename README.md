@@ -109,7 +109,7 @@ As with the leader node, you can run a performance-enhanced validator fullnode b
 `--features=cuda` to the line that runs `solana-fullnode` in `validator.sh`.
 
 ```bash
-$ cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -t leader.json < genesis.log
+$ cargo run --release --features=cuda --bin solana-fullnode -- -l validator.json -v leader.json < genesis.log
 ```
 
 
