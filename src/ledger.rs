@@ -73,7 +73,7 @@ pub fn next_entries_mut(
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
     if transactions.is_empty() {
-        vec![Entry::new_mut(start_hash, cur_hashes, transactions)]
+        vec![Entry::new_mut(start_hash, cur_hashes, transactions, false)]
     } else {
         let mut chunk_len = transactions.len();
 
@@ -82,6 +82,7 @@ pub fn next_entries_mut(
             num_hashes: 0,
             id: Hash::default(),
             transactions: transactions[0..chunk_len].to_vec(),
+            has_more: false,
         }).unwrap() > BLOB_DATA_SIZE as u64
         {
             chunk_len /= 2;
@@ -90,7 +91,7 @@ pub fn next_entries_mut(
         let mut entries = Vec::with_capacity(transactions.len() / chunk_len + 1);
 
         for chunk in transactions.chunks(chunk_len) {
-            entries.push(Entry::new_mut(start_hash, cur_hashes, chunk.to_vec()));
+            entries.push(Entry::new_mut(start_hash, cur_hashes, chunk.to_vec(), true));
         }
         entries
     }

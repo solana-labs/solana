@@ -210,7 +210,7 @@ pub mod tests {
         let transfer_amount = 501;
         let bob_keypair = KeyPair::new();
         for i in 0..num_transfers {
-            let entry0 = Entry::new(&cur_hash, i, vec![]);
+            let entry0 = Entry::new(&cur_hash, i, vec![], false);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 
@@ -222,7 +222,7 @@ pub mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
-            let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
+            let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0], false);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash);
 

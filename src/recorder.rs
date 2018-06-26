@@ -39,6 +39,7 @@ impl Recorder {
                 &mut self.last_hash,
                 &mut self.num_hashes,
                 vec![],
+                false,
             ))
         } else {
             None

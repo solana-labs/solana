@@ -35,17 +35,30 @@ pub struct Entry {
     /// generated. The may have been observed before a previous Entry ID but were
     /// pushed back into this list to ensure deterministic interpretation of the ledger.
     pub transactions: Vec<Transaction>,
+
+    /// Indication that:
+    ///  1. the next Entry in the ledger has transactions that can potentially
+    ///       be verified in parallel with these transactions
+    ///  2. this Entry can be left out of the bank's entry_id cache for
+    ///       purposes of duplicate rejection
+    pub has_more: bool,
 }
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(start_hash: &Hash, cur_hashes: u64, transactions: Vec<Transaction>) -> Self {
+    pub fn new(
+        start_hash: &Hash,
+        cur_hashes: u64,
+        transactions: Vec<Transaction>,
+        has_more: bool,
+    ) -> Self {
         let num_hashes = cur_hashes + if transactions.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &transactions);
         let entry = Entry {
             num_hashes,
             id,
             transactions,
+            has_more,
         };
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
         entry
@@ -56,8 +69,9 @@ impl Entry {
         start_hash: &mut Hash,
         cur_hashes: &mut u64,
         transactions: Vec<Transaction>,
+        has_more: bool,
     ) -> Self {
-        let entry = Self::new(start_hash, *cur_hashes, transactions);
+        let entry = Self::new(start_hash, *cur_hashes, transactions, has_more);
         *start_hash = entry.id;
         *cur_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
@@ -71,6 +85,7 @@ impl Entry {
             num_hashes,
             id: *id,
             transactions: vec![],
+            has_more: false,
         }
     }
 
@@ -119,6 +134,7 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
         num_hashes,
         id: next_hash(start_hash, num_hashes, &transactions),
         transactions,
+        has_more: false,
     }
 }
 
@@ -149,7 +165,7 @@ mod tests {
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
         let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
@@ -166,7 +182,7 @@ mod tests {
         let keypair = KeyPair::new();
         let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
         let tx1 = Transaction::new_signature(&keypair, Default::default(), zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 
         // Next, swap two witness transactions and ensure verification fails.
