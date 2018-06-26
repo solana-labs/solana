@@ -660,9 +660,8 @@ mod bench {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(msgs) => {
-                    let msgs_ = msgs.clone();
                     *rvs.lock().unwrap() += msgs.read().unwrap().packets.len();
-                    recycler.recycle(msgs_);
+                    recycler.recycle(msgs);
                 }
                 _ => (),
             }

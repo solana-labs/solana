@@ -327,13 +327,6 @@ mod bench {
         let (verified_sender, verified_receiver) = channel();
         let (signal_sender, signal_receiver) = channel();
         let packet_recycler = PacketRecycler::default();
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions, 192)
-            .into_iter()
-            .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
-                (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
 
         let setup_transactions: Vec<_> = (0..num_src_accounts)
             .map(|i| {
@@ -346,18 +339,20 @@ mod bench {
             })
             .collect();
 
-        let verified_setup: Vec<_> = to_packets_chunked(&packet_recycler, setup_transactions, tx)
-            .into_iter()
-            .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
-                (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
-
         bencher.iter(move || {
             let bank = Arc::new(Bank::new(&mint));
 
-            verified_sender.send(verified_setup.clone()).unwrap();
+            let verified_setup: Vec<_> =
+                to_packets_chunked(&packet_recycler, setup_transactions.clone(), tx)
+                    .into_iter()
+                    .map(|x| {
+                        let len = (*x).read().unwrap().packets.len();
+                        (x, iter::repeat(1).take(len).collect())
+                    })
+                    .collect();
+
+            let verified_setup_len = verified_setup.len();
+            verified_sender.send(verified_setup).unwrap();
             BankingStage::process_packets(
                 bank.clone(),
                 &verified_receiver,
@@ -365,9 +360,18 @@ mod bench {
                 &packet_recycler,
             ).unwrap();
 
-            check_txs(verified_setup.len(), &signal_receiver, num_src_accounts);
+            check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
 
-            verified_sender.send(verified.clone()).unwrap();
+            let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions.clone(), 192)
+                .into_iter()
+                .map(|x| {
+                    let len = (*x).read().unwrap().packets.len();
+                    (x, iter::repeat(1).take(len).collect())
+                })
+                .collect();
+
+            let verified_len = verified.len();
+            verified_sender.send(verified).unwrap();
             BankingStage::process_packets(
                 bank.clone(),
                 &verified_receiver,
@@ -375,7 +379,7 @@ mod bench {
                 &packet_recycler,
             ).unwrap();
 
-            check_txs(verified.len(), &signal_receiver, tx);
+            check_txs(verified_len, &signal_receiver, tx);
         });
     }
 
@@ -405,17 +409,18 @@ mod bench {
         let (verified_sender, verified_receiver) = channel();
         let (signal_sender, signal_receiver) = channel();
         let packet_recycler = PacketRecycler::default();
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions, tx)
-            .into_iter()
-            .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
-                (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
 
         bencher.iter(move || {
             let bank = Arc::new(Bank::new(&mint));
-            verified_sender.send(verified.clone()).unwrap();
+            let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions.clone(), tx)
+                .into_iter()
+                .map(|x| {
+                    let len = (*x).read().unwrap().packets.len();
+                    (x, iter::repeat(1).take(len).collect())
+                })
+                .collect();
+            let verified_len = verified.len();
+            verified_sender.send(verified).unwrap();
             BankingStage::process_packets(
                 bank.clone(),
                 &verified_receiver,
@@ -423,7 +428,7 @@ mod bench {
                 &packet_recycler,
             ).unwrap();
 
-            check_txs(verified.len(), &signal_receiver, tx);
+            check_txs(verified_len, &signal_receiver, tx);
         });
     }
 
