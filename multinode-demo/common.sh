@@ -3,17 +3,25 @@
 # Disable complaints about unused variables in this file:
 # shellcheck disable=2034
 
-if [[ -d "$SNAP" ]]; then # Running as a Linux Snap?
+if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
     local program="$1"
     printf "%s/command-%s.wrapper" "$SNAP" "$program"
   }
   SOLANA_CUDA="$(snapctl get enable-cuda)"
+
+elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries
+  solana_program() {
+    local program="$1"
+    printf "solana.%s" "$program"
+  }
 elif [[ -n "$USE_INSTALL" ]]; then # Assume |cargo install| was run
   solana_program() {
     local program="$1"
     printf "solana-%s" "$program"
   }
+  # CUDA was/wasn't selected at build time, can't affect CUDA state here
+  unset SOLANA_CUDA
 else
   solana_program() {
     local program="$1"
