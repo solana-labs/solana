@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# usage: $0 <network path to solana repo on leader machine>
+# usage: $0 <rsync network path to solana repo on leader machine>
 #
 
 here=$(dirname "$0")
@@ -19,15 +19,16 @@ if [[ -d "$SNAP" ]]; then
     # Assume drone is running on the same node as the leader by default
     leader_address="localhost"
   fi
-  leader=rsync://"$leader_address"
+  leader="$leader_address"
 else
   leader=${1:-${here}/..}  # Default to local solana repo
 fi
 
+rsync_leader_url=$(rsync_url "$leader")
 set -ex
 mkdir -p $SOLANA_CONFIG_DIR
-rsync -vz "$leader"/config/leader.json $SOLANA_CONFIG_DIR/
-rsync -vz "$leader"/config/mint-demo.json $SOLANA_CONFIG_DIR/
+rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
+rsync -vPz "$rsync_leader_url"/config/mint-demo.json $SOLANA_CONFIG_DIR/
 
 # shellcheck disable=SC2086 # $solana_drone should not be quoted
 exec $solana_drone \
