@@ -12,7 +12,7 @@ confinement: devmode
 
 hooks:
   configure:
-    plugs: []
+    plugs: [network]
 
 apps:
   drone:
