@@ -314,7 +314,12 @@ impl Bank {
                     result?;
                 }
             }
-            self.register_entry_id(&entry.id);
+            // TODO: verify this is ok in cases like:
+            //  1. an untrusted genesis or tx-<DATE>.log
+            //  2. a crazy leader..
+            if !entry.has_more {
+                self.register_entry_id(&entry.id);
+            }
         }
         Ok(self.entry_count())
     }
