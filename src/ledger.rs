@@ -1,10 +1,10 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
-use bincode::{self, deserialize, serialize_into, serialized_size};
+use bincode::{self, deserialize, serialize_into};
 use entry::Entry;
 use hash::Hash;
-use packet::{self, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
+use packet::{self, SharedBlob, BLOB_SIZE};
 use rayon::prelude::*;
 use std::collections::VecDeque;
 use std::io::Cursor;
@@ -78,13 +78,7 @@ pub fn next_entries_mut(
         let mut chunk_len = transactions.len();
 
         // check for fit, make sure they can be serialized
-        while serialized_size(&Entry {
-            num_hashes: 0,
-            id: Hash::default(),
-            transactions: transactions[0..chunk_len].to_vec(),
-            has_more: false,
-        }).unwrap() > BLOB_DATA_SIZE as u64
-        {
+        while !Entry::will_fit(transactions[0..chunk_len].to_vec()) {
             chunk_len /= 2;
         }
 
@@ -104,12 +98,6 @@ pub fn next_entries_mut(
                 chunk.to_vec(),
                 num_chunks > 0,
             ));
-            println!(
-                "transactions.len() = {}, chunk_len {}, num_chunks {}",
-                transactions.len(),
-                chunk_len,
-                num_chunks,
-            );
         }
         entries
     }
@@ -131,7 +119,7 @@ mod tests {
     use super::*;
     use entry::{next_entry, Entry};
     use hash::hash;
-    use packet::BlobRecycler;
+    use packet::{BlobRecycler, BLOB_DATA_SIZE};
     use signature::{KeyPair, KeyPairUtil};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
