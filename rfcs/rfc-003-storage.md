@@ -12,7 +12,7 @@ The basic idea to Proof of Replication is encrypting a dataset with a public sym
 
 # Optimization with PoH 
 
-Our improvement on this approach is to randomly sample the encrypted blocks faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the blocks stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. With the current generation of graphics cards our network can support up to 14k replication identities or symmetric keys. The total space required for verification is (2 CBC blocks) * (Number of Identities), with core count of equal to (Number of Identities). A CBC block is expected to be 1MB in size.
+Our improvement on this approach is to randomly sample the encrypted blocks faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the blocks stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. With the current generation of graphics cards our network can support up to 14k replication identities or symmetric keys. The total space required for verification is `(2 CBC blocks) * (Number of Identities)`, with core count of equal to (Number of Identities). A CBC block is expected to be 1MB in size.
 
 # Network
 
