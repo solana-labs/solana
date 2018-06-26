@@ -37,26 +37,26 @@ impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
     }
 }
 
-// This strategy uses rumors accumulated from the rest of the network to weight 
-// the importance of communicating with a particular validator based on cumulative network 
+// This strategy uses rumors accumulated from the rest of the network to weight
+// the importance of communicating with a particular validator based on cumulative network
 // perceiption of the number of updates the validator has to offer. A validator is randomly
 // picked based on a weighted sample from the pool of viable choices. The "weight", w, of a
 // particular validator "v" is calculated as follows:
-// 
-//  w = [Sum for all i in I_v: (rumor_v(i) - observed(v)) * stake(i)] / 
+//
+//  w = [Sum for all i in I_v: (rumor_v(i) - observed(v)) * stake(i)] /
 //      [Sum for all i in I_v: Sum(stake(i))]
 //
 // where I_v is the set of all validators that returned a rumor about the update_index of
 // validator "v", stake(i) is the size of the stake of validator "i", observed(v) is the
-// observed update_index from the last direct communication validator "v", and 
+// observed update_index from the last direct communication validator "v", and
 // rumor_v(i) is the rumored update_index of validator "v" propagated by fellow validator "i".
 
 // This could be a problem if there are validators with large stakes lying about their
-// observed updates. There could also be a problem in network partitions, or even just 
+// observed updates. There could also be a problem in network partitions, or even just
 // when certain validators are disproportionately active, where we hear more rumors about
 // certain clusters of nodes that then propagate more rumros about each other. Hopefully
-// this can be resolved with a good baseline DEFAULT_WEIGHT, or by implementing lockout 
-// periods for very active validators in the future. 
+// this can be resolved with a good baseline DEFAULT_WEIGHT, or by implementing lockout
+// periods for very active validators in the future.
 
 pub struct ChooseWeightedPeerStrategy<'a> {
     // The map of last directly observed update_index for each active validator.
