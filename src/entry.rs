@@ -43,7 +43,8 @@ pub struct Entry {
     ///       purposes of duplicate rejection
     pub has_more: bool,
 
-    erasure_pad: [u8; 3],
+    /// Erasure requires that Entry be a multiple of 4 bytes in size
+    pad: [u8; 3],
 }
 
 impl Entry {
@@ -61,9 +62,20 @@ impl Entry {
             id,
             transactions,
             has_more,
+            pad: [0, 0, 0],
         };
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
         entry
+    }
+
+    pub fn will_fit(transactions: Vec<Transaction>) -> bool {
+        serialized_size(&Entry {
+            num_hashes: 0,
+            id: Hash::default(),
+            transactions,
+            has_more: false,
+            pad: [0, 0, 0],
+        }).unwrap() <= BLOB_DATA_SIZE as u64
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
@@ -88,6 +100,7 @@ impl Entry {
             id: *id,
             transactions: vec![],
             has_more: false,
+            pad: [0, 0, 0],
         }
     }
 
@@ -137,6 +150,7 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
         id: next_hash(start_hash, num_hashes, &transactions),
         transactions,
         has_more: false,
+        pad: [0, 0, 0],
     }
 }
 
