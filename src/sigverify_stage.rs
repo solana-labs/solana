@@ -14,7 +14,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
 use std::time::Instant;
-use streamer;
+use streamer::{self, PacketReceiver};
 use timing;
 
 pub struct SigVerifyStage {
@@ -38,7 +38,7 @@ impl SigVerifyStage {
     }
 
     fn verifier(
-        recvr: &Arc<Mutex<streamer::PacketReceiver>>,
+        recvr: &Arc<Mutex<PacketReceiver>>,
         sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> Result<()> {
         let (batch, len) =
@@ -76,7 +76,7 @@ impl SigVerifyStage {
 
     fn verifier_service(
         exit: Arc<AtomicBool>,
-        packet_receiver: Arc<Mutex<streamer::PacketReceiver>>,
+        packet_receiver: Arc<Mutex<PacketReceiver>>,
         verified_sender: Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
@@ -89,7 +89,7 @@ impl SigVerifyStage {
 
     fn verifier_services(
         exit: Arc<AtomicBool>,
-        packet_receiver: streamer::PacketReceiver,
+        packet_receiver: PacketReceiver,
         verified_sender: Sender<Vec<(SharedPackets, Vec<u8>)>>,
     ) -> Vec<JoinHandle<()>> {
         let sender = Arc::new(Mutex::new(verified_sender));

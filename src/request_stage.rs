@@ -1,8 +1,7 @@
 //! The `request_stage` processes thin client Request messages.
 
 use bincode::deserialize;
-use packet;
-use packet::SharedPackets;
+use packet::{to_blobs, BlobRecycler, PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
@@ -13,17 +12,17 @@ use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::Instant;
-use streamer;
+use streamer::{self, BlobReceiver, BlobSender};
 use timing;
 
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
-    pub blob_receiver: streamer::BlobReceiver,
+    pub blob_receiver: BlobReceiver,
     pub request_processor: Arc<RequestProcessor>,
 }
 
 impl RequestStage {
-    pub fn deserialize_requests(p: &packet::Packets) -> Vec<Option<(Request, SocketAddr)>> {
+    pub fn deserialize_requests(p: &Packets) -> Vec<Option<(Request, SocketAddr)>> {
         p.packets
             .par_iter()
             .map(|x| {
@@ -37,9 +36,9 @@ impl RequestStage {
     pub fn process_request_packets(
         request_processor: &RequestProcessor,
         packet_receiver: &Receiver<SharedPackets>,
-        blob_sender: &streamer::BlobSender,
-        packet_recycler: &packet::PacketRecycler,
-        blob_recycler: &packet::BlobRecycler,
+        blob_sender: &BlobSender,
+        packet_recycler: &PacketRecycler,
+        blob_recycler: &BlobRecycler,
     ) -> Result<()> {
         let (batch, batch_len) = streamer::recv_batch(packet_receiver)?;
 
@@ -60,7 +59,7 @@ impl RequestStage {
 
             let rsps = request_processor.process_requests(reqs);
 
-            let blobs = packet::to_blobs(rsps, blob_recycler)?;
+            let blobs = to_blobs(rsps, blob_recycler)?;
             if !blobs.is_empty() {
                 info!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
@@ -84,8 +83,8 @@ impl RequestStage {
         request_processor: RequestProcessor,
         exit: Arc<AtomicBool>,
         packet_receiver: Receiver<SharedPackets>,
-        packet_recycler: packet::PacketRecycler,
-        blob_recycler: packet::BlobRecycler,
+        packet_recycler: PacketRecycler,
+        blob_recycler: BlobRecycler,
     ) -> Self {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();

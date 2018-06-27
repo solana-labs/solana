@@ -1,27 +1,27 @@
 //! The `window_stage` maintains the blob window
 
 use crdt::Crdt;
-use packet;
+use packet::BlobRecycler;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
-use streamer;
+use streamer::{self, BlobReceiver, Window};
 
 pub struct WindowStage {
-    pub blob_receiver: streamer::BlobReceiver,
+    pub blob_receiver: BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl WindowStage {
     pub fn new(
         crdt: Arc<RwLock<Crdt>>,
-        window: streamer::Window,
+        window: Window,
         retransmit_socket: UdpSocket,
         exit: Arc<AtomicBool>,
-        blob_recycler: packet::BlobRecycler,
-        fetch_stage_receiver: streamer::BlobReceiver,
+        blob_recycler: BlobRecycler,
+        fetch_stage_receiver: BlobReceiver,
         entry_count: usize,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();

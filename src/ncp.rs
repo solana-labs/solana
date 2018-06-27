@@ -1,7 +1,7 @@
 //! The `ncp` module implements the network control plane.
 
-use crdt;
-use packet;
+use crdt::Crdt;
+use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -16,13 +16,13 @@ pub struct Ncp {
 
 impl Ncp {
     pub fn new(
-        crdt: Arc<RwLock<crdt::Crdt>>,
-        window: Arc<RwLock<Vec<Option<packet::SharedBlob>>>>,
+        crdt: Arc<RwLock<Crdt>>,
+        window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Result<Ncp> {
-        let blob_recycler = packet::BlobRecycler::default();
+        let blob_recycler = BlobRecycler::default();
         let (request_sender, request_receiver) = channel();
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
@@ -42,7 +42,7 @@ impl Ncp {
             blob_recycler.clone(),
             response_receiver,
         );
-        let t_listen = crdt::Crdt::listen(
+        let t_listen = Crdt::listen(
             crdt.clone(),
             window,
             blob_recycler.clone(),
@@ -50,7 +50,7 @@ impl Ncp {
             response_sender.clone(),
             exit.clone(),
         );
-        let t_gossip = crdt::Crdt::gossip(crdt.clone(), blob_recycler, response_sender, exit);
+        let t_gossip = Crdt::gossip(crdt.clone(), blob_recycler, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Ok(Ncp { thread_hdls })
     }

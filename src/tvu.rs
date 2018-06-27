@@ -37,13 +37,13 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
-use packet;
+use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
-use streamer;
+use streamer::Window;
 use window_stage::WindowStage;
 
 pub struct Tvu {
@@ -64,13 +64,13 @@ impl Tvu {
     pub fn new(
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        window: streamer::Window,
+        window: Window,
         replicate_socket: UdpSocket,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let blob_recycler = packet::BlobRecycler::default();
+        let blob_recycler = BlobRecycler::default();
         let fetch_stage = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit.clone(),
@@ -120,7 +120,7 @@ pub mod tests {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer;
+    use streamer::{self, Window};
     use transaction::Transaction;
     use tvu::Tvu;
 
@@ -128,7 +128,7 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<(Ncp, streamer::Window)> {
+    ) -> Result<(Ncp, Window)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let ncp = Ncp::new(crdt, window.clone(), listen, send_sock, exit)?;

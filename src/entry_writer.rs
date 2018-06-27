@@ -5,7 +5,7 @@
 use bank::Bank;
 use entry::Entry;
 use ledger::Block;
-use packet;
+use packet::BlobRecycler;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
@@ -14,7 +14,7 @@ use std::io::Write;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use streamer;
+use streamer::BlobSender;
 
 pub struct EntryWriter<'a> {
     bank: &'a Bank,
@@ -57,8 +57,8 @@ impl<'a> EntryWriter<'a> {
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries<W: Write>(
         &self,
-        broadcast: &streamer::BlobSender,
-        blob_recycler: &packet::BlobRecycler,
+        broadcast: &BlobSender,
+        blob_recycler: &BlobRecycler,
         writer: &Mutex<W>,
         entry_receiver: &Receiver<Entry>,
     ) -> Result<()> {

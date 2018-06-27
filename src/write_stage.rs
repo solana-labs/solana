@@ -5,17 +5,17 @@
 use bank::Bank;
 use entry::Entry;
 use entry_writer::EntryWriter;
-use packet;
+use packet::BlobRecycler;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread::{Builder, JoinHandle};
-use streamer;
+use streamer::BlobReceiver;
 
 pub struct WriteStage {
     pub thread_hdl: JoinHandle<()>,
-    pub blob_receiver: streamer::BlobReceiver,
+    pub blob_receiver: BlobReceiver,
 }
 
 impl WriteStage {
@@ -23,7 +23,7 @@ impl WriteStage {
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
-        blob_recycler: packet::BlobRecycler,
+        blob_recycler: BlobRecycler,
         writer: Mutex<W>,
         entry_receiver: Receiver<Entry>,
     ) -> Self {

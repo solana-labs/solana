@@ -3,22 +3,24 @@
 use crdt::Crdt;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedPackets, BLOB_SIZE};
+use packet::{
+    Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedBlobs, SharedPackets, BLOB_SIZE,
+};
 use result::{Error, Result};
 use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 pub const WINDOW_SIZE: usize = 2 * 1024;
-pub type PacketReceiver = mpsc::Receiver<SharedPackets>;
-pub type PacketSender = mpsc::Sender<SharedPackets>;
-pub type BlobSender = mpsc::Sender<VecDeque<SharedBlob>>;
-pub type BlobReceiver = mpsc::Receiver<VecDeque<SharedBlob>>;
+pub type PacketReceiver = Receiver<SharedPackets>;
+pub type PacketSender = Sender<SharedPackets>;
+pub type BlobSender = Sender<SharedBlobs>;
+pub type BlobReceiver = Receiver<SharedBlobs>;
 pub type Window = Arc<RwLock<Vec<Option<SharedBlob>>>>;
 
 fn recv_loop(
