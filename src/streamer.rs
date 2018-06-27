@@ -303,9 +303,22 @@ fn recv_window(
                     debug!("duplicate blob at index {:}", w);
                 }
             }
+            // recycle old references
+            for ix in *consumed..pix {
+                let k = (ix % WINDOW_SIZE) as usize;
+                if let Some(b) = &mut window[k] {
+                    if b.read().unwrap().get_index().unwrap() >= *consumed as u64 {
+                        continue;
+                    }
+                }
+                if let Some(b) = mem::replace(&mut window[k], None) {
+                    recycler.recycle(b);
+                }
+            }
             loop {
                 let k = (*consumed % WINDOW_SIZE) as usize;
                 trace!("k: {} consumed: {}", k, *consumed);
+
                 if window[k].is_none() {
                     break;
                 }
@@ -322,11 +335,6 @@ fn recv_window(
                 if !is_coding {
                     contq.push_back(window[k].clone().expect("clone in fn recv_window"));
                     *consumed += 1;
-
-                    #[cfg(not(feature = "erasure"))]
-                    {
-                        window[k] = None;
-                    }
                 } else {
                     #[cfg(feature = "erasure")]
                     {
