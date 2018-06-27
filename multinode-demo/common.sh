@@ -30,7 +30,10 @@ else
       program=${BASH_REMATCH[1]}
       features="--features=cuda,erasure"
     fi
-    printf "cargo run --release --bin solana-%s %s -- " "$program" "$features"
+    if [[ -z "$DEBUG" ]]; then
+      maybe_release=--release
+    fi
+    printf "cargo run $maybe_release --bin solana-%s %s -- " "$program" "$features"
   }
 fi
 
