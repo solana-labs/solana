@@ -16,6 +16,7 @@ use std::time::Instant;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
+pub type SharedBlobs = VecDeque<SharedBlob>;
 pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
@@ -274,7 +275,7 @@ pub fn to_blob<T: Serialize>(
 pub fn to_blobs<T: Serialize>(
     rsps: Vec<(T, SocketAddr)>,
     blob_recycler: &BlobRecycler,
-) -> Result<VecDeque<SharedBlob>> {
+) -> Result<SharedBlobs> {
     let mut blobs = VecDeque::new();
     for (resp, rsp_addr) in rsps {
         blobs.push_back(to_blob(resp, rsp_addr, blob_recycler)?);
@@ -367,7 +368,7 @@ impl Blob {
         self.meta.size = new_size;
         self.set_data_size(new_size as u64).unwrap();
     }
-    pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<VecDeque<SharedBlob>> {
+    pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<SharedBlobs> {
         let mut v = VecDeque::new();
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
@@ -405,11 +406,7 @@ impl Blob {
         }
         Ok(v)
     }
-    pub fn send_to(
-        re: &BlobRecycler,
-        socket: &UdpSocket,
-        v: &mut VecDeque<SharedBlob>,
-    ) -> Result<()> {
+    pub fn send_to(re: &BlobRecycler, socket: &UdpSocket, v: &mut SharedBlobs) -> Result<()> {
         while let Some(r) = v.pop_front() {
             {
                 let p = r.read().expect("'r' read lock in pub fn send_to");

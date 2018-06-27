@@ -24,7 +24,7 @@
 //! ```
 
 use bank::Bank;
-use packet;
+use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use std::net::UdpSocket;
@@ -45,7 +45,7 @@ impl Rpu {
         respond_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let packet_recycler = packet::PacketRecycler::default();
+        let packet_recycler = PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
             requests_socket,
@@ -54,7 +54,7 @@ impl Rpu {
             packet_sender,
         );
 
-        let blob_recycler = packet::BlobRecycler::default();
+        let blob_recycler = BlobRecycler::default();
         let request_processor = RequestProcessor::new(bank.clone());
         let request_stage = RequestStage::new(
             request_processor,

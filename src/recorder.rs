@@ -3,7 +3,7 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
-use ledger::next_entries_mut;
+use ledger;
 use std::time::{Duration, Instant};
 use transaction::Transaction;
 
@@ -28,7 +28,7 @@ impl Recorder {
     }
 
     pub fn record(&mut self, transactions: Vec<Transaction>) -> Vec<Entry> {
-        next_entries_mut(&mut self.last_hash, &mut self.num_hashes, transactions)
+        ledger::next_entries_mut(&mut self.last_hash, &mut self.num_hashes, transactions)
     }
 
     pub fn tick(&mut self, start_time: Instant, tick_duration: Duration) -> Option<Entry> {

@@ -2,13 +2,13 @@
 
 use bank::Bank;
 use ledger;
-use packet;
+use packet::BlobRecycler;
 use result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
-use streamer;
+use streamer::BlobReceiver;
 
 pub struct ReplicateStage {
     pub thread_hdl: JoinHandle<()>,
@@ -18,8 +18,8 @@ impl ReplicateStage {
     /// Process entry blobs, already in order
     fn replicate_requests(
         bank: &Arc<Bank>,
-        blob_receiver: &streamer::BlobReceiver,
-        blob_recycler: &packet::BlobRecycler,
+        blob_receiver: &BlobReceiver,
+        blob_recycler: &BlobRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = blob_receiver.recv_timeout(timer)?;
@@ -36,8 +36,8 @@ impl ReplicateStage {
     pub fn new(
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
-        window_receiver: streamer::BlobReceiver,
-        blob_recycler: packet::BlobRecycler,
+        window_receiver: BlobReceiver,
+        blob_recycler: BlobRecycler,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-replicate-stage".to_string())

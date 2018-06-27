@@ -3,7 +3,7 @@
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData};
 use ncp::Ncp;
-use packet;
+use packet::BlobRecycler;
 use rpu::Rpu;
 use std::io::Write;
 use std::net::UdpSocket;
@@ -61,7 +61,7 @@ impl Server {
         let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
         thread_hdls.extend(rpu.thread_hdls);
 
-        let blob_recycler = packet::BlobRecycler::default();
+        let blob_recycler = BlobRecycler::default();
         let tpu = Tpu::new(
             bank.clone(),
             tick_duration,

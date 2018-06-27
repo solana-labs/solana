@@ -5,8 +5,7 @@
 use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
-use packet;
-use packet::SharedPackets;
+use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::Result;
@@ -38,7 +37,7 @@ impl BankingStage {
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        packet_recycler: packet::PacketRecycler,
+        packet_recycler: PacketRecycler,
     ) -> Self {
         let (signal_sender, signal_receiver) = channel();
         let thread_hdl = Builder::new()
@@ -65,7 +64,7 @@ impl BankingStage {
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
     /// an unused `SocketAddr` that could be used to send a response.
-    fn deserialize_transactions(p: &packet::Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
+    fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
         p.packets
             .par_iter()
             .map(|x| {
@@ -82,7 +81,7 @@ impl BankingStage {
         bank: Arc<Bank>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         signal_sender: &Sender<Signal>,
-        packet_recycler: &packet::PacketRecycler,
+        packet_recycler: &PacketRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
