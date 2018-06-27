@@ -55,6 +55,7 @@ impl Tvu {
     /// on the bank state.
     /// # Arguments
     /// * `bank` - The bank state.
+    /// * `entry_height` - Initial ledger height, passed to replicate stage
     /// * `crdt` - The crdt state.
     /// * `window` - The window state.
     /// * `replicate_socket` - my replicate socket
@@ -63,6 +64,7 @@ impl Tvu {
     /// * `exit` - The exit signal.
     pub fn new(
         bank: Arc<Bank>,
+        entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
         window: Window,
         replicate_socket: UdpSocket,
@@ -82,11 +84,11 @@ impl Tvu {
         let window_stage = WindowStage::new(
             crdt,
             window,
+            entry_height,
             retransmit_socket,
             exit.clone(),
             blob_recycler.clone(),
             fetch_stage.blob_receiver,
-            bank.entry_count(),
         );
 
         let replicate_stage =
@@ -194,6 +196,7 @@ pub mod tests {
 
         let tvu = Tvu::new(
             bank.clone(),
+            0,
             cref1,
             dr_1.1,
             target1.sockets.replicate,

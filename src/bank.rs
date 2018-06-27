@@ -87,11 +87,6 @@ pub struct Bank {
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
     transaction_count: AtomicUsize,
-
-    /// The number of Entries the bank has processed without error since start
-    ///   of the ledger, i.e. poor-man's network synchronization
-    ///   TODO: upgrade to U64 when stable?
-    entry_count: AtomicUsize,
 }
 
 impl Bank {
@@ -105,7 +100,6 @@ impl Bank {
             time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
             transaction_count: AtomicUsize::new(0),
-            entry_count: AtomicUsize::new(0),
         };
         bank.apply_payment(deposit, &mut bank.balances.write().unwrap());
         bank
@@ -302,12 +296,13 @@ impl Bank {
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries<I>(&self, entries: I) -> Result<usize>
+    pub fn process_entries<I>(&self, entries: I) -> Result<u64>
     where
         I: IntoIterator<Item = Entry>,
     {
+        let mut entry_count = 0;
         for entry in entries {
-            self.entry_count.fetch_add(1, Ordering::Relaxed);
+            entry_count += 1;
 
             if !entry.transactions.is_empty() {
                 for result in self.process_transactions(entry.transactions) {
@@ -321,7 +316,7 @@ impl Bank {
                 self.register_entry_id(&entry.id);
             }
         }
-        Ok(self.entry_count())
+        Ok(entry_count)
     }
 
     /// Process a Witness Signature. Any payment plans waiting on this signature
@@ -434,9 +429,6 @@ impl Bank {
 
     pub fn transaction_count(&self) -> usize {
         self.transaction_count.load(Ordering::Relaxed)
-    }
-    pub fn entry_count(&self) -> usize {
-        self.entry_count.load(Ordering::Relaxed)
     }
 }
 

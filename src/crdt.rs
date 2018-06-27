@@ -727,7 +727,10 @@ impl Crdt {
             }
         } else {
             assert!(window.read().unwrap()[pos].is_none());
-            info!("failed RequestWindowIndex {} {}", ix, from.repair_addr);
+            info!(
+                "failed RequestWindowIndex {} {} {}",
+                ix, pos, from.repair_addr
+            );
         }
 
         None
