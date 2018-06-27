@@ -35,6 +35,7 @@ else
 fi
 
 solana_client_demo=$(solana_program client-demo)
+solana_simple_client_demo=$(solana_program simple-client-demo)
 solana_drone=$(solana_program drone)
 solana_fullnode=$(solana_program fullnode)
 solana_fullnode_config=$(solana_program fullnode-config)
