@@ -47,6 +47,8 @@ apps:
     command: solana-mint-demo
   client-demo:
     command: solana-client-demo
+  simple-client-demo:
+    command: solana-simple-client-demo
 
   daemon-validator:
     daemon: simple

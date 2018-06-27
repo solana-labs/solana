@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# usage: $0 <rsync network path to solana repo on leader machine> <number of nodes in the network???>"
+# usage: $0 <rsync network path to solana repo on leader machine>"
 #
 
 here=$(dirname "$0")
