@@ -81,7 +81,7 @@ fn main() {
     loop {
         let mut input = String::new();
         match std::io::stdin().read_line(&mut input) {
-            Ok(n) => {
+            Ok(_) => {
                 match input.trim() {
                     // Check client balance
                     "balance" => {
@@ -103,7 +103,7 @@ fn main() {
                     // Request amount is set in request_airdrop function
                     "airdrop" => {
                         println!("Airdrop requested...");
-                        let airdrop = request_airdrop(&drone_addr, &client_pubkey);
+                        let _airdrop = request_airdrop(&drone_addr, &client_pubkey);
                         // TODO: return airdrop Result from Drone
                         sleep(Duration::from_millis(100));
                         println!(
