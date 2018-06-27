@@ -24,5 +24,6 @@ fi
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
   -l "$SOLANA_CONFIG_DIR"/leader.json \
-  < "$SOLANA_CONFIG_DIR"/genesis.log "$SOLANA_CONFIG_DIR"/tx-*.log \
+  < <(shopt -s nullglob && cat "$SOLANA_CONFIG_DIR"/genesis.log \
+          "$SOLANA_CONFIG_DIR"/tx-*.log) \
   > "$SOLANA_CONFIG_DIR"/tx-"$(date -u +%Y%m%d%H%M%S%N)".log

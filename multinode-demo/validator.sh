@@ -72,4 +72,5 @@ ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
   -l "$SOLANA_CONFIG_DIR"/validator.json -t "$leader_address:$leader_port" \
-  < "$SOLANA_LEADER_CONFIG_DIR"/genesis.log "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log
+  < <(shopt -s nullglob && cat "$SOLANA_LEADER_CONFIG_DIR"/genesis.log \
+          "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log)
