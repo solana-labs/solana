@@ -101,9 +101,11 @@ fn main() {
     bank.register_entry_id(&entry0.id);
     bank.register_entry_id(&entry1.id);
 
+    // entry_height is the network-wide agreed height of the ledger.
+    //  initialize it from the input ledger
     eprintln!("processing entries...");
-    let num_entries = bank.process_entries(entries).expect("process_entries");
-    eprintln!("processed {} entries...", num_entries);
+    let entry_height = bank.process_entries(entries).expect("process_entries");
+    eprintln!("processed {} entries...", entry_height);
 
     eprintln!("creating networking stack...");
 
@@ -135,6 +137,7 @@ fn main() {
         let newtwork_entry_point = ReplicatedData::new_entry_point(testnet_addr);
         let s = Server::new_validator(
             bank,
+            entry_height,
             repl_data.clone(),
             UdpSocket::bind(repl_data.requests_addr).unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -160,6 +163,7 @@ fn main() {
 
         let server = Server::new_leader(
             bank,
+            entry_height,
             //Some(Duration::from_millis(1000)),
             None,
             repl_data.clone(),

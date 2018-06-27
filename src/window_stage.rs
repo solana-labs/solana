@@ -18,11 +18,11 @@ impl WindowStage {
     pub fn new(
         crdt: Arc<RwLock<Crdt>>,
         window: Window,
+        entry_height: u64,
         retransmit_socket: UdpSocket,
         exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
-        entry_count: usize,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -38,11 +38,11 @@ impl WindowStage {
             exit.clone(),
             crdt.clone(),
             window,
+            entry_height,
             blob_recycler.clone(),
             fetch_stage_receiver,
             blob_sender,
             retransmit_sender,
-            entry_count,
         );
         let thread_hdls = vec![t_retransmit, t_window];
 

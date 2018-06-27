@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-pub const WINDOW_SIZE: usize = 2 * 1024;
+pub const WINDOW_SIZE: u64 = 2 * 1024;
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
@@ -148,8 +148,8 @@ pub fn blob_receiver(
 fn find_next_missing(
     locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
-    consumed: &mut usize,
-    received: &mut usize,
+    consumed: &mut u64,
+    received: &mut u64,
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     if *received <= *consumed {
         return Err(Error::GenericError);
@@ -157,7 +157,7 @@ fn find_next_missing(
     let window = locked_window.read().unwrap();
     let reqs: Vec<_> = (*consumed..*received)
         .filter_map(|pix| {
-            let i = pix % WINDOW_SIZE;
+            let i = (pix % WINDOW_SIZE) as usize;
             if let &None = &window[i] {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
@@ -174,18 +174,18 @@ fn repair_window(
     locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     _recycler: &BlobRecycler,
-    last: &mut usize,
+    last: &mut u64,
     times: &mut usize,
-    consumed: &mut usize,
-    received: &mut usize,
+    consumed: &mut u64,
+    received: &mut u64,
 ) -> Result<()> {
     #[cfg(feature = "erasure")]
     {
         if erasure::recover(
             _recycler,
             &mut locked_window.write().unwrap(),
-            *consumed,
-            *received,
+            *consumed as usize,
+            *received as usize,
         ).is_err()
         {
             trace!("erasure::recover failed");
@@ -217,8 +217,8 @@ fn recv_window(
     locked_window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
-    consumed: &mut usize,
-    received: &mut usize,
+    consumed: &mut u64,
+    received: &mut u64,
     r: &BlobReceiver,
     s: &BlobSender,
     retransmit: &BlobSender,
@@ -273,7 +273,7 @@ fn recv_window(
     while let Some(b) = dq.pop_front() {
         let (pix, meta_size) = {
             let p = b.write().expect("'b' write lock in fn recv_window");
-            (p.get_index()? as usize, p.meta.size)
+            (p.get_index()?, p.meta.size)
         };
         if pix > *received {
             *received = pix;
@@ -287,7 +287,7 @@ fn recv_window(
             );
             continue;
         }
-        let w = pix % WINDOW_SIZE;
+        let w = (pix % WINDOW_SIZE) as usize;
         //TODO, after the block are authenticated
         //if we get different blocks at the same index
         //that is a network failure/attack
@@ -304,7 +304,7 @@ fn recv_window(
                 }
             }
             loop {
-                let k = *consumed % WINDOW_SIZE;
+                let k = (*consumed % WINDOW_SIZE) as usize;
                 trace!("k: {} consumed: {}", k, *consumed);
                 if window[k].is_none() {
                     break;
@@ -330,19 +330,21 @@ fn recv_window(
                 } else {
                     #[cfg(feature = "erasure")]
                     {
-                        let block_start = *consumed - (*consumed % erasure::NUM_CODED);
-                        let coding_end = block_start + erasure::NUM_CODED;
+                        let block_start = *consumed - (*consumed % erasure::NUM_CODED as u64);
+                        let coding_end = block_start + erasure::NUM_CODED as u64;
                         // We've received all this block's data blobs, go and null out the window now
                         for j in block_start..*consumed {
-                            if let Some(b) = mem::replace(&mut window[j % WINDOW_SIZE], None) {
+                            if let Some(b) =
+                                mem::replace(&mut window[(j % WINDOW_SIZE) as usize], None)
+                            {
                                 recycler.recycle(b);
                             }
                         }
                         for j in *consumed..coding_end {
-                            window[j % WINDOW_SIZE] = None;
+                            window[(j % WINDOW_SIZE) as usize] = None;
                         }
 
-                        *consumed += erasure::MAX_MISSING;
+                        *consumed += erasure::MAX_MISSING as u64;
                         debug!(
                             "skipping processing coding blob k: {} consumed: {}",
                             k, *consumed
@@ -361,7 +363,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(locked_window: &Window, consumed: usize) {
+fn print_window(locked_window: &Window, consumed: u64) {
     {
         let buf: Vec<_> = locked_window
             .read()
@@ -369,7 +371,7 @@ fn print_window(locked_window: &Window, consumed: usize) {
             .iter()
             .enumerate()
             .map(|(i, v)| {
-                if i == (consumed % WINDOW_SIZE) {
+                if i == (consumed % WINDOW_SIZE) as usize {
                     "_"
                 } else if v.is_none() {
                     "0"
@@ -391,25 +393,25 @@ fn print_window(locked_window: &Window, consumed: usize) {
 }
 
 pub fn default_window() -> Window {
-    Arc::new(RwLock::new(vec![None; WINDOW_SIZE]))
+    Arc::new(RwLock::new(vec![None; WINDOW_SIZE as usize]))
 }
 
 pub fn window(
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
     window: Window,
+    entry_height: u64,
     recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
-    entry_count: usize,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
-            let mut consumed = entry_count;
-            let mut received = entry_count;
-            let mut last = entry_count;
+            let mut consumed = entry_height;
+            let mut received = entry_height;
+            let mut last = entry_height;
             let mut times = 0;
             loop {
                 if exit.load(Ordering::Relaxed) {
@@ -459,9 +461,9 @@ fn broadcast(
 
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
-    let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE).map(|x| x.to_vec());
+    let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    print_window(window, *receive_index as usize);
+    print_window(window, *receive_index);
 
     for mut blobs in blobs_chunked {
         // Insert the coding blobs into the blob stream
@@ -479,7 +481,7 @@ fn broadcast(
             assert!(blobs.len() <= win.len());
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
-                let pos = (ix as usize) % WINDOW_SIZE;
+                let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = mem::replace(&mut win[pos], None) {
                     trace!(
                         "popped {} at {}",
@@ -492,7 +494,7 @@ fn broadcast(
             }
             while let Some(b) = blobs.pop() {
                 let ix = b.read().unwrap().get_index().expect("blob index");
-                let pos = (ix as usize) % WINDOW_SIZE;
+                let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("caching {} at {}", ix, pos);
                 assert!(win[pos].is_none());
                 win[pos] = Some(b);
@@ -531,15 +533,15 @@ pub fn broadcaster(
     exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
     window: Window,
+    entry_height: u64,
     recycler: BlobRecycler,
     r: BlobReceiver,
-    entry_count: usize,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-broadcaster".to_string())
         .spawn(move || {
-            let mut transmit_index = entry_count as u64;
-            let mut receive_index = entry_count as u64;
+            let mut transmit_index = entry_height;
+            let mut receive_index = entry_height;
             loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -825,11 +827,11 @@ mod test {
             exit.clone(),
             subs,
             win,
+            0,
             resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
-            0,
         );
         let (s_responder, r_responder) = channel();
         let t_responder = responder(

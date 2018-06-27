@@ -32,6 +32,7 @@ fn validator(
     let replicant_bank = Bank::new(&alice);
     let mut ts = Server::new_validator(
         replicant_bank,
+        0,
         validator.data.clone(),
         validator.sockets.requests,
         validator.sockets.respond,
@@ -105,6 +106,7 @@ fn test_multi_node() {
     let leader_bank = Bank::new(&alice);
     let server = Server::new_leader(
         leader_bank,
+        0,
         None,
         leader.data.clone(),
         leader.sockets.requests,

@@ -46,6 +46,7 @@ impl Server {
     /// ```
     pub fn new_leader<W: Write + Send + 'static>(
         bank: Bank,
+        entry_height: u64,
         tick_duration: Option<Duration>,
         me: ReplicatedData,
         requests_socket: UdpSocket,
@@ -89,9 +90,9 @@ impl Server {
             exit.clone(),
             crdt,
             window,
+            entry_height,
             blob_recycler.clone(),
             tpu.blob_receiver,
-            bank.entry_count(),
         );
         thread_hdls.extend(vec![t_broadcast]);
 
@@ -129,6 +130,7 @@ impl Server {
     /// ```
     pub fn new_validator(
         bank: Bank,
+        entry_height: u64,
         me: ReplicatedData,
         requests_socket: UdpSocket,
         respond_socket: UdpSocket,
@@ -160,6 +162,7 @@ impl Server {
 
         let tvu = Tvu::new(
             bank.clone(),
+            entry_height,
             crdt.clone(),
             window.clone(),
             replicate_socket,
@@ -188,6 +191,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let v = Server::new_validator(
             bank,
+            0,
             tn.data.clone(),
             tn.sockets.requests,
             tn.sockets.respond,
