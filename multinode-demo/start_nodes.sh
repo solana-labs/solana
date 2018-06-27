@@ -5,10 +5,10 @@ remote_user=$2
 ssh_keys=$3
 
 usage() {
-  echo -e "\tUsage: $0 <IP Address array> <username> [path to ssh keys]\n"
-  echo -e "\t <IP Address array>: A bash script that exports an array of IP addresses, ip_addr_array. Elements of the array are public IP address of remote nodes."
-  echo -e "\t <username>:         The username for logging into remote nodes."
-  echo -e "\t [path to ssh keys]: The public/private key pair that remote nodes can use to perform rsync and ssh among themselves. Must contain pub, priv and authorized_keys.\n"
+  echo -e "\\tUsage: $0 <IP Address array> <username> [path to ssh keys]\\n"
+  echo -e "\\t <IP Address array>: A bash script that exports an array of IP addresses, ip_addr_array. Elements of the array are public IP address of remote nodes."
+  echo -e "\\t <username>:         The username for logging into remote nodes."
+  echo -e "\\t [path to ssh keys]: The public/private key pair that remote nodes can use to perform rsync and ssh among themselves. Must contain pub, priv and authorized_keys.\\n"
 }
 
 # Sample IP Address array file contents
@@ -29,9 +29,10 @@ PATH="$HOME"/.cargo/bin:"$PATH"
 cargo install --force
 
 # Get IP address array
+# shellcheck source=/dev/null
 source "$ip_addr_file"
 
-# shellcheck disable=SC2089
+# shellcheck disable=SC2089,SC2016
 ssh_command_prefix='export PATH="$HOME/.cargo/bin:$PATH"; cd solana; USE_INSTALL=1 ./multinode-demo/'
 
 count=0
@@ -61,7 +62,7 @@ for ip_addr in "${ip_addr_array[@]}"; do
   else
     # Start validator on all other nodes
     echo "Starting validator node $ip_addr"
-    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""validator.sh "$remote_user"@"$leader":~/solana "$leader" > validator.log 2>&1"
+    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""validator.sh $remote_user@$leader:~/solana $leader > validator.log 2>&1"
   fi
 
   (( count++ ))
@@ -69,7 +70,6 @@ for ip_addr in "${ip_addr_array[@]}"; do
   if (( count == ${#ip_addr_array[@]} )); then
     # Launch client demo on the last node
     echo "Starting client demo on $ip_addr"
-    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""client.sh "$remote_user"@"$leader":~/solana "$count" > client.log 2>&1"
+    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""client.sh $remote_user@$leader:~/solana $count > client.log 2>&1"
   fi
 done
-
