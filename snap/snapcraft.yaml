@@ -39,12 +39,8 @@ apps:
       - network-bind
   genesis:
     command: solana-genesis
-  genesis-demo:
-    command: solana-genesis-demo
   mint:
     command: solana-mint
-  mint-demo:
-    command: solana-mint-demo
   client-demo:
     command: solana-client-demo
   simple-client-demo:

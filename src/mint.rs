@@ -59,12 +59,6 @@ impl Mint {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MintDemo {
-    pub mint: Mint,
-    pub num_accounts: i64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
