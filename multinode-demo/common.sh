@@ -5,27 +5,27 @@
 
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
-    local program="$1"
+    declare program="$1"
     printf "%s/command-%s.wrapper" "$SNAP" "$program"
   }
   SOLANA_CUDA="$(snapctl get enable-cuda)"
 
 elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries
   solana_program() {
-    local program="$1"
+    declare program="$1"
     printf "solana.%s" "$program"
   }
 elif [[ -n "$USE_INSTALL" ]]; then # Assume |cargo install| was run
   solana_program() {
-    local program="$1"
+    declare program="$1"
     printf "solana-%s" "$program"
   }
   # CUDA was/wasn't selected at build time, can't affect CUDA state here
   unset SOLANA_CUDA
 else
   solana_program() {
-    local program="$1"
-    local features=""
+    declare program="$1"
+    declare features=""
     if [[ "$program" =~ ^(.*)-cuda$ ]]; then
       program=${BASH_REMATCH[1]}
       features="--features=cuda,erasure"
@@ -49,7 +49,7 @@ export RUST_BACKTRACE=1
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
-  local url="$1"
+  declare url="$1"
 
   if [[ "$url" =~ ^.*:.*$ ]]; then
     # assume remote-shell transport when colon is present, use $url unmodified
