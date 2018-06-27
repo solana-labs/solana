@@ -1,18 +1,20 @@
+extern crate atty;
 extern crate bincode;
 extern crate env_logger;
 extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
+use atty::{is, Stream};
 use bincode::serialize;
 use getopts::Options;
 use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::DroneRequest;
-use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
+use solana::mint::Mint;
 use solana::thin_client::ThinClient;
-use solana::transaction::Transaction;
 use std::env;
 use std::fs::File;
+use std::io;
 use std::io::prelude::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
@@ -28,8 +30,25 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn main() {
+fn main() -> io::Result<()> {
     env_logger::init();
+    if is(Stream::Stdin) {
+        eprintln!("nothing found on stdin, expected a json file");
+        exit(1);
+    }
+
+    let mut buffer = String::new();
+    let num_bytes = io::stdin().read_to_string(&mut buffer).unwrap();
+    if num_bytes == 0 {
+        eprintln!("empty file on stdin, expected a json file");
+        exit(1);
+    }
+
+    let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+        eprintln!("failed to parse json: {}", e);
+        exit(1);
+    });
+
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
     opts.optopt("c", "", "client port", "port");
@@ -46,7 +65,7 @@ fn main() {
     if matches.opt_present("h") {
         let program = args[0].clone();
         print_usage(&program, opts);
-        return;
+        return Ok(());
     }
     let mut client_addr: SocketAddr = "0.0.0.0:8100".parse().unwrap();
     if matches.opt_present("c") {
@@ -63,15 +82,11 @@ fn main() {
         ReplicatedData::new_leader(&server_addr)
     };
 
-    let mut client = mk_client(&client_addr, &leader);
+    let mut client = mk_client(&client_addr, &leader)?;
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
 
-    // Start the demo, generate a random client keypair, and show user possible commands
-    println!("Generating keypair...");
-    let client_keypair = KeyPair::new();
-    let client_pubkey = client_keypair.pubkey();
-    println!("Your public key is: {:?}", client_pubkey);
+    // Start the a, generate a random client keypair, and show user possible commands
     display_actions();
 
     loop {
@@ -82,7 +97,7 @@ fn main() {
                     // Check client balance
                     "balance" => {
                         println!("Balance requested...");
-                        let balance = client.poll_get_balance(&client_pubkey);
+                        let balance = client.poll_get_balance(&id.pubkey());
                         match balance {
                             Ok(balance) => {
                                 println!("Your balance is: {:?}", balance);
@@ -99,31 +114,27 @@ fn main() {
                     // Request amount is set in request_airdrop function
                     "airdrop" => {
                         println!("Airdrop requested...");
-                        let _airdrop = request_airdrop(&drone_addr, &client_pubkey);
+                        let _airdrop = request_airdrop(&drone_addr, &id);
                         // TODO: return airdrop Result from Drone
                         sleep(Duration::from_millis(100));
                         println!(
                             "Your balance is: {:?}",
-                            client.poll_get_balance(&client_pubkey).unwrap()
+                            client.poll_get_balance(&id.pubkey()).unwrap()
                         );
                     }
                     // If client has positive balance, spend tokens in {balance} number of transactions
                     "pay" => {
                         let last_id = client.get_last_id();
-                        let balance = client.poll_get_balance(&client_pubkey);
+                        let balance = client.poll_get_balance(&id.pubkey());
                         match balance {
                             Ok(0) => {
                                 println!("You don't have any tokens!");
                             }
                             Ok(balance) => {
                                 println!("Sending {:?} tokens to self...", balance);
-                                let tx = Transaction::new(
-                                    &client_keypair,
-                                    client_pubkey,
-                                    balance,
-                                    last_id,
-                                );
-                                client.transfer_signed(tx.clone()).unwrap();
+                                let sig =
+                                    client.transfer(balance, &id.keypair(), id.pubkey(), &last_id);
+                                println!("Sent transaction! Signature: {:?}", sig);
                             }
                             Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
                                 println!("No account found! Request an airdrop to get started.");
@@ -158,30 +169,28 @@ fn read_leader(path: String) -> ReplicatedData {
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }
 
-fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> ThinClient {
+fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> io::Result<ThinClient> {
     let mut addr = client_addr.clone();
     let port = addr.port();
-    let transactions_socket = UdpSocket::bind(addr.clone()).unwrap();
+    let transactions_socket = UdpSocket::bind(addr.clone())?;
     addr.set_port(port + 1);
-    let requests_socket = UdpSocket::bind(addr.clone()).unwrap();
-    requests_socket
-        .set_read_timeout(Some(Duration::new(1, 0)))
-        .unwrap();
+    let requests_socket = UdpSocket::bind(addr.clone())?;
+    requests_socket.set_read_timeout(Some(Duration::new(1, 0)))?;
 
     addr.set_port(port + 2);
-    ThinClient::new(
+    Ok(ThinClient::new(
         r.requests_addr,
         requests_socket,
         r.transactions_addr,
         transactions_socket,
-    )
+    ))
 }
 
-fn request_airdrop(drone_addr: &SocketAddr, client_pubkey: &PublicKey) {
+fn request_airdrop(drone_addr: &SocketAddr, id: &Mint) {
     let mut stream = TcpStream::connect(drone_addr).unwrap();
     let req = DroneRequest::GetAirdrop {
-        airdrop_request_amount: 50,
-        client_public_key: *client_pubkey,
+        airdrop_request_amount: id.tokens as u64,
+        client_public_key: id.pubkey(),
     };
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx).unwrap();
