@@ -1,18 +1,15 @@
 extern crate bincode;
 extern crate env_logger;
 extern crate getopts;
-extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
 use bincode::serialize;
 use getopts::Options;
-use rayon::prelude::*;
 use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::DroneRequest;
-use solana::signature::{GenKeys, KeyPair, KeyPairUtil, PublicKey};
+use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::thin_client::ThinClient;
-use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use std::env;
 use std::fs::File;
@@ -20,12 +17,11 @@ use std::io::prelude::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
-    //TODO: Edit this!!!!
     let mut brief = format!("Usage: {} [options]\n\n", program);
-    brief += "  Solana simple client demo allows you to perform basic actions, including\n";
+    brief += "  solana-wallet allows you to perform basic actions, including\n";
     brief += "  requesting an airdrop, checking your balance, and spending tokens.";
     brief += "  Takes json formatted mint file to stdin.";
 
@@ -120,32 +116,14 @@ fn main() {
                                 println!("You don't have any tokens!");
                             }
                             Ok(balance) => {
-                                println!("Spending tokens in {:?} transactions...", balance);
-                                let mut seed = [0u8; 32];
-                                seed.copy_from_slice(&client_keypair.public_key_bytes()[..32]);
-                                let rnd = GenKeys::new(seed);
-                                let txs = balance.clone();
-                                let keypairs = rnd.gen_n_keypairs(balance);
-                                let transactions: Vec<_> = keypairs
-                                    .par_iter()
-                                    .map(|keypair| {
-                                        Transaction::new(
-                                            &client_keypair,
-                                            keypair.pubkey(),
-                                            1,
-                                            last_id,
-                                        )
-                                    })
-                                    .collect();
-                                let transfer_start = Instant::now();
-                                for tx in transactions {
-                                    client.transfer_signed(tx.clone()).unwrap();
-                                }
-                                println!(
-                                    "Transactions complete. {:?} ms {} tps",
-                                    duration_as_ms(&transfer_start.elapsed()),
-                                    txs as f32 / (duration_as_s(&transfer_start.elapsed()))
+                                println!("Sending {:?} tokens to self...", balance);
+                                let tx = Transaction::new(
+                                    &client_keypair,
+                                    client_pubkey,
+                                    balance,
+                                    last_id,
                                 );
+                                client.transfer_signed(tx.clone()).unwrap();
                             }
                             Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
                                 println!("No account found! Request an airdrop to get started.");
