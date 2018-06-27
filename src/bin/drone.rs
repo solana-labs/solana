@@ -13,7 +13,7 @@ use bincode::deserialize;
 use getopts::Options;
 use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::{Drone, DroneRequest};
-use solana::mint::MintDemo;
+use solana::mint::Mint;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, Read};
@@ -26,7 +26,7 @@ use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
 fn print_usage(program: &str, opts: Options) {
-    let mut brief = format!("Usage: cat <mint-demo.json> | {} [options]\n\n", program);
+    let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
     brief += "  Run a Solana Drone to act as the custodian of the mint's remaining tokens\n";
 
     print!("{}", opts.usage(&brief));
@@ -96,12 +96,12 @@ fn main() {
         exit(1);
     }
 
-    let demo: MintDemo = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
 
-    let mint_keypair = demo.mint.keypair();
+    let mint_keypair = mint.keypair();
 
     let mut drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
     drone_addr.set_ip(get_ip_addr().unwrap());

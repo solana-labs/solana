@@ -10,7 +10,7 @@ use getopts::Options;
 use rayon::prelude::*;
 use solana::crdt::{get_ip_addr, Crdt, ReplicatedData};
 use solana::hash::Hash;
-use solana::mint::MintDemo;
+use solana::mint::Mint;
 use solana::ncp::Ncp;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
@@ -83,21 +83,18 @@ fn sample_tx_count(
 fn generate_and_send_txs(
     client: &mut ThinClient,
     tx_clients: &Vec<ThinClient>,
-    keypair_pairs: &Vec<&[KeyPair]>,
+    mint: &Mint,
+    keypairs: &Vec<KeyPair>,
     leader: &ReplicatedData,
     txs: i64,
     last_id: &mut Hash,
     threads: usize,
 ) {
-    println!(
-        "Signing transactions... {} {}",
-        keypair_pairs.len(),
-        keypair_pairs[0].len()
-    );
+    println!("Signing transactions... {}", keypairs.len(),);
     let signing_start = Instant::now();
-    let transactions: Vec<_> = keypair_pairs
+    let transactions: Vec<_> = keypairs
         .par_iter()
-        .map(|chunk| Transaction::new(&chunk[0], chunk[1].pubkey(), 1, *last_id))
+        .map(|keypair| Transaction::new(&mint.keypair(), keypair.pubkey(), 1, *last_id))
         .collect();
 
     let duration = signing_start.elapsed();
@@ -232,7 +229,7 @@ fn main() {
     }
 
     println!("Parsing stdin...");
-    let demo: MintDemo = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
@@ -243,13 +240,13 @@ fn main() {
     println!("Got last ID {:?}", last_id);
 
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&demo.mint.keypair().public_key_bytes()[..32]);
+    seed.copy_from_slice(&mint.keypair().public_key_bytes()[..32]);
     let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
-    let txs = demo.num_accounts / 2;
-    let keypairs = rnd.gen_n_keypairs(demo.num_accounts);
-    let keypair_pairs: Vec<_> = keypairs.chunks(2).collect();
+    let num_accounts = 500_000;
+    let txs = num_accounts / 2;
+    let keypairs = rnd.gen_n_keypairs(num_accounts);
 
     let first_count = client.transaction_count();
     println!("initial count {}", first_count);
@@ -286,7 +283,8 @@ fn main() {
         generate_and_send_txs(
             &mut client,
             &clients,
-            &keypair_pairs,
+            &mint,
+            &keypairs,
             &leader,
             txs,
             &mut last_id,

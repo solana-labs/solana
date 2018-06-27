@@ -34,16 +34,8 @@ name = "solana-genesis"
 path = "src/bin/genesis.rs"
 
 [[bin]]
-name = "solana-genesis-demo"
-path = "src/bin/genesis-demo.rs"
-
-[[bin]]
 name = "solana-mint"
 path = "src/bin/mint.rs"
-
-[[bin]]
-name = "solana-mint-demo"
-path = "src/bin/mint-demo.rs"
 
 [[bin]]
 name = "solana-drone"

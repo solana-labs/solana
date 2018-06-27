@@ -40,8 +40,8 @@ solana_drone=$(solana_program drone)
 solana_fullnode=$(solana_program fullnode)
 solana_fullnode_config=$(solana_program fullnode-config)
 solana_fullnode_cuda=$(solana_program fullnode-cuda)
-solana_genesis_demo=$(solana_program genesis-demo)
-solana_mint_demo=$(solana_program mint-demo)
+solana_genesis=$(solana_program genesis)
+solana_mint=$(solana_program mint)
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
