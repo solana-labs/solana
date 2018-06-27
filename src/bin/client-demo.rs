@@ -244,9 +244,8 @@ fn main() {
     let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
-    let num_accounts = 500_000;
-    let txs = num_accounts / 2;
-    let keypairs = rnd.gen_n_keypairs(num_accounts);
+    let txs = 500_000;
+    let keypairs = rnd.gen_n_keypairs(txs);
 
     let first_count = client.transaction_count();
     println!("initial count {}", first_count);
