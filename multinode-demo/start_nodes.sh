@@ -28,6 +28,7 @@ fi
 PATH="$HOME"/.cargo/bin:"$PATH"
 cargo install --force
 
+ip_addr_array=()
 # Get IP address array
 # shellcheck source=/dev/null
 source "$ip_addr_file"
@@ -50,6 +51,10 @@ for ip_addr in "${ip_addr_array[@]}"; do
   else
     rsync -r -av "$ssh_keys"/* "$remote_user"@"$ip_addr":~/.ssh/
   fi
+
+  # Stop current nodes
+  ssh "$remote_user"@"$ip_addr" 'pkill -9 solana-fullnode'
+  ssh "$remote_user"@"$ip_addr" 'pkill -9 solana-client-demo'
 
   # Run setup
   ssh "$remote_user"@"$ip_addr" "$ssh_command_prefix"'setup.sh -p "$ip_addr"'
