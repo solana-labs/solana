@@ -71,6 +71,7 @@ fn main() {
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
 
+    // Start the demo, generate a random client keypair, and show user possible commands
     println!("Generating keypair...");
     let client_keypair = KeyPair::new();
     let client_pubkey = client_keypair.pubkey();
@@ -82,6 +83,7 @@ fn main() {
         match std::io::stdin().read_line(&mut input) {
             Ok(n) => {
                 match input.trim() {
+                    // Check client balance
                     "balance" => {
                         println!("Balance requested...");
                         let balance = client.poll_get_balance(&client_pubkey);
@@ -97,6 +99,8 @@ fn main() {
                             }
                         }
                     }
+                    // Request an airdrop from Solana Drone;
+                    // Request amount is set in request_airdrop function
                     "airdrop" => {
                         println!("Airdrop requested...");
                         let airdrop = request_airdrop(&drone_addr, &client_pubkey);
@@ -107,6 +111,7 @@ fn main() {
                             client.poll_get_balance(&client_pubkey).unwrap()
                         );
                     }
+                    // If client has positive balance, spend tokens in {balance} number of transactions
                     "pay" => {
                         let last_id = client.get_last_id();
                         let balance = client.poll_get_balance(&client_pubkey);
