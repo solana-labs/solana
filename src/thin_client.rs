@@ -21,6 +21,7 @@ pub struct ThinClient {
     last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
+    signature_status: Option<(Hash, Signature)>,
 }
 
 impl ThinClient {
@@ -41,6 +42,7 @@ impl ThinClient {
             last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
+            signature_status: None,
         };
         client
     }
@@ -61,12 +63,23 @@ impl ThinClient {
                 self.balances.insert(key, val);
             }
             Response::LastId { id } => {
-                info!("Response last_id {:?}", id);
+                trace!("Response last_id {:?}", id);
                 self.last_id = Some(id);
             }
             Response::TransactionCount { transaction_count } => {
-                info!("Response transaction count {:?}", transaction_count);
+                trace!("Response transaction count {:?}", transaction_count);
                 self.transaction_count = transaction_count;
+            }
+            Response::SignatureStatus { signature_status } => {
+                self.signature_status = signature_status;
+                match signature_status {
+                    Some((_, signature)) => {
+                        trace!("Response found signature: {:?}", signature);
+                    }
+                    None => {
+                        trace!("Response signature not found");
+                    }
+                }
             }
         }
     }
@@ -141,7 +154,7 @@ impl ThinClient {
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> Hash {
-        info!("get_last_id");
+        trace!("get_last_id");
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
         let mut done = false;
@@ -178,6 +191,28 @@ impl ThinClient {
         }
 
         balance
+    }
+
+    /// Check a signature in the bank. This method blocks
+    /// until the server sends a response.
+    pub fn check_signature(&mut self, sig: &Signature) -> Option<(Hash, Signature)> {
+        trace!("check_signature");
+        let req = Request::GetSignature { signature: *sig };
+        let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
+        let mut done = false;
+        while !done {
+            self.requests_socket
+                .send_to(&data, &self.requests_addr)
+                .expect("buffer error in pub fn get_last_id");
+
+            if let Ok(resp) = self.recv_response() {
+                if let &Response::SignatureStatus { .. } = &resp {
+                    done = true;
+                }
+                self.process_response(resp);
+            }
+        }
+        self.signature_status
     }
 }
 
@@ -296,6 +331,55 @@ mod tests {
 
         let balance = client.poll_get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
+        exit.store(true, Ordering::Relaxed);
+        for t in server.thread_hdls {
+            t.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_client_check_signature() {
+        logger::setup();
+        let leader = TestNode::new();
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let server = Server::new_leader(
+            bank,
+            0,
+            Some(Duration::from_millis(30)),
+            leader.data.clone(),
+            leader.sockets.requests,
+            leader.sockets.transaction,
+            leader.sockets.broadcast,
+            leader.sockets.respond,
+            leader.sockets.gossip,
+            exit.clone(),
+            sink(),
+        );
+        sleep(Duration::from_millis(300));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(
+            leader.data.requests_addr,
+            requests_socket,
+            leader.data.transactions_addr,
+            transactions_socket,
+        );
+        let last_id = client.get_last_id();
+        let sig = client
+            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
+            .unwrap();
+        sleep(Duration::from_millis(100));
+
+        assert_eq!(client.check_signature(&sig), Some((last_id, sig)));
+
         exit.store(true, Ordering::Relaxed);
         for t in server.thread_hdls {
             t.join().unwrap();
