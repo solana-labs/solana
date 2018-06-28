@@ -28,7 +28,9 @@ impl<'a> EntryWriter<'a> {
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
         trace!("write_entry entry");
-        self.bank.register_entry_id(&entry.id);
+        if !entry.has_more {
+            self.bank.register_entry_id(&entry.id);
+        }
         writeln!(
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
