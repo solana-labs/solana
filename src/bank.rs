@@ -42,7 +42,7 @@ pub enum BankError {
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `last_id`, or as a double-spend attack.
-    DuplicateSiganture(Signature),
+    DuplicateSignature(Signature),
 
     /// The bank has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
@@ -135,7 +135,7 @@ impl Bank {
     /// Store the given signature. The bank will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut HashSet<Signature>, sig: &Signature) -> Result<()> {
         if let Some(sig) = signatures.get(sig) {
-            return Err(BankError::DuplicateSiganture(*sig));
+            return Err(BankError::DuplicateSignature(*sig));
         }
         signatures.insert(*sig);
         Ok(())
@@ -600,7 +600,7 @@ mod tests {
         );
         assert_eq!(
             bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::DuplicateSiganture(sig))
+            Err(BankError::DuplicateSignature(sig))
         );
     }
 
