@@ -28,7 +28,9 @@ impl<'a> EntryWriter<'a> {
 
     fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
         trace!("write_entry entry");
-        self.bank.register_entry_id(&entry.id);
+        if !entry.has_more {
+            self.bank.register_entry_id(&entry.id);
+        }
         writeln!(
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
@@ -78,5 +80,45 @@ impl<'a> EntryWriter<'a> {
     pub fn drain_entries(&self, entry_receiver: &Receiver<Entry>) -> Result<()> {
         self.write_entries(&Arc::new(Mutex::new(sink())), entry_receiver)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ledger;
+    use mint::Mint;
+    use packet::BLOB_DATA_SIZE;
+    use signature::{KeyPair, KeyPairUtil};
+    use transaction::Transaction;
+
+    #[test]
+    fn test_dont_register_partial_entries() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+
+        let entry_writer = EntryWriter::new(&bank);
+        let keypair = KeyPair::new();
+        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
+
+        // NOTE: if Entry grows to larger than a transaction, the code below falls over
+        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
+
+        // Verify large entries are split up and the first sets has_more.
+        let txs = vec![tx.clone(); threshold * 2];
+        let entries = ledger::next_entries(&mint.last_id(), 0, txs);
+        assert_eq!(entries.len(), 2);
+        assert!(entries[0].has_more);
+        assert!(!entries[1].has_more);
+
+        // Verify that write_entry doesn't register the first entries after a split.
+        assert_eq!(bank.last_id(), mint.last_id());
+        let writer = Mutex::new(sink());
+        entry_writer.write_entry(&writer, &entries[0]);
+        assert_eq!(bank.last_id(), mint.last_id());
+
+        // Verify that write_entry registers the final entry after a split.
+        entry_writer.write_entry(&writer, &entries[1]);
+        assert_eq!(bank.last_id(), entries[1].id);
     }
 }
