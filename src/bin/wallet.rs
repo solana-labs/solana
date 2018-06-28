@@ -60,18 +60,18 @@ fn main() -> io::Result<()> {
     if matches.opt_present("d") {
         client_addr.set_ip(get_ip_addr().unwrap());
     }
-    let leader: ReplicatedData = if matches.opt_present("l") {
+    let leader = if matches.opt_present("l") {
         read_leader(matches.opt_str("l").unwrap())
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         ReplicatedData::new_leader(&server_addr)
     };
-    let id: Mint = if matches.opt_present("m") {
+    let id = if matches.opt_present("m") {
         read_mint(matches.opt_str("m").unwrap())
     } else {
-        read_mint(matches.opt_str("m").unwrap())
+        println!("No mint found!");
+        exit(1);
     };
-    println!("{:?}", id);
 
     let mut client = mk_client(&client_addr, &leader)?;
     let mut drone_addr = leader.transactions_addr.clone();
