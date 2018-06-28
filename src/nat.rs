@@ -2,6 +2,7 @@
 
 extern crate futures;
 extern crate p2p;
+extern crate rand;
 extern crate reqwest;
 extern crate tokio_core;
 
@@ -9,7 +10,9 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 use self::futures::Future;
 use self::p2p::UdpSocketExt;
+use rand::{thread_rng, Rng};
 use std::env;
+use std::io;
 use std::str;
 
 /// A data type representing a public Udp socket
@@ -32,8 +35,25 @@ pub fn get_public_ip_addr() -> Result<IpAddr, String> {
     }
 }
 
+pub fn udp_random_bind(start: u16, end: u16, tries: u32) -> io::Result<UdpSocket> {
+    let mut count = 0;
+    loop {
+        count += 1;
+
+        let rand_port = thread_rng().gen_range(start, end);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
+
+        match UdpSocket::bind(addr) {
+            Result::Ok(val) => break Result::Ok(val),
+            Result::Err(err) => if err.kind() != io::ErrorKind::AddrInUse || count >= tries {
+                return Err(err);
+            },
+        }
+    }
+}
+
 /// Binds a private Udp address to a public address using UPnP if possible
-pub fn udp_public_bind(label: &str) -> UdpSocketPair {
+pub fn udp_public_bind(label: &str, startport: u16, endport: u16) -> UdpSocketPair {
     let private_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
     let mut core = tokio_core::reactor::Core::new().unwrap();
@@ -84,7 +104,7 @@ pub fn udp_public_bind(label: &str) -> UdpSocketPair {
             }
         }
         Err(_) => {
-            let sender = UdpSocket::bind(private_addr).unwrap();
+            let sender = udp_random_bind(startport, endport, 5).unwrap();
             let local_addr = sender.local_addr().unwrap();
             info!("Using local address {} for {}", local_addr, label);
             UdpSocketPair {

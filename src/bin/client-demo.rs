@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::hash::Hash;
 use solana::mint::Mint;
-use solana::nat::udp_public_bind;
+use solana::nat::{udp_public_bind, udp_random_bind};
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
@@ -302,8 +302,8 @@ fn main() {
 }
 
 fn mk_client(r: &ReplicatedData) -> ThinClient {
-    let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let requests_socket = udp_random_bind(8000, 10000, 5).unwrap();
+    let transactions_socket = udp_random_bind(8000, 10000, 5).unwrap();
 
     requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))
@@ -318,7 +318,7 @@ fn mk_client(r: &ReplicatedData) -> ThinClient {
 }
 
 fn spy_node() -> (ReplicatedData, UdpSocket) {
-    let gossip_socket_pair = udp_public_bind("gossip");
+    let gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
     let pubkey = KeyPair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
     let node = ReplicatedData::new(
@@ -347,7 +347,7 @@ fn converge(
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let window = default_window();
-    let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
+    let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
     let ncp = Ncp::new(
         spy_ref.clone(),
         window.clone(),
