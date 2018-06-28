@@ -91,8 +91,7 @@ impl Tvu {
             fetch_stage.blob_receiver,
         );
 
-        let replicate_stage =
-            ReplicateStage::new(bank, exit, window_stage.blob_receiver, blob_recycler);
+        let replicate_stage = ReplicateStage::new(bank, exit, window_stage.blob_receiver);
 
         let mut threads = vec![replicate_stage.thread_hdl];
         threads.extend(fetch_stage.thread_hdls.into_iter());

@@ -2,7 +2,6 @@
 
 use bank::Bank;
 use ledger;
-use packet::BlobRecycler;
 use result::Result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -16,15 +15,11 @@ pub struct ReplicateStage {
 
 impl ReplicateStage {
     /// Process entry blobs, already in order
-    fn replicate_requests(
-        bank: &Arc<Bank>,
-        blob_receiver: &BlobReceiver,
-        blob_recycler: &BlobRecycler,
-    ) -> Result<()> {
+    fn replicate_requests(bank: &Arc<Bank>, blob_receiver: &BlobReceiver) -> Result<()> {
         let timer = Duration::new(1, 0);
         let blobs = blob_receiver.recv_timeout(timer)?;
         let blobs_len = blobs.len();
-        let entries = ledger::reconstruct_entries_from_blobs(blobs, &blob_recycler)?;
+        let entries = ledger::reconstruct_entries_from_blobs(blobs)?;
         let res = bank.process_entries(entries);
         if res.is_err() {
             error!("process_entries {} {:?}", blobs_len, res);
@@ -33,16 +28,11 @@ impl ReplicateStage {
         Ok(())
     }
 
-    pub fn new(
-        bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
-        window_receiver: BlobReceiver,
-        blob_recycler: BlobRecycler,
-    ) -> Self {
+    pub fn new(bank: Arc<Bank>, exit: Arc<AtomicBool>, window_receiver: BlobReceiver) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || loop {
-                let e = Self::replicate_requests(&bank, &window_receiver, &blob_recycler);
+                let e = Self::replicate_requests(&bank, &window_receiver);
                 if e.is_err() && exit.load(Ordering::Relaxed) {
                     break;
                 }
