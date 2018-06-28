@@ -150,11 +150,16 @@ impl ThinClient {
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn get_last_id");
 
-            if let Ok(resp) = self.recv_response() {
-                if let &Response::LastId { .. } = &resp {
-                    done = true;
+            match self.recv_response() {
+                Ok(resp) => {
+                    if let &Response::LastId { .. } = &resp {
+                        done = true;
+                    }
+                    self.process_response(resp);
                 }
-                self.process_response(resp);
+                Err(e) => {
+                    debug!("thin_client get_last_id error: {}", e);
+                }
             }
         }
         self.last_id.expect("some last_id")
