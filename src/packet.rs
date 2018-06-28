@@ -163,13 +163,25 @@ impl<T: Default> Clone for Recycler<T> {
 impl<T: Default> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
-        gc.pop()
-            .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())))
+        let x = gc.pop()
+            .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())));
+
+        // Only return the item if this recycler is the last reference to it.
+        // Remove this check once `T` holds a Weak reference back to this
+        // recycler and implements `Drop`. At the time of this writing, Weak can't
+        // be passed across threads ('alloc' is a nightly-only API), and so our
+        // reference-counted recyclables are awkwardly being recycled by hand,
+        // which allows this race condition to exist.
+        if Arc::strong_count(&x) > 1 {
+            warn!("Recycled item still in use. Booting it.");
+            self.allocate()
+        } else {
+            x
+        }
     }
-    pub fn recycle(&self, msgs: Arc<RwLock<T>>) {
-        assert_eq!(Arc::strong_count(&msgs), 1); // Ensure this function holds that last reference.
+    pub fn recycle(&self, x: Arc<RwLock<T>>) {
         let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
-        gc.push(msgs);
+        gc.push(x);
     }
 }
 
