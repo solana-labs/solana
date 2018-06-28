@@ -245,17 +245,13 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let carlos_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
+        let leader_data = leader.data.clone();
 
         let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),
-            leader.data.clone(),
-            leader.sockets.requests,
-            leader.sockets.transaction,
-            leader.sockets.broadcast,
-            leader.sockets.respond,
-            leader.sockets.gossip,
+            leader,
             exit.clone(),
             sink(),
         );
@@ -266,8 +262,8 @@ mod tests {
         let mut drone = Drone::new(
             alice.keypair(),
             addr,
-            leader.data.transactions_addr,
-            leader.data.requests_addr,
+            leader_data.transactions_addr,
+            leader_data.requests_addr,
             None,
             Some(5_000_050),
         );
@@ -291,9 +287,9 @@ mod tests {
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
-            leader.data.requests_addr,
+            leader_data.requests_addr,
             requests_socket,
-            leader.data.transactions_addr,
+            leader_data.transactions_addr,
             transactions_socket,
         );
 
