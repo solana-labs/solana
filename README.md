@@ -169,7 +169,7 @@ Runtime configuration files for the daemon can be found in
 
 #### Leader daemon
 ```bash
-$ sudo snap set solana mode=leader
+$ sudo snap set solana mode=leader public-ip=$(curl -s http://ifconfig.co)
 ```
 
 If CUDA is available:
@@ -189,19 +189,21 @@ read only = true
 ```
 3. Run `sudo systemctl enable rsync; sudo systemctl start rsync`
 4. Test by running `rsync -Pzravv rsync://<ip-address-of-leader>/config
-solana-config` from another machine.  If the leader is running on a cloud
+solana-config` from another machine.  **If the leader is running on a cloud
 provider it may be necessary to configure the Firewall rules to permit ingress
-to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000
+to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000**
 
 
 To run both the Leader and Drone:
 ```bash
-$ sudo snap set solana mode=leader+drone
+$ sudo snap set solana mode=leader+drone public-ip=$(curl -s http://ifconfig.co)
+
 ```
 
 #### Validator daemon
 ```bash
-$ sudo snap set solana mode=validator
+$ sudo snap set solana mode=validator public-ip=$(curl -s http://ifconfig.co)
+
 ```
 If CUDA is available:
 ```bash

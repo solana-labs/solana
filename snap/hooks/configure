@@ -10,7 +10,8 @@ if [[ -z "$mode" ]]; then
   exit 0
 fi
 
-$SNAP/bin/setup.sh "$(snapctl get num-tokens)"
+public_ip="$(snapctl get public-ip)"
+$SNAP/bin/setup.sh -n "$(snapctl get num-tokens)" -p ${public_ip:+-p $public_ip}
 
 case $mode in
 leader+drone)
