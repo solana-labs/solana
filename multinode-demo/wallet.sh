@@ -15,7 +15,8 @@ rsync_leader_url=$(rsync_url "$leader")
 set -ex
 mkdir -p $SOLANA_CONFIG_DIR
 rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
+rsync -vPz "$rsync_leader_url"/config/mint.json $SOLANA_CONFIG_DIR/
 
 # shellcheck disable=SC2086 # $solana_simple_client_demo should not be quoted
-exec $solana_simple_client_demo \
-  -l $SOLANA_CONFIG_DIR/leader.json -d
+exec $solana_wallet \
+  -l $SOLANA_CONFIG_DIR/leader.json -m $SOLANA_CONFIG_DIR/mint.json -d
