@@ -174,6 +174,7 @@ impl<T: Default> Recycler<T> {
         // which allows this race condition to exist.
         if Arc::strong_count(&x) > 1 {
             warn!("Recycled item still in use. Booting it.");
+            drop(gc);
             self.allocate()
         } else {
             x
@@ -432,13 +433,16 @@ impl Blob {
 }
 
 #[cfg(test)]
-mod test {
-    use packet::{to_packets, Blob, BlobRecycler, Packet, PacketRecycler, Packets, NUM_PACKETS};
+mod tests {
+    use packet::{
+        to_packets, Blob, BlobRecycler, Packet, PacketRecycler, Packets, Recycler, NUM_PACKETS,
+    };
     use request::Request;
     use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
+    use std::sync::Arc;
 
     #[test]
     pub fn packet_recycler_test() {
@@ -449,6 +453,37 @@ mod test {
         let _ = r.allocate();
         assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
+
+    #[test]
+    pub fn test_leaked_recyclable() {
+        // Ensure that the recycler won't return an item
+        // that is still referenced outside the recycler.
+        let r = Recycler::<u8>::default();
+        let x0 = r.allocate();
+        r.recycle(x0.clone());
+        assert_eq!(Arc::strong_count(&x0), 2);
+        assert_eq!(r.gc.lock().unwrap().len(), 1);
+
+        let x1 = r.allocate();
+        assert_eq!(Arc::strong_count(&x1), 1);
+        assert_eq!(r.gc.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    pub fn test_leaked_recyclable_recursion() {
+        // In the case of a leaked recyclable, ensure the recycler drops its lock before recursing.
+        let r = Recycler::<u8>::default();
+        let x0 = r.allocate();
+        let x1 = r.allocate();
+        r.recycle(x0); // <-- allocate() of this will require locking the recycler's stack.
+        r.recycle(x1.clone()); // <-- allocate() of this will cause it to be dropped and recurse.
+        assert_eq!(Arc::strong_count(&x1), 2);
+        assert_eq!(r.gc.lock().unwrap().len(), 2);
+
+        r.allocate(); // Ensure lock is released before recursing.
+        assert_eq!(r.gc.lock().unwrap().len(), 0);
+    }
+
     #[test]
     pub fn blob_recycler_test() {
         let r = BlobRecycler::default();
