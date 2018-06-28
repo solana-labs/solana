@@ -5,12 +5,12 @@ extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
-use atty::{is, Stream};
 use bincode::serialize;
 use getopts::Options;
 use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::DroneRequest;
 use solana::mint::Mint;
+use solana::signature::Signature;
 use solana::thin_client::ThinClient;
 use std::env;
 use std::fs::File;
@@ -32,25 +32,10 @@ fn print_usage(program: &str, opts: Options) {
 
 fn main() -> io::Result<()> {
     env_logger::init();
-    if is(Stream::Stdin) {
-        eprintln!("nothing found on stdin, expected a json file");
-        exit(1);
-    }
-
-    let mut buffer = String::new();
-    let num_bytes = io::stdin().read_to_string(&mut buffer).unwrap();
-    if num_bytes == 0 {
-        eprintln!("empty file on stdin, expected a json file");
-        exit(1);
-    }
-
-    let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
-        eprintln!("failed to parse json: {}", e);
-        exit(1);
-    });
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
+    opts.optopt("m", "", "mint", "mint.json");
     opts.optopt("c", "", "client port", "port");
     opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optflag("h", "help", "print help");
@@ -75,16 +60,24 @@ fn main() -> io::Result<()> {
     if matches.opt_present("d") {
         client_addr.set_ip(get_ip_addr().unwrap());
     }
-    let leader = if matches.opt_present("l") {
+    let leader: ReplicatedData = if matches.opt_present("l") {
         read_leader(matches.opt_str("l").unwrap())
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         ReplicatedData::new_leader(&server_addr)
     };
+    let id: Mint = if matches.opt_present("m") {
+        read_mint(matches.opt_str("m").unwrap())
+    } else {
+        read_mint(matches.opt_str("m").unwrap())
+    };
+    println!("{:?}", id);
 
     let mut client = mk_client(&client_addr, &leader)?;
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
+
+    let mut last_transaction_sig: Option<Signature> = None;
 
     // Start the a, generate a random client keypair, and show user possible commands
     display_actions();
@@ -132,9 +125,12 @@ fn main() -> io::Result<()> {
                             }
                             Ok(balance) => {
                                 println!("Sending {:?} tokens to self...", balance);
-                                let sig =
-                                    client.transfer(balance, &id.keypair(), id.pubkey(), &last_id);
-                                println!("Sent transaction! Signature: {:?}", sig);
+                                let sig = client
+                                    .transfer(balance, &id.keypair(), id.pubkey(), &last_id)
+                                    .expect("transfer return signature");
+                                last_transaction_sig = Some(sig);
+                                println!("Transaction sent!");
+                                println!("Signature: {:?}", sig);
                             }
                             Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
                                 println!("No account found! Request an airdrop to get started.");
@@ -144,6 +140,23 @@ fn main() -> io::Result<()> {
                             }
                         }
                     }
+                    // Confirm the last client transaction by signature
+                    "confirm" => match last_transaction_sig {
+                        Some(sig) => {
+                            let check_signature = client.check_signature(&sig);
+                            match check_signature {
+                                Some((id, _sig)) => {
+                                    println!("Signature found at bank id {:?}", id);
+                                }
+                                None => {
+                                    println!("Uh oh... Signature not found!");
+                                }
+                            }
+                        }
+                        None => {
+                            println!("No recent signature. Make a payment to get started.");
+                        }
+                    },
                     _ => {
                         println!("Command {:?} not recognized", input.trim());
                     }
@@ -159,12 +172,18 @@ fn display_actions() {
     println!("");
     println!("What would you like to do? Type a command:");
     println!("  `balance` - Get your account balance");
-    println!("  `airdrop` - Request a batch of 50 tokens");
+    println!("  `airdrop` - Request a batch of tokens");
     println!("  `pay` - Spend your tokens as fast as possible");
+    println!("  `confirm` - Confirm your last payment by signature");
     println!("");
 }
 
 fn read_leader(path: String) -> ReplicatedData {
+    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
+    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+}
+
+fn read_mint(path: String) -> Mint {
     let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }
