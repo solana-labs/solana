@@ -28,8 +28,8 @@ rsync_leader_url=$(rsync_url "$leader")
 set -ex
 mkdir -p $SOLANA_CONFIG_DIR
 rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
-rsync -vPz "$rsync_leader_url"/config/mint-demo.json $SOLANA_CONFIG_DIR/
+rsync -vPz "$rsync_leader_url"/config/mint.json $SOLANA_CONFIG_DIR/
 
 # shellcheck disable=SC2086 # $solana_drone should not be quoted
 exec $solana_drone \
-  -l $SOLANA_CONFIG_DIR/leader.json < $SOLANA_CONFIG_DIR/mint-demo.json
+  -l $SOLANA_CONFIG_DIR/leader.json < $SOLANA_CONFIG_DIR/mint.json
