@@ -126,12 +126,27 @@ fn main() {
         }
     }
 
+    let mut local_gossip_addr = bind_addr.clone();
+    local_gossip_addr.set_port(repl_data.gossip_addr.port());
+
+    let mut local_replicate_addr = bind_addr.clone();
+    local_replicate_addr.set_port(repl_data.replicate_addr.port());
+
+    let mut local_requests_addr = bind_addr.clone();
+    local_requests_addr.set_port(repl_data.requests_addr.port());
+
+    let mut local_transactions_addr = bind_addr.clone();
+    local_transactions_addr.set_port(repl_data.transactions_addr.port());
+
+    let mut local_repair_addr = bind_addr.clone();
+    local_repair_addr.set_port(repl_data.repair_addr.port());
+
     let exit = Arc::new(AtomicBool::new(false));
     let threads = if matches.opt_present("t") {
         let testnet_address_string = matches.opt_str("t").unwrap();
         eprintln!(
-            "starting validator... {} connecting to {}",
-            repl_data.requests_addr, testnet_address_string
+            "starting validator... {} (advertising {}) connecting to {}",
+            local_requests_addr, repl_data.requests_addr, testnet_address_string
         );
         let testnet_addr = testnet_address_string.parse().unwrap();
         let newtwork_entry_point = ReplicatedData::new_entry_point(testnet_addr);
@@ -139,17 +154,20 @@ fn main() {
             bank,
             entry_height,
             repl_data.clone(),
-            UdpSocket::bind(repl_data.requests_addr).unwrap(),
+            UdpSocket::bind(local_requests_addr).unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
-            UdpSocket::bind(repl_data.replicate_addr).unwrap(),
-            UdpSocket::bind(repl_data.gossip_addr).unwrap(),
-            UdpSocket::bind(repl_data.repair_addr).unwrap(),
+            UdpSocket::bind(local_replicate_addr).unwrap(),
+            UdpSocket::bind(local_gossip_addr).unwrap(),
+            UdpSocket::bind(local_repair_addr).unwrap(),
             newtwork_entry_point,
             exit.clone(),
         );
         s.thread_hdls
     } else {
-        eprintln!("starting leader... {}", repl_data.requests_addr);
+        eprintln!(
+            "starting leader... {} (advertising {})",
+            local_requests_addr, repl_data.requests_addr
+        );
         repl_data.current_leader_id = repl_data.id.clone();
 
         let outfile: Box<Write + Send + 'static> = if matches.opt_present("o") {
@@ -167,17 +185,20 @@ fn main() {
             //Some(Duration::from_millis(1000)),
             None,
             repl_data.clone(),
-            UdpSocket::bind(repl_data.requests_addr).unwrap(),
-            UdpSocket::bind(repl_data.transactions_addr).unwrap(),
+            UdpSocket::bind(local_requests_addr).unwrap(),
+            UdpSocket::bind(local_transactions_addr).unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
-            UdpSocket::bind(repl_data.gossip_addr).unwrap(),
+            UdpSocket::bind(local_gossip_addr).unwrap(),
             exit.clone(),
             outfile,
         );
         server.thread_hdls
     };
-    eprintln!("Ready. Listening on {}", repl_data.transactions_addr);
+    eprintln!(
+        "Ready. Listening on {} (advertising {})",
+        local_transactions_addr, repl_data.transactions_addr
+    );
 
     for t in threads {
         t.join().expect("join");
