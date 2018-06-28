@@ -241,6 +241,7 @@ mod tests {
     fn test_thin_client() {
         logger::setup();
         let leader = TestNode::new();
+        let leader_data = leader.data.clone();
 
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
@@ -251,12 +252,7 @@ mod tests {
             bank,
             0,
             Some(Duration::from_millis(30)),
-            leader.data.clone(),
-            leader.sockets.requests,
-            leader.sockets.transaction,
-            leader.sockets.broadcast,
-            leader.sockets.respond,
-            leader.sockets.gossip,
+            leader,
             exit.clone(),
             sink(),
         );
@@ -266,9 +262,9 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let mut client = ThinClient::new(
-            leader.data.requests_addr,
+            leader_data.requests_addr,
             requests_socket,
-            leader.data.transactions_addr,
+            leader_data.transactions_addr,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -291,17 +287,13 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
+        let leader_data = leader.data.clone();
 
         let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),
-            leader.data.clone(),
-            leader.sockets.requests,
-            leader.sockets.transaction,
-            leader.sockets.broadcast,
-            leader.sockets.respond,
-            leader.sockets.gossip,
+            leader,
             exit.clone(),
             sink(),
         );
@@ -313,9 +305,9 @@ mod tests {
             .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader.data.requests_addr,
+            leader_data.requests_addr,
             requests_socket,
-            leader.data.transactions_addr,
+            leader_data.transactions_addr,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -349,17 +341,12 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-
+        let leader_data = leader.data.clone();
         let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),
-            leader.data.clone(),
-            leader.sockets.requests,
-            leader.sockets.transaction,
-            leader.sockets.broadcast,
-            leader.sockets.respond,
-            leader.sockets.gossip,
+            leader,
             exit.clone(),
             sink(),
         );
@@ -371,9 +358,9 @@ mod tests {
             .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader.data.requests_addr,
+            leader_data.requests_addr,
             requests_socket,
-            leader.data.transactions_addr,
+            leader_data.transactions_addr,
             transactions_socket,
         );
         let last_id = client.get_last_id();

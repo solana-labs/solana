@@ -15,4 +15,3 @@ _ rustup component add rustfmt-preview
 _ cargo fmt -- --write-mode=check
 _ cargo build --verbose
 _ cargo test --verbose
-_ cargo test -- --ignored

@@ -109,6 +109,12 @@ pub struct ReplicatedData {
     last_verified_count: u64,
 }
 
+fn make_debug_id(buf: &[u8]) -> u64 {
+    let mut rdr = Cursor::new(&buf[..8]);
+    rdr.read_u64::<LittleEndian>()
+        .expect("rdr.read_u64 in fn debug_id")
+}
+
 impl ReplicatedData {
     pub fn new(
         id: PublicKey,
@@ -132,7 +138,9 @@ impl ReplicatedData {
             last_verified_count: 0,
         }
     }
-
+    pub fn debug_id(&self) -> u64 {
+        make_debug_id(&self.id)
+    }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
         let mut nxt_addr = addr.clone();
         nxt_addr.set_port(addr.port() + nxt);
@@ -224,6 +232,9 @@ impl Crdt {
         g.table.insert(me.id, me);
         g
     }
+    pub fn debug_id(&self) -> u64 {
+        make_debug_id(&self.me)
+    }
     pub fn my_data(&self) -> &ReplicatedData {
         &self.table[&self.me]
     }
@@ -233,9 +244,14 @@ impl Crdt {
 
     pub fn set_leader(&mut self, key: PublicKey) -> () {
         let mut me = self.my_data().clone();
+        info!(
+            "{:x}: setting leader to {:x} from {:x}",
+            me.debug_id(),
+            make_debug_id(&key),
+            make_debug_id(&me.current_leader_id),
+        );
         me.current_leader_id = key;
         me.version += 1;
-        info!("setting leader to {:?}", &key[..4]);
         self.insert(&me);
     }
 
@@ -249,9 +265,9 @@ impl Crdt {
             //somehow we signed a message for our own identity with a higher version that
             // we have stored ourselves
             trace!(
-                "me: {:?} v.id: {:?} version: {}",
-                &self.me[..4],
-                &v.id[..4],
+                "me: {:x} v.id: {:x} version: {}",
+                self.debug_id(),
+                v.debug_id(),
                 v.version
             );
             self.update_index += 1;
@@ -259,9 +275,9 @@ impl Crdt {
             let _ = self.local.insert(v.id, self.update_index);
         } else {
             trace!(
-                "INSERT FAILED me: {:?} data: {:?} new.version: {} me.version: {}",
-                &self.me[..4],
-                &v.id[..4],
+                "INSERT FAILED me: {:x} data: {:?} new.version: {} me.version: {}",
+                self.debug_id(),
+                v.debug_id(),
                 v.version,
                 self.table[&v.id].version
             );
@@ -289,10 +305,15 @@ impl Crdt {
             .iter()
             .filter_map(|(&k, v)| {
                 if k != self.me && (now - v) > limit {
-                    info!("purge {:?} {}", &k[..4], now - v);
+                    info!("purge {:x} {}", make_debug_id(&k), now - v);
                     Some(k)
                 } else {
-                    trace!("purge skipped {:?} {} {}", &k[..4], now - v, limit);
+                    trace!(
+                        "purge skipped {:x} {} {}",
+                        make_debug_id(&k),
+                        now - v,
+                        limit
+                    );
                     None
                 }
             })
@@ -317,7 +338,11 @@ impl Crdt {
     ) -> Result<()> {
         let me: ReplicatedData = {
             let robj = obj.read().expect("'obj' read lock in crdt::index_blobs");
-            debug!("broadcast table {}", robj.table.len());
+            debug!(
+                "{:x}: broadcast table {}",
+                robj.debug_id(),
+                robj.table.len()
+            );
             robj.table[&robj.me].clone()
         };
 
@@ -454,10 +479,11 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                trace!(
-                    "retransmit blob {} to {}",
+                debug!(
+                    "{:x}: retransmit blob {} to {:x}",
+                    me.debug_id(),
                     rblob.get_index().unwrap(),
-                    v.replicate_addr
+                    v.debug_id(),
                 );
                 //TODO profile this, may need multiple sockets for par_iter
                 assert!(rblob.meta.size < BLOB_SIZE);
@@ -556,9 +582,9 @@ impl Crdt {
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
         trace!(
-            "created gossip request from {:?} to {:?} {}",
-            &self.me[..4],
-            &v.id[..4],
+            "created gossip request from {:x} to {:x} {}",
+            self.debug_id(),
+            v.debug_id(),
             v.gossip_addr
         );
 
@@ -596,11 +622,17 @@ impl Crdt {
         for v in cur {
             let cnt = table.entry(&v.current_leader_id).or_insert(0);
             *cnt += 1;
-            trace!("leader {:?} {}", &v.current_leader_id[..4], *cnt);
+            trace!("leader {:x} {}", make_debug_id(&v.current_leader_id), *cnt);
         }
         let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
-        if sorted.len() > 0 {
-            debug!("sorted leaders {:?}", sorted);
+        let my_id = self.debug_id();
+        for x in sorted.iter() {
+            trace!(
+                "{:x}: sorted leaders {:x} votes: {}",
+                my_id,
+                make_debug_id(&x.0),
+                x.1
+            );
         }
         sorted.sort_by_key(|a| a.1);
         sorted.last().map(|a| *a.0)
@@ -769,18 +801,18 @@ impl Crdt {
                 if len < 1 {
                     let me = obj.read().unwrap();
                     trace!(
-                        "no updates me {:?} ix {} since {}",
-                        &me.me[..4],
+                        "no updates me {:x} ix {} since {}",
+                        me.debug_id(),
                         me.update_index,
                         v
                     );
                     None
                 } else if let Ok(r) = to_blob(rsp, addr, &blob_recycler) {
                     trace!(
-                        "sending updates me {:?} len {} to {:?} {}",
-                        &obj.read().unwrap().me[..4],
+                        "sending updates me {:x} len {} to {:x} {}",
+                        obj.read().unwrap().debug_id(),
                         len,
-                        &from_rd.id[..4],
+                        from_rd.debug_id(),
                         addr,
                     );
                     Some(r)
@@ -790,7 +822,12 @@ impl Crdt {
                 }
             }
             Ok(Protocol::ReceiveUpdates(from, ups, data, external_liveness)) => {
-                trace!("ReceivedUpdates {:?} {} {}", &from[0..4], ups, data.len());
+                trace!(
+                    "ReceivedUpdates {:x} {} {}",
+                    make_debug_id(&from),
+                    ups,
+                    data.len()
+                );
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
                     .apply_updates(from, ups, &data, &external_liveness);

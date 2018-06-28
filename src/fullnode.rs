@@ -8,9 +8,8 @@ use packet::BlobRecycler;
 use rpu::Rpu;
 use std::fs::File;
 use std::io::Write;
-use std::io::{stdin, stdout, BufReader};
+use std::io::{sink, stdin, stdout, BufReader};
 use std::net::SocketAddr;
-use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
@@ -24,30 +23,42 @@ pub struct FullNode {
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
+pub enum LedgerFile {
+    NoFile,
+    StdIn,
+    StdOut,
+    Sink,
+    Path(String),
+}
+
 impl FullNode {
     pub fn new(
         mut node: TestNode,
         leader: bool,
-        infile: Option<String>,
+        infile: LedgerFile,
         network_entry_for_validator: Option<SocketAddr>,
-        outfile_for_leader: Option<String>,
+        outfile_for_leader: LedgerFile,
         exit: Arc<AtomicBool>,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
-        let entry_height = if let Some(path) = infile {
-            let f = File::open(path).unwrap();
-            let mut r = BufReader::new(f);
-            let entries =
-                entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
-            info!("processing ledger...");
-            bank.process_ledger(entries).expect("process_ledger")
-        } else {
-            let mut r = BufReader::new(stdin());
-            let entries =
-                entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
-            info!("processing ledger...");
-            bank.process_ledger(entries).expect("process_ledger")
+        let entry_height = match infile {
+            LedgerFile::Path(path) => {
+                let f = File::open(path).unwrap();
+                let mut r = BufReader::new(f);
+                let entries =
+                    entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
+                info!("processing ledger...");
+                bank.process_ledger(entries).expect("process_ledger")
+            }
+            LedgerFile::StdIn => {
+                let mut r = BufReader::new(stdin());
+                let entries =
+                    entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
+                info!("processing ledger...");
+                bank.process_ledger(entries).expect("process_ledger")
+            }
+            _ => panic!("expected LedgerFile::StdIn or LedgerFile::Path for infile"),
         };
 
         // entry_height is the network-wide agreed height of the ledger.
@@ -62,6 +73,7 @@ impl FullNode {
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.data.gossip_addr
         );
+        let requests_addr = node.data.requests_addr.clone();
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
@@ -69,56 +81,57 @@ impl FullNode {
             let server = FullNode::new_validator(
                 bank,
                 entry_height,
-                node.data.clone(),
-                node.sockets.requests,
-                node.sockets.respond,
-                node.sockets.replicate,
-                node.sockets.gossip,
-                node.sockets.repair,
+                node,
                 network_entry_point,
                 exit.clone(),
             );
             info!(
                 "validator ready... local request address: {} (advertising {}) connected to: {}",
-                local_requests_addr, node.data.requests_addr, testnet_addr
+                local_requests_addr, requests_addr, testnet_addr
             );
             server
         } else {
             node.data.current_leader_id = node.data.id.clone();
-            let server = if let Some(file) = outfile_for_leader {
-                FullNode::new_leader(
-                    bank,
-                    entry_height,
-                    //Some(Duration::from_millis(1000)),
-                    None,
-                    node.data.clone(),
-                    node.sockets.requests,
-                    node.sockets.transaction,
-                    node.sockets.broadcast,
-                    node.sockets.respond,
-                    node.sockets.gossip,
-                    exit.clone(),
-                    File::create(file).expect("opening ledger file"),
-                )
-            } else {
-                FullNode::new_leader(
-                    bank,
-                    entry_height,
-                    //Some(Duration::from_millis(1000)),
-                    None,
-                    node.data.clone(),
-                    node.sockets.requests,
-                    node.sockets.transaction,
-                    node.sockets.broadcast,
-                    node.sockets.respond,
-                    node.sockets.gossip,
-                    exit.clone(),
-                    stdout(),
-                )
-            };
+            let server = 
+                match outfile_for_leader {
+                    LedgerFile::Path(file) => {
+                        FullNode::new_leader(
+                            bank,
+                            entry_height,
+                            //Some(Duration::from_millis(1000)),
+                            None,
+                            node,
+                            exit.clone(),
+                            File::create(file).expect("opening ledger file"),
+                        )
+                    },
+                    LedgerFile::StdOut => {
+                        FullNode::new_leader(
+                            bank,
+                            entry_height,
+                            //Some(Duration::from_millis(1000)),
+                            None,
+                            node,
+                            exit.clone(),
+                            stdout(),
+                        )
+                    },
+                    LedgerFile::Sink => {
+                        FullNode::new_leader(
+                            bank,
+                            entry_height,
+                            //Some(Duration::from_millis(1000)),
+                            None,
+                            node,
+                            exit.clone(),
+                            sink(),
+                        )
+                    }, 
+                    _ => panic!("expected LedgerFile::StdOut, LedgerFile::Path, or LedgerFile::Sink, for infile"),
+                };
             info!(
                 "leader ready... local request address: {} (advertising {})",
-                local_requests_addr, node.data.requests_addr
+                local_requests_addr, requests_addr
             );
             server
         }
@@ -151,45 +164,43 @@ impl FullNode {
         bank: Bank,
         entry_height: u64,
         tick_duration: Option<Duration>,
-        me: ReplicatedData,
-        requests_socket: UdpSocket,
-        transactions_socket: UdpSocket,
-        broadcast_socket: UdpSocket,
-        respond_socket: UdpSocket,
-        gossip_socket: UdpSocket,
+        node: TestNode,
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
-        let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
+        let rpu = Rpu::new(
+            bank.clone(),
+            node.sockets.requests,
+            node.sockets.respond,
+            exit.clone(),
+        );
         thread_hdls.extend(rpu.thread_hdls);
 
         let blob_recycler = BlobRecycler::default();
         let (tpu, blob_receiver) = Tpu::new(
             bank.clone(),
             tick_duration,
-            transactions_socket,
+            node.sockets.transaction,
             blob_recycler.clone(),
             exit.clone(),
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls);
-
-        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         let window = streamer::default_window();
-        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
-            gossip_socket,
-            gossip_send_socket,
+            node.sockets.gossip,
+            node.sockets.gossip_send,
             exit.clone(),
         ).expect("Ncp::new");
         thread_hdls.extend(ncp.thread_hdls);
 
         let t_broadcast = streamer::broadcaster(
-            broadcast_socket,
+            node.sockets.broadcast,
             exit.clone(),
             crdt,
             window,
@@ -234,32 +245,30 @@ impl FullNode {
     pub fn new_validator(
         bank: Bank,
         entry_height: u64,
-        me: ReplicatedData,
-        requests_socket: UdpSocket,
-        respond_socket: UdpSocket,
-        replicate_socket: UdpSocket,
-        gossip_listen_socket: UdpSocket,
-        repair_socket: UdpSocket,
+        node: TestNode,
         entry_point: ReplicatedData,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
-        let rpu = Rpu::new(bank.clone(), requests_socket, respond_socket, exit.clone());
+        let rpu = Rpu::new(
+            bank.clone(),
+            node.sockets.requests,
+            node.sockets.respond,
+            exit.clone(),
+        );
         thread_hdls.extend(rpu.thread_hdls);
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(me)));
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&entry_point);
         let window = streamer::default_window();
-        let gossip_send_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let retransmit_socket = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
-            gossip_listen_socket,
-            gossip_send_socket,
+            node.sockets.gossip,
+            node.sockets.gossip_send,
             exit.clone(),
         ).expect("Ncp::new");
 
@@ -268,9 +277,9 @@ impl FullNode {
             entry_height,
             crdt.clone(),
             window.clone(),
-            replicate_socket,
-            repair_socket,
-            retransmit_socket,
+            node.sockets.replicate,
+            node.sockets.repair,
+            node.sockets.retransmit,
             exit.clone(),
         );
         thread_hdls.extend(tvu.thread_hdls);
@@ -292,18 +301,8 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
-        let v = FullNode::new_validator(
-            bank,
-            0,
-            tn.data.clone(),
-            tn.sockets.requests,
-            tn.sockets.respond,
-            tn.sockets.replicate,
-            tn.sockets.gossip,
-            tn.sockets.repair,
-            tn.data,
-            exit.clone(),
-        );
+        let entry = tn.data.clone();
+        let v = FullNode::new_validator(bank, 0, tn, entry, exit.clone());
         exit.store(true, Ordering::Relaxed);
         for t in v.thread_hdls {
             t.join().unwrap();
