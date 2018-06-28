@@ -128,7 +128,10 @@ impl Bank {
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
         let last_ids = self.last_ids.read().expect("'last_ids' read lock");
-        let last_item = last_ids.iter().last().expect("empty 'last_ids' list");
+        let last_item = last_ids
+            .iter()
+            .last()
+            .expect("get last item from 'last_ids' list");
         *last_item
     }
 
@@ -430,6 +433,18 @@ impl Bank {
     pub fn transaction_count(&self) -> usize {
         self.transaction_count.load(Ordering::Relaxed)
     }
+
+    pub fn check_signature(&self, signature: &Signature) -> Option<(Hash, Signature)> {
+        let last_ids_sigs = self.last_ids_sigs
+            .read()
+            .expect("'last_ids_sigs' read lock");
+        for (hash, signatures) in last_ids_sigs.iter() {
+            if let Some(sig) = signatures.get(signature) {
+                return Some((*hash, *sig));
+            }
+        }
+        return None;
+    }
 }
 
 #[cfg(test)]
@@ -616,6 +631,16 @@ mod tests {
             bank.reserve_signature_with_last_id(&sig, &mint.last_id())
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn test_check_signature() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let sig = Signature::default();
+        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+            .expect("reserve signature");
+        assert_eq!(bank.check_signature(&sig), Some((mint.last_id(), sig)));
     }
 
     #[test]
