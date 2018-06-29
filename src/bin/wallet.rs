@@ -146,7 +146,7 @@ fn main() -> io::Result<()> {
                             if client.check_signature(&sig) {
                                 println!("Signature found at bank id {:?}", id);
                             } else {
-                                    println!("Uh oh... Signature not found!");
+                                println!("Uh oh... Signature not found!");
                             }
                         }
                         None => {
