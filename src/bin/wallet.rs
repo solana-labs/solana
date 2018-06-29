@@ -13,6 +13,8 @@ use solana::mint::Mint;
 use solana::signature::Signature;
 use solana::thin_client::ThinClient;
 use std::env;
+use std::error;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -20,6 +22,58 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
+
+enum WalletCommand {
+    Balance,
+    AirDrop,
+    Pay,
+    Confirm,
+}
+
+#[derive(Debug, Clone)]
+enum WalletError {
+    CommandNotRecognized(String),
+}
+
+impl fmt::Display for WalletError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "invalid")
+    }
+}
+
+impl error::Error for WalletError {
+    fn description(&self) -> &str {
+        "invalid"
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+struct WalletConfig {
+    leader: ReplicatedData,
+    id: Mint,
+    client_addr: SocketAddr,
+    drone_addr: SocketAddr,
+    command: WalletCommand,
+    sig: Option<Signature>,
+}
+
+impl Default for WalletConfig {
+    fn default() -> WalletConfig {
+        let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        WalletConfig {
+            leader: ReplicatedData::new_leader(&default_addr.clone()),
+            id: Mint::new(0),
+            client_addr: default_addr.clone(),
+            drone_addr: default_addr.clone(),
+            command: WalletCommand::Balance,
+            sig: None,
+        }
+    }
+}
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: {} [options]\n\n", program);
@@ -30,16 +84,24 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn main() -> io::Result<()> {
-    env_logger::init();
+fn parse_command(input: &str) -> Result<WalletCommand, WalletError> {
+    match input {
+        "balance" => Ok(WalletCommand::Balance),
+        "airdrop" => Ok(WalletCommand::AirDrop),
+        "pay" => Ok(WalletCommand::Pay),
+        "confirm" => Ok(WalletCommand::Confirm),
+        _ => Err(WalletError::CommandNotRecognized(input.to_string())),
+    }
+}
 
+fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
     opts.optopt("m", "", "mint", "mint.json");
     opts.optopt("c", "", "client port", "port");
     opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optflag("h", "help", "print help");
-    let args: Vec<String> = env::args().collect();
+
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(e) => {
@@ -47,126 +109,129 @@ fn main() -> io::Result<()> {
             exit(1);
         }
     };
+
     if matches.opt_present("h") {
         let program = args[0].clone();
         print_usage(&program, opts);
-        return Ok(());
+        display_actions();
+        return Ok(WalletConfig::default());
     }
+
     let mut client_addr: SocketAddr = "0.0.0.0:8100".parse().unwrap();
     if matches.opt_present("c") {
         let port = matches.opt_str("c").unwrap().parse().unwrap();
         client_addr.set_port(port);
     }
+
     if matches.opt_present("d") {
         client_addr.set_ip(get_ip_addr().unwrap());
     }
+
     let leader = if matches.opt_present("l") {
         read_leader(matches.opt_str("l").unwrap())
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         ReplicatedData::new_leader(&server_addr)
     };
+
     let id = if matches.opt_present("m") {
-        read_mint(matches.opt_str("m").unwrap())
+        read_mint(matches.opt_str("m").unwrap())?
     } else {
         eprintln!("No mint found!");
         exit(1);
     };
 
-    let mut client = mk_client(&client_addr, &leader)?;
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
 
-    let mut last_transaction_sig: Option<Signature> = None;
+    let command = parse_command(&matches.free[0])?;
 
-    // Start the a, generate a random client keypair, and show user possible commands
-    display_actions();
+    Ok(WalletConfig {
+        leader,
+        id,
+        client_addr,
+        drone_addr, // TODO: Add an option for this.
+        command,
+        sig: None, // TODO: Add an option for this.
+    })
+}
 
-    loop {
-        let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
-            Ok(_) => {
-                match input.trim() {
-                    // Check client balance
-                    "balance" => {
-                        println!("Balance requested...");
-                        let balance = client.poll_get_balance(&id.pubkey());
-                        match balance {
-                            Ok(balance) => {
-                                println!("Your balance is: {:?}", balance);
-                            }
-                            Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
-                                println!("No account found! Request an airdrop to get started.");
-                            }
-                            Err(error) => {
-                                println!("An error occurred: {:?}", error);
-                            }
-                        }
-                    }
-                    // Request an airdrop from Solana Drone;
-                    // Request amount is set in request_airdrop function
-                    "airdrop" => {
-                        println!("Airdrop requested...");
-                        let _airdrop = request_airdrop(&drone_addr, &id);
-                        // TODO: return airdrop Result from Drone
-                        sleep(Duration::from_millis(100));
-                        println!(
-                            "Your balance is: {:?}",
-                            client.poll_get_balance(&id.pubkey()).unwrap()
-                        );
-                    }
-                    // If client has positive balance, spend tokens in {balance} number of transactions
-                    "pay" => {
-                        let last_id = client.get_last_id();
-                        let balance = client.poll_get_balance(&id.pubkey());
-                        match balance {
-                            Ok(0) => {
-                                println!("You don't have any tokens!");
-                            }
-                            Ok(balance) => {
-                                println!("Sending {:?} tokens to self...", balance);
-                                let sig = client
-                                    .transfer(balance, &id.keypair(), id.pubkey(), &last_id)
-                                    .expect("transfer return signature");
-                                last_transaction_sig = Some(sig);
-                                println!("Transaction sent!");
-                                println!("Signature: {:?}", sig);
-                            }
-                            Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
-                                println!("No account found! Request an airdrop to get started.");
-                            }
-                            Err(error) => {
-                                println!("An error occurred: {:?}", error);
-                            }
-                        }
-                    }
-                    // Confirm the last client transaction by signature
-                    "confirm" => match last_transaction_sig {
-                        Some(sig) => {
-                            if client.check_signature(&sig) {
-                                println!("Signature found at bank id {:?}", id);
-                            } else {
-                                println!("Uh oh... Signature not found!");
-                            }
-                        }
-                        None => {
-                            println!("No recent signature. Make a payment to get started.");
-                        }
-                    },
-                    _ => {
-                        println!("Command {:?} not recognized", input.trim());
-                    }
+fn process_command(
+    config: &WalletConfig,
+    client: &mut ThinClient,
+) -> Result<(), Box<error::Error>> {
+    match config.command {
+        // Check client balance
+        WalletCommand::Balance => {
+            println!("Balance requested...");
+            let balance = client.poll_get_balance(&config.id.pubkey());
+            match balance {
+                Ok(balance) => {
+                    println!("Your balance is: {:?}", balance);
                 }
-                display_actions();
+                Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
+                    println!("No account found! Request an airdrop to get started.");
+                }
+                Err(error) => {
+                    println!("An error occurred: {:?}", error);
+                }
             }
-            Err(error) => println!("error: {}", error),
         }
+        // Request an airdrop from Solana Drone;
+        // Request amount is set in request_airdrop function
+        WalletCommand::AirDrop => {
+            println!("Airdrop requested...");
+            let _airdrop = request_airdrop(&config.drone_addr, &config.id);
+            // TODO: return airdrop Result from Drone
+            sleep(Duration::from_millis(100));
+            println!(
+                "Your balance is: {:?}",
+                client.poll_get_balance(&config.id.pubkey()).unwrap()
+            );
+        }
+        // If client has positive balance, spend tokens in {balance} number of transactions
+        WalletCommand::Pay => {
+            let last_id = client.get_last_id();
+            let balance = client.poll_get_balance(&config.id.pubkey());
+            match balance {
+                Ok(0) => {
+                    println!("You don't have any tokens!");
+                }
+                Ok(balance) => {
+                    println!("Sending {:?} tokens to self...", balance);
+                    let sig = client
+                        .transfer(balance, &config.id.keypair(), config.id.pubkey(), &last_id)
+                        .expect("transfer return signature");
+                    println!("Transaction sent!");
+                    println!("Signature: {:?}", sig);
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
+                    println!("No account found! Request an airdrop to get started.");
+                }
+                Err(error) => {
+                    println!("An error occurred: {:?}", error);
+                }
+            }
+        }
+        // Confirm the last client transaction by signature
+        WalletCommand::Confirm => match config.sig {
+            Some(sig) => {
+                if client.check_signature(&sig) {
+                    println!("Signature found at bank id {:?}", config.id);
+                } else {
+                    println!("Uh oh... Signature not found!");
+                }
+            }
+            None => {
+                println!("No recent signature. Make a payment to get started.");
+            }
+        },
     }
+    Ok(())
 }
 
 fn display_actions() {
     println!("");
-    println!("What would you like to do? Type a command:");
     println!("  `balance` - Get your account balance");
     println!("  `airdrop` - Request a batch of tokens");
     println!("  `pay` - Spend your tokens as fast as possible");
@@ -179,9 +244,10 @@ fn read_leader(path: String) -> ReplicatedData {
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }
 
-fn read_mint(path: String) -> Mint {
-    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
-    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.clone())?;
+    let mint = serde_json::from_reader(file)?;
+    Ok(mint)
 }
 
 fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> io::Result<ThinClient> {
@@ -210,4 +276,11 @@ fn request_airdrop(drone_addr: &SocketAddr, id: &Mint) {
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx).unwrap();
     // TODO: add timeout to this function, in case of unresponsive drone
+}
+
+fn main() -> Result<(), Box<error::Error>> {
+    env_logger::init();
+    let config = parse_args(env::args().collect())?;
+    let mut client = mk_client(&config.client_addr, &config.leader)?;
+    process_command(&config, &mut client)
 }
