@@ -32,6 +32,6 @@ pub enum Response {
         transaction_count: u64,
     },
     SignatureStatus {
-        signature_status: Option<(Hash, Signature)>,
+        signature_status: bool,
     },
 }
