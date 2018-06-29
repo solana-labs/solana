@@ -25,9 +25,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 enum WalletCommand {
+    Address,
     Balance,
     AirDrop,
-    Address,
     Pay(i64, PublicKey),
     Confirm(Signature),
 }
@@ -233,6 +233,7 @@ fn process_command(
 fn display_actions() {
     println!("");
     println!("Commands:");
+    println!("  address   Get your public key");
     println!("  balance   Get your account balance");
     println!("  airdrop   Request a batch of tokens");
     println!("  pay       Spend your tokens as fast as possible");
