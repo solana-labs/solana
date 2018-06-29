@@ -9,6 +9,7 @@ source "$here"/common.sh
 SOLANA_CONFIG_DIR=config-client-demo
 
 leader=${1:-${here}/..}  # Default to local solana repo
+shift
 
 rsync_leader_url=$(rsync_url "$leader")
 
@@ -19,4 +20,4 @@ rsync -vPz "$rsync_leader_url"/config/mint.json $SOLANA_CONFIG_DIR/
 
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
-  -l $SOLANA_CONFIG_DIR/leader.json -m $SOLANA_CONFIG_DIR/mint.json -d
+  -l $SOLANA_CONFIG_DIR/leader.json -m $SOLANA_CONFIG_DIR/mint.json "$@"

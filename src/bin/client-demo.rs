@@ -8,9 +8,10 @@ extern crate solana;
 use atty::{is, Stream};
 use getopts::Options;
 use rayon::prelude::*;
-use solana::crdt::{get_ip_addr, Crdt, ReplicatedData};
+use solana::crdt::{Crdt, ReplicatedData};
 use solana::hash::Hash;
 use solana::mint::Mint;
+use solana::nat::udp_public_bind;
 use solana::ncp::Ncp;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
@@ -40,14 +41,13 @@ fn print_usage(program: &str, opts: Options) {
 }
 
 fn sample_tx_count(
-    thread_addr: Arc<RwLock<SocketAddr>>,
     exit: Arc<AtomicBool>,
     maxes: Arc<RwLock<Vec<(f64, u64)>>>,
     first_count: u64,
     v: ReplicatedData,
     sample_period: u64,
 ) {
-    let mut client = mk_client(&thread_addr, &v);
+    let mut client = mk_client(&v);
     let mut now = Instant::now();
     let mut initial_tx_count = client.transaction_count();
     let mut max_tps = 0.0;
@@ -149,9 +149,7 @@ fn main() {
 
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("c", "", "client port", "port");
     opts.optopt("t", "", "number of threads", &format!("{}", threads));
-    opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optopt(
         "s",
         "",
@@ -179,15 +177,6 @@ fn main() {
         print_usage(&program, opts);
         return;
     }
-    let mut addr: SocketAddr = "0.0.0.0:8100".parse().unwrap();
-    if matches.opt_present("c") {
-        let port = matches.opt_str("c").unwrap().parse().unwrap();
-        addr.set_port(port);
-    }
-    if matches.opt_present("d") {
-        addr.set_ip(get_ip_addr().unwrap());
-    }
-    let client_addr: Arc<RwLock<SocketAddr>> = Arc::new(RwLock::new(addr));
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
     }
@@ -207,13 +196,7 @@ fn main() {
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(
-        &client_addr,
-        &leader,
-        signal.clone(),
-        num_nodes,
-        &mut c_threads,
-    );
+    let validators = converge(&leader, signal.clone(), num_nodes, &mut c_threads);
     assert_eq!(validators.len(), num_nodes);
 
     if is(Stream::Stdin) {
@@ -233,7 +216,7 @@ fn main() {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
-    let mut client = mk_client(&client_addr, &leader);
+    let mut client = mk_client(&leader);
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();
@@ -260,20 +243,17 @@ fn main() {
         .into_iter()
         .map(|v| {
             let exit = signal.clone();
-            let thread_addr = client_addr.clone();
             let maxes = maxes.clone();
             Builder::new()
                 .name("solana-client-sample".to_string())
                 .spawn(move || {
-                    sample_tx_count(thread_addr, exit, maxes, first_count, v, sample_period);
+                    sample_tx_count(exit, maxes, first_count, v, sample_period);
                 })
                 .unwrap()
         })
         .collect();
 
-    let clients = (0..threads)
-        .map(|_| mk_client(&client_addr, &leader))
-        .collect();
+    let clients = (0..threads).map(|_| mk_client(&leader)).collect();
 
     // generate and send transactions for the specified duration
     let time = Duration::new(time_sec, 0);
@@ -320,45 +300,41 @@ fn main() {
     }
 }
 
-fn mk_client(locked_addr: &Arc<RwLock<SocketAddr>>, r: &ReplicatedData) -> ThinClient {
-    let mut addr = locked_addr.write().unwrap();
-    let port = addr.port();
-    let transactions_socket = UdpSocket::bind(addr.clone()).unwrap();
-    addr.set_port(port + 1);
-    let requests_socket = UdpSocket::bind(addr.clone()).unwrap();
-    requests_socket
+fn mk_client(r: &ReplicatedData) -> ThinClient {
+    let transactions_socket_pair = udp_public_bind("transactions");
+    let requests_socket_pair = udp_public_bind("requests");
+
+    requests_socket_pair
+        .receiver
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
 
-    addr.set_port(port + 2);
     ThinClient::new(
         r.requests_addr,
-        requests_socket,
+        requests_socket_pair.sender,
+        requests_socket_pair.receiver,
         r.transactions_addr,
-        transactions_socket,
+        transactions_socket_pair.sender,
     )
 }
 
-fn spy_node(client_addr: &Arc<RwLock<SocketAddr>>) -> (ReplicatedData, UdpSocket) {
-    let mut addr = client_addr.write().unwrap();
-    let port = addr.port();
-    let gossip = UdpSocket::bind(addr.clone()).unwrap();
-    addr.set_port(port + 1);
-    let daddr = "0.0.0.0:0".parse().unwrap();
+fn spy_node() -> (ReplicatedData, UdpSocket) {
+    let gossip_socket_pair = udp_public_bind("gossip");
     let pubkey = KeyPair::new().pubkey();
+    let daddr = "0.0.0.0:0".parse().unwrap();
     let node = ReplicatedData::new(
         pubkey,
-        gossip.local_addr().unwrap(),
+        //gossip.local_addr().unwrap(),
+        gossip_socket_pair.addr,
         daddr,
         daddr,
         daddr,
         daddr,
     );
-    (node, gossip)
+    (node, gossip_socket_pair.receiver)
 }
 
 fn converge(
-    client_addr: &Arc<RwLock<SocketAddr>>,
     leader: &ReplicatedData,
     exit: Arc<AtomicBool>,
     num_nodes: usize,
@@ -366,7 +342,7 @@ fn converge(
 ) -> Vec<ReplicatedData> {
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
-    let (spy, spy_gossip) = spy_node(client_addr);
+    let (spy, spy_gossip) = spy_node();
     let mut spy_crdt = Crdt::new(spy);
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);

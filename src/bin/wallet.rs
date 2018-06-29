@@ -8,9 +8,10 @@ extern crate solana;
 
 use bincode::serialize;
 use getopts::{Matches, Options};
-use solana::crdt::{get_ip_addr, ReplicatedData};
+use solana::crdt::ReplicatedData;
 use solana::drone::DroneRequest;
 use solana::mint::Mint;
+use solana::nat::udp_public_bind;
 use solana::signature::{PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use std::env;
@@ -19,7 +20,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
@@ -57,7 +58,6 @@ impl error::Error for WalletError {
 struct WalletConfig {
     leader: ReplicatedData,
     id: Mint,
-    client_addr: SocketAddr,
     drone_addr: SocketAddr,
     command: WalletCommand,
 }
@@ -68,7 +68,6 @@ impl Default for WalletConfig {
         WalletConfig {
             leader: ReplicatedData::new_leader(&default_addr.clone()),
             id: Mint::new(0),
-            client_addr: default_addr.clone(),
             drone_addr: default_addr.clone(),
             command: WalletCommand::Balance,
         }
@@ -122,8 +121,6 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     let mut opts = Options::new();
     opts.optopt("l", "", "leader", "leader.json");
     opts.optopt("m", "", "mint", "mint.json");
-    opts.optopt("c", "", "client port", "port");
-    opts.optflag("d", "dyn", "detect network address dynamically");
     opts.optflag("h", "help", "print help");
 
     let matches = match opts.parse(&args[1..]) {
@@ -137,16 +134,6 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     if matches.opt_present("h") || matches.free.len() < 1 {
         print_usage(&args[0], opts);
         return Ok(WalletConfig::default());
-    }
-
-    let mut client_addr: SocketAddr = "0.0.0.0:8100".parse().unwrap();
-    if matches.opt_present("c") {
-        let port = matches.opt_str("c").unwrap().parse().unwrap();
-        client_addr.set_port(port);
-    }
-
-    if matches.opt_present("d") {
-        client_addr.set_ip(get_ip_addr().unwrap());
     }
 
     let leader = if matches.opt_present("l") {
@@ -170,7 +157,6 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     Ok(WalletConfig {
         leader,
         id,
-        client_addr,
         drone_addr, // TODO: Add an option for this.
         command,
     })
@@ -252,20 +238,20 @@ fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
     Ok(mint)
 }
 
-fn mk_client(client_addr: &SocketAddr, r: &ReplicatedData) -> io::Result<ThinClient> {
-    let mut addr = client_addr.clone();
-    let port = addr.port();
-    let transactions_socket = UdpSocket::bind(addr.clone())?;
-    addr.set_port(port + 1);
-    let requests_socket = UdpSocket::bind(addr.clone())?;
-    requests_socket.set_read_timeout(Some(Duration::new(1, 0)))?;
+fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
+    let transactions_socket_pair = udp_public_bind("transactions");
+    let requests_socket_pair = udp_public_bind("requests");
+    requests_socket_pair
+        .receiver
+        .set_read_timeout(Some(Duration::new(1, 0)))
+        .unwrap();
 
-    addr.set_port(port + 2);
     Ok(ThinClient::new(
         r.requests_addr,
-        requests_socket,
+        requests_socket_pair.sender,
+        requests_socket_pair.receiver,
         r.transactions_addr,
-        transactions_socket,
+        transactions_socket_pair.sender,
     ))
 }
 
@@ -283,6 +269,6 @@ fn request_airdrop(drone_addr: &SocketAddr, id: &Mint) {
 fn main() -> Result<(), Box<error::Error>> {
     env_logger::init();
     let config = parse_args(env::args().collect())?;
-    let mut client = mk_client(&config.client_addr, &config.leader)?;
+    let mut client = mk_client(&config.leader)?;
     process_command(&config, &mut client)
 }
