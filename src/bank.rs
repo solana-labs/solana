@@ -8,6 +8,8 @@ extern crate libc;
 use chrono::prelude::*;
 use entry::Entry;
 use hash::Hash;
+use itertools::Itertools;
+use ledger::Block;
 use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{KeyPair, PublicKey, Signature};
@@ -27,6 +29,8 @@ use transaction::{Instruction, Plan, Transaction};
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = 1024 * 16;
+
+pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
@@ -51,6 +55,9 @@ pub enum BankError {
     /// The transaction is invalid and has requested a debit or credit of negative
     /// tokens.
     NegativeTokens,
+
+    /// Proof of History verification failed.
+    LedgerVerificationFailed,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -89,10 +96,9 @@ pub struct Bank {
     transaction_count: AtomicUsize,
 }
 
-impl Bank {
-    /// Create an Bank using a deposit.
-    pub fn new_from_deposit(deposit: &Payment) -> Self {
-        let bank = Bank {
+impl Default for Bank {
+    fn default() -> Self {
+        Bank {
             balances: RwLock::new(HashMap::new()),
             pending: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
@@ -100,7 +106,14 @@ impl Bank {
             time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
             transaction_count: AtomicUsize::new(0),
-        };
+        }
+    }
+}
+
+impl Bank {
+    /// Create an Bank using a deposit.
+    pub fn new_from_deposit(deposit: &Payment) -> Self {
+        let bank = Self::default();
         bank.apply_payment(deposit, &mut bank.balances.write().unwrap());
         bank
     }
@@ -319,6 +332,57 @@ impl Bank {
                 self.register_entry_id(&entry.id);
             }
         }
+        Ok(entry_count)
+    }
+
+    /// Append entry blocks to the ledger, verifying them along the way.
+    pub fn process_blocks<I>(&self, entries: I) -> Result<u64>
+    where
+        I: IntoIterator<Item = Entry>,
+    {
+        // Ledger verification needs to be parallelized, but we can't pull the whole
+        // thing into memory. We therefore chunk it.
+        let mut entry_count = 0;
+        for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
+            let block: Vec<_> = block.collect();
+            if !block.verify(&self.last_id()) {
+                return Err(BankError::LedgerVerificationFailed);
+            }
+            entry_count += self.process_entries(block)?;
+        }
+        Ok(entry_count)
+    }
+
+    /// Process a full ledger.
+    pub fn process_ledger<I>(&self, entries: I) -> Result<u64>
+    where
+        I: IntoIterator<Item = Entry>,
+    {
+        let mut entries = entries.into_iter();
+
+        // The first item in the ledger is required to be an entry with zero num_hashes,
+        // which implies its id can be used as the ledger's seed.
+        let entry0 = entries.next().expect("invalid ledger: empty");
+
+        // The second item in the ledger is a special transaction where the to and from
+        // fields are the same. That entry should be treated as a deposit, not a
+        // transfer to oneself.
+        let entry1 = entries
+            .next()
+            .expect("invalid ledger: need at least 2 entries");
+        let tx = &entry1.transactions[0];
+        let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
+            contract.plan.final_payment()
+        } else {
+            None
+        }.expect("invalid ledger, needs to start with a contract");
+
+        self.apply_payment(&deposit, &mut self.balances.write().unwrap());
+        self.register_entry_id(&entry0.id);
+        self.register_entry_id(&entry1.id);
+
+        let mut entry_count = 2;
+        entry_count += self.process_blocks(entries)?;
         Ok(entry_count)
     }
 

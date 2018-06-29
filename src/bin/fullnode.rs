@@ -10,9 +10,7 @@ use getopts::Options;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
 use solana::entry::Entry;
-use solana::payment_plan::PaymentPlan;
 use solana::server::Server;
-use solana::transaction::Instruction;
 use std::env;
 use std::fs::File;
 use std::io::{stdin, stdout, BufRead, Write};
@@ -69,7 +67,7 @@ fn main() {
 
     eprintln!("Initializing...");
     let stdin = stdin();
-    let mut entries = stdin.lock().lines().map(|line| {
+    let entries = stdin.lock().lines().map(|line| {
         let entry: Entry = serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
             eprintln!("failed to parse json: {}", e);
             exit(1);
@@ -78,34 +76,14 @@ fn main() {
     });
     eprintln!("done parsing...");
 
-    // The first item in the ledger is required to be an entry with zero num_hashes,
-    // which implies its id can be used as the ledger's seed.
-    let entry0 = entries.next().expect("invalid ledger: empty");
-
-    // The second item in the ledger is a special transaction where the to and from
-    // fields are the same. That entry should be treated as a deposit, not a
-    // transfer to oneself.
-    let entry1 = entries
-        .next()
-        .expect("invalid ledger: need at least 2 entries");
-    let tx = &entry1.transactions[0];
-    let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
-        contract.plan.final_payment()
-    } else {
-        None
-    }.expect("invalid ledger, needs to start with a contract");
-
     eprintln!("creating bank...");
-
-    let bank = Bank::new_from_deposit(&deposit);
-    bank.register_entry_id(&entry0.id);
-    bank.register_entry_id(&entry1.id);
+    let bank = Bank::default();
 
     // entry_height is the network-wide agreed height of the ledger.
     //  initialize it from the input ledger
-    eprintln!("processing entries...");
-    let entry_height = bank.process_entries(entries).expect("process_entries");
-    eprintln!("processed {} entries...", entry_height);
+    eprintln!("processing ledger...");
+    let entry_height = bank.process_ledger(entries).expect("process_ledger");
+    eprintln!("processed {} ledger...", entry_height);
 
     eprintln!("creating networking stack...");
 

@@ -52,6 +52,7 @@ extern crate bincode;
 extern crate byteorder;
 extern crate chrono;
 extern crate generic_array;
+extern crate itertools;
 extern crate libc;
 #[macro_use]
 extern crate log;
