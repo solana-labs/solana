@@ -21,7 +21,7 @@ pub struct ThinClient {
     last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, Option<i64>>,
-    signature_status: Option<(Hash, Signature)>,
+    signature_status: bool,
 }
 
 impl ThinClient {
@@ -42,7 +42,7 @@ impl ThinClient {
             last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
-            signature_status: None,
+            signature_status: false,
         };
         client
     }
@@ -73,10 +73,10 @@ impl ThinClient {
             Response::SignatureStatus { signature_status } => {
                 self.signature_status = signature_status;
                 match signature_status {
-                    Some((_, signature)) => {
-                        trace!("Response found signature: {:?}", signature);
+                    true => {
+                        trace!("Response found signature");
                     }
-                    None => {
+                    false => {
                         trace!("Response signature not found");
                     }
                 }
@@ -195,7 +195,7 @@ impl ThinClient {
 
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
-    pub fn check_signature(&mut self, sig: &Signature) -> Option<(Hash, Signature)> {
+    pub fn check_signature(&mut self, sig: &Signature) -> bool {
         trace!("check_signature");
         let req = Request::GetSignature { signature: *sig };
         let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
@@ -378,7 +378,7 @@ mod tests {
             .unwrap();
         sleep(Duration::from_millis(100));
 
-        assert_eq!(client.check_signature(&sig), Some((last_id, sig)));
+        assert!(client.check_signature(&sig));
 
         exit.store(true, Ordering::Relaxed);
         for t in server.thread_hdls {
