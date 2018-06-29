@@ -8,7 +8,7 @@ steps:
   - wait
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
-    timeout_in_minutes: 20
+    timeout_in_minutes: 30
   - command: "ci/test-stable-perf.sh"
     name: "stable-perf [public]"
     timeout_in_minutes: 20

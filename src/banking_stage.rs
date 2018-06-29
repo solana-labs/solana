@@ -297,7 +297,7 @@ mod bench {
     #[bench]
     fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         logger::setup();
-        let tx = 30_000_usize;
+        let tx = 10_000_usize;
         let mint_total = 1_000_000_000_000;
         let mint = Mint::new(mint_total);
         let num_dst_accounts = 8 * 1024;
@@ -385,7 +385,7 @@ mod bench {
     #[bench]
     fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         logger::setup();
-        let tx = 20_000_usize;
+        let tx = 10_000_usize;
         let mint = Mint::new(1_000_000_000_000);
         let mut pubkeys = Vec::new();
         let num_keys = 8;
