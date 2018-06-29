@@ -1,16 +1,17 @@
 extern crate atty;
 extern crate bincode;
+extern crate bs58;
 extern crate env_logger;
 extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
 use bincode::serialize;
-use getopts::Options;
+use getopts::{Matches, Options};
 use solana::crdt::{get_ip_addr, ReplicatedData};
 use solana::drone::DroneRequest;
 use solana::mint::Mint;
-use solana::signature::Signature;
+use solana::signature::{PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use std::env;
 use std::error;
@@ -26,8 +27,9 @@ use std::time::Duration;
 enum WalletCommand {
     Balance,
     AirDrop,
-    Pay,
-    Confirm,
+    Address,
+    Pay(i64, PublicKey),
+    Confirm(Signature),
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +60,6 @@ struct WalletConfig {
     client_addr: SocketAddr,
     drone_addr: SocketAddr,
     command: WalletCommand,
-    sig: Option<Signature>,
 }
 
 impl Default for WalletConfig {
@@ -70,7 +71,6 @@ impl Default for WalletConfig {
             client_addr: default_addr.clone(),
             drone_addr: default_addr.clone(),
             command: WalletCommand::Balance,
-            sig: None,
         }
     }
 }
@@ -82,14 +82,38 @@ fn print_usage(program: &str, opts: Options) {
     brief += "  Takes json formatted mint file to stdin.";
 
     print!("{}", opts.usage(&brief));
+    display_actions();
 }
 
-fn parse_command(input: &str) -> Result<WalletCommand, WalletError> {
-    match input {
+fn parse_command(matches: &Matches) -> Result<WalletCommand, WalletError> {
+    let input = &matches.free[0];
+    match input.as_ref() {
+        "address" => Ok(WalletCommand::Address),
         "balance" => Ok(WalletCommand::Balance),
         "airdrop" => Ok(WalletCommand::AirDrop),
-        "pay" => Ok(WalletCommand::Pay),
-        "confirm" => Ok(WalletCommand::Confirm),
+        "pay" => {
+            if matches.free.len() < 3 {
+                eprintln!("No tokens and public key provided");
+                exit(1);
+            }
+            let tokens = matches.free[1].parse().expect("parse integer");
+            let pubkey_vec = bs58::decode(&matches.free[2])
+                .into_vec()
+                .expect("base58-encoded public key");
+            let to = PublicKey::clone_from_slice(&pubkey_vec);
+            Ok(WalletCommand::Pay(tokens, to))
+        }
+        "confirm" => {
+            if matches.free.len() < 2 {
+                eprintln!("No signature provided");
+                exit(1);
+            }
+            let sig_vec = bs58::decode(&matches.free[1])
+                .into_vec()
+                .expect("base58-encoded signature");
+            let sig = Signature::clone_from_slice(&sig_vec);
+            Ok(WalletCommand::Confirm(sig))
+        }
         _ => Err(WalletError::CommandNotRecognized(input.to_string())),
     }
 }
@@ -111,9 +135,7 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     };
 
     if matches.opt_present("h") || matches.free.len() < 1 {
-        let program = args[0].clone();
-        print_usage(&program, opts);
-        display_actions();
+        print_usage(&args[0], opts);
         return Ok(WalletConfig::default());
     }
 
@@ -144,15 +166,13 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
 
-    let command = parse_command(&matches.free[0])?;
-
+    let command = parse_command(&matches)?;
     Ok(WalletConfig {
         leader,
         id,
         client_addr,
         drone_addr, // TODO: Add an option for this.
         command,
-        sig: None, // TODO: Add an option for this.
     })
 }
 
@@ -162,6 +182,9 @@ fn process_command(
 ) -> Result<(), Box<error::Error>> {
     match config.command {
         // Check client balance
+        WalletCommand::Address => {
+            println!("{}", bs58::encode(config.id.pubkey()).into_string());
+        }
         WalletCommand::Balance => {
             println!("Balance requested...");
             let balance = client.poll_get_balance(&config.id.pubkey());
@@ -190,42 +213,19 @@ fn process_command(
             );
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
-        WalletCommand::Pay => {
+        WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
-            let balance = client.poll_get_balance(&config.id.pubkey());
-            match balance {
-                Ok(0) => {
-                    println!("You don't have any tokens!");
-                }
-                Ok(balance) => {
-                    println!("Sending {:?} tokens to self...", balance);
-                    let sig = client
-                        .transfer(balance, &config.id.keypair(), config.id.pubkey(), &last_id)
-                        .expect("transfer return signature");
-                    println!("Transaction sent!");
-                    println!("Signature: {:?}", sig);
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
-                    println!("No account found! Request an airdrop to get started.");
-                }
-                Err(error) => {
-                    println!("An error occurred: {:?}", error);
-                }
-            }
+            let sig = client.transfer(tokens, &config.id.keypair(), to, &last_id)?;
+            println!("{}", bs58::encode(sig).into_string());
         }
         // Confirm the last client transaction by signature
-        WalletCommand::Confirm => match config.sig {
-            Some(sig) => {
-                if client.check_signature(&sig) {
-                    println!("Signature found at bank id {:?}", config.id);
-                } else {
-                    println!("Uh oh... Signature not found!");
-                }
+        WalletCommand::Confirm(sig) => {
+            if client.check_signature(&sig) {
+                println!("Confirmed");
+            } else {
+                println!("Not found");
             }
-            None => {
-                println!("No recent signature. Make a payment to get started.");
-            }
-        },
+        }
     }
     Ok(())
 }
