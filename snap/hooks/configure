@@ -10,9 +10,9 @@ if [[ -z "$mode" ]]; then
   exit 0
 fi
 
+ip_address_arg=-p # Use public IP address (TODO: make this configurable?)
 num_tokens="$(snapctl get num-tokens)"
-public_ip="$(snapctl get public-ip)"
-$SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${public_ip:+-p $public_ip}
+$SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg}
 
 case $mode in
 leader+drone)

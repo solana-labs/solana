@@ -1,53 +1,45 @@
 #!/bin/bash
 
-num_tokens=1000000000
-public_ip=
-
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
 usage () {
   cat <<EOF
-usage: $0 [-n num_tokens] [-P] [-p public_ip_address]
+usage: $0 [-n num_tokens] [-l] [-p]
 
 Creates a fullnode configuration
 
- -n num_tokens         - Number of tokens to create
- -p public_ip_address  - Public IP address to advertise
-                         (default uses the system IP address, which may be
-                          on a private network)
- -P                    - Autodetect the public IP address of the machine
+ -n num_tokens  - Number of tokens to create
+ -l             - Detect network address from local machine configuration, which
+                  may be a private IP address unaccessible on the Intenet (default)
+ -p             - Detect public address using public Internet servers
 EOF
 }
 
-while getopts "h?n:p:P" opt; do
+ip_address_arg=-l
+num_tokens=1000000000
+while getopts "h?n:lp" opt; do
   case $opt in
   h|\?)
     usage
     exit 0
     ;;
+  l)
+    ip_address_arg=-l
+    ;;
   p)
-    public_ip="$OPTARG"
+    ip_address_arg=-p
     ;;
   n)
     num_tokens="$OPTARG"
-    ;;
-  P)
-    public_ip="$(curl -s ifconfig.co)"
-    echo "Public IP autodetected as $public_ip"
     ;;
   esac
 done
 
 
-if [[ -n "$public_ip" ]]; then
-  leader_address_args=(-b "$public_ip":8000)
-  validator_address_args=(-b "$public_ip":9000)
-else
-  leader_address_args=(-d)
-  validator_address_args=(-d -b 9000)
-fi
+leader_address_args=("$ip_address_arg")
+validator_address_args=("$ip_address_arg" -b 9000)
 
 set -e
 

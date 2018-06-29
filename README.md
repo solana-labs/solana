@@ -169,7 +169,7 @@ Runtime configuration files for the daemon can be found in
 
 #### Leader daemon
 ```bash
-$ sudo snap set solana mode=leader public-ip=$(curl -s http://ifconfig.co)
+$ sudo snap set solana mode=leader
 ```
 
 If CUDA is available:
@@ -196,18 +196,18 @@ to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000**
 
 To run both the Leader and Drone:
 ```bash
-$ sudo snap set solana mode=leader+drone public-ip=$(curl -s http://ifconfig.co)
+$ sudo snap set solana mode=leader+drone
 
 ```
 
 #### Validator daemon
 ```bash
-$ sudo snap set solana mode=validator public-ip=$(curl -s http://ifconfig.co)
+$ sudo snap set solana mode=validator
 
 ```
 If CUDA is available:
 ```bash
-$ sudo snap set solana mode=validator public-ip=$(curl -s http://ifconfig.co) enable-cuda=1
+$ sudo snap set solana mode=validator enable-cuda=1
 ```
 
 By default the validator will connect to **testnet.solana.com**, override
