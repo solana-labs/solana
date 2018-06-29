@@ -54,6 +54,10 @@ For 3, every load and store that is relative can be checked to be within the exp
 
 For 4, Fully linked PIC ELF with just a single RX segment. Effectively we are linking a shared object with `-fpic -target bpf` and with a linker script to collect everything into a single RX segment. Writable globals are not supported.
 
+### Address Checks
+
+The interface to the module takes a `&mut Vec<Vec<u8>>` in rust, or a `int sz, void* data[sz], int szs[sz]` in `C`.  Given the module's bytecode, for each method, we need to analyze the bounds on load and stores into each buffer the module uses.  This check needs to be done `on chain`, and after those bounds are computed we can verify that the user supplied array of buffers will not cause a memory fault.  For load and stores that we cannot analyze, we can replace with a `safe_load` and `safe_store` instruction that will check the table for access.
+
 ## Loader
 The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader will verify the bytecode and that the object implements the expected entry points.
 
