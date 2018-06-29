@@ -143,14 +143,10 @@ fn main() -> io::Result<()> {
                     // Confirm the last client transaction by signature
                     "confirm" => match last_transaction_sig {
                         Some(sig) => {
-                            let check_signature = client.check_signature(&sig);
-                            match check_signature {
-                                Some((id, _sig)) => {
-                                    println!("Signature found at bank id {:?}", id);
-                                }
-                                None => {
+                            if client.check_signature(&sig) {
+                                println!("Signature found at bank id {:?}", id);
+                            } else {
                                     println!("Uh oh... Signature not found!");
-                                }
                             }
                         }
                         None => {
