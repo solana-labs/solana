@@ -77,7 +77,7 @@ impl Default for WalletConfig {
 
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: {} [options]\n\n", program);
-    brief += "  solana-wallet allows you to perform basic actions, including\n";
+    brief += "  solana-wallet allows you to perform basic actions, including";
     brief += "  requesting an airdrop, checking your balance, and spending tokens.";
     brief += "  Takes json formatted mint file to stdin.";
 
@@ -110,7 +110,7 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
         }
     };
 
-    if matches.opt_present("h") {
+    if matches.opt_present("h") || matches.free.len() < 1 {
         let program = args[0].clone();
         print_usage(&program, opts);
         display_actions();
@@ -232,10 +232,11 @@ fn process_command(
 
 fn display_actions() {
     println!("");
-    println!("  `balance` - Get your account balance");
-    println!("  `airdrop` - Request a batch of tokens");
-    println!("  `pay` - Spend your tokens as fast as possible");
-    println!("  `confirm` - Confirm your last payment by signature");
+    println!("Commands:");
+    println!("  balance   Get your account balance");
+    println!("  airdrop   Request a batch of tokens");
+    println!("  pay       Spend your tokens as fast as possible");
+    println!("  confirm   Confirm your last payment by signature");
     println!("");
 }
 
