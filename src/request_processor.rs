@@ -41,7 +41,7 @@ impl RequestProcessor {
                 Some(rsp)
             }
             Request::GetSignature { signature } => {
-                let signature_status = self.bank.check_signature(&signature);
+                let signature_status = self.bank.has_signature(&signature);
                 let rsp = (Response::SignatureStatus { signature_status }, rsp_addr);
                 info!("Response::Signature {:?}", rsp);
                 Some(rsp)
