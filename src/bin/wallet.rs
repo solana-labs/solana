@@ -69,7 +69,7 @@ fn main() -> io::Result<()> {
     let id = if matches.opt_present("m") {
         read_mint(matches.opt_str("m").unwrap())
     } else {
-        println!("No mint found!");
+        eprintln!("No mint found!");
         exit(1);
     };
 

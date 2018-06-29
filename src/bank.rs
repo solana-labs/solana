@@ -434,16 +434,16 @@ impl Bank {
         self.transaction_count.load(Ordering::Relaxed)
     }
 
-    pub fn check_signature(&self, signature: &Signature) -> bool {
+    pub fn has_signature(&self, signature: &Signature) -> bool {
         let last_ids_sigs = self.last_ids_sigs
             .read()
             .expect("'last_ids_sigs' read lock");
         for (_hash, signatures) in last_ids_sigs.iter() {
-            if let Some(_sig) = signatures.get(signature) {
+            if signatures.contains(signature) {
                 return true;
             }
         }
-        return false;
+        false
     }
 }
 
@@ -634,13 +634,13 @@ mod tests {
     }
 
     #[test]
-    fn test_check_signature() {
+    fn test_has_signature() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let sig = Signature::default();
         bank.reserve_signature_with_last_id(&sig, &mint.last_id())
             .expect("reserve signature");
-        assert!(bank.check_signature(&sig));
+        assert!(bank.has_signature(&sig));
     }
 
     #[test]
