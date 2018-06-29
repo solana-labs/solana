@@ -2,6 +2,7 @@
 
 extern crate futures;
 extern crate p2p;
+extern crate reqwest;
 extern crate tokio_core;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -9,12 +10,26 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use self::futures::Future;
 use self::p2p::UdpSocketExt;
 use std::env;
+use std::str;
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
     pub addr: SocketAddr,    // Public address of the socket
     pub receiver: UdpSocket, // Locally bound socket that can receive from the public address
     pub sender: UdpSocket,   // Locally bound socket to send via public address
+}
+
+/// Tries to determine the public IP address of this machine
+pub fn get_public_ip_addr() -> Result<IpAddr, String> {
+    let body = reqwest::get("http://ifconfig.co/ip")
+        .map_err(|err| err.to_string())?
+        .text()
+        .map_err(|err| err.to_string())?;
+
+    match body.lines().next() {
+        Some(ip) => Result::Ok(ip.parse().unwrap()),
+        None => Result::Err("Empty response body".to_string()),
+    }
 }
 
 /// Binds a private Udp address to a public address using UPnP if possible
