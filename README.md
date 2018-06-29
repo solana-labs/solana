@@ -207,7 +207,7 @@ $ sudo snap set solana mode=validator public-ip=$(curl -s http://ifconfig.co)
 ```
 If CUDA is available:
 ```bash
-$ sudo snap set solana mode=validator enable-cuda=1
+$ sudo snap set solana mode=validator public-ip=$(curl -s http://ifconfig.co) enable-cuda=1
 ```
 
 By default the validator will connect to **testnet.solana.com**, override
