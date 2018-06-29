@@ -246,6 +246,7 @@ fn mk_client(leader: &ReplicatedData) -> ThinClient {
 
     ThinClient::new(
         leader.requests_addr,
+        requests_socket.try_clone().unwrap(),
         requests_socket,
         leader.transactions_addr,
         transactions_socket,

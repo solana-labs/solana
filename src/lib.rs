@@ -25,6 +25,7 @@ pub mod hash;
 pub mod ledger;
 pub mod logger;
 pub mod mint;
+pub mod nat;
 pub mod ncp;
 pub mod packet;
 pub mod payment_plan;
