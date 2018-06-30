@@ -8,6 +8,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 use self::futures::Future;
 use self::p2p::UdpSocketExt;
+use std::env;
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
@@ -42,19 +43,24 @@ pub fn udp_public_bind(label: &str) -> UdpSocketPair {
             // |public_addr| to the local |receiver| socket...
             let receiver = UdpSocket::bind(local_addr).unwrap();
 
-            // ... however for outbound packets, the NAT *will not* rewrite the
-            // source port from |receiver.local_addr().port()| to |public_addr.port()|.
-            // This is currently a problem when talking with a fullnode as it
-            // assumes it can send UDP packets back at the source.  This hits the
-            // NAT as a datagram for |receiver.local_addr().port()| on the NAT's public
-            // IP, which the NAT promptly discards.  As a short term hack, create a
-            // local UDP socket, |sender|, with the same port as |public_addr.port()|.
-            //
-            // TODO: Remove the |sender| socket and deal with the downstream changes to
-            //       the UDP signalling
-            let mut local_addr_sender = local_addr.clone();
-            local_addr_sender.set_port(public_addr.port());
-            let sender = UdpSocket::bind(local_addr_sender).unwrap();
+            // TODO: try to autodetect a broken NAT (issue #496)
+            let sender = if env::var("BROKEN_NAT").is_err() {
+                receiver.try_clone().unwrap()
+            } else {
+                // ... however for outbound packets, some NATs *will not* rewrite the
+                // source port from |receiver.local_addr().port()| to |public_addr.port()|.
+                // This is currently a problem when talking with a fullnode as it
+                // assumes it can send UDP packets back at the source.  This hits the
+                // NAT as a datagram for |receiver.local_addr().port()| on the NAT's public
+                // IP, which the NAT promptly discards.  As a short term hack, create a
+                // local UDP socket, |sender|, with the same port as |public_addr.port()|.
+                //
+                // TODO: Remove the |sender| socket and deal with the downstream changes to
+                //       the UDP signalling
+                let mut local_addr_sender = local_addr.clone();
+                local_addr_sender.set_port(public_addr.port());
+                UdpSocket::bind(local_addr_sender).unwrap()
+            };
 
             UdpSocketPair {
                 addr: public_addr,
