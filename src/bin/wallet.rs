@@ -1,20 +1,20 @@
 extern crate atty;
 extern crate bincode;
 extern crate bs58;
+extern crate clap;
 extern crate env_logger;
 extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
 use bincode::serialize;
-use getopts::{Matches, Options};
+use clap::{App, Arg, SubCommand};
 use solana::crdt::ReplicatedData;
 use solana::drone::DroneRequest;
 use solana::mint::Mint;
 use solana::nat::udp_public_bind;
 use solana::signature::{PublicKey, Signature};
 use solana::thin_client::ThinClient;
-use std::env;
 use std::error;
 use std::fmt;
 use std::fs::File;
@@ -28,7 +28,7 @@ use std::time::Duration;
 enum WalletCommand {
     Address,
     Balance,
-    AirDrop,
+    AirDrop(i64),
     Pay(i64, PublicKey),
     Confirm(Signature),
 }
@@ -74,77 +74,84 @@ impl Default for WalletConfig {
     }
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let mut brief = format!("Usage: {} [options]\n\n", program);
-    brief += "  solana-wallet allows you to perform basic actions, including";
-    brief += "  requesting an airdrop, checking your balance, and spending tokens.";
-    brief += "  Takes json formatted mint file to stdin.";
+fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
+    let matches = App::new("solana-wallet")
+        .arg(
+            Arg::with_name("leader")
+                .short("l")
+                .long("leader")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/leader.json"),
+        )
+        .arg(
+            Arg::with_name("mint")
+                .short("m")
+                .long("mint")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/mint.json"),
+        )
+        .subcommand(
+            SubCommand::with_name("airdrop")
+                .about("Request a batch of tokens")
+                .arg(
+                    Arg::with_name("tokens")
+                        // .index(1)
+                        .long("tokens")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .help("The number of tokens to request"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("pay")
+                .about("Send a payment")
+                .arg(
+                    Arg::with_name("tokens")
+                        // .index(2)
+                        .long("tokens")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .required(true)
+                        .help("the number of tokens to send"),
+                )
+                .arg(
+                    Arg::with_name("to")
+                        // .index(1)
+                        .long("to")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The pubkey of recipient"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("confirm")
+                .about("Confirm your payment by signature")
+                .arg(
+                    Arg::with_name("signature")
+                        .index(1)
+                        .value_name("SIGNATURE")
+                        .required(true)
+                        .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(SubCommand::with_name("balance").about("Get your balance"))
+        .subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .get_matches();
 
-    print!("{}", opts.usage(&brief));
-    display_actions();
-}
-
-fn parse_command(matches: &Matches) -> Result<WalletCommand, WalletError> {
-    let input = &matches.free[0];
-    match input.as_ref() {
-        "address" => Ok(WalletCommand::Address),
-        "balance" => Ok(WalletCommand::Balance),
-        "airdrop" => Ok(WalletCommand::AirDrop),
-        "pay" => {
-            if matches.free.len() < 3 {
-                eprintln!("No tokens and public key provided");
-                exit(1);
-            }
-            let tokens = matches.free[1].parse().expect("parse integer");
-            let pubkey_vec = bs58::decode(&matches.free[2])
-                .into_vec()
-                .expect("base58-encoded public key");
-            let to = PublicKey::clone_from_slice(&pubkey_vec);
-            Ok(WalletCommand::Pay(tokens, to))
-        }
-        "confirm" => {
-            if matches.free.len() < 2 {
-                eprintln!("No signature provided");
-                exit(1);
-            }
-            let sig_vec = bs58::decode(&matches.free[1])
-                .into_vec()
-                .expect("base58-encoded signature");
-            let sig = Signature::clone_from_slice(&sig_vec);
-            Ok(WalletCommand::Confirm(sig))
-        }
-        _ => Err(WalletError::CommandNotRecognized(input.to_string())),
-    }
-}
-
-fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
-    let mut opts = Options::new();
-    opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("m", "", "mint", "mint.json");
-    opts.optflag("h", "help", "print help");
-
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
-
-    if matches.opt_present("h") || matches.free.len() < 1 {
-        print_usage(&args[0], opts);
-        return Ok(WalletConfig::default());
-    }
-
-    let leader = if matches.opt_present("l") {
-        read_leader(matches.opt_str("l").unwrap())
+    let leader: ReplicatedData;
+    if let Some(l) = matches.value_of("leader") {
+        leader = read_leader(l.to_string());
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        ReplicatedData::new_leader(&server_addr)
+        leader = ReplicatedData::new_leader(&server_addr);
     };
 
-    let id = if matches.opt_present("m") {
-        read_mint(matches.opt_str("m").unwrap())?
+    let id: Mint;
+    if let Some(m) = matches.value_of("mint") {
+        id = read_mint(m.to_string())?;
     } else {
         eprintln!("No mint found!");
         exit(1);
@@ -153,7 +160,48 @@ fn parse_args(args: Vec<String>) -> Result<WalletConfig, Box<error::Error>> {
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
 
-    let command = parse_command(&matches)?;
+    let command = match matches.subcommand() {
+        ("airdrop", Some(airdrop_matches)) => {
+            let mut tokens: i64 = id.tokens;
+            if airdrop_matches.is_present("tokens") {
+                tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
+            }
+            Ok(WalletCommand::AirDrop(tokens))
+        }
+        ("pay", Some(pay_matches)) => {
+            let to: PublicKey;
+            if pay_matches.is_present("to") {
+                let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
+                    .into_vec()
+                    .expect("base58-encoded public key");
+                to = PublicKey::clone_from_slice(&pubkey_vec);
+            } else {
+                to = id.pubkey();
+            }
+            let mut tokens: i64 = id.tokens;
+            if pay_matches.is_present("tokens") {
+                tokens = pay_matches.value_of("tokens").unwrap().parse()?;
+            }
+            Ok(WalletCommand::Pay(tokens, to))
+        }
+        ("confirm", Some(confirm_matches)) => {
+            let sig_vec = bs58::decode(confirm_matches.value_of("sig").unwrap())
+                .into_vec()
+                .expect("base58-encoded signature");
+            let sig = Signature::clone_from_slice(&sig_vec);
+            Ok(WalletCommand::Confirm(sig))
+        }
+        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
+        ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
+        ("", None) => {
+            display_actions();
+            Err(WalletError::CommandNotRecognized(
+                "no subcommand given".to_string(),
+            ))
+        }
+        _ => unreachable!(),
+    }?;
+
     Ok(WalletConfig {
         leader,
         id,
@@ -188,9 +236,10 @@ fn process_command(
         }
         // Request an airdrop from Solana Drone;
         // Request amount is set in request_airdrop function
-        WalletCommand::AirDrop => {
+        WalletCommand::AirDrop(tokens) => {
             println!("Airdrop requested...");
-            let _airdrop = request_airdrop(&config.drone_addr, &config.id);
+            println!("Airdropping {:?} tokens", tokens);
+            let _airdrop = request_airdrop(&config.drone_addr, &config.id, tokens as u64);
             // TODO: return airdrop Result from Drone
             sleep(Duration::from_millis(100));
             println!(
@@ -255,10 +304,10 @@ fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
     ))
 }
 
-fn request_airdrop(drone_addr: &SocketAddr, id: &Mint) {
+fn request_airdrop(drone_addr: &SocketAddr, id: &Mint, tokens: u64) {
     let mut stream = TcpStream::connect(drone_addr).unwrap();
     let req = DroneRequest::GetAirdrop {
-        airdrop_request_amount: id.tokens as u64,
+        airdrop_request_amount: tokens,
         client_public_key: id.pubkey(),
     };
     let tx = serialize(&req).expect("serialize drone request");
@@ -267,8 +316,7 @@ fn request_airdrop(drone_addr: &SocketAddr, id: &Mint) {
 }
 
 fn main() -> Result<(), Box<error::Error>> {
-    env_logger::init();
-    let config = parse_args(env::args().collect())?;
+    let config = parse_args()?;
     let mut client = mk_client(&config.leader)?;
     process_command(&config, &mut client)
 }
