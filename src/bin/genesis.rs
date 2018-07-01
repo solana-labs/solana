@@ -5,10 +5,12 @@ extern crate serde_json;
 extern crate solana;
 
 use atty::{is, Stream};
+use solana::entry_writer::EntryWriter;
 use solana::mint::Mint;
 use std::error;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdin, stdout, Read};
 use std::process::exit;
+use std::sync::Mutex;
 
 fn main() -> Result<(), Box<error::Error>> {
     if is(Stream::Stdin) {
@@ -24,9 +26,7 @@ fn main() -> Result<(), Box<error::Error>> {
     }
 
     let mint: Mint = serde_json::from_str(&buffer)?;
-    let mut writer = stdout();
-    for x in mint.create_entries() {
-        writeln!(writer, "{}", serde_json::to_string(&x)?)?;
-    }
+    let writer = Mutex::new(stdout());
+    EntryWriter::write_entries(&writer, &mint.create_entries())?;
     Ok(())
 }
