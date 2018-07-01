@@ -5,7 +5,6 @@ steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
     timeout_in_minutes: 20
-  - wait
   - command: "ci/docker-run.sh rustlang/rust:nightly ci/test-nightly.sh"
     name: "nightly [public]"
     timeout_in_minutes: 30
