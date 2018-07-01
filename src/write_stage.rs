@@ -9,7 +9,7 @@ use ledger::Block;
 use packet::BlobRecycler;
 use result::Result;
 use std::collections::VecDeque;
-use std::io::{self, Write};
+use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
@@ -67,43 +67,6 @@ impl WriteStage {
                 if exit.load(Ordering::Relaxed) {
                     info!("broadcat_service exiting");
                     break;
-                }
-            })
-            .unwrap();
-
-        WriteStage {
-            thread_hdl,
-            blob_receiver,
-        }
-    }
-
-    /// Process any Entry items that have been published by the Historian.
-    /// continuosly broadcast blobs of entries out
-    pub fn drain_entries(
-        entry_writer: &EntryWriter,
-        entry_receiver: &Receiver<Vec<Entry>>,
-    ) -> Result<()> {
-        let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
-        entry_writer.write_and_register_entries(&Mutex::new(io::sink()), &entries)?;
-        Ok(())
-    }
-
-    pub fn new_drain(
-        bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
-        entry_receiver: Receiver<Vec<Entry>>,
-    ) -> Self {
-        let (_blob_sender, blob_receiver) = channel();
-        let thread_hdl = Builder::new()
-            .name("solana-drain".to_string())
-            .spawn(move || {
-                let entry_writer = EntryWriter::new(&bank);
-                loop {
-                    let _ = Self::drain_entries(&entry_writer, &entry_receiver);
-                    if exit.load(Ordering::Relaxed) {
-                        info!("drain_service exiting");
-                        break;
-                    }
                 }
             })
             .unwrap();
