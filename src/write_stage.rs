@@ -25,7 +25,7 @@ impl WriteStage {
         exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
         writer: Mutex<W>,
-        entry_receiver: Receiver<Entry>,
+        entry_receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
@@ -54,7 +54,7 @@ impl WriteStage {
     pub fn new_drain(
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
-        entry_receiver: Receiver<Entry>,
+        entry_receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let (_blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
