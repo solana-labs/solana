@@ -4,16 +4,9 @@
 
 use bank::Bank;
 use entry::Entry;
-use ledger::Block;
-use packet::BlobRecycler;
-use result::Result;
 use serde_json;
-use std::collections::VecDeque;
-use std::io::{self, sink, Write};
-use std::sync::mpsc::Receiver;
+use std::io::{self, Write};
 use std::sync::Mutex;
-use std::time::Duration;
-use streamer::BlobSender;
 
 pub struct EntryWriter<'a> {
     bank: &'a Bank,
@@ -49,7 +42,7 @@ impl<'a> EntryWriter<'a> {
         Self::write_entry(&writer, entry)
     }
 
-    fn write_and_register_entries<W: Write>(
+    pub fn write_and_register_entries<W: Write>(
         &self,
         writer: &Mutex<W>,
         entries: &[Entry],
@@ -57,35 +50,6 @@ impl<'a> EntryWriter<'a> {
         for entry in entries {
             self.write_and_register_entry(writer, &entry)?;
         }
-        Ok(())
-    }
-
-    /// Process any Entry items that have been published by the Historian.
-    /// continuosly broadcast blobs of entries out
-    pub fn write_and_send_entries<W: Write>(
-        &self,
-        blob_sender: &BlobSender,
-        blob_recycler: &BlobRecycler,
-        writer: &Mutex<W>,
-        entry_receiver: &Receiver<Vec<Entry>>,
-    ) -> Result<()> {
-        let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
-        self.write_and_register_entries(writer, &entries)?;
-        trace!("New blobs? {}", entries.len());
-        let mut blobs = VecDeque::new();
-        entries.to_blobs(blob_recycler, &mut blobs);
-        if !blobs.is_empty() {
-            trace!("broadcasting {}", blobs.len());
-            blob_sender.send(blobs)?;
-        }
-        Ok(())
-    }
-
-    /// Process any Entry items that have been published by the Historian.
-    /// continuosly broadcast blobs of entries out
-    pub fn drain_entries(&self, entry_receiver: &Receiver<Vec<Entry>>) -> Result<()> {
-        let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
-        self.write_and_register_entries(&Mutex::new(sink()), &entries)?;
         Ok(())
     }
 }
@@ -120,7 +84,7 @@ mod tests {
 
         // Verify that write_and_register_entry doesn't register the first entries after a split.
         assert_eq!(bank.last_id(), mint.last_id());
-        let writer = Mutex::new(sink());
+        let writer = Mutex::new(io::sink());
         entry_writer
             .write_and_register_entry(&writer, &entries[0])
             .unwrap();
