@@ -28,5 +28,5 @@ steps:
     timeout_in_minutes: 20
     name: "clean agent [public]"
   - trigger: "solana-snap"
-    branches: "master"
+    branches: "!pull/*"
     async: true
