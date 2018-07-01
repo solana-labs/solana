@@ -20,7 +20,7 @@ pub enum Signal {
 }
 
 pub struct RecordStage {
-    pub entry_receiver: Receiver<Entry>,
+    pub entry_receiver: Receiver<Vec<Entry>>,
     pub thread_hdl: JoinHandle<()>,
 }
 
@@ -83,7 +83,7 @@ impl RecordStage {
     fn process_signal(
         signal: Signal,
         recorder: &mut Recorder,
-        sender: &Sender<Entry>,
+        sender: &Sender<Vec<Entry>>,
     ) -> Result<(), ()> {
         let txs = if let Signal::Transactions(txs) = signal {
             txs
@@ -91,20 +91,14 @@ impl RecordStage {
             vec![]
         };
         let entries = recorder.record(txs);
-        let mut result = Ok(());
-        for entry in entries {
-            result = sender.send(entry).map_err(|_| ());
-            if result.is_err() {
-                break;
-            }
-        }
-        result
+        sender.send(entries).or(Err(()))?;
+        Ok(())
     }
 
     fn process_signals(
         recorder: &mut Recorder,
         receiver: &Receiver<Signal>,
-        sender: &Sender<Entry>,
+        sender: &Sender<Vec<Entry>>,
     ) -> Result<(), ()> {
         loop {
             match receiver.recv() {
@@ -119,11 +113,11 @@ impl RecordStage {
         start_time: Instant,
         tick_duration: Duration,
         receiver: &Receiver<Signal>,
-        sender: &Sender<Entry>,
+        sender: &Sender<Vec<Entry>>,
     ) -> Result<(), ()> {
         loop {
             if let Some(entry) = recorder.tick(start_time, tick_duration) {
-                sender.send(entry).or(Err(()))?;
+                sender.send(vec![entry]).or(Err(()))?;
             }
             match receiver.try_recv() {
                 Ok(signal) => Self::process_signal(signal, recorder, sender)?,
@@ -154,9 +148,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         tx_sender.send(Signal::Tick).unwrap();
 
-        let entry0 = record_stage.entry_receiver.recv().unwrap();
-        let entry1 = record_stage.entry_receiver.recv().unwrap();
-        let entry2 = record_stage.entry_receiver.recv().unwrap();
+        let entry0 = record_stage.entry_receiver.recv().unwrap()[0].clone();
+        let entry1 = record_stage.entry_receiver.recv().unwrap()[0].clone();
+        let entry2 = record_stage.entry_receiver.recv().unwrap()[0].clone();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -204,7 +198,7 @@ mod tests {
         sleep(Duration::from_millis(900));
         tx_sender.send(Signal::Tick).unwrap();
         drop(tx_sender);
-        let entries: Vec<Entry> = record_stage.entry_receiver.iter().collect();
+        let entries: Vec<_> = record_stage.entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

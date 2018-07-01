@@ -60,15 +60,6 @@ impl<'a> EntryWriter<'a> {
         Ok(())
     }
 
-    fn recv_entries(entry_receiver: &Receiver<Entry>) -> Result<Vec<Entry>> {
-        let entry = entry_receiver.recv_timeout(Duration::new(1, 0))?;
-        let mut entries = vec![entry];
-        while let Ok(entry) = entry_receiver.try_recv() {
-            entries.push(entry);
-        }
-        Ok(entries)
-    }
-
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries<W: Write>(
@@ -76,9 +67,9 @@ impl<'a> EntryWriter<'a> {
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
         writer: &Mutex<W>,
-        entry_receiver: &Receiver<Entry>,
+        entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
-        let entries = Self::recv_entries(entry_receiver)?;
+        let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         self.write_and_register_entries(writer, &entries)?;
         trace!("New blobs? {}", entries.len());
         let mut blobs = VecDeque::new();
@@ -92,8 +83,8 @@ impl<'a> EntryWriter<'a> {
 
     /// Process any Entry items that have been published by the Historian.
     /// continuosly broadcast blobs of entries out
-    pub fn drain_entries(&self, entry_receiver: &Receiver<Entry>) -> Result<()> {
-        let entries = Self::recv_entries(entry_receiver)?;
+    pub fn drain_entries(&self, entry_receiver: &Receiver<Vec<Entry>>) -> Result<()> {
+        let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         self.write_and_register_entries(&Mutex::new(sink()), &entries)?;
         Ok(())
     }
