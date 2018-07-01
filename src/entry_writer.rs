@@ -11,7 +11,7 @@ use serde_json;
 use std::collections::VecDeque;
 use std::io::{self, sink, Write};
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
 use streamer::BlobSender;
 
@@ -94,7 +94,7 @@ impl<'a> EntryWriter<'a> {
     /// continuosly broadcast blobs of entries out
     pub fn drain_entries(&self, entry_receiver: &Receiver<Entry>) -> Result<()> {
         let entries = Self::recv_entries(entry_receiver)?;
-        self.write_and_register_entries(&Arc::new(Mutex::new(sink())), &entries)?;
+        self.write_and_register_entries(&Mutex::new(sink()), &entries)?;
         Ok(())
     }
 }
