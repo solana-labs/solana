@@ -9,6 +9,6 @@
   d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
   mkdir -p $d
   set -x
-  rsync -a --delete target $d
+  rsync -a --delete --link-dest=$PWD target $d
   du -hs $d
 )
