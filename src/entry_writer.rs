@@ -6,40 +6,39 @@ use bank::Bank;
 use entry::Entry;
 use serde_json;
 use std::io::{self, Write};
-use std::sync::Mutex;
 
 pub struct EntryWriter<'a, W> {
     bank: &'a Bank,
-    writer: Mutex<W>,
+    writer: W,
 }
 
 impl<'a, W: Write> EntryWriter<'a, W> {
     /// Create a new Tpu that wraps the given Bank.
-    pub fn new(bank: &'a Bank, writer: Mutex<W>) -> Self {
+    pub fn new(bank: &'a Bank, writer: W) -> Self {
         EntryWriter { bank, writer }
     }
 
-    fn write_entry(writer: &Mutex<W>, entry: &Entry) -> io::Result<()> {
+    fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
         let serialized = serde_json::to_string(&entry).unwrap();
-        writeln!(writer.lock().unwrap(), "{}", serialized)
+        writeln!(writer, "{}", serialized)
     }
 
-    pub fn write_entries(writer: &Mutex<W>, entries: &[Entry]) -> io::Result<()> {
+    pub fn write_entries(writer: &mut W, entries: &[Entry]) -> io::Result<()> {
         for entry in entries {
             Self::write_entry(writer, entry)?;
         }
         Ok(())
     }
 
-    fn write_and_register_entry(&self, entry: &Entry) -> io::Result<()> {
+    fn write_and_register_entry(&mut self, entry: &Entry) -> io::Result<()> {
         trace!("write_and_register_entry entry");
         if !entry.has_more {
             self.bank.register_entry_id(&entry.id);
         }
-        Self::write_entry(&self.writer, entry)
+        Self::write_entry(&mut self.writer, entry)
     }
 
-    pub fn write_and_register_entries(&self, entries: &[Entry]) -> io::Result<()> {
+    pub fn write_and_register_entries(&mut self, entries: &[Entry]) -> io::Result<()> {
         for entry in entries {
             self.write_and_register_entry(&entry)?;
         }
@@ -61,8 +60,8 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
 
-        let writer = Mutex::new(io::sink());
-        let entry_writer = EntryWriter::new(&bank, writer);
+        let writer = io::sink();
+        let mut entry_writer = EntryWriter::new(&bank, writer);
         let keypair = KeyPair::new();
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
 

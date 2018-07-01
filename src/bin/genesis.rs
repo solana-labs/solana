@@ -10,7 +10,6 @@ use solana::mint::Mint;
 use std::error;
 use std::io::{stdin, stdout, Read};
 use std::process::exit;
-use std::sync::Mutex;
 
 fn main() -> Result<(), Box<error::Error>> {
     if is(Stream::Stdin) {
@@ -26,7 +25,7 @@ fn main() -> Result<(), Box<error::Error>> {
     }
 
     let mint: Mint = serde_json::from_str(&buffer)?;
-    let writer = Mutex::new(stdout());
-    EntryWriter::write_entries(&writer, &mint.create_entries())?;
+    let mut writer = stdout();
+    EntryWriter::write_entries(&mut writer, &mint.create_entries())?;
     Ok(())
 }
