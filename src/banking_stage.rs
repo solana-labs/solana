@@ -271,6 +271,7 @@ mod test {
     use mint::Mint;
     use packet::{to_packets_chunked, BlobRecycler, PacketRecycler, SharedPackets};
     use record_stage::RecordStage;
+    use entry_writer::EntryWriter;
     use serde_json;
     use signature::{KeyPair, KeyPairUtil};
     use std;
@@ -285,7 +286,6 @@ mod test {
     use std::time::Duration;
     use transaction::Transaction;
     use write_stage::WriteStage;
-    use std::io::Write;
 
     fn poll_file_for_entries(path: &str, num: usize) -> Option<Vec<Entry>> {
         for _ in 0..20 {
@@ -329,6 +329,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let alice = Mint::new(10_000);
         let bank = Arc::new(Bank::new(&alice));
+
         let packet_recycler = PacketRecycler::default();
         let blob_recycler = BlobRecycler::default();
         let (transaction_sender, transaction_receiver) = channel();
@@ -346,19 +347,16 @@ mod test {
         );
         let record_stage = RecordStage::new(banking_stage.signal_receiver, &bank.last_id());
         //genensis
-        let mut file = File::create(&path).unwrap();
-
-        for x in alice.create_entries() {
-            let serialized = serde_json::to_string(&x).unwrap();
-            write!(&mut file, "{}\n", serialized).unwrap();
-        }
-        file.sync_all().unwrap();
+        let file = File::create(&path).unwrap();
+        let writer = Mutex::new(file);
+        EntryWriter::write_entries(&writer, &alice.create_entries()).unwrap();
+        writer.lock().unwrap().sync_all().unwrap();
 
         let write_stage = WriteStage::new(
             bank.clone(),
             exit.clone(),
             blob_recycler.clone(),
-            Mutex::new(file),
+            writer,
             record_stage.entry_receiver,
         );
 
