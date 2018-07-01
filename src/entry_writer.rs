@@ -50,15 +50,14 @@ impl<'a> EntryWriter<'a> {
         entry_receiver: &Receiver<Entry>,
     ) -> Result<Vec<Entry>> {
         //TODO implement a serialize for channel that does this without allocations
-        let mut l = vec![];
         let entry = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         self.write_and_register_entry(writer, &entry)?;
-        l.push(entry);
+        let mut entries = vec![entry];
         while let Ok(entry) = entry_receiver.try_recv() {
             self.write_and_register_entry(writer, &entry)?;
-            l.push(entry);
+            entries.push(entry);
         }
-        Ok(l)
+        Ok(entries)
     }
 
     /// Process any Entry items that have been published by the Historian.
