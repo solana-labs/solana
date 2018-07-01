@@ -22,11 +22,10 @@ shift
 ARGS=(
   --workdir /solana
   --volume "$PWD:/solana"
-  --env "HOME=/solana"
+  --volume "$HOME:/home"
+  --env "CARGO_HOME=/home/.cargo"
   --rm
 )
-
-ARGS+=(--env "CARGO_HOME=/solana/.cargo")
 
 # kcov tries to set the personality of the binary which docker
 # doesn't allow by default.
