@@ -49,24 +49,27 @@ impl WriteStage {
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
-        writer: Mutex<W>,
+        writer: W,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-writer".to_string())
-            .spawn(move || loop {
+            .spawn(move || {
                 let entry_writer = EntryWriter::new(&bank);
-                let _ = Self::write_and_send_entries(
-                    &entry_writer,
-                    &blob_sender,
-                    &blob_recycler,
-                    &writer,
-                    &entry_receiver,
-                );
-                if exit.load(Ordering::Relaxed) {
-                    info!("broadcat_service exiting");
-                    break;
+                let writer = Mutex::new(writer);
+                loop {
+                    let _ = Self::write_and_send_entries(
+                        &entry_writer,
+                        &blob_sender,
+                        &blob_recycler,
+                        &writer,
+                        &entry_receiver,
+                    );
+                    if exit.load(Ordering::Relaxed) {
+                        info!("broadcat_service exiting");
+                        break;
+                    }
                 }
             })
             .unwrap();

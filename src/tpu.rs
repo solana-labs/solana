@@ -34,7 +34,7 @@ use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use streamer::BlobReceiver;
@@ -81,7 +81,7 @@ impl Tpu {
             bank.clone(),
             exit.clone(),
             blob_recycler.clone(),
-            Mutex::new(writer),
+            writer,
             record_stage.entry_receiver,
         );
         let mut thread_hdls = vec![
