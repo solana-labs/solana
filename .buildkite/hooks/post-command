@@ -1,0 +1,14 @@
+#!/bin/bash -e
+
+[[ -n "$CARGO_TARGET_CACHE_NAME" ]] || exit 0
+
+#
+# Save target/ for the next CI build on this machine
+#
+(
+  d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
+  mkdir -p $d
+  set -x
+  rsync -a --delete target $d
+  du -hs $d
+)
