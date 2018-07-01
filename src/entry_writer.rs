@@ -9,8 +9,7 @@ use packet::BlobRecycler;
 use result::Result;
 use serde_json;
 use std::collections::VecDeque;
-use std::io::sink;
-use std::io::Write;
+use std::io::{self, sink, Write};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -26,7 +25,7 @@ impl<'a> EntryWriter<'a> {
         EntryWriter { bank }
     }
 
-    fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) {
+    fn write_entry<W: Write>(&self, writer: &Mutex<W>, entry: &Entry) -> io::Result<()> {
         trace!("write_entry entry");
         if !entry.has_more {
             self.bank.register_entry_id(&entry.id);
@@ -35,7 +34,7 @@ impl<'a> EntryWriter<'a> {
             writer.lock().expect("'writer' lock in fn fn write_entry"),
             "{}",
             serde_json::to_string(&entry).expect("'entry' to_strong in fn write_entry")
-        ).expect("writeln! in fn write_entry");
+        )
     }
 
     fn write_entries<W: Write>(
@@ -46,10 +45,10 @@ impl<'a> EntryWriter<'a> {
         //TODO implement a serialize for channel that does this without allocations
         let mut l = vec![];
         let entry = entry_receiver.recv_timeout(Duration::new(1, 0))?;
-        self.write_entry(writer, &entry);
+        self.write_entry(writer, &entry)?;
         l.push(entry);
         while let Ok(entry) = entry_receiver.try_recv() {
-            self.write_entry(writer, &entry);
+            self.write_entry(writer, &entry)?;
             l.push(entry);
         }
         Ok(l)
@@ -114,11 +113,11 @@ mod tests {
         // Verify that write_entry doesn't register the first entries after a split.
         assert_eq!(bank.last_id(), mint.last_id());
         let writer = Mutex::new(sink());
-        entry_writer.write_entry(&writer, &entries[0]);
+        entry_writer.write_entry(&writer, &entries[0]).unwrap();
         assert_eq!(bank.last_id(), mint.last_id());
 
         // Verify that write_entry registers the final entry after a split.
-        entry_writer.write_entry(&writer, &entries[1]);
+        entry_writer.write_entry(&writer, &entries[1]).unwrap();
         assert_eq!(bank.last_id(), entries[1].id);
     }
 }
