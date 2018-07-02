@@ -80,14 +80,14 @@ mkdir -p "$SOLANA_CONFIG_DIR"
 
 
 if $node_type_leader; then
-  rm -rvf "$SOLANA_CONFIG_DIR"-private
-  mkdir -p "$SOLANA_CONFIG_DIR"-private
+  rm -rvf "$SOLANA_CONFIG_PRIVATE_DIR"
+  mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
 
   echo "Creating $SOLANA_CONFIG_DIR/mint.json with $num_tokens tokens"
-  $solana_mint <<<"$num_tokens" > "$SOLANA_CONFIG_DIR"-private/mint.json
+  $solana_mint <<<"$num_tokens" > "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
   echo "Creating $SOLANA_CONFIG_DIR/genesis.log"
-  $solana_genesis < "$SOLANA_CONFIG_DIR"-private/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log
+  $solana_genesis < "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log
 
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
   $solana_fullnode_config "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
@@ -101,5 +101,5 @@ fi
 
 ls -lh "$SOLANA_CONFIG_DIR"/
 if $node_type_leader; then
-  ls -lh "$SOLANA_CONFIG_DIR"-private/
+  ls -lh "$SOLANA_CONFIG_PRIVATE_DIR"
 fi

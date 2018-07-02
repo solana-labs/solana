@@ -53,6 +53,7 @@ export RUST_BACKTRACE=1
 [[ $(uname) = Linux ]] && (set -x; sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null)
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
+SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
