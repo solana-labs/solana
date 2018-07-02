@@ -519,10 +519,9 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use entry::next_entry;
-    use entry_writer::EntryWriter;
+    use entry_writer::{self, EntryWriter};
     use hash::hash;
     use ledger::next_entries;
-    use serde_json;
     use signature::KeyPairUtil;
     use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
@@ -800,12 +799,12 @@ mod tests {
 
         let mut file = tempfile().unwrap();
         EntryWriter::write_entries(&mut file, &entries).unwrap();
-
         file.seek(SeekFrom::Start(0)).unwrap();
+
         let reader = BufReader::new(file);
         reader
             .lines()
-            .map(|line| serde_json::from_str(&line.unwrap()).unwrap())
+            .map(|line| entry_writer::read_entry(line.unwrap()).unwrap())
     }
 
     #[test]
