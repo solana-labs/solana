@@ -316,6 +316,7 @@ fn request_airdrop(drone_addr: &SocketAddr, id: &Mint, tokens: u64) {
 }
 
 fn main() -> Result<(), Box<error::Error>> {
+    env_logger::init();
     let config = parse_args()?;
     let mut client = mk_client(&config.leader)?;
     process_command(&config, &mut client)
