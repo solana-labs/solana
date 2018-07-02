@@ -114,7 +114,7 @@ impl Bank {
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let bank = Self::default();
-        bank.apply_payment(deposit, &mut bank.balances.write().unwrap());
+        bank.apply_payment(deposit);
         bank
     }
 
@@ -130,7 +130,8 @@ impl Bank {
     }
 
     /// Commit funds to the `payment.to` party.
-    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<PublicKey, i64>) {
+    fn apply_payment(&self, payment: &Payment) {
+        let mut balances = self.balances.write().unwrap();
         if balances.contains_key(&payment.to) {
             *balances.get_mut(&payment.to).unwrap() += payment.tokens;
         } else {
@@ -205,7 +206,8 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<PublicKey, i64>) -> Result<()> {
+    fn apply_debits(&self, tx: &Transaction) -> Result<()> {
+        let mut bals = self.balances.write().unwrap();
         let option = bals.get_mut(&tx.from);
         if option.is_none() {
             return Err(BankError::AccountNotFound(tx.from));
@@ -231,7 +233,7 @@ impl Bank {
 
     /// Apply only a transaction's credits. Credits from multiple transactions
     /// may safely be applied in parallel.
-    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
+    fn apply_credits(&self, tx: &Transaction) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let mut plan = contract.plan.clone();
@@ -240,7 +242,7 @@ impl Bank {
                     .expect("timestamp creation in apply_credits")));
 
                 if let Some(payment) = plan.final_payment() {
-                    self.apply_payment(&payment, balances);
+                    self.apply_payment(&payment);
                 } else {
                     let mut pending = self.pending
                         .write()
@@ -260,9 +262,8 @@ impl Bank {
     /// Process a Transaction. If it contains a payment plan that requires a witness
     /// to progress, the payment plan will be stored in the bank.
     fn process_transaction(&self, tx: &Transaction) -> Result<()> {
-        let bals = &mut self.balances.write().unwrap();
-        self.apply_debits(tx, bals)?;
-        self.apply_credits(tx, bals);
+        self.apply_debits(tx)?;
+        self.apply_credits(tx);
         self.transaction_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
@@ -270,12 +271,11 @@ impl Bank {
     /// Process a batch of transactions.
     #[must_use]
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
-        let bals = &mut self.balances.write().unwrap();
         debug!("processing Transactions {}", txs.len());
         let txs_len = txs.len();
         let now = Instant::now();
         let results: Vec<_> = txs.into_iter()
-            .map(|tx| self.apply_debits(&tx, bals).map(|_| tx))
+            .map(|tx| self.apply_debits(&tx).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         let debits = now.elapsed();
@@ -285,7 +285,7 @@ impl Bank {
             .into_iter()
             .map(|result| {
                 result.map(|tx| {
-                    self.apply_credits(&tx, bals);
+                    self.apply_credits(&tx);
                     tx
                 })
             })
@@ -377,7 +377,7 @@ impl Bank {
             None
         }.expect("invalid ledger, needs to start with a contract");
 
-        self.apply_payment(&deposit, &mut self.balances.write().unwrap());
+        self.apply_payment(&deposit);
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
 
@@ -396,7 +396,7 @@ impl Bank {
         {
             e.get_mut().apply_witness(&Witness::Signature(from));
             if let Some(payment) = e.get().final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment);
                 e.remove_entry();
             }
         };
@@ -445,7 +445,7 @@ impl Bank {
                 .read()
                 .expect("'last_time' read lock when creating timestamp")));
             if let Some(payment) = plan.final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment);
                 completed.push(key.clone());
             }
         }
