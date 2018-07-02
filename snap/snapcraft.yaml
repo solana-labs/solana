@@ -59,41 +59,32 @@ apps:
     command: drone.sh
 
 parts:
-  solana-rsync:
+  solana:
     plugin: nil
-    override-build: |
-      # TODO: build rsync from source instead of sneaking it in from the host
-      # system...
-      set -x
-      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-      cp -av /usr/bin/rsync $SNAPCRAFT_PART_INSTALL/bin/
-
-  solana-scripts:
-    plugin: nil
-    override-build: |
-      set -x
-      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-      cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/bin/
-
-  solana-cuda:
-    plugin: rust
-    rust-channel: stable
-    rust-features:
-      - erasure
-      - cuda
     prime:
-      - bin/solana-fullnode-cuda
+      - bin
       - usr/lib/libgf_complete.so.1
       - usr/lib/libJerasure.so.2
     override-build: |
+      # Build/install solana-fullnode-cuda
       ./fetch-perf-libs.sh
-      snapcraftctl build
+      cargo install --features=cuda,erasure --root $SNAPCRAFT_PART_INSTALL --bin solana-fullnode
       mv $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode $SNAPCRAFT_PART_INSTALL
       rm -rf $SNAPCRAFT_PART_INSTALL/bin/*
       mv $SNAPCRAFT_PART_INSTALL/solana-fullnode $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode-cuda
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/
       cp -f libJerasure.so $SNAPCRAFT_PART_INSTALL/usr/lib/libJerasure.so.2
       cp -f libgf_complete.so $SNAPCRAFT_PART_INSTALL/usr/lib/libgf_complete.so.1
-  solana:
-    plugin: rust
-    rust-channel: stable
+
+      # Build/install all other programs
+      cargo install --root $SNAPCRAFT_PART_INSTALL --bins
+
+      # Install multinode scripts
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/bin/
+
+      # TODO: build rsync from source instead of sneaking it in from the host
+      # system...
+      set -x
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp -av /usr/bin/rsync $SNAPCRAFT_PART_INSTALL/bin/
