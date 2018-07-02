@@ -11,7 +11,6 @@ use solana::crdt::{ReplicatedData, TestNode};
 use solana::fullnode::start;
 use std::env;
 use std::fs::File;
-use std::io::stdin;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
