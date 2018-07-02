@@ -13,15 +13,18 @@ shift
 
 rsync_leader_url=$(rsync_url "$leader")
 
-set -ex
+set -e
 mkdir -p $SOLANA_CONFIG_DIR
-rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
+if [[ ! -r $SOLANA_CONFIG_DIR/leader.json ]]; then
+  rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
+fi
 
 client_json=$SOLANA_CONFIG_DIR/client.json
 if [[ ! -r $client_json ]]; then
   $solana_mint <<<0 > $client_json
 fi
 
+set -x
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
   -l $SOLANA_CONFIG_DIR/leader.json -m $client_json "$@"
