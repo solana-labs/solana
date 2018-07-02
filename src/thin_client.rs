@@ -162,7 +162,7 @@ impl ThinClient {
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
         let mut done = false;
         while !done {
-            eprintln!("get_last_id send_to {}", &self.requests_addr);
+            debug!("get_last_id send_to {}", &self.requests_addr);
             self.requests_sender
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn get_last_id");
