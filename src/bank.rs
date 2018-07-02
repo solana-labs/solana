@@ -208,26 +208,36 @@ impl Bank {
     /// funds and isn't a duplicate.
     fn apply_debits(&self, tx: &Transaction) -> Result<()> {
         let mut bals = self.balances.write().unwrap();
-        let option = bals.get_mut(&tx.from);
-        if option.is_none() {
-            return Err(BankError::AccountNotFound(tx.from));
+        let mut purge = false;
+        {
+            let option = bals.get_mut(&tx.from);
+            if option.is_none() {
+                return Err(BankError::AccountNotFound(tx.from));
+            }
+            let bal = option.unwrap();
+
+            self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
+
+            if let Instruction::NewContract(contract) = &tx.instruction {
+                if contract.tokens < 0 {
+                    return Err(BankError::NegativeTokens);
+                }
+
+                if *bal < contract.tokens {
+                    self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                    return Err(BankError::InsufficientFunds(tx.from));
+                } else if *bal == contract.tokens {
+                    purge = true;
+                } else {
+                    *bal -= contract.tokens;
+                }
+            };
         }
-        let bal = option.unwrap();
 
-        self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
+        if purge {
+            bals.remove(&tx.from);
+        }
 
-        if let Instruction::NewContract(contract) = &tx.instruction {
-            if contract.tokens < 0 {
-                return Err(BankError::NegativeTokens);
-            }
-
-            if *bal < contract.tokens {
-                self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
-                return Err(BankError::InsufficientFunds(tx.from));
-            }
-
-            *bal -= contract.tokens;
-        };
         Ok(())
     }
 
@@ -602,7 +612,7 @@ mod tests {
             .unwrap();
 
         // Mint's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
+        assert_eq!(bank.get_balance(&mint.pubkey()), None);
 
         // tx count is 1, because debits were applied.
         assert_eq!(bank.transaction_count(), 1);
@@ -636,7 +646,7 @@ mod tests {
         bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
-        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
+        assert_eq!(bank.get_balance(&mint.pubkey()), None);
         assert_eq!(bank.get_balance(&pubkey), Some(1));
     }
 
@@ -653,7 +663,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
 
         // Mint's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&mint.pubkey()), Some(0));
+        assert_eq!(bank.get_balance(&mint.pubkey()), None);
 
         // pubkey's balance will be None because the funds have not been
         // sent.
