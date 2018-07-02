@@ -8,4 +8,4 @@ Cargo.lock
 /config-private/
 /config-drone/
 /config-validator/
-/config-client-demo/
+/config-client/
