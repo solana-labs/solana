@@ -257,10 +257,10 @@ pub mod tests {
             trace!("msg: {:?}", msg);
         }
 
-        let alice_balance = bank.get_balance(&mint.keypair().pubkey()).unwrap();
+        let alice_balance = bank.get_balance(&mint.keypair().pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = bank.get_balance(&bob_keypair.pubkey()).unwrap();
+        let bob_balance = bank.get_balance(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
