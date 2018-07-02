@@ -7,7 +7,13 @@ rsync=rsync
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
-    printf "%s/command-%s.wrapper" "$SNAP" "$program"
+    if [[ "$program" = wallet ]]; then
+      # TODO: Merge wallet.sh functionality into solana-wallet proper and
+      #       remove this special case
+      printf "%s/bin/solana-%s" "$SNAP" "$program"
+    else
+      printf "%s/command-%s.wrapper" "$SNAP" "$program"
+    fi
   }
   rsync="$SNAP"/bin/rsync
   SOLANA_CUDA="$(snapctl get enable-cuda)"
