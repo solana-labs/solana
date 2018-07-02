@@ -15,8 +15,7 @@ use transaction::Transaction;
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
     requests_addr: SocketAddr,
-    requests_sender: UdpSocket,
-    requests_receiver: UdpSocket,
+    requests_socket: UdpSocket,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
     last_id: Option<Hash>,
@@ -31,15 +30,13 @@ impl ThinClient {
     /// to a public address before invoking ThinClient methods.
     pub fn new(
         requests_addr: SocketAddr,
-        requests_sender: UdpSocket,
-        requests_receiver: UdpSocket,
+        requests_socket: UdpSocket,
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
     ) -> Self {
         let client = ThinClient {
             requests_addr,
-            requests_sender,
-            requests_receiver,
+            requests_socket,
             transactions_addr,
             transactions_socket,
             last_id: None,
@@ -53,7 +50,7 @@ impl ThinClient {
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
         trace!("start recv_from");
-        self.requests_receiver.recv_from(&mut buf)?;
+        self.requests_socket.recv_from(&mut buf)?;
         trace!("end recv_from");
         let resp = deserialize(&buf).expect("deserialize balance in thin_client");
         Ok(resp)
@@ -115,7 +112,7 @@ impl ThinClient {
         trace!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
-        self.requests_sender
+        self.requests_socket
             .send_to(&data, &self.requests_addr)
             .expect("buffer error in pub fn get_balance");
         let mut done = false;
@@ -139,7 +136,7 @@ impl ThinClient {
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
         let mut done = false;
         while !done {
-            self.requests_sender
+            self.requests_socket
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn transaction_count");
 
@@ -163,7 +160,7 @@ impl ThinClient {
         let mut done = false;
         while !done {
             debug!("get_last_id send_to {}", &self.requests_addr);
-            self.requests_sender
+            self.requests_socket
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn get_last_id");
 
@@ -205,7 +202,7 @@ impl ThinClient {
         let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
         let mut done = false;
         while !done {
-            self.requests_sender
+            self.requests_socket
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn get_last_id");
 
@@ -267,7 +264,6 @@ mod tests {
 
         let mut client = ThinClient::new(
             leader.data.requests_addr,
-            requests_socket.try_clone().unwrap(),
             requests_socket,
             leader.data.transactions_addr,
             transactions_socket,
@@ -315,7 +311,6 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
             leader.data.requests_addr,
-            requests_socket.try_clone().unwrap(),
             requests_socket,
             leader.data.transactions_addr,
             transactions_socket,
@@ -374,7 +369,6 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
             leader.data.requests_addr,
-            requests_socket.try_clone().unwrap(),
             requests_socket,
             leader.data.transactions_addr,
             transactions_socket,

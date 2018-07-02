@@ -12,7 +12,6 @@ use clap::{App, Arg, SubCommand};
 use solana::crdt::ReplicatedData;
 use solana::drone::DroneRequest;
 use solana::mint::Mint;
-use solana::nat::udp_public_bind;
 use solana::signature::{PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use std::error;
@@ -20,7 +19,7 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
@@ -288,19 +287,17 @@ fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
 }
 
 fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
-    let transactions_socket_pair = udp_public_bind("transactions");
-    let requests_socket_pair = udp_public_bind("requests");
-    requests_socket_pair
-        .receiver
+    let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
 
     Ok(ThinClient::new(
         r.requests_addr,
-        requests_socket_pair.sender,
-        requests_socket_pair.receiver,
+        requests_socket,
         r.transactions_addr,
-        transactions_socket_pair.sender,
+        transactions_socket,
     ))
 }
 

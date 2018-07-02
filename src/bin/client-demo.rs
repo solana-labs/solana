@@ -301,20 +301,18 @@ fn main() {
 }
 
 fn mk_client(r: &ReplicatedData) -> ThinClient {
-    let transactions_socket_pair = udp_public_bind("transactions");
-    let requests_socket_pair = udp_public_bind("requests");
+    let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-    requests_socket_pair
-        .receiver
+    requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
 
     ThinClient::new(
         r.requests_addr,
-        requests_socket_pair.sender,
-        requests_socket_pair.receiver,
+        requests_socket,
         r.transactions_addr,
-        transactions_socket_pair.sender,
+        transactions_socket,
     )
 }
 
