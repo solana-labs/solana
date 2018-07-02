@@ -35,6 +35,7 @@ enum WalletCommand {
 #[derive(Debug, Clone)]
 enum WalletError {
     CommandNotRecognized(String),
+    BadParameter(String),
 }
 
 impl fmt::Display for WalletError {
@@ -173,6 +174,11 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
                     .into_vec()
                     .expect("base58-encoded public key");
+
+                if pubkey_vec.len() != std::mem::size_of::<PublicKey>() {
+                    display_actions();
+                    Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                }
                 to = PublicKey::clone_from_slice(&pubkey_vec);
             } else {
                 to = id.pubkey();
@@ -187,8 +193,14 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             let sig_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
                 .expect("base58-encoded signature");
-            let sig = Signature::clone_from_slice(&sig_vec);
-            Ok(WalletCommand::Confirm(sig))
+
+            if sig_vec.len() == std::mem::size_of::<Signature>() {
+                let sig = Signature::clone_from_slice(&sig_vec);
+                Ok(WalletCommand::Confirm(sig))
+            } else {
+                display_actions();
+                Err(WalletError::BadParameter("Invalid signature".to_string()))
+            }
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
