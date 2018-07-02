@@ -250,7 +250,7 @@ fn process_command(
         WalletCommand::AirDrop(tokens) => {
             println!("Airdrop requested...");
             println!("Airdropping {:?} tokens", tokens);
-            let _airdrop = request_airdrop(&config.drone_addr, &config.id, tokens as u64);
+            let _airdrop = request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
             // TODO: return airdrop Result from Drone
             sleep(Duration::from_millis(100));
             println!(
@@ -313,8 +313,12 @@ fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
     ))
 }
 
-fn request_airdrop(drone_addr: &SocketAddr, id: &Mint, tokens: u64) {
-    let mut stream = TcpStream::connect(drone_addr).unwrap();
+fn request_airdrop(
+    drone_addr: &SocketAddr,
+    id: &Mint,
+    tokens: u64,
+) -> Result<(), Box<error::Error>> {
+    let mut stream = TcpStream::connect(drone_addr)?;
     let req = DroneRequest::GetAirdrop {
         airdrop_request_amount: tokens,
         client_public_key: id.pubkey(),
@@ -322,6 +326,7 @@ fn request_airdrop(drone_addr: &SocketAddr, id: &Mint, tokens: u64) {
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx).unwrap();
     // TODO: add timeout to this function, in case of unresponsive drone
+    Ok(())
 }
 
 fn main() -> Result<(), Box<error::Error>> {
