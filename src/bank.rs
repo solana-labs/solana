@@ -513,9 +513,6 @@ impl Bank {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempfile;
-
-    use self::tempfile::tempfile;
     use super::*;
     use bincode::serialize;
     use entry::next_entry;
@@ -523,7 +520,7 @@ mod tests {
     use hash::hash;
     use ledger::next_entries;
     use signature::KeyPairUtil;
-    use std::io::{BufRead, BufReader, Seek, SeekFrom};
+    use std::io::{BufRead, BufReader, Cursor, Seek, SeekFrom};
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -797,7 +794,7 @@ mod tests {
     fn to_file_iter(entries: impl Iterator<Item = Entry>) -> impl Iterator<Item = Entry> {
         let entries: Vec<_> = entries.collect();
 
-        let mut file = tempfile().unwrap();
+        let mut file = Cursor::new(vec![]);
         EntryWriter::write_entries(&mut file, &entries).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
