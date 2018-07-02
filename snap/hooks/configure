@@ -12,17 +12,19 @@ fi
 
 ip_address_arg=-p # Use public IP address (TODO: make this configurable?)
 num_tokens="$(snapctl get num-tokens)"
-$SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg}
 
 case $mode in
 leader+drone)
+  $SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg} -t leader
   snapctl start --enable solana.daemon-leader
   snapctl start --enable solana.daemon-drone
   ;;
 leader)
+  $SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg} -t leader
   snapctl start --enable solana.daemon-leader
   ;;
 validator)
+  $SNAP/bin/setup.sh ${ip_address_arg} -t validator
   snapctl start --enable solana.daemon-validator
   ;;
 *)

@@ -57,7 +57,9 @@ fi
 
 
 [[ -f "$SOLANA_CONFIG_DIR"/validator.json ]] || {
-  echo "$SOLANA_CONFIG_DIR/validator.json not found, run ${here}/setup.sh first"
+  echo "$SOLANA_CONFIG_DIR/validator.json not found, create it by running:"
+  echo
+  echo "  ${here}/setup.sh -t validator"
   exit 1
 }
 
