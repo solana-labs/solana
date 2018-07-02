@@ -238,9 +238,9 @@ If your rustc version is lower than 1.26.1, please update it:
 $ rustup update
 ```
 
-On Linux systems you may need to install libssl-dev.  On Ubuntu:
+On Linux systems you may need to install libssl-dev and pkg-config.  On Ubuntu:
 ```bash
-$ sudo apt-get install libssl-dev
+$ sudo apt-get install libssl-dev pkg-config
 ```
 
 Download the source code:
