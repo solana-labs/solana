@@ -8,8 +8,13 @@ here=$(dirname "$0")
 source "$here"/common.sh
 SOLANA_CONFIG_DIR=config-client
 
-leader=${1:-${here}/..}  # Default to local solana repo
-shift
+# if $1 isn't host:path or some local path
+if [[ ${1%:} != "$1" || -d $1 ]]; then
+  leader=$1 # interpret
+  shift
+else
+  leader=$here/.. # Default to local solana repo
+fi
 
 rsync_leader_url=$(rsync_url "$leader")
 
