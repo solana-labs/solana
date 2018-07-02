@@ -223,9 +223,9 @@ mod tests {
     use bank::Bank;
     use budget::Budget;
     use crdt::TestNode;
+    use fullnode::FullNode;
     use logger;
     use mint::Mint;
-    use server::Server;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -244,7 +244,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let server = Server::new_leader(
+        let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),
@@ -289,7 +289,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let server = Server::new_leader(
+        let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),
@@ -347,7 +347,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
-        let server = Server::new_leader(
+        let server = FullNode::new_leader(
             bank,
             0,
             Some(Duration::from_millis(30)),

@@ -8,7 +8,7 @@ extern crate solana;
 use atty::{is, Stream};
 use getopts::Options;
 use solana::crdt::{ReplicatedData, TestNode};
-use solana::fullnode::start;
+use solana::fullnode::FullNode;
 use std::env;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -80,17 +80,17 @@ fn main() -> () {
     }
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
     let exit = Arc::new(AtomicBool::new(false));
-    let threads = if matches.opt_present("t") {
+    let fullnode = if matches.opt_present("t") {
         let testnet_address_string = matches.opt_str("t").unwrap();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        start(node, false, None, Some(testnet_addr), None, exit)
+        FullNode::new(node, false, None, Some(testnet_addr), None, exit)
     } else {
         node.data.current_leader_id = node.data.id.clone();
 
         let outfile = matches.opt_str("o");
-        start(node, true, None, None, outfile, exit)
+        FullNode::new(node, true, None, None, outfile, exit)
     };
-    for t in threads {
+    for t in fullnode.thread_hdls {
         t.join().expect("join");
     }
 }

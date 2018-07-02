@@ -944,15 +944,15 @@ impl TestNode {
         let transaction = UdpSocket::bind(local_transactions_addr).unwrap();
         let gossip = UdpSocket::bind(local_gossip_addr).unwrap();
         let replicate = UdpSocket::bind(local_replicate_addr).unwrap();
-        let requests = UdpSocket::bind(local_requests_addr).unwrap();
-
         let repair = UdpSocket::bind(local_repair_addr).unwrap();
-        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let requests = UdpSocket::bind(local_requests_addr).unwrap();
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
         // response Udp packet correctly back to the requester.
-        let respond = requests_socket.try_clone().unwrap();
+        let respond = requests.try_clone().unwrap();
+
+        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         TestNode {
