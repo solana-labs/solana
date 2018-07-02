@@ -6,7 +6,7 @@
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
-SOLANA_CONFIG_DIR=config-client
+SOLANA_CONFIG_DIR="$SOLANA_CONFIG_DIR"-client
 
 # if $1 isn't host:path, something.com, or a valid local path
 if [[ ${1%:} != "$1" || "$1" =~ [^.].[^.] || -d $1 ]]; then
