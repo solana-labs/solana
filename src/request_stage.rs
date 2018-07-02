@@ -17,7 +17,6 @@ use timing;
 
 pub struct RequestStage {
     pub thread_hdl: JoinHandle<()>,
-    pub blob_receiver: BlobReceiver,
     pub request_processor: Arc<RequestProcessor>,
 }
 
@@ -85,7 +84,7 @@ impl RequestStage {
         packet_receiver: Receiver<SharedPackets>,
         packet_recycler: PacketRecycler,
         blob_recycler: BlobRecycler,
-    ) -> Self {
+    ) -> (Self, BlobReceiver) {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
         let (blob_sender, blob_receiver) = channel();
@@ -106,10 +105,12 @@ impl RequestStage {
                 }
             })
             .unwrap();
-        RequestStage {
-            thread_hdl,
+        (
+            RequestStage {
+                thread_hdl,
+                request_processor,
+            },
             blob_receiver,
-            request_processor,
-        }
+        )
     }
 }

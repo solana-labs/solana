@@ -23,9 +23,6 @@ use transaction::Transaction;
 pub struct BankingStage {
     /// Handle to the stage's thread.
     pub thread_hdl: JoinHandle<()>,
-
-    /// Output receiver for the following stage.
-    pub signal_receiver: Receiver<Signal>,
 }
 
 impl BankingStage {
@@ -38,7 +35,7 @@ impl BankingStage {
         exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: PacketRecycler,
-    ) -> Self {
+    ) -> (Self, Receiver<Signal>) {
         let (signal_sender, signal_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
@@ -56,10 +53,7 @@ impl BankingStage {
                 }
             })
             .unwrap();
-        BankingStage {
-            thread_hdl,
-            signal_receiver,
-        }
+        (BankingStage { thread_hdl }, signal_receiver)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and

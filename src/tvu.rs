@@ -73,7 +73,7 @@ impl Tvu {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let blob_recycler = BlobRecycler::default();
-        let fetch_stage = BlobFetchStage::new_multi_socket(
+        let (fetch_stage, blob_receiver) = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit.clone(),
             blob_recycler.clone(),
@@ -81,17 +81,17 @@ impl Tvu {
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
-        let window_stage = WindowStage::new(
+        let (window_stage, blob_receiver) = WindowStage::new(
             crdt,
             window,
             entry_height,
             retransmit_socket,
             exit.clone(),
             blob_recycler.clone(),
-            fetch_stage.blob_receiver,
+            blob_receiver,
         );
 
-        let replicate_stage = ReplicateStage::new(bank, exit, window_stage.blob_receiver);
+        let replicate_stage = ReplicateStage::new(bank, exit, blob_receiver);
 
         let mut threads = vec![replicate_stage.thread_hdl];
         threads.extend(fetch_stage.thread_hdls.into_iter());

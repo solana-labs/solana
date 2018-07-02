@@ -63,7 +63,7 @@ impl Server {
         thread_hdls.extend(rpu.thread_hdls);
 
         let blob_recycler = BlobRecycler::default();
-        let tpu = Tpu::new(
+        let (tpu, blob_receiver) = Tpu::new(
             bank.clone(),
             tick_duration,
             transactions_socket,
@@ -92,7 +92,7 @@ impl Server {
             window,
             entry_height,
             blob_recycler.clone(),
-            tpu.blob_receiver,
+            blob_receiver,
         );
         thread_hdls.extend(vec![t_broadcast]);
 

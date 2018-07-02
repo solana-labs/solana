@@ -19,7 +19,6 @@ use streamer::{BlobReceiver, BlobSender};
 
 pub struct WriteStage {
     pub thread_hdl: JoinHandle<()>,
-    pub blob_receiver: BlobReceiver,
 }
 
 impl WriteStage {
@@ -50,7 +49,7 @@ impl WriteStage {
         blob_recycler: BlobRecycler,
         writer: W,
         entry_receiver: Receiver<Vec<Entry>>,
-    ) -> Self {
+    ) -> (Self, BlobReceiver) {
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-writer".to_string())
@@ -71,9 +70,6 @@ impl WriteStage {
             })
             .unwrap();
 
-        WriteStage {
-            thread_hdl,
-            blob_receiver,
-        }
+        (WriteStage { thread_hdl }, blob_receiver)
     }
 }
