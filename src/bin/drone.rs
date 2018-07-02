@@ -11,7 +11,7 @@ extern crate tokio_io;
 use atty::{is, Stream as atty_stream};
 use bincode::deserialize;
 use getopts::Options;
-use solana::crdt::{get_ip_addr, ReplicatedData};
+use solana::crdt::ReplicatedData;
 use solana::drone::{Drone, DroneRequest};
 use solana::mint::Mint;
 use std::env;
@@ -103,8 +103,7 @@ fn main() {
 
     let mint_keypair = mint.keypair();
 
-    let mut drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-    drone_addr.set_ip(get_ip_addr().unwrap());
+    let drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
