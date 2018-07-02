@@ -24,7 +24,7 @@ steps:
     agents:
       - "queue=cuda"
   - command: "ci/pr-snap.sh"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 20
     name: "snap [public]"
   - wait
   - command: "ci/publish-crate.sh"
