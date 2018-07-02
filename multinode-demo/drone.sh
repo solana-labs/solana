@@ -6,7 +6,7 @@
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
-SOLANA_CONFIG_DIR=config-drone
+SOLANA_CONFIG_DIR="$SOLANA_CONFIG_DIR"-drone
 
 if [[ -d "$SNAP" ]]; then
   # Exit if mode is not yet configured
