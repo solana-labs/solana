@@ -513,11 +513,18 @@ impl Bank {
 
 #[cfg(test)]
 mod tests {
+    extern crate tempfile;
+
+    use self::tempfile::tempfile;
     use super::*;
     use bincode::serialize;
     use entry::next_entry;
+    use entry_writer::EntryWriter;
     use hash::hash;
+    use ledger::next_entries;
+    use serde_json;
     use signature::KeyPairUtil;
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -755,6 +762,71 @@ mod tests {
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
         bank.process_entries(vec![entry]).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
+    }
+
+    #[test]
+    fn test_process_genesis() {
+        let mint = Mint::new(1);
+        let genesis = mint.create_entries();
+        let bank = Bank::default();
+        bank.process_ledger(genesis).unwrap();
+        assert_eq!(bank.get_balance(&mint.pubkey()).unwrap(), 1);
+    }
+
+    fn create_sample_block(mint: &Mint) -> impl Iterator<Item = Entry> {
+        let keypair = KeyPair::new();
+        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
+        next_entries(&mint.last_id(), 0, vec![tx]).into_iter()
+    }
+
+    fn create_sample_ledger() -> (impl Iterator<Item = Entry>, PublicKey) {
+        let mint = Mint::new(2);
+        let genesis = mint.create_entries();
+        let block = create_sample_block(&mint);
+        (genesis.into_iter().chain(block), mint.pubkey())
+    }
+
+    #[test]
+    fn test_process_ledger() {
+        let (ledger, pubkey) = create_sample_ledger();
+        let bank = Bank::default();
+        bank.process_ledger(ledger).unwrap();
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1);
+    }
+
+    // Write the given entries to a file and then return a file iterator to them.
+    fn to_file_iter(entries: impl Iterator<Item = Entry>) -> impl Iterator<Item = Entry> {
+        let entries: Vec<_> = entries.collect();
+
+        let mut file = tempfile().unwrap();
+        EntryWriter::write_entries(&mut file, &entries).unwrap();
+
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let reader = BufReader::new(file);
+        reader
+            .lines()
+            .map(|line| serde_json::from_str(&line.unwrap()).unwrap())
+    }
+
+    #[test]
+    fn test_process_ledger_from_file() {
+        let (ledger, pubkey) = create_sample_ledger();
+        let ledger = to_file_iter(ledger);
+
+        let bank = Bank::default();
+        bank.process_ledger(ledger).unwrap();
+        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_process_ledger_from_files() {
+        let mint = Mint::new(2);
+        let genesis = to_file_iter(mint.create_entries().into_iter());
+        let block = to_file_iter(create_sample_block(&mint));
+
+        let bank = Bank::default();
+        bank.process_ledger(genesis.chain(block)).unwrap();
+        assert_eq!(bank.get_balance(&mint.pubkey()).unwrap(), 1);
     }
 }
 
