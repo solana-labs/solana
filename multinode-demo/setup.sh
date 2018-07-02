@@ -44,14 +44,17 @@ validator_address_args=("$ip_address_arg" -b 9000)
 set -e
 
 echo "Cleaning $SOLANA_CONFIG_DIR"
-rm -rvf "$SOLANA_CONFIG_DIR"
-mkdir -p "$SOLANA_CONFIG_DIR"
+(
+  set -x
+  rm -rvf "$SOLANA_CONFIG_DIR"{,-private}
+  mkdir -p "$SOLANA_CONFIG_DIR"{,-private}
+)
 
 echo "Creating $SOLANA_CONFIG_DIR/mint.json with $num_tokens tokens"
-$solana_mint <<<"$num_tokens" > "$SOLANA_CONFIG_DIR"/mint.json
+$solana_mint <<<"$num_tokens" > "$SOLANA_CONFIG_DIR"-private/mint.json
 
 echo "Creating $SOLANA_CONFIG_DIR/genesis.log"
-$solana_genesis < "$SOLANA_CONFIG_DIR"/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log
+$solana_genesis < "$SOLANA_CONFIG_DIR"-private/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log
 
 echo "Creating $SOLANA_CONFIG_DIR/leader.json"
 $solana_fullnode_config "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json

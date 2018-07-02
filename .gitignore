@@ -5,6 +5,7 @@ Cargo.lock
 
 # node configuration files
 /config/
+/config-private/
 /config-drone/
 /config-validator/
 /config-client-demo/
