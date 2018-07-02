@@ -44,7 +44,9 @@ apps:
   client-demo:
     command: solana-client-demo
   wallet:
-    command: solana-wallet
+    # TODO: Merge wallet.sh functionality into solana-wallet proper
+    command: wallet.sh
+    #command: solana-wallet
 
   daemon-validator:
     daemon: simple
