@@ -13,7 +13,11 @@ if [[ ${1%:} != "$1" || "$1" =~ [^.].[^.] || -d $1 ]]; then
   leader=$1 # interpret
   shift
 else
-  leader=$here/.. # Default to local solana repo
+  if [[ -d "$SNAP" ]]; then
+    leader=testnet.solana.com # Default to testnet when running as a Snap
+  else
+    leader=$here/.. # Default to local solana repo
+  fi
 fi
 
 rsync_leader_url=$(rsync_url "$leader")
