@@ -2,11 +2,14 @@
 
 use bank::Bank;
 use crdt::{Crdt, ReplicatedData, TestNode};
+use entry::Entry;
 use entry_writer;
+use ledger::Block;
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
 use service::Service;
+use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{sink, stdin, stdout, BufReader};
 use std::io::{Read, Write};
@@ -51,9 +54,9 @@ impl FullNode {
         };
         let reader = BufReader::new(infile);
         let entries = entry_writer::read_entries(reader).map(|e| e.expect("failed to parse entry"));
-        info!("processing ledger...");
-        let entry_height = bank.process_ledger(entries).expect("process_ledger");
 
+        info!("processing ledger...");
+        let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
@@ -74,6 +77,7 @@ impl FullNode {
             let server = FullNode::new_validator(
                 bank,
                 entry_height,
+                Some(ledger_tail),
                 node,
                 network_entry_point,
                 exit.clone(),
@@ -100,6 +104,7 @@ impl FullNode {
             let server = FullNode::new_leader(
                 bank,
                 entry_height,
+                Some(ledger_tail),
                 //Some(Duration::from_millis(1000)),
                 None,
                 node,
@@ -113,6 +118,27 @@ impl FullNode {
             server
         }
     }
+
+    fn new_window(
+        ledger_tail: Option<Vec<Entry>>,
+        entry_height: u64,
+        crdt: &Arc<RwLock<Crdt>>,
+        blob_recycler: &BlobRecycler,
+    ) -> streamer::Window {
+        match ledger_tail {
+            Some(ledger_tail) => {
+                // convert to blobs
+                let mut blobs = VecDeque::new();
+                ledger_tail.to_blobs(&blob_recycler, &mut blobs);
+
+                // flatten deque to vec
+                let blobs: Vec<_> = blobs.into_iter().collect();
+                streamer::initialized_window(&crdt, blobs, entry_height)
+            }
+            None => streamer::default_window(),
+        }
+    }
+
     /// Create a server instance acting as a leader.
     ///
     /// ```text
@@ -140,6 +166,7 @@ impl FullNode {
     pub fn new_leader<W: Write + Send + 'static>(
         bank: Bank,
         entry_height: u64,
+        ledger_tail: Option<Vec<Entry>>,
         tick_duration: Option<Duration>,
         node: TestNode,
         exit: Arc<AtomicBool>,
@@ -166,7 +193,9 @@ impl FullNode {
         );
         thread_hdls.extend(tpu.thread_hdls());
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
-        let window = streamer::default_window();
+
+        let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
+
         let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
@@ -221,6 +250,7 @@ impl FullNode {
     pub fn new_validator(
         bank: Bank,
         entry_height: u64,
+        ledger_tail: Option<Vec<Entry>>,
         node: TestNode,
         entry_point: ReplicatedData,
         exit: Arc<AtomicBool>,
@@ -239,7 +269,11 @@ impl FullNode {
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&entry_point);
-        let window = streamer::default_window();
+
+        let blob_recycler = BlobRecycler::default();
+
+        let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
+
         let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
@@ -292,7 +326,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(bank, 0, tn, entry, exit.clone());
+        let v = FullNode::new_validator(bank, 0, None, tn, entry, exit.clone());
         exit.store(true, Ordering::Relaxed);
         for t in v.thread_hdls {
             t.join().unwrap();

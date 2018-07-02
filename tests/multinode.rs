@@ -306,6 +306,7 @@ fn test_multi_node_dynamic_network() {
         Some(OutFile::Path(ledger_path.clone())),
         exit.clone(),
     );
+    info!("{:x} LEADER", leader_data.debug_id());
     let threads = server.thread_hdls();
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
@@ -328,6 +329,7 @@ fn test_multi_node_dynamic_network() {
                 Some(OutFile::Path(ledger_path.clone())),
                 exit.clone(),
             );
+            info!("{:x} VALIDATOR", rd.debug_id());
             (rd, exit, val)
         })
         .collect();

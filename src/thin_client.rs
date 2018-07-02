@@ -290,6 +290,7 @@ mod tests {
         let server = FullNode::new_leader(
             bank,
             0,
+            None,
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
@@ -329,6 +330,7 @@ mod tests {
         let server = FullNode::new_leader(
             bank,
             0,
+            None,
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
@@ -380,6 +382,7 @@ mod tests {
         let server = FullNode::new_leader(
             bank,
             0,
+            None,
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),

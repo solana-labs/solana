@@ -462,6 +462,44 @@ pub fn default_window() -> Window {
     Arc::new(RwLock::new(vec![None; WINDOW_SIZE as usize]))
 }
 
+/// Initialize a rebroadcast window with most recent Entry blobs
+/// * `crdt` - gossip instance, used to set blob ids
+/// * `blobs` - up to WINDOW_SIZE most recent blobs
+/// * `entry_height` - current entry height
+pub fn initialized_window(
+    crdt: &Arc<RwLock<Crdt>>,
+    blobs: Vec<SharedBlob>,
+    entry_height: u64,
+) -> Window {
+    let window = default_window();
+
+    {
+        let mut win = window.write().unwrap();
+        assert!(blobs.len() <= win.len());
+
+        debug!(
+            "initialized window entry_height:{} blobs_len:{}",
+            entry_height,
+            blobs.len()
+        );
+
+        // Index the blobs
+        let mut received = entry_height - blobs.len() as u64;
+        Crdt::index_blobs(crdt, &blobs, &mut received).expect("index blobs for initial window");
+
+        // populate the window, offset by implied index
+        for b in blobs {
+            let ix = b.read().unwrap().get_index().expect("blob index");
+            let pos = (ix % WINDOW_SIZE) as usize;
+            trace!("caching {} at {}", ix, pos);
+            assert!(win[pos].is_none());
+            win[pos] = Some(b);
+        }
+    }
+
+    window
+}
+
 pub fn window(
     crdt: Arc<RwLock<Crdt>>,
     window: Window,
