@@ -9,7 +9,7 @@ use atty::{is, Stream};
 use getopts::Options;
 use solana::bank::Bank;
 use solana::crdt::ReplicatedData;
-use solana::entry::Entry;
+use solana::entry_writer;
 use solana::server::Server;
 use std::env;
 use std::fs::File;
@@ -68,11 +68,10 @@ fn main() {
     eprintln!("Initializing...");
     let stdin = stdin();
     let entries = stdin.lock().lines().map(|line| {
-        let entry: Entry = serde_json::from_str(&line.unwrap()).unwrap_or_else(|e| {
+        entry_writer::read_entry(line.unwrap()).unwrap_or_else(|e| {
             eprintln!("failed to parse json: {}", e);
             exit(1);
-        });
-        entry
+        })
     });
     eprintln!("done parsing...");
 

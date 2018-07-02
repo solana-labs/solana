@@ -5,7 +5,7 @@
 use bank::Bank;
 use entry::Entry;
 use serde_json;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Error, ErrorKind, Write};
 
 pub struct EntryWriter<'a, W> {
     bank: &'a Bank,
@@ -44,6 +44,17 @@ impl<'a, W: Write> EntryWriter<'a, W> {
         }
         Ok(())
     }
+}
+
+pub fn read_entry(s: String) -> io::Result<Entry> {
+    serde_json::from_str(&s).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+}
+
+// TODO: How to implement this without attaching the input's lifetime to the output?
+pub fn read_entries<'a, R: BufRead>(
+    reader: &'a mut R,
+) -> impl Iterator<Item = io::Result<Entry>> + 'a {
+    reader.lines().map(|s| read_entry(s?))
 }
 
 #[cfg(test)]
