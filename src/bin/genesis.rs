@@ -26,6 +26,6 @@ fn main() -> Result<(), Box<error::Error>> {
 
     let mint: Mint = serde_json::from_str(&buffer)?;
     let mut writer = stdout();
-    EntryWriter::write_entries(&mut writer, &mint.create_entries())?;
+    EntryWriter::write_entries(&mut writer, mint.create_entries())?;
     Ok(())
 }

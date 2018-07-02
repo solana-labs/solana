@@ -792,10 +792,8 @@ mod tests {
 
     // Write the given entries to a file and then return a file iterator to them.
     fn to_file_iter(entries: impl Iterator<Item = Entry>) -> impl Iterator<Item = Entry> {
-        let entries: Vec<_> = entries.collect();
-
         let mut file = Cursor::new(vec![]);
-        EntryWriter::write_entries(&mut file, &entries).unwrap();
+        EntryWriter::write_entries(&mut file, entries).unwrap();
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let reader = BufReader::new(file);

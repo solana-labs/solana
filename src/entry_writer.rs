@@ -19,13 +19,16 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 
     fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
-        let serialized = serde_json::to_string(&entry).unwrap();
+        let serialized = serde_json::to_string(entry).unwrap();
         writeln!(writer, "{}", serialized)
     }
 
-    pub fn write_entries(writer: &mut W, entries: &[Entry]) -> io::Result<()> {
+    pub fn write_entries<I>(writer: &mut W, entries: I) -> io::Result<()>
+    where
+        I: IntoIterator<Item = Entry>,
+    {
         for entry in entries {
-            Self::write_entry(writer, entry)?;
+            Self::write_entry(writer, &entry)?;
         }
         Ok(())
     }
