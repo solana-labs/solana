@@ -56,7 +56,7 @@ impl Rpu {
 
         let blob_recycler = BlobRecycler::default();
         let request_processor = RequestProcessor::new(bank.clone());
-        let request_stage = RequestStage::new(
+        let (request_stage, blob_receiver) = RequestStage::new(
             request_processor,
             exit.clone(),
             packet_receiver,
@@ -68,7 +68,7 @@ impl Rpu {
             respond_socket,
             exit.clone(),
             blob_recycler.clone(),
-            request_stage.blob_receiver,
+            blob_receiver,
         );
 
         let thread_hdls = vec![t_receiver, t_responder, request_stage.thread_hdl];

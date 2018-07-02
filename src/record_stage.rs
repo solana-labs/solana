@@ -20,14 +20,16 @@ pub enum Signal {
 }
 
 pub struct RecordStage {
-    pub entry_receiver: Receiver<Vec<Entry>>,
     pub thread_hdl: JoinHandle<()>,
 }
 
 impl RecordStage {
     /// A background thread that will continue tagging received Transaction messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
-    pub fn new(signal_receiver: Receiver<Signal>, start_hash: &Hash) -> Self {
+    pub fn new(
+        signal_receiver: Receiver<Signal>,
+        start_hash: &Hash,
+    ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let start_hash = start_hash.clone();
 
@@ -39,10 +41,7 @@ impl RecordStage {
             })
             .unwrap();
 
-        RecordStage {
-            entry_receiver,
-            thread_hdl,
-        }
+        (RecordStage { thread_hdl }, entry_receiver)
     }
 
     /// Same as `RecordStage::new`, but will automatically produce entries every `tick_duration`.
@@ -50,7 +49,7 @@ impl RecordStage {
         signal_receiver: Receiver<Signal>,
         start_hash: &Hash,
         tick_duration: Duration,
-    ) -> Self {
+    ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let start_hash = start_hash.clone();
 
@@ -74,10 +73,7 @@ impl RecordStage {
             })
             .unwrap();
 
-        RecordStage {
-            entry_receiver,
-            thread_hdl,
-        }
+        (RecordStage { thread_hdl }, entry_receiver)
     }
 
     fn process_signal(
@@ -140,7 +136,7 @@ mod tests {
     fn test_historian() {
         let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(tx_receiver, &zero);
+        let (record_stage, entry_receiver) = RecordStage::new(tx_receiver, &zero);
 
         tx_sender.send(Signal::Tick).unwrap();
         sleep(Duration::new(0, 1_000_000));
@@ -148,9 +144,9 @@ mod tests {
         sleep(Duration::new(0, 1_000_000));
         tx_sender.send(Signal::Tick).unwrap();
 
-        let entry0 = record_stage.entry_receiver.recv().unwrap()[0].clone();
-        let entry1 = record_stage.entry_receiver.recv().unwrap()[0].clone();
-        let entry2 = record_stage.entry_receiver.recv().unwrap()[0].clone();
+        let entry0 = entry_receiver.recv().unwrap()[0].clone();
+        let entry1 = entry_receiver.recv().unwrap()[0].clone();
+        let entry2 = entry_receiver.recv().unwrap()[0].clone();
 
         assert_eq!(entry0.num_hashes, 0);
         assert_eq!(entry1.num_hashes, 0);
@@ -166,8 +162,8 @@ mod tests {
     fn test_historian_closed_sender() {
         let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(tx_receiver, &zero);
-        drop(record_stage.entry_receiver);
+        let (record_stage, entry_receiver) = RecordStage::new(tx_receiver, &zero);
+        drop(entry_receiver);
         tx_sender.send(Signal::Tick).unwrap();
         assert_eq!(record_stage.thread_hdl.join().unwrap(), ());
     }
@@ -176,7 +172,7 @@ mod tests {
     fn test_transactions() {
         let (tx_sender, signal_receiver) = channel();
         let zero = Hash::default();
-        let record_stage = RecordStage::new(signal_receiver, &zero);
+        let (_record_stage, entry_receiver) = RecordStage::new(signal_receiver, &zero);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
         let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
@@ -185,7 +181,7 @@ mod tests {
             .send(Signal::Transactions(vec![tx0, tx1]))
             .unwrap();
         drop(tx_sender);
-        let entries: Vec<_> = record_stage.entry_receiver.iter().collect();
+        let entries: Vec<_> = entry_receiver.iter().collect();
         assert_eq!(entries.len(), 1);
     }
 
@@ -193,12 +189,12 @@ mod tests {
     fn test_clock() {
         let (tx_sender, tx_receiver) = channel();
         let zero = Hash::default();
-        let record_stage =
+        let (_record_stage, entry_receiver) =
             RecordStage::new_with_clock(tx_receiver, &zero, Duration::from_millis(20));
         sleep(Duration::from_millis(900));
         tx_sender.send(Signal::Tick).unwrap();
         drop(tx_sender);
-        let entries: Vec<_> = record_stage.entry_receiver.iter().flat_map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() > 1);
 
         // Ensure the ID is not the seed.

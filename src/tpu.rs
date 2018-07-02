@@ -41,7 +41,6 @@ use streamer::BlobReceiver;
 use write_stage::WriteStage;
 
 pub struct Tpu {
-    pub blob_receiver: BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -53,36 +52,35 @@ impl Tpu {
         blob_recycler: BlobRecycler,
         exit: Arc<AtomicBool>,
         writer: W,
-    ) -> Self {
+    ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
 
-        let fetch_stage =
+        let (fetch_stage, packet_receiver) =
             FetchStage::new(transactions_socket, exit.clone(), packet_recycler.clone());
 
-        let sigverify_stage = SigVerifyStage::new(exit.clone(), fetch_stage.packet_receiver);
+        let (sigverify_stage, verified_receiver) =
+            SigVerifyStage::new(exit.clone(), packet_receiver);
 
-        let banking_stage = BankingStage::new(
+        let (banking_stage, signal_receiver) = BankingStage::new(
             bank.clone(),
             exit.clone(),
-            sigverify_stage.verified_receiver,
+            verified_receiver,
             packet_recycler.clone(),
         );
 
-        let record_stage = match tick_duration {
-            Some(tick_duration) => RecordStage::new_with_clock(
-                banking_stage.signal_receiver,
-                &bank.last_id(),
-                tick_duration,
-            ),
-            None => RecordStage::new(banking_stage.signal_receiver, &bank.last_id()),
+        let (record_stage, entry_receiver) = match tick_duration {
+            Some(tick_duration) => {
+                RecordStage::new_with_clock(signal_receiver, &bank.last_id(), tick_duration)
+            }
+            None => RecordStage::new(signal_receiver, &bank.last_id()),
         };
 
-        let write_stage = WriteStage::new(
+        let (write_stage, blob_receiver) = WriteStage::new(
             bank.clone(),
             exit.clone(),
             blob_recycler.clone(),
             writer,
-            record_stage.entry_receiver,
+            entry_receiver,
         );
         let mut thread_hdls = vec![
             banking_stage.thread_hdl,
@@ -91,9 +89,6 @@ impl Tpu {
         ];
         thread_hdls.extend(fetch_stage.thread_hdls.into_iter());
         thread_hdls.extend(sigverify_stage.thread_hdls.into_iter());
-        Tpu {
-            blob_receiver: write_stage.blob_receiver,
-            thread_hdls,
-        }
+        (Tpu { thread_hdls }, blob_receiver)
     }
 }

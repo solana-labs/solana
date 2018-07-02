@@ -10,7 +10,6 @@ use std::thread::JoinHandle;
 use streamer::{self, BlobReceiver, Window};
 
 pub struct WindowStage {
-    pub blob_receiver: BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -23,7 +22,7 @@ impl WindowStage {
         exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
-    ) -> Self {
+    ) -> (Self, BlobReceiver) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let t_retransmit = streamer::retransmitter(
@@ -46,9 +45,6 @@ impl WindowStage {
         );
         let thread_hdls = vec![t_retransmit, t_window];
 
-        WindowStage {
-            blob_receiver,
-            thread_hdls,
-        }
+        (WindowStage { thread_hdls }, blob_receiver)
     }
 }

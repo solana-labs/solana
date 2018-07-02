@@ -9,19 +9,22 @@ use std::thread::JoinHandle;
 use streamer::{self, BlobReceiver};
 
 pub struct BlobFetchStage {
-    pub blob_receiver: BlobReceiver,
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl BlobFetchStage {
-    pub fn new(socket: UdpSocket, exit: Arc<AtomicBool>, blob_recycler: BlobRecycler) -> Self {
+    pub fn new(
+        socket: UdpSocket,
+        exit: Arc<AtomicBool>,
+        blob_recycler: BlobRecycler,
+    ) -> (Self, BlobReceiver) {
         Self::new_multi_socket(vec![socket], exit, blob_recycler)
     }
     pub fn new_multi_socket(
         sockets: Vec<UdpSocket>,
         exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
-    ) -> Self {
+    ) -> (Self, BlobReceiver) {
         let (blob_sender, blob_receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
@@ -35,9 +38,6 @@ impl BlobFetchStage {
             })
             .collect();
 
-        BlobFetchStage {
-            blob_receiver,
-            thread_hdls,
-        }
+        (BlobFetchStage { thread_hdls }, blob_receiver)
     }
 }
