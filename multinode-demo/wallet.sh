@@ -8,8 +8,8 @@ here=$(dirname "$0")
 source "$here"/common.sh
 SOLANA_CONFIG_DIR=config-client
 
-# if $1 isn't host:path or some local path
-if [[ ${1%:} != "$1" || -d $1 ]]; then
+# if $1 isn't host:path, something.com, or a valid local path
+if [[ ${1%:} != "$1" || "$1" =~ [^.].[^.] || -d $1 ]]; then
   leader=$1 # interpret
   shift
 else
