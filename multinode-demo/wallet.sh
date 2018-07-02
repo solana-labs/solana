@@ -6,7 +6,7 @@
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
-SOLANA_CONFIG_DIR=config-client-demo
+SOLANA_CONFIG_DIR=config-client
 
 leader=${1:-${here}/..}  # Default to local solana repo
 shift
