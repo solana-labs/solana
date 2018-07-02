@@ -185,7 +185,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
-            let sig_vec = bs58::decode(confirm_matches.value_of("sig").unwrap())
+            let sig_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
                 .expect("base58-encoded signature");
             let sig = Signature::clone_from_slice(&sig_vec);
