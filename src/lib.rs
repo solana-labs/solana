@@ -21,6 +21,7 @@ pub mod entry_writer;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;
+pub mod fullnode;
 pub mod hash;
 pub mod ledger;
 pub mod logger;
