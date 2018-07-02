@@ -21,7 +21,7 @@ rsync_leader_url=$(rsync_url "$leader")
 set -e
 mkdir -p $SOLANA_CONFIG_DIR
 if [[ ! -r $SOLANA_CONFIG_DIR/leader.json ]]; then
-  rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
+  $rsync -vPz "$rsync_leader_url"/config/leader.json $SOLANA_CONFIG_DIR/
 fi
 
 client_json=$SOLANA_CONFIG_DIR/client.json
