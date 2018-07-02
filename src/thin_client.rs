@@ -20,7 +20,7 @@ pub struct ThinClient {
     transactions_socket: UdpSocket,
     last_id: Option<Hash>,
     transaction_count: u64,
-    balances: HashMap<PublicKey, Option<i64>>,
+    balances: HashMap<PublicKey, i64>,
     signature_status: bool,
 }
 
@@ -124,7 +124,10 @@ impl ThinClient {
             }
             self.process_response(resp);
         }
-        self.balances[pubkey].ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
+        self.balances
+            .get(pubkey)
+            .map(|x| *x)
+            .ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
@@ -186,7 +189,7 @@ impl ThinClient {
         let now = Instant::now();
         loop {
             balance = self.get_balance(pubkey);
-            if balance.is_ok() || now.elapsed().as_secs() > 1 {
+            if balance.is_ok() && *balance.as_ref().unwrap() != 0 || now.elapsed().as_secs() > 1 {
                 break;
             }
         }

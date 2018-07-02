@@ -21,7 +21,7 @@ impl Request {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    Balance { key: PublicKey, val: Option<i64> },
+    Balance { key: PublicKey, val: i64 },
     LastId { id: Hash },
     TransactionCount { transaction_count: u64 },
     SignatureStatus { signature_status: bool },

@@ -497,11 +497,11 @@ impl Bank {
         self.process_transaction(&tx).map(|_| sig)
     }
 
-    pub fn get_balance(&self, pubkey: &PublicKey) -> Option<i64> {
+    pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
         let bals = self.balances
             .read()
             .expect("'balances' read lock in get_balance");
-        bals.get(pubkey).map(|x| *x)
+        bals.get(pubkey).map(|x| *x).unwrap_or(0)
     }
 
     pub fn transaction_count(&self) -> usize {
@@ -541,11 +541,11 @@ mod tests {
 
         bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_000);
+        assert_eq!(bank.get_balance(&pubkey), 1_000);
 
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_500);
+        assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
     }
 
@@ -588,8 +588,8 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
 
         let mint_pubkey = mint.keypair().pubkey();
-        assert_eq!(bank.get_balance(&mint_pubkey).unwrap(), 10_000);
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1_000);
+        assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
+        assert_eq!(bank.get_balance(&pubkey), 1_000);
     }
 
     #[test]
@@ -599,7 +599,7 @@ mod tests {
         let pubkey = KeyPair::new().pubkey();
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 500);
+        assert_eq!(bank.get_balance(&pubkey), 500);
     }
 
     #[test]
@@ -612,26 +612,26 @@ mod tests {
             .unwrap();
 
         // Mint's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&mint.pubkey()), None);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
 
         // tx count is 1, because debits were applied.
         assert_eq!(bank.transaction_count(), 1);
 
         // pubkey's balance will be None because the funds have not been
         // sent.
-        assert_eq!(bank.get_balance(&pubkey), None);
+        assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
         bank.apply_timestamp(mint.pubkey(), dt).unwrap();
-        assert_eq!(bank.get_balance(&pubkey), Some(1));
+        assert_eq!(bank.get_balance(&pubkey), 1);
 
         // tx count is still 1, because we chose not to count timestamp transactions
         // tx count.
         assert_eq!(bank.transaction_count(), 1);
 
         bank.apply_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
-        assert_ne!(bank.get_balance(&pubkey), Some(2));
+        assert_ne!(bank.get_balance(&pubkey), 2);
     }
 
     #[test]
@@ -646,8 +646,8 @@ mod tests {
         bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
-        assert_eq!(bank.get_balance(&mint.pubkey()), None);
-        assert_eq!(bank.get_balance(&pubkey), Some(1));
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
     #[test]
@@ -663,22 +663,22 @@ mod tests {
         assert_eq!(bank.transaction_count(), 1);
 
         // Mint's balance will be zero because all funds are locked up.
-        assert_eq!(bank.get_balance(&mint.pubkey()), None);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
 
         // pubkey's balance will be None because the funds have not been
         // sent.
-        assert_eq!(bank.get_balance(&pubkey), None);
+        assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
         bank.apply_signature(mint.pubkey(), sig).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), Some(1));
-        assert_eq!(bank.get_balance(&pubkey), None);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
         bank.apply_signature(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
-        assert_ne!(bank.get_balance(&mint.pubkey()), Some(2));
+        assert_ne!(bank.get_balance(&mint.pubkey()), 2);
     }
 
     #[test]
@@ -776,7 +776,7 @@ mod tests {
         let genesis = mint.create_entries();
         let bank = Bank::default();
         bank.process_ledger(genesis).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()).unwrap(), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
     fn create_sample_block(mint: &Mint) -> impl Iterator<Item = Entry> {
@@ -797,7 +797,7 @@ mod tests {
         let (ledger, pubkey) = create_sample_ledger();
         let bank = Bank::default();
         bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1);
+        assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
     // Write the given entries to a file and then return a file iterator to them.
@@ -819,7 +819,7 @@ mod tests {
 
         let bank = Bank::default();
         bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey).unwrap(), 1);
+        assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
     #[test]
@@ -830,7 +830,7 @@ mod tests {
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()).unwrap(), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 }
 
