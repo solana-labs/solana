@@ -228,6 +228,7 @@ fn recv_window(
     let leader_id = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
+        .expect("leader not ready")
         .id;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
