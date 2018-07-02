@@ -3,11 +3,13 @@
 # Disable complaints about unused variables in this file:
 # shellcheck disable=2034
 
+rsync=rsync
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
     printf "%s/command-%s.wrapper" "$SNAP" "$program"
   }
+  rsync="$SNAP"/bin/rsync
   SOLANA_CUDA="$(snapctl get enable-cuda)"
 
 elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries

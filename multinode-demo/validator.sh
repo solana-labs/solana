@@ -68,7 +68,7 @@ rsync_leader_url=$(rsync_url "$leader")
 set -ex
 SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
-rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+$rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 
 # shellcheck disable=SC2086 # $program should not be quoted
