@@ -156,16 +156,22 @@ fn main() {
             Box::new(stdout())
         };
 
+        let requests_socket = UdpSocket::bind(local_requests_addr).unwrap();
+        // Responses are sent from the same Udp port as requests are received
+        // from, in hopes that a NAT sitting in the middle will route the
+        // response Udp packet correctly back to the requester.
+        let respond_socket = requests_socket.try_clone().unwrap();
+
         let server = Server::new_leader(
             bank,
             entry_height,
             //Some(Duration::from_millis(1000)),
             None,
             repl_data.clone(),
-            UdpSocket::bind(local_requests_addr).unwrap(),
+            requests_socket,
             UdpSocket::bind(local_transactions_addr).unwrap(),
             UdpSocket::bind("0.0.0.0:0").unwrap(),
-            UdpSocket::bind("0.0.0.0:0").unwrap(),
+            respond_socket,
             UdpSocket::bind(local_gossip_addr).unwrap(),
             exit.clone(),
             outfile,
