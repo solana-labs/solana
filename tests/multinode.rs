@@ -6,10 +6,10 @@ extern crate solana;
 use solana::bank::Bank;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
+use solana::fullnode::FullNode;
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
-use solana::server::Server;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
@@ -30,7 +30,7 @@ fn validator(
 ) {
     let validator = TestNode::new();
     let replicant_bank = Bank::new(&alice);
-    let mut ts = Server::new_validator(
+    let mut ts = FullNode::new_validator(
         replicant_bank,
         0,
         validator.data.clone(),
@@ -104,7 +104,7 @@ fn test_multi_node_validator_catchup_from_zero() {
     let exit = Arc::new(AtomicBool::new(false));
 
     let leader_bank = Bank::new(&alice);
-    let server = Server::new_leader(
+    let server = FullNode::new_leader(
         leader_bank,
         0,
         None,
@@ -194,7 +194,7 @@ fn test_multi_node_basic() {
     let exit = Arc::new(AtomicBool::new(false));
 
     let leader_bank = Bank::new(&alice);
-    let server = Server::new_leader(
+    let server = FullNode::new_leader(
         leader_bank,
         0,
         None,
