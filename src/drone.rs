@@ -99,7 +99,6 @@ impl Drone {
 
         let mut client = ThinClient::new(
             self.requests_addr,
-            requests_socket.try_clone().unwrap(),
             requests_socket,
             self.transactions_addr,
             transactions_socket,
@@ -293,7 +292,6 @@ mod tests {
 
         let mut client = ThinClient::new(
             leader.data.requests_addr,
-            requests_socket.try_clone().unwrap(),
             requests_socket,
             leader.data.transactions_addr,
             transactions_socket,
