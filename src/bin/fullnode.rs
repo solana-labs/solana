@@ -11,11 +11,11 @@ use solana::crdt::{ReplicatedData, TestNode};
 use solana::fullnode::start;
 use std::env;
 use std::fs::File;
-use std::io::{stdin, stdout, Write};
+use std::io::stdin;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 //use std::time::Duration;
 
 fn print_usage(program: &str, opts: Options) {
@@ -79,24 +79,17 @@ fn main() -> () {
             exit(1);
         }
     }
-    let node = TestNode::new_with_bind_addr(repl_data, bind_addr);
+    let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
     let exit = Arc::new(AtomicBool::new(false));
-    let mut reader = stdin().lock();
     let threads = if matches.opt_present("t") {
         let testnet_address_string = matches.opt_str("t").unwrap();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        start(node, false, &mut reader, Some(testnet_addr), None, exit)
+        start(node, false, None, Some(testnet_addr), None, exit)
     } else {
-        repl_data.current_leader_id = repl_data.id.clone();
+        node.data.current_leader_id = node.data.id.clone();
 
-        let outfile: Write + Send + 'static = if matches.opt_present("o") {
-            let path = matches.opt_str("o").unwrap();
-            let f = File::create(&path).expect(&format!("unable to open output file \"{}\"", path));
-            Mutex::new(f)
-        } else {
-            stdout().lock()
-        };
-        start(node, true, &mut reader, None, Some(&outfile), exit)
+        let outfile = matches.opt_str("o");
+        start(node, true, None, None, outfile, exit)
     };
     for t in threads {
         t.join().expect("join");
