@@ -11,7 +11,9 @@ if [[ -d "$SNAP" ]]; then
 fi
 
 [[ -f "$SOLANA_CONFIG_DIR"/leader.json ]] || {
-  echo "$SOLANA_CONFIG_DIR/leader.json not found, run ${here}/setup.sh first"
+  echo "$SOLANA_CONFIG_DIR/leader.json not found, create it by running:"
+  echo
+  echo "  ${here}/setup.sh -t leader"
   exit 1
 }
 
