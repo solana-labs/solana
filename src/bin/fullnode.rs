@@ -27,7 +27,7 @@ fn print_usage(program: &str, opts: Options) {
     print!("{}", opts.usage(&brief));
 }
 
-fn main() {
+fn main() -> () {
     env_logger::init();
     let mut opts = Options::new();
     opts.optflag("h", "help", "print help");
