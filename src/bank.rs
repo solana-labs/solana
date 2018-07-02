@@ -19,6 +19,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
+use streamer::WINDOW_SIZE;
 use timing::duration_as_us;
 use transaction::{Instruction, Plan, Transaction};
 
@@ -306,10 +307,7 @@ impl Bank {
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries<I>(&self, entries: I) -> Result<u64>
-    where
-        I: IntoIterator<Item = Entry>,
-    {
+    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<u64> {
         let mut entry_count = 0;
         for entry in entries {
             entry_count += 1;
@@ -348,7 +346,7 @@ impl Bank {
     }
 
     /// Process a full ledger.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<u64>
+    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Vec<Entry>)>
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -364,20 +362,39 @@ impl Bank {
         let entry1 = entries
             .next()
             .expect("invalid ledger: need at least 2 entries");
-        let tx = &entry1.transactions[0];
-        let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
-            contract.plan.final_payment()
-        } else {
-            None
-        }.expect("invalid ledger, needs to start with a contract");
+        {
+            let tx = &entry1.transactions[0];
+            let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
+                contract.plan.final_payment()
+            } else {
+                None
+            }.expect("invalid ledger, needs to start with a contract");
 
-        self.apply_payment(&deposit, &mut self.balances.write().unwrap());
+            self.apply_payment(&deposit, &mut self.balances.write().unwrap());
+        }
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
 
         let mut entry_count = 2;
-        entry_count += self.process_blocks(entries)?;
-        Ok(entry_count)
+        let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
+        let mut next = Vec::with_capacity(WINDOW_SIZE as usize);
+
+        for block in &entries.into_iter().chunks(WINDOW_SIZE as usize) {
+            tail = next;
+            next = block.collect();
+            entry_count += self.process_blocks(next.clone())?;
+        }
+
+        tail.append(&mut next);
+
+        if tail.len() < WINDOW_SIZE as usize {
+            tail.insert(0, entry1);
+            if tail.len() < WINDOW_SIZE as usize {
+                tail.insert(0, entry0);
+            }
+        }
+
+        Ok((entry_count, tail))
     }
 
     /// Process a Witness Signature. Any payment plans waiting on this signature
@@ -483,9 +500,9 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use entry::next_entry;
+    use entry::Entry;
     use entry_writer::{self, EntryWriter};
     use hash::hash;
-    use ledger::next_entries;
     use signature::KeyPairUtil;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
 
@@ -720,25 +737,52 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    fn create_sample_block(mint: &Mint) -> impl Iterator<Item = Entry> {
-        let keypair = KeyPair::new();
-        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
-        next_entries(&mint.last_id(), 0, vec![tx]).into_iter()
+    fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
+        let mut entries = Vec::with_capacity(length);
+        let mut hash = mint.last_id();
+        let mut cur_hashes = 0;
+        for _ in 0..length {
+            let keypair = KeyPair::new();
+            let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
+            let entry = Entry::new_mut(&mut hash, &mut cur_hashes, vec![tx], false);
+            entries.push(entry);
+        }
+        entries.into_iter()
     }
-
-    fn create_sample_ledger() -> (impl Iterator<Item = Entry>, PublicKey) {
-        let mint = Mint::new(2);
+    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, PublicKey) {
+        let mint = Mint::new(1 + length as i64);
         let genesis = mint.create_entries();
-        let block = create_sample_block(&mint);
+        let block = create_sample_block(&mint, length);
         (genesis.into_iter().chain(block), mint.pubkey())
     }
 
     #[test]
     fn test_process_ledger() {
-        let (ledger, pubkey) = create_sample_ledger();
+        let (ledger, pubkey) = create_sample_ledger(1);
+        let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
-        bank.process_ledger(ledger).unwrap();
+        let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
+        assert_eq!(ledger_height, 3);
+        assert_eq!(tail.len(), 3);
+        assert_eq!(tail, dup.collect_vec());
+        let last_entry = &tail[tail.len() - 1];
+        assert_eq!(bank.last_id(), last_entry.id);
+    }
+
+    #[test]
+    fn test_process_ledger_around_window_size() {
+        let window_size = WINDOW_SIZE as usize;
+        for entry_count in window_size - 1..window_size + 1 {
+            let (ledger, pubkey) = create_sample_ledger(entry_count);
+            let bank = Bank::default();
+            let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+            assert_eq!(bank.get_balance(&pubkey), 1);
+            assert_eq!(ledger_height, entry_count as u64 + 2);
+            assert!(tail.len() <= window_size);
+            let last_entry = &tail[tail.len() - 1];
+            assert_eq!(bank.last_id(), last_entry.id);
+        }
     }
 
     // Write the given entries to a file and then return a file iterator to them.
@@ -753,7 +797,7 @@ mod tests {
 
     #[test]
     fn test_process_ledger_from_file() {
-        let (ledger, pubkey) = create_sample_ledger();
+        let (ledger, pubkey) = create_sample_ledger(1);
         let ledger = to_file_iter(ledger);
 
         let bank = Bank::default();
@@ -765,7 +809,7 @@ mod tests {
     fn test_process_ledger_from_files() {
         let mint = Mint::new(2);
         let genesis = to_file_iter(mint.create_entries().into_iter());
-        let block = to_file_iter(create_sample_block(&mint));
+        let block = to_file_iter(create_sample_block(&mint, 1));
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();

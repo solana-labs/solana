@@ -388,7 +388,7 @@ impl Crdt {
                     //filter myself
                     false
                 } else if v.replicate_addr == daddr {
-                    //filter nodes that are not listening
+                    trace!("broadcast skip not listening {:x}", v.debug_id());
                     false
                 } else {
                     trace!("broadcast node {}", v.replicate_addr);
@@ -400,7 +400,7 @@ impl Crdt {
             warn!("crdt too small");
             Err(CrdtError::TooSmall)?;
         }
-        trace!("nodes table {}", nodes.len());
+        trace!("broadcast nodes {}", nodes.len());
 
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
@@ -414,7 +414,7 @@ impl Crdt {
             orders.push((window_l[k].clone(), nodes[is % nodes.len()]));
         }
 
-        trace!("orders table {}", orders.len());
+        trace!("broadcast orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
             .map(|(b, v)| {
@@ -471,13 +471,14 @@ impl Crdt {
                     trace!("skip retransmit to leader {:?}", v.id);
                     false
                 } else if v.replicate_addr == daddr {
-                    trace!("skip nodes that are not listening {:?}", v.id);
+                    trace!("retransmit skip not listening {:x}", v.debug_id());
                     false
                 } else {
                     true
                 }
             })
             .collect();
+        trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
@@ -757,6 +758,11 @@ impl Crdt {
                 }
 
                 return Some(out);
+            } else {
+                info!(
+                    "requested ix {} != blob_ix {}, outside window!",
+                    ix, blob_ix
+                );
             }
         } else {
             assert!(window.read().unwrap()[pos].is_none());
