@@ -6,7 +6,7 @@ use entry_writer;
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::io::{sink, stdin, stdout, BufReader};
 use std::net::SocketAddr;
@@ -102,7 +102,11 @@ impl FullNode {
                         None,
                         node,
                         exit.clone(),
-                        File::create(file).expect("opening ledger file"),
+                        OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(file)
+                            .expect("opening ledger file"),
                     )
                 }
                 Some(OutFile::StdOut) => {
