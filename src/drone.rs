@@ -278,12 +278,13 @@ mod tests {
             leader_data.transactions_addr,
             leader_data.requests_addr,
             None,
-            Some(5_000_050),
+            Some(150_000),
         );
 
         let bob_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 50,
             client_public_key: bob_pubkey,
+            tps_demo: false,
         };
         let bob_result = drone.send_airdrop(bob_req).expect("send airdrop test");
         assert!(bob_result > 0);
@@ -291,6 +292,7 @@ mod tests {
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
             client_public_key: carlos_pubkey,
+            tps_demo: true,
         };
         let carlos_result = drone.send_airdrop(carlos_req).expect("send airdrop test");
         assert!(carlos_result > 0);
