@@ -291,7 +291,9 @@ fn test_boot_validator_from_file() {
     std::fs::remove_file(ledger_path).unwrap();
 }
 
+//TODO: this test will run a long time so its disabled for CI
 #[test]
+#[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
     const N: usize = 25;
