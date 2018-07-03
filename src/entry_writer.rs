@@ -5,7 +5,7 @@
 use bank::Bank;
 use entry::Entry;
 use serde_json;
-use std::io::{self, BufRead, Error, ErrorKind, Write};
+use std::io::{self, BufRead, Cursor, Error, ErrorKind, Write};
 
 pub struct EntryWriter<'a, W> {
     bank: &'a Bank,
@@ -49,12 +49,28 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 }
 
+/// Parse a string containing an Entry.
 pub fn read_entry(s: &str) -> io::Result<Entry> {
     serde_json::from_str(s).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
+/// Return an iterator for all the entries in the given file.
 pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
     reader.lines().map(|s| read_entry(&s?))
+}
+
+/// Same as read_entries() but returning a vector. Handy for debugging short logs.
+pub fn read_entries_to_vec<R: BufRead>(reader: R) -> io::Result<Vec<Entry>> {
+    let mut result = vec![];
+    for x in read_entries(reader) {
+        result.push(x?);
+    }
+    Ok(result)
+}
+
+/// Same as read_entries() but parsing a string and returning a vector.
+pub fn read_entries_from_str(s: &str) -> io::Result<Vec<Entry>> {
+    read_entries_to_vec(Cursor::new(s))
 }
 
 #[cfg(test)]
@@ -64,6 +80,7 @@ mod tests {
     use mint::Mint;
     use packet::BLOB_DATA_SIZE;
     use signature::{KeyPair, KeyPairUtil};
+    use std::str;
     use transaction::Transaction;
 
     #[test]
@@ -94,5 +111,14 @@ mod tests {
         // Verify that write_and_register_entry registers the final entry after a split.
         entry_writer.write_and_register_entry(&entries[1]).unwrap();
         assert_eq!(bank.last_id(), entries[1].id);
+    }
+
+    #[test]
+    fn test_read_entries_from_str() {
+        let mint = Mint::new(1);
+        let mut buf = vec![];
+        EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
+        let entries = read_entries_from_str(str::from_utf8(&buf).unwrap()).unwrap();
+        assert_eq!(entries, mint.create_entries());
     }
 }
