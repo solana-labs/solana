@@ -253,6 +253,13 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
+    info!(
+        "{:x}: RECV_WINDOW {} {}: got packets {}",
+        debug_id,
+        *consumed,
+        *received,
+        dq.len(),
+    );
     {
         //retransmit all leader blocks
         let mut retransmitq = VecDeque::new();
@@ -291,6 +298,13 @@ fn recv_window(
             warn!("{:x}: no leader to retransmit from", debug_id);
         }
         if !retransmitq.is_empty() {
+            info!(
+                "{:x}: RECV_WINDOW {} {}: retransmit {}",
+                debug_id,
+                *consumed,
+                *received,
+                retransmitq.len(),
+            );
             retransmit.send(retransmitq)?;
         }
     }
@@ -398,6 +412,13 @@ fn recv_window(
     print_window(locked_window, *consumed);
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
+        info!(
+            "{:x}: RECV_WINDOW {} {}: forwarding contq {}",
+            debug_id,
+            *consumed,
+            *received,
+            contq.len(),
+        );
         trace!("sending contq.len: {}", contq.len());
         s.send(contq)?;
     }

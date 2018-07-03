@@ -479,7 +479,7 @@ impl Crdt {
         let errs: Vec<_> = orders
             .par_iter()
             .map(|v| {
-                debug!(
+                info!(
                     "{:x}: retransmit blob {} to {:x}",
                     me.debug_id(),
                     rblob.get_index().unwrap(),
@@ -766,8 +766,11 @@ impl Crdt {
         } else {
             assert!(window.read().unwrap()[pos].is_none());
             info!(
-                "failed RequestWindowIndex {} {} {}",
-                ix, pos, from.repair_addr
+                "{:x}: failed RequestWindowIndex {:x} {} {}",
+                me.debug_id(),
+                from.debug_id(),
+                ix,
+                pos,
             );
         }
 
@@ -840,10 +843,10 @@ impl Crdt {
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
                 trace!(
-                    "received RequestWindowIndex {} {} myaddr {}",
+                    "{:x}:received RequestWindowIndex {:x} {} ",
+                    me.debug_id(),
+                    from.debug_id(),
                     ix,
-                    from.repair_addr,
-                    me.repair_addr
                 );
                 assert_ne!(from.repair_addr, me.repair_addr);
                 Self::run_window_request(&window, &me, &from, ix, blob_recycler)
