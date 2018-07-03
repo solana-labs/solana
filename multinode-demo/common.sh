@@ -60,6 +60,7 @@ export RUST_BACKTRACE=1
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
+SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client-client
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
