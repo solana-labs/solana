@@ -530,7 +530,7 @@ mod tests {
     use hash::hash;
     use ledger::next_entries;
     use signature::KeyPairUtil;
-    use std::io::{BufRead, BufReader, Cursor, Seek, SeekFrom};
+    use std::io::{BufReader, Cursor, Seek, SeekFrom};
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -807,9 +807,7 @@ mod tests {
         file.seek(SeekFrom::Start(0)).unwrap();
 
         let reader = BufReader::new(file);
-        reader
-            .lines()
-            .map(|line| entry_writer::read_entry(line.unwrap()).unwrap())
+        entry_writer::read_entries(reader).map(|x| x.unwrap())
     }
 
     #[test]
