@@ -233,6 +233,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_send_airdrop() {
         const SMALL_BATCH: i64 = 50;
         const TPS_BATCH: i64 = 5_000_000;
@@ -255,6 +256,7 @@ mod tests {
             exit.clone(),
             sink(),
         );
+        //TODO: this seems unstable
         sleep(Duration::from_millis(900));
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
