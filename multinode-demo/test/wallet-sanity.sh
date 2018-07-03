@@ -29,8 +29,6 @@ pay_and_confirm() {
 
 $wallet reset
 $wallet address
-check_balance_output "No account found! Request an airdrop to get started"
-$wallet airdrop
 check_balance_output "Your balance is: 0"
 $wallet airdrop --tokens 60
 check_balance_output "Your balance is: 60"
