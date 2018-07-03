@@ -43,23 +43,12 @@ for ip_addr in "${ip_addr_array[@]}"; do
   ssh-keygen -R "$ip_addr"
   ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts
 
-  ssh "$remote_user@$ip_addr" 'mkdir ~/.ssh'
+  ssh "$remote_user@$ip_addr" 'mkdir -p ~/.ssh ~/solana ~/.cargo/bin'
 
   # Killing sshguard for now. TODO: Find a better solution
   # sshguard is blacklisting IP address after ssh-keyscan and ssh login attempts
   ssh -n -f "$remote_user@$ip_addr" "sudo service sshguard stop"
-  ssh -n -f "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install rsync'
-
-  if [[ -n $leader ]]; then
-    echo "Adding known hosts for $ip_addr"
-    ssh -n -f "$remote_user@$ip_addr" "ssh-keygen -R $leader"
-    ssh -n -f "$remote_user@$ip_addr" "ssh-keyscan $leader >> ~/.ssh/known_hosts"
-  fi
-
-  # Deploy build and scripts to remote node
-  ssh "$remote_user@$ip_addr" 'mkdir ~/solana'
-  rsync -vPrz ~/.cargo/bin "$remote_user"@"$ip_addr":~/.cargo
-  rsync -vPrz ./multinode-demo "$remote_user"@"$ip_addr":~/solana/
+  ssh -n -f "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install rsync libssl-dev'
 
   # If provided, deploy SSH keys
   if [[ -z $ssh_keys ]]; then
@@ -75,7 +64,18 @@ for ip_addr in "${ip_addr_array[@]}"; do
   ssh "$remote_user@$ip_addr" 'pkill -9 solana-fullnode'
   ssh "$remote_user@$ip_addr" 'pkill -9 solana-client-demo'
 
-  ssh "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install libssl-dev'
+  if [[ -n $leader ]]; then
+    echo "Adding known hosts for $ip_addr"
+    ssh -n -f "$remote_user@$ip_addr" "ssh-keygen -R $leader"
+    ssh -n -f "$remote_user@$ip_addr" "ssh-keyscan $leader >> ~/.ssh/known_hosts"
+
+    ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader"":~/.cargo/bin/solana* ~/.cargo/bin/"
+    ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader"":~/solana/multinode-demo ~/solana/"
+  else
+    # Deploy build and scripts to remote node
+    rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/
+    rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
+  fi
 
   # Run setup
   ssh "$remote_user@$ip_addr" "$ssh_command_prefix"'setup.sh -p "$ip_addr"'
