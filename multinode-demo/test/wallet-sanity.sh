@@ -21,14 +21,23 @@ check_balance_output() {
   fi
 }
 
-# Ensure a fresh client configuration every time
+pay_and_confirm() {
+  exec 42>&1
+  signature=$($wallet pay "$@" | tee >(cat - >&42))
+  $wallet confirm "$signature"
+}
+
 $wallet reset
 $wallet address
 check_balance_output "No account found! Request an airdrop to get started"
-$wallet airdrop --tokens 100
-check_balance_output "Your balance is: 100"
-$wallet pay --to $garbage_address --tokens 100
+$wallet airdrop
 check_balance_output "Your balance is: 0"
+$wallet airdrop --tokens 60
+check_balance_output "Your balance is: 60"
+$wallet airdrop --tokens 40
+check_balance_output "Your balance is: 100"
+pay_and_confirm --to $garbage_address --tokens 99
+check_balance_output "Your balance is: 1"
 
 echo PASS
 exit 0
