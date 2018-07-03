@@ -23,11 +23,13 @@ pub struct FullNode {
     pub thread_hdls: Vec<JoinHandle<()>>,
 }
 
-pub enum LedgerFile {
-    NoFile,
+pub enum InFile {
     StdIn,
+    Path(String),
+}
+
+pub enum OutFile {
     StdOut,
-    Sink,
     Path(String),
 }
 
@@ -35,15 +37,15 @@ impl FullNode {
     pub fn new(
         mut node: TestNode,
         leader: bool,
-        infile: LedgerFile,
+        infile: InFile,
         network_entry_for_validator: Option<SocketAddr>,
-        outfile_for_leader: LedgerFile,
+        outfile_for_leader: Option<OutFile>,
         exit: Arc<AtomicBool>,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
         let entry_height = match infile {
-            LedgerFile::Path(path) => {
+            InFile::Path(path) => {
                 let f = File::open(path).unwrap();
                 let mut r = BufReader::new(f);
                 let entries =
@@ -51,14 +53,13 @@ impl FullNode {
                 info!("processing ledger...");
                 bank.process_ledger(entries).expect("process_ledger")
             }
-            LedgerFile::StdIn => {
+            InFile::StdIn => {
                 let mut r = BufReader::new(stdin());
                 let entries =
                     entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
                 info!("processing ledger...");
                 bank.process_ledger(entries).expect("process_ledger")
             }
-            _ => panic!("expected LedgerFile::StdIn or LedgerFile::Path for infile"),
         };
 
         // entry_height is the network-wide agreed height of the ledger.
@@ -92,43 +93,41 @@ impl FullNode {
             server
         } else {
             node.data.current_leader_id = node.data.id.clone();
-            let server = 
-                match outfile_for_leader {
-                    LedgerFile::Path(file) => {
-                        FullNode::new_leader(
-                            bank,
-                            entry_height,
-                            //Some(Duration::from_millis(1000)),
-                            None,
-                            node,
-                            exit.clone(),
-                            File::create(file).expect("opening ledger file"),
-                        )
-                    },
-                    LedgerFile::StdOut => {
-                        FullNode::new_leader(
-                            bank,
-                            entry_height,
-                            //Some(Duration::from_millis(1000)),
-                            None,
-                            node,
-                            exit.clone(),
-                            stdout(),
-                        )
-                    },
-                    LedgerFile::Sink => {
-                        FullNode::new_leader(
-                            bank,
-                            entry_height,
-                            //Some(Duration::from_millis(1000)),
-                            None,
-                            node,
-                            exit.clone(),
-                            sink(),
-                        )
-                    }, 
-                    _ => panic!("expected LedgerFile::StdOut, LedgerFile::Path, or LedgerFile::Sink, for infile"),
-                };
+            let server = match outfile_for_leader {
+                Some(OutFile::Path(file)) => {
+                    FullNode::new_leader(
+                        bank,
+                        entry_height,
+                        //Some(Duration::from_millis(1000)),
+                        None,
+                        node,
+                        exit.clone(),
+                        File::create(file).expect("opening ledger file"),
+                    )
+                }
+                Some(OutFile::StdOut) => {
+                    FullNode::new_leader(
+                        bank,
+                        entry_height,
+                        //Some(Duration::from_millis(1000)),
+                        None,
+                        node,
+                        exit.clone(),
+                        stdout(),
+                    )
+                }
+                None => {
+                    FullNode::new_leader(
+                        bank,
+                        entry_height,
+                        //Some(Duration::from_millis(1000)),
+                        None,
+                        node,
+                        exit.clone(),
+                        sink(),
+                    )
+                }
+            };
             info!(
                 "leader ready... local request address: {} (advertising {})",
                 local_requests_addr, requests_addr
