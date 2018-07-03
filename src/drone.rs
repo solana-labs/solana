@@ -20,6 +20,7 @@ pub enum DroneRequest {
     GetAirdrop {
         airdrop_request_amount: u64,
         client_public_key: PublicKey,
+        tps_demo: bool,
     },
 }
 
@@ -32,6 +33,7 @@ pub struct Drone {
     pub time_slice: Duration,
     request_cap: u64,
     pub request_current: u64,
+    pub tps_request_current: bool,
 }
 
 impl Drone {
@@ -60,6 +62,7 @@ impl Drone {
             time_slice,
             request_cap,
             request_current: 0,
+            tps_request_current: false,
         }
     }
 
@@ -69,6 +72,7 @@ impl Drone {
 
     pub fn clear_request_count(&mut self) {
         self.request_current = 0;
+        self.tps_request_current = false;
     }
 
     pub fn add_ip_to_cache(&mut self, ip: IpAddr) {
@@ -104,11 +108,13 @@ impl Drone {
             transactions_socket,
         );
         let last_id = client.get_last_id();
+        let tps_check: bool;
 
         match req {
             DroneRequest::GetAirdrop {
                 airdrop_request_amount,
                 client_public_key,
+                tps_demo,
             } => {
                 request_amount = airdrop_request_amount.clone();
                 tx = Transaction::new(
@@ -117,10 +123,14 @@ impl Drone {
                     airdrop_request_amount as i64,
                     last_id,
                 );
+                tps_check = tps_demo;
             }
         }
         if self.check_request_limit(request_amount) {
             self.request_current += request_amount;
+            client.transfer_signed(tx)
+        } else if tps_check && !self.tps_request_current {
+            self.tps_request_current = true;
             client.transfer_signed(tx)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
