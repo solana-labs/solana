@@ -415,7 +415,6 @@ fn request_airdrop(
     let req = DroneRequest::GetAirdrop {
         airdrop_request_amount: tokens,
         client_public_key: id.pubkey(),
-        tps_demo: true,
     };
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx).unwrap();
