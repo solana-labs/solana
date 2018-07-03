@@ -244,6 +244,55 @@ fn test_multi_node_basic() {
 }
 
 #[test]
+#[ignore]
+fn test_boot_validator_from_file() {
+    logger::setup();
+    let leader = TestNode::new();
+    let bob_pubkey = KeyPair::new().pubkey();
+    let exit = Arc::new(AtomicBool::new(false));
+    let (alice, ledger_path) = genesis(100_000);
+    let leader_data = leader.data.clone();
+    let leader_fullnode = FullNode::new(
+        leader,
+        true,
+        InFile::Path(ledger_path.clone()),
+        None,
+        None,
+        exit.clone(),
+    );
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
+    assert_eq!(leader_balance, 500);
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
+    assert_eq!(leader_balance, 1000);
+
+    let validator = TestNode::new();
+    let validator_data = validator.data.clone();
+    let val_fullnode = FullNode::new(
+        validator,
+        false,
+        InFile::Path(ledger_path.clone()),
+        Some(leader_data.gossip_addr),
+        None,
+        exit.clone(),
+    );
+
+    let mut client = mk_client(&validator_data);
+    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+    assert!(getbal == Some(leader_balance));
+
+    exit.store(true, Ordering::Relaxed);
+    for t in leader_fullnode.thread_hdls {
+        t.join().unwrap();
+    }
+    for t in val_fullnode.thread_hdls {
+        t.join().unwrap();
+    }
+    std::fs::remove_file(ledger_path).unwrap();
+}
+
+#[test]
 fn test_multi_node_dynamic_network() {
     logger::setup();
     const N: usize = 3;
