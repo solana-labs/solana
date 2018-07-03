@@ -22,8 +22,7 @@ check_balance_output() {
 }
 
 # Ensure a fresh client configuration every time
-rm -rf config-client
-
+$wallet reset
 $wallet address
 check_balance_output "No account found! Request an airdrop to get started"
 $wallet airdrop --tokens 100
