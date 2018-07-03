@@ -84,41 +84,23 @@ impl FullNode {
             server
         } else {
             node.data.current_leader_id = node.data.id.clone();
-            let server = match outfile_for_leader {
+            let outfile_for_leader: Box<Write + Send> = match outfile_for_leader {
                 Some(OutFile::Path(file)) => {
-                    FullNode::new_leader(
-                        bank,
-                        entry_height,
-                        //Some(Duration::from_millis(1000)),
-                        None,
-                        node,
-                        exit.clone(),
-                        File::create(file).expect("opening ledger file"),
-                    )
+                    Box::new(File::create(file).expect("opening ledger file"))
                 }
-                Some(OutFile::StdOut) => {
-                    FullNode::new_leader(
-                        bank,
-                        entry_height,
-                        //Some(Duration::from_millis(1000)),
-                        None,
-                        node,
-                        exit.clone(),
-                        stdout(),
-                    )
-                }
-                None => {
-                    FullNode::new_leader(
-                        bank,
-                        entry_height,
-                        //Some(Duration::from_millis(1000)),
-                        None,
-                        node,
-                        exit.clone(),
-                        sink(),
-                    )
-                }
+                Some(OutFile::StdOut) => Box::new(stdout()),
+                None => Box::new(sink()),
             };
+
+            let server = FullNode::new_leader(
+                bank,
+                entry_height,
+                //Some(Duration::from_millis(1000)),
+                None,
+                node,
+                exit.clone(),
+                outfile_for_leader,
+            );
             info!(
                 "leader ready... local request address: {} (advertising {})",
                 local_requests_addr, requests_addr
