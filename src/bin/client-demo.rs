@@ -1,14 +1,12 @@
-extern crate atty;
 extern crate bincode;
+extern crate clap;
 extern crate env_logger;
-extern crate getopts;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use atty::{is, Stream};
 use bincode::serialize;
-use getopts::Options;
+use clap::{App, Arg};
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::drone::DroneRequest;
@@ -22,10 +20,9 @@ use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
-use std::env;
 use std::error;
 use std::fs::File;
-use std::io::{stdin, Read, Write};
+use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,15 +32,6 @@ use std::thread::Builder;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
-
-fn print_usage(program: &str, opts: Options) {
-    let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
-    brief += "  Solana client demo creates a number of transactions and\n";
-    brief += "  sends them to a target node.";
-    brief += "  Takes json formatted mint file to stdin.";
-
-    print!("{}", opts.usage(&brief));
-}
 
 fn sample_tx_count(
     exit: Arc<AtomicBool>,
@@ -153,52 +141,76 @@ fn main() {
     let mut num_nodes = 1usize;
     let mut time_sec = 60;
 
-    let mut opts = Options::new();
-    opts.optopt("l", "", "leader", "leader.json");
-    opts.optopt("t", "", "number of threads", &format!("{}", threads));
-    opts.optopt(
-        "s",
-        "",
-        "send transactions for this many seconds",
-        &format!("{}", time_sec),
-    );
-    opts.optopt(
-        "n",
-        "",
-        "number of nodes to converge to",
-        &format!("{}", num_nodes),
-    );
-    opts.optflag("h", "help", "print help");
-    let args: Vec<String> = env::args().collect();
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
-    };
+    let matches = App::new("solana-client-demo")
+        .arg(
+            Arg::with_name("leader")
+                .short("l")
+                .long("leader")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/leader.json"),
+        )
+        .arg(
+            Arg::with_name("mint")
+                .short("m")
+                .long("mint")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/mint.json"),
+        )
+        .arg(
+            Arg::with_name("num_nodes")
+                .short("n")
+                .long("nodes")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .help("number of nodes to converge to"),
+        )
+        .arg(
+            Arg::with_name("threads")
+                .short("t")
+                .long("threads")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .help("number of threads"),
+        )
+        .arg(
+            Arg::with_name("seconds")
+                .short("s")
+                .long("sec")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .help("send transactions for this many seconds"),
+        )
+        .get_matches();
 
-    if matches.opt_present("h") {
-        let program = args[0].clone();
-        print_usage(&program, opts);
-        exit(1);
-    }
-    if matches.opt_present("t") {
-        threads = matches.opt_str("t").unwrap().parse().expect("integer");
-    }
-    if matches.opt_present("n") {
-        num_nodes = matches.opt_str("n").unwrap().parse().expect("integer");
-    }
-    if matches.opt_present("s") {
-        time_sec = matches.opt_str("s").unwrap().parse().expect("integer");
-    }
-
-    let leader = if matches.opt_present("l") {
-        read_leader(matches.opt_str("l").unwrap())
+    let leader: ReplicatedData;
+    if let Some(l) = matches.value_of("leader") {
+        leader = read_leader(l.to_string());
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        ReplicatedData::new_leader(&server_addr)
+        leader = ReplicatedData::new_leader(&server_addr);
     };
+
+    let id: Mint;
+    if let Some(m) = matches.value_of("mint") {
+        id = read_mint(m.to_string()).expect("client mint");
+    } else {
+        eprintln!("No mint found!");
+        exit(1);
+    };
+
+    if let Some(t) = matches.value_of("threads") {
+        threads = t.to_string().parse().expect("integer");
+    }
+
+    if let Some(n) = matches.value_of("nodes") {
+        num_nodes = n.to_string().parse().expect("integer");
+    }
+
+    if let Some(s) = matches.value_of("seconds") {
+        time_sec = s.to_string().parse().expect("integer");
+    }
 
     let mut drone_addr = leader.transactions_addr.clone();
     drone_addr.set_port(9900);
@@ -208,23 +220,23 @@ fn main() {
     let validators = converge(&leader, signal.clone(), num_nodes, &mut c_threads);
     assert_eq!(validators.len(), num_nodes);
 
-    if is(Stream::Stdin) {
-        eprintln!("nothing found on stdin, expected a json file");
-        exit(1);
-    }
-
-    let mut buffer = String::new();
-    let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
-    if num_bytes == 0 {
-        eprintln!("empty file on stdin, expected a json file");
-        exit(1);
-    }
-
-    println!("Parsing stdin...");
-    let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
-        eprintln!("failed to parse json: {}", e);
-        exit(1);
-    });
+    // if is(Stream::Stdin) {
+    //     eprintln!("nothing found on stdin, expected a json file");
+    //     exit(1);
+    // }
+    //
+    // let mut buffer = String::new();
+    // let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
+    // if num_bytes == 0 {
+    //     eprintln!("empty file on stdin, expected a json file");
+    //     exit(1);
+    // }
+    //
+    // println!("Parsing stdin...");
+    // let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+    //     eprintln!("failed to parse json: {}", e);
+    //     exit(1);
+    // });
     let mut client = mk_client(&leader);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
@@ -403,6 +415,12 @@ fn converge(
 fn read_leader(path: String) -> ReplicatedData {
     let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+}
+
+fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.clone())?;
+    let mint = serde_json::from_reader(file)?;
+    Ok(mint)
 }
 
 fn request_airdrop(
