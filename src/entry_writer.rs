@@ -49,15 +49,12 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 }
 
-pub fn read_entry(s: String) -> io::Result<Entry> {
-    serde_json::from_str(&s).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+pub fn read_entry(s: &str) -> io::Result<Entry> {
+    serde_json::from_str(s).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
-// TODO: How to implement this without attaching the input's lifetime to the output?
-pub fn read_entries<'a, R: BufRead>(
-    reader: &'a mut R,
-) -> impl Iterator<Item = io::Result<Entry>> + 'a {
-    reader.lines().map(|s| read_entry(s?))
+pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
+    reader.lines().map(|s| read_entry(&s?))
 }
 
 #[cfg(test)]

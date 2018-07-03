@@ -7,8 +7,8 @@ use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
 use std::fs::File;
-use std::io::Write;
 use std::io::{sink, stdin, stdout, BufReader};
+use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -44,23 +44,14 @@ impl FullNode {
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
-        let entry_height = match infile {
-            InFile::Path(path) => {
-                let f = File::open(path).unwrap();
-                let mut r = BufReader::new(f);
-                let entries =
-                    entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
-                info!("processing ledger...");
-                bank.process_ledger(entries).expect("process_ledger")
-            }
-            InFile::StdIn => {
-                let mut r = BufReader::new(stdin());
-                let entries =
-                    entry_writer::read_entries(&mut r).map(|e| e.expect("failed to parse entry"));
-                info!("processing ledger...");
-                bank.process_ledger(entries).expect("process_ledger")
-            }
+        let infile: Box<Read> = match infile {
+            InFile::Path(path) => Box::new(File::open(path).unwrap()),
+            InFile::StdIn => Box::new(stdin()),
         };
+        let reader = BufReader::new(infile);
+        let entries = entry_writer::read_entries(reader).map(|e| e.expect("failed to parse entry"));
+        info!("processing ledger...");
+        let entry_height = bank.process_ledger(entries).expect("process_ledger");
 
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
