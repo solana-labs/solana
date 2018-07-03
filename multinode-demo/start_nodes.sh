@@ -9,6 +9,7 @@ usage() {
   echo -e "\\t <IP Address array>: A bash script that exports an array of IP addresses, ip_addr_array. Elements of the array are public IP address of remote nodes."
   echo -e "\\t <username>:         The username for logging into remote nodes."
   echo -e "\\t [path to ssh keys]: The public/private key pair that remote nodes can use to perform rsync and ssh among themselves. Must contain pub, priv and authorized_keys.\\n"
+  exit 1
 }
 
 # Sample IP Address array file contents
@@ -16,12 +17,10 @@ usage() {
 
 if [[ -z "$ip_addr_file" ]]; then
   usage
-  exit 1
 fi
 
 if [[ -z "$remote_user" ]]; then
   usage
-  exit 1
 fi
 
 # Build and install locally
@@ -41,40 +40,56 @@ leader=
 for ip_addr in "${ip_addr_array[@]}"; do
   echo "$ip_addr"
 
+  ssh-keygen -R "$ip_addr"
+  ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts
+
+  ssh "$remote_user@$ip_addr" 'mkdir ~/.ssh'
+
+  # Killing sshguard for now. TODO: Find a better solution
+  # sshguard is blacklisting IP address after ssh-keyscan and ssh login attempts
+  ssh -n -f "$remote_user@$ip_addr" "sudo service sshguard stop"
+  ssh -n -f "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install rsync'
+
+  if [[ -n $leader ]]; then
+    echo "Adding known hosts for $ip_addr"
+    ssh -n -f "$remote_user@$ip_addr" "ssh-keygen -R $leader"
+    ssh -n -f "$remote_user@$ip_addr" "ssh-keyscan $leader >> ~/.ssh/known_hosts"
+  fi
+
   # Deploy build and scripts to remote node
+  ssh "$remote_user@$ip_addr" 'mkdir ~/solana'
   rsync -r -av ~/.cargo/bin "$remote_user"@"$ip_addr":~/.cargo
   rsync -r -av ./multinode-demo "$remote_user"@"$ip_addr":~/solana/
-  
+
   # If provided, deploy SSH keys
   if [[ -z $ssh_keys ]]; then
     echo "skip copying the ssh keys"
   else
-    rsync -r -av "$ssh_keys"/* "$remote_user"@"$ip_addr":~/.ssh/
+    rsync -r -av "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
+    rsync -r -av "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
+    rsync -r -av "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
+    ssh -n -f "$remote_user@$ip_addr" 'chmod 600 ~/.ssh/authorized_keys ~/.ssh/id_rsa'
   fi
 
   # Stop current nodes
-  ssh "$remote_user"@"$ip_addr" 'pkill -9 solana-fullnode'
-  ssh "$remote_user"@"$ip_addr" 'pkill -9 solana-client-demo'
+  ssh "$remote_user@$ip_addr" 'pkill -9 solana-fullnode'
+  ssh "$remote_user@$ip_addr" 'pkill -9 solana-client-demo'
+
+  ssh "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install libssl-dev'
 
   # Run setup
-  ssh "$remote_user"@"$ip_addr" "$ssh_command_prefix"'setup.sh -p "$ip_addr"'
-  
-  if (( !count )); then
+  ssh "$remote_user@$ip_addr" "$ssh_command_prefix"'setup.sh -p "$ip_addr"'
+
+  if ((!count)); then
     # Start the leader on the first node
     echo "Starting leader node $ip_addr"
-    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix"'leader.sh > leader.log 2>&1'
+    ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"'leader.sh > leader.log 2>&1'
     leader=${ip_addr_array[0]}
   else
     # Start validator on all other nodes
     echo "Starting validator node $ip_addr"
-    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""validator.sh $remote_user@$leader:~/solana $leader > validator.log 2>&1"
+    ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix""validator.sh $remote_user@$leader:~/solana $leader > validator.log 2>&1"
   fi
 
-  (( count++ ))
-
-  if (( count == ${#ip_addr_array[@]} )); then
-    # Launch client demo on the last node
-    echo "Starting client demo on $ip_addr"
-    ssh -n -f "$remote_user"@"$ip_addr" "$ssh_command_prefix""client.sh $remote_user@$leader:~/solana $count > client.log 2>&1"
-  fi
+  ((count++))
 done
