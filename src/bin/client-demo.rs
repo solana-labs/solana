@@ -220,23 +220,6 @@ fn main() {
     let validators = converge(&leader, signal.clone(), num_nodes, &mut c_threads);
     assert_eq!(validators.len(), num_nodes);
 
-    // if is(Stream::Stdin) {
-    //     eprintln!("nothing found on stdin, expected a json file");
-    //     exit(1);
-    // }
-    //
-    // let mut buffer = String::new();
-    // let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
-    // if num_bytes == 0 {
-    //     eprintln!("empty file on stdin, expected a json file");
-    //     exit(1);
-    // }
-    //
-    // println!("Parsing stdin...");
-    // let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
-    //     eprintln!("failed to parse json: {}", e);
-    //     exit(1);
-    // });
     let mut client = mk_client(&leader);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
