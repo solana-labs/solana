@@ -600,7 +600,7 @@ impl Crdt {
         }
         let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
         if sorted.len() > 0 {
-            info!("sorted leaders {:?}", sorted);
+            debug!("sorted leaders {:?}", sorted);
         }
         sorted.sort_by_key(|a| a.1);
         sorted.last().map(|a| *a.0)
