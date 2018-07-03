@@ -6,7 +6,7 @@ use entry_writer;
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{sink, stdin, stdout, BufReader};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
@@ -85,9 +85,13 @@ impl FullNode {
         } else {
             node.data.current_leader_id = node.data.id.clone();
             let outfile_for_leader: Box<Write + Send> = match outfile_for_leader {
-                Some(OutFile::Path(file)) => {
-                    Box::new(File::create(file).expect("opening ledger file"))
-                }
+                Some(OutFile::Path(file)) => Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(file)
+                        .expect("opening ledger file"),
+                ),
                 Some(OutFile::StdOut) => Box::new(stdout()),
                 None => Box::new(sink()),
             };
