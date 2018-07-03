@@ -7,7 +7,7 @@ extern crate solana;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::entry_writer::EntryWriter;
-use solana::fullnode::{FullNode, LedgerFile};
+use solana::fullnode::{FullNode, InFile};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -98,9 +98,9 @@ fn test_multi_node_validator_catchup_from_zero() {
     let server = FullNode::new(
         leader,
         true,
-        LedgerFile::Path(ledger_path.clone()),
+        InFile::Path(ledger_path.clone()),
         None,
-        LedgerFile::Sink,
+        None,
         exit.clone(),
     );
     let mut threads = server.thread_hdls;
@@ -109,9 +109,9 @@ fn test_multi_node_validator_catchup_from_zero() {
         let mut val = FullNode::new(
             validator,
             false,
-            LedgerFile::Path(ledger_path.clone()),
+            InFile::Path(ledger_path.clone()),
             Some(leader_data.gossip_addr),
-            LedgerFile::NoFile,
+            None,
             exit.clone(),
         );
         threads.append(&mut val.thread_hdls);
@@ -142,9 +142,9 @@ fn test_multi_node_validator_catchup_from_zero() {
     let mut val = FullNode::new(
         TestNode::new(),
         false,
-        LedgerFile::Path(ledger_path.clone()),
+        InFile::Path(ledger_path.clone()),
         Some(leader_data.gossip_addr),
-        LedgerFile::NoFile,
+        None,
         exit.clone(),
     );
     threads.append(&mut val.thread_hdls);
@@ -199,9 +199,9 @@ fn test_multi_node_basic() {
     let server = FullNode::new(
         leader,
         true,
-        LedgerFile::Path(ledger_path.clone()),
+        InFile::Path(ledger_path.clone()),
         None,
-        LedgerFile::Sink,
+        None,
         exit.clone(),
     );
     let threads = server.thread_hdls;
@@ -210,9 +210,9 @@ fn test_multi_node_basic() {
         FullNode::new(
             validator,
             false,
-            LedgerFile::Path(ledger_path.clone()),
+            InFile::Path(ledger_path.clone()),
             Some(leader_data.gossip_addr),
-            LedgerFile::NoFile,
+            None,
             exit.clone(),
         );
     }
@@ -255,9 +255,9 @@ fn test_multi_node_dynamic_network() {
     let server = FullNode::new(
         leader,
         true,
-        LedgerFile::Path(ledger_path.clone()),
+        InFile::Path(ledger_path.clone()),
         None,
-        LedgerFile::Sink,
+        None,
         exit.clone(),
     );
     let threads = server.thread_hdls;
@@ -277,9 +277,9 @@ fn test_multi_node_dynamic_network() {
             let val = FullNode::new(
                 validator,
                 false,
-                LedgerFile::Path(ledger_path.clone()),
+                InFile::Path(ledger_path.clone()),
                 Some(leader_data.gossip_addr),
-                LedgerFile::NoFile,
+                None,
                 exit.clone(),
             );
             (rd, exit, val)
@@ -323,9 +323,9 @@ fn test_multi_node_dynamic_network() {
             let val = FullNode::new(
                 validator,
                 false,
-                LedgerFile::Path(ledger_path.clone()),
+                InFile::Path(ledger_path.clone()),
                 Some(leader_data.gossip_addr),
-                LedgerFile::NoFile,
+                None,
                 exit.clone(),
             );
             info!("{:x} ADDED", rd.debug_id());

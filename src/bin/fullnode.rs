@@ -8,7 +8,7 @@ extern crate solana;
 use atty::{is, Stream};
 use getopts::Options;
 use solana::crdt::{ReplicatedData, TestNode};
-use solana::fullnode::{FullNode, LedgerFile};
+use solana::fullnode::{FullNode, InFile, OutFile};
 use std::env;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -83,23 +83,16 @@ fn main() -> () {
     let fullnode = if matches.opt_present("t") {
         let testnet_address_string = matches.opt_str("t").unwrap();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        FullNode::new(
-            node,
-            false,
-            LedgerFile::StdIn,
-            Some(testnet_addr),
-            LedgerFile::NoFile,
-            exit,
-        )
+        FullNode::new(node, false, InFile::StdIn, Some(testnet_addr), None, exit)
     } else {
         node.data.current_leader_id = node.data.id.clone();
 
         let outfile = if let Some(f) = matches.opt_str("o") {
-            LedgerFile::Path(f)
+            OutFile::Path(f)
         } else {
-            LedgerFile::StdIn
+            OutFile::StdOut
         };
-        FullNode::new(node, true, LedgerFile::StdIn, None, outfile, exit)
+        FullNode::new(node, true, InFile::StdIn, None, Some(outfile), exit)
     };
     for t in fullnode.thread_hdls {
         t.join().expect("join");
