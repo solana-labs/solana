@@ -58,16 +58,16 @@ for ip_addr in "${ip_addr_array[@]}"; do
 
   # Deploy build and scripts to remote node
   ssh "$remote_user@$ip_addr" 'mkdir ~/solana'
-  rsync -r -av ~/.cargo/bin "$remote_user"@"$ip_addr":~/.cargo
-  rsync -r -av ./multinode-demo "$remote_user"@"$ip_addr":~/solana/
+  rsync -vPrz ~/.cargo/bin "$remote_user"@"$ip_addr":~/.cargo
+  rsync -vPrz ./multinode-demo "$remote_user"@"$ip_addr":~/solana/
 
   # If provided, deploy SSH keys
   if [[ -z $ssh_keys ]]; then
     echo "skip copying the ssh keys"
   else
-    rsync -r -av "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
-    rsync -r -av "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
-    rsync -r -av "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
+    rsync -vPrz "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
+    rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
+    rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
     ssh -n -f "$remote_user@$ip_addr" 'chmod 600 ~/.ssh/authorized_keys ~/.ssh/id_rsa'
   fi
 
