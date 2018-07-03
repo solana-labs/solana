@@ -71,6 +71,8 @@ rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 $rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 
+tune_networking
+
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
   -l "$SOLANA_CONFIG_DIR"/validator.json -t "$leader_address:$leader_port" \

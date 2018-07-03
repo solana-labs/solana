@@ -23,6 +23,8 @@ else
   program="$solana_fullnode"
 fi
 
+tune_networking
+
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
   -l "$SOLANA_CONFIG_DIR"/leader.json \
