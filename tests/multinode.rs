@@ -7,7 +7,7 @@ extern crate solana;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::entry_writer::EntryWriter;
-use solana::fullnode::{FullNode, InFile};
+use solana::fullnode::{FullNode, InFile, OutFile};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -244,7 +244,6 @@ fn test_multi_node_basic() {
 }
 
 #[test]
-#[ignore]
 fn test_boot_validator_from_file() {
     logger::setup();
     let leader = TestNode::new();
@@ -257,7 +256,7 @@ fn test_boot_validator_from_file() {
         true,
         InFile::Path(ledger_path.clone()),
         None,
-        None,
+        Some(OutFile::Path(ledger_path.clone())),
         exit.clone(),
     );
     let leader_balance =
