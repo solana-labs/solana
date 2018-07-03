@@ -14,10 +14,19 @@ rsync_leader_url=$(rsync_url "$leader")
 
 set -ex
 mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
-$rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
-$rsync -vPz "$rsync_leader_url"/config-private/mint.json "$SOLANA_CONFIG_CLIENT_DIR"/
+if [[ ! -r "$SOLANA_CONFIG_CLIENT_DIR"/leader.json ]]; then
+  (
+    set -x
+    $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
+  )
+fi
+
+client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
+if [[ ! -r $client_json ]]; then
+  $solana_mint <<<0 > "$client_json"
+fi
 
 # shellcheck disable=SC2086 # $solana_client_demo should not be quoted
 exec $solana_client_demo \
   -n "$count" -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
-  < "$SOLANA_CONFIG_CLIENT_DIR"/mint.json
+  < "$SOLANA_CONFIG_CLIENT_DIR"/client.json

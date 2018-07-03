@@ -1,4 +1,5 @@
 extern crate atty;
+extern crate bincode;
 extern crate env_logger;
 extern crate getopts;
 extern crate rayon;
@@ -6,9 +7,11 @@ extern crate serde_json;
 extern crate solana;
 
 use atty::{is, Stream};
+use bincode::serialize;
 use getopts::Options;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
+use solana::drone::DroneRequest;
 use solana::hash::Hash;
 use solana::mint::Mint;
 use solana::nat::{udp_public_bind, udp_random_bind};
@@ -20,9 +23,10 @@ use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use std::env;
+use std::error;
 use std::fs::File;
-use std::io::{stdin, Read};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::io::{stdin, Read, Write};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -84,18 +88,19 @@ fn sample_tx_count(
 fn generate_and_send_txs(
     client: &mut ThinClient,
     tx_clients: &Vec<ThinClient>,
-    mint: &Mint,
+    id: &Mint,
     keypairs: &Vec<KeyPair>,
     leader: &ReplicatedData,
     txs: i64,
     last_id: &mut Hash,
     threads: usize,
 ) {
-    println!("Signing transactions... {}", keypairs.len(),);
+    println!("Signing transactions... {}", txs,);
     let signing_start = Instant::now();
+
     let transactions: Vec<_> = keypairs
         .par_iter()
-        .map(|keypair| Transaction::new(&mint.keypair(), keypair.pubkey(), 1, *last_id))
+        .map(|keypair| Transaction::new(&id.keypair(), keypair.pubkey(), 1, *last_id))
         .collect();
 
     let duration = signing_start.elapsed();
@@ -176,7 +181,7 @@ fn main() {
     if matches.opt_present("h") {
         let program = args[0].clone();
         print_usage(&program, opts);
-        return;
+        exit(1);
     }
     if matches.opt_present("t") {
         threads = matches.opt_str("t").unwrap().parse().expect("integer");
@@ -194,6 +199,9 @@ fn main() {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         ReplicatedData::new_leader(&server_addr)
     };
+
+    let mut drone_addr = leader.transactions_addr.clone();
+    drone_addr.set_port(9900);
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
@@ -213,22 +221,36 @@ fn main() {
     }
 
     println!("Parsing stdin...");
-    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
+    let id: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
         eprintln!("failed to parse json: {}", e);
         exit(1);
     });
     let mut client = mk_client(&leader);
+
+    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+
+    let txs: i64 = 500_000;
+    println!("Airdropping {:?} tokens", txs);
+    let _airdrop = request_airdrop(&drone_addr, &id, txs as u64).unwrap();
+    // TODO: return airdrop Result from Drone
+    sleep(Duration::from_millis(100));
+    let balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    println!("Your balance is: {:?}", balance);
+
+    if balance < txs || (starting_balance == balance) {
+        println!("TPS airdrop limit reached; wait 60sec to retry");
+        exit(1);
+    }
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();
     println!("Got last ID {:?}", last_id);
 
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&mint.keypair().public_key_bytes()[..32]);
+    seed.copy_from_slice(&id.keypair().public_key_bytes()[..32]);
     let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
-    let txs = 500_000;
     let keypairs = rnd.gen_n_keypairs(txs);
 
     let first_count = client.transaction_count();
@@ -263,7 +285,7 @@ fn main() {
         generate_and_send_txs(
             &mut client,
             &clients,
-            &mint,
+            &id,
             &keypairs,
             &leader,
             txs,
@@ -381,4 +403,21 @@ fn converge(
 fn read_leader(path: String) -> ReplicatedData {
     let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+}
+
+fn request_airdrop(
+    drone_addr: &SocketAddr,
+    id: &Mint,
+    tokens: u64,
+) -> Result<(), Box<error::Error>> {
+    let mut stream = TcpStream::connect(drone_addr)?;
+    let req = DroneRequest::GetAirdrop {
+        airdrop_request_amount: tokens,
+        client_public_key: id.pubkey(),
+        tps_demo: true,
+    };
+    let tx = serialize(&req).expect("serialize drone request");
+    stream.write_all(&tx).unwrap();
+    // TODO: add timeout to this function, in case of unresponsive drone
+    Ok(())
 }
