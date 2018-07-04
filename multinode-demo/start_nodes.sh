@@ -42,12 +42,10 @@ ssh_command_prefix='export PATH="$HOME/.cargo/bin:$PATH"; cd solana; USE_INSTALL
 echo "Deployment started at $(date)"
 SECONDS=0
 count=0
-leader=
-for ip_addr in "${ip_addr_array[@]}"; do
-  echo "$ip_addr"
+leader_ip=
 
-  ssh-keygen -R "$ip_addr"
-  ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts
+common_setup() {
+  ip_addr=$1
 
   ssh -n -f "$remote_user@$ip_addr" 'mkdir -p ~/.ssh ~/solana ~/.cargo/bin'
 
@@ -68,40 +66,62 @@ for ip_addr in "${ip_addr_array[@]}"; do
 
   # Stop current nodes
   ssh "$remote_user@$ip_addr" 'pkill -9 solana-'
+}
 
-  if [[ -n $leader ]]; then
-    echo "Adding known hosts for $ip_addr"
-    ssh -n -f "$remote_user@$ip_addr" "ssh-keygen -R $leader"
-    ssh -n -f "$remote_user@$ip_addr" "ssh-keyscan $leader >> ~/.ssh/known_hosts"
+leader() {
+  common_setup "$1"
 
-    ssh -n -f "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader"":~/.cargo/bin/solana* ~/.cargo/bin/"
-    ssh -n -f "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader"":~/solana/multinode-demo ~/solana/"
-    ssh -n -f "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader"":~/solana/fetch-perf-libs.sh ~/solana/"
-  else
-    # Deploy build and scripts to remote node
-    rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/
-    rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
-    rsync -vPrz ./fetch-perf-libs.sh "$remote_user@$ip_addr":~/solana/
-  fi
+  rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/ # Deploy build and scripts to remote node
+  rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
+  rsync -vPrz ./fetch-perf-libs.sh "$remote_user@$ip_addr":~/solana/
 
   # Run setup
   ssh "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/setup.sh -p "$ip_addr"'
 
+  echo "Starting leader node $ip_addr"
+  ssh -n -f "$remote_user@$ip_addr" 'cd solana; ./fetch-perf-libs.sh'
+  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' SOLANA_CUDA=1 ./multinode-demo/leader.sh > leader.log 2>&1'
+  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/drone.sh > drone.log 2>&1'
+  leader_ip=${ip_addr_array[0]}
+}
+
+validator() {
+  common_setup "$1"
+
+  echo "Adding known hosts for $ip_addr"
+  ssh "$remote_user@$ip_addr" "ssh-keygen -R ""$leader_ip"
+  ssh "$remote_user@$ip_addr" "ssh-keyscan ""$leader_ip >> ~/.ssh/known_hosts"
+
+  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/.cargo/bin/solana* ~/.cargo/bin/"
+  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/multinode-demo ~/solana/"
+  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/fetch-perf-libs.sh ~/solana/"
+
+  # Run setup
+  ssh "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/setup.sh -p "$ip_addr"'
+
+  echo "Starting validator node $ip_addr"
+  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"" ./multinode-demo/validator.sh $remote_user@$leader_ip:~/solana $leader_ip > validator.log 2>&1"
+}
+
+for ip_addr in "${ip_addr_array[@]}"; do
+  echo "$ip_addr"
+  ssh-keygen -R "$ip_addr"
+  ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts
+
   if ((!count)); then
     # Start the leader on the first node
-    echo "Starting leader node $ip_addr"
-    ssh -n -f "$remote_user@$ip_addr" 'cd solana; ./fetch-perf-libs.sh'
-    ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' SOLANA_CUDA=1 ./multinode-demo/leader.sh > leader.log 2>&1'
-    ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/drone.sh > drone.log 2>&1'
-    leader=${ip_addr_array[0]}
+    leader "$ip_addr"
   else
     # Start validator on all other nodes
-    echo "Starting validator node $ip_addr"
-    ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"" ./multinode-demo/validator.sh $remote_user@$leader:~/solana $leader > validator.log 2>&1"
+    validator "$ip_addr" &
+    # TBD: Remove the sleep or reduce time once GCP login quota is increased
+    sleep 2
   fi
 
   ((count++))
 done
+
+wait
 
 echo "Deployment finished at $(date)"
 echo "Deployment took $SECONDS seconds"
