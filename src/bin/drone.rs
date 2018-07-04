@@ -1,22 +1,19 @@
-extern crate atty;
 extern crate bincode;
+extern crate clap;
 extern crate env_logger;
-extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 extern crate tokio;
 extern crate tokio_codec;
 extern crate tokio_io;
 
-use atty::{is, Stream as atty_stream};
 use bincode::deserialize;
-use getopts::Options;
+use clap::{App, Arg};
 use solana::crdt::ReplicatedData;
 use solana::drone::{Drone, DroneRequest};
 use solana::mint::Mint;
-use std::env;
+use std::error;
 use std::fs::File;
-use std::io::{stdin, Read};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
@@ -25,81 +22,70 @@ use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
-fn print_usage(program: &str, opts: Options) {
-    let mut brief = format!("Usage: cat <mint.json> | {} [options]\n\n", program);
-    brief += "  Run a Solana Drone to act as the custodian of the mint's remaining tokens\n";
-
-    print!("{}", opts.usage(&brief));
-}
-
 fn main() {
     env_logger::init();
-    let mut opts = Options::new();
-    opts.optopt(
-        "t",
-        "",
-        "time",
-        "time slice over which to limit token requests to drone",
-    );
-    opts.optopt("c", "", "cap", "request limit for time slice");
-    opts.optopt("l", "", "leader", "leader.json");
-    opts.optflag("h", "help", "print help");
-    let args: Vec<String> = env::args().collect();
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("{}", e);
-            exit(1);
-        }
+    let matches = App::new("solana-client-demo")
+        .arg(
+            Arg::with_name("leader")
+                .short("l")
+                .long("leader")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/leader.json"),
+        )
+        .arg(
+            Arg::with_name("mint")
+                .short("m")
+                .long("mint")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/mint.json"),
+        )
+        .arg(
+            Arg::with_name("time")
+                .short("t")
+                .long("time")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .help("time slice over which to limit requests to drone"),
+        )
+        .arg(
+            Arg::with_name("cap")
+                .short("c")
+                .long("cap")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .help("request limit for time slice"),
+        )
+        .get_matches();
+
+    let leader: ReplicatedData;
+    if let Some(l) = matches.value_of("leader") {
+        leader = read_leader(l.to_string());
+    } else {
+        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        leader = ReplicatedData::new_leader(&server_addr);
     };
-    if matches.opt_present("h") {
-        let program = args[0].clone();
-        print_usage(&program, opts);
-        return;
-    }
+
+    let mint: Mint;
+    if let Some(m) = matches.value_of("mint") {
+        mint = read_mint(m.to_string()).expect("client mint");
+    } else {
+        eprintln!("No mint found!");
+        exit(1);
+    };
     let time_slice: Option<u64>;
-    if matches.opt_present("t") {
-        time_slice = matches
-            .opt_str("t")
-            .expect("unexpected string from input")
-            .parse()
-            .ok();
+    if let Some(t) = matches.value_of("time") {
+        time_slice = Some(t.to_string().parse().expect("integer"));
     } else {
         time_slice = None;
     }
     let request_cap: Option<u64>;
-    if matches.opt_present("c") {
-        request_cap = matches
-            .opt_str("c")
-            .expect("unexpected string from input")
-            .parse()
-            .ok();
+    if let Some(c) = matches.value_of("cap") {
+        request_cap = Some(c.to_string().parse().expect("integer"));
     } else {
         request_cap = None;
     }
-    let leader = if matches.opt_present("l") {
-        read_leader(matches.opt_str("l").unwrap())
-    } else {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        ReplicatedData::new_leader(&server_addr)
-    };
-
-    if is(atty_stream::Stdin) {
-        eprintln!("nothing found on stdin, expected a json file");
-        exit(1);
-    }
-
-    let mut buffer = String::new();
-    let num_bytes = stdin().read_to_string(&mut buffer).unwrap();
-    if num_bytes == 0 {
-        eprintln!("empty file on stdin, expected a json file");
-        exit(1);
-    }
-
-    let mint: Mint = serde_json::from_str(&buffer).unwrap_or_else(|e| {
-        eprintln!("failed to parse json: {}", e);
-        exit(1);
-    });
 
     let mint_keypair = mint.keypair();
 
@@ -164,4 +150,10 @@ fn main() {
 fn read_leader(path: String) -> ReplicatedData {
     let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+}
+
+fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.clone())?;
+    let mint = serde_json::from_reader(file)?;
+    Ok(mint)
 }
