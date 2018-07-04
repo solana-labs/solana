@@ -8,6 +8,7 @@ use solana::crdt::{Crdt, TestNode};
 use solana::logger;
 use solana::ncp::Ncp;
 use solana::packet::Blob;
+use solana::service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -58,10 +59,8 @@ where
         sleep(Duration::new(1, 0));
     }
     exit.store(true, Ordering::Relaxed);
-    for (c, dr, _) in listen.into_iter() {
-        for j in dr.thread_hdls.into_iter() {
-            j.join().unwrap();
-        }
+    for (c, dr, _) in listen {
+        dr.join().unwrap();
         // make it clear what failed
         // protocol is to chatty, updates should stop after everyone receives `num`
         assert!(c.read().unwrap().update_index <= num as u64);
@@ -175,13 +174,9 @@ pub fn crdt_retransmit() {
     //r1 was the sender, so it should fail to receive the packet
     assert_eq!(res, [true, false, false]);
     exit.store(true, Ordering::Relaxed);
-    let mut threads = vec![];
-    threads.extend(dr1.thread_hdls.into_iter());
-    threads.extend(dr2.thread_hdls.into_iter());
-    threads.extend(dr3.thread_hdls.into_iter());
-    for t in threads.into_iter() {
-        t.join().unwrap();
-    }
+    dr1.join().unwrap();
+    dr2.join().unwrap();
+    dr3.join().unwrap();
 }
 
 #[test]
@@ -255,13 +250,8 @@ fn test_external_liveness_table() {
 
     // Shutdown validators c2 and c3
     c2_c3_exit.store(true, Ordering::Relaxed);
-    let mut threads = vec![];
-    threads.extend(dr2.thread_hdls.into_iter());
-    threads.extend(dr3.thread_hdls.into_iter());
-
-    for t in threads {
-        t.join().unwrap();
-    }
+    dr2.join().unwrap();
+    dr3.join().unwrap();
 
     // Allow communication between c1 and c4, make sure that c1's external_liveness table
     // entry for c4 gets cleared
@@ -281,11 +271,6 @@ fn test_external_liveness_table() {
 
     // Shutdown validators c1 and c4
     c1_c4_exit.store(true, Ordering::Relaxed);
-    let mut threads = vec![];
-    threads.extend(dr1.thread_hdls.into_iter());
-    threads.extend(dr4.thread_hdls.into_iter());
-
-    for t in threads {
-        t.join().unwrap();
-    }
+    dr1.join().unwrap();
+    dr4.join().unwrap();
 }
