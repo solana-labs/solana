@@ -229,6 +229,7 @@ mod tests {
     use fullnode::FullNode;
     use logger;
     use mint::Mint;
+    use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -274,9 +275,7 @@ mod tests {
         let balance = client.poll_get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in server.thread_hdls {
-            t.join().unwrap();
-        }
+        server.join().unwrap();
     }
 
     #[test]
@@ -328,9 +327,7 @@ mod tests {
         let balance = client.poll_get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
-        for t in server.thread_hdls {
-            t.join().unwrap();
-        }
+        server.join().unwrap();
     }
 
     #[test]
@@ -372,8 +369,6 @@ mod tests {
         assert!(client.check_signature(&sig));
 
         exit.store(true, Ordering::Relaxed);
-        for t in server.thread_hdls {
-            t.join().unwrap();
-        }
+        server.join().unwrap();
     }
 }

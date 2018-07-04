@@ -39,15 +39,18 @@ use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
 use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
+use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use streamer::Window;
 use window_stage::WindowStage;
 
 pub struct Tvu {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    replicate_stage: ReplicateStage,
+    fetch_stage: BlobFetchStage,
+    window_stage: WindowStage,
 }
 
 impl Tvu {
@@ -93,12 +96,28 @@ impl Tvu {
 
         let replicate_stage = ReplicateStage::new(bank, exit, blob_receiver);
 
-        let mut threads = vec![replicate_stage.thread_hdl];
-        threads.extend(fetch_stage.thread_hdls.into_iter());
-        threads.extend(window_stage.thread_hdls.into_iter());
         Tvu {
-            thread_hdls: threads,
+            replicate_stage,
+            fetch_stage,
+            window_stage,
         }
+    }
+}
+
+impl Service for Tvu {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        let mut thread_hdls = vec![];
+        thread_hdls.extend(self.replicate_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.fetch_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.window_stage.thread_hdls().into_iter());
+        thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 
@@ -114,6 +133,7 @@ pub mod tests {
     use ncp::Ncp;
     use packet::BlobRecycler;
     use result::Result;
+    use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
     use std::net::UdpSocket;
@@ -264,18 +284,10 @@ pub mod tests {
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         exit.store(true, Ordering::Relaxed);
-        for t in tvu.thread_hdls {
-            t.join().expect("join");
-        }
-        for t in dr_l.0.thread_hdls {
-            t.join().expect("join");
-        }
-        for t in dr_2.0.thread_hdls {
-            t.join().expect("join");
-        }
-        for t in dr_1.0.thread_hdls {
-            t.join().expect("join");
-        }
+        tvu.join().expect("join");
+        dr_l.0.join().expect("join");
+        dr_2.0.join().expect("join");
+        dr_1.0.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
     }

@@ -3,15 +3,16 @@
 use crdt::Crdt;
 use packet::{BlobRecycler, SharedBlob};
 use result::Result;
+use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use streamer;
 
 pub struct Ncp {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Ncp {
@@ -53,6 +54,19 @@ impl Ncp {
         let t_gossip = Crdt::gossip(crdt.clone(), blob_recycler, response_sender, exit);
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Ok(Ncp { thread_hdls })
+    }
+}
+
+impl Service for Ncp {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        self.thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 

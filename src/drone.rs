@@ -136,6 +136,7 @@ mod tests {
     use fullnode::FullNode;
     use logger;
     use mint::Mint;
+    use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
@@ -304,8 +305,6 @@ mod tests {
         assert_eq!(carlos_balance.unwrap(), TPS_BATCH);
 
         exit.store(true, Ordering::Relaxed);
-        for t in server.thread_hdls {
-            t.join().unwrap();
-        }
+        server.join().unwrap();
     }
 }

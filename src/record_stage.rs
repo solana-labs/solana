@@ -8,8 +8,9 @@
 use entry::Entry;
 use hash::Hash;
 use recorder::Recorder;
+use service::Service;
 use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use transaction::Transaction;
 
@@ -20,7 +21,7 @@ pub enum Signal {
 }
 
 pub struct RecordStage {
-    pub thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
 }
 
 impl RecordStage {
@@ -121,6 +122,16 @@ impl RecordStage {
                 Err(TryRecvError::Disconnected) => return Err(()),
             };
         }
+    }
+}
+
+impl Service for RecordStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        vec![self.thread_hdl]
+    }
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }
 

@@ -6,13 +6,14 @@ use entry_writer;
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
+use service::Service;
 use std::fs::{File, OpenOptions};
 use std::io::{sink, stdin, stdout, BufReader};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, Result};
 use std::time::Duration;
 use streamer;
 use tpu::Tpu;
@@ -20,7 +21,7 @@ use tvu::Tvu;
 
 //use std::time::Duration;
 pub struct FullNode {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 pub enum InFile {
@@ -152,7 +153,7 @@ impl FullNode {
             node.sockets.respond,
             exit.clone(),
         );
-        thread_hdls.extend(rpu.thread_hdls);
+        thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
         let (tpu, blob_receiver) = Tpu::new(
@@ -163,7 +164,7 @@ impl FullNode {
             exit.clone(),
             writer,
         );
-        thread_hdls.extend(tpu.thread_hdls);
+        thread_hdls.extend(tpu.thread_hdls());
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         let window = streamer::default_window();
         let ncp = Ncp::new(
@@ -173,7 +174,7 @@ impl FullNode {
             node.sockets.gossip_send,
             exit.clone(),
         ).expect("Ncp::new");
-        thread_hdls.extend(ncp.thread_hdls);
+        thread_hdls.extend(ncp.thread_hdls());
 
         let t_broadcast = streamer::broadcaster(
             node.sockets.broadcast,
@@ -233,7 +234,7 @@ impl FullNode {
             node.sockets.respond,
             exit.clone(),
         );
-        thread_hdls.extend(rpu.thread_hdls);
+        thread_hdls.extend(rpu.thread_hdls());
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         crdt.write()
@@ -258,11 +259,25 @@ impl FullNode {
             node.sockets.retransmit,
             exit.clone(),
         );
-        thread_hdls.extend(tvu.thread_hdls);
-        thread_hdls.extend(ncp.thread_hdls);
+        thread_hdls.extend(tvu.thread_hdls());
+        thread_hdls.extend(ncp.thread_hdls());
         FullNode { thread_hdls }
     }
 }
+
+impl Service for FullNode {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        self.thread_hdls
+    }
+
+    fn join(self) -> Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bank::Bank;

@@ -30,18 +30,23 @@ use banking_stage::BankingStage;
 use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
+use service::Service;
 use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
 use write_stage::WriteStage;
 
 pub struct Tpu {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    fetch_stage: FetchStage,
+    sigverify_stage: SigVerifyStage,
+    banking_stage: BankingStage,
+    record_stage: RecordStage,
+    write_stage: WriteStage,
 }
 
 impl Tpu {
@@ -82,13 +87,33 @@ impl Tpu {
             writer,
             entry_receiver,
         );
-        let mut thread_hdls = vec![
-            banking_stage.thread_hdl,
-            record_stage.thread_hdl,
-            write_stage.thread_hdl,
-        ];
-        thread_hdls.extend(fetch_stage.thread_hdls.into_iter());
-        thread_hdls.extend(sigverify_stage.thread_hdls.into_iter());
-        (Tpu { thread_hdls }, blob_receiver)
+
+        let tpu = Tpu {
+            fetch_stage,
+            sigverify_stage,
+            banking_stage,
+            record_stage,
+            write_stage,
+        };
+        (tpu, blob_receiver)
+    }
+}
+
+impl Service for Tpu {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        let mut thread_hdls = vec![];
+        thread_hdls.extend(self.fetch_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.sigverify_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.banking_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.record_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.write_stage.thread_hdls().into_iter());
+        thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
