@@ -38,4 +38,4 @@ $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_DIR"/
 
 # shellcheck disable=SC2086 # $solana_drone should not be quoted
 exec $solana_drone \
-  -l "$SOLANA_CONFIG_DIR"/leader.json < "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
+  -l "$SOLANA_CONFIG_DIR"/leader.json -m "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
