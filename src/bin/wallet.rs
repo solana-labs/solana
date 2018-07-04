@@ -3,7 +3,6 @@ extern crate bincode;
 extern crate bs58;
 extern crate clap;
 extern crate env_logger;
-extern crate getopts;
 extern crate serde_json;
 extern crate solana;
 
