@@ -29,6 +29,7 @@ SECONDS=0
 PATH="$HOME"/.cargo/bin:"$PATH"
 cargo install --force
 
+build_time=$SECONDS
 echo "Build took $SECONDS seconds"
 
 ip_addr_array=()
@@ -36,83 +37,71 @@ ip_addr_array=()
 # shellcheck source=/dev/null
 source "$ip_addr_file"
 
-# shellcheck disable=SC2089,SC2016
-ssh_command_prefix='export PATH="$HOME/.cargo/bin:$PATH"; cd solana; USE_INSTALL=1'
-
 echo "Deployment started at $(date)"
 SECONDS=0
 count=0
 leader_ip=
+leader_time=
+
+mkdir -p log
 
 common_setup() {
   ip_addr=$1
 
-  ssh -n -f "$remote_user@$ip_addr" 'mkdir -p ~/.ssh ~/solana ~/.cargo/bin'
-
   # Killing sshguard for now. TODO: Find a better solution
   # sshguard is blacklisting IP address after ssh-keyscan and ssh login attempts
-  ssh -n -f "$remote_user@$ip_addr" "sudo service sshguard stop"
-  ssh -n -f "$remote_user@$ip_addr" 'sudo apt-get --assume-yes install rsync libssl-dev'
+  ssh -n -f "$remote_user@$ip_addr" "
+    set -ex; \
+    sudo service sshguard stop; \
+    sudo apt-get --assume-yes install rsync libssl-dev; \
+    pkill -9 solana-; \
+    pkill -9 validator; \
+    pkill -9 leader; \
+  " >log/"$ip_addr".log
 
   # If provided, deploy SSH keys
-  if [[ -z $ssh_keys ]]; then
-    echo "skip copying the ssh keys"
-  else
-    rsync -vPrz "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
-    rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
-    rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
-    ssh -n -f "$remote_user@$ip_addr" 'chmod 600 ~/.ssh/authorized_keys ~/.ssh/id_rsa'
+  if [[ -n $ssh_keys ]]; then
+    {
+      rsync -vPrz "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
+      rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
+      rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
+    } >>log/"$ip_addr".log
   fi
-
-  # Stop current nodes
-  ssh "$remote_user@$ip_addr" 'pkill -9 solana-'
 }
 
 leader() {
   common_setup "$1"
 
-  rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/ # Deploy build and scripts to remote node
-  rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
-  rsync -vPrz ./fetch-perf-libs.sh "$remote_user@$ip_addr":~/solana/
+  {
+    rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/
+    rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
+    rsync -vPrz ./fetch-perf-libs.sh "$remote_user@$ip_addr":~/solana/
+    ssh -n -f "$remote_user@$ip_addr" 'cd solana; FORCE=1 ./multinode-demo/remote_leader.sh'
+  } >>log/"$1".log
 
-  # Run setup
-  ssh "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/setup.sh -p "$ip_addr"'
-
-  echo "Starting leader node $ip_addr"
-  ssh -n -f "$remote_user@$ip_addr" 'cd solana; ./fetch-perf-libs.sh'
-  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' SOLANA_CUDA=1 ./multinode-demo/leader.sh > leader.log 2>&1'
-  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/drone.sh > drone.log 2>&1'
-  leader_ip=${ip_addr_array[0]}
+  leader_ip=$1
+  leader_time=$SECONDS
+  SECONDS=0
 }
 
 validator() {
   common_setup "$1"
 
-  echo "Adding known hosts for $ip_addr"
-  ssh "$remote_user@$ip_addr" "ssh-keygen -R ""$leader_ip"
-  ssh "$remote_user@$ip_addr" "ssh-keyscan ""$leader_ip >> ~/.ssh/known_hosts"
-
-  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/.cargo/bin/solana* ~/.cargo/bin/"
-  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/multinode-demo ~/solana/"
-  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/fetch-perf-libs.sh ~/solana/"
-
-  # Run setup
-  ssh "$remote_user@$ip_addr" "$ssh_command_prefix"' ./multinode-demo/setup.sh -p "$ip_addr"'
-
-  echo "Starting validator node $ip_addr"
-  ssh -n -f "$remote_user@$ip_addr" "$ssh_command_prefix"" ./multinode-demo/validator.sh $remote_user@$leader_ip:~/solana $leader_ip > validator.log 2>&1"
+  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/multinode-demo ~/solana/" >>log/"$1".log
+  ssh -n -f "$remote_user@$ip_addr" "cd solana; FORCE=1 ./multinode-demo/remote_validator.sh $leader_ip" >>log/"$1".log
 }
 
 for ip_addr in "${ip_addr_array[@]}"; do
-  echo "$ip_addr"
-  ssh-keygen -R "$ip_addr"
-  ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts
+  ssh-keygen -R "$ip_addr" >log/local.log
+  ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts 2>/dev/null
 
   if ((!count)); then
     # Start the leader on the first node
+    echo "Leader node $ip_addr, killing previous instance and restarting"
     leader "$ip_addr"
   else
     # Start validator on all other nodes
+    echo "Validator[$count] node $ip_addr, killing previous instance and restarting"
     validator "$ip_addr" &
     # TBD: Remove the sleep or reduce time once GCP login quota is increased
     sleep 2
@@ -123,5 +112,9 @@ done
 
 wait
 
+((validator_count = count - 1))
+
 echo "Deployment finished at $(date)"
-echo "Deployment took $SECONDS seconds"
+echo "Build took $build_time seconds"
+echo "Leader deployment too $leader_time seconds"
+echo "$validator_count Validator deployment took $SECONDS seconds"
