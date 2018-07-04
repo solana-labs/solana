@@ -27,7 +27,7 @@ enum WalletCommand {
     Balance,
     AirDrop(i64),
     Pay(i64, PublicKey),
-    Confirm(Signature),
+    Confirm(PublicKey, u64, Signature),
 }
 
 #[derive(Debug, Clone)]
@@ -126,13 +126,29 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("confirm")
-                .about("Confirm your payment by signature")
+                .about("Confirm your payment by public key and version")
+                .arg(
+                    Arg::with_name("pubkey")
+                        // .index(1)
+                        .value_name("PUBKEY")
+                        .required(true)
+                        .help("The account pubkey to confirm"),
+                )
                 .arg(
                     Arg::with_name("signature")
-                        .index(1)
+                        // .index(1)
                         .value_name("SIGNATURE")
                         .required(true)
-                        .help("The transaction signature to confirm"),
+                        .help("The signature of the transaction to confirm"),
+                )
+                .arg(
+                    Arg::with_name("version")
+                        // .index(2)
+                        .long("version")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .required(true)
+                        .help("the account version to confirm"),
                 ),
         )
         .subcommand(SubCommand::with_name("balance").about("Get your balance"))
@@ -190,16 +206,23 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
-            let sig_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
+            let pubkey_vec = bs58::decode(confirm_matches.value_of("pubkey").unwrap())
+                .into_vec()
+                .expect("base58-encoded public key");
+            let signature_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
                 .expect("base58-encoded signature");
+            let version = confirm_matches.value_of("version").unwrap().parse()?;
 
-            if sig_vec.len() == std::mem::size_of::<Signature>() {
-                let sig = Signature::new(&sig_vec);
-                Ok(WalletCommand::Confirm(sig))
+            if pubkey_vec.len() == std::mem::size_of::<PublicKey>()
+                && signature_vec.len() == std::mem::size_of::<Signature>()
+            {
+                let pubkey = PublicKey::new(&pubkey_vec);
+                let signature = Signature::new(&signature_vec);
+                Ok(WalletCommand::Confirm(pubkey, version, signature))
             } else {
                 display_actions();
-                Err(WalletError::BadParameter("Invalid signature".to_string()))
+                Err(WalletError::BadParameter("Invalid public key".to_string()))
             }
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
@@ -274,13 +297,18 @@ fn process_command(
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
-            let last_id = client.get_last_id();
-            let sig = client.transfer(tokens, &config.id, to, &last_id)?;
-            println!("{}", sig);
+            let sig = client.retry_transfer(&config.id, &to, tokens, 30).expect("retry transfer");
+            println!("{:?}", sig);
+            println!(
+                "{} {} {}",
+                bs58::encode(config.id.pubkey()).into_string(),
+                sig.0,
+                bs58::encode(sig.1).into_string(),
+            );
         }
         // Confirm the last client transaction by signature
-        WalletCommand::Confirm(sig) => {
-            if client.check_signature(&sig) {
+        WalletCommand::Confirm(pubkey, version, signature) => {
+            if client.get_version(&pubkey) == (version + 1, signature) {
                 println!("Confirmed");
             } else {
                 println!("Not found");
@@ -297,7 +325,7 @@ fn display_actions() {
     println!("  balance   Get your account balance");
     println!("  airdrop   Request a batch of tokens");
     println!("  pay       Send tokens to a public key");
-    println!("  confirm   Confirm your last payment by signature");
+    println!("  confirm   Confirm your last payment by public key and version");
     println!();
 }
 

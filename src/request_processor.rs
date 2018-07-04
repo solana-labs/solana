@@ -40,10 +40,10 @@ impl RequestProcessor {
                 info!("Response::TransactionCount {:?}", rsp);
                 Some(rsp)
             }
-            Request::GetSignature { signature } => {
-                let signature_status = self.bank.has_signature(&signature);
-                let rsp = (Response::SignatureStatus { signature_status }, rsp_addr);
-                info!("Response::Signature {:?}", rsp);
+            Request::GetPubKeyVersion { pubkey } => {
+                let (version, signature) = self.bank.get_version(&pubkey);
+                let rsp = (Response::PubKeyVersion { version, signature }, rsp_addr);
+                info!("Response::PubKeyVersion {:?}", rsp);
                 Some(rsp)
             }
         }

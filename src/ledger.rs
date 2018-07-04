@@ -347,8 +347,9 @@ mod tests {
             },
             one,
             1,
+            0,
         );
-        let tx1 = Transaction::new_timestamp(&keypair, Utc::now(), one);
+        let tx1 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), one, 0);
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,
@@ -367,7 +368,6 @@ mod tests {
     #[test]
     fn test_entries_to_blobs() {
         let entries = make_test_entries();
-
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);
@@ -398,8 +398,9 @@ mod tests {
             },
             next_id,
             2,
+            0,
         );
-        let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+        let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id, 0);
 
         let tx_small_size = serialized_size(&tx_small).unwrap();
         let tx_large_size = serialized_size(&tx_large).unwrap();
@@ -408,7 +409,6 @@ mod tests {
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
         let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1;
-
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];
         let entries0 = next_entries(&id, 0, transactions.clone());

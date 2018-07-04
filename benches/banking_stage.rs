@@ -111,6 +111,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 dstkeys[i % num_dst_accounts],
                 i as i64,
                 mint.last_id(),
+                i as u64,
             )
         })
         .collect();
@@ -126,6 +127,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 srckeys[i].pubkey(),
                 mint_total / num_src_accounts as i64,
                 mint.last_id(),
+                i as u64,
             )
         })
         .collect();
@@ -183,6 +185,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
                 pubkeys[i % num_keys],
                 i as i64,
                 mint.last_id(),
+                i as u64,
             )
         })
         .collect();

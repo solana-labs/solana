@@ -107,7 +107,7 @@ fn test_multi_node_validator_catchup_from_zero() {
 
     // Send leader some tokens to vote
     let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, None).unwrap();
+        retry_send_tx_and_get_balance(&leader_data, &alice, &leader_pubkey).unwrap();
     info!("leader balance {}", leader_balance);
 
     let mut nodes = vec![server];
@@ -127,8 +127,7 @@ fn test_multi_node_validator_catchup_from_zero() {
     //contains the leader addr as well
     assert_eq!(servers.len(), N + 1);
     //verify leader can do transfer
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, None).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 500);
     //verify validator has the same balance
     let mut success = 0usize;
@@ -160,7 +159,7 @@ fn test_multi_node_validator_catchup_from_zero() {
     let servers = converge(&leader_data, N + 2);
 
     let mut leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, None).unwrap();
+        retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     info!("leader balance {}", leader_balance);
     loop {
         let mut client = mk_client(&leader_data);
@@ -215,7 +214,7 @@ fn test_multi_node_basic() {
 
     // Send leader some tokens to vote
     let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, None).unwrap();
+        retry_send_tx_and_get_balance(&leader_data, &alice, &leader_pubkey).unwrap();
     info!("leader balance {}", leader_balance);
 
     let mut nodes = vec![server];
@@ -235,8 +234,7 @@ fn test_multi_node_basic() {
     //contains the leader addr as well
     assert_eq!(servers.len(), N + 1);
     //verify leader can do transfer
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, None).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 500);
     //verify validator has the same balance
     let mut success = 0usize;
@@ -272,11 +270,9 @@ fn test_boot_validator_from_file() {
         leader_keypair,
         None,
     );
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 1000);
 
     let keypair = KeyPair::new();
@@ -325,8 +321,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // lengthen the ledger
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 500);
 
     // create a "stale" ledger by copying current ledger
@@ -341,8 +336,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // lengthen the ledger
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 1000);
 
     // restart the leader
@@ -368,8 +362,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let mut client = mk_client(&validator_data);
     for _ in 0..10 {
         let leader_balance =
-            send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(expected))
-                .unwrap();
+            retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
         assert_eq!(leader_balance, expected);
         let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
         if getbal == Some(leader_balance) {
@@ -423,27 +416,24 @@ fn test_multi_node_dynamic_network() {
     );
 
     // Send leader some tokens to vote
-    let leader_balance = send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &leader_pubkey,
-        None,
     ).unwrap();
     info!("leader balance {}", leader_balance);
 
     info!("{:x} LEADER", leader_data.debug_id());
-    let leader_balance = retry_send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
-        Some(500),
     ).unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance = retry_send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
-        Some(1000),
     ).unwrap();
     assert_eq!(leader_balance, 1000);
 
@@ -458,11 +448,10 @@ fn test_multi_node_dynamic_network() {
                     info!("Spawned thread {}", n);
                     let keypair = KeyPair::new();
                     //send some tokens to the new validator
-                    let bal = retry_send_tx_and_retry_get_balance(
+                    let bal = retry_send_tx_and_get_balance(
                         &leader_data,
                         &alice_clone.read().unwrap(),
                         &keypair.pubkey(),
-                        Some(500),
                     );
                     assert_eq!(bal, Some(500));
                     info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
@@ -509,11 +498,10 @@ fn test_multi_node_dynamic_network() {
     for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
-        let leader_balance = retry_send_tx_and_retry_get_balance(
+        let leader_balance = retry_send_tx_and_get_balance(
             &leader_data,
             &alice_arc.read().unwrap(),
             &bob_pubkey,
-            Some(expected),
         ).unwrap();
         if leader_balance != expected {
             info!(
@@ -639,48 +627,13 @@ fn retry_get_balance(
     None
 }
 
-fn send_tx_and_retry_get_balance(
-    leader: &NodeInfo,
+fn retry_send_tx_and_get_balance(
+    node: &NodeInfo,
     alice: &Mint,
     bob_pubkey: &PublicKey,
-    expected: Option<i64>,
 ) -> Option<i64> {
-    let mut client = mk_client(leader);
-    trace!("getting leader last_id");
-    let last_id = client.get_last_id();
-    info!("executing leader transfer");
-    let _sig = client
-        .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
-        .unwrap();
-    retry_get_balance(&mut client, bob_pubkey, expected)
+    let mut client = mk_client(node);
+    let _ = client.retry_transfer(&alice.keypair(), bob_pubkey, 500, 30);
+    client.poll_get_balance(bob_pubkey).ok()
 }
 
-fn retry_send_tx_and_retry_get_balance(
-    leader: &NodeInfo,
-    alice: &Mint,
-    bob_pubkey: &PublicKey,
-    expected: Option<i64>,
-) -> Option<i64> {
-    let mut client = mk_client(leader);
-    trace!("getting leader last_id");
-    let last_id = client.get_last_id();
-    info!("executing leader transfer");
-    const LAST: usize = 30;
-    for run in 0..(LAST + 1) {
-        let _sig = client
-            .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
-            .unwrap();
-        let out = client.poll_get_balance(bob_pubkey);
-        if expected.is_none() || run == LAST {
-            return out.ok().clone();
-        }
-        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
-        if let (Some(e), Ok(o)) = (expected, out) {
-            if o == e {
-                return Some(o);
-            }
-        }
-        sleep(Duration::from_millis(20));
-    }
-    None
-}

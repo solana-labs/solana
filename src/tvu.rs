@@ -253,11 +253,15 @@ pub mod tests {
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
+            //version should increase with every message
+            let version = i;
+            trace!("version {}", version);
             let tx0 = Transaction::new(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
+                version,
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());

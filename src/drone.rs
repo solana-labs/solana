@@ -6,14 +6,12 @@
 
 use influx_db_client as influxdb;
 use metrics;
-use signature::Signature;
-use signature::{KeyPair, PublicKey};
+use signature::{KeyPair, PublicKey, Signature};
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Duration;
 use thin_client::ThinClient;
-use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 1_000_000;
@@ -96,54 +94,54 @@ impl Drone {
     }
 
     pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<Signature, io::Error> {
-        let request_amount: u64;
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
         let mut client = ThinClient::new(
             self.requests_addr,
             requests_socket,
             self.transactions_addr,
             transactions_socket,
         );
-        let last_id = client.get_last_id();
-
-        let tx = match req {
+        match req {
             DroneRequest::GetAirdrop {
                 airdrop_request_amount,
                 client_public_key,
             } => {
                 info!(
-                    "Requesting airdrop of {} to {:?}",
+                    "Requesting airdrop of {} to {}",
                     airdrop_request_amount, client_public_key
                 );
-                request_amount = airdrop_request_amount;
-                Transaction::new(
-                    &self.mint_keypair,
-                    client_public_key,
-                    airdrop_request_amount as i64,
-                    last_id,
-                )
+                let request_amount = airdrop_request_amount;
+                if self.check_request_limit(request_amount) {
+                    self.request_current += request_amount;
+                    metrics::submit(
+                        influxdb::Point::new("drone")
+                            .add_tag("op", influxdb::Value::String("airdrop".to_string()))
+                            .add_field(
+                                "request_amount",
+                                influxdb::Value::Integer(request_amount as i64),
+                            )
+                            .add_field(
+                                "request_current",
+                                influxdb::Value::Integer(self.request_current as i64),
+                            )
+                            .to_owned(),
+                    );
+                    let rv = client.retry_transfer(
+                        &self.mint_keypair,
+                        &client_public_key,
+                        request_amount as i64,
+                        10,
+                    );
+                    if let Some(reply) = rv {
+                        Ok(reply.1)
+                    } else {
+                        Err(Error::new(ErrorKind::Other, "transaction failed"))
+                    }
+                } else {
+                    Err(Error::new(ErrorKind::Other, "token limit reached"))
+                }
             }
-        };
-        if self.check_request_limit(request_amount) {
-            self.request_current += request_amount;
-            metrics::submit(
-                influxdb::Point::new("drone")
-                    .add_tag("op", influxdb::Value::String("airdrop".to_string()))
-                    .add_field(
-                        "request_amount",
-                        influxdb::Value::Integer(request_amount as i64),
-                    )
-                    .add_field(
-                        "request_current",
-                        influxdb::Value::Integer(self.request_current as i64),
-                    )
-                    .to_owned(),
-            );
-            client.transfer_signed(&tx)
-        } else {
-            Err(Error::new(ErrorKind::Other, "token limit reached"))
         }
     }
 }
@@ -316,15 +314,13 @@ mod tests {
             airdrop_request_amount: 50,
             client_public_key: bob_pubkey,
         };
-        let bob_sig = drone.send_airdrop(bob_req).unwrap();
-        assert!(client.poll_for_signature(&bob_sig).is_ok());
+        let _ = drone.send_airdrop(bob_req).expect("airdrop succeeded");
 
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
             client_public_key: carlos_pubkey,
         };
-        let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
-        assert!(client.poll_for_signature(&carlos_sig).is_ok());
+        let _ = drone.send_airdrop(carlos_req).expect("airdrop2 succeeded");
 
         let bob_balance = client.get_balance(&bob_pubkey);
         info!("Small request balance: {:?}", bob_balance);

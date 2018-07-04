@@ -22,7 +22,7 @@ pub type BlobRecycler = Recycler<Blob>;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = 64 * 1024;
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
-pub const PACKET_DATA_SIZE: usize = 256;
+pub const PACKET_DATA_SIZE: usize = 512;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default, Debug)]
@@ -455,6 +455,7 @@ impl Blob {
 mod tests {
     use packet::{
         to_packets, Blob, BlobRecycler, Packet, PacketRecycler, Packets, Recycler, NUM_PACKETS,
+        PACKET_DATA_SIZE,
     };
     use request::Request;
     use std::collections::VecDeque;
@@ -523,12 +524,12 @@ mod tests {
         p.write().unwrap().packets.resize(10, Packet::default());
         for m in p.write().unwrap().packets.iter_mut() {
             m.meta.set_addr(&addr);
-            m.meta.size = 256;
+            m.meta.size = PACKET_DATA_SIZE;
         }
         p.read().unwrap().send_to(&sender).unwrap();
         p.write().unwrap().recv_from(&reader).unwrap();
         for m in p.write().unwrap().packets.iter_mut() {
-            assert_eq!(m.meta.size, 256);
+            assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
 

@@ -10,7 +10,7 @@ use metrics;
 use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use service::Service;
-use signature::KeyPair;
+use signature::{KeyPair, KeyPairUtil};
 use std::collections::VecDeque;
 use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -33,6 +33,7 @@ enum VoteError {
 }
 
 pub fn create_vote_tx_and_blob(
+    bank: &Arc<Bank>,
     last_id: &Hash,
     keypair: &KeyPair,
     crdt: &Arc<RwLock<Crdt>>,
@@ -45,7 +46,8 @@ pub fn create_vote_tx_and_blob(
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
         wcrdt.new_vote(*last_id)
     }?;
-    let tx = Transaction::new_vote(&keypair, vote, *last_id, 0);
+    let version = bank.get_version(&keypair.pubkey());
+    let tx = Transaction::new_vote(&keypair, vote, *last_id, 0, version.0);
     {
         let mut blob = shared_blob.write().unwrap();
         let bytes = serialize(&tx)?;
@@ -111,7 +113,7 @@ pub fn send_leader_vote(
             get_last_id_to_vote_on(debug_id, &ids, bank, now, last_vote)
         {
             if let Ok((tx, shared_blob)) =
-                create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
+                create_vote_tx_and_blob(&bank, &last_id, keypair, crdt, blob_recycler)
             {
                 bank.process_transaction(&tx)?;
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
@@ -141,7 +143,7 @@ fn send_validator_vote(
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
+    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&bank, &last_id, keypair, crdt, blob_recycler) {
         inc_new_counter!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
@@ -272,7 +274,7 @@ pub mod tests {
 
         // give the leader some tokens
         let give_leader_tokens_tx =
-            Transaction::new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
+            Transaction::new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id, 0);
         bank.process_transaction(&give_leader_tokens_tx).unwrap();
 
         leader_crdt.set_leader(leader_pubkey);

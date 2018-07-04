@@ -103,7 +103,7 @@ mod tests {
     use super::*;
     use ledger;
     use mint::Mint;
-    use packet::BLOB_DATA_SIZE;
+    use packet::{BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{KeyPair, KeyPairUtil};
     use std::io::Cursor;
     use transaction::Transaction;
@@ -116,10 +116,10 @@ mod tests {
         let writer = io::sink();
         let mut entry_writer = EntryWriter::new(&bank, writer);
         let keypair = KeyPair::new();
-        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
+        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id(), 0);
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
+        let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1; // PACKET_DATA_SIZE is transaction size
 
         // Verify large entries are split up and the first sets has_more.
         let txs = vec![tx.clone(); threshold * 2];

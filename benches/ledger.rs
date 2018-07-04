@@ -14,7 +14,7 @@ fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
     let zero = Hash::default();
     let one = hash(&zero.as_ref());
     let keypair = KeyPair::new();
-    let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
+    let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one, 0);
     let transactions = vec![tx0; 10];
     let entries = next_entries(&zero, 1, transactions);
 

@@ -18,12 +18,19 @@ fn bench_process_transaction(bencher: &mut Bencher) {
     let bank = Bank::new(&mint);
 
     // Create transactions between unrelated parties.
+    // page_table requires sequential debits from the same account
     let transactions: Vec<_> = (0..4096)
-        .into_par_iter()
+        .into_iter()
         .map(|i| {
             // Seed the 'from' account.
             let rando0 = KeyPair::new();
-            let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 10_000, mint.last_id());
+            let tx = Transaction::new(
+                &mint.keypair(),
+                rando0.pubkey(),
+                10_000,
+                mint.last_id(),
+                i as u64,
+            );
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Seed the 'to' account and a cell for its signature.
@@ -31,7 +38,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
             bank.register_entry_id(&last_id);
 
             let rando1 = KeyPair::new();
-            let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
+            let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id, 0);
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Finally, return the transaction to the benchmark.
@@ -41,9 +48,9 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
     bencher.iter_with_setup(
         || {
-            // Since benchmarker runs this multiple times, we need to clear the signatures.
-            bank.clear_signatures();
-            transactions.clone()
+            let mut txs = transactions.clone();
+            txs.iter_mut().for_each(|tx| tx.call.data.version += 1);
+            txs
         },
         |transactions| {
             let results = bank.process_transactions(transactions);
