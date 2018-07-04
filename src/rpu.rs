@@ -27,15 +27,16 @@ use bank::Bank;
 use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
+use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use streamer;
 
 pub struct Rpu {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl Rpu {
@@ -71,7 +72,21 @@ impl Rpu {
             blob_receiver,
         );
 
-        let thread_hdls = vec![t_receiver, t_responder, request_stage.thread_hdl];
+        let mut thread_hdls = vec![t_receiver, t_responder];
+        thread_hdls.extend(request_stage.thread_hdls().into_iter());
         Rpu { thread_hdls }
+    }
+}
+
+impl Service for Rpu {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        self.thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }

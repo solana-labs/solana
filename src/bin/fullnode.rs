@@ -9,6 +9,7 @@ use atty::{is, Stream};
 use getopts::Options;
 use solana::crdt::{ReplicatedData, TestNode};
 use solana::fullnode::{FullNode, InFile, OutFile};
+use solana::service::Service;
 use std::env;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -94,7 +95,5 @@ fn main() -> () {
         };
         FullNode::new(node, true, InFile::StdIn, None, Some(outfile), exit)
     };
-    for t in fullnode.thread_hdls {
-        t.join().expect("join");
-    }
+    fullnode.join().expect("join");
 }

@@ -6,17 +6,18 @@ use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
 use result::Result;
+use service::Service;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 use streamer::{self, BlobReceiver, BlobSender};
 use timing;
 
 pub struct RequestStage {
-    pub thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
     pub request_processor: Arc<RequestProcessor>,
 }
 
@@ -112,5 +113,15 @@ impl RequestStage {
             },
             blob_receiver,
         )
+    }
+}
+
+impl Service for RequestStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        vec![self.thread_hdl]
+    }
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }

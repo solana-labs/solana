@@ -3,14 +3,15 @@
 use bank::Bank;
 use ledger;
 use result::Result;
+use service::Service;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
 
 pub struct ReplicateStage {
-    pub thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
 }
 
 impl ReplicateStage {
@@ -39,5 +40,15 @@ impl ReplicateStage {
             })
             .unwrap();
         ReplicateStage { thread_hdl }
+    }
+}
+
+impl Service for ReplicateStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        vec![self.thread_hdl]
+    }
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }

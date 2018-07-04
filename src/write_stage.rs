@@ -8,17 +8,18 @@ use entry_writer::EntryWriter;
 use ledger::Block;
 use packet::BlobRecycler;
 use result::Result;
+use service::Service;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender};
 
 pub struct WriteStage {
-    pub thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
 }
 
 impl WriteStage {
@@ -71,5 +72,15 @@ impl WriteStage {
             .unwrap();
 
         (WriteStage { thread_hdl }, blob_receiver)
+    }
+}
+
+impl Service for WriteStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        vec![self.thread_hdl]
+    }
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }

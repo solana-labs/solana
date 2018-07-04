@@ -38,6 +38,7 @@ pub mod request_processor;
 pub mod request_stage;
 pub mod result;
 pub mod rpu;
+pub mod service;
 pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;

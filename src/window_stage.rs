@@ -2,15 +2,16 @@
 
 use crdt::Crdt;
 use packet::BlobRecycler;
+use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use streamer::{self, BlobReceiver, Window};
 
 pub struct WindowStage {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl WindowStage {
@@ -46,5 +47,18 @@ impl WindowStage {
         let thread_hdls = vec![t_retransmit, t_window];
 
         (WindowStage { thread_hdls }, blob_receiver)
+    }
+}
+
+impl Service for WindowStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        self.thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }

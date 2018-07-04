@@ -9,11 +9,12 @@ use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::Result;
+use service::Service;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
@@ -22,7 +23,7 @@ use transaction::Transaction;
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     /// Handle to the stage's thread.
-    pub thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<()>,
 }
 
 impl BankingStage {
@@ -127,6 +128,16 @@ impl BankingStage {
         );
         inc_counter!(COUNTER, count, proc_start);
         Ok(())
+    }
+}
+
+impl Service for BankingStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        vec![self.thread_hdl]
+    }
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
     }
 }
 

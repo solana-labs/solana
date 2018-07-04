@@ -13,6 +13,7 @@ use solana::hash::Hash;
 use solana::mint::Mint;
 use solana::nat::udp_public_bind;
 use solana::ncp::Ncp;
+use solana::service::Service;
 use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
@@ -373,7 +374,7 @@ fn converge(
         }
         sleep(Duration::new(1, 0));
     }
-    threads.extend(ncp.thread_hdls.into_iter());
+    threads.extend(ncp.thread_hdls().into_iter());
     rv
 }
 

@@ -8,17 +8,18 @@
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::Result;
+use service::Service;
 use sigverify;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{spawn, JoinHandle};
+use std::thread::{self, spawn, JoinHandle};
 use std::time::Instant;
 use streamer::{self, PacketReceiver};
 use timing;
 
 pub struct SigVerifyStage {
-    pub thread_hdls: Vec<JoinHandle<()>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl SigVerifyStage {
@@ -96,5 +97,18 @@ impl SigVerifyStage {
         (0..4)
             .map(|_| Self::verifier_service(exit.clone(), receiver.clone(), sender.clone()))
             .collect()
+    }
+}
+
+impl Service for SigVerifyStage {
+    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
+        self.thread_hdls
+    }
+
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
