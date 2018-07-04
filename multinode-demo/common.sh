@@ -58,7 +58,13 @@ export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 
 tune_networking() {
-  [[ $(uname) = Linux ]] && (set -x; sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null)
+  # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
+  [[ $(uname) = Linux ]] && (
+    set -x
+    # TODO: Check values and warn instead, it's a little rude to set them here.
+    sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
+    sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
+  )
 }
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
