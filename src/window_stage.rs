@@ -4,7 +4,6 @@ use crdt::Crdt;
 use packet::BlobRecycler;
 use service::Service;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
@@ -20,7 +19,6 @@ impl WindowStage {
         window: Window,
         entry_height: u64,
         retransmit_socket: UdpSocket,
-        exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {
@@ -28,14 +26,12 @@ impl WindowStage {
 
         let t_retransmit = streamer::retransmitter(
             retransmit_socket,
-            exit.clone(),
             crdt.clone(),
             blob_recycler.clone(),
             retransmit_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
         let t_window = streamer::window(
-            exit.clone(),
             crdt.clone(),
             window,
             entry_height,

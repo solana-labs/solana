@@ -464,7 +464,6 @@ pub fn default_window() -> Window {
 }
 
 pub fn window(
-    exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
     window: Window,
     entry_height: u64,
@@ -482,10 +481,7 @@ pub fn window(
             let mut times = 0;
             let debug_id = crdt.read().unwrap().debug_id();
             loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                let _ = recv_window(
+                if let Err(e) = recv_window(
                     debug_id,
                     &window,
                     &crdt,
@@ -495,7 +491,13 @@ pub fn window(
                     &r,
                     &s,
                     &retransmit,
-                );
+                ) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => error!("{:?}", e),
+                    }
+                }
                 let _ = repair_window(
                     debug_id,
                     &window,
@@ -669,7 +671,6 @@ fn retransmit(
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 pub fn retransmitter(
     sock: UdpSocket,
-    exit: Arc<AtomicBool>,
     crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
@@ -679,11 +680,13 @@ pub fn retransmitter(
         .spawn(move || {
             trace!("retransmitter started");
             loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
+                if let Err(e) = retransmit(&crdt, &recycler, &r, &sock) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => error!("{:?}", e),
+                    }
                 }
-                // TODO: handle this error
-                let _ = retransmit(&crdt, &recycler, &r, &sock);
             }
             trace!("exiting retransmitter");
         })
@@ -903,7 +906,6 @@ mod test {
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
         let t_window = window(
-            exit.clone(),
             subs,
             win,
             0,
