@@ -5,11 +5,10 @@ use packet::{to_blobs, BlobRecycler, PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
-use result::Result;
+use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -81,7 +80,6 @@ impl RequestStage {
     }
     pub fn new(
         request_processor: RequestProcessor,
-        exit: Arc<AtomicBool>,
         packet_receiver: Receiver<SharedPackets>,
         packet_recycler: PacketRecycler,
         blob_recycler: BlobRecycler,
@@ -92,16 +90,17 @@ impl RequestStage {
         let thread_hdl = Builder::new()
             .name("solana-request-stage".to_string())
             .spawn(move || loop {
-                let e = Self::process_request_packets(
+                if let Err(e) = Self::process_request_packets(
                     &request_processor_,
                     &packet_receiver,
                     &blob_sender,
                     &packet_recycler,
                     &blob_recycler,
-                );
-                if e.is_err() {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
+                ) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => error!("{:?}", e),
                     }
                 }
             })
