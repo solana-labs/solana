@@ -178,7 +178,6 @@ impl FullNode {
 
         let t_broadcast = streamer::broadcaster(
             node.sockets.broadcast,
-            exit.clone(),
             crdt,
             window,
             entry_height,
