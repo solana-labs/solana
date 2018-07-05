@@ -11,7 +11,6 @@ use result::{Error, Result};
 use service::Service;
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
@@ -46,7 +45,6 @@ impl WriteStage {
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
         blob_recycler: BlobRecycler,
         writer: W,
         entry_receiver: Receiver<Vec<Entry>>,
@@ -65,15 +63,10 @@ impl WriteStage {
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::SendError => break,
+                            Error::SendError => (), // Ignore when downstream stage exists prematurely.
                             _ => error!("{:?}", e),
                         }
                     };
-
-                    if exit.load(Ordering::Relaxed) {
-                        info!("broadcat_service exiting");
-                        break;
-                    }
                 }
             })
             .unwrap();
