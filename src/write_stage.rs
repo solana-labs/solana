@@ -23,7 +23,7 @@ pub struct WriteStage {
 }
 
 impl WriteStage {
-    /// Process any Entry items that have been published by the Historian.
+    /// Process any Entry items that have been published by the RecordStage.
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries<W: Write>(
         entry_writer: &mut EntryWriter<W>,
@@ -43,7 +43,7 @@ impl WriteStage {
         Ok(())
     }
 
-    /// Create a new Rpu that wraps the given Bank.
+    /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
         exit: Arc<AtomicBool>,
