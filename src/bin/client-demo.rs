@@ -365,6 +365,8 @@ fn spy_node() -> (NodeInfo, UdpSocket) {
     let gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
     let pubkey = KeyPair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
+    assert!(!gossip_socket_pair.addr.ip().is_unspecified());
+    assert!(!gossip_socket_pair.addr.ip().is_multicast());
     let node = NodeInfo::new(
         pubkey,
         //gossip.local_addr().unwrap(),
