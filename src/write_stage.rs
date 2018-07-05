@@ -64,7 +64,6 @@ impl WriteStage {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            Error::SendError => (), // Ignore when downstream stage exits prematurely.
                             _ => error!("{:?}", e),
                         }
                     };
