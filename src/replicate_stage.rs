@@ -2,9 +2,9 @@
 
 use bank::Bank;
 use ledger;
-use result::Result;
+use result::{Error, Result};
 use service::Service;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -29,13 +29,16 @@ impl ReplicateStage {
         Ok(())
     }
 
-    pub fn new(bank: Arc<Bank>, exit: Arc<AtomicBool>, window_receiver: BlobReceiver) -> Self {
+    pub fn new(bank: Arc<Bank>, window_receiver: BlobReceiver) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || loop {
-                let e = Self::replicate_requests(&bank, &window_receiver);
-                if e.is_err() && exit.load(Ordering::Relaxed) {
-                    break;
+                if let Err(e) = Self::replicate_requests(&bank, &window_receiver) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => error!("{:?}", e),
+                    }
                 }
             })
             .unwrap();

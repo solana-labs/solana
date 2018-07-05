@@ -94,7 +94,7 @@ impl Tvu {
             blob_receiver,
         );
 
-        let replicate_stage = ReplicateStage::new(bank, exit, blob_receiver);
+        let replicate_stage = ReplicateStage::new(bank, blob_receiver);
 
         Tvu {
             replicate_stage,
