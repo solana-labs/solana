@@ -193,12 +193,8 @@ pub mod tests {
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
-        let t_responder = streamer::responder(
-            leader.sockets.requests,
-            exit.clone(),
-            resp_recycler.clone(),
-            r_responder,
-        );
+        let t_responder =
+            streamer::responder(leader.sockets.requests, resp_recycler.clone(), r_responder);
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
@@ -269,6 +265,7 @@ pub mod tests {
 
         // send the blobs into the socket
         s_responder.send(msgs).expect("send");
+        drop(s_responder);
 
         // receive retransmitted messages
         let timer = Duration::new(1, 0);

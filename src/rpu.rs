@@ -65,12 +65,7 @@ impl Rpu {
             blob_recycler.clone(),
         );
 
-        let t_responder = streamer::responder(
-            respond_socket,
-            exit.clone(),
-            blob_recycler.clone(),
-            blob_receiver,
-        );
+        let t_responder = streamer::responder(respond_socket, blob_recycler.clone(), blob_receiver);
 
         let mut thread_hdls = vec![t_receiver, t_responder];
         thread_hdls.extend(request_stage.thread_hdls().into_iter());
