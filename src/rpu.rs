@@ -50,7 +50,7 @@ impl Rpu {
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
             requests_socket,
-            exit.clone(),
+            exit,
             packet_recycler.clone(),
             packet_sender,
         );
@@ -59,7 +59,6 @@ impl Rpu {
         let request_processor = RequestProcessor::new(bank.clone());
         let (request_stage, blob_receiver) = RequestStage::new(
             request_processor,
-            exit.clone(),
             packet_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
