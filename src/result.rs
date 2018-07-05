@@ -2,9 +2,13 @@
 
 use bank;
 use bincode;
+use crdt;
+#[cfg(feature = "erasure")]
+use erasure;
 use serde_json;
 use std;
 use std::any::Any;
+use streamer;
 
 #[derive(Debug)]
 pub enum Error {
@@ -16,10 +20,11 @@ pub enum Error {
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     BankError(bank::BankError),
+    CrdtError(crdt::CrdtError),
+    WindowError(streamer::WindowError),
+    #[cfg(feature = "erasure")]
+    ErasureError(erasure::ErasureError),
     SendError,
-    Services,
-    CrdtTooSmall,
-    GenericError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -37,6 +42,22 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
 impl std::convert::From<bank::BankError> for Error {
     fn from(e: bank::BankError) -> Error {
         Error::BankError(e)
+    }
+}
+impl std::convert::From<crdt::CrdtError> for Error {
+    fn from(e: crdt::CrdtError) -> Error {
+        Error::CrdtError(e)
+    }
+}
+impl std::convert::From<streamer::WindowError> for Error {
+    fn from(e: streamer::WindowError) -> Error {
+        Error::WindowError(e)
+    }
+}
+#[cfg(feature = "erasure")]
+impl std::convert::From<erasure::ErasureError> for Error {
+    fn from(e: erasure::ErasureError) -> Error {
+        Error::ErasureError(e)
     }
 }
 impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {

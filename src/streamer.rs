@@ -6,7 +6,7 @@ use erasure;
 use packet::{
     Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedBlobs, SharedPackets, BLOB_SIZE,
 };
-use result::{Error, Result};
+use result::Result;
 use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
@@ -22,6 +22,11 @@ pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 pub type Window = Arc<RwLock<Vec<Option<SharedBlob>>>>;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowError {
+    GenericError,
+}
 
 fn recv_loop(
     sock: &UdpSocket,
@@ -152,7 +157,7 @@ fn find_next_missing(
     received: &mut u64,
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     if *received <= *consumed {
-        return Err(Error::GenericError);
+        Err(WindowError::GenericError)?;
     }
     let window = locked_window.read().unwrap();
     let reqs: Vec<_> = (*consumed..*received)
@@ -575,7 +580,7 @@ fn broadcast(
                 &mut window.write().unwrap(),
                 *receive_index as usize,
                 blobs_len,
-            ).map_err(|_| Error::GenericError)?;
+            )?;
         }
 
         *receive_index += blobs_len as u64;

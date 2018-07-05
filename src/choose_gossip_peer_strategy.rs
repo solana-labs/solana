@@ -1,7 +1,7 @@
-use crdt::ReplicatedData;
+use crdt::{CrdtError, ReplicatedData};
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
-use result::{Error, Result};
+use result::Result;
 use signature::PublicKey;
 use std;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ impl<'a, 'b> ChooseRandomPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
         if options.is_empty() {
-            return Err(Error::CrdtTooSmall);
+            Err(CrdtError::TooSmall)?;
         }
 
         let n = ((self.random)() as usize) % options.len();
@@ -174,7 +174,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
         if options.len() < 1 {
-            return Err(Error::CrdtTooSmall);
+            Err(CrdtError::TooSmall)?;
         }
 
         let mut weighted_peers = vec![];
