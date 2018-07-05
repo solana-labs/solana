@@ -9,8 +9,9 @@ extern crate solana;
 use atty::{is, Stream};
 use clap::{App, Arg};
 use solana::crdt::{ReplicatedData, TestNode};
-use solana::fullnode::{FullNode, InFile, OutFile};
+use solana::fullnode::{Config, FullNode, InFile, OutFile};
 use solana::service::Service;
+use solana::signature::{KeyPair, KeyPairUtil};
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -50,12 +51,15 @@ fn main() -> () {
     }
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-    let mut repl_data = ReplicatedData::new_leader(&bind_addr);
+    let mut keypair = KeyPair::new();
+    let mut repl_data = ReplicatedData::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
     if let Some(l) = matches.value_of("identity") {
         let path = l.to_string();
         if let Ok(file) = File::open(path.clone()) {
-            if let Ok(data) = serde_json::from_reader(file) {
-                repl_data = data;
+            let parse: serde_json::Result<Config> = serde_json::from_reader(file);
+            if let Ok(data) = parse {
+                keypair = data.keypair();
+                repl_data = data.network;
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -69,7 +73,7 @@ fn main() -> () {
     let fullnode = if let Some(t) = matches.value_of("testnet") {
         let testnet_address_string = t.to_string();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        FullNode::new(node, false, InFile::StdIn, Some(testnet_addr), None)
+        FullNode::new(node, false, InFile::StdIn, None, Some(testnet_addr), None)
     } else {
         node.data.current_leader_id = node.data.id.clone();
 
@@ -78,7 +82,14 @@ fn main() -> () {
         } else {
             OutFile::StdOut
         };
-        FullNode::new(node, true, InFile::StdIn, None, Some(outfile))
+        FullNode::new(
+            node,
+            true,
+            InFile::StdIn,
+            Some(keypair),
+            None,
+            Some(outfile),
+        )
     };
     fullnode.join().expect("join");
 }

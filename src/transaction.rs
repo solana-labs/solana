@@ -47,6 +47,17 @@ pub struct Contract {
     pub plan: Plan,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Vote {
+    /// We send some gossip specific membershp information through the vote to shortcut
+    /// liveness voting
+    /// The version of the CRDT struct that the last_id of this network voted with
+    pub version: u64,
+    /// The version of the CRDT struct that has the same network configuration as this one
+    pub contact_info_version: u64,
+    // TODO: add signature of the state here as well
+}
+
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
@@ -59,6 +70,9 @@ pub enum Instruction {
     /// Tell the payment plan that the `NewContract` with `Signature` has been
     /// signed by the containing transaction's `PublicKey`.
     ApplySignature(Signature),
+
+    /// Vote for a PoH that is equal to the lastid of this transaction
+    NewVote(Vote),
 }
 
 /// An instruction signed by a client with `PublicKey`.
@@ -133,6 +147,10 @@ impl Transaction {
     pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
         let instruction = Instruction::ApplySignature(tx_sig);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
+    }
+
+    pub fn new_vote(from_keypair: &KeyPair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+        Transaction::new_from_instruction(&from_keypair, Instruction::NewVote(vote), last_id, fee)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.

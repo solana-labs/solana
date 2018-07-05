@@ -10,6 +10,7 @@ use clap::{App, Arg};
 use rayon::prelude::*;
 use solana::crdt::{Crdt, ReplicatedData};
 use solana::drone::DroneRequest;
+use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::mint::Mint;
 use solana::nat::{udp_public_bind, udp_random_bind};
@@ -186,7 +187,7 @@ fn main() {
 
     let leader: ReplicatedData;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l.to_string());
+        leader = read_leader(l.to_string()).network;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = ReplicatedData::new_leader(&server_addr);
@@ -395,7 +396,7 @@ fn converge(
     rv
 }
 
-fn read_leader(path: String) -> ReplicatedData {
+fn read_leader(path: String) -> Config {
     let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
     serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
 }

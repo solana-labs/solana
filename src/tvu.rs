@@ -2,13 +2,15 @@
 //! 3-stage transaction validation pipeline in software.
 //!
 //! ```text
-//!                  .------------------------------------------.
-//!                  |  TVU                                     |
-//!                  |                                          |
-//!                  |                                          |  .------------.
-//!                  |                   .------------------------>| Validators |
-//!                  |  .-------.        |                      |  `------------`
-//! .--------.       |  |       |   .----+---.   .-----------.  |
+//!      +<------------------------------------------<+
+//!      |                                            |
+//!      |           .--------------------------------+---------.
+//!      |           |  TVU                           |         |
+//!      |           |                                |         |
+//!      |           |                                |         |  .------------.
+//!      |           |                   .------------+----------->| Validators |
+//!      |           |  .-------.        |            |         |  `------------`
+//! .----+---.       |  |       |   .----+---.   .----+------.  |
 //! | Leader |--------->| Blob  |   | Window |   | Replicate |  |
 //! `--------`       |  | Fetch |-->| Stage  |-->|  Stage    |  |
 //! .------------.   |  | Stage |   |        |   |           |  |
@@ -40,6 +42,7 @@ use crdt::Crdt;
 use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
 use service::Service;
+use signature::KeyPair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -66,6 +69,7 @@ impl Tvu {
     /// * `retransmit_socket` - my retransmit socket
     /// * `exit` - The exit signal.
     pub fn new(
+        keypair: Arc<KeyPair>,
         bank: Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
@@ -76,7 +80,7 @@ impl Tvu {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let blob_recycler = BlobRecycler::default();
-        let (fetch_stage, blob_receiver) = BlobFetchStage::new_multi_socket(
+        let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit,
             blob_recycler.clone(),
@@ -84,16 +88,17 @@ impl Tvu {
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
-        let (window_stage, blob_receiver) = WindowStage::new(
-            crdt,
+        let (window_stage, blob_window_receiver) = WindowStage::new(
+            crdt.clone(),
             window,
             entry_height,
             retransmit_socket,
             blob_recycler.clone(),
-            blob_receiver,
+            blob_fetch_receiver,
         );
 
-        let replicate_stage = ReplicateStage::new(bank, blob_receiver);
+        let replicate_stage =
+            ReplicateStage::new(keypair, bank, crdt, blob_recycler, blob_window_receiver);
 
         Tvu {
             replicate_stage,
@@ -164,7 +169,8 @@ pub mod tests {
     fn test_replicate() {
         logger::setup();
         let leader = TestNode::new();
-        let target1 = TestNode::new();
+        let target1_kp = KeyPair::new();
+        let target1 = TestNode::new_with_pubkey(target1_kp.pubkey());
         let target2 = TestNode::new();
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -214,6 +220,7 @@ pub mod tests {
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
 
         let tvu = Tvu::new(
+            Arc::new(target1_kp),
             bank.clone(),
             0,
             cref1,

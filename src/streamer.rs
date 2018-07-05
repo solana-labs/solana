@@ -7,6 +7,7 @@ use packet::{
     Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedBlobs, SharedPackets, BLOB_SIZE,
 };
 use result::{Error, Result};
+use std::cmp;
 use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
@@ -477,7 +478,6 @@ pub fn initialized_window(
     {
         let mut win = window.write().unwrap();
         let me = crdt.read().unwrap().my_data().clone();
-        assert!(blobs.len() <= win.len());
 
         debug!(
             "initialized window entry_height:{} blobs_len:{}",
@@ -490,7 +490,8 @@ pub fn initialized_window(
         Crdt::index_blobs(&me, &blobs, &mut received).expect("index blobs for initial window");
 
         // populate the window, offset by implied index
-        for b in blobs {
+        let diff = cmp::max(blobs.len() as isize - win.len() as isize, 0) as usize;
+        for b in blobs.into_iter().skip(diff) {
             let ix = b.read().unwrap().get_index().expect("blob index");
             let pos = (ix % WINDOW_SIZE) as usize;
             trace!("caching {} at {}", ix, pos);

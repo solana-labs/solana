@@ -15,7 +15,6 @@ use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use std::fs::File;
-use std::mem;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -92,14 +91,23 @@ fn test_multi_node_validator_catchup_from_zero() {
     let bob_pubkey = KeyPair::new().pubkey();
 
     let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(leader, true, InFile::Path(ledger_path.clone()), None, None);
+    let server = FullNode::new(
+        leader,
+        true,
+        InFile::Path(ledger_path.clone()),
+        None,
+        None,
+        None,
+    );
     let mut nodes = vec![server];
     for _ in 0..N {
-        let validator = TestNode::new();
+        let keypair = KeyPair::new();
+        let validator = TestNode::new_with_pubkey(keypair.pubkey());
         let mut val = FullNode::new(
             validator,
             false,
             InFile::Path(ledger_path.clone()),
+            Some(keypair),
             Some(leader_data.contact_info.ncp),
             None,
         );
@@ -128,10 +136,13 @@ fn test_multi_node_validator_catchup_from_zero() {
 
     success = 0;
     // start up another validator, converge and then check everyone's balances
+    let keypair = KeyPair::new();
+    let validator = TestNode::new_with_pubkey(keypair.pubkey());
     let val = FullNode::new(
-        TestNode::new(),
+        validator,
         false,
         InFile::Path(ledger_path.clone()),
+        Some(keypair),
         Some(leader_data.contact_info.ncp),
         None,
     );
@@ -155,7 +166,7 @@ fn test_multi_node_validator_catchup_from_zero() {
     for server in servers.iter() {
         let mut client = mk_client(server);
         info!("1server: {:x}", server.debug_id());
-        for _ in 0..10 {
+        for _ in 0..15 {
             if let Ok(bal) = client.poll_get_balance(&bob_pubkey) {
                 info!("validator balance {}", bal);
                 if bal == leader_balance {
@@ -182,14 +193,23 @@ fn test_multi_node_basic() {
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(leader, true, InFile::Path(ledger_path.clone()), None, None);
+    let server = FullNode::new(
+        leader,
+        true,
+        InFile::Path(ledger_path.clone()),
+        None,
+        None,
+        None,
+    );
     let mut nodes = vec![server];
     for _ in 0..N {
-        let validator = TestNode::new();
-        let val = FullNode::new(
+        let keypair = KeyPair::new();
+        let validator = TestNode::new_with_pubkey(keypair.pubkey());
+        FullNode::new(
             validator,
             false,
             InFile::Path(ledger_path.clone()),
+            Some(keypair),
             Some(leader_data.contact_info.ncp),
             None,
         );
@@ -233,6 +253,7 @@ fn test_boot_validator_from_file() {
         true,
         InFile::Path(ledger_path.clone()),
         None,
+        None,
         Some(OutFile::Path(ledger_path.clone())),
     );
     let leader_balance =
@@ -242,12 +263,14 @@ fn test_boot_validator_from_file() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let validator = TestNode::new();
+    let keypair = KeyPair::new();
+    let validator = TestNode::new_with_pubkey(keypair.pubkey());
     let validator_data = validator.data.clone();
     let val_fullnode = FullNode::new(
         validator,
         false,
         InFile::Path(ledger_path.clone()),
+        Some(keypair),
         Some(leader_data.contact_info.ncp),
         None,
     );
@@ -269,7 +292,8 @@ fn create_leader(ledger_path: &str) -> (ReplicatedData, FullNode) {
         true,
         InFile::Path(ledger_path.to_string()),
         None,
-        Some(OutFile::Path(ledger_path.to_string())),
+        None,
+        Some(OutFile::Path(ledger_path.clone())),
     );
     (leader_data, leader_fullnode)
 }
@@ -312,12 +336,14 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // start validator from old ledger
-    let validator = TestNode::new();
+    let keypair = KeyPair::new();
+    let validator = TestNode::new_with_pubkey(keypair.pubkey());
     let validator_data = validator.data.clone();
     let val_fullnode = FullNode::new(
         validator,
         false,
         InFile::Path(stale_ledger_path.clone()),
+        Some(keypair),
         Some(leader_data.contact_info.ncp),
         None,
     );
@@ -352,7 +378,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 25;
+    const N: usize = 60;
     let leader = TestNode::new();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
@@ -361,6 +387,7 @@ fn test_multi_node_dynamic_network() {
         leader,
         true,
         InFile::Path(ledger_path.clone()),
+        None,
         None,
         Some(OutFile::Path(ledger_path.clone())),
     );
@@ -372,19 +399,25 @@ fn test_multi_node_dynamic_network() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let mut validators: Vec<(ReplicatedData, FullNode)> = (0..N)
+    let validators: Vec<(ReplicatedData, FullNode)> = (0..N)
         .into_iter()
-        .map(|_| {
-            let validator = TestNode::new();
+        .map(|n| {
+            let keypair = KeyPair::new();
+            let validator = TestNode::new_with_pubkey(keypair.pubkey());
             let rd = validator.data.clone();
+            //send some tokens to the new validator
+            let bal =
+                send_tx_and_retry_get_balance(&leader_data, &alice, &keypair.pubkey(), Some(500));
+            assert_eq!(bal, Some(500));
             let val = FullNode::new(
                 validator,
                 false,
                 InFile::Path(ledger_path.clone()),
+                Some(keypair),
                 Some(leader_data.contact_info.ncp),
                 Some(OutFile::Path(ledger_path.clone())),
             );
-            info!("{:x} VALIDATOR", rd.debug_id());
+            info!("started[{}/{}] {:x}", n, N, rd.debug_id());
             (rd, val)
         })
         .collect();
@@ -395,13 +428,19 @@ fn test_multi_node_dynamic_network() {
         let leader_balance =
             send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(expected))
                 .unwrap();
-        assert_eq!(leader_balance, expected);
+        if leader_balance != expected {
+            info!(
+                "leader dropped transaction {} {:?} {:?}",
+                i, leader_balance, expected
+            );
+        }
         //verify all validators have the same balance
-        for i in 0..10 {
+        {
             let mut success = 0usize;
             let mut distance = 0i64;
             for server in validators.iter() {
                 let mut client = mk_client(&server.0);
+                trace!("{:x} {} get_balance start", server.0.debug_id(), i);
                 let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
                 trace!(
                     "{:x} {} get_balance: {:?} expected: {}",
@@ -411,49 +450,23 @@ fn test_multi_node_dynamic_network() {
                     expected
                 );
                 let bal = getbal.unwrap_or(0);
-                distance += (expected - bal) / 500;
+                distance += (leader_balance - bal) / 500;
                 if let Some(bal) = getbal {
                     if bal == leader_balance {
                         success += 1;
                     }
                 }
             }
-            if success == validators.len() {
-                break;
-            }
-            sleep(Duration::from_millis(i * 100));
             info!(
-                "SUCCESS {} out of {} distance: {}",
+                "SUCCESS[{}] {} out of {} distance: {}",
+                i,
                 success,
                 validators.len(),
                 distance
             );
+            //assert_eq!(success, validators.len());
         }
-
-        let val = {
-            let validator = TestNode::new();
-            let rd = validator.data.clone();
-            let val = FullNode::new(
-                validator,
-                false,
-                InFile::Path(ledger_path.clone()),
-                Some(leader_data.contact_info.ncp),
-                Some(OutFile::Path(ledger_path.clone())),
-            );
-            info!("{:x} ADDED", rd.debug_id());
-            (rd, val)
-        };
-
-        let old_val = mem::replace(&mut validators[i], val);
-
-        // this should be almost true, or at least validators.len() - 1 while the other node catches up
-        //assert!(success == validators.len());
-        //kill a validator
-        old_val.1.close().unwrap();
-        info!("{:x} KILLED", old_val.0.debug_id());
-        //add a new one
     }
-
     for (_, node) in validators {
         node.close().unwrap();
     }
@@ -490,6 +503,7 @@ fn retry_get_balance(
         if expected.is_none() || run == LAST {
             return out.ok().clone();
         }
+        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
         if let (Some(e), Ok(o)) = (expected, out) {
             if o == e {
                 return Some(o);

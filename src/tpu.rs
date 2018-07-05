@@ -27,6 +27,7 @@
 
 use bank::Bank;
 use banking_stage::BankingStage;
+use crdt::Crdt;
 use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
@@ -35,7 +36,7 @@ use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
@@ -52,6 +53,7 @@ pub struct Tpu {
 impl Tpu {
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
+        crdt: Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
         transactions_socket: UdpSocket,
         blob_recycler: BlobRecycler,
@@ -75,8 +77,13 @@ impl Tpu {
             None => RecordStage::new(signal_receiver, &bank.last_id()),
         };
 
-        let (write_stage, blob_receiver) =
-            WriteStage::new(bank.clone(), blob_recycler.clone(), writer, entry_receiver);
+        let (write_stage, blob_receiver) = WriteStage::new(
+            bank.clone(),
+            crdt.clone(),
+            blob_recycler.clone(),
+            writer,
+            entry_receiver,
+        );
 
         let tpu = Tpu {
             fetch_stage,

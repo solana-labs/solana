@@ -49,6 +49,7 @@ pub mod timing;
 pub mod tpu;
 pub mod transaction;
 pub mod tvu;
+pub mod voting;
 pub mod window_stage;
 pub mod write_stage;
 extern crate bincode;
