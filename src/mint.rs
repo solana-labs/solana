@@ -29,7 +29,6 @@ impl Mint {
             tokens,
         }
     }
-
     pub fn seed(&self) -> Hash {
         hash(&self.pkcs8)
     }

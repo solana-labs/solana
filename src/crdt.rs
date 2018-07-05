@@ -34,6 +34,7 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender, Window};
 use timing::timestamp;
+use transaction::Vote;
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -286,6 +287,63 @@ impl Crdt {
         self.external_liveness.get(key)
     }
 
+    pub fn insert_vote(&mut self, pubkey: &PublicKey, v: &Vote, last_id: Hash) {
+        if self.table.get(pubkey).is_none() {
+            warn!(
+                "{:x}: VOTE for unknown id: {:x}",
+                self.debug_id(),
+                make_debug_id(&pubkey)
+            );
+            return;
+        }
+        if v.contact_info_version > self.table[pubkey].contact_info.version {
+            warn!(
+                "{:x}: VOTE for new address version from: {:x} ours: {} vote: {:?}",
+                self.debug_id(),
+                make_debug_id(pubkey),
+                self.table[pubkey].contact_info.version,
+                v,
+            );
+            return;
+        }
+        self.update_leader_liveness();
+        if v.version <= self.table[pubkey].version {
+            debug!(
+                "{:x}: VOTE for old version: {:x}",
+                self.debug_id(),
+                make_debug_id(&pubkey)
+            );
+            self.update_liveness(*pubkey);
+            return;
+        } else {
+            let mut data = self.table[pubkey].clone();
+            data.version = v.version;
+            data.last_verified_id = last_id;
+            debug!(
+                "{:x}: INSERTING VOTE! for {:x}",
+                self.debug_id(),
+                data.debug_id()
+            );
+            self.insert(&data);
+        }
+    }
+    fn update_leader_liveness(&mut self) {
+        //TODO: (leaders should vote)
+        //until then we pet their liveness every time we see some votes from anyone
+        let ld = self.leader_data().map(|x| x.id.clone());
+        trace!("leader_id {:?}", ld);
+        if let Some(leader_id) = ld {
+            self.update_liveness(leader_id);
+        }
+    }
+    pub fn insert_votes(&mut self, votes: Vec<(PublicKey, Vote, Hash)>) {
+        if votes.len() > 0 {
+            info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
+        }
+        for v in &votes {
+            self.insert_vote(&v.0, &v.1, v.2);
+        }
+    }
     pub fn insert(&mut self, v: &ReplicatedData) {
         // TODO check that last_verified types are always increasing
         //update the peer table
@@ -641,6 +699,20 @@ impl Crdt {
         );
 
         Ok((v.contact_info.ncp, req))
+    }
+
+    pub fn new_vote(&mut self, height: u64, last_id: Hash) -> Result<(Vote, SocketAddr)> {
+        let mut me = self.my_data().clone();
+        let leader = self.leader_data().ok_or(CrdtError::NoLeader)?.clone();
+        me.version += 1;
+        me.last_verified_id = last_id;
+        me.last_verified_height = height;
+        let vote = Vote {
+            version: me.version,
+            contact_info_version: me.contact_info.version,
+        };
+        self.insert(&me);
+        Ok((vote, leader.contact_info.tpu))
     }
 
     /// At random pick a node and try to get updated changes from them
@@ -1080,6 +1152,7 @@ mod tests {
         parse_port_or_addr, Crdt, CrdtError, ReplicatedData, GOSSIP_PURGE_MILLIS,
         GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
+    use hash::Hash;
     use logger;
     use packet::BlobRecycler;
     use result::Error;
@@ -1090,6 +1163,7 @@ mod tests {
     use std::thread::sleep;
     use std::time::Duration;
     use streamer::default_window;
+    use transaction::Vote;
 
     #[test]
     fn test_parse_port_or_addr() {
@@ -1120,6 +1194,90 @@ mod tests {
         crdt.insert(&d);
         assert_eq!(crdt.table[&d.id].version, 2);
     }
+    #[test]
+    fn test_new_vote() {
+        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d.version, 0);
+        let mut crdt = Crdt::new(d.clone());
+        assert_eq!(crdt.table[&d.id].version, 0);
+        let leader = ReplicatedData::new_leader(&"127.0.0.2:1235".parse().unwrap());
+        assert_ne!(d.id, leader.id);
+        assert_matches!(
+            crdt.new_vote(0, Hash::default()).err(),
+            Some(Error::CrdtError(CrdtError::NoLeader))
+        );
+        crdt.insert(&leader);
+        assert_matches!(
+            crdt.new_vote(0, Hash::default()).err(),
+            Some(Error::CrdtError(CrdtError::NoLeader))
+        );
+        crdt.set_leader(leader.id);
+        assert_eq!(crdt.table[&d.id].version, 1);
+        let v = Vote {
+            version: 2, //version shoud increase when we vote
+            contact_info_version: 0,
+        };
+        let expected = (v, crdt.table[&leader.id].contact_info.tpu);
+        assert_eq!(crdt.new_vote(0, Hash::default()).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_insert_vote() {
+        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d.version, 0);
+        let mut crdt = Crdt::new(d.clone());
+        assert_eq!(crdt.table[&d.id].version, 0);
+        let vote_same_version = Vote {
+            version: d.version,
+            contact_info_version: 0,
+        };
+        crdt.insert_vote(&d.id, &vote_same_version, Hash::default());
+        assert_eq!(crdt.table[&d.id].version, 0);
+
+        let vote_new_version_new_addrs = Vote {
+            version: d.version + 1,
+            contact_info_version: 1,
+        };
+        crdt.insert_vote(&d.id, &vote_new_version_new_addrs, Hash::default());
+        //should be dropped since the address is newer then we know
+        assert_eq!(crdt.table[&d.id].version, 0);
+
+        let vote_new_version_old_addrs = Vote {
+            version: d.version + 1,
+            contact_info_version: 0,
+        };
+        crdt.insert_vote(&d.id, &vote_new_version_old_addrs, Hash::default());
+        //should be accepted, since the update is for the same address field as the one we know
+        assert_eq!(crdt.table[&d.id].version, 1);
+    }
+
+    #[test]
+    fn test_insert_vote_leader_liveness() {
+        logger::setup();
+        // TODO: remove this test once leaders vote
+        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        assert_eq!(d.version, 0);
+        let mut crdt = Crdt::new(d.clone());
+        let leader = ReplicatedData::new_leader(&"127.0.0.2:1235".parse().unwrap());
+        assert_ne!(d.id, leader.id);
+        crdt.insert(&leader);
+        crdt.set_leader(leader.id);
+        let live: u64 = crdt.alive[&leader.id];
+        trace!("{:x} live {}", leader.debug_id(), live);
+        let vote_new_version_old_addrs = Vote {
+            version: d.version + 1,
+            contact_info_version: 0,
+        };
+        sleep(Duration::from_millis(100));
+        let votes = vec![(d.id.clone(), vote_new_version_old_addrs, Hash::default())];
+        crdt.insert_votes(votes);
+        let updated = crdt.alive[&leader.id];
+        //should be accepted, since the update is for the same address field as the one we know
+        assert_eq!(crdt.table[&d.id].version, 1);
+        trace!("{:x} {} {}", leader.debug_id(), updated, live);
+        assert!(updated > live);
+    }
+
     fn sorted(ls: &Vec<ReplicatedData>) -> Vec<ReplicatedData> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();
         copy.sort_by(|x, y| x.id.cmp(&y.id));

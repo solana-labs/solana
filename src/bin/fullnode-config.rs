@@ -3,7 +3,8 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
-use solana::crdt::{get_ip_addr, parse_port_or_addr, ReplicatedData};
+use solana::crdt::{get_ip_addr, parse_port_or_addr};
+use solana::fullnode::Config;
 use solana::nat::get_public_ip_addr;
 use std::io;
 use std::net::SocketAddr;
@@ -55,7 +56,7 @@ fn main() {
 
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
-    let repl_data = ReplicatedData::new_leader(&bind_addr);
+    let config = Config::new(&bind_addr);
     let stdout = io::stdout();
-    serde_json::to_writer(stdout, &repl_data).expect("serialize");
+    serde_json::to_writer(stdout, &config).expect("serialize");
 }

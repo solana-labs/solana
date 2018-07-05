@@ -3,6 +3,7 @@
 //! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
+use crdt::Crdt;
 use entry::Entry;
 use entry_writer::EntryWriter;
 use ledger::Block;
@@ -12,10 +13,11 @@ use service::Service;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender};
+use voting::entries_to_votes;
 
 pub struct WriteStage {
     thread_hdl: JoinHandle<()>,
@@ -25,12 +27,15 @@ impl WriteStage {
     /// Process any Entry items that have been published by the RecordStage.
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries<W: Write>(
+        crdt: &Arc<RwLock<Crdt>>,
         entry_writer: &mut EntryWriter<W>,
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
         entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
+        let votes = entries_to_votes(&entries);
+        crdt.write().unwrap().insert_votes(votes);
         entry_writer.write_and_register_entries(&entries)?;
         trace!("New blobs? {}", entries.len());
         let mut blobs = VecDeque::new();
@@ -45,6 +50,7 @@ impl WriteStage {
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new<W: Write + Send + 'static>(
         bank: Arc<Bank>,
+        crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
         writer: W,
         entry_receiver: Receiver<Vec<Entry>>,
@@ -56,6 +62,7 @@ impl WriteStage {
                 let mut entry_writer = EntryWriter::new(&bank, writer);
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
+                        &crdt,
                         &mut entry_writer,
                         &blob_sender,
                         &blob_recycler,

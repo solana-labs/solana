@@ -7,8 +7,10 @@ use entry_writer;
 use ledger::Block;
 use ncp::Ncp;
 use packet::BlobRecycler;
+use ring::rand::SystemRandom;
 use rpu::Rpu;
 use service::Service;
+use signature::{KeyPair, KeyPairUtil};
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::io::{sink, stdin, stdout, BufReader};
@@ -21,6 +23,7 @@ use std::time::Duration;
 use streamer;
 use tpu::Tpu;
 use tvu::Tvu;
+use untrusted::Input;
 
 //use std::time::Duration;
 pub struct FullNode {
@@ -38,11 +41,41 @@ pub enum OutFile {
     Path(String),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// Fullnode configuration to be stored in file
+pub struct Config {
+    pub network: ReplicatedData,
+    pkcs8: Vec<u8>,
+}
+
+/// Structure to be replicated by the network
+impl Config {
+    pub fn new(bind_addr: &SocketAddr) -> Self {
+        let rnd = SystemRandom::new();
+        let pkcs8 = KeyPair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        let keypair =
+            KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
+        let pubkey = keypair.pubkey();
+        let network = ReplicatedData::new_leader_with_pubkey(pubkey, bind_addr);
+        Config {
+            network: network,
+            pkcs8: pkcs8,
+        }
+    }
+    pub fn keypair(&self) -> KeyPair {
+        KeyPair::from_pkcs8(Input::from(&self.pkcs8))
+            .expect("from_pkcs8 in fullnode::Config keypair")
+    }
+}
+
 impl FullNode {
     pub fn new(
         mut node: TestNode,
         leader: bool,
         infile: InFile,
+        keypair_for_validator: Option<KeyPair>,
         network_entry_for_validator: Option<SocketAddr>,
         outfile_for_leader: Option<OutFile>,
     ) -> FullNode {
@@ -75,7 +108,9 @@ impl FullNode {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
             let network_entry_point = ReplicatedData::new_entry_point(testnet_addr);
+            let keypair = keypair_for_validator.expect("validastor requires keypair");
             let server = FullNode::new_validator(
+                keypair,
                 bank,
                 entry_height,
                 Some(ledger_tail),
@@ -184,8 +219,10 @@ impl FullNode {
         thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         let (tpu, blob_receiver) = Tpu::new(
             bank.clone(),
+            crdt.clone(),
             tick_duration,
             node.sockets.transaction,
             blob_recycler.clone(),
@@ -193,10 +230,7 @@ impl FullNode {
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls());
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
-
         let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
-
         let ncp = Ncp::new(
             crdt.clone(),
             window.clone(),
@@ -249,6 +283,7 @@ impl FullNode {
     ///               `-------------------------------`
     /// ```
     pub fn new_validator(
+        keypair: KeyPair,
         bank: Bank,
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
@@ -284,6 +319,7 @@ impl FullNode {
         ).expect("Ncp::new");
 
         let tvu = Tvu::new(
+            Arc::new(keypair),
             bank.clone(),
             entry_height,
             crdt.clone(),
@@ -323,16 +359,18 @@ mod tests {
     use crdt::TestNode;
     use fullnode::FullNode;
     use mint::Mint;
+    use signature::{KeyPair, KeyPairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     #[test]
     fn validator_exit() {
-        let tn = TestNode::new();
+        let kp = KeyPair::new();
+        let tn = TestNode::new_with_pubkey(kp.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(bank, 0, None, tn, entry, exit);
+        let v = FullNode::new_validator(kp, bank, 0, None, tn, entry, exit);
         v.close().unwrap();
     }
 }
