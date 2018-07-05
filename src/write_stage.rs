@@ -7,12 +7,12 @@ use entry::Entry;
 use entry_writer::EntryWriter;
 use ledger::Block;
 use packet::BlobRecycler;
-use result::Result;
+use result::{Error, Result};
 use service::Service;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -57,12 +57,19 @@ impl WriteStage {
             .spawn(move || {
                 let mut entry_writer = EntryWriter::new(&bank, writer);
                 loop {
-                    let _ = Self::write_and_send_entries(
+                    if let Err(e) = Self::write_and_send_entries(
                         &mut entry_writer,
                         &blob_sender,
                         &blob_recycler,
                         &entry_receiver,
-                    );
+                    ) {
+                        match e {
+                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::SendError => break,
+                            _ => error!("{:?}", e),
+                        }
+                    };
+
                     if exit.load(Ordering::Relaxed) {
                         info!("broadcat_service exiting");
                         break;
