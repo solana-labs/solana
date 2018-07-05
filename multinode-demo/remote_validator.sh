@@ -6,7 +6,8 @@ chmod 600 ~/.ssh/authorized_keys ~/.ssh/id_rsa
 
 PATH="$HOME"/.cargo/bin:"$PATH"
 
-ssh-keygen -R "$1"
+touch ~/.ssh/known_hosts
+ssh-keygen -R "$1" 2>/dev/null
 ssh-keyscan "$1" >>~/.ssh/known_hosts 2>/dev/null
 
 rsync -vPrz "$1":~/.cargo/bin/solana* ~/.cargo/bin/
