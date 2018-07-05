@@ -42,6 +42,11 @@ const GOSSIP_SLEEP_MILLIS: u64 = 100;
 /// minimum membership table size before we start purging dead nodes
 const MIN_TABLE_SIZE: usize = 2;
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum CrdtError {
+    TooSmall,
+}
+
 pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
     let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
     if let Some(addrstr) = optstr {
@@ -393,7 +398,7 @@ impl Crdt {
             .collect();
         if nodes.len() < 1 {
             warn!("crdt too small");
-            return Err(Error::CrdtTooSmall);
+            Err(CrdtError::TooSmall)?;
         }
         trace!("nodes table {}", nodes.len());
 
@@ -433,13 +438,10 @@ impl Crdt {
             .collect();
         trace!("broadcast results {}", errs.len());
         for e in errs {
-            match e {
-                Err(e) => {
-                    error!("broadcast result {:?}", e);
-                    return Err(Error::IO(e));
-                }
-                _ => (),
+            if let Err(e) = &e {
+                error!("broadcast result {:?}", e);
             }
+            e?;
             *transmit_index += 1;
         }
         Ok(())
@@ -491,13 +493,10 @@ impl Crdt {
             })
             .collect();
         for e in errs {
-            match e {
-                Err(e) => {
-                    info!("retransmit error {:?}", e);
-                    return Err(Error::IO(e));
-                }
-                _ => (),
+            if let Err(e) = &e {
+                error!("broadcast result {:?}", e);
             }
+            e?;
         }
         Ok(())
     }
@@ -541,7 +540,7 @@ impl Crdt {
             .filter(|r| r.id != self.me && r.repair_addr != daddr)
             .collect();
         if valid.is_empty() {
-            return Err(Error::CrdtTooSmall);
+            Err(CrdtError::TooSmall)?;
         }
         let n = (Self::random() as usize) % valid.len();
         let addr = valid[n].gossip_addr.clone();
@@ -566,18 +565,14 @@ impl Crdt {
 
         let choose_peer_result = choose_peer_strategy.choose_peer(options);
 
-        let v = match choose_peer_result {
-            Ok(peer) => peer,
-            Err(Error::CrdtTooSmall) => {
-                trace!(
-                    "crdt too small for gossip {:?} {}",
-                    &self.me[..4],
-                    self.table.len()
-                );
-                return Err(Error::CrdtTooSmall);
-            }
-            Err(e) => return Err(e),
+        if let Err(Error::CrdtError(CrdtError::TooSmall)) = &choose_peer_result {
+            trace!(
+                "crdt too small for gossip {:?} {}",
+                &self.me[..4],
+                self.table.len()
+            );
         };
+        let v = choose_peer_result?;
 
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
@@ -1014,7 +1009,9 @@ impl TestNode {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{parse_port_or_addr, Crdt, ReplicatedData, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE};
+    use crdt::{
+        parse_port_or_addr, Crdt, CrdtError, ReplicatedData, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
+    };
     use logger;
     use packet::BlobRecycler;
     use result::Error;
@@ -1140,7 +1137,7 @@ mod tests {
         );
         let mut crdt = Crdt::new(me.clone());
         let rv = crdt.window_index_request(0);
-        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
         let nxt = ReplicatedData::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
@@ -1151,7 +1148,7 @@ mod tests {
         );
         crdt.insert(&nxt);
         let rv = crdt.window_index_request(0);
-        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
         let nxt = ReplicatedData::new(
             KeyPair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
@@ -1202,7 +1199,7 @@ mod tests {
         );
         let mut crdt = Crdt::new(me.clone());
         let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtTooSmall));
+        assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
         let nxt1 = ReplicatedData::new(
             KeyPair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
