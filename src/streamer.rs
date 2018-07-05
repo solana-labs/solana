@@ -101,17 +101,16 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
     Ok((batch, len))
 }
 
-pub fn responder(
-    sock: UdpSocket,
-    exit: Arc<AtomicBool>,
-    recycler: BlobRecycler,
-    r: BlobReceiver,
-) -> JoinHandle<()> {
+pub fn responder(sock: UdpSocket, recycler: BlobRecycler, r: BlobReceiver) -> JoinHandle<()> {
     Builder::new()
         .name("solana-responder".to_string())
         .spawn(move || loop {
-            if recv_send(&sock, &recycler, &r).is_err() && exit.load(Ordering::Relaxed) {
-                break;
+            if let Err(e) = recv_send(&sock, &recycler, &r) {
+                match e {
+                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    _ => error!("{:?}", e),
+                }
             }
         })
         .unwrap()
@@ -844,20 +843,24 @@ mod test {
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
-        let (s_responder, r_responder) = channel();
-        let t_responder = responder(send, exit.clone(), resp_recycler.clone(), r_responder);
-        let mut msgs = VecDeque::new();
-        for i in 0..10 {
-            let b = resp_recycler.allocate();
-            {
-                let mut w = b.write().unwrap();
-                w.data[0] = i as u8;
-                w.meta.size = PACKET_DATA_SIZE;
-                w.meta.set_addr(&addr);
+        let t_responder = {
+            let (s_responder, r_responder) = channel();
+            let t_responder = responder(send, resp_recycler.clone(), r_responder);
+            let mut msgs = VecDeque::new();
+            for i in 0..10 {
+                let b = resp_recycler.allocate();
+                {
+                    let mut w = b.write().unwrap();
+                    w.data[0] = i as u8;
+                    w.meta.size = PACKET_DATA_SIZE;
+                    w.meta.set_addr(&addr);
+                }
+                msgs.push_back(b);
             }
-            msgs.push_back(b);
-        }
-        s_responder.send(msgs).expect("send");
+            s_responder.send(msgs).expect("send");
+            t_responder
+        };
+
         let mut num = 0;
         get_msgs(r_reader, &mut num);
         assert_eq!(num, 10);
@@ -914,28 +917,28 @@ mod test {
             s_window,
             s_retransmit,
         );
-        let (s_responder, r_responder) = channel();
-        let t_responder = responder(
-            tn.sockets.replicate,
-            exit.clone(),
-            resp_recycler.clone(),
-            r_responder,
-        );
-        let mut msgs = VecDeque::new();
-        for v in 0..10 {
-            let i = 9 - v;
-            let b = resp_recycler.allocate();
-            {
-                let mut w = b.write().unwrap();
-                w.set_index(i).unwrap();
-                w.set_id(me_id).unwrap();
-                assert_eq!(i, w.get_index().unwrap());
-                w.meta.size = PACKET_DATA_SIZE;
-                w.meta.set_addr(&tn.data.gossip_addr);
+
+        let t_responder = {
+            let (s_responder, r_responder) = channel();
+            let t_responder = responder(tn.sockets.replicate, resp_recycler.clone(), r_responder);
+            let mut msgs = VecDeque::new();
+            for v in 0..10 {
+                let i = 9 - v;
+                let b = resp_recycler.allocate();
+                {
+                    let mut w = b.write().unwrap();
+                    w.set_index(i).unwrap();
+                    w.set_id(me_id).unwrap();
+                    assert_eq!(i, w.get_index().unwrap());
+                    w.meta.size = PACKET_DATA_SIZE;
+                    w.meta.set_addr(&tn.data.gossip_addr);
+                }
+                msgs.push_back(b);
             }
-            msgs.push_back(b);
-        }
-        s_responder.send(msgs).expect("send");
+            s_responder.send(msgs).expect("send");
+            t_responder
+        };
+
         let mut num = 0;
         get_blobs(r_window, &mut num);
         assert_eq!(num, 10);
