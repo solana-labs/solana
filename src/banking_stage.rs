@@ -8,11 +8,11 @@ use counter::Counter;
 use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
-use result::Result;
+use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::atomic::AtomicUsize;
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -27,13 +27,11 @@ pub struct BankingStage {
 }
 
 impl BankingStage {
-    /// Create the stage using `bank`. Exit when either `exit` is set or
-    /// when `verified_receiver` or the stage's output receiver is dropped.
+    /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     /// Discard input packets using `packet_recycler` to minimize memory
     /// allocations in a previous stage such as the `fetch_stage`.
     pub fn new(
         bank: Arc<Bank>,
-        exit: Arc<AtomicBool>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: PacketRecycler,
     ) -> (Self, Receiver<Signal>) {
@@ -41,15 +39,17 @@ impl BankingStage {
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
             .spawn(move || loop {
-                let e = Self::process_packets(
+                if let Err(e) = Self::process_packets(
                     bank.clone(),
                     &verified_receiver,
                     &signal_sender,
                     &packet_recycler,
-                );
-                if e.is_err() {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
+                ) {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        Error::SendError => (), // Ignore when downstream stage exits prematurely.
+                        _ => error!("{:?}", e),
                     }
                 }
             })
