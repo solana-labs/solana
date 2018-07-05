@@ -78,7 +78,7 @@ impl Tvu {
         let blob_recycler = BlobRecycler::default();
         let (fetch_stage, blob_receiver) = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
-            exit.clone(),
+            exit,
             blob_recycler.clone(),
         );
         //TODO
@@ -89,7 +89,6 @@ impl Tvu {
             window,
             entry_height,
             retransmit_socket,
-            exit.clone(),
             blob_recycler.clone(),
             blob_receiver,
         );
