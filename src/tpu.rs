@@ -80,13 +80,8 @@ impl Tpu {
             None => RecordStage::new(signal_receiver, &bank.last_id()),
         };
 
-        let (write_stage, blob_receiver) = WriteStage::new(
-            bank.clone(),
-            exit.clone(),
-            blob_recycler.clone(),
-            writer,
-            entry_receiver,
-        );
+        let (write_stage, blob_receiver) =
+            WriteStage::new(bank.clone(), blob_recycler.clone(), writer, entry_receiver);
 
         let tpu = Tpu {
             fetch_stage,
