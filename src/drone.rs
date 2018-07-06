@@ -4,6 +4,8 @@
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
 
+use influx_db_client as influxdb;
+use metrics;
 use signature::{KeyPair, PublicKey};
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -121,10 +123,29 @@ impl Drone {
         }
         if self.check_request_limit(request_amount) {
             self.request_current += request_amount;
+            metrics::submit(
+                influxdb::Point::new("drone")
+                    .add_tag("op", influxdb::Value::String("airdrop".to_string()))
+                    .add_field(
+                        "request_amount",
+                        influxdb::Value::Integer(request_amount as i64),
+                    )
+                    .add_field(
+                        "request_current",
+                        influxdb::Value::Integer(self.request_current as i64),
+                    )
+                    .to_owned(),
+            );
             client.transfer_signed(tx)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
         }
+    }
+}
+
+impl Drop for Drone {
+    fn drop(&mut self) {
+        metrics::flush();
     }
 }
 
