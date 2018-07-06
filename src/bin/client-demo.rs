@@ -33,9 +33,14 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
+pub struct NodeStats {
+    pub tps: f64, // Maximum TPS reported by this node
+    pub tx: u64,  // Total transactions reported by this node
+}
+
 fn sample_tx_count(
     exit: &Arc<AtomicBool>,
-    maxes: &Arc<RwLock<Vec<(f64, u64)>>>,
+    maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
     first_count: u64,
     v: &NodeInfo,
     sample_period: u64,
@@ -67,7 +72,11 @@ fn sample_tx_count(
 
         if exit.load(Ordering::Relaxed) {
             println!("exiting validator thread");
-            maxes.write().unwrap().push((max_tps, total));
+            let stats = NodeStats {
+                tps: max_tps,
+                tx: total,
+            };
+            maxes.write().unwrap().push((v.contact_info.tpu, stats));
             break;
         }
     }
@@ -335,12 +344,30 @@ fn main() {
     // Compute/report stats
     let mut max_of_maxes = 0.0;
     let mut total_txs = 0;
-    for (max, txs) in maxes.read().unwrap().iter() {
-        if *max > max_of_maxes {
-            max_of_maxes = *max;
+    let mut nodes_with_zero_tps = 0;
+    let mut total_maxes = 0.0;
+    for (sock, stats) in maxes.read().unwrap().iter() {
+        println!("Node:{}, Max TPS: {:.2}", *sock, stats.tps);
+        if stats.tx == 0 {
+            nodes_with_zero_tps += 1;
         }
-        total_txs += *txs;
+        total_maxes += stats.tps;
+
+        if stats.tps > max_of_maxes {
+            max_of_maxes = stats.tps;
+        }
+        total_txs += stats.tx;
     }
+
+    if total_maxes > 0.0 {
+        let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
+        let average_max = total_maxes / num_nodes_with_tps as f64;
+        println!(
+            "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
+            average_max, nodes_with_zero_tps
+        );
+    }
+
     println!(
         "\nHighest TPS: {:.2} sampling period {}s total transactions: {} clients: {}",
         max_of_maxes,
