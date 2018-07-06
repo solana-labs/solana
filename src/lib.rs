@@ -25,6 +25,7 @@ pub mod fullnode;
 pub mod hash;
 pub mod ledger;
 pub mod logger;
+pub mod metrics;
 pub mod mint;
 pub mod nat;
 pub mod ncp;
@@ -72,4 +73,5 @@ extern crate untrusted;
 #[macro_use]
 extern crate matches;
 
+extern crate influx_db_client;
 extern crate rand;

@@ -10,7 +10,12 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
+use std::time::Instant;
+use timing;
 use transaction::Transaction;
+
+use influx_db_client as influxdb;
+use metrics;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -100,9 +105,20 @@ impl ThinClient {
         to: PublicKey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
+        let now = Instant::now();
         let tx = Transaction::new(keypair, to, n, *last_id);
         let sig = tx.sig;
-        self.transfer_signed(tx).map(|_| sig)
+        let result = self.transfer_signed(tx).map(|_| sig);
+        metrics::submit(
+            influxdb::Point::new("thinclient")
+                .add_tag("op", influxdb::Value::String("transfer".to_string()))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
+                )
+                .to_owned(),
+        );
+        result
     }
 
     /// Request the balance of the user holding `pubkey`. This method blocks
@@ -183,8 +199,6 @@ impl ThinClient {
     }
 
     pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
-        use std::time::Instant;
-
         let mut balance;
         let now = Instant::now();
         loop {
@@ -193,7 +207,15 @@ impl ThinClient {
                 break;
             }
         }
-
+        metrics::submit(
+            influxdb::Point::new("thinclient")
+                .add_tag("op", influxdb::Value::String("get_balance".to_string()))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
+                )
+                .to_owned(),
+        );
         balance
     }
 
@@ -203,6 +225,7 @@ impl ThinClient {
         trace!("check_signature");
         let req = Request::GetSignature { signature: *sig };
         let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
+        let now = Instant::now();
         let mut done = false;
         while !done {
             self.requests_socket
@@ -216,7 +239,22 @@ impl ThinClient {
                 self.process_response(resp);
             }
         }
+        metrics::submit(
+            influxdb::Point::new("thinclient")
+                .add_tag("op", influxdb::Value::String("check_signature".to_string()))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
+                )
+                .to_owned(),
+        );
         self.signature_status
+    }
+}
+
+impl Drop for ThinClient {
+    fn drop(&mut self) {
+        metrics::flush();
     }
 }
 
