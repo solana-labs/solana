@@ -16,6 +16,7 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
     fi
   }
   rsync="$SNAP"/bin/rsync
+  SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
 
 elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries
@@ -56,6 +57,51 @@ solana_mint=$(solana_program mint)
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
+
+
+# The SOLANA_METRICS_CONFIG environment variable is formatted as a
+# comma-delimited list of parameters. All parameters are optional.
+#
+# Example:
+#   export SOLANA_METRICS_CONFIG="host=<metrics host>,db=<database name>,u=<username>,p=<password>"
+#
+configure_metrics() {
+  [[ -n $SOLANA_METRICS_CONFIG ]] || return
+
+  declare metrics_params
+  IFS=',' read -r -a metrics_params <<< "$SOLANA_METRICS_CONFIG"
+  for param in "${metrics_params[@]}"; do
+    IFS='=' read -r -a pair <<< "$param"
+    if [[ "${#pair[@]}" != 2 ]]; then
+      echo Error: invalid metrics parameter: "$param"
+    else
+      declare name="${pair[0]}"
+      declare value="${pair[1]}"
+      case "$name" in
+      host)
+        export INFLUX_HOST="$value"
+        echo INFLUX_HOST="$INFLUX_HOST"
+        ;;
+      db)
+        export INFLUX_DATABASE="$value"
+        echo INFLUX_DATABASE="$INFLUX_DATABASE"
+        ;;
+      u)
+        export INFLUX_USERNAME="$value"
+        echo INFLUX_USERNAME="$INFLUX_USERNAME"
+        ;;
+      p)
+        export INFLUX_PASSWORD="$value"
+        echo INFLUX_PASSWORD="********"
+        ;;
+      *)
+        echo Error: Unknown metrics parameter name: "$name"
+        ;;
+      esac
+    fi
+  done
+}
+configure_metrics
 
 tune_networking() {
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
