@@ -56,6 +56,7 @@ impl InfluxDbMetricsWriter {
 impl MetricsWriter for InfluxDbMetricsWriter {
     fn write(&self, points: Vec<influxdb::Point>) {
         if let Some(ref client) = self.client {
+            info!("submitting {} points", points.len());
             if let Err(err) = client.write_points(
                 influxdb::Points { point: points },
                 Some(influxdb::Precision::Milliseconds),
