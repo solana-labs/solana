@@ -1,3 +1,5 @@
+use influx_db_client as influxdb;
+use metrics;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use timing;
@@ -45,6 +47,15 @@ impl Counter {
                 timing::timestamp(),
             );
         }
+        metrics::submit(
+            influxdb::Point::new(&format!("counter_{}", self.name))
+                .add_field("count", influxdb::Value::Integer(events as i64))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(&dur) as i64),
+                )
+                .to_owned(),
+        );
     }
 }
 #[cfg(test)]
