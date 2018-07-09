@@ -32,9 +32,9 @@ impl PaymentPlan for Plan {
         }
     }
 
-    fn apply_witness(&mut self, witness: &Witness) {
+    fn apply_witness(&mut self, witness: &Witness, from: &PublicKey) {
         match self {
-            Plan::Budget(budget) => budget.apply_witness(witness),
+            Plan::Budget(budget) => budget.apply_witness(witness, from),
         }
     }
 }
@@ -145,7 +145,7 @@ impl Transaction {
     ) -> Self {
         let from = from_keypair.pubkey();
         let budget = Budget::Or(
-            (Condition::Timestamp(dt), Payment { tokens, to }),
+            (Condition::Timestamp(dt, from), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let plan = Plan::Budget(budget);

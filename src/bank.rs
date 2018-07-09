@@ -388,7 +388,7 @@ impl Bank {
             .expect("write() in apply_signature")
             .entry(tx_sig)
         {
-            e.get_mut().apply_witness(&Witness::Signature(from));
+            e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {
                 self.apply_payment(&payment, &mut self.balances.write().unwrap());
                 e.remove_entry();
@@ -400,7 +400,7 @@ impl Bank {
 
     /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
     /// will progress one step.
-    fn apply_timestamp(&self, _from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+    fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
 
@@ -410,7 +410,7 @@ impl Bank {
             .write()
             .expect("'pending' write lock in apply_timestamp");
         for (key, plan) in pending.iter_mut() {
-            plan.apply_witness(&Witness::Timestamp(dt));
+            plan.apply_witness(&Witness::Timestamp(dt), &from);
             if let Some(payment) = plan.final_payment() {
                 self.apply_payment(&payment, &mut self.balances.write().unwrap());
                 completed.push(key.clone());

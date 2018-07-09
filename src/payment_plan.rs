@@ -13,7 +13,7 @@ pub enum Witness {
     Timestamp(DateTime<Utc>),
 
     /// A siganture from PublicKey.
-    Signature(PublicKey),
+    Signature,
 }
 
 /// Some amount of tokens that should be sent to the `to` `PublicKey`.
@@ -36,5 +36,5 @@ pub trait PaymentPlan {
 
     /// Apply a witness to the payment plan to see if the plan can be reduced.
     /// If so, modify the plan in-place.
-    fn apply_witness(&mut self, witness: &Witness);
+    fn apply_witness(&mut self, witness: &Witness, from: &PublicKey);
 }
