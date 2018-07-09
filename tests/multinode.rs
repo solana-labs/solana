@@ -314,6 +314,9 @@ fn restart_leader(
 
 #[test]
 fn test_leader_restart_validator_start_from_old_ledger() {
+    // this test verifies that a freshly started leader makes his ledger available
+    //    in the repair window to validators that are started with an older
+    //    ledger (currently up to WINDOW_SIZE entries)
     logger::setup();
 
     let (alice, ledger_path) = genesis(100_000);
@@ -330,7 +333,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let mut stale_ledger_path = ledger_path.clone();
     stale_ledger_path.insert_str(ledger_path.rfind("/").unwrap() + 1, "stale_");
 
-    std::fs::copy(ledger_path.clone(), stale_ledger_path.clone())
+    std::fs::copy(&ledger_path, &stale_ledger_path)
         .expect(format!("copy {} to {}", &ledger_path, &stale_ledger_path,).as_str());
 
     // restart the leader
@@ -366,7 +369,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-    assert!(getbal == Some(leader_balance));
+    assert_eq!(getbal, Some(leader_balance));
 
     exit.store(true, Ordering::Relaxed);
     leader_fullnode.join().unwrap();
