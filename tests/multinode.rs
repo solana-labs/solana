@@ -287,6 +287,94 @@ fn test_boot_validator_from_file() {
     std::fs::remove_file(ledger_path).unwrap();
 }
 
+fn restart_leader(
+    exit: Option<Arc<AtomicBool>>,
+    leader_fullnode: Option<FullNode>,
+    ledger_path: String,
+) -> (ReplicatedData, FullNode, Arc<AtomicBool>) {
+    if let (Some(exit), Some(leader_fullnode)) = (exit, leader_fullnode) {
+        // stop the leader
+        exit.store(true, Ordering::Relaxed);
+        leader_fullnode.join().unwrap();
+    }
+
+    let leader = TestNode::new();
+    let leader_data = leader.data.clone();
+    let exit = Arc::new(AtomicBool::new(false));
+    let leader_fullnode = FullNode::new(
+        leader,
+        true,
+        InFile::Path(ledger_path.clone()),
+        None,
+        Some(OutFile::Path(ledger_path.clone())),
+        exit.clone(),
+    );
+    (leader_data, leader_fullnode, exit)
+}
+
+#[test]
+fn test_leader_restart_validator_start_from_old_ledger() {
+    logger::setup();
+
+    let (alice, ledger_path) = genesis(100_000);
+    let bob_pubkey = KeyPair::new().pubkey();
+
+    let (leader_data, leader_fullnode, exit) = restart_leader(None, None, ledger_path.clone());
+
+    // lengthen the ledger
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
+    assert_eq!(leader_balance, 500);
+
+    // create a "stale" ledger by copying current ledger
+    let mut stale_ledger_path = ledger_path.clone();
+    stale_ledger_path.insert_str(ledger_path.rfind("/").unwrap() + 1, "stale_");
+
+    std::fs::copy(ledger_path.clone(), stale_ledger_path.clone())
+        .expect(format!("copy {} to {}", &ledger_path, &stale_ledger_path,).as_str());
+
+    // restart the leader
+    let (leader_data, leader_fullnode, exit) =
+        restart_leader(Some(exit), Some(leader_fullnode), ledger_path.clone());
+
+    // lengthen the ledger
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
+    assert_eq!(leader_balance, 1000);
+
+    // restart the leader
+    let (leader_data, leader_fullnode, exit) =
+        restart_leader(Some(exit), Some(leader_fullnode), ledger_path.clone());
+
+    // start validator from old ledger
+    let validator = TestNode::new();
+    let validator_data = validator.data.clone();
+    let val_fullnode = FullNode::new(
+        validator,
+        false,
+        InFile::Path(stale_ledger_path.clone()),
+        Some(leader_data.gossip_addr),
+        None,
+        exit.clone(),
+    );
+
+    // trigger broadcast, validator should catch up from leader, whose window contains
+    //   the entries missing from the stale ledger
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1500)).unwrap();
+    assert_eq!(leader_balance, 1500);
+
+    let mut client = mk_client(&validator_data);
+    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+    assert!(getbal == Some(leader_balance));
+
+    exit.store(true, Ordering::Relaxed);
+    leader_fullnode.join().unwrap();
+    val_fullnode.join().unwrap();
+    std::fs::remove_file(ledger_path).unwrap();
+    std::fs::remove_file(stale_ledger_path).unwrap();
+}
+
 //TODO: this test will run a long time so its disabled for CI
 #[test]
 #[ignore]
