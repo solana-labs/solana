@@ -227,7 +227,7 @@ fn repair_window(
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     for (to, req) in reqs {
         //todo cache socket
-        info!(
+        debug!(
             "{:x} repair_window request {} {} {}",
             debug_id, *consumed, *received, to
         );
@@ -257,7 +257,7 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
-    info!(
+    debug!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
         *consumed,
@@ -302,7 +302,7 @@ fn recv_window(
             warn!("{:x}: no leader to retransmit from", debug_id);
         }
         if !retransmitq.is_empty() {
-            info!(
+            debug!(
                 "{:x}: RECV_WINDOW {} {}: retransmit {}",
                 debug_id,
                 *consumed,
@@ -416,7 +416,7 @@ fn recv_window(
     print_window(locked_window, *consumed);
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
-        info!(
+        debug!(
             "{:x}: RECV_WINDOW {} {}: forwarding contq {}",
             debug_id,
             *consumed,
@@ -475,6 +475,7 @@ pub fn initialized_window(
 
     {
         let mut win = window.write().unwrap();
+        let me = crdt.read().unwrap().my_data().clone();
         assert!(blobs.len() <= win.len());
 
         debug!(
@@ -485,7 +486,7 @@ pub fn initialized_window(
 
         // Index the blobs
         let mut received = entry_height - blobs.len() as u64;
-        Crdt::index_blobs(crdt, &blobs, &mut received).expect("index blobs for initial window");
+        Crdt::index_blobs(&me, &blobs, &mut received).expect("index blobs for initial window");
 
         // populate the window, offset by implied index
         for b in blobs {
@@ -552,8 +553,8 @@ pub fn window(
 }
 
 fn broadcast(
-    debug_id: u64,
-    crdt: &Arc<RwLock<Crdt>>,
+    me: &ReplicatedData,
+    broadcast_table: &Vec<ReplicatedData>,
     window: &Window,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
@@ -561,6 +562,7 @@ fn broadcast(
     transmit_index: &mut u64,
     receive_index: &mut u64,
 ) -> Result<()> {
+    let debug_id = me.debug_id();
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
     while let Ok(mut nq) = r.try_recv() {
@@ -585,7 +587,7 @@ fn broadcast(
         debug!("{:x} broadcast blobs.len: {}", debug_id, blobs_len);
 
         // Index the blobs
-        Crdt::index_blobs(crdt, &blobs, receive_index)?;
+        Crdt::index_blobs(&me, &blobs, receive_index)?;
         // keep the cache of blobs that are broadcast
         {
             let mut win = window.write().unwrap();
@@ -625,7 +627,14 @@ fn broadcast(
         *receive_index += blobs_len as u64;
 
         // Send blobs out from the window
-        Crdt::broadcast(crdt, &window, &sock, transmit_index, *receive_index)?;
+        Crdt::broadcast(
+            &me,
+            &broadcast_table,
+            &window,
+            &sock,
+            transmit_index,
+            *receive_index,
+        )?;
     }
     Ok(())
 }
@@ -652,11 +661,12 @@ pub fn broadcaster(
         .spawn(move || {
             let mut transmit_index = entry_height;
             let mut receive_index = entry_height;
-            let debug_id = crdt.read().unwrap().debug_id();
+            let me = crdt.read().unwrap().my_data().clone();
             loop {
+                let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
                 if let Err(e) = broadcast(
-                    debug_id,
-                    &crdt,
+                    &me,
+                    &broadcast_table,
                     &window,
                     &recycler,
                     &r,
@@ -955,7 +965,6 @@ mod test {
             s_window,
             s_retransmit,
         );
-
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(tn.sockets.replicate, resp_recycler.clone(), r_responder);
@@ -969,7 +978,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.gossip_addr);
+                    w.meta.set_addr(&tn.data.addrs.gossip);
                 }
                 msgs.push_back(b);
             }
