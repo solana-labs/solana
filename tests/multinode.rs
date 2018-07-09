@@ -29,8 +29,8 @@ fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
     let mut spy = TestNode::new();
     let daddr = "0.0.0.0:0".parse().unwrap();
     let me = spy.data.id.clone();
-    spy.data.replicate_addr = daddr;
-    spy.data.requests_addr = daddr;
+    spy.data.addrs.replicate = daddr;
+    spy.data.addrs.requests = daddr;
     let mut spy_crdt = Crdt::new(spy.data);
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
@@ -55,7 +55,7 @@ fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .filter(|x| x.requests_addr != daddr)
+            .filter(|x| x.addrs.requests != daddr)
             .cloned()
             .collect();
         if num >= num_nodes as u64 && v.len() >= num_nodes {
@@ -110,7 +110,7 @@ fn test_multi_node_validator_catchup_from_zero() {
             validator,
             false,
             InFile::Path(ledger_path.clone()),
-            Some(leader_data.gossip_addr),
+            Some(leader_data.addrs.gossip),
             None,
             exit.clone(),
         );
@@ -143,7 +143,7 @@ fn test_multi_node_validator_catchup_from_zero() {
         TestNode::new(),
         false,
         InFile::Path(ledger_path.clone()),
-        Some(leader_data.gossip_addr),
+        Some(leader_data.addrs.gossip),
         None,
         exit.clone(),
     );
@@ -211,7 +211,7 @@ fn test_multi_node_basic() {
             validator,
             false,
             InFile::Path(ledger_path.clone()),
-            Some(leader_data.gossip_addr),
+            Some(leader_data.addrs.gossip),
             None,
             exit.clone(),
         );
@@ -272,7 +272,7 @@ fn test_boot_validator_from_file() {
         validator,
         false,
         InFile::Path(ledger_path.clone()),
-        Some(leader_data.gossip_addr),
+        Some(leader_data.addrs.gossip),
         None,
         exit.clone(),
     );
@@ -356,7 +356,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
         validator,
         false,
         InFile::Path(stale_ledger_path.clone()),
-        Some(leader_data.gossip_addr),
+        Some(leader_data.addrs.gossip),
         None,
         exit.clone(),
     );
@@ -416,7 +416,7 @@ fn test_multi_node_dynamic_network() {
                 validator,
                 false,
                 InFile::Path(ledger_path.clone()),
-                Some(leader_data.gossip_addr),
+                Some(leader_data.addrs.gossip),
                 Some(OutFile::Path(ledger_path.clone())),
                 exit.clone(),
             );
@@ -473,7 +473,7 @@ fn test_multi_node_dynamic_network() {
                 validator,
                 false,
                 InFile::Path(ledger_path.clone()),
-                Some(leader_data.gossip_addr),
+                Some(leader_data.addrs.gossip),
                 Some(OutFile::Path(ledger_path.clone())),
                 exit.clone(),
             );
@@ -509,12 +509,12 @@ fn mk_client(leader: &ReplicatedData) -> ThinClient {
         .unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let daddr = "0.0.0.0:0".parse().unwrap();
-    assert!(leader.requests_addr != daddr);
-    assert!(leader.transactions_addr != daddr);
+    assert!(leader.addrs.requests != daddr);
+    assert!(leader.addrs.transactions != daddr);
     ThinClient::new(
-        leader.requests_addr,
+        leader.addrs.requests,
         requests_socket,
-        leader.transactions_addr,
+        leader.addrs.transactions,
         transactions_socket,
     )
 }

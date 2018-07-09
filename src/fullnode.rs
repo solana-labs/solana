@@ -67,9 +67,9 @@ impl FullNode {
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         info!(
             "starting... local gossip address: {} (advertising {})",
-            local_gossip_addr, node.data.gossip_addr
+            local_gossip_addr, node.data.addrs.gossip
         );
-        let requests_addr = node.data.requests_addr.clone();
+        let requests_addr = node.data.addrs.requests.clone();
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 

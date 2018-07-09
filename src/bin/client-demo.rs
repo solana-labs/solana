@@ -51,17 +51,20 @@ fn sample_tx_count(
         now = Instant::now();
         let sample = tx_count - initial_tx_count;
         initial_tx_count = tx_count;
-        println!("{}: Transactions processed {}", v.transactions_addr, sample);
+        println!(
+            "{}: Transactions processed {}",
+            v.addrs.transactions, sample
+        );
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (sample * 1_000_000_000) as f64 / ns as f64;
         if tps > max_tps {
             max_tps = tps;
         }
-        println!("{}: {:.2} tps", v.transactions_addr, tps);
+        println!("{}: {:.2} tps", v.addrs.transactions, tps);
         total = tx_count - first_count;
         println!(
             "{}: Total Transactions processed {}",
-            v.transactions_addr, total
+            v.addrs.transactions, total
         );
         sleep(Duration::new(sample_period, 0));
 
@@ -113,7 +116,7 @@ fn generate_and_send_txs(
             println!(
                 "Transferring 1 unit {} times... to {:?}",
                 txs.len(),
-                leader.transactions_addr
+                leader.addrs.transactions
             );
             for tx in txs {
                 client.transfer_signed(tx.clone()).unwrap();
@@ -212,7 +215,7 @@ fn main() {
         time_sec = s.to_string().parse().expect("integer");
     }
 
-    let mut drone_addr = leader.transactions_addr.clone();
+    let mut drone_addr = leader.addrs.transactions.clone();
     drone_addr.set_port(9900);
 
     let signal = Arc::new(AtomicBool::new(false));
@@ -327,9 +330,9 @@ fn mk_client(r: &ReplicatedData) -> ThinClient {
         .unwrap();
 
     ThinClient::new(
-        r.requests_addr,
+        r.addrs.requests,
         requests_socket,
-        r.transactions_addr,
+        r.addrs.transactions,
         transactions_socket,
     )
 }
@@ -381,7 +384,7 @@ fn converge(
             .table
             .values()
             .into_iter()
-            .filter(|x| x.requests_addr != daddr)
+            .filter(|x| x.addrs.requests != daddr)
             .cloned()
             .collect();
         if v.len() >= num_nodes {
