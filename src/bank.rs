@@ -81,11 +81,6 @@ pub struct Bank {
     /// reject transactions with signatures its seen before
     last_ids_sigs: RwLock<HashMap<Hash, HashSet<Signature>>>,
 
-    /// The most recent timestamp from a trusted timekeeper. This timestamp is applied
-    /// to every smart contract when it enters the system. If it is waiting on a
-    /// timestamp witness before that timestamp, the bank will execute it immediately.
-    last_time: RwLock<DateTime<Utc>>,
-
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
     transaction_count: AtomicUsize,
@@ -98,7 +93,6 @@ impl Default for Bank {
             pending: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
-            last_time: RwLock::new(Utc.timestamp(0, 0)),
             transaction_count: AtomicUsize::new(0),
         }
     }
@@ -238,11 +232,7 @@ impl Bank {
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
-                let mut plan = contract.plan.clone();
-                plan.apply_witness(&Witness::Timestamp(*self.last_time
-                    .read()
-                    .expect("timestamp creation in apply_credits")));
-
+                let plan = contract.plan.clone();
                 if let Some(payment) = plan.final_payment() {
                     self.apply_payment(&payment, balances);
                 } else {
@@ -411,10 +401,6 @@ impl Bank {
     /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
     /// will progress one step.
     fn apply_timestamp(&self, _from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
-        if dt > *self.last_time.read().expect("'last_time' read lock") {
-            *self.last_time.write().expect("'last_time' write lock") = dt;
-        }
-
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
 
@@ -424,9 +410,7 @@ impl Bank {
             .write()
             .expect("'pending' write lock in apply_timestamp");
         for (key, plan) in pending.iter_mut() {
-            plan.apply_witness(&Witness::Timestamp(*self.last_time
-                .read()
-                .expect("'last_time' read lock when creating timestamp")));
+            plan.apply_witness(&Witness::Timestamp(dt));
             if let Some(payment) = plan.final_payment() {
                 self.apply_payment(&payment, &mut self.balances.write().unwrap());
                 completed.push(key.clone());
@@ -605,22 +589,6 @@ mod tests {
 
         bank.apply_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
         assert_ne!(bank.get_balance(&pubkey), 2);
-    }
-
-    #[test]
-    fn test_transfer_after_date() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let pubkey = KeyPair::new().pubkey();
-        let dt = Utc::now();
-        bank.apply_timestamp(mint.pubkey(), dt).unwrap();
-
-        // It's now past now, so this transfer should be processed immediately.
-        bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
-            .unwrap();
-
-        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
-        assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
     #[test]
