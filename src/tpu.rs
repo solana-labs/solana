@@ -87,6 +87,11 @@ impl Tpu {
         };
         (tpu, blob_receiver)
     }
+
+    pub fn close(self) -> thread::Result<()> {
+        self.fetch_stage.close();
+        self.join()
+    }
 }
 
 impl Service for Tpu {

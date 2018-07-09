@@ -14,8 +14,6 @@ use solana::service::Service;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 //use std::time::Duration;
 
 fn main() -> () {
@@ -68,11 +66,10 @@ fn main() -> () {
         }
     }
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
-    let exit = Arc::new(AtomicBool::new(false));
     let fullnode = if let Some(t) = matches.value_of("testnet") {
         let testnet_address_string = t.to_string();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        FullNode::new(node, false, InFile::StdIn, Some(testnet_addr), None, exit)
+        FullNode::new(node, false, InFile::StdIn, Some(testnet_addr), None)
     } else {
         node.data.current_leader_id = node.data.id.clone();
 
@@ -81,7 +78,7 @@ fn main() -> () {
         } else {
             OutFile::StdOut
         };
-        FullNode::new(node, true, InFile::StdIn, None, Some(outfile), exit)
+        FullNode::new(node, true, InFile::StdIn, None, Some(outfile))
     };
     fullnode.join().expect("join");
 }

@@ -11,14 +11,13 @@ use solana::fullnode::{FullNode, InFile, OutFile};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
-use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use std::fs::File;
 use std::mem;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
@@ -36,7 +35,7 @@ fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
-    let dr = Ncp::new(
+    let ncp = Ncp::new(
         spy_ref.clone(),
         spy_window,
         spy.sockets.gossip,
@@ -66,8 +65,7 @@ fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
         sleep(Duration::new(1, 0));
     }
     assert!(converged);
-    exit.store(true, Ordering::Relaxed);
-    dr.join().unwrap();
+    ncp.close().unwrap();
     rv
 }
 
@@ -92,18 +90,10 @@ fn test_multi_node_validator_catchup_from_zero() {
     let leader = TestNode::new();
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
-    let exit = Arc::new(AtomicBool::new(false));
 
     let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(
-        leader,
-        true,
-        InFile::Path(ledger_path.clone()),
-        None,
-        None,
-        exit.clone(),
-    );
-    let mut threads = server.thread_hdls();
+    let server = FullNode::new(leader, true, InFile::Path(ledger_path.clone()), None, None);
+    let mut nodes = vec![server];
     for _ in 0..N {
         let validator = TestNode::new();
         let mut val = FullNode::new(
@@ -112,9 +102,8 @@ fn test_multi_node_validator_catchup_from_zero() {
             InFile::Path(ledger_path.clone()),
             Some(leader_data.contact_info.ncp),
             None,
-            exit.clone(),
         );
-        threads.append(&mut val.thread_hdls());
+        nodes.push(val);
     }
     let servers = converge(&leader_data, N + 1);
     //contains the leader addr as well
@@ -145,9 +134,8 @@ fn test_multi_node_validator_catchup_from_zero() {
         InFile::Path(ledger_path.clone()),
         Some(leader_data.contact_info.ncp),
         None,
-        exit.clone(),
     );
-    threads.append(&mut val.thread_hdls());
+    nodes.push(val);
     //contains the leader and new node
     let servers = converge(&leader_data, N + 2);
 
@@ -180,9 +168,8 @@ fn test_multi_node_validator_catchup_from_zero() {
     }
     assert_eq!(success, servers.len());
 
-    exit.store(true, Ordering::Relaxed);
-    for t in threads {
-        t.join().unwrap();
+    for node in nodes {
+        node.close().unwrap();
     }
 }
 
@@ -194,27 +181,19 @@ fn test_multi_node_basic() {
     let leader = TestNode::new();
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
-    let exit = Arc::new(AtomicBool::new(false));
     let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(
-        leader,
-        true,
-        InFile::Path(ledger_path.clone()),
-        None,
-        None,
-        exit.clone(),
-    );
-    let threads = server.thread_hdls();
+    let server = FullNode::new(leader, true, InFile::Path(ledger_path.clone()), None, None);
+    let mut nodes = vec![server];
     for _ in 0..N {
         let validator = TestNode::new();
-        FullNode::new(
+        let val = FullNode::new(
             validator,
             false,
             InFile::Path(ledger_path.clone()),
             Some(leader_data.contact_info.ncp),
             None,
-            exit.clone(),
         );
+        nodes.push(val);
     }
     let servers = converge(&leader_data, N + 1);
     //contains the leader addr as well
@@ -236,9 +215,8 @@ fn test_multi_node_basic() {
     }
     assert_eq!(success, servers.len());
 
-    exit.store(true, Ordering::Relaxed);
-    for t in threads {
-        t.join().unwrap();
+    for node in nodes {
+        node.close().unwrap();
     }
     std::fs::remove_file(ledger_path).unwrap();
 }
@@ -248,7 +226,6 @@ fn test_boot_validator_from_file() {
     logger::setup();
     let leader = TestNode::new();
     let bob_pubkey = KeyPair::new().pubkey();
-    let exit = Arc::new(AtomicBool::new(false));
     let (alice, ledger_path) = genesis(100_000);
     let leader_data = leader.data.clone();
     let leader_fullnode = FullNode::new(
@@ -257,7 +234,6 @@ fn test_boot_validator_from_file() {
         InFile::Path(ledger_path.clone()),
         None,
         Some(OutFile::Path(ledger_path.clone())),
-        exit.clone(),
     );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
@@ -274,42 +250,36 @@ fn test_boot_validator_from_file() {
         InFile::Path(ledger_path.clone()),
         Some(leader_data.contact_info.ncp),
         None,
-        exit.clone(),
     );
 
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
     assert!(getbal == Some(leader_balance));
 
-    exit.store(true, Ordering::Relaxed);
-    leader_fullnode.join().unwrap();
-    val_fullnode.join().unwrap();
+    leader_fullnode.close().unwrap();
+    val_fullnode.close().unwrap();
     std::fs::remove_file(ledger_path).unwrap();
 }
 
 fn restart_leader(
-    exit: Option<Arc<AtomicBool>>,
     leader_fullnode: Option<FullNode>,
     ledger_path: String,
-) -> (ReplicatedData, FullNode, Arc<AtomicBool>) {
-    if let (Some(exit), Some(leader_fullnode)) = (exit, leader_fullnode) {
+) -> (ReplicatedData, FullNode) {
+    if let Some(leader_fullnode) = leader_fullnode {
         // stop the leader
-        exit.store(true, Ordering::Relaxed);
-        leader_fullnode.join().unwrap();
+        leader_fullnode.close().unwrap();
     }
 
     let leader = TestNode::new();
     let leader_data = leader.data.clone();
-    let exit = Arc::new(AtomicBool::new(false));
     let leader_fullnode = FullNode::new(
         leader,
         true,
         InFile::Path(ledger_path.clone()),
         None,
         Some(OutFile::Path(ledger_path.clone())),
-        exit.clone(),
     );
-    (leader_data, leader_fullnode, exit)
+    (leader_data, leader_fullnode)
 }
 
 #[test]
@@ -322,7 +292,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let (alice, ledger_path) = genesis(100_000);
     let bob_pubkey = KeyPair::new().pubkey();
 
-    let (leader_data, leader_fullnode, exit) = restart_leader(None, None, ledger_path.clone());
+    let (leader_data, leader_fullnode) = restart_leader(None, ledger_path.clone());
 
     // lengthen the ledger
     let leader_balance =
@@ -337,8 +307,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
         .expect(format!("copy {} to {}", &ledger_path, &stale_ledger_path,).as_str());
 
     // restart the leader
-    let (leader_data, leader_fullnode, exit) =
-        restart_leader(Some(exit), Some(leader_fullnode), ledger_path.clone());
+    let (leader_data, leader_fullnode) = restart_leader(Some(leader_fullnode), ledger_path.clone());
 
     // lengthen the ledger
     let leader_balance =
@@ -346,8 +315,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     assert_eq!(leader_balance, 1000);
 
     // restart the leader
-    let (leader_data, leader_fullnode, exit) =
-        restart_leader(Some(exit), Some(leader_fullnode), ledger_path.clone());
+    let (leader_data, leader_fullnode) = restart_leader(Some(leader_fullnode), ledger_path.clone());
 
     // start validator from old ledger
     let validator = TestNode::new();
@@ -358,7 +326,6 @@ fn test_leader_restart_validator_start_from_old_ledger() {
         InFile::Path(stale_ledger_path.clone()),
         Some(leader_data.contact_info.ncp),
         None,
-        exit.clone(),
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -380,14 +347,13 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
     assert_eq!(getbal, Some(expected));
 
-    exit.store(true, Ordering::Relaxed);
-    leader_fullnode.join().unwrap();
-    val_fullnode.join().unwrap();
+    leader_fullnode.close().unwrap();
+    val_fullnode.close().unwrap();
     std::fs::remove_file(ledger_path).unwrap();
     std::fs::remove_file(stale_ledger_path).unwrap();
 }
 
-//TODO: this test will run a long time so its disabled for CI
+//TODO: this test will run a long time so it's disabled for CI
 #[test]
 #[ignore]
 fn test_multi_node_dynamic_network() {
@@ -395,7 +361,6 @@ fn test_multi_node_dynamic_network() {
     const N: usize = 25;
     let leader = TestNode::new();
     let bob_pubkey = KeyPair::new().pubkey();
-    let exit = Arc::new(AtomicBool::new(false));
     let (alice, ledger_path) = genesis(100_000);
     let leader_data = leader.data.clone();
     let server = FullNode::new(
@@ -404,10 +369,8 @@ fn test_multi_node_dynamic_network() {
         InFile::Path(ledger_path.clone()),
         None,
         Some(OutFile::Path(ledger_path.clone())),
-        exit.clone(),
     );
     info!("{:x} LEADER", leader_data.debug_id());
-    let threads = server.thread_hdls();
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
     assert_eq!(leader_balance, 500);
@@ -415,10 +378,9 @@ fn test_multi_node_dynamic_network() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let mut validators: Vec<(ReplicatedData, Arc<AtomicBool>, FullNode)> = (0..N)
+    let mut validators: Vec<(ReplicatedData, FullNode)> = (0..N)
         .into_iter()
         .map(|_| {
-            let exit = Arc::new(AtomicBool::new(false));
             let validator = TestNode::new();
             let rd = validator.data.clone();
             let val = FullNode::new(
@@ -427,12 +389,12 @@ fn test_multi_node_dynamic_network() {
                 InFile::Path(ledger_path.clone()),
                 Some(leader_data.contact_info.ncp),
                 Some(OutFile::Path(ledger_path.clone())),
-                exit.clone(),
             );
             info!("{:x} VALIDATOR", rd.debug_id());
-            (rd, exit, val)
+            (rd, val)
         })
         .collect();
+
     for i in 0..N {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
@@ -475,7 +437,6 @@ fn test_multi_node_dynamic_network() {
         }
 
         let val = {
-            let exit = Arc::new(AtomicBool::new(false));
             let validator = TestNode::new();
             let rd = validator.data.clone();
             let val = FullNode::new(
@@ -484,10 +445,9 @@ fn test_multi_node_dynamic_network() {
                 InFile::Path(ledger_path.clone()),
                 Some(leader_data.contact_info.ncp),
                 Some(OutFile::Path(ledger_path.clone())),
-                exit.clone(),
             );
             info!("{:x} ADDED", rd.debug_id());
-            (rd, exit, val)
+            (rd, val)
         };
 
         let old_val = mem::replace(&mut validators[i], val);
@@ -495,19 +455,16 @@ fn test_multi_node_dynamic_network() {
         // this should be almost true, or at least validators.len() - 1 while the other node catches up
         //assert!(success == validators.len());
         //kill a validator
-        old_val.1.store(true, Ordering::Relaxed);
-        old_val.2.join().unwrap();
+        old_val.1.close().unwrap();
         info!("{:x} KILLED", old_val.0.debug_id());
         //add a new one
     }
-    for (_, exit, val) in validators.into_iter() {
-        exit.store(true, Ordering::Relaxed);
-        val.join().unwrap();
+
+    for (_, node) in validators {
+        node.close().unwrap();
     }
-    exit.store(true, Ordering::Relaxed);
-    for t in threads {
-        t.join().unwrap();
-    }
+    server.close().unwrap();
+
     std::fs::remove_file(ledger_path).unwrap();
 }
 

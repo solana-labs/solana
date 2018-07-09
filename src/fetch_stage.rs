@@ -3,13 +3,14 @@
 use packet::PacketRecycler;
 use service::Service;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use streamer::{self, PacketReceiver};
 
 pub struct FetchStage {
+    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -39,7 +40,11 @@ impl FetchStage {
             })
             .collect();
 
-        (FetchStage { thread_hdls }, packet_receiver)
+        (FetchStage { exit, thread_hdls }, packet_receiver)
+    }
+
+    pub fn close(&self) {
+        self.exit.store(true, Ordering::Relaxed);
     }
 }
 
