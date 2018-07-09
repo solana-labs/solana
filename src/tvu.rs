@@ -101,6 +101,11 @@ impl Tvu {
             window_stage,
         }
     }
+
+    pub fn close(self) -> thread::Result<()> {
+        self.fetch_stage.close();
+        self.join()
+    }
 }
 
 impl Service for Tvu {
@@ -136,7 +141,7 @@ pub mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
     use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
@@ -279,8 +284,7 @@ pub mod tests {
         let bob_balance = bank.get_balance(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
-        exit.store(true, Ordering::Relaxed);
-        tvu.join().expect("join");
+        tvu.close().expect("close");
         dr_l.0.join().expect("join");
         dr_2.0.join().expect("join");
         dr_1.0.join().expect("join");

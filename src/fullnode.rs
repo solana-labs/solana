@@ -14,7 +14,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{sink, stdin, stdout, BufReader};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{JoinHandle, Result};
 use std::time::Duration;
@@ -24,6 +24,7 @@ use tvu::Tvu;
 
 //use std::time::Duration;
 pub struct FullNode {
+    exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -44,7 +45,6 @@ impl FullNode {
         infile: InFile,
         network_entry_for_validator: Option<SocketAddr>,
         outfile_for_leader: Option<OutFile>,
-        exit: Arc<AtomicBool>,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
@@ -70,6 +70,7 @@ impl FullNode {
             local_gossip_addr, node.data.contact_info.ncp
         );
         let requests_addr = node.data.contact_info.rpu.clone();
+        let exit = Arc::new(AtomicBool::new(false));
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
@@ -215,7 +216,7 @@ impl FullNode {
         );
         thread_hdls.extend(vec![t_broadcast]);
 
-        FullNode { thread_hdls }
+        FullNode { exit, thread_hdls }
     }
 
     /// Create a server instance acting as a validator.
@@ -294,7 +295,12 @@ impl FullNode {
         );
         thread_hdls.extend(tvu.thread_hdls());
         thread_hdls.extend(ncp.thread_hdls());
-        FullNode { thread_hdls }
+        FullNode { exit, thread_hdls }
+    }
+
+    pub fn close(self) -> Result<()> {
+        self.exit.store(true, Ordering::Relaxed);
+        self.join()
     }
 }
 
@@ -317,7 +323,7 @@ mod tests {
     use crdt::TestNode;
     use fullnode::FullNode;
     use mint::Mint;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
     #[test]
     fn validator_exit() {
@@ -326,10 +332,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(bank, 0, None, tn, entry, exit.clone());
-        exit.store(true, Ordering::Relaxed);
-        for t in v.thread_hdls {
-            t.join().unwrap();
-        }
+        let v = FullNode::new_validator(bank, 0, None, tn, entry, exit);
+        v.close().unwrap();
     }
 }
