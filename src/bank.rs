@@ -81,11 +81,6 @@ pub struct Bank {
     /// reject transactions with signatures its seen before
     last_ids_sigs: RwLock<HashMap<Hash, HashSet<Signature>>>,
 
-    /// The set of trusted timekeepers. A Timestamp transaction from a `PublicKey`
-    /// outside this set will be discarded. Note that if validators do not have the
-    /// same set as leaders, they may interpret the ledger differently.
-    time_sources: RwLock<HashSet<PublicKey>>,
-
     /// The most recent timestamp from a trusted timekeeper. This timestamp is applied
     /// to every smart contract when it enters the system. If it is waiting on a
     /// timestamp witness before that timestamp, the bank will execute it immediately.
@@ -103,7 +98,6 @@ impl Default for Bank {
             pending: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
-            time_sources: RwLock::new(HashSet::new()),
             last_time: RwLock::new(Utc.timestamp(0, 0)),
             transaction_count: AtomicUsize::new(0),
         }
@@ -416,30 +410,9 @@ impl Bank {
 
     /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
     /// will progress one step.
-    fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
-        // If this is the first timestamp we've seen, it probably came from the genesis block,
-        // so we'll trust it.
-        if *self.last_time
-            .read()
-            .expect("'last_time' read lock on first timestamp check")
-            == Utc.timestamp(0, 0)
-        {
-            self.time_sources
-                .write()
-                .expect("'time_sources' write lock on first timestamp")
-                .insert(from);
-        }
-
-        if self.time_sources
-            .read()
-            .expect("'time_sources' read lock")
-            .contains(&from)
-        {
-            if dt > *self.last_time.read().expect("'last_time' read lock") {
-                *self.last_time.write().expect("'last_time' write lock") = dt;
-            }
-        } else {
-            return Ok(());
+    fn apply_timestamp(&self, _from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+        if dt > *self.last_time.read().expect("'last_time' read lock") {
+            *self.last_time.write().expect("'last_time' write lock") = dt;
         }
 
         // Check to see if any timelocked transactions can be completed.
