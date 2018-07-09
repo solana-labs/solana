@@ -261,23 +261,15 @@ fn test_boot_validator_from_file() {
     std::fs::remove_file(ledger_path).unwrap();
 }
 
-fn restart_leader(
-    leader_fullnode: Option<FullNode>,
-    ledger_path: String,
-) -> (ReplicatedData, FullNode) {
-    if let Some(leader_fullnode) = leader_fullnode {
-        // stop the leader
-        leader_fullnode.close().unwrap();
-    }
-
+fn create_leader(ledger_path: &str) -> (ReplicatedData, FullNode) {
     let leader = TestNode::new();
     let leader_data = leader.data.clone();
     let leader_fullnode = FullNode::new(
         leader,
         true,
-        InFile::Path(ledger_path.clone()),
+        InFile::Path(ledger_path.to_string()),
         None,
-        Some(OutFile::Path(ledger_path.clone())),
+        Some(OutFile::Path(ledger_path.to_string())),
     );
     (leader_data, leader_fullnode)
 }
@@ -292,7 +284,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let (alice, ledger_path) = genesis(100_000);
     let bob_pubkey = KeyPair::new().pubkey();
 
-    let (leader_data, leader_fullnode) = restart_leader(None, ledger_path.clone());
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // lengthen the ledger
     let leader_balance =
@@ -307,7 +299,8 @@ fn test_leader_restart_validator_start_from_old_ledger() {
         .expect(format!("copy {} to {}", &ledger_path, &stale_ledger_path,).as_str());
 
     // restart the leader
-    let (leader_data, leader_fullnode) = restart_leader(Some(leader_fullnode), ledger_path.clone());
+    leader_fullnode.close().unwrap();
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // lengthen the ledger
     let leader_balance =
@@ -315,7 +308,8 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     assert_eq!(leader_balance, 1000);
 
     // restart the leader
-    let (leader_data, leader_fullnode) = restart_leader(Some(leader_fullnode), ledger_path.clone());
+    leader_fullnode.close().unwrap();
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // start validator from old ledger
     let validator = TestNode::new();
