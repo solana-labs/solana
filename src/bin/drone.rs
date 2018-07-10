@@ -94,8 +94,8 @@ fn main() {
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
         drone_addr,
-        leader.addrs.transactions,
-        leader.addrs.requests,
+        leader.contact_info.tpu,
+        leader.contact_info.rpu,
         time_slice,
         request_cap,
     )));

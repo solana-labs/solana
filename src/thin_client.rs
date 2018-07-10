@@ -302,9 +302,9 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let mut client = ThinClient::new(
-            leader_data.addrs.requests,
+            leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.addrs.transactions,
+            leader_data.contact_info.tpu,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -344,9 +344,9 @@ mod tests {
             .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.addrs.requests,
+            leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.addrs.transactions,
+            leader_data.contact_info.tpu,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -396,9 +396,9 @@ mod tests {
             .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.addrs.requests,
+            leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.addrs.transactions,
+            leader_data.contact_info.tpu,
             transactions_socket,
         );
         let last_id = client.get_last_id();

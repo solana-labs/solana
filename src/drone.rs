@@ -287,8 +287,8 @@ mod tests {
         let mut drone = Drone::new(
             alice.keypair(),
             addr,
-            leader_data.addrs.transactions,
-            leader_data.addrs.requests,
+            leader_data.contact_info.tpu,
+            leader_data.contact_info.rpu,
             None,
             Some(150_000),
         );
@@ -312,9 +312,9 @@ mod tests {
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
-            leader_data.addrs.requests,
+            leader_data.contact_info.rpu,
             requests_socket,
-            leader_data.addrs.transactions,
+            leader_data.contact_info.tpu,
             transactions_socket,
         );
 
