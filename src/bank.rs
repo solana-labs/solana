@@ -322,20 +322,19 @@ impl Bank {
         &self,
         entries: Vec<Entry>,
         tail: &mut Vec<Entry>,
-        tail_index: &mut usize,
+        tail_idx: &mut usize,
     ) -> Result<u64> {
         let mut entry_count = 0;
 
         for entry in entries {
             entry_count += 1;
 
-            if tail.len() > *tail_index {
-                tail[*tail_index] = entry.clone();
+            if tail.len() > *tail_idx {
+                tail[*tail_idx] = entry.clone();
             } else {
                 tail.push(entry.clone());
             }
-            *tail_index += 1;
-            *tail_index %= WINDOW_SIZE as usize;
+            *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
             if !entry.transactions.is_empty() {
                 for result in self.process_transactions(entry.transactions) {
@@ -379,7 +378,7 @@ impl Bank {
         &self,
         entries: I,
         tail: &mut Vec<Entry>,
-        tail_index: &mut usize,
+        tail_idx: &mut usize,
     ) -> Result<u64>
     where
         I: IntoIterator<Item = Entry>,
@@ -392,7 +391,7 @@ impl Bank {
             if !block.verify(&self.last_id()) {
                 return Err(BankError::LedgerVerificationFailed);
             }
-            entry_count += self.process_entries_tail(block, tail, tail_index)?;
+            entry_count += self.process_entries_tail(block, tail, tail_idx)?;
         }
         Ok(entry_count)
     }
@@ -435,14 +434,14 @@ impl Bank {
         let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
 
         // check if we need to shift tail around
-        if tail.len() == WINDOW_SIZE as usize && tail_idx != 0 {
-            for i in 0..WINDOW_SIZE as usize {
-                tail.swap(i, tail_idx);
-
-                tail_idx += 1;
-                tail_idx %= WINDOW_SIZE as usize;
-            }
-        }
+        let tail = if tail.len() == WINDOW_SIZE as usize && tail_idx != 0 {
+            let mut shift = Vec::with_capacity(WINDOW_SIZE as usize);
+            shift.extend_from_slice(&tail[tail_idx..]);
+            shift.extend_from_slice(&tail[0..tail_idx]);
+            shift
+        } else {
+            tail
+        };
 
         eprintln!(".. {}", duration_as_us(&now.elapsed()));
 
@@ -832,7 +831,8 @@ mod tests {
         }
 
         let window_size = WINDOW_SIZE as usize;
-        for entry_count in window_size - 1..window_size + 2 {
+        for entry_count in window_size - 3..window_size + 2 {
+            eprintln!("entry_count {}", entry_count);
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
             let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
