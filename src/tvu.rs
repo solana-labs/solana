@@ -2,14 +2,14 @@
 //! 3-stage transaction validation pipeline in software.
 //!
 //! ```text
-//!      +<------------------------------------------<+
+//!      .--------------------------------------------.
 //!      |                                            |
 //!      |           .--------------------------------+---------.
 //!      |           |  TVU                           |         |
 //!      |           |                                |         |
 //!      |           |                                |         |  .------------.
 //!      |           |                   .------------+----------->| Validators |
-//!      |           |  .-------.        |            |         |  `------------`
+//!      v           |  .-------.        |            |         |  `------------`
 //! .----+---.       |  |       |   .----+---.   .----+------.  |
 //! | Leader |--------->| Blob  |   | Window |   | Replicate |  |
 //! `--------`       |  | Fetch |-->| Stage  |-->|  Stage    |  |
@@ -69,7 +69,7 @@ impl Tvu {
     /// * `retransmit_socket` - my retransmit socket
     /// * `exit` - The exit signal.
     pub fn new(
-        keypair: Arc<KeyPair>,
+        keypair: KeyPair,
         bank: Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
@@ -220,7 +220,7 @@ pub mod tests {
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
 
         let tvu = Tvu::new(
-            Arc::new(target1_kp),
+            target1_kp,
             bank.clone(),
             0,
             cref1,

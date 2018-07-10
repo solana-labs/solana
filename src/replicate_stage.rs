@@ -60,9 +60,8 @@ impl ReplicateStage {
                 wcrdt.insert_votes(votes);
                 //TODO: doesn't seem like there is a synchronous call to get height and id
                 info!("replicate_stage {} {:?}", height, &last_id[..8]);
-                let (vote, addr) = wcrdt.new_vote(height, last_id)?;
-                (vote, addr)
-            };
+                wcrdt.new_vote(height, last_id)
+            }?;
             {
                 let mut blob = shared_blob.write().unwrap();
                 let tx = Transaction::new_vote(&keypair, vote, last_id, 0);
@@ -81,7 +80,7 @@ impl ReplicateStage {
         Ok(())
     }
     pub fn new(
-        keypair: Arc<KeyPair>,
+        keypair: KeyPair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
@@ -90,6 +89,7 @@ impl ReplicateStage {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(send, blob_recycler.clone(), vote_blob_receiver);
+        let skeypair = Arc::new(keypair);
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
@@ -97,7 +97,7 @@ impl ReplicateStage {
                 let mut timestamp: u64 = 0;
                 loop {
                     if let Err(e) = Self::replicate_requests(
-                        &keypair,
+                        &skeypair,
                         &bank,
                         &crdt,
                         &blob_recycler,

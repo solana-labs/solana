@@ -187,7 +187,7 @@ fn main() {
 
     let leader: ReplicatedData;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l.to_string()).network;
+        leader = read_leader(l.to_string()).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = ReplicatedData::new_leader(&server_addr);
