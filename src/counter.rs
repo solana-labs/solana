@@ -9,6 +9,7 @@ pub struct Counter {
     pub counts: AtomicUsize,
     pub nanos: AtomicUsize,
     pub times: AtomicUsize,
+    pub lastlog: AtomicUsize,
     pub lograte: usize,
 }
 
@@ -19,6 +20,7 @@ macro_rules! create_counter {
             counts: AtomicUsize::new(0),
             nanos: AtomicUsize::new(0),
             times: AtomicUsize::new(0),
+            lastlog: AtomicUsize::new(0),
             lograte: $lograte,
         }
     };
@@ -36,6 +38,7 @@ impl Counter {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let nanos = self.nanos.fetch_add(total as usize, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
+        let lastlog = self.lastlog.fetch_add(1, Ordering::Relaxed);
         if times % self.lograte == 0 && times > 0 {
             info!(
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"nanos\": {}, \"samples\": {}, \"rate\": {}, \"now\": {}}}",
@@ -46,16 +49,21 @@ impl Counter {
                 counts as f64 * 1e9 / nanos as f64,
                 timing::timestamp(),
             );
+            metrics::submit(
+                influxdb::Point::new(&format!("counter_{}", self.name))
+                    .add_field(
+                        "count",
+                        influxdb::Value::Integer(events as i64 - lastlog as i64),
+                    )
+                    .add_field(
+                        "duration_ms",
+                        influxdb::Value::Integer(timing::duration_as_ms(&dur) as i64),
+                    )
+                    .to_owned(),
+            );
+            self.lastlog
+                .compare_and_swap(lastlog, events, Ordering::Relaxed);
         }
-        metrics::submit(
-            influxdb::Point::new(&format!("counter_{}", self.name))
-                .add_field("count", influxdb::Value::Integer(events as i64))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&dur) as i64),
-                )
-                .to_owned(),
-        );
     }
 }
 #[cfg(test)]
