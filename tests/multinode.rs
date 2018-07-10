@@ -205,7 +205,7 @@ fn test_multi_node_basic() {
     for _ in 0..N {
         let keypair = KeyPair::new();
         let validator = TestNode::new_with_pubkey(keypair.pubkey());
-        FullNode::new(
+        let val = FullNode::new(
             validator,
             false,
             InFile::Path(ledger_path.clone()),
@@ -293,7 +293,7 @@ fn create_leader(ledger_path: &str) -> (ReplicatedData, FullNode) {
         InFile::Path(ledger_path.to_string()),
         None,
         None,
-        Some(OutFile::Path(ledger_path.clone())),
+        Some(OutFile::Path(ledger_path.to_string())),
     );
     (leader_data, leader_fullnode)
 }
