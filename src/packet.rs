@@ -12,7 +12,6 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -20,6 +19,7 @@ pub type SharedBlobs = VecDeque<SharedBlob>;
 pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
+const LOG_RATE: usize = 10;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = 64 * 1024;
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
@@ -188,7 +188,7 @@ impl<T: Default> Recycler<T> {
 
 impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
-        static mut COUNTER: Counter = create_counter!("packets", 10);
+        static mut COUNTER: Counter = create_counter!("packets", LOG_RATE);
         self.packets.resize(NUM_PACKETS, Packet::default());
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
@@ -198,13 +198,12 @@ impl Packets {
         //  * read until it fails
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
-        let mut start = Instant::now();
         for p in &mut self.packets {
             p.meta.size = 0;
             trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    inc_counter!(COUNTER, i, start);
+                    inc_counter!(COUNTER, i);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }
@@ -216,7 +215,6 @@ impl Packets {
                     p.meta.size = nrecv;
                     p.meta.set_addr(&from);
                     if i == 0 {
-                        start = Instant::now();
                         socket.set_nonblocking(true)?;
                     }
                 }

@@ -16,6 +16,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
+use counter::Counter;
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -28,13 +29,15 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::net::{IpAddr, SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender, Window};
 use timing::timestamp;
 use transaction::Vote;
+
+const LOG_RATE: usize = 10;
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -337,6 +340,8 @@ impl Crdt {
         }
     }
     pub fn insert_votes(&mut self, votes: Vec<(PublicKey, Vote, Hash)>) {
+        static mut COUNTER_VOTE: Counter = create_counter!("crdt-vote-count", LOG_RATE);
+        inc_counter!(COUNTER_VOTE, votes.len());
         if votes.len() > 0 {
             info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
         }
@@ -360,6 +365,8 @@ impl Crdt {
             self.update_index += 1;
             let _ = self.table.insert(v.id.clone(), v.clone());
             let _ = self.local.insert(v.id, self.update_index);
+            static mut COUNTER_UPDATE: Counter = create_counter!("crdt-update-count", LOG_RATE);
+            inc_counter!(COUNTER_UPDATE, 1);
         } else {
             trace!(
                 "{:x}: INSERT FAILED data: {:x} new.version: {} me.version: {}",
@@ -430,6 +437,9 @@ impl Crdt {
                 }
             })
             .collect();
+
+        static mut COUNTER_PURGE: Counter = create_counter!("crdt-purge-count", LOG_RATE);
+        inc_counter!(COUNTER_PURGE, dead_ids.len());
 
         for id in dead_ids.iter() {
             self.alive.remove(id);
@@ -884,15 +894,24 @@ impl Crdt {
                     outblob.meta.set_addr(&from.contact_info.tvu_window);
                     outblob.set_id(sender_id).expect("blob set_id");
                 }
+                static mut COUNTER_REQ_WINDOW_PASS: Counter =
+                    create_counter!("crdt-window-request-pass", LOG_RATE);
+                inc_counter!(COUNTER_REQ_WINDOW_PASS, 1);
 
                 return Some(out);
             } else {
+                static mut COUNTER_REQ_WINDOW_OUTSIDE: Counter =
+                    create_counter!("crdt-window-request-outside", LOG_RATE);
+                inc_counter!(COUNTER_REQ_WINDOW_OUTSIDE, 1);
                 info!(
                     "requested ix {} != blob_ix {}, outside window!",
                     ix, blob_ix
                 );
             }
         } else {
+            static mut COUNTER_REQ_WINDOW_FAIL: Counter =
+                create_counter!("crdt-window-request-fail", LOG_RATE);
+            inc_counter!(COUNTER_REQ_WINDOW_FAIL, 1);
             assert!(window.read().unwrap()[pos].is_none());
             info!(
                 "{:x}: failed RequestWindowIndex {:x} {} {}",
@@ -971,6 +990,9 @@ impl Crdt {
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
+                static mut COUNTER_REQ_WINDOW: Counter =
+                    create_counter!("crdt-window-request-recv", LOG_RATE);
+                inc_counter!(COUNTER_REQ_WINDOW, 1);
                 trace!(
                     "{:x}:received RequestWindowIndex {:x} {} ",
                     me.debug_id(),

@@ -1,5 +1,6 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
+use counter::Counter;
 use crdt::{Crdt, CrdtError, ReplicatedData};
 #[cfg(feature = "erasure")]
 use erasure;
@@ -11,12 +12,13 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
+const LOG_RATE: usize = 10;
 pub const WINDOW_SIZE: u64 = 2 * 1024;
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
@@ -217,6 +219,9 @@ fn repair_window(
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if reqs.len() > 0 {
+        static mut COUNTER_REPAIR: Counter =
+            create_counter!("streamer-repair_window-repair", LOG_RATE);
+        inc_counter!(COUNTER_REPAIR, reqs.len());
         debug!(
             "{:x}: repair_window counter times: {} consumed: {} received: {} missing: {}",
             debug_id,
@@ -259,6 +264,8 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
+    static mut COUNTER_RECV: Counter = create_counter!("streamer-recv_window-recv", LOG_RATE);
+    inc_counter!(COUNTER_RECV, dq.len());
     debug!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
@@ -268,7 +275,7 @@ fn recv_window(
     );
     {
         //retransmit all leader blocks
-        let mut retransmitq = VecDeque::new();
+        let mut retransmit_queue = VecDeque::new();
         if let Some(leader) = maybe_leader {
             for b in &dq {
                 let p = b.read().expect("'b' read lock in fn recv_window");
@@ -297,25 +304,28 @@ fn recv_window(
                         mnv.meta.size = sz;
                         mnv.data[..sz].copy_from_slice(&p.data[..sz]);
                     }
-                    retransmitq.push_back(nv);
+                    retransmit_queue.push_back(nv);
                 }
             }
         } else {
             warn!("{:x}: no leader to retransmit from", debug_id);
         }
-        if !retransmitq.is_empty() {
+        if !retransmit_queue.is_empty() {
             debug!(
                 "{:x}: RECV_WINDOW {} {}: retransmit {}",
                 debug_id,
                 *consumed,
                 *received,
-                retransmitq.len(),
+                retransmit_queue.len(),
             );
-            retransmit.send(retransmitq)?;
+            static mut COUNTER_RETRANSMIT: Counter =
+                create_counter!("streamer-recv_window-retransmit", LOG_RATE);
+            inc_counter!(COUNTER_RETRANSMIT, retransmit_queue.len());
+            retransmit.send(retransmit_queue)?;
         }
     }
     //send a contiguous set of blocks
-    let mut contq = VecDeque::new();
+    let mut consume_queue = VecDeque::new();
     while let Some(b) = dq.pop_front() {
         let (pix, meta_size) = {
             let p = b.write().expect("'b' write lock in fn recv_window");
@@ -386,7 +396,7 @@ fn recv_window(
                     }
                 }
                 if !is_coding {
-                    contq.push_back(window[k].clone().expect("clone in fn recv_window"));
+                    consume_queue.push_back(window[k].clone().expect("clone in fn recv_window"));
                     *consumed += 1;
                 } else {
                     #[cfg(feature = "erasure")]
@@ -416,17 +426,20 @@ fn recv_window(
         }
     }
     print_window(debug_id, locked_window, *consumed);
-    trace!("sending contq.len: {}", contq.len());
-    if !contq.is_empty() {
+    trace!("sending consume_queue.len: {}", consume_queue.len());
+    if !consume_queue.is_empty() {
         debug!(
-            "{:x}: RECV_WINDOW {} {}: forwarding contq {}",
+            "{:x}: RECV_WINDOW {} {}: forwarding consume_queue {}",
             debug_id,
             *consumed,
             *received,
-            contq.len(),
+            consume_queue.len(),
         );
-        trace!("sending contq.len: {}", contq.len());
-        s.send(contq)?;
+        trace!("sending consume_queue.len: {}", consume_queue.len());
+        static mut COUNTER_CONSUME: Counter =
+            create_counter!("streamer-recv_window-consume", LOG_RATE);
+        inc_counter!(COUNTER_CONSUME, consume_queue.len());
+        s.send(consume_queue)?;
     }
     Ok(())
 }
@@ -592,6 +605,9 @@ fn broadcast(
         // Index the blobs
         Crdt::index_blobs(&me, &blobs, receive_index)?;
         // keep the cache of blobs that are broadcast
+        static mut COUNTER_BROADCAST: Counter =
+            create_counter!("streamer-broadcast-sent", LOG_RATE);
+        inc_counter!(COUNTER_BROADCAST, blobs.len());
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
