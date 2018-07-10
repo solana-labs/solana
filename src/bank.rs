@@ -321,7 +321,7 @@ impl Bank {
     pub fn process_entries_tail(
         &self,
         entries: Vec<Entry>,
-        tail: &mut [Entry; WINDOW_SIZE as usize],
+        tail: &mut Vec<Entry>,
         tail_index: &mut usize,
     ) -> Result<u64> {
         let mut entry_count = 0;
@@ -374,7 +374,7 @@ impl Bank {
     pub fn process_blocks<I>(
         &self,
         entries: I,
-        tail: &mut [Entry; WINDOW_SIZE as usize],
+        tail: &mut Vec<Entry>,
         tail_index: &mut usize,
     ) -> Result<u64>
     where
@@ -424,11 +424,11 @@ impl Bank {
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
 
-        let mut tail = [Entry::new_tick(0, &Hash::default()); WINDOW_SIZE as usize];
+        let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
         tail[0] = entry0;
         tail[1] = entry1;
         let mut tail_idx = 2;
-        let mut entry_count = 2 + self.process_blocks(entries, tail, tail_idx)?;
+        let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
 
         eprintln!(".. {}", duration_as_us(&now.elapsed()));
 
