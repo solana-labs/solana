@@ -392,6 +392,8 @@ impl Bank {
             if tail.len() < WINDOW_SIZE as usize {
                 tail.insert(0, entry0);
             }
+        } else if tail.len() > WINDOW_SIZE as usize {
+            tail = tail[tail.len() - WINDOW_SIZE as usize..].to_vec();
         }
 
         Ok((entry_count, tail))
@@ -773,7 +775,7 @@ mod tests {
     #[test]
     fn test_process_ledger_around_window_size() {
         let window_size = WINDOW_SIZE as usize;
-        for entry_count in window_size - 1..window_size + 1 {
+        for entry_count in window_size - 1..window_size + 3 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
             let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
