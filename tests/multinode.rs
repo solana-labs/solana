@@ -441,13 +441,13 @@ fn test_multi_node_dynamic_network() {
             for server in validators.iter() {
                 let mut client = mk_client(&server.0);
                 trace!("{:x} {} get_balance start", server.0.debug_id(), i);
-                let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
+                let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
                 trace!(
-                    "{:x} {} get_balance: {:?} expected: {}",
+                    "{:x} {} get_balance: {:?} leader_balance: {}",
                     server.0.debug_id(),
                     i,
                     getbal,
-                    expected
+                    leader_balance
                 );
                 let bal = getbal.unwrap_or(0);
                 distance += (leader_balance - bal) / 500;
