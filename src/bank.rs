@@ -162,6 +162,13 @@ impl Bank {
         }
     }
 
+    /// Forget all signatures. Useful for benchmarking.
+    pub fn clear_signatures(&self) {
+        for (_, sigs) in self.last_ids_sigs.write().unwrap().iter_mut() {
+            sigs.clear();
+        }
+    }
+
     fn reserve_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) -> Result<()> {
         if let Some(entry) = self.last_ids_sigs
             .write()
@@ -258,7 +265,7 @@ impl Bank {
 
     /// Process a Transaction. If it contains a payment plan that requires a witness
     /// to progress, the payment plan will be stored in the bank.
-    fn process_transaction(&self, tx: &Transaction) -> Result<()> {
+    pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let bals = &mut self.balances.write().unwrap();
         self.apply_debits(tx, bals)?;
         self.apply_credits(tx, bals);
@@ -820,55 +827,5 @@ mod tests {
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
-    }
-}
-
-#[cfg(all(feature = "unstable", test))]
-mod bench {
-    extern crate test;
-    use self::test::Bencher;
-    use bank::*;
-    use bincode::serialize;
-    use hash::hash;
-    use rayon::prelude::*;
-    use signature::KeyPairUtil;
-
-    #[bench]
-    fn bench_process_transaction(bencher: &mut Bencher) {
-        let mint = Mint::new(100_000_000);
-        let bank = Bank::new(&mint);
-        // Create transactions between unrelated parties.
-        let transactions: Vec<_> = (0..4096)
-            .into_par_iter()
-            .map(|i| {
-                // Seed the 'from' account.
-                let rando0 = KeyPair::new();
-                let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, mint.last_id());
-                bank.process_transaction(&tx).unwrap();
-
-                // Seed the 'to' account and a cell for its signature.
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_entry_id(&last_id);
-
-                let rando1 = KeyPair::new();
-                let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
-                bank.process_transaction(&tx).unwrap();
-
-                // Finally, return a transaction that's unique
-                Transaction::new(&rando0, rando1.pubkey(), 1, last_id)
-            })
-            .collect();
-        bencher.iter(|| {
-            // Since benchmarker runs this multiple times, we need to clear the signatures.
-            for (_, sigs) in bank.last_ids_sigs.write().unwrap().iter_mut() {
-                sigs.clear();
-            }
-
-            assert!(
-                bank.process_transactions(transactions.clone())
-                    .iter()
-                    .all(|x| x.is_ok())
-            );
-        });
     }
 }
