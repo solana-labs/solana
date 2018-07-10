@@ -2,6 +2,7 @@
 
 use bank::Bank;
 use bincode::serialize;
+use counter::Counter;
 use crdt::Crdt;
 use ledger;
 use packet::BlobRecycler;
@@ -10,6 +11,7 @@ use service::Service;
 use signature::KeyPair;
 use std::collections::VecDeque;
 use std::net::UdpSocket;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
@@ -25,6 +27,7 @@ pub struct ReplicateStage {
 }
 
 const VOTE_TIMEOUT_MS: u64 = 1000;
+const LOG_RATE: usize = 10;
 
 impl ReplicateStage {
     /// Process entry blobs, already in order
@@ -46,6 +49,12 @@ impl ReplicateStage {
         let blobs_len = blobs.len();
         let entries = ledger::reconstruct_entries_from_blobs(blobs.clone())?;
         let votes = entries_to_votes(&entries);
+
+        static mut COUNTER_REPLICATE: Counter = create_counter!("replicate-transactions", LOG_RATE);
+        inc_counter!(
+            COUNTER_REPLICATE,
+            entries.iter().map(|x| x.transactions.len()).sum()
+        );
         let res = bank.process_entries(entries);
         if res.is_err() {
             error!("process_entries {} {:?}", blobs_len, res);

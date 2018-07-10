@@ -125,7 +125,7 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
-        inc_counter!(COUNTER, count, proc_start);
+        inc_counter!(COUNTER, count);
         Ok(())
     }
 }
