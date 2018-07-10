@@ -531,9 +531,7 @@ mod test {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let crdt = Arc::new(RwLock::new(crdt::Crdt::new(d.clone())));
-
-        assert!(crdt::Crdt::index_blobs(&crdt, &blobs, &mut (offset as u64)).is_ok());
+        assert!(crdt::Crdt::index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
             let idx = b.read().unwrap().get_index().unwrap() as usize;
             window[idx] = Some(b);
