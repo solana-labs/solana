@@ -39,13 +39,17 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         })
         .collect();
 
-    bencher.iter(|| {
-        // Since benchmarker runs this multiple times, we need to clear the signatures.
-        bank.clear_signatures();
-
-        let results = bank.process_transactions(transactions.clone());
-        assert!(results.iter().all(Result::is_ok));
-    })
+    bencher.iter_with_setup(
+        || {
+            // Since benchmarker runs this multiple times, we need to clear the signatures.
+            bank.clear_signatures();
+            transactions.clone()
+        },
+        |transactions| {
+            let results = bank.process_transactions(transactions);
+            assert!(results.iter().all(Result::is_ok));
+        },
+    )
 }
 
 fn bench(criterion: &mut Criterion) {
