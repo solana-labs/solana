@@ -980,7 +980,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.addrs.gossip);
+                    w.meta.set_addr(&tn.data.contact_info.ncp);
                 }
                 msgs.push_back(b);
             }

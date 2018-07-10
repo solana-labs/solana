@@ -156,7 +156,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         exit(1);
     };
 
-    let mut drone_addr = leader.addrs.transactions.clone();
+    let mut drone_addr = leader.contact_info.tpu.clone();
     drone_addr.set_port(9900);
 
     let command = match matches.subcommand() {
@@ -305,9 +305,9 @@ fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
         .unwrap();
 
     Ok(ThinClient::new(
-        r.addrs.requests,
+        r.contact_info.rpu,
         requests_socket,
-        r.addrs.transactions,
+        r.contact_info.tpu,
         transactions_socket,
     ))
 }

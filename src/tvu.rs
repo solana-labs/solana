@@ -198,7 +198,7 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let replicate_addr = target1.data.addrs.replicate;
+        let replicate_addr = target1.data.contact_info.tvu;
         let bank = Arc::new(Bank::new(&mint));
 
         //start crdt1
