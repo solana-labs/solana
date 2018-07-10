@@ -33,11 +33,12 @@ The process to update a disk image is as follows (TODO: make this less manual):
 4. From another machine, `gcloud auth login`, then create a new Disk Image based
 off the modified VM Instance:
 ```
- $ gcloud compute images create ci-default-v5 --source-disk xxx --source-disk-zone us-east1-b
+ $ gcloud compute images create ci-default-$(date +%Y%m%d) --source-disk xxx --source-disk-zone us-east1-b --family ci-default
+
 ```
 or
 ```
-  $ gcloud compute images create ci-cuda-v5 --source-disk xxx --source-disk-zone us-east1-b
+  $ gcloud compute images create ci-cuda-$(date +%Y%m%d) --source-disk xxx --source-disk-zone us-east1-b --family ci-cuda
 ```
 5. Delete the new VM instance.
 6. Go to the Instance templates tab, find the existing template named
