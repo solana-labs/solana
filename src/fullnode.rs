@@ -44,7 +44,7 @@ pub enum OutFile {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 /// Fullnode configuration to be stored in file
 pub struct Config {
-    pub network: ReplicatedData,
+    pub node_info: ReplicatedData,
     pkcs8: Vec<u8>,
 }
 
@@ -58,11 +58,8 @@ impl Config {
         let keypair =
             KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
-        let network = ReplicatedData::new_leader_with_pubkey(pubkey, bind_addr);
-        Config {
-            network: network,
-            pkcs8: pkcs8,
-        }
+        let node_info = ReplicatedData::new_leader_with_pubkey(pubkey, bind_addr);
+        Config { node_info, pkcs8 }
     }
     pub fn keypair(&self) -> KeyPair {
         KeyPair::from_pkcs8(Input::from(&self.pkcs8))
@@ -108,7 +105,7 @@ impl FullNode {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
             let network_entry_point = ReplicatedData::new_entry_point(testnet_addr);
-            let keypair = keypair_for_validator.expect("validastor requires keypair");
+            let keypair = keypair_for_validator.expect("validator requires keypair");
             let server = FullNode::new_validator(
                 keypair,
                 bank,
@@ -319,7 +316,7 @@ impl FullNode {
         ).expect("Ncp::new");
 
         let tvu = Tvu::new(
-            Arc::new(keypair),
+            keypair,
             bank.clone(),
             entry_height,
             crdt.clone(),

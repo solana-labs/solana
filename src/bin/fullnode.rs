@@ -59,7 +59,7 @@ fn main() -> () {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
                 keypair = data.keypair();
-                repl_data = data.network;
+                repl_data = data.node_info;
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
