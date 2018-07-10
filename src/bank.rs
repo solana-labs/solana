@@ -329,7 +329,11 @@ impl Bank {
         for entry in entries {
             entry_count += 1;
 
-            tail[*tail_index] = entry.clone();
+            if tail.len() > *tail_index {
+                tail[*tail_index] = entry.clone();
+            } else {
+                tail.push(entry.clone());
+            }
             *tail_index += 1;
             *tail_index %= WINDOW_SIZE as usize;
 
@@ -425,10 +429,20 @@ impl Bank {
         self.register_entry_id(&entry1.id);
 
         let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
-        tail[0] = entry0;
-        tail[1] = entry1;
+        tail.push(entry0);
+        tail.push(entry1);
         let mut tail_idx = 2;
         let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
+
+        // check if we need to shift tail around
+        if tail.len() == WINDOW_SIZE as usize && tail_idx != 0 {
+            for i in 0..WINDOW_SIZE as usize {
+                tail.swap(i, tail_idx);
+
+                tail_idx += 1;
+                tail_idx %= WINDOW_SIZE as usize;
+            }
+        }
 
         eprintln!(".. {}", duration_as_us(&now.elapsed()));
 
@@ -810,23 +824,24 @@ mod tests {
 
     #[test]
     fn test_process_ledger_around_window_size() {
+        // benchmark
         for _ in 0..10 {
             let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize * 6);
             let bank = Bank::default();
             let (_, _) = bank.process_ledger(ledger).unwrap();
         }
 
-        //        let window_size = WINDOW_SIZE as usize;
-        //        for entry_count in window_size - 1..window_size + 2 {
-        //            let (ledger, pubkey) = create_sample_ledger(entry_count);
-        //            let bank = Bank::default();
-        //            let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
-        //            assert_eq!(bank.get_balance(&pubkey), 1);
-        //            assert_eq!(ledger_height, entry_count as u64 + 2);
-        //            assert!(tail.len() <= window_size);
-        //            let last_entry = &tail[tail.len() - 1];
-        //            assert_eq!(bank.last_id(), last_entry.id);
-        //        }
+        let window_size = WINDOW_SIZE as usize;
+        for entry_count in window_size - 1..window_size + 2 {
+            let (ledger, pubkey) = create_sample_ledger(entry_count);
+            let bank = Bank::default();
+            let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+            assert_eq!(bank.get_balance(&pubkey), 1);
+            assert_eq!(ledger_height, entry_count as u64 + 2);
+            assert!(tail.len() <= window_size);
+            let last_entry = &tail[tail.len() - 1];
+            assert_eq!(bank.last_id(), last_entry.id);
+        }
     }
 
     // Write the given entries to a file and then return a file iterator to them.
