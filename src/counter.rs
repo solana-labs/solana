@@ -6,11 +6,11 @@ use timing;
 
 pub struct Counter {
     pub name: &'static str,
-    /// total accumilated value
+    /// total accumulated value
     pub counts: AtomicUsize,
     pub nanos: AtomicUsize,
     pub times: AtomicUsize,
-    /// last accumilated value logged
+    /// last accumulated value logged
     pub lastlog: AtomicUsize,
     pub lograte: usize,
 }
