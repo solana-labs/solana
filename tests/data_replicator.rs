@@ -180,6 +180,7 @@ pub fn crdt_retransmit() {
 }
 
 #[test]
+#[ignore]
 fn test_external_liveness_table() {
     logger::setup();
     let c1_c4_exit = Arc::new(AtomicBool::new(false));

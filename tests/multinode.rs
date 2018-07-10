@@ -363,13 +363,22 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 
     // trigger broadcast, validator should catch up from leader, whose window contains
     //   the entries missing from the stale ledger
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1500)).unwrap();
-    assert_eq!(leader_balance, 1500);
-
+    //   send requests so the validator eventually sees a gap and requests a repair
+    let mut expected = 1500;
     let mut client = mk_client(&validator_data);
-    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-    assert_eq!(getbal, Some(leader_balance));
+    for _ in 0..10 {
+        let leader_balance =
+            send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(expected))
+                .unwrap();
+        assert_eq!(leader_balance, expected);
+        let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+        if getbal == Some(leader_balance) {
+            break;
+        }
+        expected += 500;
+    }
+    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
+    assert_eq!(getbal, Some(expected));
 
     exit.store(true, Ordering::Relaxed);
     leader_fullnode.join().unwrap();
@@ -524,7 +533,7 @@ fn retry_get_balance(
     bob_pubkey: &PublicKey,
     expected: Option<i64>,
 ) -> Option<i64> {
-    const LAST: usize = 9;
+    const LAST: usize = 20;
     for run in 0..(LAST + 1) {
         let out = client.poll_get_balance(bob_pubkey);
         if expected.is_none() || run == LAST {

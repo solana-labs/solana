@@ -214,6 +214,7 @@ fn repair_window(
     }
 
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
+    trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if reqs.len() > 0 {
         debug!(
             "{:x}: repair_window counter times: {} consumed: {} received: {} missing: {}",
@@ -413,7 +414,7 @@ fn recv_window(
             }
         }
     }
-    print_window(locked_window, *consumed);
+    print_window(debug_id, locked_window, *consumed);
     trace!("sending contq.len: {}", contq.len());
     if !contq.is_empty() {
         debug!(
@@ -429,7 +430,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(locked_window: &Window, consumed: u64) {
+fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
     {
         let buf: Vec<_> = locked_window
             .read()
@@ -454,7 +455,7 @@ fn print_window(locked_window: &Window, consumed: u64) {
                 }
             })
             .collect();
-        trace!("WINDOW ({}): {}", consumed, buf.join(""));
+        trace!("{:x}:WINDOW ({}): {}", debug_id, consumed, buf.join(""));
     }
 }
 
@@ -518,6 +519,7 @@ pub fn window(
             let mut last = entry_height;
             let mut times = 0;
             let debug_id = crdt.read().unwrap().debug_id();
+            trace!("{:x}: RECV_WINDOW started", debug_id);
             loop {
                 if let Err(e) = recv_window(
                     debug_id,
@@ -576,7 +578,7 @@ fn broadcast(
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    print_window(window, *receive_index);
+    print_window(me.debug_id(), window, *receive_index);
 
     for mut blobs in blobs_chunked {
         // Insert the coding blobs into the blob stream

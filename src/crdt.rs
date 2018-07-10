@@ -19,10 +19,9 @@ use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerSt
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, RngCore};
 use rayon::prelude::*;
 use result::{Error, Result};
-use ring::rand::{SecureRandom, SystemRandom};
 use signature::{KeyPair, KeyPairUtil, PublicKey};
 use std;
 use std::collections::HashMap;
@@ -37,7 +36,7 @@ use streamer::{BlobReceiver, BlobSender, Window};
 use timing::timestamp;
 
 /// milliseconds we sleep for between gossip requests
-const GOSSIP_SLEEP_MILLIS: u64 = 200;
+const GOSSIP_SLEEP_MILLIS: u64 = 100;
 const GOSSIP_PURGE_MILLIS: u64 = 15000;
 
 /// minimum membership table size before we start purging dead nodes
@@ -305,7 +304,7 @@ impl Crdt {
             let _ = self.local.insert(v.id, self.update_index);
         } else {
             trace!(
-                "{:x}: INSERT FAILED data: {:?} new.version: {} me.version: {}",
+                "{:x}: INSERT FAILED data: {:x} new.version: {} me.version: {}",
                 self.debug_id(),
                 v.debug_id(),
                 v.version,
@@ -354,7 +353,7 @@ impl Crdt {
                         Some(k)
                     } else {
                         info!(
-                            "{:x}: purge {:x} {}",
+                            "{:x}: PURGE {:x} {}",
                             self.debug_id(),
                             make_debug_id(&k),
                             now - v
@@ -363,7 +362,8 @@ impl Crdt {
                     }
                 } else {
                     trace!(
-                        "purge skipped {:x} {} {}",
+                        "{:x} purge skipped {:x} {} {}",
+                        self.debug_id(),
                         make_debug_id(&k),
                         now - v,
                         limit
@@ -391,6 +391,7 @@ impl Crdt {
         receive_index: &mut u64,
     ) -> Result<()> {
         // enumerate all the blobs, those are the indices
+        trace!("{:x}: INDEX_BLOBS {}", me.debug_id(), blobs.len());
         for (i, b) in blobs.iter().enumerate() {
             // only leader should be broadcasting
             let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
@@ -404,8 +405,8 @@ impl Crdt {
     /// compute broadcast table
     /// # Remarks
     pub fn compute_broadcast_table(&self) -> Vec<ReplicatedData> {
-        let mut live: Vec<_> = self.alive.iter().collect();
-        thread_rng().shuffle(&mut live);
+        let live: Vec<_> = self.alive.iter().collect();
+        //thread_rng().shuffle(&mut live);
         let daddr = "0.0.0.0:0".parse().unwrap();
         let me = &self.table[&self.me];
         let cloned_table: Vec<ReplicatedData> = live.iter()
@@ -415,10 +416,19 @@ impl Crdt {
                     //filter myself
                     false
                 } else if v.addrs.replicate == daddr {
-                    trace!("broadcast skip not listening {:x}", v.debug_id());
+                    trace!(
+                        "{:x}:broadcast skip not listening {:x}",
+                        me.debug_id(),
+                        v.debug_id()
+                    );
                     false
                 } else {
-                    trace!("broadcast node {}", v.addrs.replicate);
+                    trace!(
+                        "{:x}:broadcast node {:x} {}",
+                        me.debug_id(),
+                        v.debug_id(),
+                        v.addrs.replicate
+                    );
                     true
                 }
             })
@@ -439,7 +449,7 @@ impl Crdt {
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.len() < 1 {
-            warn!("not enough peers in crdt table");
+            warn!("{:x}:not enough peers in crdt table", me.debug_id());
             Err(CrdtError::TooSmall)?;
         }
         trace!("broadcast nodes {}", broadcast_table.len());
@@ -467,15 +477,23 @@ impl Crdt {
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!(
-                    "broadcast idx: {} sz: {} to {} coding: {}",
+                    "{:x}: BROADCAST idx: {} sz: {} to {:x},{} coding: {}",
+                    me.debug_id(),
                     blob.get_index().unwrap(),
                     blob.meta.size,
+                    v.debug_id(),
                     v.addrs.replicate,
                     blob.is_coding()
                 );
                 assert!(blob.meta.size < BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.addrs.replicate);
-                trace!("done broadcast {} to {}", blob.meta.size, v.addrs.replicate);
+                trace!(
+                    "{:x}: done broadcast {} to {:x} {}",
+                    me.debug_id(),
+                    blob.meta.size,
+                    v.debug_id(),
+                    v.addrs.replicate
+                );
                 e
             })
             .collect();
@@ -552,12 +570,7 @@ impl Crdt {
     }
 
     fn random() -> u64 {
-        let rnd = SystemRandom::new();
-        let mut buf = [0u8; 8];
-        rnd.fill(&mut buf).expect("rnd.fill in pub fn random");
-        let mut rdr = Cursor::new(&buf);
-        rdr.read_u64::<LittleEndian>()
-            .expect("rdr.read_u64 in fn random")
+        thread_rng().next_u64()
     }
 
     // TODO: fill in with real implmentation once staking is implemented
@@ -611,8 +624,8 @@ impl Crdt {
 
         if let Err(Error::CrdtError(CrdtError::TooSmall)) = &choose_peer_result {
             trace!(
-                "crdt too small for gossip {:?} {}",
-                &self.me[..4],
+                "crdt too small for gossip {:x} {}",
+                self.debug_id(),
                 self.table.len()
             );
         };
