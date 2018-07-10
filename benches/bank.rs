@@ -1,20 +1,18 @@
-#![feature(test)]
-
+#[macro_use]
+extern crate criterion;
 extern crate bincode;
 extern crate rayon;
 extern crate solana;
-extern crate test;
 
 use bincode::serialize;
+use criterion::{Bencher, Criterion};
 use rayon::prelude::*;
 use solana::bank::*;
 use solana::hash::hash;
 use solana::mint::Mint;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
-use test::Bencher;
 
-#[bench]
 fn bench_process_transaction(bencher: &mut Bencher) {
     let mint = Mint::new(100_000_000);
     let bank = Bank::new(&mint);
@@ -47,5 +45,14 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
         let results = bank.process_transactions(transactions.clone());
         assert!(results.iter().all(Result::is_ok));
+    })
+}
+
+fn bench(criterion: &mut Criterion) {
+    criterion.bench_function("bench_process_transaction", |bencher| {
+        bench_process_transaction(bencher);
     });
 }
+
+criterion_group!(benches, bench);
+criterion_main!(benches);
