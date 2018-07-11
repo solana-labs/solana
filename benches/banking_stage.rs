@@ -134,7 +134,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         let bank = Arc::new(Bank::new(&mint));
 
         let verified_setup: Vec<_> =
-            to_packets_chunked(&packet_recycler, setup_transactions.clone(), tx)
+            to_packets_chunked(&packet_recycler, &setup_transactions.clone(), tx)
                 .into_iter()
                 .map(|x| {
                     let len = (*x).read().unwrap().packets.len();
@@ -153,7 +153,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
         check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
 
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions.clone(), 192)
+        let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
             .into_iter()
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();
@@ -201,7 +201,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
 
     bencher.iter(move || {
         let bank = Arc::new(Bank::new(&mint));
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, transactions.clone(), tx)
+        let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), tx)
             .into_iter()
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();

@@ -66,7 +66,7 @@ impl ReplicateStage {
             let shared_blob = blob_recycler.allocate();
             let (vote, addr) = {
                 let mut wcrdt = crdt.write().unwrap();
-                wcrdt.insert_votes(votes);
+                wcrdt.insert_votes(&votes);
                 //TODO: doesn't seem like there is a synchronous call to get height and id
                 info!("replicate_stage {} {:?}", height, &last_id[..8]);
                 wcrdt.new_vote(height, last_id)

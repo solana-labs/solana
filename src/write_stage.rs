@@ -35,7 +35,7 @@ impl WriteStage {
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         let votes = entries_to_votes(&entries);
-        crdt.write().unwrap().insert_votes(votes);
+        crdt.write().unwrap().insert_votes(&votes);
         entry_writer.write_and_register_entries(&entries)?;
         trace!("New blobs? {}", entries.len());
         let mut blobs = VecDeque::new();

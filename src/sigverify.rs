@@ -59,7 +59,7 @@ fn verify_packet(packet: &Packet) -> u8 {
     ).is_ok() as u8
 }
 
-fn batch_size(batches: &Vec<SharedPackets>) -> usize {
+fn batch_size(batches: &[SharedPackets]) -> usize {
     batches
         .iter()
         .map(|p| p.read().unwrap().packets.len())

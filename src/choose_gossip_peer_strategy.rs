@@ -159,7 +159,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 
         // Return u32 b/c the weighted sampling API from rand::distributions
         // only takes u32 for weights
-        if weighted_vote >= std::u32::MAX as f64 {
+        if weighted_vote >= f64::from(std::u32::MAX) {
             return std::u32::MAX;
         }
 
@@ -173,7 +173,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
-        if options.len() < 1 {
+        if options.is_empty() {
             Err(CrdtError::TooSmall)?;
         }
 

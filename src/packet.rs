@@ -240,7 +240,7 @@ impl Packets {
 
 pub fn to_packets_chunked<T: Serialize>(
     r: &PacketRecycler,
-    xs: Vec<T>,
+    xs: &[T],
     chunks: usize,
 ) -> Vec<SharedPackets> {
     let mut out = vec![];
@@ -258,10 +258,10 @@ pub fn to_packets_chunked<T: Serialize>(
         }
         out.push(p);
     }
-    return out;
+    out
 }
 
-pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: Vec<T>) -> Vec<SharedPackets> {
+pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: &[T]) -> Vec<SharedPackets> {
     to_packets_chunked(r, xs, NUM_PACKETS)
 }
 
@@ -347,7 +347,7 @@ impl Blob {
     }
 
     pub fn is_coding(&self) -> bool {
-        return (self.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0;
+        (self.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0
     }
 
     pub fn set_coding(&mut self) -> Result<()> {
@@ -524,15 +524,15 @@ mod tests {
     fn test_to_packets() {
         let tx = Request::GetTransactionCount;
         let re = PacketRecycler::default();
-        let rv = to_packets(&re, vec![tx.clone(); 1]);
+        let rv = to_packets(&re, &vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), 1);
 
-        let rv = to_packets(&re, vec![tx.clone(); NUM_PACKETS]);
+        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
 
-        let rv = to_packets(&re, vec![tx.clone(); NUM_PACKETS + 1]);
+        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
         assert_eq!(rv[1].read().unwrap().packets.len(), 1);

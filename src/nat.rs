@@ -92,7 +92,7 @@ pub fn udp_public_bind(label: &str, startport: u16, endport: u16) -> UdpSocketPa
                 //
                 // TODO: Remove the |sender| socket and deal with the downstream changes to
                 //       the UDP signalling
-                let mut local_addr_sender = local_addr.clone();
+                let mut local_addr_sender = local_addr;
                 local_addr_sender.set_port(public_addr.port());
                 UdpSocket::bind(local_addr_sender).unwrap()
             };

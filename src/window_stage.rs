@@ -15,11 +15,11 @@ pub struct WindowStage {
 
 impl WindowStage {
     pub fn new(
-        crdt: Arc<RwLock<Crdt>>,
+        crdt: &Arc<RwLock<Crdt>>,
         window: Window,
         entry_height: u64,
         retransmit_socket: UdpSocket,
-        blob_recycler: BlobRecycler,
+        blob_recycler: &BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {
         let (retransmit_sender, retransmit_receiver) = channel();

@@ -36,10 +36,11 @@ impl InfluxDbMetricsWriter {
     }
 
     fn build_client() -> Option<influxdb::Client> {
-        let host = env::var("INFLUX_HOST").unwrap_or("https://metrics.solana.com:8086".to_string());
-        let db = env::var("INFLUX_DATABASE").unwrap_or("scratch".to_string());
-        let username = env::var("INFLUX_USERNAME").unwrap_or("scratch_writer".to_string());
-        let password = env::var("INFLUX_PASSWORD").unwrap_or("topsecret".to_string());
+        let host = env::var("INFLUX_HOST")
+            .unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
+        let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
+        let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "scratch_writer".to_string());
+        let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "topsecret".to_string());
 
         debug!("InfluxDB host={} db={} username={}", host, db, username);
         let mut client = influxdb::Client::new_with_option(host, db, None)
@@ -120,13 +121,11 @@ impl MetricsAgent {
             }
 
             let now = Instant::now();
-            if now.duration_since(last_write_time) >= write_frequency {
-                if !points.is_empty() {
-                    debug!("run: writing {} points", points.len());
-                    writer.write(points);
-                    points = Vec::new();
-                    last_write_time = now;
-                }
+            if now.duration_since(last_write_time) >= write_frequency && !points.is_empty() {
+                debug!("run: writing {} points", points.len());
+                writer.write(points);
+                points = Vec::new();
+                last_write_time = now;
             }
         }
         trace!("run: exit");

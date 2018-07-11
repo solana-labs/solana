@@ -17,27 +17,27 @@ use std::time::Instant;
 use streamer::{self, PacketReceiver};
 use timing;
 
+pub type VerifiedPackets = Vec<(SharedPackets, Vec<u8>)>;
+
 pub struct SigVerifyStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl SigVerifyStage {
-    pub fn new(
-        packet_receiver: Receiver<SharedPackets>,
-    ) -> (Self, Receiver<Vec<(SharedPackets, Vec<u8>)>>) {
+    pub fn new(packet_receiver: Receiver<SharedPackets>) -> (Self, Receiver<VerifiedPackets>) {
         let (verified_sender, verified_receiver) = channel();
         let thread_hdls = Self::verifier_services(packet_receiver, verified_sender);
         (SigVerifyStage { thread_hdls }, verified_receiver)
     }
 
-    fn verify_batch(batch: Vec<SharedPackets>) -> Vec<(SharedPackets, Vec<u8>)> {
+    fn verify_batch(batch: Vec<SharedPackets>) -> VerifiedPackets {
         let r = sigverify::ed25519_verify(&batch);
         batch.into_iter().zip(r).collect()
     }
 
     fn verifier(
         recvr: &Arc<Mutex<PacketReceiver>>,
-        sendr: &Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
+        sendr: &Arc<Mutex<Sender<VerifiedPackets>>>,
     ) -> Result<()> {
         let (batch, len) =
             streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
@@ -74,7 +74,7 @@ impl SigVerifyStage {
 
     fn verifier_service(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
-        verified_sender: Arc<Mutex<Sender<Vec<(SharedPackets, Vec<u8>)>>>>,
+        verified_sender: Arc<Mutex<Sender<VerifiedPackets>>>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
             if let Err(e) = Self::verifier(&packet_receiver.clone(), &verified_sender.clone()) {
@@ -89,7 +89,7 @@ impl SigVerifyStage {
 
     fn verifier_services(
         packet_receiver: PacketReceiver,
-        verified_sender: Sender<Vec<(SharedPackets, Vec<u8>)>>,
+        verified_sender: Sender<VerifiedPackets>,
     ) -> Vec<JoinHandle<()>> {
         let sender = Arc::new(Mutex::new(verified_sender));
         let receiver = Arc::new(Mutex::new(packet_receiver));

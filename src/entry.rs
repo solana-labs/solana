@@ -144,7 +144,7 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
 pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
-    assert!(num_hashes > 0 || transactions.len() == 0);
+    assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
         id: next_hash(start_hash, num_hashes, &transactions),

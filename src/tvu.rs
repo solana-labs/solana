@@ -89,11 +89,11 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (window_stage, blob_window_receiver) = WindowStage::new(
-            crdt.clone(),
+            &crdt.clone(),
             window,
             entry_height,
             retransmit_socket,
-            blob_recycler.clone(),
+            &blob_recycler.clone(),
             blob_fetch_receiver,
         );
 

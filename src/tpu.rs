@@ -52,11 +52,11 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new<W: Write + Send + 'static>(
-        bank: Arc<Bank>,
-        crdt: Arc<RwLock<Crdt>>,
+        bank: &Arc<Bank>,
+        crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
         transactions_socket: UdpSocket,
-        blob_recycler: BlobRecycler,
+        blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
         writer: W,
     ) -> (Self, BlobReceiver) {

@@ -99,7 +99,7 @@ impl FullNode {
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.data.contact_info.ncp
         );
-        let requests_addr = node.data.contact_info.rpu.clone();
+        let requests_addr = node.data.contact_info.rpu;
         let exit = Arc::new(AtomicBool::new(false));
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
@@ -121,7 +121,7 @@ impl FullNode {
             );
             server
         } else {
-            node.data.leader_id = node.data.id.clone();
+            node.data.leader_id = node.data.id;
             let outfile_for_leader: Box<Write + Send> = match outfile_for_leader {
                 Some(OutFile::Path(file)) => Box::new(
                     OpenOptions::new()
@@ -218,11 +218,11 @@ impl FullNode {
         let blob_recycler = BlobRecycler::default();
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
         let (tpu, blob_receiver) = Tpu::new(
-            bank.clone(),
-            crdt.clone(),
+            &bank.clone(),
+            &crdt.clone(),
             tick_duration,
             node.sockets.transaction,
-            blob_recycler.clone(),
+            &blob_recycler.clone(),
             exit.clone(),
             writer,
         );
