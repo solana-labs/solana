@@ -102,15 +102,20 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
     Ok((batch, len))
 }
 
-pub fn responder(sock: UdpSocket, recycler: BlobRecycler, r: BlobReceiver) -> JoinHandle<()> {
+pub fn responder(
+    name: &'static str,
+    sock: UdpSocket,
+    recycler: BlobRecycler,
+    r: BlobReceiver,
+) -> JoinHandle<()> {
     Builder::new()
-        .name("solana-responder".to_string())
+        .name(format!("solana-responder-{}", name))
         .spawn(move || loop {
             if let Err(e) = recv_send(&sock, &recycler, &r) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => error!("{:?}", e),
+                    _ => error!("{} responder error: {:?}", name, e),
                 }
             }
         })
@@ -536,7 +541,7 @@ pub fn window(
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => error!("{:?}", e),
+                        _ => error!("window error: {:?}", e),
                     }
                 }
                 let _ = repair_window(
@@ -681,7 +686,7 @@ pub fn broadcaster(
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         Error::CrdtError(CrdtError::TooSmall) => (), // TODO: Why are the unit-tests throwing hundreds of these?
-                        _ => error!("{:?}", e),
+                        _ => error!("broadcaster error: {:?}", e),
                     }
                 }
             }
@@ -734,7 +739,7 @@ pub fn retransmitter(
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => error!("{:?}", e),
+                        _ => error!("retransmitter error: {:?}", e),
                     }
                 }
             }
@@ -896,7 +901,12 @@ mod test {
         let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
         let t_responder = {
             let (s_responder, r_responder) = channel();
-            let t_responder = responder(send, resp_recycler.clone(), r_responder);
+            let t_responder = responder(
+                "streamer_send_test",
+                send,
+                resp_recycler.clone(),
+                r_responder,
+            );
             let mut msgs = VecDeque::new();
             for i in 0..10 {
                 let b = resp_recycler.allocate();
@@ -970,7 +980,12 @@ mod test {
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
-            let t_responder = responder(tn.sockets.replicate, resp_recycler.clone(), r_responder);
+            let t_responder = responder(
+                "window_send_test",
+                tn.sockets.replicate,
+                resp_recycler.clone(),
+                r_responder,
+            );
             let mut msgs = VecDeque::new();
             for v in 0..10 {
                 let i = 9 - v;

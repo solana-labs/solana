@@ -38,8 +38,12 @@ impl Ncp {
             request_sender,
         )?;
         let (response_sender, response_receiver) = channel();
-        let t_responder =
-            streamer::responder(gossip_send_socket, blob_recycler.clone(), response_receiver);
+        let t_responder = streamer::responder(
+            "ncp",
+            gossip_send_socket,
+            blob_recycler.clone(),
+            response_receiver,
+        );
         let t_listen = Crdt::listen(
             crdt.clone(),
             window,

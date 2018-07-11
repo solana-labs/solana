@@ -204,8 +204,12 @@ pub mod tests {
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
-        let t_responder =
-            streamer::responder(leader.sockets.requests, resp_recycler.clone(), r_responder);
+        let t_responder = streamer::responder(
+            "test_replicate",
+            leader.sockets.requests,
+            resp_recycler.clone(),
+            r_responder,
+        );
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
