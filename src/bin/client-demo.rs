@@ -87,10 +87,15 @@ fn generate_and_send_txs(
     println!("Signing transactions... {}", txs,);
     let signing_start = Instant::now();
 
-    let transactions: Vec<_> = keypairs
+    let mut transactions: Vec<_> = keypairs
         .par_iter()
         .map(|keypair| Transaction::new(&id.keypair(), keypair.pubkey(), 1, *last_id))
         .collect();
+    let mut transactions1: Vec<_> = keypairs
+        .par_iter()
+        .map(|keypair| Transaction::new(keypair, id.pubkey(), 1, *last_id))
+        .collect();
+    transactions.append(&mut transactions1);
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -251,7 +256,7 @@ fn main() {
     let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
-    let keypairs = rnd.gen_n_keypairs(txs);
+    let keypairs = rnd.gen_n_keypairs(txs / 2);
 
     let first_count = client.transaction_count();
     println!("initial count {}", first_count);
