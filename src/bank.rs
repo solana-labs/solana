@@ -33,13 +33,6 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
-fn rotate_vector<T: Clone>(v: Vec<T>, at: usize) -> Vec<T> {
-    let mut ret = Vec::with_capacity(v.len());
-    ret.extend_from_slice(&v[at..]);
-    ret.extend_from_slice(&v[0..at]);
-    ret
-}
-
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
@@ -324,8 +317,21 @@ impl Bank {
         res
     }
 
-    /// Process an ordered list of entries.
-    pub fn process_entries_tail(
+    fn process_entry(&self, entry: Entry) -> Result<()> {
+        if !entry.transactions.is_empty() {
+            for result in self.process_transactions(entry.transactions) {
+                result?;
+            }
+        }
+        if !entry.has_more {
+            self.register_entry_id(&entry.id);
+        }
+        Ok(())
+    }
+
+    /// Process an ordered list of entries, populating a circular buffer "tail"
+    ///   as we go.
+    fn process_entries_tail(
         &self,
         entries: Vec<Entry>,
         tail: &mut Vec<Entry>,
@@ -334,8 +340,6 @@ impl Bank {
         let mut entry_count = 0;
 
         for entry in entries {
-            entry_count += 1;
-
             if tail.len() > *tail_idx {
                 tail[*tail_idx] = entry.clone();
             } else {
@@ -343,14 +347,8 @@ impl Bank {
             }
             *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
-            if !entry.transactions.is_empty() {
-                for result in self.process_transactions(entry.transactions) {
-                    result?;
-                }
-            }
-            if !entry.has_more {
-                self.register_entry_id(&entry.id);
-            }
+            entry_count += 1;
+            self.process_entry(entry)?;
         }
 
         Ok(entry_count)
@@ -361,21 +359,13 @@ impl Bank {
         let mut entry_count = 0;
         for entry in entries {
             entry_count += 1;
-
-            if !entry.transactions.is_empty() {
-                for result in self.process_transactions(entry.transactions) {
-                    result?;
-                }
-            }
-            if !entry.has_more {
-                self.register_entry_id(&entry.id);
-            }
+            self.process_entry(entry)?;
         }
         Ok(entry_count)
     }
 
     /// Append entry blocks to the ledger, verifying them along the way.
-    pub fn process_blocks<I>(
+    fn process_blocks<I>(
         &self,
         entries: I,
         tail: &mut Vec<Entry>,
@@ -433,8 +423,8 @@ impl Bank {
         let mut tail_idx = 2;
         let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
 
-        // check if we need to shift tail around
-        let tail = if tail.len() == WINDOW_SIZE as usize && tail_idx != 0 {
+        // check f we need to rotate tail
+        let tail = if tail.len() == WINDOW_SIZE as usize {
             rotate_vector(tail, tail_idx)
         } else {
             tail
@@ -538,6 +528,17 @@ impl Bank {
             }
         }
         false
+    }
+}
+
+fn rotate_vector<T: Clone>(v: Vec<T>, at: usize) -> Vec<T> {
+    if at != 0 {
+        let mut ret = Vec::with_capacity(v.len());
+        ret.extend_from_slice(&v[at..]);
+        ret.extend_from_slice(&v[0..at]);
+        ret
+    } else {
+        v
     }
 }
 
@@ -827,7 +828,6 @@ mod tests {
 
         let window_size = WINDOW_SIZE as usize;
         for entry_count in window_size - 3..window_size + 2 {
-            eprintln!("entry_count {}", entry_count);
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
             let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
@@ -872,35 +872,12 @@ mod tests {
 
     #[test]
     fn test_rotate_vector() {
-        let test = vec![4, 1, 2, 3];
-        let etest = vec![4, 1, 2, 3];
+        let expect = vec![1, 2, 3, 4];
 
-        let (left, right) = etest.split_at(1);
-        let mut right = right.to_vec();
-        right.extend(left);
-
-        assert_eq!(rotate_vector(test, 1), right);
-
-        // TODO: put me back in when Criterion is up
-        //let now = Instant::now();
-        //for _ in 0..100_000 {
-        //    let etest = vec![4, 1, 2, 3];
-        //    let (left, right) = etest.split_at(1);
-        //    let mut right = right.to_vec();
-        //    right.extend(left);
-        //}
-        //eprintln!("split_at {}", duration_as_us(&now.elapsed()));
-        //
-        //let now = Instant::now();
-        //for _ in 0..100_000 {
-        //    let test = vec![4, 1, 2, 3];
-        //    rotate_vector(test, 1);
-        //}
-        //eprintln!("rotate {}", duration_as_us(&now.elapsed()));
-
-        // expected ratio:
-        //  split_at 97145
-        //  rotate 70582
+        assert_eq!(rotate_vector(vec![4, 1, 2, 3], 1), expect);
+        assert_eq!(rotate_vector(vec![1, 2, 3, 4], 0), expect);
+        assert_eq!(rotate_vector(vec![2, 3, 4, 1], 3), expect);
+        assert_eq!(rotate_vector(vec![3, 4, 1, 2], 2), expect);
     }
 
 }
