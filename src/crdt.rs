@@ -108,26 +108,32 @@ pub struct ContactInfo {
     /// destined to the replciate_addr
     pub tvu_window: SocketAddr,
     /// if this struture changes update this value as well
-    /// Always update `ReplicatedData` version too
+    /// Always update `NodeInfo` version too
     /// This separate version for addresses allows us to use the `Vote`
-    /// as means of updating the `ReplicatedData` table without touching the
+    /// as means of updating the `NodeInfo` table without touching the
     /// addresses if they haven't changed.
     pub version: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ReplicatedData {
+pub struct LedgerState {
+    /// last verified hash that was submitted to the leader
+    pub last_id: Hash,
+    /// last verified entry count, always increasing
+    pub entry_height: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct NodeInfo {
     pub id: PublicKey,
     /// If any of the bits change, update increment this value
     pub version: u64,
     /// network addresses
     pub contact_info: ContactInfo,
     /// current leader identity
-    pub current_leader_id: PublicKey,
-    /// last verified hash that was submitted to the leader
-    last_verified_id: Hash,
-    /// last verified count, always increasing
-    last_verified_height: u64,
+    pub leader_id: PublicKey,
+    /// information about the state of the ledger
+    ledger_state: LedgerState,
 }
 
 fn make_debug_id(buf: &[u8]) -> u64 {
@@ -136,7 +142,7 @@ fn make_debug_id(buf: &[u8]) -> u64 {
         .expect("rdr.read_u64 in fn debug_id")
 }
 
-impl ReplicatedData {
+impl NodeInfo {
     pub fn new(
         id: PublicKey,
         ncp: SocketAddr,
@@ -144,8 +150,8 @@ impl ReplicatedData {
         rpu: SocketAddr,
         tpu: SocketAddr,
         tvu_window: SocketAddr,
-    ) -> ReplicatedData {
-        ReplicatedData {
+    ) -> NodeInfo {
+        NodeInfo {
             id,
             version: 0,
             contact_info: ContactInfo {
@@ -156,9 +162,11 @@ impl ReplicatedData {
                 tvu_window,
                 version: 0,
             },
-            current_leader_id: PublicKey::default(),
-            last_verified_id: Hash::default(),
-            last_verified_height: 0,
+            leader_id: PublicKey::default(),
+            ledger_state: LedgerState {
+                last_id: Hash::default(),
+                entry_height: 0,
+            },
         }
     }
     pub fn debug_id(&self) -> u64 {
@@ -175,7 +183,7 @@ impl ReplicatedData {
         let replicate_addr = Self::next_port(&bind_addr, 2);
         let requests_addr = Self::next_port(&bind_addr, 3);
         let repair_addr = Self::next_port(&bind_addr, 4);
-        ReplicatedData::new(
+        NodeInfo::new(
             pubkey,
             gossip_addr,
             replicate_addr,
@@ -190,7 +198,7 @@ impl ReplicatedData {
     }
     pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
         let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
-        ReplicatedData::new(
+        NodeInfo::new(
             PublicKey::default(),
             gossip_addr,
             daddr.clone(),
@@ -201,9 +209,9 @@ impl ReplicatedData {
     }
 }
 
-/// `Crdt` structure keeps a table of `ReplicatedData` structs
+/// `Crdt` structure keeps a table of `NodeInfo` structs
 /// # Properties
-/// * `table` - map of public id's to versioned and signed ReplicatedData structs
+/// * `table` - map of public id's to versioned and signed NodeInfo structs
 /// * `local` - map of public id's to what `self.update_index` `self.table` was updated
 /// * `remote` - map of public id's to the `remote.update_index` was sent
 /// * `update_index` - my update index
@@ -214,7 +222,7 @@ impl ReplicatedData {
 /// No attempt to keep track of timeouts or dropped requests is made, or should be.
 pub struct Crdt {
     /// table of everyone in the network
-    pub table: HashMap<PublicKey, ReplicatedData>,
+    pub table: HashMap<PublicKey, NodeInfo>,
     /// Value of my update index when entry in table was updated.
     /// Nodes will ask for updates since `update_index`, and this node
     /// should respond with all the identities that are greater then the
@@ -238,17 +246,17 @@ enum Protocol {
     /// this doesn't update the `remote` update index, but it allows the
     /// recepient of this request to add knowledge of this node to the network
     /// (last update index i saw from you, my replicated data)
-    RequestUpdates(u64, ReplicatedData),
+    RequestUpdates(u64, NodeInfo),
     //TODO might need a since?
-    /// from id, form's last update index, ReplicatedData
-    ReceiveUpdates(PublicKey, u64, Vec<ReplicatedData>, Vec<(PublicKey, u64)>),
+    /// from id, form's last update index, NodeInfo
+    ReceiveUpdates(PublicKey, u64, Vec<NodeInfo>, Vec<(PublicKey, u64)>),
     /// ask for a missing index
     /// (my replicated data to keep alive, missing window index)
-    RequestWindowIndex(ReplicatedData, u64),
+    RequestWindowIndex(NodeInfo, u64),
 }
 
 impl Crdt {
-    pub fn new(me: ReplicatedData) -> Crdt {
+    pub fn new(me: NodeInfo) -> Crdt {
         assert_eq!(me.version, 0);
         let mut g = Crdt {
             table: HashMap::new(),
@@ -266,11 +274,11 @@ impl Crdt {
     pub fn debug_id(&self) -> u64 {
         make_debug_id(&self.me)
     }
-    pub fn my_data(&self) -> &ReplicatedData {
+    pub fn my_data(&self) -> &NodeInfo {
         &self.table[&self.me]
     }
-    pub fn leader_data(&self) -> Option<&ReplicatedData> {
-        self.table.get(&(self.table[&self.me].current_leader_id))
+    pub fn leader_data(&self) -> Option<&NodeInfo> {
+        self.table.get(&(self.table[&self.me].leader_id))
     }
 
     pub fn set_leader(&mut self, key: PublicKey) -> () {
@@ -279,9 +287,9 @@ impl Crdt {
             "{:x}: LEADER_UPDATE TO {:x} from {:x}",
             me.debug_id(),
             make_debug_id(&key),
-            make_debug_id(&me.current_leader_id),
+            make_debug_id(&me.leader_id),
         );
-        me.current_leader_id = key;
+        me.leader_id = key;
         me.version += 1;
         self.insert(&me);
     }
@@ -321,7 +329,7 @@ impl Crdt {
         } else {
             let mut data = self.table[pubkey].clone();
             data.version = v.version;
-            data.last_verified_id = last_id;
+            data.ledger_state.last_id = last_id;
             debug!(
                 "{:x}: INSERTING VOTE! for {:x}",
                 self.debug_id(),
@@ -349,7 +357,7 @@ impl Crdt {
             self.insert_vote(&v.0, &v.1, v.2);
         }
     }
-    pub fn insert(&mut self, v: &ReplicatedData) {
+    pub fn insert(&mut self, v: &NodeInfo) {
         // TODO check that last_verified types are always increasing
         //update the peer table
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
@@ -454,7 +462,7 @@ impl Crdt {
     }
 
     pub fn index_blobs(
-        me: &ReplicatedData,
+        me: &NodeInfo,
         blobs: &Vec<SharedBlob>,
         receive_index: &mut u64,
     ) -> Result<()> {
@@ -472,12 +480,12 @@ impl Crdt {
     }
     /// compute broadcast table
     /// # Remarks
-    pub fn compute_broadcast_table(&self) -> Vec<ReplicatedData> {
+    pub fn compute_broadcast_table(&self) -> Vec<NodeInfo> {
         let live: Vec<_> = self.alive.iter().collect();
         //thread_rng().shuffle(&mut live);
         let daddr = "0.0.0.0:0".parse().unwrap();
         let me = &self.table[&self.me];
-        let cloned_table: Vec<ReplicatedData> = live.iter()
+        let cloned_table: Vec<NodeInfo> = live.iter()
             .map(|x| &self.table[x.0])
             .filter(|v| {
                 if me.id == v.id {
@@ -509,8 +517,8 @@ impl Crdt {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
-        me: &ReplicatedData,
-        broadcast_table: &Vec<ReplicatedData>,
+        me: &NodeInfo,
+        broadcast_table: &Vec<NodeInfo>,
         window: &Window,
         s: &UdpSocket,
         transmit_index: &mut u64,
@@ -540,7 +548,7 @@ impl Crdt {
             .into_iter()
             .map(|(b, v)| {
                 // only leader should be broadcasting
-                assert!(me.current_leader_id != v.id);
+                assert!(me.leader_id != v.id);
                 let bl = b.unwrap();
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
@@ -580,7 +588,7 @@ impl Crdt {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
-        let (me, table): (ReplicatedData, Vec<ReplicatedData>) = {
+        let (me, table): (NodeInfo, Vec<NodeInfo>) = {
             // copy to avoid locking during IO
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.table[&s.me].clone(), s.table.values().cloned().collect())
@@ -596,7 +604,7 @@ impl Crdt {
             .filter(|v| {
                 if me.id == v.id {
                     false
-                } else if me.current_leader_id == v.id {
+                } else if me.leader_id == v.id {
                     trace!("skip retransmit to leader {:?}", v.id);
                     false
                 } else if v.contact_info.tvu == daddr {
@@ -646,7 +654,7 @@ impl Crdt {
         1.0
     }
 
-    fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<ReplicatedData>) {
+    fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<NodeInfo>) {
         //trace!("get updates since {}", v);
         let data = self.table
             .values()
@@ -715,8 +723,8 @@ impl Crdt {
         let mut me = self.my_data().clone();
         let leader = self.leader_data().ok_or(CrdtError::NoLeader)?.clone();
         me.version += 1;
-        me.last_verified_id = last_id;
-        me.last_verified_height = height;
+        me.ledger_state.last_id = last_id;
+        me.ledger_state.entry_height = height;
         let vote = Vote {
             version: me.version,
             contact_info_version: me.contact_info.version,
@@ -752,11 +760,11 @@ impl Crdt {
     fn top_leader(&self) -> Option<PublicKey> {
         let mut table = HashMap::new();
         let def = PublicKey::default();
-        let cur = self.table.values().filter(|x| x.current_leader_id != def);
+        let cur = self.table.values().filter(|x| x.leader_id != def);
         for v in cur {
-            let cnt = table.entry(&v.current_leader_id).or_insert(0);
+            let cnt = table.entry(&v.leader_id).or_insert(0);
             *cnt += 1;
-            trace!("leader {:x} {}", make_debug_id(&v.current_leader_id), *cnt);
+            trace!("leader {:x} {}", make_debug_id(&v.leader_id), *cnt);
         }
         let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
         let my_id = self.debug_id();
@@ -776,7 +784,7 @@ impl Crdt {
     /// A t-shirt for the first person to actually use this bad behavior to attack the alpha testnet
     fn update_leader(&mut self) {
         if let Some(leader_id) = self.top_leader() {
-            if self.my_data().current_leader_id != leader_id {
+            if self.my_data().leader_id != leader_id {
                 if self.table.get(&leader_id).is_some() {
                     self.set_leader(leader_id);
                 }
@@ -793,7 +801,7 @@ impl Crdt {
         &mut self,
         from: PublicKey,
         update_index: u64,
-        data: &[ReplicatedData],
+        data: &[NodeInfo],
         external_liveness: &[(PublicKey, u64)],
     ) {
         trace!("got updates {}", data.len());
@@ -857,8 +865,8 @@ impl Crdt {
     }
     fn run_window_request(
         window: &Window,
-        me: &ReplicatedData,
-        from: &ReplicatedData,
+        me: &NodeInfo,
+        from: &NodeInfo,
         ix: u64,
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
@@ -877,7 +885,7 @@ impl Crdt {
                 // Allow retransmission of this response if the node
                 // is the leader and the number of repair requests equals
                 // a power of two
-                if me.current_leader_id == me.id
+                if me.leader_id == me.id
                     && (num_retransmits == 0 || num_retransmits.is_power_of_two())
                 {
                     sender_id = me.id
@@ -1079,7 +1087,7 @@ pub struct Sockets {
 }
 
 pub struct TestNode {
-    pub data: ReplicatedData,
+    pub data: NodeInfo,
     pub sockets: Sockets,
 }
 
@@ -1098,7 +1106,7 @@ impl TestNode {
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let data = ReplicatedData::new(
+        let data = NodeInfo::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
@@ -1121,7 +1129,7 @@ impl TestNode {
             },
         }
     }
-    pub fn new_with_bind_addr(data: ReplicatedData, bind_addr: SocketAddr) -> TestNode {
+    pub fn new_with_bind_addr(data: NodeInfo, bind_addr: SocketAddr) -> TestNode {
         let mut local_gossip_addr = bind_addr.clone();
         local_gossip_addr.set_port(data.contact_info.ncp.port());
 
@@ -1171,7 +1179,7 @@ impl TestNode {
 #[cfg(test)]
 mod tests {
     use crdt::{
-        parse_port_or_addr, Crdt, CrdtError, ReplicatedData, GOSSIP_PURGE_MILLIS,
+        parse_port_or_addr, Crdt, CrdtError, NodeInfo, GOSSIP_PURGE_MILLIS,
         GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
     use hash::Hash;
@@ -1198,7 +1206,7 @@ mod tests {
     }
     #[test]
     fn insert_test() {
-        let mut d = ReplicatedData::new(
+        let mut d = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1218,11 +1226,11 @@ mod tests {
     }
     #[test]
     fn test_new_vote() {
-        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
-        let leader = ReplicatedData::new_leader(&"127.0.0.2:1235".parse().unwrap());
+        let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
         assert_matches!(
             crdt.new_vote(0, Hash::default()).err(),
@@ -1245,7 +1253,7 @@ mod tests {
 
     #[test]
     fn test_insert_vote() {
-        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
         assert_eq!(crdt.table[&d.id].version, 0);
@@ -1277,10 +1285,10 @@ mod tests {
     fn test_insert_vote_leader_liveness() {
         logger::setup();
         // TODO: remove this test once leaders vote
-        let d = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone());
-        let leader = ReplicatedData::new_leader(&"127.0.0.2:1235".parse().unwrap());
+        let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
         crdt.insert(&leader);
         crdt.set_leader(leader.id);
@@ -1300,7 +1308,7 @@ mod tests {
         assert!(updated > live);
     }
 
-    fn sorted(ls: &Vec<ReplicatedData>) -> Vec<ReplicatedData> {
+    fn sorted(ls: &Vec<NodeInfo>) -> Vec<NodeInfo> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();
         copy.sort_by(|x, y| x.id.cmp(&y.id));
         copy
@@ -1308,7 +1316,7 @@ mod tests {
     #[test]
     fn replicated_data_new_leader_with_pubkey() {
         let kp = KeyPair::new();
-        let d1 = ReplicatedData::new_leader_with_pubkey(
+        let d1 = NodeInfo::new_leader_with_pubkey(
             kp.pubkey().clone(),
             &"127.0.0.1:1234".parse().unwrap(),
         );
@@ -1324,7 +1332,7 @@ mod tests {
     }
     #[test]
     fn update_test() {
-        let d1 = ReplicatedData::new(
+        let d1 = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1332,7 +1340,7 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let d2 = ReplicatedData::new(
+        let d2 = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1340,7 +1348,7 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let d3 = ReplicatedData::new(
+        let d3 = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1376,14 +1384,14 @@ mod tests {
             sorted(&crdt2.table.values().map(|x| x.clone()).collect()),
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
-        let d4 = ReplicatedData::new_entry_point("127.0.0.4:1234".parse().unwrap());
+        let d4 = NodeInfo::new_entry_point("127.0.0.4:1234".parse().unwrap());
         crdt.insert(&d4);
         let (_key, _ix, ups) = crdt.get_updates_since(0);
         assert_eq!(sorted(&ups), sorted(&vec![d2.clone(), d1, d3]));
     }
     #[test]
     fn window_index_request() {
-        let me = ReplicatedData::new(
+        let me = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1394,7 +1402,7 @@ mod tests {
         let mut crdt = Crdt::new(me.clone());
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
-        let nxt = ReplicatedData::new(
+        let nxt = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1405,7 +1413,7 @@ mod tests {
         crdt.insert(&nxt);
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
-        let nxt = ReplicatedData::new(
+        let nxt = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1418,7 +1426,7 @@ mod tests {
         assert_eq!(nxt.contact_info.ncp, "127.0.0.2:1234".parse().unwrap());
         assert_eq!(rv.0, "127.0.0.2:1234".parse().unwrap());
 
-        let nxt = ReplicatedData::new(
+        let nxt = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.3:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1445,7 +1453,7 @@ mod tests {
     /// test that gossip requests are eventually generated for all nodes
     #[test]
     fn gossip_request() {
-        let me = ReplicatedData::new(
+        let me = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1456,7 +1464,7 @@ mod tests {
         let mut crdt = Crdt::new(me.clone());
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
-        let nxt1 = ReplicatedData::new(
+        let nxt1 = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1470,7 +1478,7 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt1.contact_info.ncp);
 
-        let nxt2 = ReplicatedData::new_entry_point("127.0.0.3:1234".parse().unwrap());
+        let nxt2 = NodeInfo::new_entry_point("127.0.0.3:1234".parse().unwrap());
         crdt.insert(&nxt2);
         // check that the service works
         // and that it eventually produces a request for both nodes
@@ -1511,9 +1519,9 @@ mod tests {
     #[test]
     fn purge_test() {
         logger::setup();
-        let me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let mut crdt = Crdt::new(me.clone());
-        let nxt = ReplicatedData::new_leader(&"127.0.0.2:1234".parse().unwrap());
+        let nxt = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
         assert_ne!(me.id, nxt.id);
         crdt.set_leader(me.id);
         crdt.insert(&nxt);
@@ -1532,7 +1540,7 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
-        let nxt2 = ReplicatedData::new_leader(&"127.0.0.2:1234".parse().unwrap());
+        let nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
         assert_ne!(me.id, nxt2.id);
         assert_ne!(nxt.id, nxt2.id);
         crdt.insert(&nxt2);
@@ -1555,7 +1563,7 @@ mod tests {
     #[test]
     fn run_window_request() {
         let window = default_window();
-        let me = ReplicatedData::new(
+        let me = NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
@@ -1584,10 +1592,10 @@ mod tests {
     fn run_window_request_with_backoff() {
         let window = default_window();
 
-        let mut me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        me.current_leader_id = me.id;
+        let mut me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        me.leader_id = me.id;
 
-        let mock_peer = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let mock_peer = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
 
         let recycler = BlobRecycler::default();
 
@@ -1620,25 +1628,25 @@ mod tests {
     #[test]
     fn test_update_leader() {
         logger::setup();
-        let me = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let leader0 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let leader1 = ReplicatedData::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let leader0 = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let leader1 = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let mut crdt = Crdt::new(me.clone());
         assert_eq!(crdt.top_leader(), None);
         crdt.set_leader(leader0.id);
         assert_eq!(crdt.top_leader().unwrap(), leader0.id);
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
-            let mut dum = ReplicatedData::new_entry_point("127.0.0.1:1234".parse().unwrap());
+            let mut dum = NodeInfo::new_entry_point("127.0.0.1:1234".parse().unwrap());
             dum.id = KeyPair::new().pubkey();
-            dum.current_leader_id = leader1.id;
+            dum.leader_id = leader1.id;
             crdt.insert(&dum);
         }
         assert_eq!(crdt.top_leader().unwrap(), leader1.id);
         crdt.update_leader();
-        assert_eq!(crdt.my_data().current_leader_id, leader0.id);
+        assert_eq!(crdt.my_data().leader_id, leader0.id);
         crdt.insert(&leader1);
         crdt.update_leader();
-        assert_eq!(crdt.my_data().current_leader_id, leader1.id);
+        assert_eq!(crdt.my_data().leader_id, leader1.id);
     }
 }

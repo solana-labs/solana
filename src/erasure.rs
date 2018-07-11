@@ -523,7 +523,7 @@ mod test {
         erasure::add_coding_blobs(blob_recycler, &mut blobs, offset as u64);
         let blobs_len = blobs.len();
 
-        let d = crdt::ReplicatedData::new(
+        let d = crdt::NodeInfo::new(
             KeyPair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),

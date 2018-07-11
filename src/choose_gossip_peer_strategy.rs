@@ -1,4 +1,4 @@
-use crdt::{CrdtError, ReplicatedData};
+use crdt::{CrdtError, NodeInfo};
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::Result;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 pub const DEFAULT_WEIGHT: u32 = 1;
 
 pub trait ChooseGossipPeerStrategy {
-    fn choose_peer<'a>(&self, options: Vec<&'a ReplicatedData>) -> Result<&'a ReplicatedData>;
+    fn choose_peer<'a>(&self, options: Vec<&'a NodeInfo>) -> Result<&'a NodeInfo>;
 }
 
 pub struct ChooseRandomPeerStrategy<'a> {
@@ -27,7 +27,7 @@ impl<'a, 'b> ChooseRandomPeerStrategy<'a> {
 }
 
 impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
-    fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
+    fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.is_empty() {
             Err(CrdtError::TooSmall)?;
         }
@@ -172,7 +172,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 }
 
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
-    fn choose_peer<'b>(&self, options: Vec<&'b ReplicatedData>) -> Result<&'b ReplicatedData> {
+    fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.len() < 1 {
             Err(CrdtError::TooSmall)?;
         }
