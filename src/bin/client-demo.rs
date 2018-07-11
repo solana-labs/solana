@@ -8,7 +8,7 @@ extern crate solana;
 use bincode::serialize;
 use clap::{App, Arg};
 use rayon::prelude::*;
-use solana::crdt::{Crdt, ReplicatedData};
+use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::DroneRequest;
 use solana::fullnode::Config;
 use solana::hash::Hash;
@@ -38,7 +38,7 @@ fn sample_tx_count(
     exit: Arc<AtomicBool>,
     maxes: Arc<RwLock<Vec<(f64, u64)>>>,
     first_count: u64,
-    v: ReplicatedData,
+    v: NodeInfo,
     sample_period: u64,
 ) {
     let mut client = mk_client(&v);
@@ -79,7 +79,7 @@ fn generate_and_send_txs(
     tx_clients: &Vec<ThinClient>,
     id: &Mint,
     keypairs: &Vec<KeyPair>,
-    leader: &ReplicatedData,
+    leader: &NodeInfo,
     txs: i64,
     last_id: &mut Hash,
     threads: usize,
@@ -185,12 +185,12 @@ fn main() {
         )
         .get_matches();
 
-    let leader: ReplicatedData;
+    let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
         leader = read_leader(l.to_string()).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = ReplicatedData::new_leader(&server_addr);
+        leader = NodeInfo::new_leader(&server_addr);
     };
 
     let id: Mint;
@@ -319,7 +319,7 @@ fn main() {
     }
 }
 
-fn mk_client(r: &ReplicatedData) -> ThinClient {
+fn mk_client(r: &NodeInfo) -> ThinClient {
     let requests_socket = udp_random_bind(8000, 10000, 5).unwrap();
     let transactions_socket = udp_random_bind(8000, 10000, 5).unwrap();
 
@@ -335,11 +335,11 @@ fn mk_client(r: &ReplicatedData) -> ThinClient {
     )
 }
 
-fn spy_node() -> (ReplicatedData, UdpSocket) {
+fn spy_node() -> (NodeInfo, UdpSocket) {
     let gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
     let pubkey = KeyPair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
-    let node = ReplicatedData::new(
+    let node = NodeInfo::new(
         pubkey,
         //gossip.local_addr().unwrap(),
         gossip_socket_pair.addr,
@@ -352,11 +352,11 @@ fn spy_node() -> (ReplicatedData, UdpSocket) {
 }
 
 fn converge(
-    leader: &ReplicatedData,
+    leader: &NodeInfo,
     exit: Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
-) -> Vec<ReplicatedData> {
+) -> Vec<NodeInfo> {
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node();
@@ -376,7 +376,7 @@ fn converge(
     let mut rv = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
-        let v: Vec<ReplicatedData> = spy_ref
+        let v: Vec<NodeInfo> = spy_ref
             .read()
             .unwrap()
             .table

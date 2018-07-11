@@ -1,7 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 use counter::Counter;
-use crdt::{Crdt, CrdtError, ReplicatedData};
+use crdt::{Crdt, CrdtError, NodeInfo};
 #[cfg(feature = "erasure")]
 use erasure;
 use packet::{
@@ -262,7 +262,7 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let maybe_leader: Option<ReplicatedData> = crdt.read()
+    let maybe_leader: Option<NodeInfo> = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
         .cloned();
@@ -574,8 +574,8 @@ pub fn window(
 }
 
 fn broadcast(
-    me: &ReplicatedData,
-    broadcast_table: &Vec<ReplicatedData>,
+    me: &NodeInfo,
+    broadcast_table: &Vec<NodeInfo>,
     window: &Window,
     recycler: &BlobRecycler,
     r: &BlobReceiver,

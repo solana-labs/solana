@@ -8,7 +8,7 @@ extern crate solana;
 
 use atty::{is, Stream};
 use clap::{App, Arg};
-use solana::crdt::{ReplicatedData, TestNode};
+use solana::crdt::{NodeInfo, TestNode};
 use solana::fullnode::{Config, FullNode, InFile, OutFile};
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil};
@@ -52,7 +52,7 @@ fn main() -> () {
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
     let mut keypair = KeyPair::new();
-    let mut repl_data = ReplicatedData::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
+    let mut repl_data = NodeInfo::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
     if let Some(l) = matches.value_of("identity") {
         let path = l.to_string();
         if let Ok(file) = File::open(path.clone()) {
@@ -82,7 +82,7 @@ fn main() -> () {
             None,
         )
     } else {
-        node.data.current_leader_id = node.data.id.clone();
+        node.data.leader_id = node.data.id.clone();
 
         let outfile = if let Some(o) = matches.value_of("output") {
             OutFile::Path(o.to_string())
