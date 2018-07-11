@@ -9,7 +9,7 @@ extern crate tokio_io;
 
 use bincode::deserialize;
 use clap::{App, Arg};
-use solana::crdt::ReplicatedData;
+use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest};
 use solana::fullnode::Config;
 use solana::mint::Mint;
@@ -60,12 +60,12 @@ fn main() {
         )
         .get_matches();
 
-    let leader: ReplicatedData;
+    let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
         leader = read_leader(l.to_string()).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = ReplicatedData::new_leader(&server_addr);
+        leader = NodeInfo::new_leader(&server_addr);
     };
 
     let mint: Mint;
