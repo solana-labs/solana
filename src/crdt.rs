@@ -1179,8 +1179,8 @@ impl TestNode {
 #[cfg(test)]
 mod tests {
     use crdt::{
-        parse_port_or_addr, Crdt, CrdtError, NodeInfo, GOSSIP_PURGE_MILLIS,
-        GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
+        parse_port_or_addr, Crdt, CrdtError, NodeInfo, GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS,
+        MIN_TABLE_SIZE,
     };
     use hash::Hash;
     use logger;
