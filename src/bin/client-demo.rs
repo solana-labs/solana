@@ -224,18 +224,22 @@ fn main() {
     let mut client = mk_client(&leader);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-
     let txs: i64 = 500_000;
-    println!("Airdropping {:?} tokens", txs);
-    let _airdrop = request_airdrop(&drone_addr, &id, txs as u64).unwrap();
-    // TODO: return airdrop Result from Drone
-    sleep(Duration::from_millis(100));
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap();
-    println!("Your balance is: {:?}", balance);
 
-    if balance < txs || (starting_balance == balance) {
-        println!("TPS airdrop limit reached; wait 60sec to retry");
-        exit(1);
+    if starting_balance < txs {
+        let airdrop_amount = txs - starting_balance;
+        println!("Airdropping {:?} tokens", airdrop_amount);
+        let _airdrop = request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
+        // TODO: return airdrop Result from Drone
+        sleep(Duration::from_millis(100));
+
+        let balance = client.poll_get_balance(&id.pubkey()).unwrap();
+        println!("Your balance is: {:?}", balance);
+
+        if balance < txs || (starting_balance == balance) {
+            println!("TPS airdrop limit reached; wait 60sec to retry");
+            exit(1);
+        }
     }
 
     println!("Get last ID...");
