@@ -1,10 +1,10 @@
-#![feature(test)]
-
 #[macro_use]
 extern crate log;
 extern crate solana;
-extern crate test;
+#[macro_use]
+extern crate criterion;
 
+use criterion::{Bencher, Criterion};
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
@@ -16,7 +16,6 @@ use std::thread::sleep;
 use std::thread::{spawn, JoinHandle};
 use std::time::Duration;
 use std::time::SystemTime;
-use test::Bencher;
 
 fn producer(addr: &SocketAddr, recycler: PacketRecycler, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -98,7 +97,17 @@ fn bench_streamer_with_result() -> Result<()> {
     Ok(())
 }
 
-#[bench]
-fn bench_streamer(_bench: &mut Bencher) {
-    bench_streamer_with_result().unwrap();
+fn bench_streamer(bencher: &mut Bencher) {
+    bencher.iter(|| {
+        bench_streamer_with_result().unwrap();
+    });
 }
+
+fn bench(criterion: &mut Criterion) {
+    criterion.bench_function("bench_streamer", |bencher| {
+        bench_streamer(bencher);
+    });
+}
+
+criterion_group!(benches, bench);
+criterion_main!(benches);
