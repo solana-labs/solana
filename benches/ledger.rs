@@ -1,17 +1,15 @@
-#![feature(test)]
-
+#[macro_use]
+extern crate criterion;
 extern crate solana;
-extern crate test;
 
+use criterion::{Bencher, Criterion};
 use solana::hash::{hash, Hash};
 use solana::ledger::{next_entries, reconstruct_entries_from_blobs, Block};
 use solana::packet::BlobRecycler;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 use std::collections::VecDeque;
-use test::Bencher;
 
-#[bench]
 fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
     let zero = Hash::default();
     let one = hash(&zero);
@@ -27,3 +25,12 @@ fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
         assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
     });
 }
+
+fn bench(criterion: &mut Criterion) {
+    criterion.bench_function("bench_block_to_blobs_to_block", |bencher| {
+        bench_block_to_blobs_to_block(bencher);
+    });
+}
+
+criterion_group!(benches, bench);
+criterion_main!(benches);

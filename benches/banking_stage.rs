@@ -1,16 +1,13 @@
-#![feature(test)]
-
 extern crate bincode;
+#[macro_use]
+extern crate criterion;
 extern crate rayon;
 extern crate solana;
-extern crate test;
-#[macro_use]
-extern crate log;
 
+use criterion::{Bencher, Criterion};
 use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::banking_stage::BankingStage;
-use solana::logger;
 use solana::mint::Mint;
 use solana::packet::{to_packets_chunked, PacketRecycler};
 use solana::record_stage::Signal;
@@ -19,9 +16,7 @@ use solana::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
-use test::Bencher;
 
-// extern crate test;
 // use self::test::Bencher;
 // use bank::{Bank, MAX_ENTRY_IDS};
 // use bincode::serialize;
@@ -33,7 +28,6 @@ use test::Bencher;
 // use std::time::Instant;
 // use transaction::Transaction;
 //
-// #[bench]
 // fn bench_process_transactions(_bencher: &mut Bencher) {
 //     let mint = Mint::new(100_000_000);
 //     let bank = Bank::new(&mint);
@@ -98,10 +92,8 @@ fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
     assert_eq!(total, ref_tx_count);
 }
 
-#[bench]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
-    logger::setup();
-    let tx = 10_000_usize;
+    let tx = 1_000_usize;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
     let num_dst_accounts = 8 * 1024;
@@ -111,8 +103,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let dstkeys: Vec<_> = (0..num_dst_accounts)
         .map(|_| KeyPair::new().pubkey())
         .collect();
-
-    info!("created keys src: {} dst: {}", srckeys.len(), dstkeys.len());
 
     let transactions: Vec<_> = (0..tx)
         .map(|i| {
@@ -124,8 +114,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             )
         })
         .collect();
-
-    info!("created transactions");
 
     let (verified_sender, verified_receiver) = channel();
     let (signal_sender, signal_receiver) = channel();
@@ -186,10 +174,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     });
 }
 
-#[bench]
 fn bench_banking_stage_single_from(bencher: &mut Bencher) {
-    logger::setup();
-    let tx = 10_000_usize;
+    let tx = 1_000_usize;
     let mint = Mint::new(1_000_000_000_000);
     let mut pubkeys = Vec::new();
     let num_keys = 8;
@@ -234,3 +220,15 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         check_txs(verified_len, &signal_receiver, tx);
     });
 }
+
+fn bench(criterion: &mut Criterion) {
+    criterion.bench_function("bench_banking_stage_multi_accounts", |bencher| {
+        bench_banking_stage_multi_accounts(bencher);
+    });
+    criterion.bench_function("bench_process_transaction", |bencher| {
+        bench_banking_stage_single_from(bencher);
+    });
+}
+
+criterion_group!(benches, bench);
+criterion_main!(benches);
