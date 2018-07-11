@@ -73,7 +73,14 @@ fn main() -> () {
     let fullnode = if let Some(t) = matches.value_of("testnet") {
         let testnet_address_string = t.to_string();
         let testnet_addr = testnet_address_string.parse().unwrap();
-        FullNode::new(node, false, InFile::StdIn, None, Some(testnet_addr), None)
+        FullNode::new(
+            node,
+            false,
+            InFile::StdIn,
+            Some(keypair),
+            Some(testnet_addr),
+            None,
+        )
     } else {
         node.data.current_leader_id = node.data.id.clone();
 
@@ -82,14 +89,7 @@ fn main() -> () {
         } else {
             OutFile::StdOut
         };
-        FullNode::new(
-            node,
-            true,
-            InFile::StdIn,
-            Some(keypair),
-            None,
-            Some(outfile),
-        )
+        FullNode::new(node, true, InFile::StdIn, None, None, Some(outfile))
     };
     fullnode.join().expect("join");
 }
