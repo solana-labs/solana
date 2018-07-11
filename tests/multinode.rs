@@ -5,7 +5,7 @@ extern crate serde_json;
 extern crate solana;
 
 use solana::crdt::TestNode;
-use solana::crdt::{Crdt, ReplicatedData};
+use solana::crdt::{Crdt, NodeInfo};
 use solana::entry_writer::EntryWriter;
 use solana::fullnode::{FullNode, InFile, OutFile};
 use solana::logger;
@@ -21,7 +21,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
+fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     //lets spy on the network
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = TestNode::new();
@@ -46,7 +46,7 @@ fn converge(leader: &ReplicatedData, num_nodes: usize) -> Vec<ReplicatedData> {
     let mut rv = vec![];
     for _ in 0..30 {
         let num = spy_ref.read().unwrap().convergence();
-        let mut v: Vec<ReplicatedData> = spy_ref
+        let mut v: Vec<NodeInfo> = spy_ref
             .read()
             .unwrap()
             .table
@@ -284,7 +284,7 @@ fn test_boot_validator_from_file() {
     std::fs::remove_file(ledger_path).unwrap();
 }
 
-fn create_leader(ledger_path: &str) -> (ReplicatedData, FullNode) {
+fn create_leader(ledger_path: &str) -> (NodeInfo, FullNode) {
     let leader = TestNode::new();
     let leader_data = leader.data.clone();
     let leader_fullnode = FullNode::new(
@@ -399,7 +399,7 @@ fn test_multi_node_dynamic_network() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let validators: Vec<(ReplicatedData, FullNode)> = (0..N)
+    let validators: Vec<(NodeInfo, FullNode)> = (0..N)
         .into_iter()
         .map(|n| {
             let keypair = KeyPair::new();
@@ -475,7 +475,7 @@ fn test_multi_node_dynamic_network() {
     std::fs::remove_file(ledger_path).unwrap();
 }
 
-fn mk_client(leader: &ReplicatedData) -> ThinClient {
+fn mk_client(leader: &NodeInfo) -> ThinClient {
     let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))
@@ -514,7 +514,7 @@ fn retry_get_balance(
 }
 
 fn send_tx_and_retry_get_balance(
-    leader: &ReplicatedData,
+    leader: &NodeInfo,
     alice: &Mint,
     bob_pubkey: &PublicKey,
     expected: Option<i64>,

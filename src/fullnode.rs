@@ -1,7 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use bank::Bank;
-use crdt::{Crdt, ReplicatedData, TestNode};
+use crdt::{Crdt, NodeInfo, TestNode};
 use entry::Entry;
 use entry_writer;
 use ledger::Block;
@@ -44,7 +44,7 @@ pub enum OutFile {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 /// Fullnode configuration to be stored in file
 pub struct Config {
-    pub node_info: ReplicatedData,
+    pub node_info: NodeInfo,
     pkcs8: Vec<u8>,
 }
 
@@ -58,7 +58,7 @@ impl Config {
         let keypair =
             KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
-        let node_info = ReplicatedData::new_leader_with_pubkey(pubkey, bind_addr);
+        let node_info = NodeInfo::new_leader_with_pubkey(pubkey, bind_addr);
         Config { node_info, pkcs8 }
     }
     pub fn keypair(&self) -> KeyPair {
@@ -104,7 +104,7 @@ impl FullNode {
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
-            let network_entry_point = ReplicatedData::new_entry_point(testnet_addr);
+            let network_entry_point = NodeInfo::new_entry_point(testnet_addr);
             let keypair = keypair_for_validator.expect("validator requires keypair");
             let server = FullNode::new_validator(
                 keypair,
@@ -121,7 +121,7 @@ impl FullNode {
             );
             server
         } else {
-            node.data.current_leader_id = node.data.id.clone();
+            node.data.leader_id = node.data.id.clone();
             let outfile_for_leader: Box<Write + Send> = match outfile_for_leader {
                 Some(OutFile::Path(file)) => Box::new(
                     OpenOptions::new()
@@ -285,7 +285,7 @@ impl FullNode {
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
         node: TestNode,
-        entry_point: ReplicatedData,
+        entry_point: NodeInfo,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let bank = Arc::new(bank);
