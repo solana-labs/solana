@@ -93,7 +93,7 @@ fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
 }
 
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
-    let tx = 1_000_usize;
+    let tx = 10_000_usize;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
     let num_dst_accounts = 8 * 1024;
@@ -175,7 +175,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 }
 
 fn bench_banking_stage_single_from(bencher: &mut Bencher) {
-    let tx = 1_000_usize;
+    let tx = 10_000_usize;
     let mint = Mint::new(1_000_000_000_000);
     let mut pubkeys = Vec::new();
     let num_keys = 8;
@@ -225,10 +225,14 @@ fn bench(criterion: &mut Criterion) {
     criterion.bench_function("bench_banking_stage_multi_accounts", |bencher| {
         bench_banking_stage_multi_accounts(bencher);
     });
-    criterion.bench_function("bench_process_transaction", |bencher| {
+    criterion.bench_function("bench_process_stage_single_from", |bencher| {
         bench_banking_stage_single_from(bencher);
     });
 }
 
-criterion_group!(benches, bench);
+criterion_group!(
+    name = benches;
+    config = Criterion::default().sample_size(2);
+    targets = bench
+);
 criterion_main!(benches);
