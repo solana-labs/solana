@@ -186,7 +186,7 @@ mod tests {
 
         // jumble some data to test failure
         if modify_data {
-            packet.data[20] = 10;
+            packet.data[20] = packet.data[20].wrapping_add(10);
         }
 
         // generate packet vector
