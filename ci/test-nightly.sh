@@ -13,7 +13,6 @@ _() {
 
 _ cargo build --verbose --features unstable
 _ cargo test --verbose --features unstable
-_ cargo bench --verbose --features unstable
 
 
 exit 0
