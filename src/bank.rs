@@ -402,7 +402,6 @@ impl Bank {
     where
         I: IntoIterator<Item = Entry>,
     {
-        let now = Instant::now();
         let mut entries = entries.into_iter();
 
         // The first item in the ledger is required to be an entry with zero num_hashes,
@@ -440,8 +439,6 @@ impl Bank {
         } else {
             tail
         };
-
-        eprintln!(".. {}", duration_as_us(&now.elapsed()));
 
         Ok((entry_count, tail))
     }
@@ -821,9 +818,9 @@ mod tests {
 
     #[test]
     fn test_process_ledger_around_window_size() {
-        //        // benchmark
+        // TODO: put me back in when Criterion is up
         //        for _ in 0..10 {
-        //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize * 6);
+        //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize);
         //            let bank = Bank::default();
         //            let (_, _) = bank.process_ledger(ledger).unwrap();
         //        }
@@ -883,6 +880,27 @@ mod tests {
         right.extend(left);
 
         assert_eq!(rotate_vector(test, 1), right);
+
+        // TODO: put me back in when Criterion is up
+        //let now = Instant::now();
+        //for _ in 0..100_000 {
+        //    let etest = vec![4, 1, 2, 3];
+        //    let (left, right) = etest.split_at(1);
+        //    let mut right = right.to_vec();
+        //    right.extend(left);
+        //}
+        //eprintln!("split_at {}", duration_as_us(&now.elapsed()));
+        //
+        //let now = Instant::now();
+        //for _ in 0..100_000 {
+        //    let test = vec![4, 1, 2, 3];
+        //    rotate_vector(test, 1);
+        //}
+        //eprintln!("rotate {}", duration_as_us(&now.elapsed()));
+
+        // expected ratio:
+        //  split_at 97145
+        //  rotate 70582
     }
 
 }
