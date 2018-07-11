@@ -196,32 +196,3 @@ mod tests {
         //        assert_eq!(entries0, entries1);
     }
 }
-
-#[cfg(all(feature = "unstable", test))]
-mod bench {
-    extern crate test;
-    use self::test::Bencher;
-    use hash::hash;
-    use ledger::*;
-    use packet::BlobRecycler;
-    use signature::{KeyPair, KeyPairUtil};
-    use transaction::Transaction;
-
-    #[bench]
-    fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
-        let zero = Hash::default();
-        let one = hash(&zero);
-        let keypair = KeyPair::new();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let transactions = vec![tx0; 10];
-        let entries = next_entries(&zero, 1, transactions);
-
-        let blob_recycler = BlobRecycler::default();
-        bencher.iter(|| {
-            let mut blob_q = VecDeque::new();
-            entries.to_blobs(&blob_recycler, &mut blob_q);
-            assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
-        });
-    }
-
-}

@@ -88,3 +88,15 @@ criterion = "0.2"
 [[bench]]
 name = "bank"
 harness = false
+
+[[bench]]
+name = "banking_stage"
+
+[[bench]]
+name = "ledger"
+
+[[bench]]
+name = "signature"
+
+[[bench]]
+name = "streamer"
