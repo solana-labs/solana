@@ -32,7 +32,7 @@ impl RecordStage {
         start_hash: &Hash,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
-        let start_hash = start_hash.clone();
+        let start_hash = *start_hash;
 
         let thread_hdl = Builder::new()
             .name("solana-record-stage".to_string())
@@ -52,7 +52,7 @@ impl RecordStage {
         tick_duration: Duration,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
-        let start_hash = start_hash.clone();
+        let start_hash = *start_hash;
 
         let thread_hdl = Builder::new()
             .name("solana-record-stage".to_string())
@@ -60,13 +60,14 @@ impl RecordStage {
                 let mut recorder = Recorder::new(start_hash);
                 let start_time = Instant::now();
                 loop {
-                    if let Err(_) = Self::try_process_signals(
+                    if Self::try_process_signals(
                         &mut recorder,
                         start_time,
                         tick_duration,
                         &signal_receiver,
                         &entry_sender,
-                    ) {
+                    ).is_err()
+                    {
                         return;
                     }
                     recorder.hash();

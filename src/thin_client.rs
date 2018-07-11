@@ -39,7 +39,7 @@ impl ThinClient {
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
     ) -> Self {
-        let client = ThinClient {
+        ThinClient {
             requests_addr,
             requests_socket,
             transactions_addr,
@@ -48,8 +48,7 @@ impl ThinClient {
             transaction_count: 0,
             balances: HashMap::new(),
             signature_status: false,
-        };
-        client
+        }
     }
 
     pub fn recv_response(&self) -> io::Result<Response> {
@@ -60,8 +59,8 @@ impl ThinClient {
         deserialize(&buf).or_else(|_| Err(io::Error::new(io::ErrorKind::Other, "deserialize")))
     }
 
-    pub fn process_response(&mut self, resp: Response) {
-        match resp {
+    pub fn process_response(&mut self, resp: &Response) {
+        match *resp {
             Response::Balance { key, val } => {
                 trace!("Response balance {:?} {:?}", key, val);
                 self.balances.insert(key, val);
@@ -76,13 +75,10 @@ impl ThinClient {
             }
             Response::SignatureStatus { signature_status } => {
                 self.signature_status = signature_status;
-                match signature_status {
-                    true => {
-                        trace!("Response found signature");
-                    }
-                    false => {
-                        trace!("Response signature not found");
-                    }
+                if signature_status {
+                    trace!("Response found signature");
+                } else {
+                    trace!("Response signature not found");
                 }
             }
         }
@@ -90,7 +86,7 @@ impl ThinClient {
 
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
-    pub fn transfer_signed(&self, tx: Transaction) -> io::Result<usize> {
+    pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<usize> {
         let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
             .send_to(&data, &self.transactions_addr)
@@ -107,7 +103,7 @@ impl ThinClient {
         let now = Instant::now();
         let tx = Transaction::new(keypair, to, n, *last_id);
         let sig = tx.sig;
-        let result = self.transfer_signed(tx).map(|_| sig);
+        let result = self.transfer_signed(&tx).map(|_| sig);
         metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("transfer".to_string()))
@@ -137,12 +133,12 @@ impl ThinClient {
             if let Response::Balance { key, .. } = &resp {
                 done = key == pubkey;
             }
-            self.process_response(resp);
+            self.process_response(&resp);
         }
         self.balances
             .get(pubkey)
-            .map(|x| *x)
-            .ok_or(io::Error::new(io::ErrorKind::Other, "nokey"))
+            .cloned()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
@@ -160,10 +156,10 @@ impl ThinClient {
 
             if let Ok(resp) = self.recv_response() {
                 info!("recv_response {:?}", resp);
-                if let &Response::TransactionCount { .. } = &resp {
+                if let Response::TransactionCount { .. } = resp {
                     done = true;
                 }
-                self.process_response(resp);
+                self.process_response(&resp);
             }
         }
         self.transaction_count
@@ -184,10 +180,10 @@ impl ThinClient {
 
             match self.recv_response() {
                 Ok(resp) => {
-                    if let &Response::LastId { .. } = &resp {
+                    if let Response::LastId { .. } = resp {
                         done = true;
                     }
-                    self.process_response(resp);
+                    self.process_response(&resp);
                 }
                 Err(e) => {
                     debug!("thin_client get_last_id error: {}", e);
@@ -232,10 +228,10 @@ impl ThinClient {
                 .expect("buffer error in pub fn get_last_id");
 
             if let Ok(resp) = self.recv_response() {
-                if let &Response::SignatureStatus { .. } = &resp {
+                if let Response::SignatureStatus { .. } = resp {
                     done = true;
                 }
-                self.process_response(resp);
+                self.process_response(&resp);
             }
         }
         metrics::submit(
@@ -355,7 +351,7 @@ mod tests {
 
         let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
 
-        let _sig = client.transfer_signed(tx).unwrap();
+        let _sig = client.transfer_signed(&tx).unwrap();
 
         let last_id = client.get_last_id();
 
@@ -364,7 +360,7 @@ mod tests {
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
-        let _sig = client.transfer_signed(tr2).unwrap();
+        let _sig = client.transfer_signed(&tr2).unwrap();
 
         let balance = client.poll_get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);

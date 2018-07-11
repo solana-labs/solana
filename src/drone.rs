@@ -112,7 +112,7 @@ impl Drone {
                 airdrop_request_amount,
                 client_public_key,
             } => {
-                request_amount = airdrop_request_amount.clone();
+                request_amount = airdrop_request_amount;
                 tx = Transaction::new(
                     &self.mint_keypair,
                     client_public_key,
@@ -136,7 +136,7 @@ impl Drone {
                     )
                     .to_owned(),
             );
-            client.transfer_signed(tx)
+            client.transfer_signed(&tx)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
         }

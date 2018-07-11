@@ -170,7 +170,7 @@ fn find_next_missing(
     let reqs: Vec<_> = (*consumed..*received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
-            if let &None = &window[i] {
+            if window[i].is_none() {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
                     return Some((to, req));
@@ -223,7 +223,7 @@ fn repair_window(
 
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
-    if reqs.len() > 0 {
+    if !reqs.is_empty() {
         static mut COUNTER_REPAIR: Counter =
             create_counter!("streamer-repair_window-repair", LOG_RATE);
         inc_counter!(COUNTER_REPAIR, reqs.len());
@@ -389,7 +389,7 @@ fn recv_window(
                     break;
                 }
                 let mut is_coding = false;
-                if let &Some(ref cblob) = &window[k] {
+                if let Some(ref cblob) = window[k] {
                     let cblob_r = cblob
                         .read()
                         .expect("blob read lock for flogs streamer::window");
@@ -461,16 +461,14 @@ fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
                     "_"
                 } else if v.is_none() {
                     "0"
-                } else {
-                    if let &Some(ref cblob) = &v {
-                        if cblob.read().unwrap().is_coding() {
-                            "C"
-                        } else {
-                            "1"
-                        }
+                } else if let Some(ref cblob) = v {
+                    if cblob.read().unwrap().is_coding() {
+                        "C"
                     } else {
-                        "0"
+                        "1"
                     }
+                } else {
+                    "0"
                 }
             })
             .collect();
@@ -575,7 +573,7 @@ pub fn window(
 
 fn broadcast(
     me: &NodeInfo,
-    broadcast_table: &Vec<NodeInfo>,
+    broadcast_table: &[NodeInfo],
     window: &Window,
     recycler: &BlobRecycler,
     r: &BlobReceiver,

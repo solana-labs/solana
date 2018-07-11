@@ -129,7 +129,7 @@ fn generate_and_send_txs(
                 leader.contact_info.tpu
             );
             for tx in txs {
-                client.transfer_signed(tx.clone()).unwrap();
+                client.transfer_signed(tx).unwrap();
             }
         });
     println!(

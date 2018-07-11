@@ -56,7 +56,7 @@ pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
     let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
     if let Some(addrstr) = optstr {
         if let Ok(port) = addrstr.parse() {
-            let mut addr = daddr.clone();
+            let mut addr = daddr;
             addr.set_port(port);
             addr
         } else if let Ok(addr) = addrstr.parse() {
@@ -173,12 +173,12 @@ impl NodeInfo {
         make_debug_id(&self.id)
     }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
-        let mut nxt_addr = addr.clone();
+        let mut nxt_addr = *addr;
         nxt_addr.set_port(addr.port() + nxt);
         nxt_addr
     }
     pub fn new_leader_with_pubkey(pubkey: PublicKey, bind_addr: &SocketAddr) -> Self {
-        let transactions_addr = bind_addr.clone();
+        let transactions_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
         let requests_addr = Self::next_port(&bind_addr, 3);
@@ -201,9 +201,9 @@ impl NodeInfo {
         NodeInfo::new(
             PublicKey::default(),
             gossip_addr,
-            daddr.clone(),
-            daddr.clone(),
-            daddr.clone(),
+            daddr,
+            daddr,
+            daddr,
             daddr,
         )
     }
@@ -341,19 +341,19 @@ impl Crdt {
     fn update_leader_liveness(&mut self) {
         //TODO: (leaders should vote)
         //until then we pet their liveness every time we see some votes from anyone
-        let ld = self.leader_data().map(|x| x.id.clone());
+        let ld = self.leader_data().map(|x| x.id);
         trace!("leader_id {:?}", ld);
         if let Some(leader_id) = ld {
             self.update_liveness(leader_id);
         }
     }
-    pub fn insert_votes(&mut self, votes: Vec<(PublicKey, Vote, Hash)>) {
+    pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
         static mut COUNTER_VOTE: Counter = create_counter!("crdt-vote-count", LOG_RATE);
         inc_counter!(COUNTER_VOTE, votes.len());
-        if votes.len() > 0 {
+        if !votes.is_empty() {
             info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
         }
-        for v in &votes {
+        for v in votes {
             self.insert_vote(&v.0, &v.1, v.2);
         }
     }
@@ -371,7 +371,7 @@ impl Crdt {
             );
 
             self.update_index += 1;
-            let _ = self.table.insert(v.id.clone(), v.clone());
+            let _ = self.table.insert(v.id, v.clone());
             let _ = self.local.insert(v.id, self.update_index);
             static mut COUNTER_UPDATE: Counter = create_counter!("crdt-update-count", LOG_RATE);
             inc_counter!(COUNTER_UPDATE, 1);
@@ -449,7 +449,7 @@ impl Crdt {
         static mut COUNTER_PURGE: Counter = create_counter!("crdt-purge-count", LOG_RATE);
         inc_counter!(COUNTER_PURGE, dead_ids.len());
 
-        for id in dead_ids.iter() {
+        for id in &dead_ids {
             self.alive.remove(id);
             self.table.remove(id);
             self.remote.remove(id);
@@ -461,11 +461,7 @@ impl Crdt {
         }
     }
 
-    pub fn index_blobs(
-        me: &NodeInfo,
-        blobs: &Vec<SharedBlob>,
-        receive_index: &mut u64,
-    ) -> Result<()> {
+    pub fn index_blobs(me: &NodeInfo, blobs: &[SharedBlob], receive_index: &mut u64) -> Result<()> {
         // enumerate all the blobs, those are the indices
         trace!("{:x}: INDEX_BLOBS {}", me.debug_id(), blobs.len());
         for (i, b) in blobs.iter().enumerate() {
@@ -518,13 +514,13 @@ impl Crdt {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
         me: &NodeInfo,
-        broadcast_table: &Vec<NodeInfo>,
+        broadcast_table: &[NodeInfo],
         window: &Window,
         s: &UdpSocket,
         transmit_index: &mut u64,
         received_index: u64,
     ) -> Result<()> {
-        if broadcast_table.len() < 1 {
+        if broadcast_table.is_empty() {
             warn!("{:x}:not enough peers in crdt table", me.debug_id());
             Err(CrdtError::TooSmall)?;
         }
@@ -676,7 +672,7 @@ impl Crdt {
             Err(CrdtError::TooSmall)?;
         }
         let n = (Self::random() as usize) % valid.len();
-        let addr = valid[n].contact_info.ncp.clone();
+        let addr = valid[n].contact_info.ncp;
         let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix);
         let out = serialize(&req)?;
         Ok((addr, out))
@@ -768,7 +764,7 @@ impl Crdt {
         }
         let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
         let my_id = self.debug_id();
-        for x in sorted.iter() {
+        for x in &sorted {
             trace!(
                 "{:x}: sorted leaders {:x} votes: {}",
                 my_id,
@@ -784,10 +780,8 @@ impl Crdt {
     /// A t-shirt for the first person to actually use this bad behavior to attack the alpha testnet
     fn update_leader(&mut self) {
         if let Some(leader_id) = self.top_leader() {
-            if self.my_data().leader_id != leader_id {
-                if self.table.get(&leader_id).is_some() {
-                    self.set_leader(leader_id);
-                }
+            if self.my_data().leader_id != leader_id && self.table.get(&leader_id).is_some() {
+                self.set_leader(leader_id);
             }
         }
     }
@@ -822,7 +816,9 @@ impl Crdt {
                 continue;
             }
 
-            let liveness_entry = self.external_liveness.entry(*pk).or_insert(HashMap::new());
+            let liveness_entry = self.external_liveness
+                .entry(*pk)
+                .or_insert_with(HashMap::new);
             let peer_index = *liveness_entry.entry(from).or_insert(*external_remote_index);
             if *external_remote_index > peer_index {
                 liveness_entry.insert(from, *external_remote_index);
@@ -854,7 +850,7 @@ impl Crdt {
                 obj.write().unwrap().purge(timestamp());
                 //TODO: possibly tune this parameter
                 //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
-                let _ = obj.write().unwrap().update_leader();
+                obj.write().unwrap().update_leader();
                 let elapsed = timestamp() - start;
                 if GOSSIP_SLEEP_MILLIS > elapsed {
                     let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
@@ -948,10 +944,7 @@ impl Crdt {
                 let me = obj.read().unwrap();
                 // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = me.get_updates_since(v);
-                let external_liveness = me.remote
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect();
+                let external_liveness = me.remote.iter().map(|(k, v)| (*k, *v)).collect();
                 drop(me);
                 trace!("get updates since response {} {}", v, data.len());
                 let len = data.len();
@@ -1091,6 +1084,12 @@ pub struct TestNode {
     pub sockets: Sockets,
 }
 
+impl Default for TestNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestNode {
     pub fn new() -> Self {
         let pubkey = KeyPair::new().pubkey();
@@ -1115,7 +1114,7 @@ impl TestNode {
             repair.local_addr().unwrap(),
         );
         TestNode {
-            data: data,
+            data,
             sockets: Sockets {
                 gossip,
                 gossip_send,
@@ -1130,19 +1129,19 @@ impl TestNode {
         }
     }
     pub fn new_with_bind_addr(data: NodeInfo, bind_addr: SocketAddr) -> TestNode {
-        let mut local_gossip_addr = bind_addr.clone();
+        let mut local_gossip_addr = bind_addr;
         local_gossip_addr.set_port(data.contact_info.ncp.port());
 
-        let mut local_replicate_addr = bind_addr.clone();
+        let mut local_replicate_addr = bind_addr;
         local_replicate_addr.set_port(data.contact_info.tvu.port());
 
-        let mut local_requests_addr = bind_addr.clone();
+        let mut local_requests_addr = bind_addr;
         local_requests_addr.set_port(data.contact_info.rpu.port());
 
-        let mut local_transactions_addr = bind_addr.clone();
+        let mut local_transactions_addr = bind_addr;
         local_transactions_addr.set_port(data.contact_info.tpu.port());
 
-        let mut local_repair_addr = bind_addr.clone();
+        let mut local_repair_addr = bind_addr;
         local_repair_addr.set_port(data.contact_info.tvu_window.port());
 
         let transaction = UdpSocket::bind(local_transactions_addr).unwrap();
@@ -1160,7 +1159,7 @@ impl TestNode {
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         TestNode {
-            data: data,
+            data,
             sockets: Sockets {
                 gossip,
                 gossip_send,
@@ -1300,7 +1299,7 @@ mod tests {
         };
         sleep(Duration::from_millis(100));
         let votes = vec![(d.id.clone(), vote_new_version_old_addrs, Hash::default())];
-        crdt.insert_votes(votes);
+        crdt.insert_votes(&votes);
         let updated = crdt.alive[&leader.id];
         //should be accepted, since the update is for the same address field as the one we know
         assert_eq!(crdt.table[&d.id].version, 1);

@@ -120,11 +120,7 @@ impl Bank {
 
     /// Commit funds to the `payment.to` party.
     fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<PublicKey, i64>) {
-        if balances.contains_key(&payment.to) {
-            *balances.get_mut(&payment.to).unwrap() += payment.tokens;
-        } else {
-            balances.insert(payment.to, payment.tokens);
-        }
+        *balances.entry(payment.to).or_insert(0) += payment.tokens;
     }
 
     /// Return the last entry ID registered.
@@ -511,7 +507,7 @@ impl Bank {
         let bals = self.balances
             .read()
             .expect("'balances' read lock in get_balance");
-        bals.get(pubkey).map(|x| *x).unwrap_or(0)
+        bals.get(pubkey).cloned().unwrap_or(0)
     }
 
     pub fn transaction_count(&self) -> usize {
