@@ -121,17 +121,3 @@ mod tests {
         assert_eq!(gen_n_pubkeys(seed, 50), gen_n_pubkeys(seed, 50));
     }
 }
-
-#[cfg(all(feature = "unstable", test))]
-mod bench {
-    extern crate test;
-
-    use self::test::Bencher;
-    use super::*;
-
-    #[bench]
-    fn bench_gen_keys(b: &mut Bencher) {
-        let rnd = GenKeys::new([0u8; 32]);
-        b.iter(|| rnd.gen_n_keypairs(1000));
-    }
-}
