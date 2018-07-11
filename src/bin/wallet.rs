@@ -8,7 +8,7 @@ extern crate solana;
 
 use bincode::serialize;
 use clap::{App, Arg, SubCommand};
-use solana::crdt::ReplicatedData;
+use solana::crdt::NodeInfo;
 use solana::drone::DroneRequest;
 use solana::fullnode::Config;
 use solana::mint::Mint;
@@ -56,7 +56,7 @@ impl error::Error for WalletError {
 }
 
 struct WalletConfig {
-    leader: ReplicatedData,
+    leader: NodeInfo,
     id: Mint,
     drone_addr: SocketAddr,
     command: WalletCommand,
@@ -66,7 +66,7 @@ impl Default for WalletConfig {
     fn default() -> WalletConfig {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         WalletConfig {
-            leader: ReplicatedData::new_leader(&default_addr.clone()),
+            leader: NodeInfo::new_leader(&default_addr.clone()),
             id: Mint::new(0),
             drone_addr: default_addr.clone(),
             command: WalletCommand::Balance,
@@ -141,12 +141,12 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .get_matches();
 
-    let leader: ReplicatedData;
+    let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
         leader = read_leader(l.to_string()).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = ReplicatedData::new_leader(&server_addr);
+        leader = NodeInfo::new_leader(&server_addr);
     };
 
     let id: Mint;
@@ -298,7 +298,7 @@ fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
     Ok(mint)
 }
 
-fn mk_client(r: &ReplicatedData) -> io::Result<ThinClient> {
+fn mk_client(r: &NodeInfo) -> io::Result<ThinClient> {
     let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     requests_socket

@@ -31,8 +31,8 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
 }
 
 /// Test that the network converges.
-/// Run until every node in the network has a full ReplicatedData set.
-/// Check that nodes stop sending updates after all the ReplicatedData has been shared.
+/// Run until every node in the network has a full NodeInfo set.
+/// Check that nodes stop sending updates after all the NodeInfo has been shared.
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(topo: F)
 where
