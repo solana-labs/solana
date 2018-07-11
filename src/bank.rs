@@ -33,6 +33,13 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
+fn rotate_vector<T: Clone>(v: Vec<T>, at: usize) -> Vec<T> {
+    let mut ret = Vec::with_capacity(v.len());
+    ret.extend_from_slice(&v[at..]);
+    ret.extend_from_slice(&v[0..at]);
+    ret
+}
+
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
@@ -341,9 +348,6 @@ impl Bank {
                     result?;
                 }
             }
-            // TODO: verify this is ok in cases like:
-            //  1. an untrusted genesis or tx-<DATE>.log
-            //  2. a crazy leader..
             if !entry.has_more {
                 self.register_entry_id(&entry.id);
             }
@@ -363,9 +367,6 @@ impl Bank {
                     result?;
                 }
             }
-            // TODO: verify this is ok in cases like:
-            //  1. an untrusted genesis or tx-<DATE>.log
-            //  2. a crazy leader..
             if !entry.has_more {
                 self.register_entry_id(&entry.id);
             }
@@ -435,10 +436,7 @@ impl Bank {
 
         // check if we need to shift tail around
         let tail = if tail.len() == WINDOW_SIZE as usize && tail_idx != 0 {
-            let mut shift = Vec::with_capacity(WINDOW_SIZE as usize);
-            shift.extend_from_slice(&tail[tail_idx..]);
-            shift.extend_from_slice(&tail[0..tail_idx]);
-            shift
+            rotate_vector(tail, tail_idx)
         } else {
             tail
         };
@@ -823,12 +821,12 @@ mod tests {
 
     #[test]
     fn test_process_ledger_around_window_size() {
-        // benchmark
-        for _ in 0..10 {
-            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize * 6);
-            let bank = Bank::default();
-            let (_, _) = bank.process_ledger(ledger).unwrap();
-        }
+        //        // benchmark
+        //        for _ in 0..10 {
+        //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize * 6);
+        //            let bank = Bank::default();
+        //            let (_, _) = bank.process_ledger(ledger).unwrap();
+        //        }
 
         let window_size = WINDOW_SIZE as usize;
         for entry_count in window_size - 3..window_size + 2 {
@@ -874,4 +872,17 @@ mod tests {
         bank.process_ledger(genesis.chain(block)).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
+
+    #[test]
+    fn test_rotate_vector() {
+        let test = vec![4, 1, 2, 3];
+        let etest = vec![4, 1, 2, 3];
+
+        let (left, right) = etest.split_at(1);
+        let mut right = right.to_vec();
+        right.extend(left);
+
+        assert_eq!(rotate_vector(test, 1), right);
+    }
+
 }
