@@ -422,7 +422,13 @@ impl Blob {
             {
                 let p = r.read().expect("'r' read lock in pub fn send_to");
                 let a = p.meta.addr();
-                socket.send_to(&p.data[..p.meta.size], &a)?;
+                if let Err(e) = socket.send_to(&p.data[..p.meta.size], &a) {
+                    info!(
+                        "error sending {} byte packet to {:?}: {:?}",
+                        p.meta.size, a, e
+                    );
+                    Err(e)?;
+                }
             }
             re.recycle(r);
         }

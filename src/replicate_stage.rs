@@ -97,7 +97,12 @@ impl ReplicateStage {
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
-        let t_responder = responder(send, blob_recycler.clone(), vote_blob_receiver);
+        let t_responder = responder(
+            "replicate_stage",
+            send,
+            blob_recycler.clone(),
+            vote_blob_receiver,
+        );
         let skeypair = Arc::new(keypair);
 
         let t_replicate = Builder::new()
