@@ -62,7 +62,7 @@ fn main() {
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l.to_string()).node_info;
+        leader = read_leader(l).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = NodeInfo::new_leader(&server_addr);
@@ -70,7 +70,7 @@ fn main() {
 
     let mint: Mint;
     if let Some(m) = matches.value_of("mint") {
-        mint = read_mint(m.to_string()).expect("client mint");
+        mint = read_mint(m).expect("client mint");
     } else {
         eprintln!("No mint found!");
         exit(1);
@@ -148,13 +148,13 @@ fn main() {
         });
     tokio::run(done);
 }
-fn read_leader(path: String) -> Config {
-    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
-    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+fn read_leader(path: &str) -> Config {
+    let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
+    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }
 
-fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.clone())?;
+fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.to_string())?;
     let mint = serde_json::from_reader(file)?;
     Ok(mint)
 }

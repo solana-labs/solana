@@ -66,9 +66,9 @@ impl Default for WalletConfig {
     fn default() -> WalletConfig {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         WalletConfig {
-            leader: NodeInfo::new_leader(&default_addr.clone()),
+            leader: NodeInfo::new_leader(&default_addr),
             id: Mint::new(0),
-            drone_addr: default_addr.clone(),
+            drone_addr: default_addr,
             command: WalletCommand::Balance,
         }
     }
@@ -143,7 +143,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l.to_string()).node_info;
+        leader = read_leader(l).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = NodeInfo::new_leader(&server_addr);
@@ -151,26 +151,26 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
 
     let id: Mint;
     if let Some(m) = matches.value_of("mint") {
-        id = read_mint(m.to_string())?;
+        id = read_mint(m)?;
     } else {
         eprintln!("No mint found!");
         exit(1);
     };
 
-    let mut drone_addr = leader.contact_info.tpu.clone();
+    let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(9900);
 
     let command = match matches.subcommand() {
         ("airdrop", Some(airdrop_matches)) => {
-            let mut tokens: i64 = id.tokens;
-            if airdrop_matches.is_present("tokens") {
-                tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
-            }
+            let tokens = if airdrop_matches.is_present("tokens") {
+                airdrop_matches.value_of("tokens").unwrap().parse()?
+            } else {
+                id.tokens
+            };
             Ok(WalletCommand::AirDrop(tokens))
         }
         ("pay", Some(pay_matches)) => {
-            let to: PublicKey;
-            if pay_matches.is_present("to") {
+            let to = if pay_matches.is_present("to") {
                 let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
                     .into_vec()
                     .expect("base58-encoded public key");
@@ -179,14 +179,17 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                     display_actions();
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
-                to = PublicKey::clone_from_slice(&pubkey_vec);
+                PublicKey::clone_from_slice(&pubkey_vec)
             } else {
-                to = id.pubkey();
-            }
-            let mut tokens: i64 = id.tokens;
-            if pay_matches.is_present("tokens") {
-                tokens = pay_matches.value_of("tokens").unwrap().parse()?;
-            }
+                id.pubkey()
+            };
+
+            let tokens = if pay_matches.is_present("tokens") {
+                pay_matches.value_of("tokens").unwrap().parse()?
+            } else {
+                id.tokens
+            };
+
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
@@ -250,7 +253,7 @@ fn process_command(
         WalletCommand::AirDrop(tokens) => {
             println!("Airdrop requested...");
             println!("Airdropping {:?} tokens", tokens);
-            let _airdrop = request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
+            request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
             // TODO: return airdrop Result from Drone
             sleep(Duration::from_millis(100));
             println!(
@@ -277,23 +280,23 @@ fn process_command(
 }
 
 fn display_actions() {
-    println!("");
+    println!();
     println!("Commands:");
     println!("  address   Get your public key");
     println!("  balance   Get your account balance");
     println!("  airdrop   Request a batch of tokens");
     println!("  pay       Send tokens to a public key");
     println!("  confirm   Confirm your last payment by signature");
-    println!("");
+    println!();
 }
 
-fn read_leader(path: String) -> Config {
-    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
-    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+fn read_leader(path: &str) -> Config {
+    let file = File::open(path.to_string()).unwrap_or_else(|_| panic!("file not found: {}", path));
+    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }
 
-fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.clone())?;
+fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.to_string())?;
     let mint = serde_json::from_reader(file)?;
     Ok(mint)
 }

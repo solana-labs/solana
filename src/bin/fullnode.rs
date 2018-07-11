@@ -82,7 +82,7 @@ fn main() -> () {
             None,
         )
     } else {
-        node.data.leader_id = node.data.id.clone();
+        node.data.leader_id = node.data.id;
 
         let outfile = if let Some(o) = matches.value_of("output") {
             OutFile::Path(o.to_string())

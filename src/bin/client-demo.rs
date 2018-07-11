@@ -35,10 +35,10 @@ use std::time::Duration;
 use std::time::Instant;
 
 fn sample_tx_count(
-    exit: Arc<AtomicBool>,
-    maxes: Arc<RwLock<Vec<(f64, u64)>>>,
+    exit: &Arc<AtomicBool>,
+    maxes: &Arc<RwLock<Vec<(f64, u64)>>>,
     first_count: u64,
-    v: NodeInfo,
+    v: &NodeInfo,
     sample_period: u64,
 ) {
     let mut client = mk_client(&v);
@@ -76,9 +76,9 @@ fn sample_tx_count(
 
 fn generate_and_send_txs(
     client: &mut ThinClient,
-    tx_clients: &Vec<ThinClient>,
+    tx_clients: &[ThinClient],
     id: &Mint,
-    keypairs: &Vec<KeyPair>,
+    keypairs: &[KeyPair],
     leader: &NodeInfo,
     txs: i64,
     last_id: &mut Hash,
@@ -199,7 +199,7 @@ fn main() {
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l.to_string()).node_info;
+        leader = read_leader(l).node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = NodeInfo::new_leader(&server_addr);
@@ -207,7 +207,7 @@ fn main() {
 
     let id: Mint;
     if let Some(m) = matches.value_of("mint") {
-        id = read_mint(m.to_string()).expect("client mint");
+        id = read_mint(m).expect("client mint");
     } else {
         eprintln!("No mint found!");
         exit(1);
@@ -225,12 +225,12 @@ fn main() {
         time_sec = s.to_string().parse().expect("integer");
     }
 
-    let mut drone_addr = leader.contact_info.tpu.clone();
+    let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(9900);
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, signal.clone(), num_nodes, &mut c_threads);
+    let validators = converge(&leader, &signal.clone(), num_nodes, &mut c_threads);
     assert_eq!(validators.len(), num_nodes);
 
     let mut client = mk_client(&leader);
@@ -241,7 +241,7 @@ fn main() {
     if starting_balance < txs {
         let airdrop_amount = txs - starting_balance;
         println!("Airdropping {:?} tokens", airdrop_amount);
-        let _airdrop = request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
+        request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
         // TODO: return airdrop Result from Drone
         sleep(Duration::from_millis(100));
 
@@ -282,13 +282,13 @@ fn main() {
             Builder::new()
                 .name("solana-client-sample".to_string())
                 .spawn(move || {
-                    sample_tx_count(exit, maxes, first_count, v, sample_period);
+                    sample_tx_count(&exit, &maxes, first_count, &v, sample_period);
                 })
                 .unwrap()
         })
         .collect();
 
-    let clients = (0..threads).map(|_| mk_client(&leader)).collect();
+    let clients: Vec<_> = (0..threads).map(|_| mk_client(&leader)).collect();
 
     // generate and send transactions for the specified duration
     let time = Duration::new(time_sec / 2, 0);
@@ -385,7 +385,7 @@ fn spy_node() -> (NodeInfo, UdpSocket) {
 
 fn converge(
     leader: &NodeInfo,
-    exit: Arc<AtomicBool>,
+    exit: &Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
 ) -> Vec<NodeInfo> {
@@ -428,13 +428,13 @@ fn converge(
     rv
 }
 
-fn read_leader(path: String) -> Config {
-    let file = File::open(path.clone()).expect(&format!("file not found: {}", path));
-    serde_json::from_reader(file).expect(&format!("failed to parse {}", path))
+fn read_leader(path: &str) -> Config {
+    let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
+    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }
 
-fn read_mint(path: String) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.clone())?;
+fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
+    let file = File::open(path.to_string())?;
     let mint = serde_json::from_reader(file)?;
     Ok(mint)
 }
