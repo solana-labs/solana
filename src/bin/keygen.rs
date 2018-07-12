@@ -12,14 +12,14 @@ use std::io::Write;
 use std::path::Path;
 
 fn main() -> Result<(), Box<error::Error>> {
-    let matches = App::new("solana-genesis")
+    let matches = App::new("solana-keygen")
         .arg(
             Arg::with_name("outfile")
                 .short("o")
                 .long("outfile")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("Number of tokens with which to initialize mint"),
+                .help("path to generated file"),
         )
         .get_matches();
 
