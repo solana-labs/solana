@@ -100,6 +100,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                         .long("tokens")
                         .value_name("NUMBER")
                         .takes_value(true)
+                        .required(true)
                         .help("The number of tokens to request"),
                 ),
         )
@@ -121,7 +122,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                         .long("to")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .required(true)
                         .help("The pubkey of recipient"),
                 ),
         )
@@ -155,11 +155,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
 
     let command = match matches.subcommand() {
         ("airdrop", Some(airdrop_matches)) => {
-            let tokens = if airdrop_matches.is_present("tokens") {
-                airdrop_matches.value_of("tokens").unwrap().parse()?
-            } else {
-                100
-            };
+            let tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
             Ok(WalletCommand::AirDrop(tokens))
         }
         ("pay", Some(pay_matches)) => {
@@ -177,11 +173,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 id.pubkey()
             };
 
-            let tokens = if pay_matches.is_present("tokens") {
-                pay_matches.value_of("tokens").unwrap().parse()?
-            } else {
-                10
-            };
+            let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
 
             Ok(WalletCommand::Pay(tokens, to))
         }
