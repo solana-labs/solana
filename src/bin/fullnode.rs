@@ -1,4 +1,3 @@
-extern crate atty;
 extern crate clap;
 extern crate env_logger;
 extern crate getopts;
@@ -6,7 +5,6 @@ extern crate log;
 extern crate serde_json;
 extern crate solana;
 
-use atty::{is, Stream};
 use clap::{App, Arg};
 use solana::crdt::{NodeInfo, TestNode};
 use solana::fullnode::{Config, FullNode, Ledger};
@@ -22,8 +20,8 @@ fn main() -> () {
     let matches = App::new("fullnode")
         .arg(
             Arg::with_name("identity")
-                .short("l")
-                .long("local")
+                .short("i")
+                .long("identity")
                 .value_name("FILE")
                 .takes_value(true)
                 .help("run with the identity found in FILE"),
@@ -34,7 +32,7 @@ fn main() -> () {
                 .long("testnet")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("testnet; connect to the network at this gossip entry point"),
+                .help("connect to the network at this gossip entry point"),
         )
         .arg(
             Arg::with_name("ledger")
@@ -45,16 +43,12 @@ fn main() -> () {
                 .help("use FILE as persistent ledger (defaults to stdin/stdout)"),
         )
         .get_matches();
-    if is(Stream::Stdin) {
-        eprintln!("nothing found on stdin, expected a log file");
-        exit(1);
-    }
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
     let mut keypair = KeyPair::new();
     let mut repl_data = NodeInfo::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
-    if let Some(l) = matches.value_of("identity") {
-        let path = l.to_string();
+    if let Some(i) = matches.value_of("identity") {
+        let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
