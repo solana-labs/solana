@@ -6,6 +6,8 @@ use clap::{App, Arg};
 use solana::crdt::{get_ip_addr, parse_port_or_addr};
 use solana::fullnode::Config;
 use solana::nat::get_public_ip_addr;
+use solana::signature::read_pkcs8;
+use std::env;
 use std::io;
 use std::net::SocketAddr;
 
@@ -17,6 +19,14 @@ fn main() {
                 .long("local")
                 .takes_value(false)
                 .help("detect network address from local machine configuration"),
+        )
+        .arg(
+            Arg::with_name("keypair")
+                .short("k")
+                .long("keypair")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/id.json"),
         )
         .arg(
             Arg::with_name("public")
@@ -54,9 +64,18 @@ fn main() {
         bind_addr
     };
 
+    let mut path = env::home_dir().expect("home directory");
+    let id_path = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap()
+    } else {
+        path.extend(&[".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+    let pkcs8 = read_pkcs8(id_path).expect("client keypair");
+
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
-    let config = Config::new(&bind_addr);
+    let config = Config::new(&bind_addr, pkcs8);
     let stdout = io::stdout();
     serde_json::to_writer(stdout, &config).expect("serialize");
 }
