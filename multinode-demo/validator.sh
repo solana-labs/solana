@@ -73,8 +73,16 @@ ls -lh "$SOLANA_LEADER_CONFIG_DIR"
 
 tune_networking
 
+# migrate from old ledger format?  why not...
+if [[ ! -f "$SOLANA_LEADER_CONFIG_DIR"/ledger.log &&
+          -f "$SOLANA_LEADER_CONFIG_DIR"/genesis.log ]]; then
+  (shopt -s nullglob &&
+     cat "$SOLANA_LEADER_CONFIG_DIR"/genesis.log \
+         "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log) > "$SOLANA_LEADER_CONFIG_DIR"/ledger.log
+fi
+
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
-  -l "$SOLANA_CONFIG_DIR"/validator.json -t "$leader_address:$leader_port" \
-  < <(shopt -s nullglob && cat "$SOLANA_LEADER_CONFIG_DIR"/genesis.log \
-          "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log)
+  --identity "$SOLANA_CONFIG_DIR"/validator.json \
+  --testnet "$leader_address:$leader_port" \
+  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log

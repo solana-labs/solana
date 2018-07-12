@@ -25,9 +25,15 @@ fi
 
 tune_networking
 
+# migrate from old ledger format?  why not...
+if [[ ! -f "$SOLANA_CONFIG_DIR"/ledger.log &&
+          -f "$SOLANA_CONFIG_DIR"/genesis.log ]]; then
+  (shopt -s nullglob &&
+    cat "$SOLANA_CONFIG_DIR"/genesis.log \
+        "$SOLANA_CONFIG_DIR"/tx-*.log) > "$SOLANA_CONFIG_DIR"/ledger.log
+fi
+
 # shellcheck disable=SC2086 # $program should not be quoted
 exec $program \
-  -l "$SOLANA_CONFIG_DIR"/leader.json \
-  < <(shopt -s nullglob && cat "$SOLANA_CONFIG_DIR"/genesis.log \
-          "$SOLANA_CONFIG_DIR"/tx-*.log) \
-  > "$SOLANA_CONFIG_DIR"/tx-"$(date -u +%Y%m%d%H%M%S%N)".log
+  --identity "$SOLANA_CONFIG_DIR"/leader.json \
+  --ledger "$SOLANA_CONFIG_DIR"/ledger.log
