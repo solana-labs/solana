@@ -29,6 +29,16 @@ impl Mint {
             tokens,
         }
     }
+    pub fn new_from_keygen(tokens: i64, pkcs8: Vec<u8>) -> Self {
+        let keypair = KeyPair::from_pkcs8(Input::from(&pkcs8))
+            .expect("keypair from_pkcs8 in mint pub fn new_from_keypair");
+        let pubkey = keypair.pubkey();
+        Mint {
+            pkcs8,
+            pubkey,
+            tokens,
+        }
+    }
     pub fn seed(&self) -> Hash {
         hash(&self.pkcs8)
     }

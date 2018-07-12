@@ -1,10 +1,12 @@
 //! A command-line executable for generating the chain's genesis block.
 
 extern crate atty;
+extern crate clap;
 extern crate serde_json;
 extern crate solana;
 
 use atty::{is, Stream};
+use clap::{App, Arg};
 use solana::entry_writer::EntryWriter;
 use solana::mint::Mint;
 use std::error;
@@ -12,6 +14,24 @@ use std::io::{stdin, stdout, Read};
 use std::process::exit;
 
 fn main() -> Result<(), Box<error::Error>> {
+    let matches = App::new("solana-genesis")
+        .arg(
+            Arg::with_name("tokens")
+                .short("t")
+                .long("tokens")
+                .value_name("NUMBER")
+                .takes_value(true)
+                .required(true)
+                .help("Number of tokens with which to initialize mint"),
+        )
+        .get_matches();
+    let tokens: i64;
+    if let Some(t) = matches.value_of("tokens") {
+        tokens = t.to_string().parse().expect("integer");
+    } else {
+        tokens = 0;
+    }
+
     if is(Stream::Stdin) {
         eprintln!("nothing found on stdin, expected a json file");
         exit(1);
@@ -24,7 +44,8 @@ fn main() -> Result<(), Box<error::Error>> {
         exit(1);
     }
 
-    let mint: Mint = serde_json::from_str(&buffer)?;
+    let pkcs8: Vec<u8> = serde_json::from_str(&buffer)?;
+    let mint: Mint = Mint::new_from_keygen(tokens, pkcs8);
     let mut writer = stdout();
     EntryWriter::write_entries(&mut writer, mint.create_entries())?;
     Ok(())
