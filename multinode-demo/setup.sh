@@ -87,7 +87,7 @@ if $node_type_leader; then
   $solana_mint <<<"$num_tokens" > "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
   echo "Creating $SOLANA_CONFIG_DIR/genesis.log"
-  $solana_genesis < "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log
+  $solana_genesis --tokens "$num_tokens" < "$SOLANA_CONFIG_PRIVATE_DIR"/id.json > "$SOLANA_CONFIG_DIR"/genesis.log
 
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
   $solana_fullnode_config "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
