@@ -11,8 +11,7 @@ use clap::{App, Arg, SubCommand};
 use solana::crdt::NodeInfo;
 use solana::drone::DroneRequest;
 use solana::fullnode::Config;
-use solana::mint::Mint;
-use solana::signature::{PublicKey, Signature};
+use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use std::error;
 use std::fmt;
@@ -20,7 +19,6 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
-use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -57,7 +55,7 @@ impl error::Error for WalletError {
 
 struct WalletConfig {
     leader: NodeInfo,
-    id: Mint,
+    id: KeyPair,
     drone_addr: SocketAddr,
     command: WalletCommand,
 }
@@ -67,7 +65,7 @@ impl Default for WalletConfig {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         WalletConfig {
             leader: NodeInfo::new_leader(&default_addr),
-            id: Mint::new(0),
+            id: KeyPair::new(),
             drone_addr: default_addr,
             command: WalletCommand::Balance,
         }
@@ -85,12 +83,13 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .help("/path/to/leader.json"),
         )
         .arg(
-            Arg::with_name("mint")
-                .short("m")
-                .long("mint")
+            Arg::with_name("keypair")
+                .short("k")
+                .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("/path/to/mint.json"),
+                .default_value("~/.config/solana/id.json")
+                .help("/path/to/id.json"),
         )
         .subcommand(
             SubCommand::with_name("airdrop")
@@ -149,13 +148,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let id: Mint;
-    if let Some(m) = matches.value_of("mint") {
-        id = read_mint(m)?;
-    } else {
-        eprintln!("No mint found!");
-        exit(1);
-    };
+    let id = read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(9900);
@@ -165,7 +158,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             let tokens = if airdrop_matches.is_present("tokens") {
                 airdrop_matches.value_of("tokens").unwrap().parse()?
             } else {
-                id.tokens
+                100
             };
             Ok(WalletCommand::AirDrop(tokens))
         }
@@ -187,7 +180,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             let tokens = if pay_matches.is_present("tokens") {
                 pay_matches.value_of("tokens").unwrap().parse()?
             } else {
-                id.tokens
+                10
             };
 
             Ok(WalletCommand::Pay(tokens, to))
@@ -264,7 +257,7 @@ fn process_command(
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
-            let sig = client.transfer(tokens, &config.id.keypair(), to, &last_id)?;
+            let sig = client.transfer(tokens, &config.id, to, &last_id)?;
             println!("{}", bs58::encode(sig).into_string());
         }
         // Confirm the last client transaction by signature
@@ -295,12 +288,6 @@ fn read_leader(path: &str) -> Config {
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }
 
-fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.to_string())?;
-    let mint = serde_json::from_reader(file)?;
-    Ok(mint)
-}
-
 fn mk_client(r: &NodeInfo) -> io::Result<ThinClient> {
     let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -318,7 +305,7 @@ fn mk_client(r: &NodeInfo) -> io::Result<ThinClient> {
 
 fn request_airdrop(
     drone_addr: &SocketAddr,
-    id: &Mint,
+    id: &KeyPair,
     tokens: u64,
 ) -> Result<(), Box<error::Error>> {
     let mut stream = TcpStream::connect(drone_addr)?;

@@ -12,7 +12,6 @@ use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::DroneRequest;
 use solana::fullnode::Config;
 use solana::hash::Hash;
-use solana::mint::Mint;
 use solana::nat::{udp_public_bind, udp_random_bind};
 use solana::ncp::Ncp;
 use solana::service::Service;
@@ -164,19 +163,12 @@ fn main() {
                 .help("/path/to/leader.json"),
         )
         .arg(
-            Arg::with_name("mint")
-                .short("m")
-                .long("mint")
-                .value_name("PATH")
-                .takes_value(true)
-                .help("/path/to/mint.json"),
-        )
-        .arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
+                .default_value("~/.config/solana/id.json")
                 .help("/path/to/id.json"),
         )
         .arg(
@@ -213,13 +205,7 @@ fn main() {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let id = if let Some(m) = matches.value_of("keypair") {
-        read_keypair(m).expect("client keypair")
-    } else if let Some(m) = matches.value_of("mint") {
-        read_mint(m).expect("client mint").keypair()
-    } else {
-        read_keypair("~/.config/solana/id.json").expect("default keypair")
-    };
+    let id = read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
 
     if let Some(t) = matches.value_of("threads") {
         threads = t.to_string().parse().expect("integer");
@@ -439,12 +425,6 @@ fn converge(
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
-}
-
-fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.to_string())?;
-    let mint = serde_json::from_reader(file)?;
-    Ok(mint)
 }
 
 fn request_airdrop(
