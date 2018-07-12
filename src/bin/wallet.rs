@@ -13,6 +13,7 @@ use solana::drone::DroneRequest;
 use solana::fullnode::Config;
 use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
+use std::env;
 use std::error;
 use std::fmt;
 use std::fs::File;
@@ -88,7 +89,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .default_value("~/.config/solana/id.json")
                 .help("/path/to/id.json"),
         )
         .subcommand(
@@ -148,7 +148,14 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let id = read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
+    let mut path = env::home_dir().expect("home directory");
+    let id_path = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap()
+    } else {
+        path.extend(&[".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+    let id = read_keypair(id_path).expect("client keypair");
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(9900);
