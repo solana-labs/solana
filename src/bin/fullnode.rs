@@ -7,7 +7,7 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::crdt::{NodeInfo, TestNode};
-use solana::fullnode::{Config, FullNode, Ledger};
+use solana::fullnode::{Config, FullNode, LedgerFile};
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil};
 use std::fs::File;
@@ -64,9 +64,9 @@ fn main() -> () {
         }
     }
     let ledger = if let Some(l) = matches.value_of("ledger") {
-        Ledger::Path(l.to_string())
+        LedgerFile::Path(l.to_string())
     } else {
-        Ledger::StdInOut
+        LedgerFile::StdInOut
     };
 
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
