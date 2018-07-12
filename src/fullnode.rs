@@ -112,7 +112,7 @@ impl FullNode {
                 entry_height,
                 Some(ledger_tail),
                 node,
-                network_entry_point,
+                &network_entry_point,
                 exit.clone(),
             );
             info!(
@@ -208,7 +208,7 @@ impl FullNode {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
-            bank.clone(),
+            &bank.clone(),
             node.sockets.requests,
             node.sockets.respond,
             exit.clone(),
@@ -229,7 +229,7 @@ impl FullNode {
         thread_hdls.extend(tpu.thread_hdls());
         let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
         let ncp = Ncp::new(
-            crdt.clone(),
+            &crdt.clone(),
             window.clone(),
             node.sockets.gossip,
             node.sockets.gossip_send,
@@ -285,13 +285,13 @@ impl FullNode {
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
         node: TestNode,
-        entry_point: NodeInfo,
+        entry_point: &NodeInfo,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
-            bank.clone(),
+            &bank.clone(),
             node.sockets.requests,
             node.sockets.respond,
             exit.clone(),
@@ -308,7 +308,7 @@ impl FullNode {
         let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
 
         let ncp = Ncp::new(
-            crdt.clone(),
+            &crdt.clone(),
             window.clone(),
             node.sockets.gossip,
             node.sockets.gossip_send,
@@ -367,7 +367,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(kp, bank, 0, None, tn, entry, exit);
+        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit);
         v.close().unwrap();
     }
 }

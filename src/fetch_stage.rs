@@ -18,14 +18,14 @@ impl FetchStage {
     pub fn new(
         socket: UdpSocket,
         exit: Arc<AtomicBool>,
-        packet_recycler: PacketRecycler,
+        packet_recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
         Self::new_multi_socket(vec![socket], exit, packet_recycler)
     }
     pub fn new_multi_socket(
         sockets: Vec<UdpSocket>,
         exit: Arc<AtomicBool>,
-        packet_recycler: PacketRecycler,
+        packet_recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
         let (packet_sender, packet_receiver) = channel();
         let thread_hdls: Vec<_> = sockets

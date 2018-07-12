@@ -144,12 +144,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
         let verified_setup_len = verified_setup.len();
         verified_sender.send(verified_setup).unwrap();
-        BankingStage::process_packets(
-            bank.clone(),
-            &verified_receiver,
-            &signal_sender,
-            &packet_recycler,
-        ).unwrap();
+        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
+            .unwrap();
 
         check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
 
@@ -163,12 +159,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
         let verified_len = verified.len();
         verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(
-            bank.clone(),
-            &verified_receiver,
-            &signal_sender,
-            &packet_recycler,
-        ).unwrap();
+        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
+            .unwrap();
 
         check_txs(verified_len, &signal_receiver, tx);
     });
@@ -210,12 +202,8 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
             .collect();
         let verified_len = verified.len();
         verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(
-            bank.clone(),
-            &verified_receiver,
-            &signal_sender,
-            &packet_recycler,
-        ).unwrap();
+        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
+            .unwrap();
 
         check_txs(verified_len, &signal_receiver, tx);
     });

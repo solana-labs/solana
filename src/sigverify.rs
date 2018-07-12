@@ -66,6 +66,7 @@ fn batch_size(batches: &[SharedPackets]) -> usize {
         .sum()
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;

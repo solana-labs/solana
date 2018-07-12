@@ -81,13 +81,13 @@ impl Default for MetricsAgent {
 impl MetricsAgent {
     fn new(writer: Arc<MetricsWriter + Send + Sync>, write_frequency: Duration) -> Self {
         let (sender, receiver) = channel::<MetricsCommand>();
-        thread::spawn(move || Self::run(receiver, writer, write_frequency));
+        thread::spawn(move || Self::run(&receiver, &writer, write_frequency));
         MetricsAgent { sender }
     }
 
     fn run(
-        receiver: Receiver<MetricsCommand>,
-        writer: Arc<MetricsWriter>,
+        receiver: &Receiver<MetricsCommand>,
+        writer: &Arc<MetricsWriter + Send + Sync>,
         write_frequency: Duration,
     ) {
         trace!("run: enter");
