@@ -18,7 +18,6 @@ _ cargo test --verbose --features unstable
 exit 0
 
 # Coverage disabled (see issue #433)
-_ cargo install --force cargo-cov
 _ cargo cov test
 _ cargo cov report
 
