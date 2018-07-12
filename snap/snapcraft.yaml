@@ -39,8 +39,8 @@ apps:
       - network-bind
   genesis:
     command: solana-genesis
-  mint:
-    command: solana-mint
+  keygen:
+    command: solana-keygen
   client-demo:
     command: solana-client-demo
   wallet:

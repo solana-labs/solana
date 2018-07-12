@@ -8,8 +8,11 @@ use ring::error::Unspecified;
 use ring::rand::SecureRandom;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
+use serde_json;
 use std::cell::RefCell;
-use untrusted;
+use std::error;
+use std::fs::File;
+use untrusted::Input;
 
 pub type KeyPair = Ed25519KeyPair;
 pub type PublicKey = GenericArray<u8, U32>;
@@ -24,10 +27,8 @@ impl KeyPairUtil for Ed25519KeyPair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
         let rng = rand::SystemRandom::new();
-        let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
-            .expect("generate_pkcs8 in signature pb fn new");
-        signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes))
-            .expect("from_pcks8 in signature pb fn new")
+        let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).expect("generate_pkcs8");
+        Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8_bytes)).expect("from_pcks8")
     }
 
     /// Return the public key for the given keypair
@@ -42,9 +43,9 @@ pub trait SignatureUtil {
 
 impl SignatureUtil for GenericArray<u8, U64> {
     fn verify(&self, peer_public_key_bytes: &[u8], msg_bytes: &[u8]) -> bool {
-        let peer_public_key = untrusted::Input::from(peer_public_key_bytes);
-        let msg = untrusted::Input::from(msg_bytes);
-        let sig = untrusted::Input::from(self);
+        let peer_public_key = Input::from(peer_public_key_bytes);
+        let msg = Input::from(msg_bytes);
+        let sig = Input::from(self);
         signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
     }
 }
@@ -77,7 +78,7 @@ impl GenKeys {
             .into_par_iter()
             .map(|seed| {
                 let pkcs8 = GenKeys::new(seed).new_key();
-                KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8)).unwrap()
+                KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap()
             })
             .collect()
     }
@@ -89,6 +90,13 @@ impl SecureRandom for GenKeys {
         rng.fill(dest);
         Ok(())
     }
+}
+
+pub fn read_keypair(path: &str) -> Result<KeyPair, Box<error::Error>> {
+    let file = File::open(path.to_string())?;
+    let pkcs8: Vec<u8> = serde_json::from_reader(file)?;
+    let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8))?;
+    Ok(keypair)
 }
 
 #[cfg(test)]

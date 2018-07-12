@@ -53,7 +53,7 @@ solana_fullnode=$(solana_program fullnode)
 solana_fullnode_config=$(solana_program fullnode-config)
 solana_fullnode_cuda=$(solana_program fullnode-cuda)
 solana_genesis=$(solana_program genesis)
-solana_mint=$(solana_program mint)
+solana_keygen=$(solana_program keygen)
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1

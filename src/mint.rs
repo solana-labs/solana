@@ -15,11 +15,7 @@ pub struct Mint {
 }
 
 impl Mint {
-    pub fn new(tokens: i64) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = KeyPair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
+    pub fn new_with_pkcs8(tokens: i64, pkcs8: Vec<u8>) -> Self {
         let keypair =
             KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
         let pubkey = keypair.pubkey();
@@ -29,6 +25,15 @@ impl Mint {
             tokens,
         }
     }
+
+    pub fn new(tokens: i64) -> Self {
+        let rnd = SystemRandom::new();
+        let pkcs8 = KeyPair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        Self::new_with_pkcs8(tokens, pkcs8)
+    }
+
     pub fn seed(&self) -> Hash {
         hash(&self.pkcs8)
     }
