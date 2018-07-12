@@ -12,11 +12,9 @@ use clap::{App, Arg};
 use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest};
 use solana::fullnode::Config;
-use solana::mint::Mint;
-use std::error;
+use solana::signature::read_keypair;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
@@ -35,11 +33,12 @@ fn main() {
                 .help("/path/to/leader.json"),
         )
         .arg(
-            Arg::with_name("mint")
-                .short("m")
-                .long("mint")
+            Arg::with_name("keypair")
+                .short("k")
+                .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
+                .required(true)
                 .help("/path/to/mint.json"),
         )
         .arg(
@@ -68,13 +67,9 @@ fn main() {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let mint: Mint;
-    if let Some(m) = matches.value_of("mint") {
-        mint = read_mint(m).expect("client mint");
-    } else {
-        eprintln!("No mint found!");
-        exit(1);
-    };
+    let mint_keypair =
+        read_keypair(matches.value_of("keypair").expect("keypair")).expect("client keypair");
+
     let time_slice: Option<u64>;
     if let Some(t) = matches.value_of("time") {
         time_slice = Some(t.to_string().parse().expect("integer"));
@@ -87,8 +82,6 @@ fn main() {
     } else {
         request_cap = None;
     }
-
-    let mint_keypair = mint.keypair();
 
     let drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
 
@@ -151,10 +144,4 @@ fn main() {
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
-}
-
-fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
-    let file = File::open(path.to_string())?;
-    let mint = serde_json::from_reader(file)?;
-    Ok(mint)
 }
