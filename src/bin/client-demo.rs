@@ -83,19 +83,22 @@ fn generate_and_send_txs(
     txs: i64,
     last_id: &mut Hash,
     threads: usize,
+    reclaim: bool,
 ) {
-    println!("Signing transactions... {}", txs,);
+    println!("Signing transactions... {}", txs / 2,);
     let signing_start = Instant::now();
 
-    let mut transactions: Vec<_> = keypairs
-        .par_iter()
-        .map(|keypair| Transaction::new(&id.keypair(), keypair.pubkey(), 1, *last_id))
-        .collect();
-    let mut transactions1: Vec<_> = keypairs
-        .par_iter()
-        .map(|keypair| Transaction::new(keypair, id.pubkey(), 1, *last_id))
-        .collect();
-    transactions.append(&mut transactions1);
+    let transactions: Vec<_> = if !reclaim {
+        keypairs
+            .par_iter()
+            .map(|keypair| Transaction::new(&id.keypair(), keypair.pubkey(), 1, *last_id))
+            .collect()
+    } else {
+        keypairs
+            .par_iter()
+            .map(|keypair| Transaction::new(keypair, id.pubkey(), 1, *last_id))
+            .collect()
+    };
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -108,7 +111,11 @@ fn generate_and_send_txs(
         duration_as_ms(&duration),
     );
 
-    println!("Transfering {} transactions in {} batches", txs, threads);
+    println!(
+        "Transfering {} transactions in {} batches",
+        txs / 2,
+        threads
+    );
     let transfer_start = Instant::now();
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
@@ -145,7 +152,7 @@ fn main() {
     env_logger::init();
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
-    let mut time_sec = 60;
+    let mut time_sec = 90;
 
     let matches = App::new("solana-client-demo")
         .arg(
@@ -284,8 +291,8 @@ fn main() {
     let clients = (0..threads).map(|_| mk_client(&leader)).collect();
 
     // generate and send transactions for the specified duration
-    let time = Duration::new(time_sec, 0);
-    let now = Instant::now();
+    let time = Duration::new(time_sec / 2, 0);
+    let mut now = Instant::now();
     while now.elapsed() < time {
         generate_and_send_txs(
             &mut client,
@@ -296,6 +303,22 @@ fn main() {
             txs,
             &mut last_id,
             threads,
+            false,
+        );
+    }
+    last_id = client.get_last_id();
+    now = Instant::now();
+    while now.elapsed() < time {
+        generate_and_send_txs(
+            &mut client,
+            &clients,
+            &id,
+            &keypairs,
+            &leader,
+            txs,
+            &mut last_id,
+            threads,
+            true,
         );
     }
 
