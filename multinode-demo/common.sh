@@ -108,10 +108,10 @@ tune_networking() {
   [[ $(uname) = Linux ]] && (
     set -x
     # test the existence of the sysctls before trying to set them
-    sysctl net.core.rmem_max=26214400 2>/dev/null 1>/dev/null &&
+    sysctl net.core.rmem_max 2>/dev/null 1>/dev/null &&
         sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
 
-    sysctl net.core.rmem_default=26214400 2>/dev/null 1>/dev/null &&
+    sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
         sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
   )
   return 0
