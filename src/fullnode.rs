@@ -12,7 +12,7 @@ use service::Service;
 use signature::{KeyPair, KeyPairUtil};
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
-use std::io::{sink, stdin, stdout, BufReader};
+use std::io::{stdin, stdout, BufReader};
 use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,13 +30,8 @@ pub struct FullNode {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-pub enum InFile {
-    StdIn,
-    Path(String),
-}
-
-pub enum OutFile {
-    StdOut,
+pub enum Ledger {
+    StdInOut,
     Path(String),
 }
 
@@ -66,16 +61,24 @@ impl FullNode {
     pub fn new(
         mut node: TestNode,
         leader: bool,
-        infile: InFile,
+        ledger: Ledger,
         keypair_for_validator: Option<KeyPair>,
         network_entry_for_validator: Option<SocketAddr>,
-        outfile_for_leader: Option<OutFile>,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
-        let infile: Box<Read> = match infile {
-            InFile::Path(path) => Box::new(File::open(path).unwrap()),
-            InFile::StdIn => Box::new(stdin()),
+        let (infile, outfile): (Box<Read>, Box<Write + Send>) = match ledger {
+            Ledger::Path(path) => (
+                Box::new(File::open(path.clone()).expect("opening ledger file")),
+                Box::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(path)
+                        .expect("opening ledger file"),
+                ),
+            ),
+            Ledger::StdInOut => (Box::new(stdin()), Box::new(stdout())),
         };
         let reader = BufReader::new(infile);
         let entries = entry_writer::read_entries(reader).map(|e| e.expect("failed to parse entry"));
@@ -117,17 +120,6 @@ impl FullNode {
             server
         } else {
             node.data.leader_id = node.data.id;
-            let outfile_for_leader: Box<Write + Send> = match outfile_for_leader {
-                Some(OutFile::Path(file)) => Box::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(file)
-                        .expect("opening ledger file"),
-                ),
-                Some(OutFile::StdOut) => Box::new(stdout()),
-                None => Box::new(sink()),
-            };
 
             let server = FullNode::new_leader(
                 bank,
@@ -137,7 +129,7 @@ impl FullNode {
                 None,
                 node,
                 exit.clone(),
-                outfile_for_leader,
+                outfile,
             );
             info!(
                 "leader ready... local request address: {} (advertising {})",
