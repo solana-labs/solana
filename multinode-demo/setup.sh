@@ -71,8 +71,8 @@ done
 
 leader_address_args=("$ip_address_arg")
 validator_address_args=("$ip_address_arg" -b 9000)
-id_path=("$SOLANA_CONFIG_PRIVATE_DIR"/id.json)
-mint_path=("$SOLANA_CONFIG_PRIVATE_DIR"/mint.json)
+id_path="$SOLANA_CONFIG_PRIVATE_DIR"/id.json
+mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
 set -e
 
@@ -99,7 +99,7 @@ fi
 
 if $node_type_validator; then
   echo "Creating $SOLANA_CONFIG_DIR/validator.json"
-  $solana_fullnode_config "${keypair_arg}" "${validator_address_args[@]}" > "$SOLANA_CONFIG_DIR"/validator.json
+  $solana_fullnode_config --keypair="$id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_DIR"/validator.json
 fi
 
 ls -lh "$SOLANA_CONFIG_DIR"/
