@@ -38,7 +38,7 @@ fi
 
 client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
 if [[ ! -r $client_json ]]; then
-  $solana_mint <<<0 > "$client_json"
+  $solana_keygen > "$client_json"
 fi
 
 set -x

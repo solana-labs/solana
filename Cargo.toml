@@ -38,10 +38,6 @@ name = "solana-genesis"
 path = "src/bin/genesis.rs"
 
 [[bin]]
-name = "solana-mint"
-path = "src/bin/mint.rs"
-
-[[bin]]
 name = "solana-drone"
 path = "src/bin/drone.rs"
 

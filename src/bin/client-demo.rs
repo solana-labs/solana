@@ -16,7 +16,7 @@ use solana::mint::Mint;
 use solana::nat::{udp_public_bind, udp_random_bind};
 use solana::ncp::Ncp;
 use solana::service::Service;
-use solana::signature::{GenKeys, KeyPair, KeyPairUtil};
+use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
@@ -77,7 +77,7 @@ fn sample_tx_count(
 fn generate_and_send_txs(
     client: &mut ThinClient,
     tx_clients: &[ThinClient],
-    id: &Mint,
+    id: &KeyPair,
     keypairs: &[KeyPair],
     leader: &NodeInfo,
     txs: i64,
@@ -91,7 +91,7 @@ fn generate_and_send_txs(
     let transactions: Vec<_> = if !reclaim {
         keypairs
             .par_iter()
-            .map(|keypair| Transaction::new(&id.keypair(), keypair.pubkey(), 1, *last_id))
+            .map(|keypair| Transaction::new(&id, keypair.pubkey(), 1, *last_id))
             .collect()
     } else {
         keypairs
@@ -172,6 +172,14 @@ fn main() {
                 .help("/path/to/mint.json"),
         )
         .arg(
+            Arg::with_name("keypair")
+                .short("k")
+                .long("keypair")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("/path/to/id.json"),
+        )
+        .arg(
             Arg::with_name("num_nodes")
                 .short("n")
                 .long("nodes")
@@ -205,12 +213,12 @@ fn main() {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let id: Mint;
-    if let Some(m) = matches.value_of("mint") {
-        id = read_mint(m).expect("client mint");
+    let id = if let Some(m) = matches.value_of("keypair") {
+        read_keypair(m).expect("client keypair")
+    } else if let Some(m) = matches.value_of("mint") {
+        read_mint(m).expect("client mint").keypair()
     } else {
-        eprintln!("No mint found!");
-        exit(1);
+        read_keypair("~/.config/solana/id.json").expect("default keypair")
     };
 
     if let Some(t) = matches.value_of("threads") {
@@ -259,7 +267,7 @@ fn main() {
     println!("Got last ID {:?}", last_id);
 
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.keypair().public_key_bytes()[..32]);
+    seed.copy_from_slice(&id.public_key_bytes()[..32]);
     let rnd = GenKeys::new(seed);
 
     println!("Creating keypairs...");
@@ -441,7 +449,7 @@ fn read_mint(path: &str) -> Result<Mint, Box<error::Error>> {
 
 fn request_airdrop(
     drone_addr: &SocketAddr,
-    id: &Mint,
+    id: &KeyPair,
     tokens: u64,
 ) -> Result<(), Box<error::Error>> {
     let mut stream = TcpStream::connect(drone_addr)?;
