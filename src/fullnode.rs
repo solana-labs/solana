@@ -7,7 +7,6 @@ use entry_writer;
 use ledger::Block;
 use ncp::Ncp;
 use packet::BlobRecycler;
-use ring::rand::SystemRandom;
 use rpu::Rpu;
 use service::Service;
 use signature::{KeyPair, KeyPairUtil};
@@ -50,11 +49,7 @@ pub struct Config {
 
 /// Structure to be replicated by the network
 impl Config {
-    pub fn new(bind_addr: &SocketAddr) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = KeyPair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
+    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
         let keypair =
             KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();

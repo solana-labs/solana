@@ -92,9 +92,14 @@ impl SecureRandom for GenKeys {
     }
 }
 
-pub fn read_keypair(path: &str) -> Result<KeyPair, Box<error::Error>> {
+pub fn read_pkcs8(path: &str) -> Result<Vec<u8>, Box<error::Error>> {
     let file = File::open(path.to_string())?;
     let pkcs8: Vec<u8> = serde_json::from_reader(file)?;
+    Ok(pkcs8)
+}
+
+pub fn read_keypair(path: &str) -> Result<KeyPair, Box<error::Error>> {
+    let pkcs8 = read_pkcs8(path)?;
     let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8))?;
     Ok(keypair)
 }
