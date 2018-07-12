@@ -18,7 +18,7 @@ pub struct Ncp {
 
 impl Ncp {
     pub fn new(
-        crdt: Arc<RwLock<Crdt>>,
+        crdt: &Arc<RwLock<Crdt>>,
         window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
@@ -93,7 +93,7 @@ mod tests {
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
         let d = Ncp::new(
-            c.clone(),
+            &c.clone(),
             w,
             tn.sockets.gossip,
             tn.sockets.gossip_send,

@@ -21,7 +21,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
     let d = Ncp::new(
-        c.clone(),
+        &c.clone(),
         w,
         tn.sockets.gossip,
         tn.sockets.gossip_send,

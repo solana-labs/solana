@@ -399,7 +399,7 @@ fn converge(
     let window = default_window();
     let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
     let ncp = Ncp::new(
-        spy_ref.clone(),
+        &spy_ref.clone(),
         window.clone(),
         spy_gossip,
         gossip_send_socket,

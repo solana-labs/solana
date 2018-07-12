@@ -17,7 +17,7 @@ use transaction::Transaction;
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 1_000_000;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum DroneRequest {
     GetAirdrop {
         airdrop_request_amount: u64,

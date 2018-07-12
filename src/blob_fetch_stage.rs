@@ -18,14 +18,14 @@ impl BlobFetchStage {
     pub fn new(
         socket: UdpSocket,
         exit: Arc<AtomicBool>,
-        blob_recycler: BlobRecycler,
+        blob_recycler: &BlobRecycler,
     ) -> (Self, BlobReceiver) {
         Self::new_multi_socket(vec![socket], exit, blob_recycler)
     }
     pub fn new_multi_socket(
         sockets: Vec<UdpSocket>,
         exit: Arc<AtomicBool>,
-        blob_recycler: BlobRecycler,
+        blob_recycler: &BlobRecycler,
     ) -> (Self, BlobReceiver) {
         let (blob_sender, blob_receiver) = channel();
         let thread_hdls: Vec<_> = sockets

@@ -41,7 +41,7 @@ pub struct Rpu {
 
 impl Rpu {
     pub fn new(
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         requests_socket: UdpSocket,
         respond_socket: UdpSocket,
         exit: Arc<AtomicBool>,

@@ -40,7 +40,7 @@ impl BankingStage {
             .name("solana-banking-stage".to_string())
             .spawn(move || loop {
                 if let Err(e) = Self::process_packets(
-                    bank.clone(),
+                    &bank.clone(),
                     &verified_receiver,
                     &signal_sender,
                     &packet_recycler,
@@ -72,7 +72,7 @@ impl BankingStage {
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         signal_sender: &Sender<Signal>,
         packet_recycler: &PacketRecycler,

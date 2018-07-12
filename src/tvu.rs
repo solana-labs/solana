@@ -83,7 +83,7 @@ impl Tvu {
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit,
-            blob_recycler.clone(),
+            &blob_recycler.clone(),
         );
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -161,7 +161,7 @@ pub mod tests {
     ) -> Result<(Ncp, Window)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let ncp = Ncp::new(crdt, window.clone(), listen, send_sock, exit)?;
+        let ncp = Ncp::new(&crdt, window.clone(), listen, send_sock, exit)?;
         Ok((ncp, window))
     }
     /// Test that message sent from leader to target1 and replicated to target2
