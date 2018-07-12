@@ -30,7 +30,7 @@ pub struct FullNode {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-pub enum Ledger {
+pub enum LedgerFile {
     StdInOut,
     Path(String),
 }
@@ -61,14 +61,14 @@ impl FullNode {
     pub fn new(
         mut node: TestNode,
         leader: bool,
-        ledger: Ledger,
+        ledger: LedgerFile,
         keypair_for_validator: Option<KeyPair>,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
         let (infile, outfile): (Box<Read>, Box<Write + Send>) = match ledger {
-            Ledger::Path(path) => (
+            LedgerFile::Path(path) => (
                 Box::new(File::open(path.clone()).expect("opening ledger file")),
                 Box::new(
                     OpenOptions::new()
@@ -78,7 +78,7 @@ impl FullNode {
                         .expect("opening ledger file"),
                 ),
             ),
-            Ledger::StdInOut => (Box::new(stdin()), Box::new(stdout())),
+            LedgerFile::StdInOut => (Box::new(stdin()), Box::new(stdout())),
         };
         let reader = BufReader::new(infile);
         let entries = entry_writer::read_entries(reader).map(|e| e.expect("failed to parse entry"));
