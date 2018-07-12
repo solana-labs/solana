@@ -23,7 +23,6 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("NUMBER")
                 .takes_value(true)
                 .required(true)
-                .default_value("0")
                 .help("Number of tokens with which to initialize mint"),
         )
         .get_matches();

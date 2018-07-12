@@ -84,7 +84,7 @@ if $node_type_leader; then
   mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
 
   echo "Creating $SOLANA_CONFIG_DIR/mint.json with $num_tokens tokens"
-  $solana_keygen > "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
+  $solana_keygen -o "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
   echo "Creating $SOLANA_CONFIG_DIR/genesis.log"
   $solana_genesis --tokens="$num_tokens" < "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json > "$SOLANA_CONFIG_DIR"/genesis.log

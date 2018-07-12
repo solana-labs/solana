@@ -23,7 +23,7 @@ fi
 
 client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
 if [[ ! -r $client_json ]]; then
-  $solana_keygen > "$client_json"
+  $solana_keygen -o "$client_json"
 fi
 
 # shellcheck disable=SC2086 # $solana_client_demo should not be quoted
