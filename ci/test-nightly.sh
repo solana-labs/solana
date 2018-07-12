@@ -13,8 +13,6 @@ _() {
 
 _ cargo build --verbose --features unstable
 _ cargo test --verbose --features unstable
-
-_ cargo install --force clippy
 _ cargo clippy -- --deny=warnings
 
 exit 0
