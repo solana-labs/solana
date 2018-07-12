@@ -26,6 +26,10 @@ name = "solana-fullnode"
 path = "src/bin/fullnode.rs"
 
 [[bin]]
+name = "solana-keygen"
+path = "src/bin/keygen.rs"
+
+[[bin]]
 name = "solana-fullnode-config"
 path = "src/bin/fullnode-config.rs"
 
