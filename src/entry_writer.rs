@@ -106,12 +106,13 @@ mod tests {
     use packet::BLOB_DATA_SIZE;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::Cursor;
-    use transaction::Transaction;
+    use std::str;
+    use transaction::{Transaction, BASE_TRANSACTION_SIZE, MAX_INSTRUCTION_SIZE};
 
     #[test]
     fn test_dont_register_partial_entries() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
 
         let writer = io::sink();
         let mut entry_writer = EntryWriter::new(&bank, writer);
@@ -119,7 +120,8 @@ mod tests {
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
+        let transaction_size = BASE_TRANSACTION_SIZE + MAX_INSTRUCTION_SIZE;
+        let threshold = (BLOB_DATA_SIZE / transaction_size) - 1;
 
         // Verify large entries are split up and the first sets has_more.
         let txs = vec![tx.clone(); threshold * 2];
@@ -153,8 +155,9 @@ mod tests {
     fn test_read_entries_from_buf() {
         let mint = Mint::new(1);
         let mut buf = vec![];
-        EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
+        let created_entries = mint.create_entries();
+        EntryWriter::write_entries(&mut buf, created_entries.clone()).unwrap();
         let entries = read_entries_from_buf(&buf).unwrap();
-        assert_eq!(entries, mint.create_entries());
+        assert_eq!(entries, created_entries);
     }
 }

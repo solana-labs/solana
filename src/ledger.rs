@@ -319,7 +319,7 @@ mod tests {
     use signature::{KeyPair, KeyPairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::{Transaction, Vote};
+    use transaction::{Transaction, Vote, BASE_TRANSACTION_SIZE, MAX_INSTRUCTION_SIZE};
 
     #[test]
     fn test_verify_slice() {
@@ -406,8 +406,9 @@ mod tests {
         assert!(tx_small_size < tx_large_size);
         assert!(tx_large_size < PACKET_DATA_SIZE as u64);
 
+        let transaction_size = BASE_TRANSACTION_SIZE + MAX_INSTRUCTION_SIZE;
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1;
+        let threshold = (BLOB_DATA_SIZE / transaction_size) - 1; // 256 is transaction size
 
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];

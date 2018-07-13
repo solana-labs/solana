@@ -13,7 +13,7 @@ pub const PUB_KEY_OFFSET: usize = 80;
 pub const MAX_ALLOWED_INSTRUCTIONS: usize = 20;
 // The biggest current instruction is a Budget with a payment plan of 'Or' with two
 // datetime 'Condition' branches. This is the serialized size of that instruction
-pub const MAX_INSTRUCTION_SIZE: usize = 280;
+pub const MAX_INSTRUCTION_SIZE: usize = 314;
 // Serialized size of everything in the transaction excluding the instructions
 pub const BASE_TRANSACTION_SIZE: usize = 168;
 pub const FEE_PER_INSTRUCTION: usize = 0;

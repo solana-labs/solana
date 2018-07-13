@@ -324,8 +324,8 @@ mod tests {
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.data.clone();
 
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -369,8 +369,8 @@ mod tests {
         logger::setup();
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
@@ -427,8 +427,8 @@ mod tests {
         logger::setup();
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
@@ -473,8 +473,8 @@ mod tests {
         logger::setup();
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost();
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
@@ -552,8 +552,8 @@ mod tests {
         logger::setup();
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost();
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();

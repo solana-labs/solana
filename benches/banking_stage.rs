@@ -95,7 +95,7 @@ fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total);
+    let mut mint = Mint::new(mint_total);
     let num_dst_accounts = 8 * 1024;
     let num_src_accounts = 8 * 1024;
 
@@ -131,7 +131,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         .collect();
 
     bencher.iter(move || {
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(Bank::new(&mut mint));
 
         let verified_setup: Vec<_> =
             to_packets_chunked(&packet_recycler, &setup_transactions.clone(), tx)
@@ -168,7 +168,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
 fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let tx = 10_000_usize;
-    let mint = Mint::new(1_000_000_000_000);
+    let mut mint = Mint::new(1_000_000_000_000);
+    let last_id = mint.last_id();
     let mut pubkeys = Vec::new();
     let num_keys = 8;
     for _ in 0..num_keys {
@@ -177,14 +178,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
 
     let transactions: Vec<_> = (0..tx)
         .into_par_iter()
-        .map(|i| {
-            Transaction::new(
-                &mint.keypair(),
-                pubkeys[i % num_keys],
-                i as i64,
-                mint.last_id(),
-            )
-        })
+        .map(|i| Transaction::new(&mint.keypair(), pubkeys[i % num_keys], i as i64, last_id))
         .collect();
 
     let (verified_sender, verified_receiver) = channel();
@@ -192,7 +186,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let packet_recycler = PacketRecycler::default();
 
     bencher.iter(move || {
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(Bank::new(&mut mint));
         let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), tx)
             .into_iter()
             .map(|x| {

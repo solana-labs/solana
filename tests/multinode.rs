@@ -74,7 +74,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 }
 
 fn genesis(num: i64) -> (Mint, String) {
-    let mint = Mint::new(num);
+    let mut mint = Mint::new(num);
     let path = format!(
         "target/test_multi_node_dynamic_network-{}.log",
         mint.pubkey()

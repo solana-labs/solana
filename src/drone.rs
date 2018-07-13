@@ -269,8 +269,8 @@ mod tests {
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000_000);
+        let bank = Bank::new(&mut alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let carlos_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));

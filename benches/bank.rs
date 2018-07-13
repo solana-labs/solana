@@ -14,8 +14,9 @@ use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
 
 fn bench_process_transaction(bencher: &mut Bencher) {
-    let mint = Mint::new(100_000_000);
-    let bank = Bank::new(&mint);
+    let mut mint = Mint::new(100_000_000);
+    let bank = Bank::new(&mut mint);
+    let last_id = mint.last_id();
 
     // Create transactions between unrelated parties.
     let transactions: Vec<_> = (0..4096)
@@ -23,7 +24,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .map(|i| {
             // Seed the 'from' account.
             let rando0 = KeyPair::new();
-            let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 10_000, mint.last_id());
+            let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 10_000, last_id);
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Seed the 'to' account and a cell for its signature.

@@ -397,8 +397,8 @@ mod tests {
     fn validator_exit() {
         let kp = KeyPair::new();
         let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut alice = Mint::new(10_000);
+        let bank = Bank::new(&mut alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
         let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false);
@@ -411,8 +411,8 @@ mod tests {
             .map(|_| {
                 let kp = KeyPair::new();
                 let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
-                let alice = Mint::new(10_000);
-                let bank = Bank::new(&alice);
+                let mut alice = Mint::new(10_000);
+                let bank = Bank::new(&mut alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
                 FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false)

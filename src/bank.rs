@@ -109,7 +109,7 @@ impl Bank {
     }
 
     /// Create an Bank with only a Mint. Typically used by unit tests.
-    pub fn new(mint: &Mint) -> Self {
+    pub fn new(mint: &mut Mint) -> Self {
         let deposit = Payment {
             to: mint.pubkey(),
             tokens: mint.tokens,
@@ -561,10 +561,9 @@ impl Bank {
         to: PublicKey,
         dt: DateTime<Utc>,
         last_id: Hash,
-    ) -> Result<Signature> {
+    ) -> Result<Transaction> {
         let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
-        let sig = tx.sig;
-        self.process_transaction(&tx).map(|_| sig)
+        self.process_transaction(&tx).map(|_| tx)
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
@@ -606,9 +605,9 @@ mod tests {
 
     #[test]
     fn test_two_payments_to_one_party() {
-        let mint = Mint::new(10_000);
+        let mut mint = Mint::new(10_000);
         let pubkey = KeyPair::new().pubkey();
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&mut mint);
         assert_eq!(bank.last_id(), mint.last_id());
 
         bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
@@ -623,9 +622,9 @@ mod tests {
 
     #[test]
     fn test_negative_tokens() {
-        let mint = Mint::new(1);
+        let mut mint = Mint::new(1);
         let pubkey = KeyPair::new().pubkey();
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&mut mint);
         assert_eq!(
             bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id()),
             Err(BankError::NegativeTokens)
@@ -635,8 +634,8 @@ mod tests {
 
     #[test]
     fn test_account_not_found() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let keypair = KeyPair::new();
         assert_eq!(
             bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
@@ -647,8 +646,8 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let mint = Mint::new(11_000);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(11_000);
+        let bank = Bank::new(&mut mint);
         let pubkey = KeyPair::new().pubkey();
         bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
@@ -666,8 +665,8 @@ mod tests {
 
     #[test]
     fn test_transfer_to_newb() {
-        let mint = Mint::new(10_000);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(10_000);
+        let bank = Bank::new(&mut mint);
         let pubkey = KeyPair::new().pubkey();
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
@@ -676,8 +675,8 @@ mod tests {
 
     #[test]
     fn test_transfer_on_date() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
         bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
@@ -712,14 +711,20 @@ mod tests {
 
     #[test]
     fn test_cancel_transfer() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank
+        let tx = bank
             .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
+        let mut contract_id: Signature = Signature::default();
+        if let Instruction::NewContract(contract) = &tx.instructions[0] {
+            contract_id = contract.id;
+        } else {
+            panic!("expecting contract instruction");
+        }
         // Assert the debit counts as a transaction.
         assert_eq!(bank.transaction_count(), 1);
 
@@ -733,7 +738,7 @@ mod tests {
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
         bank.apply_signature(
             mint.pubkey(),
-            sig,
+            contract_id,
             &mut bank.balances.write().unwrap(),
         ).unwrap();
 
@@ -745,17 +750,17 @@ mod tests {
 
         bank.apply_signature(
             mint.pubkey(),
-            sig,
+            contract_id,
             &mut bank.balances.write().unwrap(),
-        ).unwrap();
+        ).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
 
         assert_ne!(bank.get_balance(&mint.pubkey()), 2);
     }
 
     #[test]
     fn test_duplicate_transaction_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let sig = Signature::default();
         assert!(
             bank.reserve_signature_with_last_id(&sig, &mint.last_id())
@@ -769,8 +774,8 @@ mod tests {
 
     #[test]
     fn test_forget_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let sig = Signature::default();
         bank.reserve_signature_with_last_id(&sig, &mint.last_id())
             .unwrap();
@@ -783,8 +788,8 @@ mod tests {
 
     #[test]
     fn test_has_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let sig = Signature::default();
         bank.reserve_signature_with_last_id(&sig, &mint.last_id())
             .expect("reserve signature");
@@ -793,8 +798,8 @@ mod tests {
 
     #[test]
     fn test_reject_old_last_id() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let sig = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
@@ -809,8 +814,8 @@ mod tests {
 
     #[test]
     fn test_count_valid_ids() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
@@ -827,8 +832,8 @@ mod tests {
 
     #[test]
     fn test_debits_before_credits() {
-        let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(2);
+        let bank = Bank::new(&mut mint);
         let keypair = KeyPair::new();
         let tx0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tx1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
@@ -842,8 +847,8 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let mut mint = Mint::new(1);
+        let bank = Bank::new(&mut mint);
         let keypair = KeyPair::new();
         let entry = next_entry(&mint.last_id(), 1, vec![]);
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
@@ -861,14 +866,14 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
-        let mint = Mint::new(1);
+        let mut mint = Mint::new(1);
         let genesis = mint.create_entries();
         let bank = Bank::default();
         bank.process_ledger(genesis).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
+    fn create_sample_block(mint: &mut Mint, length: usize) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
         let mut cur_hashes = 0;
@@ -881,9 +886,9 @@ mod tests {
         entries.into_iter()
     }
     fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, PublicKey) {
-        let mint = Mint::new(1 + length as i64);
+        let mut mint = Mint::new(1 + length as i64);
         let genesis = mint.create_entries();
-        let block = create_sample_block(&mint, length);
+        let block = create_sample_block(&mut mint, length);
         (genesis.into_iter().chain(block), mint.pubkey())
     }
 
@@ -945,9 +950,9 @@ mod tests {
 
     #[test]
     fn test_process_ledger_from_files() {
-        let mint = Mint::new(2);
+        let mut mint = Mint::new(2);
         let genesis = to_file_iter(mint.create_entries().into_iter());
-        let block = to_file_iter(create_sample_block(&mint, 1));
+        let block = to_file_iter(create_sample_block(&mut mint, 1));
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
