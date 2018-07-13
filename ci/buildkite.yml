@@ -1,38 +1,4 @@
 steps:
-  - command: "ci/docker-run.sh rust ci/test-stable.sh"
-    name: "stable [public]"
-    env:
-      CARGO_TARGET_CACHE_NAME: "stable"
-    timeout_in_minutes: 20
-  - command: "ci/shellcheck.sh"
-    name: "shellcheck [public]"
-    timeout_in_minutes: 20
-  - command: "ci/docker-run.sh solanalabs/rust-nightly ci/test-nightly.sh"
-    name: "nightly [public]"
-    env:
-      CARGO_TARGET_CACHE_NAME: "nightly"
-    timeout_in_minutes: 30
-  - command: "ci/test-stable-perf.sh"
-    name: "stable-perf [public]"
-    env:
-      CARGO_TARGET_CACHE_NAME: "stable-perf"
-    timeout_in_minutes: 20
-    retry:
-      automatic:
-      - exit_status: "*"
-        limit: 2
-    agents:
-      - "queue=cuda"
-  - command: "ci/pr-snap.sh"
-    timeout_in_minutes: 20
-    name: "snap [public]"
-  - wait
-  - command: "ci/publish-crate.sh"
-    timeout_in_minutes: 20
-    name: "publish crate [public]"
-  - command: "ci/hoover.sh"
-    timeout_in_minutes: 20
-    name: "clean agent [public]"
   - trigger: "solana-snap"
     branches: "!pull/*"
     async: true
