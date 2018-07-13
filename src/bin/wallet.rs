@@ -155,7 +155,13 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    let id = read_keypair(id_path).expect("client keypair");
+    let id = read_keypair(id_path).or_else(|err| {
+        display_actions();
+        Err(WalletError::BadParameter(format!(
+            "{}: Unable to open keypair file: {}",
+            err, id_path
+        )))
+    })?;
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(9900);
