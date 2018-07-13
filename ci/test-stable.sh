@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+(
+  set -x
+  gnuplot --version || :
+)
+
 cd "$(dirname "$0")/.."
 
 export RUST_BACKTRACE=1
