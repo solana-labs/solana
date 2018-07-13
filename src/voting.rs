@@ -19,9 +19,7 @@ fn transaction_to_votes(tx: &Transaction) -> Vec<(PublicKey, Vote, Hash)> {
     tx.instructions
         .iter()
         .filter_map(|i| match &i {
-            &Instruction::NewVote(ref vote) => {
-                Some((tx.from, vote.clone(), tx.last_id))
-            }
+            &Instruction::NewVote(ref vote) => Some((tx.from, vote.clone(), tx.last_id)),
             _ => None,
         })
         .collect()

@@ -58,11 +58,7 @@ pub struct Contract {
 impl Contract {
     pub fn new(tokens: i64, plan: Plan) -> Self {
         let id = Self::generate_id(tokens, &plan);
-        Contract {
-            tokens,
-            plan,
-            id,
-        }
+        Contract { tokens, plan, id }
     }
 
     // TODO: this is a dummy random id generator, come up with better solution later.
@@ -150,10 +146,7 @@ impl Transaction {
         fee: i64,
         last_id: Hash,
     ) -> Self {
-        let payment = Payment {
-            tokens: tokens,
-            to,
-        };
+        let payment = Payment { tokens: tokens, to };
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let contract = Contract::new(tokens, plan);
@@ -236,7 +229,7 @@ impl Transaction {
             return false;
         }
 
-        for i in self.instructions.iter(){
+        for i in self.instructions.iter() {
             if let Instruction::NewContract(contract) = i {
                 if !contract.plan.verify(contract.tokens) {
                     return false;

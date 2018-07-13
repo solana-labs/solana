@@ -236,22 +236,19 @@ impl Bank {
 
             self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
 
-            /// Negative fee shouldn't be possible here, we checked for valid fees when 
+            /// Negative fee shouldn't be possible here, we checked for valid fees when
             /// deserializing the transactions
-            let total_cost_result = tx.instructions.iter().try_fold(
-                tx.fee,
-                |total, i| {
-                    if let Instruction::NewContract(contract) = i {
-                        if contract.tokens < 0 {
-                            return Err(BankError::NegativeTokens);
-                        }
-                        
-                        Ok(total + contract.tokens)
-                    } else {
-                        Ok(total)
+            let total_cost_result = tx.instructions.iter().try_fold(tx.fee, |total, i| {
+                if let Instruction::NewContract(contract) = i {
+                    if contract.tokens < 0 {
+                        return Err(BankError::NegativeTokens);
                     }
-                },
-            );
+
+                    Ok(total + contract.tokens)
+                } else {
+                    Ok(total)
+                }
+            });
 
             let total_cost = total_cost_result?;
 

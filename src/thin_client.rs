@@ -7,8 +7,10 @@ use bincode::{deserialize, serialize};
 use budget::Condition;
 use chrono::prelude::Utc;
 use hash::Hash;
-use request::{Request, Response};
+use influx_db_client as influxdb;
+use metrics;
 use payment_plan::Payment;
+use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
@@ -17,9 +19,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::{Contract, FEE_PER_INSTRUCTION, Transaction};
-use influx_db_client as influxdb;
-use metrics;
+use transaction::{Contract, Transaction, FEE_PER_INSTRUCTION};
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -505,7 +505,7 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        
+
         // Make new contract instructions
         let initial_transfer_value: i64 = 500;
         let num_contracts: usize = 10;
@@ -527,7 +527,7 @@ mod tests {
             let instruction = Instruction::NewContract(contract);
             multi_instructions.push(instruction);
         }
-        
+
         let final_transaction = Transaction::new_from_instructions(
             &alice.keypair(),
             multi_instructions,
@@ -537,7 +537,9 @@ mod tests {
 
         let _sig = client.transfer_signed(&final_transaction).unwrap();
 
-        let balance = client.retry_get_balance(&bob_pubkey, Some(expected_balance)).unwrap();
+        let balance = client
+            .retry_get_balance(&bob_pubkey, Some(expected_balance))
+            .unwrap();
 
         assert_eq!(balance, expected_balance);
 
@@ -582,7 +584,7 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        
+
         // Set up all the contracts
         let initial_transfer_value = 100;
         let num_signature_contracts = 10;
@@ -597,16 +599,15 @@ mod tests {
             let transfer_value = initial_transfer_value + i as i64;
             expected_balance += transfer_value;
 
-            let date_condition = 
-                (Condition::Timestamp(
-                    Utc::now(),
-                    alice.pubkey()),
-                Payment { tokens: transfer_value, to: bob_pubkey });
-
-            let budget = Budget::Or(
-                date_condition.clone(),
-                date_condition,
+            let date_condition = (
+                Condition::Timestamp(Utc::now(), alice.pubkey()),
+                Payment {
+                    tokens: transfer_value,
+                    to: bob_pubkey,
+                },
             );
+
+            let budget = Budget::Or(date_condition.clone(), date_condition);
             let plan = Plan::Budget(budget);
             let contract = Contract::new(transfer_value, plan);
             contract_instructions.push(Instruction::NewContract(contract));
@@ -617,11 +618,7 @@ mod tests {
             let transfer_value = initial_transfer_value + i as i64;
             expected_balance += transfer_value;
 
-            let budget = Budget::new_authorized_payment(
-                alice.pubkey(),
-                transfer_value,
-                bob_pubkey,
-            );
+            let budget = Budget::new_authorized_payment(alice.pubkey(), transfer_value, bob_pubkey);
 
             let plan = Plan::Budget(budget);
             let contract = Contract::new(transfer_value, plan);
@@ -639,9 +636,11 @@ mod tests {
         let _sig = client.transfer_signed(&contract_transaction).unwrap();
 
         // Create instructions to fulfill all the above contracts
-        let mut fulfill_instructions: Vec<Instruction> = contract_ids.iter().map(
-            |id| Instruction::ApplySignature(*id)).collect();
-        
+        let mut fulfill_instructions: Vec<Instruction> = contract_ids
+            .iter()
+            .map(|id| Instruction::ApplySignature(*id))
+            .collect();
+
         let fulfill_timestamp_instruction = Instruction::ApplyTimestamp(Utc::now());
         fulfill_instructions.push(fulfill_timestamp_instruction);
 
@@ -655,7 +654,9 @@ mod tests {
         );
 
         let _sig = client.transfer_signed(&final_transaction).unwrap();
-        let balance = client.retry_get_balance(&bob_pubkey, Some(expected_balance)).unwrap();
+        let balance = client
+            .retry_get_balance(&bob_pubkey, Some(expected_balance))
+            .unwrap();
 
         assert_eq!(balance, expected_balance);
 
