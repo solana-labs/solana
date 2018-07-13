@@ -1,7 +1,7 @@
 [package]
 name = "solana"
 description = "Blockchain, Rebuilt for Scale"
-version = "0.7.0-rc.1"
+version = "0.7.0-rc.2"
 documentation = "https://docs.rs/solana"
 homepage = "http://solana.com/"
 readme = "README.md"
