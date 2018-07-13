@@ -119,7 +119,7 @@ tune_networking() {
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
-SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client-client
+SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
