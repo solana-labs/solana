@@ -38,7 +38,10 @@ fi
 
 client_id_path="$SOLANA_CONFIG_CLIENT_DIR"/id.json
 if [[ ! -r $client_id_path ]]; then
-  $solana_keygen -o "$client_id_path"
+  (
+    set -x
+    $solana_keygen -o "$client_id_path"
+  )
 fi
 
 set -x
