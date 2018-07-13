@@ -37,16 +37,26 @@ apps:
     plugs:
       - network
       - network-bind
+      - home
   genesis:
     command: solana-genesis
   keygen:
     command: solana-keygen
+    plugs:
+      - home
   client-demo:
     command: solana-client-demo
+    plugs:
+      - network
+      - network-bind
+      - home
   wallet:
     # TODO: Merge wallet.sh functionality into solana-wallet proper
     command: wallet.sh
     #command: solana-wallet
+    plugs:
+      - network
+      - home
 
   daemon-validator:
     daemon: simple
