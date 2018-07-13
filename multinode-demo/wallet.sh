@@ -36,12 +36,12 @@ if [[ ! -r "$SOLANA_CONFIG_CLIENT_DIR"/leader.json ]]; then
   )
 fi
 
-client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
-if [[ ! -r $client_json ]]; then
-  $solana_keygen -o "$client_json"
+client_id_path="$SOLANA_CONFIG_CLIENT_DIR"/id.json
+if [[ ! -r $client_id_path ]]; then
+  $solana_keygen -o "$client_id_path"
 fi
 
 set -x
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
-  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_json" "$@"
+  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" "$@"
