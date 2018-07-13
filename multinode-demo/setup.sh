@@ -86,7 +86,7 @@ mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
 $solana_keygen -o "$id_path"
 
 if $node_type_leader; then
-  echo "Creating $SOLANA_CONFIG_DIR/mint.json with $num_tokens tokens"
+  echo "Creating $mint_path with $num_tokens tokens"
   $solana_keygen -o "$mint_path"
 
   echo "Creating $SOLANA_CONFIG_DIR/ledger.log"
