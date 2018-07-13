@@ -31,19 +31,19 @@ done < <(gcloud compute instances list --filter="labels.testnet-mode=validator" 
 
 
 echo "--- Refreshing"
-mode=leader+drone
+nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
 for info in "${vmlist[@]}"; do
   vmName=${info%:*}
   vmZone=${info#*:}
   echo "Starting refresh for $vmName"
 
   (
-    echo "--- Processing $vmName in zone $vmZone as $mode"
+    echo "--- Processing $vmName in zone $vmZone"
     cat > "autogen-refresh-$vmName.sh" <<EOF
       set -x
       sudo snap remove solana
       sudo snap install solana $SOLANA_SNAP_CHANNEL --devmode
-      sudo snap set solana mode=$mode metrics-config=$SOLANA_METRICS_CONFIG
+      sudo snap set solana $nodeConfig
       snap info solana
       sudo snap logs solana -n200
 EOF
@@ -53,7 +53,7 @@ EOF
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t" \
       --command="bash ./autogen-refresh-$vmName.sh"
   ) > "log-$vmName.txt" 2>&1 &
-  mode=validator
+  nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG"
 done
 
 echo "Waiting..."
