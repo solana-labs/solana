@@ -31,7 +31,7 @@ done < <(gcloud compute instances list --filter="labels.testnet-mode=validator" 
 
 
 echo "--- Refreshing"
-nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
+leader=true
 for info in "${vmlist[@]}"; do
   vmName=${info%:*}
   vmZone=${info#*:}
@@ -39,6 +39,11 @@ for info in "${vmlist[@]}"; do
 
   (
     echo "--- Processing $vmName in zone $vmZone"
+    if $leader; then
+      nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
+    else
+      nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG"
+    fi
     cat > "autogen-refresh-$vmName.sh" <<EOF
       set -x
       sudo snap remove solana
@@ -53,10 +58,17 @@ EOF
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t" \
       --command="bash ./autogen-refresh-$vmName.sh"
   ) > "log-$vmName.txt" 2>&1 &
-  nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG"
+
+  if $leader; then
+    echo Waiting for leader...
+    # Wait for the leader to initialize before starting the validators
+    # TODO: Remove this limitation eventually.
+    wait
+  fi
+  leader=false
 done
 
-echo "Waiting..."
+echo Waiting for validators...
 wait
 
 for info in "${vmlist[@]}"; do
