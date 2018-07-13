@@ -8,3 +8,4 @@ steps:
       branch: "${BUILDKITE_BRANCH}"
       env:
         BUILDKITE_TAG: "${BUILDKITE_TAG}"
+        PARENT_BUILDKITE_TAG: "${BUILDKITE_TAG}"
