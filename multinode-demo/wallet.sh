@@ -44,4 +44,4 @@ fi
 set -x
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
-  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -m "$client_json" "$@"
+  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_json" "$@"
