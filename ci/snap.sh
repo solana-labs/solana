@@ -7,7 +7,11 @@ if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
   DRYRUN="echo"
 fi
 
-if [[ -z "$BUILDKITE_TAG" ]]; then
+# BUILDKITE_TAG is the normal environment variable set by Buildkite.  However
+# when this script is run from a triggered pipeline, TRIGGERED_BUILDKITE_TAG is
+# used instead of BUILDKITE_TAG (due to Buildkite limitations that prevents
+# BUILDKITE_TAG from propagating through to triggered pipelines)
+if [[ -z "$BUILDKITE_TAG" && -z "$TRIGGERED_BUILDKITE_TAG" ]]; then
   SNAP_CHANNEL=edge
 else
   SNAP_CHANNEL=beta
