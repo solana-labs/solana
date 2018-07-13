@@ -142,7 +142,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l).node_info;
+        leader = read_leader(l)?.node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = NodeInfo::new_leader(&server_addr);
@@ -288,9 +288,20 @@ fn display_actions() {
     println!();
 }
 
-fn read_leader(path: &str) -> Config {
-    let file = File::open(path.to_string()).unwrap_or_else(|_| panic!("file not found: {}", path));
-    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
+fn read_leader(path: &str) -> Result<Config, WalletError> {
+    let file = File::open(path.to_string()).or_else(|err| {
+        Err(WalletError::BadParameter(format!(
+            "{}: Unable to open leader file: {}",
+            err, path
+        )))
+    })?;
+
+    serde_json::from_reader(file).or_else(|err| {
+        Err(WalletError::BadParameter(format!(
+            "{}: Failed to parse leader file: {}",
+            err, path
+        )))
+    })
 }
 
 fn mk_client(r: &NodeInfo) -> io::Result<ThinClient> {
