@@ -36,7 +36,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
     let ncp = Ncp::new(
-        &spy_ref.clone(),
+        &spy_ref,
         spy_window,
         spy.sockets.gossip,
         spy.sockets.gossip_send,

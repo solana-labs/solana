@@ -224,7 +224,7 @@ fn main() {
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, &signal.clone(), num_nodes, &mut c_threads);
+    let validators = converge(&leader, &signal, num_nodes, &mut c_threads);
     assert_eq!(validators.len(), num_nodes);
 
     let mut client = mk_client(&leader);
@@ -395,7 +395,7 @@ fn converge(
     let window = default_window();
     let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
     let ncp = Ncp::new(
-        &spy_ref.clone(),
+        &spy_ref,
         window.clone(),
         spy_gossip,
         gossip_send_socket,

@@ -78,7 +78,7 @@ impl SigVerifyStage {
         verified_sender: Arc<Mutex<Sender<VerifiedPackets>>>,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            if let Err(e) = Self::verifier(&packet_receiver.clone(), &verified_sender.clone()) {
+            if let Err(e) = Self::verifier(&packet_receiver, &verified_sender) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),

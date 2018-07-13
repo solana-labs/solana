@@ -40,7 +40,7 @@ impl BankingStage {
             .name("solana-banking-stage".to_string())
             .spawn(move || loop {
                 if let Err(e) = Self::process_packets(
-                    &bank.clone(),
+                    &bank,
                     &verified_receiver,
                     &signal_sender,
                     &packet_recycler,

@@ -70,7 +70,7 @@ impl Tvu {
     /// * `exit` - The exit signal.
     pub fn new(
         keypair: KeyPair,
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
         window: Window,
@@ -83,22 +83,27 @@ impl Tvu {
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
             vec![replicate_socket, repair_socket],
             exit,
-            &blob_recycler.clone(),
+            &blob_recycler,
         );
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (window_stage, blob_window_receiver) = WindowStage::new(
-            &crdt.clone(),
+            &crdt,
             window,
             entry_height,
             retransmit_socket,
-            &blob_recycler.clone(),
+            &blob_recycler,
             blob_fetch_receiver,
         );
 
-        let replicate_stage =
-            ReplicateStage::new(keypair, bank, crdt, blob_recycler, blob_window_receiver);
+        let replicate_stage = ReplicateStage::new(
+            keypair,
+            bank.clone(),
+            crdt,
+            blob_recycler,
+            blob_window_receiver,
+        );
 
         Tvu {
             replicate_stage,
@@ -225,7 +230,7 @@ pub mod tests {
 
         let tvu = Tvu::new(
             target1_kp,
-            bank.clone(),
+            &bank,
             0,
             cref1,
             dr_1.1,

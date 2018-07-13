@@ -63,7 +63,7 @@ impl Tpu {
         let packet_recycler = PacketRecycler::default();
 
         let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_socket, exit, &packet_recycler.clone());
+            FetchStage::new(transactions_socket, exit, &packet_recycler);
 
         let (sigverify_stage, verified_receiver) = SigVerifyStage::new(packet_receiver);
 

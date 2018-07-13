@@ -195,7 +195,7 @@ impl FullNode {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
-            &bank.clone(),
+            &bank,
             node.sockets.requests,
             node.sockets.respond,
             exit.clone(),
@@ -205,18 +205,18 @@ impl FullNode {
         let blob_recycler = BlobRecycler::default();
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         let (tpu, blob_receiver) = Tpu::new(
-            &bank.clone(),
-            &crdt.clone(),
+            &bank,
+            &crdt,
             tick_duration,
             node.sockets.transaction,
-            &blob_recycler.clone(),
+            &blob_recycler,
             exit.clone(),
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls());
         let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
         let ncp = Ncp::new(
-            &crdt.clone(),
+            &crdt,
             window.clone(),
             node.sockets.gossip,
             node.sockets.gossip_send,
@@ -278,7 +278,7 @@ impl FullNode {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
-            &bank.clone(),
+            &bank,
             node.sockets.requests,
             node.sockets.respond,
             exit.clone(),
@@ -295,7 +295,7 @@ impl FullNode {
         let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
 
         let ncp = Ncp::new(
-            &crdt.clone(),
+            &crdt,
             window.clone(),
             node.sockets.gossip,
             node.sockets.gossip_send,
@@ -304,7 +304,7 @@ impl FullNode {
 
         let tvu = Tvu::new(
             keypair,
-            bank.clone(),
+            &bank,
             entry_height,
             crdt.clone(),
             window.clone(),
