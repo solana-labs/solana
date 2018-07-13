@@ -1,11 +1,11 @@
 extern crate clap;
+extern crate dirs;
 extern crate ring;
 extern crate serde_json;
 
 use clap::{App, Arg};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
-use std::env;
 use std::error;
 use std::fs::{self, File};
 use std::io::Write;
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<error::Error>> {
     let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
     let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
 
-    let mut path = env::home_dir().expect("home directory");
+    let mut path = dirs::home_dir().expect("home directory");
     let outfile = if matches.is_present("outfile") {
         matches.value_of("outfile").unwrap()
     } else {

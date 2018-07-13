@@ -1,4 +1,5 @@
 extern crate clap;
+extern crate dirs;
 extern crate serde_json;
 extern crate solana;
 
@@ -7,7 +8,6 @@ use solana::crdt::{get_ip_addr, parse_port_or_addr};
 use solana::fullnode::Config;
 use solana::nat::get_public_ip_addr;
 use solana::signature::read_pkcs8;
-use std::env;
 use std::io;
 use std::net::SocketAddr;
 
@@ -64,7 +64,7 @@ fn main() {
         bind_addr
     };
 
-    let mut path = env::home_dir().expect("home directory");
+    let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
     } else {

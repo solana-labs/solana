@@ -2,6 +2,7 @@ extern crate atty;
 extern crate bincode;
 extern crate bs58;
 extern crate clap;
+extern crate dirs;
 extern crate env_logger;
 extern crate serde_json;
 extern crate solana;
@@ -13,7 +14,6 @@ use solana::drone::DroneRequest;
 use solana::fullnode::Config;
 use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
-use std::env;
 use std::error;
 use std::fmt;
 use std::fs::File;
@@ -148,7 +148,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         leader = NodeInfo::new_leader(&server_addr);
     };
 
-    let mut path = env::home_dir().expect("home directory");
+    let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
         matches.value_of("keypair").unwrap()
     } else {
