@@ -12,7 +12,7 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
 fi
 
 # Default to --edge channel.  To select the beta channel:
-#   export SOLANA_METRICS_CONFIG=--beta
+#   export SOLANA_SNAP_CHANNEL=--beta
 if [[ -z $SOLANA_SNAP_CHANNEL ]]; then
   SOLANA_SNAP_CHANNEL=--edge
 fi
