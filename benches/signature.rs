@@ -16,5 +16,9 @@ fn bench(criterion: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench);
+criterion_group!(
+    name = benches;
+    config = Criterion::default().sample_size(2);
+    targets = bench
+);
 criterion_main!(benches);
