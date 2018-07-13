@@ -47,7 +47,7 @@ $ source $HOME/.cargo/env
 Now checkout the code from github:
 
 ```bash
-$ git clone https://github.com/solana-labs/solana.git 
+$ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
@@ -84,16 +84,23 @@ Now start the server:
 $ ./multinode-demo/leader.sh
 ```
 
-To run a performance-enhanced fullnode on Linux,
-[CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
-your system:
-```bash
-$ ./fetch-perf-libs.sh
-$ SOLANA_CUDA=1 ./multinode-demo/leader.sh
-```
-
 Wait a few seconds for the server to initialize. It will print "Ready." when it's ready to
 receive transactions.
+
+Drone
+---
+
+In order for the below test client and validators to work, we'll also need to
+spin up a drone to give out some test tokens.  The drone delivers Milton
+Friedman-style "air drops" (free tokens to requesting clients) to be used in
+test transactions.
+
+Start the drone on the leader node with:
+
+```bash
+$ ./multinode-demo/drone.sh
+```
+
 
 Multinode Testnet
 ---
@@ -104,13 +111,16 @@ To run a multinode testnet, after starting a leader node, spin up some validator
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
 ```
 
-To run a performance-enhanced fullnode on Linux,
+To run a performance-enhanced leader or validator (on Linux),
 [CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
 your system:
 ```bash
 $ ./fetch-perf-libs.sh
-$ SOLANA_CUDA=1 ./multinode-demo/leader.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
+$ SOLANA_CUDA=1 ./multinode-demo/leader.sh
+$ SOLANA_CUDA=1 ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
+
 ```
+
 
 
 Testnet Client Demo
