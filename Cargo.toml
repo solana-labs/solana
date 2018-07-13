@@ -81,6 +81,7 @@ futures = "0.1.21"
 clap = "2.31"
 reqwest = "0.8.6"
 influx_db_client = "0.3.4"
+dirs = "1.0.2"
 
 [dev-dependencies]
 criterion = "0.2"
