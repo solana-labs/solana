@@ -36,3 +36,7 @@ steps:
   - trigger: "solana-snap"
     branches: "!pull/*"
     async: true
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
