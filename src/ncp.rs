@@ -93,7 +93,7 @@ mod tests {
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
         let d = Ncp::new(
-            &c.clone(),
+            &c,
             w,
             tn.sockets.gossip,
             tn.sockets.gossip_send,

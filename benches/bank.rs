@@ -32,7 +32,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             let rando1 = KeyPair::new();
             let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
-            assert!(bank.process_transaction(&tx.clone()).is_ok());
+            assert!(bank.process_transaction(&tx).is_ok());
 
             // Finally, return the transaction to the benchmark.
             tx
