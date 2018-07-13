@@ -84,7 +84,7 @@ fi
 # Ensure the validator has at least 1 token before connecting to the network
 # TODO: Remove this workaround
 while ! $solana_wallet \
-          -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
+          -l "$SOLANA_LEADER_CONFIG_DIR"/leader.json \
           -k "$SOLANA_CONFIG_PRIVATE_DIR"/id.json airdrop --tokens 1; do
   sleep 1
 done
