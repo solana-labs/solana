@@ -29,28 +29,39 @@ while read -r vmName vmZone status; do
   vmlist+=("$vmName:$vmZone")
 done < <(gcloud compute instances list --filter="labels.testnet-mode=validator" --format 'value(name,zone,status)')
 
+
+echo "--- Refreshing"
 mode=leader+drone
 for info in "${vmlist[@]}"; do
   vmName=${info%:*}
   vmZone=${info#*:}
+  echo "Starting refresh for $vmName"
 
-  echo "--- Processing $vmName in zone $vmZone as $mode"
-  cat > autogen-refresh.sh <<EOF
-  set -x
-  sudo snap remove solana
-  sudo snap install solana $SOLANA_SNAP_CHANNEL --devmode
-  sudo snap set solana mode=$mode metrics-config=$SOLANA_METRICS_CONFIG
-  snap info solana
-  sudo snap logs solana -n200
-EOF
   (
+    echo "--- Processing $vmName in zone $vmZone as $mode"
+    cat > "autogen-refresh-$vmName.sh" <<EOF
+      set -x
+      sudo snap remove solana
+      sudo snap install solana $SOLANA_SNAP_CHANNEL --devmode
+      sudo snap set solana mode=$mode metrics-config=$SOLANA_METRICS_CONFIG
+      snap info solana
+      sudo snap logs solana -n200
+EOF
     set -x
-    gcloud compute scp --zone "$vmZone" autogen-refresh.sh "$vmName":
+    gcloud compute scp --zone "$vmZone" "autogen-refresh-$vmName.sh" "$vmName":
     gcloud compute ssh "$vmName" --zone "$vmZone" \
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t" \
-      --command="bash ./autogen-refresh.sh"
-  )
+      --command="bash ./autogen-refresh-$vmName.sh"
+  ) > "log-$vmName.txt" 2>&1 &
   mode=validator
+done
+
+echo "Waiting..."
+wait
+
+for info in "${vmlist[@]}"; do
+  vmName=${info%:*}
+  cat "log-$vmName.txt"
 done
 
 echo "--- done"
