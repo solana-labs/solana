@@ -249,15 +249,19 @@ fn process_command(
         // Request an airdrop from Solana Drone;
         // Request amount is set in request_airdrop function
         WalletCommand::AirDrop(tokens) => {
-            println!("Airdrop requested...");
-            println!("Airdropping {:?} tokens", tokens);
+            println!(
+                "Requesting airdrop of {:?} tokens from {}",
+                tokens, config.drone_addr
+            );
+            let previous_balance = client.poll_get_balance(&config.id.pubkey())?;
             request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
             // TODO: return airdrop Result from Drone
             sleep(Duration::from_millis(100));
-            println!(
-                "Your balance is: {:?}",
-                client.poll_get_balance(&config.id.pubkey()).unwrap()
-            );
+            let current_balance = client.poll_get_balance(&config.id.pubkey())?;
+            println!("Your balance is: {:?}", current_balance);
+            if current_balance - previous_balance != tokens {
+                Err("Airdrop failed!")?;
+            }
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
