@@ -255,9 +255,18 @@ fn process_command(
             );
             let previous_balance = client.poll_get_balance(&config.id.pubkey())?;
             request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
-            // TODO: return airdrop Result from Drone
-            sleep(Duration::from_millis(100));
-            let current_balance = client.poll_get_balance(&config.id.pubkey())?;
+
+            // TODO: return airdrop Result from Drone instead of polling the
+            //       network
+            let mut current_balance = previous_balance;
+            for _ in 0..20 {
+                sleep(Duration::from_millis(500));
+                current_balance = client.poll_get_balance(&config.id.pubkey())?;
+                if previous_balance != current_balance {
+                    break;
+                }
+                println!(".");
+            }
             println!("Your balance is: {:?}", current_balance);
             if current_balance - previous_balance != tokens {
                 Err("Airdrop failed!")?;
