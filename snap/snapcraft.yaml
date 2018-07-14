@@ -45,7 +45,9 @@ apps:
     plugs:
       - home
   client-demo:
-    command: solana-client-demo
+    # TODO: Merge client.sh functionality into solana-client-demo proper
+    command: client.sh
+    #command: solana-client-demo
     plugs:
       - network
       - network-bind
