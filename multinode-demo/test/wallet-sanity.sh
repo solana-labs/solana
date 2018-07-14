@@ -6,7 +6,13 @@
 here=$(dirname "$0")
 cd "$here"
 
-wallet="../wallet.sh $1"
+if [[ -n "$USE_SNAP" ]]; then
+  # TODO: Merge wallet.sh functionality into solana-wallet proper and
+  #       remove this USE_SNAP case
+  wallet="solana.wallet $1"
+else
+  wallet="../wallet.sh $1"
+fi
 
 # Tokens transferred to this address are lost forever...
 garbage_address=vS3ngn1TfQmpsW1Z4NkLuqNAQFF3dYQw8UZ6TCx9bmq
