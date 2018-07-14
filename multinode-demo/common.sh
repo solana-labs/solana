@@ -3,6 +3,12 @@
 # Disable complaints about unused variables in this file:
 # shellcheck disable=2034
 
+# shellcheck disable=2154 # 'here' is referenced but not assigned
+if [[ -z $here ]]; then
+  echo "|here| is not defined"
+  exit 1
+fi
+
 rsync=rsync
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
@@ -44,6 +50,11 @@ else
     fi
     printf "cargo run $maybe_release --bin solana-%s %s -- " "$program" "$features"
   }
+  if [[ -n $SOLANA_CUDA ]]; then
+    # Locate perf libs downloaded by |./fetch-perf-libs.sh|
+    LD_LIBRARY_PATH=$(cd "$here" && dirname "$PWD"):$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH
+  fi
 fi
 
 solana_client_demo=$(solana_program client-demo)
