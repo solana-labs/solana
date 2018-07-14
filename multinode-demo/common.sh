@@ -14,6 +14,13 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
     else
       printf "%s/command-%s.wrapper" "$SNAP" "$program"
     fi
+    if [[ "$program" = client-demo ]]; then
+      # TODO: Merge client.sh functionality into solana-client-demo proper and
+      #       remove this special case
+      printf "%s/bin/solana-%s" "$SNAP" "$program"
+    else
+      printf "%s/command-%s.wrapper" "$SNAP" "$program"
+    fi
   }
   rsync="$SNAP"/bin/rsync
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"

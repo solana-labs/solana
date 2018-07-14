@@ -7,7 +7,14 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
-leader=${1:-${here}/..}  # Default to local solana repo
+leader=$1
+if [[ -z $leader ]]; then
+  if [[ -d "$SNAP" ]]; then
+    leader=testnet.solana.com # Default to testnet when running as a Snap
+  else
+    leader=$here/.. # Default to local solana repo
+  fi
+fi
 count=${2:-1}
 
 rsync_leader_url=$(rsync_url "$leader")
