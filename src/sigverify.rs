@@ -22,6 +22,8 @@ struct Elems {
 #[cfg(feature = "cuda")]
 #[link(name = "cuda_verify_ed25519")]
 extern "C" {
+    fn ed25519_init() -> bool;
+    fn ed25519_set_verbose(val: bool);
     fn ed25519_verify_many(
         vecs: *const Elems,
         num: u32,          //number of vecs
@@ -32,6 +34,11 @@ extern "C" {
         signed_message_len_offset: u32,
         out: *mut u8, //combined length of all the items in vecs
     ) -> u32;
+}
+
+#[cfg(not(feature = "cuda"))]
+pub fn init() {
+    // stub
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -86,6 +93,17 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
         .collect();
     inc_counter!(COUNTER, count);
     rv
+}
+
+#[cfg(feature = "cuda")]
+pub fn init() {
+    unsafe {
+        ed25519_set_verbose(true);
+        if !ed25519_init() {
+            panic!("ed25519_init() failed");
+        }
+        ed25519_set_verbose(false);
+    }
 }
 
 #[cfg(feature = "cuda")]

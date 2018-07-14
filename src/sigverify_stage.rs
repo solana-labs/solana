@@ -25,6 +25,7 @@ pub struct SigVerifyStage {
 
 impl SigVerifyStage {
     pub fn new(packet_receiver: Receiver<SharedPackets>) -> (Self, Receiver<VerifiedPackets>) {
+        sigverify::init();
         let (verified_sender, verified_receiver) = channel();
         let thread_hdls = Self::verifier_services(packet_receiver, verified_sender);
         (SigVerifyStage { thread_hdls }, verified_receiver)
