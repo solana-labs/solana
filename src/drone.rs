@@ -112,6 +112,10 @@ impl Drone {
                 airdrop_request_amount,
                 client_public_key,
             } => {
+                info!(
+                    "Requesting airdrop of {} to {:?}",
+                    airdrop_request_amount, client_public_key
+                );
                 request_amount = airdrop_request_amount;
                 tx = Transaction::new(
                     &self.mint_keypair,
