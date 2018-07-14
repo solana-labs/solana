@@ -76,5 +76,7 @@ for info in "${vmlist[@]}"; do
   cat "log-$vmName.txt"
 done
 
-echo "--- done"
+echo "--- Testnet sanity test"
+USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh testnet.solana.com
+
 exit 0
