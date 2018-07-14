@@ -7,16 +7,9 @@ rsync=rsync
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
-    if [[ "$program" = wallet ]]; then
-      # TODO: Merge wallet.sh functionality into solana-wallet proper and
-      #       remove this special case
-      printf "%s/bin/solana-%s" "$SNAP" "$program"
-    else
-      printf "%s/command-%s.wrapper" "$SNAP" "$program"
-    fi
-    if [[ "$program" = client-demo ]]; then
-      # TODO: Merge client.sh functionality into solana-client-demo proper and
-      #       remove this special case
+    if [[ "$program" = wallet || "$program" = client-demo ]]; then
+      # TODO: Merge wallet.sh/client.sh functionality into
+      #       solana-wallet/solana-demo-client proper and remove this special case
       printf "%s/bin/solana-%s" "$SNAP" "$program"
     else
       printf "%s/command-%s.wrapper" "$SNAP" "$program"
