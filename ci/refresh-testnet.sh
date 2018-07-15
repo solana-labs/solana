@@ -77,6 +77,7 @@ for info in "${vmlist[@]}"; do
 done
 
 echo "--- Testnet sanity test"
+set -e
 USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh testnet.solana.com
 
 exit 0
