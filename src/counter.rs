@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use timing;
 
 const INFLUX_RATE: usize = 100;
+pub const DEFAULT_LOG_RATE: usize = 10;
 
 pub struct Counter {
     pub name: &'static str,
