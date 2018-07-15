@@ -30,21 +30,16 @@ rsync_leader_url=$(rsync_url "$leader")
 set -e
 mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
 if [[ ! -r "$SOLANA_CONFIG_CLIENT_DIR"/leader.json ]]; then
-  (
-    set -x
-    $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
-  )
+  echo "Fetching leader configuration from $rsync_leader_url"
+  $rsync -Pz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
 fi
 
 client_id_path="$SOLANA_CONFIG_CLIENT_DIR"/id.json
 if [[ ! -r $client_id_path ]]; then
-  (
-    set -x
-    $solana_keygen -o "$client_id_path"
-  )
+  echo "Generating client identity: $client_id_path"
+  $solana_keygen -o "$client_id_path"
 fi
 
-set -x
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
   -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" "$@"
