@@ -6,6 +6,7 @@
 extern crate libc;
 
 use chrono::prelude::*;
+use counter::{self, Counter};
 use entry::Entry;
 use hash::Hash;
 use itertools::Itertools;
@@ -202,6 +203,19 @@ impl Bank {
         {
             let option = bals.get_mut(&tx.from);
             if option.is_none() {
+                if let Instruction::NewVote(_) = &tx.instruction {
+                    static mut COUNTER_VOTE_ACCOUNT_NOT_FOUND: Counter = create_counter!(
+                        "bank-appy_debits-vote_account_not_found",
+                        counter::DEFAULT_LOG_RATE
+                    );
+                    inc_counter!(COUNTER_VOTE_ACCOUNT_NOT_FOUND, 1);
+                } else {
+                    static mut COUNTER_ACCOUNT_NOT_FOUND: Counter = create_counter!(
+                        "bank-appy_debits-generic_account_not_found",
+                        counter::DEFAULT_LOG_RATE
+                    );
+                    inc_counter!(COUNTER_ACCOUNT_NOT_FOUND, 1);
+                }
                 return Err(BankError::AccountNotFound(tx.from));
             }
             let bal = option.unwrap();
