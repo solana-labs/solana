@@ -65,13 +65,12 @@ fi
 
 rsync_leader_url=$(rsync_url "$leader")
 
-set -ex
+tune_networking
+
 SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
+set -ex
 $rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
-ls -lh "$SOLANA_LEADER_CONFIG_DIR"
-
-tune_networking
 
 # migrate from old ledger format?  why not...
 if [[ ! -f "$SOLANA_LEADER_CONFIG_DIR"/ledger.log &&
@@ -85,7 +84,7 @@ fi
 # TODO: Remove this workaround
 while ! $solana_wallet \
           -l "$SOLANA_LEADER_CONFIG_DIR"/leader.json \
-          -k "$SOLANA_CONFIG_PRIVATE_DIR"/id.json airdrop --tokens 1; do
+          -k "$SOLANA_CONFIG_PRIVATE_DIR"/validator-id.json airdrop --tokens 1; do
   sleep 1
 done
 
