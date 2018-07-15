@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 #
 # Refreshes the Solana software running on the Testnet full nodes
 #
@@ -30,15 +30,17 @@ while read -r vmName vmZone status; do
 done < <(gcloud compute instances list --filter="labels.testnet-mode=validator" --format 'value(name,zone,status)')
 
 
-echo "--- Refreshing"
+echo "--- Refreshing leader"
 leader=true
+logfiles=()
 for info in "${vmlist[@]}"; do
   vmName=${info%:*}
   vmZone=${info#*:}
   echo "Starting refresh for $vmName"
 
   (
-    echo "--- Processing $vmName in zone $vmZone"
+    SECONDS=0
+    echo "--- $vmName in zone $vmZone"
     if $leader; then
       nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
     else
@@ -52,11 +54,13 @@ for info in "${vmlist[@]}"; do
       snap info solana
       sudo snap logs solana -n200
 EOF
+
     set -x
     gcloud compute scp --zone "$vmZone" "autogen-refresh-$vmName.sh" "$vmName":
     gcloud compute ssh "$vmName" --zone "$vmZone" \
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t" \
       --command="bash ./autogen-refresh-$vmName.sh"
+    echo "Succeeded in ${SECONDS} seconds"
   ) > "log-$vmName.txt" 2>&1 &
 
   if $leader; then
@@ -64,20 +68,27 @@ EOF
     # Wait for the leader to initialize before starting the validators
     # TODO: Remove this limitation eventually.
     wait
+
+    cat "log-$vmName.txt"
+    echo "--- Refreshing validators"
+  else
+    #  Slow down deployment to ~30 machines a minute to avoid triggering GCP login
+    #  quota limits (the previous |scp| and |ssh| each count as a login)
+    sleep 2
+
+    logfiles+=("log-$vmName.txt")
   fi
   leader=false
 done
 
-echo Waiting for validators...
+echo --- Waiting for validators
 wait
 
-for info in "${vmlist[@]}"; do
-  vmName=${info%:*}
-  cat "log-$vmName.txt"
+for log in "${logfiles[@]}"; do
+  cat "$log"
 done
 
 echo "--- Testnet sanity test"
-set -e
 USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh testnet.solana.com
 
 exit 0
