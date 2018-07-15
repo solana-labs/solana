@@ -71,7 +71,8 @@ done
 
 leader_address_args=("$ip_address_arg")
 validator_address_args=("$ip_address_arg" -b 9000)
-id_path="$SOLANA_CONFIG_PRIVATE_DIR"/id.json
+leader_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/leader-id.json
+validator_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/validator-id.json
 mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
 set -e
@@ -83,7 +84,8 @@ mkdir -p "$SOLANA_CONFIG_DIR"
 rm -rvf "$SOLANA_CONFIG_PRIVATE_DIR"
 mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
 
-$solana_keygen -o "$id_path"
+$solana_keygen -o "$leader_id_path"
+$solana_keygen -o "$validator_id_path"
 
 if $node_type_leader; then
   echo "Creating $mint_path with $num_tokens tokens"
@@ -93,13 +95,13 @@ if $node_type_leader; then
   $solana_genesis --tokens="$num_tokens" < "$mint_path" > "$SOLANA_CONFIG_DIR"/ledger.log
 
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
-  $solana_fullnode_config --keypair="$id_path" "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
+  $solana_fullnode_config --keypair="$leader_id_path" "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
 fi
 
 
 if $node_type_validator; then
   echo "Creating $SOLANA_CONFIG_DIR/validator.json"
-  $solana_fullnode_config --keypair="$id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_DIR"/validator.json
+  $solana_fullnode_config --keypair="$validator_id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_DIR"/validator.json
 fi
 
 ls -lh "$SOLANA_CONFIG_DIR"/

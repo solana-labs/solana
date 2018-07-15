@@ -116,18 +116,18 @@ configure_metrics
 
 tune_networking() {
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-  [[ $(uname) = Linux ]] && (
-    set -x +e
-    # test the existence of the sysctls before trying to set them
-    # go ahead and return true and don't exit if these calls fail
-    sysctl net.core.rmem_max 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
+  if [[ $(uname) = Linux ]]; then
+    (
+      set -x +e
+      # test the existence of the sysctls before trying to set them
+      # go ahead and return true and don't exit if these calls fail
+      sysctl net.core.rmem_max 2>/dev/null 1>/dev/null &&
+          sudo sysctl -w net.core.rmem_max=26214400 1>/dev/null 2>/dev/null
 
-    sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
-        sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
-    :
-  )
-
+      sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
+          sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
+    ) || true
+  fi
 }
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
