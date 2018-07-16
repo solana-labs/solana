@@ -1,10 +1,12 @@
 #!/bin/bash -e
 #
-# Refreshes the Solana software running on the Testnet full nodes
+# Deploys the Solana software running on the testnet full nodes
 #
 # This script must be run by a user/machine that has successfully authenticated
 # with GCP and has sufficient permission.
 #
+
+cd "$(dirname "$0")/.."
 
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   echo Error: SOLANA_METRICS_CONFIG environment variable is unset
@@ -106,6 +108,6 @@ for log in "${logfiles[@]}"; do
 done
 
 echo "--- $publicUrl sanity test"
-USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh $publicUrl
+USE_SNAP=1 ci/testnet-sanity.sh $publicUrl
 
 exit 0
