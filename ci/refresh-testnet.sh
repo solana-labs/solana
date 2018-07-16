@@ -19,10 +19,12 @@ fi
 
 case $SOLANA_SNAP_CHANNEL in
 edge)
-  resourcePrefix=master-testnet-solana-com
+  publicUrl=master.testnet.solana.com
+  publicIp=$(dig +short $publicUrl | head -n1)
   ;;
 beta)
-  resourcePrefix=testnet-solana-com
+  publicUrl=testnet.solana.com
+  publicIp=#  # Use default value
   ;;
 *)
   echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
@@ -30,7 +32,7 @@ beta)
   ;;
 esac
 
-publicUrl=${resourcePrefix//-/.}
+resourcePrefix=${publicUrl//./-}
 vmlist=("$resourcePrefix":us-west1-b) # Leader is hard coded as the first entry
 validatorNamePrefix=$resourcePrefix-validator-
 
@@ -59,7 +61,7 @@ for info in "${vmlist[@]}"; do
     if $leader; then
       nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
     else
-      nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG"
+      nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG leader-address=$publicIp"
     fi
     cat > "autogen-refresh-$vmName.sh" <<EOF
       set -x
