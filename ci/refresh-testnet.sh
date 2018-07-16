@@ -11,26 +11,41 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   exit 1
 fi
 
-# Default to --edge channel.  To select the beta channel:
-#   export SOLANA_SNAP_CHANNEL=--beta
+# Default to edge channel.  To select the beta channel:
+#   export SOLANA_SNAP_CHANNEL=beta
 if [[ -z $SOLANA_SNAP_CHANNEL ]]; then
-  SOLANA_SNAP_CHANNEL=--edge
+  SOLANA_SNAP_CHANNEL=edge
 fi
 
-vmlist=(testnet-solana-com:us-west1-b) # Leader is hard coded as the first entry
+case $SOLANA_SNAP_CHANNEL in
+edge)
+  resourcePrefix=master-testnet-solana-com
+  ;;
+beta)
+  resourcePrefix=testnet-solana-com
+  ;;
+*)
+  echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
+  exit 1
+  ;;
+esac
 
-echo "--- Available validators"
-gcloud compute instances list --filter="labels.testnet-mode=validator"
+publicUrl=${resourcePrefix//-/.}
+vmlist=("$resourcePrefix":us-west1-b) # Leader is hard coded as the first entry
+validatorNamePrefix=$resourcePrefix-validator-
+
+echo "--- Available validators for $publicUrl"
+filter="name~^$validatorNamePrefix"
+gcloud compute instances list --filter="$filter"
 while read -r vmName vmZone status; do
   if [[ $status != RUNNING ]]; then
     echo "Warning: $vmName is not RUNNING, ignoring it."
     continue
   fi
   vmlist+=("$vmName:$vmZone")
-done < <(gcloud compute instances list --filter="labels.testnet-mode=validator" --format 'value(name,zone,status)')
+done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
 
-
-echo "--- Refreshing leader"
+echo "--- Refreshing leader for $publicUrl"
 leader=true
 logfiles=()
 for info in "${vmlist[@]}"; do
@@ -49,7 +64,7 @@ for info in "${vmlist[@]}"; do
     cat > "autogen-refresh-$vmName.sh" <<EOF
       set -x
       sudo snap remove solana
-      sudo snap install solana $SOLANA_SNAP_CHANNEL --devmode
+      sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode
       sudo snap set solana $nodeConfig
       snap info solana
       sudo snap logs solana -n200
@@ -88,7 +103,7 @@ for log in "${logfiles[@]}"; do
   cat "$log"
 done
 
-echo "--- Testnet sanity test"
-USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh testnet.solana.com
+echo "--- $publicUrl sanity test"
+USE_SNAP=1 ./multinode-demo/test/wallet-sanity.sh $publicUrl
 
 exit 0
