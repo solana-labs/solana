@@ -410,7 +410,7 @@ fn test_multi_node_dynamic_network() {
         })
         .collect();
 
-    let consequtive_successes = 0;
+    let mut consequtive_success = 0;
     for i in 0..N {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
@@ -458,7 +458,7 @@ fn test_multi_node_dynamic_network() {
             } else {
                 consequtive_success = 0;
             }
-            if (consequtive_success == 10) {
+            if consequtive_success == 10 {
                 break;
             }
         }
