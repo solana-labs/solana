@@ -89,7 +89,7 @@ parts:
 
       # Build/install solana-fullnode-cuda
       ./fetch-perf-libs.sh
-      cargo install --features=cuda,erasure --root $SNAPCRAFT_PART_INSTALL --bin solana-fullnode
+      cargo install --features=cuda --root $SNAPCRAFT_PART_INSTALL --bin solana-fullnode
       mv $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode $SNAPCRAFT_PART_INSTALL
       rm -rf $SNAPCRAFT_PART_INSTALL/bin/*
       mv $SNAPCRAFT_PART_INSTALL/solana-fullnode $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode-cuda
