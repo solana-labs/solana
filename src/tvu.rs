@@ -168,10 +168,10 @@ pub mod tests {
     #[test]
     fn test_replicate() {
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
         let target1_kp = KeyPair::new();
-        let target1 = TestNode::new_with_pubkey(target1_kp.pubkey());
-        let target2 = TestNode::new();
+        let target1 = TestNode::new_localhost_with_pubkey(target1_kp.pubkey());
+        let target2 = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader

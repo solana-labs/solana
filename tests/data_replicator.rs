@@ -16,7 +16,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
-    let tn = TestNode::new();
+    let tn = TestNode::new_localhost();
     let crdt = Crdt::new(tn.data.clone());
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));

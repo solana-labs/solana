@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn validator_exit() {
         let kp = KeyPair::new();
-        let tn = TestNode::new_with_pubkey(kp.pubkey());
+        let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));

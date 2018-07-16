@@ -899,7 +899,7 @@ mod test {
     #[test]
     pub fn window_send_test() {
         logger::setup();
-        let tn = TestNode::new();
+        let tn = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let mut crdt_me = Crdt::new(tn.data.clone());
         let me_id = crdt_me.my_data().id;

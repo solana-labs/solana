@@ -151,6 +151,15 @@ impl NodeInfo {
         tpu: SocketAddr,
         tvu_window: SocketAddr,
     ) -> NodeInfo {
+        let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
+        for addr in &[ncp, tvu, rpu, tpu, tvu_window] {
+            //make sure that if addr is a dummy address, that its valid
+            if *addr != daddr {
+                trace!("{:?} != {:?}", *addr, daddr);
+                assert_ne!(addr.ip(), daddr.ip());
+                assert_ne!(addr.port(), daddr.port());
+            }
+        }
         NodeInfo {
             id,
             version: 0,
@@ -1084,25 +1093,20 @@ pub struct TestNode {
     pub sockets: Sockets,
 }
 
-impl Default for TestNode {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TestNode {
-    pub fn new() -> Self {
+    pub fn new_localhost() -> Self {
         let pubkey = KeyPair::new().pubkey();
-        Self::new_with_pubkey(pubkey)
+        Self::new_localhost_with_pubkey(pubkey)
     }
-    pub fn new_with_pubkey(pubkey: PublicKey) -> Self {
-        let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
+    pub fn new_localhost_with_pubkey(pubkey: PublicKey) -> Self {
+        let transaction = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let requests = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
+
         let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let respond = requests.try_clone().unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let data = NodeInfo::new(

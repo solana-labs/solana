@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_thin_client() {
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
         let leader_data = leader.data.clone();
 
         let alice = Mint::new(10_000);
@@ -317,7 +317,7 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
