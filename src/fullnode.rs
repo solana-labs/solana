@@ -203,7 +203,7 @@ impl FullNode {
         thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         let (tpu, blob_receiver) = Tpu::new(
             &bank.clone(),
             &crdt.clone(),
@@ -285,7 +285,7 @@ impl FullNode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.data)));
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&entry_point);

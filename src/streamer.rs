@@ -901,7 +901,7 @@ mod test {
         logger::setup();
         let tn = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut crdt_me = Crdt::new(tn.data.clone());
+        let mut crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
         crdt_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(crdt_me));

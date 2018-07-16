@@ -29,7 +29,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     let me = spy.data.id.clone();
     spy.data.contact_info.tvu = daddr;
     spy.data.contact_info.rpu = daddr;
-    let mut spy_crdt = Crdt::new(spy.data);
+    let mut spy_crdt = Crdt::new(spy.data).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));

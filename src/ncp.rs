@@ -89,7 +89,7 @@ mod tests {
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = TestNode::new_localhost();
-        let crdt = Crdt::new(tn.data.clone());
+        let crdt = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
         let d = Ncp::new(
