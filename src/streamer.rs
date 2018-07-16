@@ -304,6 +304,21 @@ fn retransmit_all_leader_blocks(
     Ok(())
 }
 
+/// process a blob: Add blob to the window. If a continuous set of blobs
+///      starting from consumed is thereby formed, add that continuous
+///      range of blobs to a queue to be sent on to the next stage.
+///
+/// * `b` -  the blob to be processed into the window and rebroadcast
+/// * `pix` -  the index of the blob, corresponds to
+///            the entry height of this blob
+/// * `w` -  the index this blob would land at within the window
+/// * `consume_queue` - output, blobs to be rebroadcast are placed here
+/// * `locked_window` - the window we're operating on
+/// * `debug_id` - this node's id in a useful-for-debug format
+/// * `recycler` - where to return the blob once processed, also where
+///                  to return old blobs from the window
+/// * `consumed` - input/output, the entry-height to which this
+///                 node has populated and rebroadcast entries
 fn process_blob(
     b: SharedBlob,
     pix: u64,
