@@ -50,7 +50,7 @@ impl Counter {
         }
         if times % INFLUX_RATE == 0 && times > 0 {
             metrics::submit(
-                influxdb::Point::new(&format!("counter_{}", self.name))
+                influxdb::Point::new(&format!("counter-{}", self.name))
                     .add_field(
                         "count",
                         influxdb::Value::Integer(counts as i64 - lastlog as i64),
