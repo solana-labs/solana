@@ -151,15 +151,6 @@ impl NodeInfo {
         tpu: SocketAddr,
         tvu_window: SocketAddr,
     ) -> NodeInfo {
-        let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
-        for addr in &[ncp, tvu, rpu, tpu, tvu_window] {
-            //make sure that if addr is a dummy address, that it's valid
-            if *addr != daddr {
-                trace!("{:?} != {:?}", *addr, daddr);
-                assert_ne!(addr.ip(), daddr.ip());
-                assert_ne!(addr.port(), daddr.port());
-            }
-        }
         NodeInfo {
             id,
             version: 0,
@@ -267,6 +258,21 @@ enum Protocol {
 impl Crdt {
     pub fn new(me: NodeInfo) -> Crdt {
         assert_eq!(me.version, 0);
+        for addr in &[
+            me.contact_info.ncp,
+            me.contact_info.tvu,
+            me.contact_info.rpu,
+            me.contact_info.tpu,
+            me.contact_info.tvu_window,
+        ] {
+            //if addr is not a dummy address, than it must be valid
+            let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
+            if *addr != daddr {
+                assert!(!addr.ip().is_multicast());
+                assert!(!addr.ip().is_unspecified());
+                assert_ne!(addr.port(), 0);
+            }
+        }
         let mut g = Crdt {
             table: HashMap::new(),
             local: HashMap::new(),
