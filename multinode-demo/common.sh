@@ -43,7 +43,7 @@ else
     declare features=""
     if [[ "$program" =~ ^(.*)-cuda$ ]]; then
       program=${BASH_REMATCH[1]}
-      features="--features=cuda,erasure"
+      features="--features=cuda"
     fi
     if [[ -z "$DEBUG" ]]; then
       maybe_release=--release
