@@ -117,7 +117,7 @@ pub fn responder(
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => info!("{} responder error: {:?}", name, e),
+                    _ => warn!("{} responder error: {:?}", name, e),
                 }
             }
         })
