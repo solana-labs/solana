@@ -462,8 +462,8 @@ fn test_multi_node_dynamic_network() {
                 break;
             }
         }
-        assert_eq!(consequtive_success, 10);
     }
+    assert_eq!(consequtive_success, 10);
     for (_, node) in validators {
         node.close().unwrap();
     }
