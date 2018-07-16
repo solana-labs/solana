@@ -61,7 +61,10 @@ for info in "${vmlist[@]}"; do
     SECONDS=0
     echo "--- $vmName in zone $vmZone"
     if $leader; then
-      nodeConfig="mode=leader+drone enable-cuda=1 metrics-config=$SOLANA_METRICS_CONFIG"
+      nodeConfig="mode=leader+drone metrics-config=$SOLANA_METRICS_CONFIG"
+      if [[ -n $SOLANA_CUDA ]]; then
+        nodeConfig="$nodeConfig enable-cuda=1"
+      fi
     else
       nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG leader-address=$publicIp"
     fi
