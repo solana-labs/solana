@@ -410,6 +410,7 @@ fn test_multi_node_dynamic_network() {
         })
         .collect();
 
+    let consequtive_successes = 0;
     for i in 0..N {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
@@ -452,8 +453,16 @@ fn test_multi_node_dynamic_network() {
                 validators.len(),
                 distance
             );
-            //assert_eq!(success, validators.len());
+            if success == validators.len() && distance == 0 {
+                consequtive_success += 1;
+            } else {
+                consequtive_success = 0;
+            }
+            if (consequtive_success == 10) {
+                break;
+            }
         }
+        assert_eq!(consequtive_success, 10);
     }
     for (_, node) in validators {
         node.close().unwrap();
