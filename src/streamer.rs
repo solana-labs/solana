@@ -731,7 +731,7 @@ pub fn broadcaster(
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::CrdtError(CrdtError::TooSmall) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                        Error::CrdtError(CrdtError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                         _ => {
                             inc_new_counter!("streamer-broadcaster-error", 1, 1);
                             error!("broadcaster error: {:?}", e);

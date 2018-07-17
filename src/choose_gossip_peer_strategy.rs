@@ -29,7 +29,7 @@ impl<'a, 'b> ChooseRandomPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.is_empty() {
-            Err(CrdtError::TooSmall)?;
+            Err(CrdtError::NoPeers)?;
         }
 
         let n = ((self.random)() as usize) % options.len();
@@ -174,7 +174,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
 impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
     fn choose_peer<'b>(&self, options: Vec<&'b NodeInfo>) -> Result<&'b NodeInfo> {
         if options.is_empty() {
-            Err(CrdtError::TooSmall)?;
+            Err(CrdtError::NoPeers)?;
         }
 
         let mut weighted_peers = vec![];
