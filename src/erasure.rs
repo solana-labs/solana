@@ -5,8 +5,8 @@ use streamer::WindowSlot;
 
 //TODO(sakridge) pick these values
 pub const NUM_DATA: usize = 16; // number of data blobs
-pub const NUM_CODING: usize = 4; // number of coded blobs, also the maximum number that can go missing
-pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING; // total number of blobs in an erasure set, includes data and coded blobs
+pub const NUM_CODING: usize = 4; // number of coding blobs, also the maximum number that can go missing
+pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING; // total number of blobs in an erasure set, includes data and coding blobs
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErasureError {
@@ -161,34 +161,6 @@ pub fn decode_blocks(data: &mut [&mut [u8]], coding: &[&[u8]], erasures: &[i32])
     }
     Ok(())
 }
-
-// Allocate some coding blobs and insert into the blobs array
-//pub fn add_coding_blobs(recycler: &BlobRecycler, blobs: &mut [WindowSlot], consumed: u64) {
-//    let mut added = 0;
-//    let blobs_len = blobs.len() as u64;
-//    for i in consumed..consumed + blobs_len {
-//        let is = i as usize;
-//        if is != 0 && ((is + NUM_CODING) % NUM_DATA) == 0 {
-//            for _ in 0..NUM_CODING {
-//                trace!("putting coding at {}", (i - consumed));
-//                let new_blob = recycler.allocate();
-//                let new_blob_clone = new_blob.clone();
-//                let mut new_blob_l = new_blob_clone.write().unwrap();
-//                new_blob_l.set_size(0);
-//                new_blob_l.set_coding().unwrap();
-//                drop(new_blob_l);
-//                blobs.insert((i - consumed) as usize, new_blob);
-//                added += 1;
-//            }
-//        }
-//    }
-//    info!(
-//        "add_coding consumed: {} blobs.len(): {} added: {}",
-//        consumed,
-//        blobs.len(),
-//        added
-//    );
-//}
 
 // Generate coding blocks in window starting from consumed,
 //   for each block place the coding blobs at the end of the block
