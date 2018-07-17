@@ -421,7 +421,7 @@ impl Blob {
                 let p = r.read().expect("'r' read lock in pub fn send_to");
                 let a = p.meta.addr();
                 if let Err(e) = socket.send_to(&p.data[..p.meta.size], &a) {
-                    info!(
+                    warn!(
                         "error sending {} byte packet to {:?}: {:?}",
                         p.meta.size, a, e
                     );

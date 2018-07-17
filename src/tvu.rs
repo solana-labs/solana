@@ -168,21 +168,21 @@ pub mod tests {
     #[test]
     fn test_replicate() {
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
         let target1_kp = KeyPair::new();
-        let target1 = TestNode::new_with_pubkey(target1_kp.pubkey());
-        let target2 = TestNode::new();
+        let target1 = TestNode::new_localhost_with_pubkey(target1_kp.pubkey());
+        let target2 = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader
-        let mut crdt_l = Crdt::new(leader.data.clone());
+        let mut crdt_l = Crdt::new(leader.data.clone()).expect("Crdt::new");
         crdt_l.set_leader(leader.data.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
         let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
 
         //start crdt2
-        let mut crdt2 = Crdt::new(target2.data.clone());
+        let mut crdt2 = Crdt::new(target2.data.clone()).expect("Crdt::new");
         crdt2.insert(&leader.data);
         crdt2.set_leader(leader.data.id);
         let leader_id = leader.data.id;
@@ -217,7 +217,7 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&mint));
 
         //start crdt1
-        let mut crdt1 = Crdt::new(target1.data.clone());
+        let mut crdt1 = Crdt::new(target1.data.clone()).expect("Crdt::new");
         crdt1.insert(&leader.data);
         crdt1.set_leader(leader.data.id);
         let cref1 = Arc::new(RwLock::new(crdt1));

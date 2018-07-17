@@ -265,7 +265,7 @@ mod tests {
         const TPS_BATCH: i64 = 5_000_000;
 
         logger::setup();
-        let leader = TestNode::new();
+        let leader = TestNode::new_localhost();
 
         let alice = Mint::new(10_000_000);
         let bank = Bank::new(&alice);

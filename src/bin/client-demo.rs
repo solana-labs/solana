@@ -386,7 +386,7 @@ fn converge(
     //lets spy on the network
     let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node();
-    let mut spy_crdt = Crdt::new(spy);
+    let mut spy_crdt = Crdt::new(spy).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));

@@ -48,6 +48,8 @@ const MIN_TABLE_SIZE: usize = 2;
 pub enum CrdtError {
     TooSmall,
     NoLeader,
+    BadContactInfo,
+    BadNodeInfo,
 }
 
 pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
@@ -254,8 +256,26 @@ enum Protocol {
 }
 
 impl Crdt {
-    pub fn new(me: NodeInfo) -> Crdt {
-        assert_eq!(me.version, 0);
+    pub fn new(me: NodeInfo) -> Result<Crdt> {
+        if me.version != 0 {
+            return Err(Error::CrdtError(CrdtError::BadNodeInfo));
+        }
+        for addr in &[
+            me.contact_info.ncp,
+            me.contact_info.tvu,
+            me.contact_info.rpu,
+            me.contact_info.tpu,
+            me.contact_info.tvu_window,
+        ] {
+            //dummy address is allowed, services will filter them
+            if addr.ip().is_unspecified() && addr.port() == 0 {
+                continue;
+            }
+            //if addr is not a dummy address, than it must be valid
+            if addr.ip().is_unspecified() || addr.port() == 0 || addr.ip().is_multicast() {
+                return Err(Error::CrdtError(CrdtError::BadContactInfo));
+            }
+        }
         let mut g = Crdt {
             table: HashMap::new(),
             local: HashMap::new(),
@@ -267,7 +287,7 @@ impl Crdt {
         };
         g.local.insert(me.id, g.update_index);
         g.table.insert(me.id, me);
-        g
+        Ok(g)
     }
     pub fn debug_id(&self) -> u64 {
         make_debug_id(&self.me)
@@ -1071,23 +1091,18 @@ pub struct TestNode {
     pub sockets: Sockets,
 }
 
-impl Default for TestNode {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TestNode {
-    pub fn new() -> Self {
+    pub fn new_localhost() -> Self {
         let pubkey = KeyPair::new().pubkey();
-        Self::new_with_pubkey(pubkey)
+        Self::new_localhost_with_pubkey(pubkey)
     }
-    pub fn new_with_pubkey(pubkey: PublicKey) -> Self {
-        let transaction = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let gossip = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let replicate = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let requests = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let repair = UdpSocket::bind("0.0.0.0:0").unwrap();
+    pub fn new_localhost_with_pubkey(pubkey: PublicKey) -> Self {
+        let transaction = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let requests = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
+
         let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1191,6 +1206,68 @@ mod tests {
         assert_eq!(p3.port(), 8000);
     }
     #[test]
+    fn test_bad_address() {
+        let d1 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.0:1234".parse().unwrap(),
+            "0.0.0.0:1235".parse().unwrap(),
+            "0.0.0.0:1236".parse().unwrap(),
+            "0.0.0.0:1237".parse().unwrap(),
+            "0.0.0.0:1238".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d1).err(),
+            Some(Error::CrdtError(CrdtError::BadContactInfo))
+        );
+        let d2 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d2).err(),
+            Some(Error::CrdtError(CrdtError::BadContactInfo))
+        );
+        let d3 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        assert_eq!(Crdt::new(d3).is_ok(), true);
+        let d4 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d4).err(),
+            Some(Error::CrdtError(CrdtError::BadContactInfo))
+        );
+        let mut d5 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+            "255.255.255.255:0".parse().unwrap(),
+        );
+        d5.version = 1;
+        assert_matches!(
+            Crdt::new(d5).err(),
+            Some(Error::CrdtError(CrdtError::BadNodeInfo))
+        );
+    }
+
+    #[test]
     fn insert_test() {
         let mut d = NodeInfo::new(
             KeyPair::new().pubkey(),
@@ -1201,7 +1278,7 @@ mod tests {
             "127.0.0.1:1238".parse().unwrap(),
         );
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone());
+        let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
         d.version = 2;
         crdt.insert(&d);
@@ -1214,7 +1291,7 @@ mod tests {
     fn test_new_vote() {
         let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone());
+        let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
         let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
@@ -1241,7 +1318,7 @@ mod tests {
     fn test_insert_vote() {
         let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone());
+        let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
         let vote_same_version = Vote {
             version: d.version,
@@ -1273,7 +1350,7 @@ mod tests {
         // TODO: remove this test once leaders vote
         let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone());
+        let mut crdt = Crdt::new(d.clone()).unwrap();
         let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
         crdt.insert(&leader);
@@ -1342,7 +1419,7 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let mut crdt = Crdt::new(d1.clone());
+        let mut crdt = Crdt::new(d1.clone()).expect("Crdt::new");
         let (key, ix, ups) = crdt.get_updates_since(0);
         assert_eq!(key, d1.id);
         assert_eq!(ix, 1);
@@ -1363,7 +1440,7 @@ mod tests {
             sorted(&ups),
             sorted(&vec![d1.clone(), d2.clone(), d3.clone()])
         );
-        let mut crdt2 = Crdt::new(d2.clone());
+        let mut crdt2 = Crdt::new(d2.clone()).expect("Crdt::new");
         crdt2.apply_updates(key, ix, &ups, &vec![]);
         assert_eq!(crdt2.table.values().len(), 3);
         assert_eq!(
@@ -1385,7 +1462,7 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let mut crdt = Crdt::new(me.clone());
+        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
         let nxt = NodeInfo::new(
@@ -1447,7 +1524,7 @@ mod tests {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        let mut crdt = Crdt::new(me.clone());
+        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
         let nxt1 = NodeInfo::new(
@@ -1506,7 +1583,7 @@ mod tests {
     fn purge_test() {
         logger::setup();
         let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let mut crdt = Crdt::new(me.clone());
+        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let nxt = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
         assert_ne!(me.id, nxt.id);
         crdt.set_leader(me.id);
@@ -1617,7 +1694,7 @@ mod tests {
         let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let leader0 = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let leader1 = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let mut crdt = Crdt::new(me.clone());
+        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         assert_eq!(crdt.top_leader(), None);
         crdt.set_leader(leader0.id);
         assert_eq!(crdt.top_leader().unwrap(), leader0.id);

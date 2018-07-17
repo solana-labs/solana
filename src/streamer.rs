@@ -116,7 +116,7 @@ pub fn responder(
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    _ => error!("{} responder error: {:?}", name, e),
+                    _ => warn!("{} responder error: {:?}", name, e),
                 }
             }
         })
@@ -889,9 +889,9 @@ mod test {
     #[test]
     pub fn window_send_test() {
         logger::setup();
-        let tn = TestNode::new();
+        let tn = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut crdt_me = Crdt::new(tn.data.clone());
+        let mut crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
         crdt_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(crdt_me));
