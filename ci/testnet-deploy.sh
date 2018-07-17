@@ -70,11 +70,14 @@ for info in "${vmlist[@]}"; do
     fi
     cat > "autogen-refresh-$vmName.sh" <<EOF
       set -x
+      logmarker="solana deploy $(date)/$RANDOM"
       sudo snap remove solana
+      logger \$logmarker
       sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode
       sudo snap set solana $nodeConfig
       snap info solana
-      sudo snap logs solana -n200
+      sleep 2 # Slight delay to get more syslog output
+      sudo grep -Pzo "\$logmarker(.|\\n)*" /var/log/syslog
 EOF
 
     set -x
