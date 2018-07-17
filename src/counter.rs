@@ -126,7 +126,10 @@ mod tests {
         static mut COUNTER: Counter = create_counter!("test_lograte", 0);
         inc_counter!(COUNTER, 2);
         unsafe {
-            assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 10);
+            assert_eq!(
+                COUNTER.lograte.load(Ordering::Relaxed),
+                DEFAULT_METRICS_RATE
+            );
         }
     }
     #[test]
