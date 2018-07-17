@@ -3,6 +3,7 @@
 //! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
+use counter::Counter;
 use crdt::Crdt;
 use entry::Entry;
 use entry_writer::EntryWriter;
@@ -12,6 +13,7 @@ use result::{Error, Result};
 use service::Service;
 use std::collections::VecDeque;
 use std::io::Write;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -41,6 +43,8 @@ impl WriteStage {
         let mut blobs = VecDeque::new();
         entries.to_blobs(blob_recycler, &mut blobs);
         if !blobs.is_empty() {
+            inc_new_counter!("write_stage-broadcast_vote-count", votes.len());
+            inc_new_counter!("write_stage-broadcast_blobs-count", blobs.len());
             trace!("broadcasting {}", blobs.len());
             blob_sender.send(blobs)?;
         }
