@@ -583,7 +583,10 @@ pub fn window(
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => error!("window error: {:?}", e),
+                        _ => {
+                            inc_new_counter!("streamer-window-error", 1, 1);
+                            error!("window error: {:?}", e);
+                        }
                     }
                 }
                 let _ = repair_window(
@@ -729,7 +732,10 @@ pub fn broadcaster(
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         Error::CrdtError(CrdtError::TooSmall) => (), // TODO: Why are the unit-tests throwing hundreds of these?
-                        _ => error!("broadcaster error: {:?}", e),
+                        _ => {
+                            inc_new_counter!("streamer-broadcaster-error", 1, 1);
+                            error!("broadcaster error: {:?}", e);
+                        }
                     }
                 }
             }
@@ -782,7 +788,10 @@ pub fn retransmitter(
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => error!("retransmitter error: {:?}", e),
+                        _ => {
+                            inc_new_counter!("streamer-retransmit-error", 1, 1);
+                            error!("retransmitter error: {:?}", e);
+                        }
                     }
                 }
             }
