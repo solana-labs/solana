@@ -50,6 +50,7 @@ pub enum CrdtError {
     NoLeader,
     BadContactInfo,
     BadNodeInfo,
+    BadGossipAddress,
 }
 
 pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
@@ -289,8 +290,13 @@ impl Crdt {
         if me.version != 0 {
             return Err(Error::CrdtError(CrdtError::BadNodeInfo));
         }
+        if me.contact_info.ncp.ip().is_unspecified()
+            || me.contact_info.ncp.port() == 0
+            || me.contact_info.ncp.ip().is_multicast()
+        {
+            return Err(Error::CrdtError(CrdtError::BadGossipAddress));
+        }
         for addr in &[
-            me.contact_info.ncp,
             me.contact_info.tvu,
             me.contact_info.rpu,
             me.contact_info.tpu,
@@ -1264,6 +1270,18 @@ mod tests {
         );
         assert_matches!(
             Crdt::new(d1).err(),
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
+        );
+        let d1_1 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.1:1234".parse().unwrap(),
+            "0.0.0.0:1235".parse().unwrap(),
+            "0.0.0.0:1236".parse().unwrap(),
+            "0.0.0.0:1237".parse().unwrap(),
+            "0.0.0.0:1238".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d1_1).err(),
             Some(Error::CrdtError(CrdtError::BadContactInfo))
         );
         let d2 = NodeInfo::new(
@@ -1276,14 +1294,29 @@ mod tests {
         );
         assert_matches!(
             Crdt::new(d2).err(),
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
+        );
+        let d2_1 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.1:1234".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.1:0".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d2_1).err(),
             Some(Error::CrdtError(CrdtError::BadContactInfo))
         );
         let d3 = NodeInfo::new_unspecified();
-        assert_eq!(Crdt::new(d3).is_ok(), true);
+        assert_matches!(
+            Crdt::new(d3).err(),
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
+        );
         let d4 = NodeInfo::new_multicast();
         assert_matches!(
             Crdt::new(d4).err(),
-            Some(Error::CrdtError(CrdtError::BadContactInfo))
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let mut d5 = NodeInfo::new_multicast();
         d5.version = 1;
@@ -1291,6 +1324,39 @@ mod tests {
             Crdt::new(d5).err(),
             Some(Error::CrdtError(CrdtError::BadNodeInfo))
         );
+        let d6 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.0:1234".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d6).err(),
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
+        );
+        let d7 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.1:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        assert_matches!(
+            Crdt::new(d7).err(),
+            Some(Error::CrdtError(CrdtError::BadGossipAddress))
+        );
+        let d8 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.1:1234".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        assert_eq!(Crdt::new(d8).is_ok(), true);
     }
 
     #[test]
