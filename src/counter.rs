@@ -47,9 +47,14 @@ macro_rules! inc_new_counter {
 
 impl Counter {
     fn default_log_rate() -> usize {
-        env::var("SOLANA_DEFAULT_METRICS_RATE")
+        let v = env::var("SOLANA_DEFAULT_METRICS_RATE")
             .map(|x| x.parse().unwrap_or(DEFAULT_METRICS_RATE))
-            .unwrap_or(DEFAULT_METRICS_RATE)
+            .unwrap_or(DEFAULT_METRICS_RATE);
+        if v == 0 {
+            DEFAULT_METRICS_RATE
+        } else {
+            v
+        }
     }
     pub fn inc(&mut self, events: usize) {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
@@ -83,7 +88,7 @@ impl Counter {
 }
 #[cfg(test)]
 mod tests {
-    use counter::Counter;
+    use counter::{Counter, DEFAULT_METRICS_RATE};
     use std::env;
     use std::sync::atomic::{AtomicUsize, Ordering};
     #[test]
@@ -126,11 +131,22 @@ mod tests {
     }
     #[test]
     fn test_lograte_env() {
+        assert_ne!(DEFAULT_METRICS_RATE, 0);
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0);
         env::set_var("SOLANA_DEFAULT_METRICS_RATE", "50");
         inc_counter!(COUNTER, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
+        }
+
+        static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0);
+        env::set_var("SOLANA_DEFAULT_METRICS_RATE", "0");
+        inc_counter!(COUNTER2, 2);
+        unsafe {
+            assert_eq!(
+                COUNTER2.lograte.load(Ordering::Relaxed),
+                DEFAULT_METRICS_RATE
+            );
         }
     }
 }
