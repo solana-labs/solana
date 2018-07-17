@@ -75,7 +75,10 @@ impl WriteStage {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            _ => error!("{:?}", e),
+                            _ => {
+                                inc_new_counter!("write_stage-error", 1);
+                                error!("{:?}", e);
+                            }
                         }
                     };
                 }
