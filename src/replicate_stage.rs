@@ -2,7 +2,7 @@
 
 use bank::Bank;
 use bincode::serialize;
-use counter::{Counter, DEFAULT_LOG_RATE};
+use counter::Counter;
 use crdt::Crdt;
 use ledger;
 use packet::BlobRecycler;
@@ -52,14 +52,10 @@ impl ReplicateStage {
             let mut wcrdt = crdt.write().unwrap();
             wcrdt.insert_votes(&votes);
         };
-        {
-            static mut COUNTER_REPLICATE: Counter =
-                create_counter!("replicate-transactions", DEFAULT_LOG_RATE);
-            inc_counter!(
-                COUNTER_REPLICATE,
-                entries.iter().map(|x| x.transactions.len()).sum()
-            );
-        }
+        inc_new_counter!(
+            "replicate-transactions",
+            entries.iter().map(|x| x.transactions.len()).sum()
+        );
         let res = bank.process_entries(entries);
         if res.is_err() {
             error!("process_entries {} {:?}", blobs_len, res);
@@ -84,11 +80,7 @@ impl ReplicateStage {
                 blob.meta.set_addr(&addr);
                 blob.meta.size = len;
             }
-            {
-                static mut COUNTER_REPLICATE_VOTE: Counter =
-                    create_counter!("replicate-vote_sent", DEFAULT_LOG_RATE);
-                inc_counter!(COUNTER_REPLICATE_VOTE, 1);
-            }
+            inc_new_counter!("replicate-vote_sent", 1);
             *last_vote = now;
 
             vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;

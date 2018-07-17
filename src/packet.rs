@@ -19,7 +19,6 @@ pub type SharedBlobs = VecDeque<SharedBlob>;
 pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
-const LOG_RATE: usize = 10;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = 64 * 1024;
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
@@ -188,7 +187,6 @@ impl<T: Default> Recycler<T> {
 
 impl Packets {
     fn run_read_from(&mut self, socket: &UdpSocket) -> Result<usize> {
-        static mut COUNTER: Counter = create_counter!("packets", LOG_RATE);
         self.packets.resize(NUM_PACKETS, Packet::default());
         let mut i = 0;
         //DOCUMENTED SIDE-EFFECT
@@ -203,7 +201,7 @@ impl Packets {
             trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    inc_counter!(COUNTER, i);
+                    inc_new_counter!("packets-recv_count", 1);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }

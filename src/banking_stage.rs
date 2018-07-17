@@ -89,7 +89,6 @@ impl BankingStage {
             mms.len(),
         );
         let count = mms.iter().map(|x| x.1.len()).sum();
-        static mut COUNTER: Counter = create_counter!("banking_stage_process_packets", 1);
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
@@ -125,7 +124,7 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
-        inc_counter!(COUNTER, count);
+        inc_new_counter!("banking_stage-process_packets", count);
         Ok(())
     }
 }

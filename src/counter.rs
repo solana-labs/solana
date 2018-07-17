@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use timing;
 
 const INFLUX_RATE: usize = 100;
-pub const DEFAULT_LOG_RATE: usize = 10;
 
 pub struct Counter {
     pub name: &'static str,
@@ -32,6 +31,17 @@ macro_rules! inc_counter {
     ($name:expr, $count:expr) => {
         unsafe { $name.inc($count) };
     };
+}
+
+macro_rules! inc_new_counter {
+    ($name:expr, $count:expr) => {{
+        static mut INC_NEW_COUNTER: Counter = create_counter!($name, 10);
+        inc_counter!(INC_NEW_COUNTER, $count);
+    }};
+    ($name:expr, $count:expr, $lograte:expr) => {{
+        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
+        inc_counter!(INC_NEW_COUNTER, $count);
+    }};
 }
 
 impl Counter {
@@ -88,5 +98,12 @@ mod tests {
         unsafe {
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 399);
         }
+    }
+    #[test]
+    fn test_inc_new_counter() {
+        //make sure that macros are syntactically correct
+        //the variable is internal to the macro scope so there is no way to introspect it
+        inc_new_counter!("counter-1", 1);
+        inc_new_counter!("counter-2", 1, 2);
     }
 }

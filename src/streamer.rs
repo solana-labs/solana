@@ -18,7 +18,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
-const LOG_RATE: usize = 10;
 pub const WINDOW_SIZE: u64 = 2 * 1024;
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
@@ -224,9 +223,7 @@ fn repair_window(
     let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if !reqs.is_empty() {
-        static mut COUNTER_REPAIR: Counter =
-            create_counter!("streamer-repair_window-repair", LOG_RATE);
-        inc_counter!(COUNTER_REPAIR, reqs.len());
+        inc_new_counter!("streamer-repair_window-repair", reqs.len());
         debug!(
             "{:x}: repair_window counter times: {} consumed: {} received: {} missing: {}",
             debug_id,
@@ -301,9 +298,7 @@ fn retransmit_all_leader_blocks(
             *received,
             retransmit_queue.len(),
         );
-        static mut COUNTER_RETRANSMIT: Counter =
-            create_counter!("streamer-recv_window-retransmit", LOG_RATE);
-        inc_counter!(COUNTER_RETRANSMIT, retransmit_queue.len());
+        inc_new_counter!("streamer-recv_window-retransmit", retransmit_queue.len());
         retransmit.send(retransmit_queue)?;
     }
     Ok(())
@@ -413,8 +408,7 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
-    static mut COUNTER_RECV: Counter = create_counter!("streamer-recv_window-recv", LOG_RATE);
-    inc_counter!(COUNTER_RECV, dq.len());
+    inc_new_counter!("streamer-recv_window-recv", dq.len());
     debug!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
@@ -480,9 +474,7 @@ fn recv_window(
             consume_queue.len(),
         );
         trace!("sending consume_queue.len: {}", consume_queue.len());
-        static mut COUNTER_CONSUME: Counter =
-            create_counter!("streamer-recv_window-consume", LOG_RATE);
-        inc_counter!(COUNTER_CONSUME, consume_queue.len());
+        inc_new_counter!("streamer-recv_window-consume", consume_queue.len());
         s.send(consume_queue)?;
     }
     Ok(())
@@ -647,9 +639,7 @@ fn broadcast(
         // Index the blobs
         Crdt::index_blobs(&me, &blobs, receive_index)?;
         // keep the cache of blobs that are broadcast
-        static mut COUNTER_BROADCAST: Counter =
-            create_counter!("streamer-broadcast-sent", LOG_RATE);
-        inc_counter!(COUNTER_BROADCAST, blobs.len());
+        inc_new_counter!("streamer-broadcast-sent", blobs.len());
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
