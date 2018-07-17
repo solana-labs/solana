@@ -88,8 +88,9 @@ while ! $solana_wallet \
   sleep 1
 done
 
-# shellcheck disable=SC2086 # $program should not be quoted
-exec $program \
+set -o pipefail
+$program \
   --identity "$SOLANA_CONFIG_DIR"/validator.json \
   --testnet "$leader_address:$leader_port" \
-  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log
+  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log \
+2>&1 | $validator_logger

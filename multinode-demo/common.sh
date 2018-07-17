@@ -10,6 +10,10 @@ if [[ -z $here ]]; then
 fi
 
 rsync=rsync
+leader_logger="cat"
+validator_logger="cat"
+drone_logger="cat"
+
 if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
@@ -22,6 +26,10 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
     fi
   }
   rsync="$SNAP"/bin/rsync
+  leader_logger="$SNAP/bin/multilog t $SNAP_DATA/leader"
+  validator_logger="$SNAP/bin/multilog t $SNAP_DATA/validator"
+  drone_logger="$SNAP/bin/multilog t $SNAP_DATA/drone"
+
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
   RUST_LOG="$(snapctl get rust-log)"
