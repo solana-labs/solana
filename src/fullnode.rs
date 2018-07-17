@@ -319,11 +319,11 @@ impl FullNode {
     }
 
     //used for notifying many nodes in parallel to exit
-    pub fn notify_exit(&self) {
+    pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
     pub fn close(self) -> Result<()> {
-        self.exit.store(true, Ordering::Relaxed);
+        self.exit();
         self.join()
     }
 }
@@ -359,7 +359,26 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
         let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit);
-        v.notify_exit();
+        v.exit();
         v.close().unwrap();
+    }
+    #[test]
+    fn validator_parallel_exit() {
+        let vals: Vec<FullNode> = (0..2)
+            .map(|_| {
+                let kp = KeyPair::new();
+                let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
+                let alice = Mint::new(10_000);
+                let bank = Bank::new(&alice);
+                let exit = Arc::new(AtomicBool::new(false));
+                let entry = tn.data.clone();
+                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit)
+            })
+            .collect();
+        //each validator can exit in parallel to speed many sequential calls to `close`
+        vals.iter().for_each(|v| v.exit());
+        //while close is called sequentially, the above exit call notified all the
+        //validators to exit from all their threads
+        vals.into_iter().for_each(|v| v.close().unwrap());
     }
 }

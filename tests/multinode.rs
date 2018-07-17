@@ -465,9 +465,9 @@ fn test_multi_node_dynamic_network() {
     }
     assert_eq!(consecutive_success, 10);
     for (_, node) in &validators {
-        node.notify_exit();
+        node.exit();
     }
-    server.notify_exit();
+    server.exit();
     for (_, node) in validators {
         node.close().unwrap();
     }
