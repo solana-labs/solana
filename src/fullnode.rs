@@ -318,6 +318,10 @@ impl FullNode {
         FullNode { exit, thread_hdls }
     }
 
+    //used for notifying many nodes in parallel to exit
+    pub fn notify_exit(self) {
+        self.exit.store(true, Ordering::Relaxed);
+    }
     pub fn close(self) -> Result<()> {
         self.exit.store(true, Ordering::Relaxed);
         self.join()
@@ -355,6 +359,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
         let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit);
+        v.notify_exit();
         v.close().unwrap();
     }
 }
