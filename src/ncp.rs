@@ -1,7 +1,7 @@
 //! The `ncp` module implements the network control plane.
 
 use crdt::Crdt;
-use packet::{BlobRecycler, SharedBlob};
+use packet::BlobRecycler;
 use result::Result;
 use service::Service;
 use std::net::UdpSocket;
@@ -19,7 +19,7 @@ pub struct Ncp {
 impl Ncp {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
-        window: Arc<RwLock<Vec<Option<SharedBlob>>>>,
+        window: streamer::Window,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
         exit: Arc<AtomicBool>,

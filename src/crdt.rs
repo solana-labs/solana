@@ -578,10 +578,10 @@ impl Crdt {
         for i in *transmit_index..received_index {
             let is = i as usize;
             let k = is % window_l.len();
-            assert!(window_l[k].is_some());
+            assert!(window_l[k].data.is_some());
 
             let pos = is % broadcast_table.len();
-            orders.push((window_l[k].clone(), &broadcast_table[pos]));
+            orders.push((window_l[k].data.clone(), &broadcast_table[pos]));
         }
 
         trace!("broadcast orders table {}", orders.len());
@@ -917,7 +917,7 @@ impl Crdt {
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         let pos = (ix as usize) % window.read().unwrap().len();
-        if let Some(blob) = &window.read().unwrap()[pos] {
+        if let Some(blob) = &window.read().unwrap()[pos].data {
             let mut wblob = blob.write().unwrap();
             let blob_ix = wblob.get_index().expect("run_window_request get_index");
             if blob_ix == ix {
@@ -960,7 +960,7 @@ impl Crdt {
             }
         } else {
             inc_new_counter!("crdt-window-request-fail", 1);
-            assert!(window.read().unwrap()[pos].is_none());
+            assert!(window.read().unwrap()[pos].data.is_none());
             info!(
                 "{:x}: failed RequestWindowIndex {:x} {} {}",
                 me.debug_id(),
@@ -1809,7 +1809,7 @@ mod tests {
         assert!(rv.is_none());
         let out = recycler.allocate();
         out.write().unwrap().meta.size = 200;
-        window.write().unwrap()[0] = Some(out);
+        window.write().unwrap()[0].data = Some(out);
         let rv = Crdt::run_window_request(&window, &me, &me, 0, &recycler);
         assert!(rv.is_some());
         let v = rv.unwrap();
@@ -1838,7 +1838,7 @@ mod tests {
         let blob = recycler.allocate();
         let blob_size = 200;
         blob.write().unwrap().meta.size = blob_size;
-        window.write().unwrap()[0] = Some(blob);
+        window.write().unwrap()[0].data = Some(blob);
 
         let num_requests: u32 = 64;
         for i in 0..num_requests {

@@ -223,8 +223,8 @@ pub fn generate_coding(
             }
 
             let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-            let mut coding_locks = Vec::with_cpacity(NUM_CODING);
-            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_cpacity(NUM_CODING);
+            let mut coding_locks = Vec::with_capacity(NUM_CODING);
+            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
 
             let coding_start = block_start + NUM_DATA - NUM_CODING;
             let coding_end = block_start + NUM_DATA;
@@ -234,16 +234,16 @@ pub fn generate_coding(
                     window[n].coding = Some(recycler.allocate());
                 }
 
-                let w_l = window[n].coding.clone().unwrap();
-                w_l.write().unwrap().set_size(max_data_size);
-                w_l.write()
-                    .unwrap()
-                    .set_index(window[n].data.get_index().unwrap());
-                w_l.write()
-                    .unwrap()
-                    .set_id(window[n].data.get_id().unwrap());
-
-                if w_l.write().unwrap().set_coding().is_err() {
+                let coding = window[n].coding.clone().unwrap();
+                let mut coding_wl = coding.write().unwrap();
+                {
+                    let data = window[n].data.clone().unwrap();
+                    let data_rl = data.read().unwrap();
+                    coding_wl.set_index(data_rl.get_index().unwrap()).unwrap();
+                    coding_wl.set_id(data_rl.get_id().unwrap()).unwrap();
+                }
+                coding_wl.set_size(max_data_size);
+                if coding_wl.set_coding().is_err() {
                     return Err(ErasureError::EncodeError);
                 }
                 coding_blobs.push(
@@ -349,16 +349,21 @@ pub fn recover(
         // add the data blobs we have into recovery blob vector
         for i in block_start..coding_end {
             let j = i % window.len();
-            let mut b = &mut window[j];
-            if b.data.is_some() {
+
+            if window[j].data.is_some() {
                 if meta.is_none() {
-                    let bl = b.data.clone().unwrap();
+                    let bl = window[j].data.clone().unwrap();
                     meta = Some(bl.read().unwrap().meta.clone());
                 }
-                blobs.push(b.data.clone().expect("'blobs' arr in pb fn recover"));
+                blobs.push(
+                    window[j]
+                        .data
+                        .clone()
+                        .expect("'blobs' arr in pb fn recover"),
+                );
             } else {
                 let n = recycler.allocate();
-                *b.data = Some(n.clone());
+                window[j].data = Some(n.clone());
                 // mark the missing memory
                 blobs.push(n);
                 erasures.push((i - block_start) as i32);
@@ -366,16 +371,20 @@ pub fn recover(
         }
         for i in coding_start..coding_end {
             let j = i % window.len();
-            let mut b = &mut window[j];
-            if b.coding.is_some() {
+            if window[j].coding.is_some() {
                 if size.is_none() {
-                    let bl = b.coding.clone().unwrap();
+                    let bl = window[j].coding.clone().unwrap();
                     size = Some(bl.read().unwrap().meta.size - BLOB_HEADER_SIZE);
                 }
-                blobs.push(b.coding.clone().expect("'blobs' arr in pb fn recover"));
+                blobs.push(
+                    window[j]
+                        .coding
+                        .clone()
+                        .expect("'blobs' arr in pb fn recover"),
+                );
             } else {
                 let n = recycler.allocate();
-                *b = Some(n.clone());
+                window[j].coding = Some(n.clone());
                 //mark the missing memory
                 blobs.push(n);
                 erasures.push((i - block_start + NUM_DATA) as i32);
@@ -516,11 +525,14 @@ mod test {
         blob_recycler: &BlobRecycler,
         offset: usize,
         num_blobs: usize,
-    ) -> [WindowSlot; 32] {
-        let mut window = [WindowSlot {
-            data: None,
-            coding: None,
-        }; 32];
+    ) -> Vec<WindowSlot> {
+        let mut window = vec![
+            WindowSlot {
+                data: None,
+                coding: None
+            };
+            32
+        ];
         let mut blobs = Vec::new();
         for i in 0..num_blobs {
             let b = blob_recycler.allocate();
@@ -563,14 +575,14 @@ mod test {
         print_window(&window);
 
         // Generate the coding blocks
-        assert!(erasure::generate_coding(&mut window, blob_recycler, offset, num_blobs).is_ok());
+        assert!(erasure::generate_coding(&mut window, &blob_recycler, offset, num_blobs).is_ok());
         println!("** after-gen-coding:");
         print_window(&window);
 
         let erase_offset = offset;
         // Create a hole in the window
-        let refwindow = window[erase_offset].clone();
-        window[erase_offset] = None;
+        let refwindow = window[erase_offset].data.clone();
+        window[erase_offset].data = None;
 
         // Recover it from coding
         assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
@@ -578,7 +590,7 @@ mod test {
         print_window(&window);
 
         // Check the result
-        let window_l = window[erase_offset].clone().unwrap();
+        let window_l = window[erase_offset].data.clone().unwrap();
         let window_l2 = window_l.read().unwrap();
         let ref_l = refwindow.clone().unwrap();
         let ref_l2 = ref_l.read().unwrap();
