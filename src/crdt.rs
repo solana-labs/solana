@@ -1045,7 +1045,16 @@ impl Crdt {
                     from.debug_id(),
                     ix,
                 );
-                assert_ne!(from.contact_info.tvu_window, me.contact_info.tvu_window);
+                if from.contact_info.tvu_window == me.contact_info.tvu_window {
+                    warn!(
+                        "Ignored {:x}:received RequestWindowIndex from ME {:x} {} ",
+                        me.debug_id(),
+                        from.debug_id(),
+                        ix,
+                    );
+                    inc_new_counter!("crdt-window-request-address-eq", 1);
+                    return None;
+                }
                 Self::run_window_request(&window, &me, &from, ix, blob_recycler)
             }
             Err(_) => {
