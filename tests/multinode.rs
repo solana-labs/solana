@@ -467,6 +467,7 @@ fn test_multi_node_dynamic_network() {
     for (_, node) in validators {
         node.notify_exit();
     }
+    server.notify_exit();
     for (_, node) in validators {
         node.close().unwrap();
     }
