@@ -537,6 +537,7 @@ impl Crdt {
     ) -> Result<()> {
         if broadcast_table.is_empty() {
             warn!("{:x}:not enough peers in crdt table", me.debug_id());
+            inc_new_counter!("crdt-broadcast-not_enough_peers_error", 1, 1);
             Err(CrdtError::TooSmall)?;
         }
         trace!("broadcast nodes {}", broadcast_table.len());
@@ -643,7 +644,8 @@ impl Crdt {
             .collect();
         for e in errs {
             if let Err(e) = &e {
-                error!("broadcast result {:?}", e);
+                inc_new_counter!("crdt-retransmit-send_to_error", 1, 1);
+                error!("retransmit result {:?}", e);
             }
             e?;
         }
