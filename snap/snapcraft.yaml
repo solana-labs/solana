@@ -110,8 +110,9 @@ parts:
       mkdir -p $SNAPCRAFT_PART_INSTALL/bin
       cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/bin/
 
-      # TODO: build rsync from source instead of sneaking it in from the host
+      # TODO: build rsync/multilog from source instead of sneaking it in from the host
       # system...
       set -x
       mkdir -p $SNAPCRAFT_PART_INSTALL/bin
       cp -av /usr/bin/rsync $SNAPCRAFT_PART_INSTALL/bin/
+      cp -av /usr/bin/multilog $SNAPCRAFT_PART_INSTALL/bin/
