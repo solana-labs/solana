@@ -18,7 +18,7 @@ use std::process::exit;
 
 fn main() -> () {
     env_logger::init();
-    set_panic_hook();
+    set_panic_hook("fullnode");
     let matches = App::new("fullnode")
         .arg(
             Arg::with_name("identity")
