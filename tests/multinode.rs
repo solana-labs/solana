@@ -11,6 +11,7 @@ use solana::fullnode::{FullNode, LedgerFile};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
+use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
@@ -469,9 +470,9 @@ fn test_multi_node_dynamic_network() {
     }
     server.exit();
     for (_, node) in validators {
-        node.close().unwrap();
+        node.join().unwrap();
     }
-    server.close().unwrap();
+    server.join().unwrap();
 
     std::fs::remove_file(ledger_path).unwrap();
 }

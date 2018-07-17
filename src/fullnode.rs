@@ -347,6 +347,7 @@ mod tests {
     use crdt::TestNode;
     use fullnode::FullNode;
     use mint::Mint;
+    use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
@@ -360,7 +361,7 @@ mod tests {
         let entry = tn.data.clone();
         let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit);
         v.exit();
-        v.close().unwrap();
+        v.join().unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
@@ -375,10 +376,10 @@ mod tests {
                 FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit)
             })
             .collect();
-        //each validator can exit in parallel to speed many sequential calls to `close`
+        //each validator can exit in parallel to speed many sequential calls to `join`
         vals.iter().for_each(|v| v.exit());
-        //while close is called sequentially, the above exit call notified all the
+        //while join is called sequentially, the above exit call notified all the
         //validators to exit from all their threads
-        vals.into_iter().for_each(|v| v.close().unwrap());
+        vals.into_iter().for_each(|v| v.join().unwrap());
     }
 }
