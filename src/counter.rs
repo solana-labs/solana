@@ -39,7 +39,7 @@ macro_rules! inc_new_counter {
         inc_counter!(INC_NEW_COUNTER, $count);
     }};
     ($name:expr, $count:expr, $lograte:expr) => {{
-        static mut INC_NEW_COUNTER: Counter = create_counter!($name, 10);
+        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
         inc_counter!($name, $count);
     }};
 }
