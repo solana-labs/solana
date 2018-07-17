@@ -59,18 +59,24 @@ apps:
     plugs:
       - network
       - home
-
   daemon-validator:
     daemon: simple
     command: validator.sh
-
+    plugs:
+      - network
+      - network-bind
   daemon-leader:
     daemon: simple
     command: leader.sh
-
+    plugs:
+      - network
+      - network-bind
   daemon-drone:
     daemon: simple
     command: drone.sh
+    plugs:
+      - network
+      - network-bind
 
 parts:
   solana:
