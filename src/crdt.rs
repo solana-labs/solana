@@ -269,12 +269,13 @@ impl Crdt {
             me.contact_info.tpu,
             me.contact_info.tvu_window,
         ] {
+            //dummy address is allowed, services will filter them
+            if addr.ip().is_unspecified() && addr.port() == 0 {
+                continue;
+            }
             //if addr is not a dummy address, than it must be valid
-            let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
-            if *addr != daddr {
-                if addr.ip().is_multicast() || addr.ip().is_unspecified() || addr.port() == 0 {
-                    return Err(Error::CrdtError(CrdtError::BadContactInfo));
-                }
+            if addr.ip().is_unspecified() || addr.port() == 0 || addr.ip().is_multicast() {
+                return Err(Error::CrdtError(CrdtError::BadContactInfo));
             }
         }
         let mut g = Crdt {
