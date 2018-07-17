@@ -23,7 +23,33 @@ pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
-pub type Window = Arc<RwLock<Vec<Option<SharedBlob>>>>;
+
+#[derive(Clone)]
+pub struct WindowSlot {
+    pub data: Option<SharedBlob>,
+    pub coding: Option<SharedBlob>,
+}
+
+//impl Copy for WindowSlot {}
+
+//impl Clone for WindowSlot {
+//    fn clone(&self) -> WindowSlot {
+//        WindowSlot {
+//            data: if self.data.is_some() {
+//                Some(self.data.clone())
+//            } else {
+//                None
+//            },
+//            coding: if self.coding.is_some() {
+//                Some(self.coding.clone())
+//            } else {
+//                None
+//            },
+//        }
+//    }
+//}
+
+pub type Window = Arc<RwLock<Vec<WindowSlot>>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum WindowError {
@@ -169,7 +195,7 @@ fn find_next_missing(
     let reqs: Vec<_> = (*consumed..*received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
-            if window[i].is_none() {
+            if window[i].data.is_none() {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
                     return Some((to, req));
@@ -335,21 +361,21 @@ fn process_blob(
     // of consumed to received and clear any old ones
     for ix in *consumed..(pix + 1) {
         let k = (ix % WINDOW_SIZE) as usize;
-        if let Some(b) = &mut window[k] {
+        if let Some(b) = &mut window[k].data {
             if b.read().unwrap().get_index().unwrap() >= *consumed as u64 {
                 continue;
             }
         }
-        if let Some(b) = mem::replace(&mut window[k], None) {
+        if let Some(b) = mem::replace(&mut window[k].data, None) {
             recycler.recycle(b);
         }
     }
 
     // Insert the new blob into the window
     // spot should be free because we cleared it above
-    if window[w].is_none() {
-        window[w] = Some(b);
-    } else if let Some(cblob) = &window[w] {
+    if window[w].data.is_none() {
+        window[w].data = Some(b);
+    } else if let Some(cblob) = &window[w].data {
         if cblob.read().unwrap().get_index().unwrap() != pix as u64 {
             warn!("{:x}: overrun blob at index {:}", debug_id, w);
         } else {
@@ -360,11 +386,11 @@ fn process_blob(
         let k = (*consumed % WINDOW_SIZE) as usize;
         trace!("k: {} consumed: {}", k, *consumed);
 
-        if window[k].is_none() {
+        if window[k].data.is_none() {
             break;
         }
         let mut is_coding = false;
-        if let Some(ref cblob) = window[k] {
+        if let Some(ref cblob) = window[k].data {
             let cblob_r = cblob
                 .read()
                 .expect("blob read lock for flogs streamer::window");
@@ -376,29 +402,29 @@ fn process_blob(
             }
         }
         if !is_coding {
-            consume_queue.push_back(window[k].clone().expect("clone in fn recv_window"));
+            consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
             *consumed += 1;
         } else {
-            #[cfg(feature = "erasure")]
-            {
-                let block_start = *consumed - (*consumed % erasure::NUM_CODED as u64);
-                let coding_end = block_start + erasure::NUM_CODED as u64;
-                // We've received all this block's data blobs, go and null out the window now
-                for j in block_start..*consumed {
-                    if let Some(b) = mem::replace(&mut window[(j % WINDOW_SIZE) as usize], None) {
-                        recycler.recycle(b);
-                    }
-                }
-                for j in *consumed..coding_end {
-                    window[(j % WINDOW_SIZE) as usize] = None;
-                }
-
-                *consumed += erasure::MAX_MISSING as u64;
-                debug!(
-                    "skipping processing coding blob k: {} consumed: {}",
-                    k, *consumed
-                );
-            }
+            //            #[cfg(feature = "erasure")]
+            //            {
+            //                let block_start = *consumed - (*consumed % erasure::NUM_DATA as u64);
+            //                let coding_end = block_start + erasure::NUM_DATA as u64;
+            //                // We've received all this block's data blobs, go and null out the window now
+            //                for j in block_start..*consumed {
+            //                    if let Some(b) = mem::replace(&mut window[(j % WINDOW_SIZE) as usize], None) {
+            //                        recycler.recycle(b);
+            //                    }
+            //                }
+            //                for j in *consumed..coding_end {
+            //                    window[(j % WINDOW_SIZE) as usize] = None;
+            //                }
+            //
+            //                *consumed += erasure::MAX_MISSING as u64;
+            //                debug!(
+            //                    "skipping processing coding blob k: {} consumed: {}",
+            //                    k, *consumed
+            //                );
+            //            }
         }
     }
 }
@@ -505,9 +531,9 @@ fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
             .map(|(i, v)| {
                 if i == (consumed % WINDOW_SIZE) as usize {
                     "_"
-                } else if v.is_none() {
+                } else if v.data.is_none() {
                     "0"
-                } else if let Some(ref cblob) = v {
+                } else if let Some(ref cblob) = v.data {
                     if cblob.read().unwrap().is_coding() {
                         "C"
                     } else {
@@ -523,7 +549,13 @@ fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
 }
 
 pub fn default_window() -> Window {
-    Arc::new(RwLock::new(vec![None; WINDOW_SIZE as usize]))
+    Arc::new(RwLock::new(vec![
+        WindowSlot {
+            data: None,
+            coding: None,
+        };
+        WINDOW_SIZE as usize
+    ]))
 }
 
 /// Initialize a rebroadcast window with most recent Entry blobs
@@ -557,8 +589,8 @@ pub fn initialized_window(
             let ix = b.read().unwrap().get_index().expect("blob index");
             let pos = (ix % WINDOW_SIZE) as usize;
             trace!("caching {} at {}", ix, pos);
-            assert!(win[pos].is_none());
-            win[pos] = Some(b);
+            assert!(win[pos].data.is_none());
+            win[pos].data = Some(b);
         }
     }
 
@@ -648,8 +680,8 @@ fn broadcast(
 
     for mut blobs in blobs_chunked {
         // Insert the coding blobs into the blob stream
-        #[cfg(feature = "erasure")]
-        erasure::add_coding_blobs(recycler, &mut blobs, *receive_index);
+        //        #[cfg(feature = "erasure")]
+        //        erasure::add_coding_blobs(recycler, &mut blobs, *receive_index);
 
         let blobs_len = blobs.len();
         debug!("{:x} broadcast blobs.len: {}", debug_id, blobs_len);
@@ -664,7 +696,7 @@ fn broadcast(
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
-                if let Some(x) = mem::replace(&mut win[pos], None) {
+                if let Some(x) = mem::replace(&mut win[pos].data, None) {
                     trace!(
                         "popped {} at {}",
                         x.read().unwrap().get_index().unwrap(),
@@ -678,8 +710,8 @@ fn broadcast(
                 let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("caching {} at {}", ix, pos);
-                assert!(win[pos].is_none());
-                win[pos] = Some(b);
+                assert!(win[pos].data.is_none());
+                win[pos].data = Some(b);
             }
         }
 
@@ -688,6 +720,7 @@ fn broadcast(
         {
             erasure::generate_coding(
                 &mut window.write().unwrap(),
+                recycler,
                 *receive_index as usize,
                 blobs_len,
             )?;
