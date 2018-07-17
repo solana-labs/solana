@@ -106,9 +106,13 @@ pub fn udp_public_bind(label: &str, startport: u16, endport: u16) -> UdpSocketPa
         Err(_) => {
             let sender = udp_random_bind(startport, endport, 5).unwrap();
             let local_addr = sender.local_addr().unwrap();
-            info!("Using local address {} for {}", local_addr, label);
+
+            let pub_ip = get_public_ip_addr().unwrap();
+            let pub_addr = SocketAddr::new(pub_ip, local_addr.port());
+
+            info!("Using source address {} for {}", pub_addr, label);
             UdpSocketPair {
-                addr: private_addr,
+                addr: pub_addr,
                 receiver: sender.try_clone().unwrap(),
                 sender,
             }
