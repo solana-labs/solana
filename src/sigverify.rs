@@ -77,7 +77,6 @@ fn batch_size(batches: &[SharedPackets]) -> usize {
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
-    static mut COUNTER: Counter = create_counter!("ed25519_verify", 1);
     let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
@@ -91,7 +90,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
                 .collect()
         })
         .collect();
-    inc_counter!(COUNTER, count);
+    inc_new_counter!("ed25519_verify", count);
     rv
 }
 
@@ -109,7 +108,6 @@ pub fn init() {
 #[cfg(feature = "cuda")]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
-    static mut COUNTER: Counter = create_counter!("ed25519_verify_cuda", 1);
     let count = batch_size(batches);
     info!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
@@ -169,7 +167,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
             num += 1;
         }
     }
-    inc_counter!(COUNTER, count);
+    inc_new_counter!("ed25519_verify", count);
     rvs
 }
 
