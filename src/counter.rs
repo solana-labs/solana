@@ -4,7 +4,7 @@ use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use timing;
 
-const DEFAULT_METRICS_RATE: usize = 10;
+const DEFAULT_METRICS_RATE: usize = 100;
 
 pub struct Counter {
     pub name: &'static str,

@@ -15,7 +15,6 @@ use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
-use std::env;
 use std::fs::File;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -369,7 +368,6 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[test]
 #[ignore]
 fn test_multi_node_dynamic_network() {
-    env::set_var("SOLANA_DEFAULT_METRICS_RATE", "100");
     logger::setup();
     const N: usize = 60;
     let leader = TestNode::new_localhost();
