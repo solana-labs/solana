@@ -701,7 +701,10 @@ impl Crdt {
     /// * A - Address to send to
     /// * B - RequestUpdates protocol message
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
-        let options: Vec<_> = self.table.values().filter(|v| v.id != self.me).collect();
+        let options: Vec<_> = self.table
+            .values()
+            .filter(|v| v.id != self.me && !v.contact_info.ncp.ip().is_unspecified())
+            .collect();
 
         let choose_peer_strategy = ChooseWeightedPeerStrategy::new(
             &self.remote,
@@ -1513,6 +1516,30 @@ mod tests {
             }
         }
         assert!(one && two);
+    }
+
+    #[test]
+    fn gossip_request_bad_addr() {
+        let me = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
+        let nxt1 = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+            "0.0.0.0:0".parse().unwrap(),
+        );
+        crdt.insert(&nxt1);
+        let rv = crdt.gossip_request();
+        assert_matches!(rv, Err(Error::CrdtError(CrdtError::TooSmall)));
     }
 
     /// test that gossip requests are eventually generated for all nodes
