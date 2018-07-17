@@ -24,6 +24,7 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   rsync="$SNAP"/bin/rsync
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
+  RUST_LOG="$(snapctl get rust-log)"
 
 elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries
   solana_program() {
