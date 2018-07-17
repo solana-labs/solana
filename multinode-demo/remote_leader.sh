@@ -2,8 +2,6 @@
 
 [[ -n $FORCE ]] || exit
 
-mkdir -p ~/.ssh ~/solana ~/.cargo/bin
-sudo apt-get --assume-yes install rsync libssl-dev
 chmod 600 ~/.ssh/authorized_keys ~/.ssh/id_rsa
 
 PATH="$HOME"/.cargo/bin:"$PATH"
