@@ -185,7 +185,7 @@ pub fn flush() {
 }
 
 /// Hook the panic handler to generate a data point on each panic
-pub fn set_panic_hook() {
+pub fn set_panic_hook(program: &'static str) {
     use std::panic;
     use std::sync::{Once, ONCE_INIT};
     static SET_HOOK: Once = ONCE_INIT;
@@ -195,12 +195,16 @@ pub fn set_panic_hook() {
             default_hook(ono);
             submit(
                 influxdb::Point::new("panic")
-                    .add_field(
+                    .add_tag("program", influxdb::Value::String(program.to_string()))
+                    .add_tag(
                         "thread",
                         influxdb::Value::String(
                             thread::current().name().unwrap_or("?").to_string(),
                         ),
                     )
+                    // The 'one' field exists to give Kapacitor Alerts a numerical value
+                    // to filter on
+                    .add_field("one", influxdb::Value::Integer(1))
                     .add_field(
                         "message",
                         influxdb::Value::String(

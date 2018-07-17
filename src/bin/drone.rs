@@ -24,8 +24,8 @@ use tokio_codec::{BytesCodec, Decoder};
 
 fn main() {
     env_logger::init();
-    set_panic_hook();
-    let matches = App::new("solana-client-demo")
+    set_panic_hook("drone");
+    let matches = App::new("drone")
         .arg(
             Arg::with_name("leader")
                 .short("l")
