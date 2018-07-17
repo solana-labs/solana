@@ -101,6 +101,8 @@ mod tests {
     }
     #[test]
     fn test_inc_new_counter() {
+        //make sure that macros are syntactically correct
+        //the variable is internal to the macro scope so there is no way to introspect it
         inc_new_counter!("counter-1", 1);
         inc_new_counter!("counter-2", 1, 2);
     }
