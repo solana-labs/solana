@@ -184,6 +184,46 @@ pub fn flush() {
     agent.flush();
 }
 
+/// Hook the panic handler to generate a data point on each panic
+pub fn set_panic_hook() {
+    use std::panic;
+    use std::sync::{Once, ONCE_INIT};
+    static SET_HOOK: Once = ONCE_INIT;
+    SET_HOOK.call_once(|| {
+        let default_hook = panic::take_hook();
+        panic::set_hook(Box::new(move |ono| {
+            default_hook(ono);
+            submit(
+                influxdb::Point::new("panic")
+                    .add_field(
+                        "thread",
+                        influxdb::Value::String(
+                            thread::current().name().unwrap_or("?").to_string(),
+                        ),
+                    )
+                    .add_field(
+                        "message",
+                        influxdb::Value::String(
+                            // TODO: use ono.message() when it becomes stable
+                            ono.to_string(),
+                        ),
+                    )
+                    .add_field(
+                        "location",
+                        influxdb::Value::String(match ono.location() {
+                            Some(location) => location.to_string(),
+                            None => "?".to_string(),
+                        }),
+                    )
+                    .to_owned(),
+            );
+            // Flush metrics immediately in case the process exits immediately
+            // upon return
+            flush();
+        }));
+    });
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
