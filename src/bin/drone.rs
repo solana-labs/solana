@@ -12,6 +12,7 @@ use clap::{App, Arg};
 use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest};
 use solana::fullnode::Config;
+use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -23,6 +24,7 @@ use tokio_codec::{BytesCodec, Decoder};
 
 fn main() {
     env_logger::init();
+    set_panic_hook();
     let matches = App::new("solana-client-demo")
         .arg(
             Arg::with_name("leader")

@@ -8,6 +8,7 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::crdt::{NodeInfo, TestNode};
 use solana::fullnode::{Config, FullNode, LedgerFile};
+use solana::metrics::set_panic_hook;
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil};
 use std::fs::File;
@@ -17,6 +18,7 @@ use std::process::exit;
 
 fn main() -> () {
     env_logger::init();
+    set_panic_hook();
     let matches = App::new("fullnode")
         .arg(
             Arg::with_name("identity")
