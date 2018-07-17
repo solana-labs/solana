@@ -319,7 +319,7 @@ impl FullNode {
     }
 
     //used for notifying many nodes in parallel to exit
-    pub fn notify_exit(self) {
+    pub fn notify_exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
     pub fn close(self) -> Result<()> {
