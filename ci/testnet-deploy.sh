@@ -5,7 +5,6 @@
 # This script must be run by a user/machine that has successfully authenticated
 # with GCP and has sufficient permission.
 #
-
 cd "$(dirname "$0")/.."
 
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
@@ -26,7 +25,7 @@ edge)
   ;;
 beta)
   publicUrl=testnet.solana.com
-  publicIp=#  # Use default value
+  publicIp="" # Use default value
   ;;
 *)
   echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
