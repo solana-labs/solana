@@ -54,7 +54,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .filter(|x| x.contact_info.rpu != daddr)
+            .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
         if num >= num_nodes as u64 && v.len() >= num_nodes {
@@ -483,9 +483,8 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let daddr = "0.0.0.0:0".parse().unwrap();
-    assert!(leader.contact_info.rpu != daddr);
-    assert!(leader.contact_info.tpu != daddr);
+    assert!(Crdt::is_valid_address(leader.contact_info.rpu));
+    assert!(Crdt::is_valid_address(leader.contact_info.tpu));
     ThinClient::new(
         leader.contact_info.rpu,
         requests_socket,
