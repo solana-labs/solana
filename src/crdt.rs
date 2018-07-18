@@ -120,8 +120,6 @@ pub struct ContactInfo {
 pub struct LedgerState {
     /// last verified hash that was submitted to the leader
     pub last_id: Hash,
-    /// last verified entry count, always increasing
-    pub entry_height: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -166,7 +164,6 @@ impl NodeInfo {
             leader_id: PublicKey::default(),
             ledger_state: LedgerState {
                 last_id: Hash::default(),
-                entry_height: 0,
             },
         }
     }
@@ -772,12 +769,11 @@ impl Crdt {
         Ok((v.contact_info.ncp, req))
     }
 
-    pub fn new_vote(&mut self, height: u64, last_id: Hash) -> Result<(Vote, SocketAddr)> {
+    pub fn new_vote(&mut self, last_id: Hash) -> Result<(Vote, SocketAddr)> {
         let mut me = self.my_data().clone();
         let leader = self.leader_data().ok_or(CrdtError::NoLeader)?.clone();
         me.version += 1;
         me.ledger_state.last_id = last_id;
-        me.ledger_state.entry_height = height;
         let vote = Vote {
             version: me.version,
             contact_info_version: me.contact_info.version,
@@ -1386,12 +1382,12 @@ mod tests {
         let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
         assert_matches!(
-            crdt.new_vote(0, Hash::default()).err(),
+            crdt.new_vote(Hash::default()).err(),
             Some(Error::CrdtError(CrdtError::NoLeader))
         );
         crdt.insert(&leader);
         assert_matches!(
-            crdt.new_vote(0, Hash::default()).err(),
+            crdt.new_vote(Hash::default()).err(),
             Some(Error::CrdtError(CrdtError::NoLeader))
         );
         crdt.set_leader(leader.id);
@@ -1401,7 +1397,7 @@ mod tests {
             contact_info_version: 0,
         };
         let expected = (v, crdt.table[&leader.id].contact_info.tpu);
-        assert_eq!(crdt.new_vote(0, Hash::default()).unwrap(), expected);
+        assert_eq!(crdt.new_vote(Hash::default()).unwrap(), expected);
     }
 
     #[test]
