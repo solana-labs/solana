@@ -30,25 +30,6 @@ pub struct WindowSlot {
     pub coding: Option<SharedBlob>,
 }
 
-//impl Copy for WindowSlot {}
-
-//impl Clone for WindowSlot {
-//    fn clone(&self) -> WindowSlot {
-//        WindowSlot {
-//            data: if self.data.is_some() {
-//                Some(self.data.clone())
-//            } else {
-//                None
-//            },
-//            coding: if self.coding.is_some() {
-//                Some(self.coding.clone())
-//            } else {
-//                None
-//            },
-//        }
-//    }
-//}
-
 pub type Window = Arc<RwLock<Vec<WindowSlot>>>;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -217,18 +198,6 @@ fn repair_window(
     consumed: &mut u64,
     received: &mut u64,
 ) -> Result<()> {
-    #[cfg(feature = "erasure")]
-    {
-        if erasure::recover(
-            _recycler,
-            &mut locked_window.write().unwrap(),
-            *consumed as usize,
-            *received as usize,
-        ).is_err()
-        {
-            trace!("erasure::recover failed");
-        }
-    }
     //exponential backoff
     if *last != *consumed {
         *times = 0;
@@ -354,6 +323,7 @@ fn process_blob(
     debug_id: u64,
     recycler: &BlobRecycler,
     consumed: &mut u64,
+    received: u64,
 ) {
     let mut window = locked_window.write().unwrap();
 
@@ -361,13 +331,24 @@ fn process_blob(
     // of consumed to received and clear any old ones
     for ix in *consumed..(pix + 1) {
         let k = (ix % WINDOW_SIZE) as usize;
-        if let Some(b) = &mut window[k].data {
-            if b.read().unwrap().get_index().unwrap() >= *consumed as u64 {
-                continue;
+
+        let mut old = false;
+        if let Some(b) = &window[k].data {
+            old = b.read().unwrap().get_index().unwrap() < *consumed as u64;
+        }
+        if old {
+            if let Some(b) = mem::replace(&mut window[k].data, None) {
+                recycler.recycle(b);
             }
         }
-        if let Some(b) = mem::replace(&mut window[k].data, None) {
-            recycler.recycle(b);
+        let mut old = false;
+        if let Some(b) = &window[k].coding {
+            old = b.read().unwrap().get_index().unwrap() < *consumed as u64;
+        }
+        if old {
+            if let Some(b) = mem::replace(&mut window[k].coding, None) {
+                recycler.recycle(b);
+            }
         }
     }
 
@@ -384,9 +365,9 @@ fn process_blob(
             window[w].coding = Some(b);
         } else if let Some(blob) = &window[w].coding {
             if blob.read().unwrap().get_index().unwrap() != pix as u64 {
-                warn!("{:x}: overrun blob at index {:}", debug_id, w);
+                warn!("{:x}: overrun coding blob at index {:}", debug_id, w);
             } else {
-                debug!("{:x}: duplicate blob at index {:}", debug_id, w);
+                debug!("{:x}: duplicate coding blob at index {:}", debug_id, w);
             }
         }
     } else {
@@ -394,10 +375,17 @@ fn process_blob(
             window[w].data = Some(b);
         } else if let Some(blob) = &window[w].data {
             if blob.read().unwrap().get_index().unwrap() != pix as u64 {
-                warn!("{:x}: overrun blob at index {:}", debug_id, w);
+                warn!("{:x}: overrun data blob at index {:}", debug_id, w);
             } else {
-                debug!("{:x}: duplicate blob at index {:}", debug_id, w);
+                debug!("{:x}: duplicate data blob at index {:}", debug_id, w);
             }
+        }
+    }
+
+    #[cfg(feature = "erasure")]
+    {
+        if erasure::recover(recycler, &mut window, *consumed as usize, received as usize).is_err() {
+            trace!("erasure::recover failed");
         }
     }
 
@@ -487,6 +475,7 @@ fn recv_window(
             debug_id,
             recycler,
             consumed,
+            *received,
         );
     }
     print_window(debug_id, locked_window, *consumed);
@@ -507,30 +496,28 @@ fn recv_window(
 }
 
 fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
-    {
-        let buf: Vec<_> = locked_window
-            .read()
-            .unwrap()
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                if i == (consumed % WINDOW_SIZE) as usize {
-                    "_"
-                } else if v.data.is_none() {
-                    "0"
-                } else if let Some(ref cblob) = v.data {
-                    if cblob.read().unwrap().is_coding() {
-                        "C"
-                    } else {
-                        "1"
-                    }
-                } else {
-                    "0"
-                }
-            })
-            .collect();
-        trace!("{:x}:WINDOW ({}): {}", debug_id, consumed, buf.join(""));
-    }
+    let buf: Vec<_> = locked_window
+        .read()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            if i == (consumed % WINDOW_SIZE) as usize {
+                "_"
+            } else if v.data.is_none() && v.coding.is_none() {
+                "0"
+            } else if v.data.is_some() && v.coding.is_some() {
+                "X"
+            } else if v.data.is_some() {
+                // coding.is_none()
+                "D"
+            } else {
+                // data.is_none()
+                "C"
+            }
+        })
+        .collect();
+    trace!("{:x}:WINDOW ({}): {}", debug_id, consumed, buf.join(""));
 }
 
 pub fn default_window() -> Window {
@@ -686,6 +673,15 @@ fn broadcast(
                     );
                     recycler.recycle(x);
                 }
+                if let Some(x) = mem::replace(&mut win[pos].coding, None) {
+                    trace!(
+                        "popped {} at {}",
+                        x.read().unwrap().get_index().unwrap(),
+                        pos
+                    );
+                    recycler.recycle(x);
+                }
+
                 trace!("null {}", pos);
             }
             while let Some(b) = blobs.pop() {
