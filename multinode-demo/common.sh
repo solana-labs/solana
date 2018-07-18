@@ -35,6 +35,7 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   mkdir -p "$SNAP_DATA"/{drone,leader,validator}
 
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
+  SOLANA_DEFAULT_METRICS_RATE="$(snapctl get default-metrics-rate)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
   RUST_LOG="$(snapctl get rust-log)"
 

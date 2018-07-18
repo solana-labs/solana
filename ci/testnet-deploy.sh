@@ -76,13 +76,18 @@ for info in "${vmlist[@]}"; do
   (
     SECONDS=0
     echo "--- $vmName in zone $vmZone $nodePosition"
+    commonNodeConfig="\
+      rust-log=$RUST_LOG \
+      default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
+      metrics-config=$SOLANA_METRICS_CONFIG \
+    "
     if $leader; then
-      nodeConfig="mode=leader+drone metrics-config=$SOLANA_METRICS_CONFIG"
+      nodeConfig="mode=leader+drone $commonNodeConfig"
       if [[ -n $SOLANA_CUDA ]]; then
         nodeConfig="$nodeConfig enable-cuda=1"
       fi
     else
-      nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG leader-address=$publicIp"
+      nodeConfig="mode=validator leader-address=$publicIp $commonNodeConfig"
     fi
 
     set -x
