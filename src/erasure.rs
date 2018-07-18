@@ -183,10 +183,6 @@ pub fn generate_coding(
 
     for i in consumed..consumed + num_blobs {
         if (i % NUM_DATA) == (NUM_DATA - 1) {
-            let mut data_blobs = Vec::with_capacity(NUM_DATA);
-            let mut data_locks = Vec::with_capacity(NUM_DATA);
-            let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
-
             info!(
                 "generate_coding start: {} end: {} consumed: {} num_blobs: {}",
                 block_start,
@@ -194,6 +190,10 @@ pub fn generate_coding(
                 consumed,
                 num_blobs
             );
+
+            let mut data_blobs = Vec::with_capacity(NUM_DATA);
+            let mut max_data_size = 0;
+
             for i in block_start..block_start + NUM_DATA {
                 let n = i % window.len();
                 trace!("window[{}] = {:?}", n, window[n].data);
@@ -201,6 +201,14 @@ pub fn generate_coding(
                     trace!("data block is null @ {}", n);
                     return Ok(());
                 }
+                let data = window[n].data.clone().unwrap();
+                {
+                    let data_rl = data.read().unwrap();
+                    if data_rl.meta.size > max_data_size {
+                        max_data_size = data_rl.meta.size;
+                    }
+                }
+
                 data_blobs.push(
                     window[n]
                         .data
@@ -208,23 +216,8 @@ pub fn generate_coding(
                         .expect("'data_blobs' arr in pub fn generate_coding"),
                 );
             }
-            let mut max_data_size = 0;
-            for b in &data_blobs {
-                let lck = b.write().expect("'b' write lock in pub fn generate_coding");
-                if lck.meta.size > max_data_size {
-                    max_data_size = lck.meta.size;
-                }
-                data_locks.push(lck);
-            }
-            trace!("max_data_size: {}", max_data_size);
-            for (i, l) in data_locks.iter_mut().enumerate() {
-                trace!("i: {} data: {}", i, l.data[0]);
-                data_ptrs.push(&l.data[..max_data_size]);
-            }
 
             let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-            let mut coding_locks = Vec::with_capacity(NUM_CODING);
-            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
 
             let coding_start = block_start + NUM_DATA - NUM_CODING;
             let coding_end = block_start + NUM_DATA;
@@ -237,6 +230,7 @@ pub fn generate_coding(
                 let coding = window[n].coding.clone().unwrap();
                 let mut coding_wl = coding.write().unwrap();
                 {
+                    // copy index and id from the data blob
                     let data = window[n].data.clone().unwrap();
                     let data_rl = data.read().unwrap();
                     coding_wl.set_index(data_rl.get_index().unwrap()).unwrap();
@@ -253,12 +247,31 @@ pub fn generate_coding(
                         .expect("'coding_blobs' arr in pub fn generate_coding"),
                 );
             }
+
+            let mut data_locks = Vec::with_capacity(NUM_DATA);
+            for b in &data_blobs {
+                data_locks.push(
+                    b.write()
+                        .expect("'data_locks' write lock in pub fn generate_coding"),
+                );
+            }
+
+            let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
+            trace!("max_data_size: {}", max_data_size);
+            for (i, l) in data_locks.iter_mut().enumerate() {
+                trace!("i: {} data: {}", i, l.data[0]);
+                data_ptrs.push(&l.data[..max_data_size]);
+            }
+
+            let mut coding_locks = Vec::with_capacity(NUM_CODING);
             for b in &coding_blobs {
                 coding_locks.push(
                     b.write()
                         .expect("'coding_locks' arr in pub fn generate_coding"),
                 );
             }
+
+            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
             for (i, l) in coding_locks.iter_mut().enumerate() {
                 trace!("i: {} coding: {} size: {}", i, l.data[0], max_data_size);
                 coding_ptrs.push(&mut l.data_mut()[..max_data_size]);
@@ -501,21 +514,36 @@ mod test {
 
     fn print_window(window: &[WindowSlot]) {
         for (i, w) in window.iter().enumerate() {
-            print!("window({}): ", i);
+            print!("window({:>w$}): ", i, w = 2);
             if w.data.is_some() {
                 let window_l1 = w.data.clone().unwrap();
                 let window_l2 = window_l1.read().unwrap();
                 print!(
-                    "index: {:?} meta.size: {} data: ",
+                    "data index: {:?} meta.size: {} data: ",
                     window_l2.get_index(),
                     window_l2.meta.size
                 );
                 for i in 0..8 {
-                    print!("{} ", window_l2.data()[i]);
+                    print!("{:>w$} ", window_l2.data()[i], w = 2);
                 }
             } else {
-                print!("null");
+                print!("data null");
             }
+            if w.coding.is_some() {
+                let window_l1 = w.coding.clone().unwrap();
+                let window_l2 = window_l1.read().unwrap();
+                print!(
+                    "coding index: {:?} meta.size: {} data: ",
+                    window_l2.get_index(),
+                    window_l2.meta.size
+                );
+                for i in 0..8 {
+                    print!("{:>w$} ", window_l2.data()[i], w = 2);
+                }
+            } else {
+                print!("coding null");
+            }
+
             println!("");
         }
     }
