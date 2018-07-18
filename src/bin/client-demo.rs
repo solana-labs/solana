@@ -9,7 +9,7 @@ use bincode::serialize;
 use clap::{App, Arg};
 use rayon::prelude::*;
 use solana::crdt::{Crdt, NodeInfo};
-use solana::drone::DroneRequest;
+use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::nat::{udp_public_bind, udp_random_bind};
@@ -220,7 +220,7 @@ fn main() {
     }
 
     let mut drone_addr = leader.contact_info.tpu;
-    drone_addr.set_port(9900);
+    drone_addr.set_port(DRONE_PORT);
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];

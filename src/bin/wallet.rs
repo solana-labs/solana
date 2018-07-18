@@ -10,7 +10,7 @@ extern crate solana;
 use bincode::serialize;
 use clap::{App, Arg, SubCommand};
 use solana::crdt::NodeInfo;
-use solana::drone::DroneRequest;
+use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
@@ -164,7 +164,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
     })?;
 
     let mut drone_addr = leader.contact_info.tpu;
-    drone_addr.set_port(9900);
+    drone_addr.set_port(DRONE_PORT);
 
     let command = match matches.subcommand() {
         ("airdrop", Some(airdrop_matches)) => {
