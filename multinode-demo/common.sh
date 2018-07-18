@@ -32,7 +32,7 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   drone_logger="$multilog $SNAP_DATA/drone"
   # Create log directories manually to prevent multilog from creating them as
   # 0700
-  mkdir "$SNAP_DATA"/{drone,leader,validator}
+  mkdir -p "$SNAP_DATA"/{drone,leader,validator}
 
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
