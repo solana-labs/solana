@@ -49,7 +49,6 @@ while read -r vmName vmZone status; do
   vmlist+=("$vmName:$vmZone")
 done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
 
-
 wait_for_node() {
   declare pid=$1
 
@@ -66,14 +65,17 @@ wait_for_node() {
 echo "--- Refreshing leader for $publicUrl"
 leader=true
 pids=()
+count=1
 for info in "${vmlist[@]}"; do
+  nodePosition="($count/${#vmlist[*]})"
+
   vmName=${info%:*}
   vmZone=${info#*:}
-  echo "Starting refresh for $vmName"
+  echo "Starting refresh for $vmName $nodePosition"
 
   (
     SECONDS=0
-    echo "--- $vmName in zone $vmZone"
+    echo "--- $vmName in zone $vmZone $nodePosition"
     if $leader; then
       nodeConfig="mode=leader+drone metrics-config=$SOLANA_METRICS_CONFIG"
       if [[ -n $SOLANA_CUDA ]]; then
@@ -82,23 +84,22 @@ for info in "${vmlist[@]}"; do
     else
       nodeConfig="mode=validator metrics-config=$SOLANA_METRICS_CONFIG leader-address=$publicIp"
     fi
-    cat > "autogen-refresh-$vmName.sh" <<EOF
-      set -x
-      logmarker="solana deploy $(date)/$RANDOM"
-      sudo snap remove solana
-      logger \$logmarker
-      sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode
-      sudo snap set solana $nodeConfig
-      snap info solana
-      sleep 2 # Slight delay to get more syslog output
-      sudo grep -Pzo "\$logmarker(.|\\n)*" /var/log/syslog
-EOF
 
     set -x
-    gcloud compute scp --zone "$vmZone" "autogen-refresh-$vmName.sh" "$vmName":
     gcloud compute ssh "$vmName" --zone "$vmZone" \
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -t" \
-      --command="bash ./autogen-refresh-$vmName.sh"
+      --command="\
+        set -ex; \
+        logmarker='solana deploy $(date)/$RANDOM'; \
+        sudo snap remove solana; \
+        logger \$logmarker; \
+        sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+        sudo snap set solana $nodeConfig; \
+        snap info solana; \
+        echo Slight delay to get more syslog output; \
+        sleep 2; \
+        sudo grep -Pzo \"\$logmarker(.|\\n)*\" /var/log/syslog \
+      "
     echo "Succeeded in ${SECONDS} seconds"
   ) > "log-$vmName.txt" 2>&1 &
   pid=$!
@@ -113,13 +114,14 @@ EOF
 
     echo "--- Refreshing validators"
   else
-    #  Slow down deployment to ~30 machines a minute to avoid triggering GCP login
-    #  quota limits (the previous |scp| and |ssh| each count as a login)
+    #  Slow down deployment to ~20 machines a minute to avoid triggering GCP login
+    #  quota limits (each |ssh| counts as a login)
     sleep 3
 
     pids+=("$pid")
   fi
   leader=false
+  count=$((count + 1))
 done
 
 echo --- Waiting for validators
