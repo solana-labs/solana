@@ -24,7 +24,7 @@ pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct WindowSlot {
     pub data: Option<SharedBlob>,
     pub coding: Option<SharedBlob>,
@@ -371,17 +371,37 @@ fn process_blob(
         }
     }
 
-    // Insert the new blob into the window
-    // spot should be free because we cleared it above
-    if window[w].data.is_none() {
-        window[w].data = Some(b);
-    } else if let Some(cblob) = &window[w].data {
-        if cblob.read().unwrap().get_index().unwrap() != pix as u64 {
-            warn!("{:x}: overrun blob at index {:}", debug_id, w);
-        } else {
-            debug!("{:x}: duplicate blob at index {:}", debug_id, w);
+    let is_coding = {
+        let blob_r = b.read().expect("blob read lock for flogs streamer::window");
+        blob_r.is_coding()
+    };
+
+    // insert the new blob into the window if it's coding or data
+    if is_coding {
+        // Insert the new blob into the window
+        // spot should be free because we cleared it above
+        if window[w].coding.is_none() {
+            window[w].coding = Some(b);
+        } else if let Some(blob) = &window[w].coding {
+            if blob.read().unwrap().get_index().unwrap() != pix as u64 {
+                warn!("{:x}: overrun blob at index {:}", debug_id, w);
+            } else {
+                debug!("{:x}: duplicate blob at index {:}", debug_id, w);
+            }
+        }
+    } else {
+        if window[w].data.is_none() {
+            window[w].data = Some(b);
+        } else if let Some(blob) = &window[w].data {
+            if blob.read().unwrap().get_index().unwrap() != pix as u64 {
+                warn!("{:x}: overrun blob at index {:}", debug_id, w);
+            } else {
+                debug!("{:x}: duplicate blob at index {:}", debug_id, w);
+            }
         }
     }
+
+    // push all contiguous blobs into consumed queue, increment consumed
     loop {
         let k = (*consumed % WINDOW_SIZE) as usize;
         trace!("k: {} consumed: {}", k, *consumed);
@@ -389,43 +409,8 @@ fn process_blob(
         if window[k].data.is_none() {
             break;
         }
-        let mut is_coding = false;
-        if let Some(ref cblob) = window[k].data {
-            let cblob_r = cblob
-                .read()
-                .expect("blob read lock for flogs streamer::window");
-            if cblob_r.get_index().unwrap() < *consumed {
-                break;
-            }
-            if cblob_r.is_coding() {
-                is_coding = true;
-            }
-        }
-        if !is_coding {
-            consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
-            *consumed += 1;
-        } else {
-            //            #[cfg(feature = "erasure")]
-            //            {
-            //                let block_start = *consumed - (*consumed % erasure::NUM_DATA as u64);
-            //                let coding_end = block_start + erasure::NUM_DATA as u64;
-            //                // We've received all this block's data blobs, go and null out the window now
-            //                for j in block_start..*consumed {
-            //                    if let Some(b) = mem::replace(&mut window[(j % WINDOW_SIZE) as usize], None) {
-            //                        recycler.recycle(b);
-            //                    }
-            //                }
-            //                for j in *consumed..coding_end {
-            //                    window[(j % WINDOW_SIZE) as usize] = None;
-            //                }
-            //
-            //                *consumed += erasure::MAX_MISSING as u64;
-            //                debug!(
-            //                    "skipping processing coding blob k: {} consumed: {}",
-            //                    k, *consumed
-            //                );
-            //            }
-        }
+        consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
+        *consumed += 1;
     }
 }
 
@@ -550,10 +535,7 @@ fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
 
 pub fn default_window() -> Window {
     Arc::new(RwLock::new(vec![
-        WindowSlot {
-            data: None,
-            coding: None,
-        };
+        WindowSlot::default();
         WINDOW_SIZE as usize
     ]))
 }
