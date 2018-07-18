@@ -41,7 +41,7 @@ extern "C" {
         row_k_ones: i32,
         erasures: *const i32,
         data_ptrs: *const *mut u8,
-        coding_ptrs: *const *const u8,
+        coding_ptrs: *const *mut u8,
         size: i32,
     ) -> i32;
     fn galois_single_divide(a: i32, b: i32, w: i32) -> i32;
@@ -115,7 +115,11 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
 //   data: array of blocks to recover into
 //   coding: arry of coding blocks
 //   erasures: list of indices in data where blocks should be recovered
-pub fn decode_blocks(data: &mut [&mut [u8]], coding: &[&[u8]], erasures: &[i32]) -> Result<()> {
+pub fn decode_blocks(
+    data: &mut [&mut [u8]],
+    coding: &mut [&mut [u8]],
+    erasures: &[i32],
+) -> Result<()> {
     if data.len() == 0 {
         return Ok(());
     }
@@ -123,12 +127,12 @@ pub fn decode_blocks(data: &mut [&mut [u8]], coding: &[&[u8]], erasures: &[i32])
     let matrix: Vec<i32> = get_matrix(coding.len() as i32, data.len() as i32, ERASURE_W);
 
     // generate coding pointers, blocks should be the same size
-    let mut coding_arg: Vec<*const u8> = Vec::new();
-    for x in coding.iter() {
+    let mut coding_arg: Vec<*mut u8> = Vec::new();
+    for x in coding.iter_mut() {
         if x.len() != block_len {
             return Err(ErasureError::InvalidBlockSize);
         }
-        coding_arg.push(x.as_ptr());
+        coding_arg.push(x.as_mut_ptr());
     }
 
     // generate data pointers, blocks should be the same size
@@ -208,6 +212,7 @@ pub fn generate_coding(
 
                 data_blobs.push(data);
             }
+            trace!("max_data_size: {}", max_data_size);
 
             let mut coding_blobs = Vec::with_capacity(NUM_CODING);
 
@@ -232,6 +237,9 @@ pub fn generate_coding(
                 if coding_wl.set_coding().is_err() {
                     return Err(ErasureError::EncodeError);
                 }
+                trace!("coding {:?}", coding_wl.meta);
+                trace!("coding.data_size {}", coding_wl.get_data_size().unwrap());
+
                 coding_blobs.push(
                     window[n]
                         .coding
@@ -239,6 +247,8 @@ pub fn generate_coding(
                         .expect("'coding_blobs' arr in pub fn generate_coding"),
                 );
             }
+
+            trace!("max_data_size {}", max_data_size);
 
             let mut data_locks = Vec::with_capacity(NUM_DATA);
             for b in &data_blobs {
@@ -249,7 +259,6 @@ pub fn generate_coding(
             }
 
             let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
-            trace!("max_data_size: {}", max_data_size);
             for (i, l) in data_locks.iter_mut().enumerate() {
                 trace!("i: {} data: {}", i, l.data[0]);
                 data_ptrs.push(&l.data[..max_data_size]);
@@ -412,12 +421,12 @@ pub fn recover(
         }
 
         {
-            let mut coding_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_CODING);
+            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
             let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
             for (i, l) in locks.iter_mut().enumerate() {
                 if i >= NUM_DATA {
                     trace!("pushing coding: {}", i);
-                    coding_ptrs.push(&l.data()[..size.unwrap()]);
+                    coding_ptrs.push(&mut l.data[..size.unwrap()]);
                 } else {
                     trace!("pushing data: {}", i);
                     data_ptrs.push(&mut l.data[..size.unwrap()]);
@@ -428,7 +437,11 @@ pub fn recover(
                 coding_ptrs.len(),
                 data_ptrs.len()
             );
-            decode_blocks(data_ptrs.as_mut_slice(), &coding_ptrs, &erasures)?;
+            decode_blocks(
+                data_ptrs.as_mut_slice(),
+                coding_ptrs.as_mut_slice(),
+                &erasures,
+            )?;
         }
         for i in &erasures[..erasures.len() - 1] {
             let idx = *i as usize;
@@ -495,13 +508,14 @@ mod test {
         vs[erasure as usize].copy_from_slice(zero_vec.as_slice());
 
         {
-            let coding_blocks_slices: Vec<_> = coding_blocks.iter().map(|x| x.as_slice()).collect();
+            let mut coding_blocks_slices: Vec<_> =
+                coding_blocks.iter_mut().map(|x| x.as_mut_slice()).collect();
             let mut v_slices: Vec<_> = vs.iter_mut().map(|x| x.as_mut_slice()).collect();
 
             assert!(
                 erasure::decode_blocks(
                     v_slices.as_mut_slice(),
-                    coding_blocks_slices.as_slice(),
+                    coding_blocks_slices.as_mut_slice(),
                     erasures.as_slice(),
                 ).is_ok()
             );
