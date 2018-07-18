@@ -1,5 +1,6 @@
 // Support erasure coding
 use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE};
+use std::cmp;
 use std::result;
 use streamer::WindowSlot;
 
@@ -201,20 +202,11 @@ pub fn generate_coding(
                     trace!("data block is null @ {}", n);
                     return Ok(());
                 }
-                let data = window[n].data.clone().unwrap();
-                {
-                    let data_rl = data.read().unwrap();
-                    if data_rl.meta.size > max_data_size {
-                        max_data_size = data_rl.meta.size;
-                    }
-                }
 
-                data_blobs.push(
-                    window[n]
-                        .data
-                        .clone()
-                        .expect("'data_blobs' arr in pub fn generate_coding"),
-                );
+                let data = window[n].data.clone().unwrap();
+                max_data_size = cmp::max(data.read().unwrap().meta.size, max_data_size);
+
+                data_blobs.push(data);
             }
 
             let mut coding_blobs = Vec::with_capacity(NUM_CODING);

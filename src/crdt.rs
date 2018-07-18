@@ -575,13 +575,22 @@ impl Crdt {
         // transmit them to nodes, starting from a different node
         let mut orders = Vec::new();
         let window_l = window.write().unwrap();
-        for i in *transmit_index..received_index {
-            let is = i as usize;
-            let k = is % window_l.len();
-            assert!(window_l[k].data.is_some());
+        let mut br_idx = *transmit_index as usize % broadcast_table.len();
 
-            let pos = is % broadcast_table.len();
-            orders.push((window_l[k].data.clone(), &broadcast_table[pos]));
+        for idx in *transmit_index..received_index {
+            let w_idx = idx as usize % window_l.len();
+            assert!(window_l[w_idx].data.is_some());
+
+            orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
+
+            br_idx += 1;
+            br_idx %= broadcast_table.len();
+
+            if window_l[w_idx].coding.is_some() {
+                orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
+                br_idx += 1;
+                br_idx %= broadcast_table.len();
+            }
         }
 
         trace!("broadcast orders table {}", orders.len());
