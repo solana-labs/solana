@@ -1744,7 +1744,6 @@ mod tests {
         assert_ne!(me.id, nxt.id);
         crdt.insert(&nxt);
         crdt.set_leader(nxt.id);
-        trace!("here");
         let now = crdt.alive[&nxt.id];
         let nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
         crdt.insert(&nxt2);
