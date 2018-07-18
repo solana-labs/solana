@@ -225,7 +225,8 @@ fn main() {
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
     let validators = converge(&leader, &signal, num_nodes, &mut c_threads);
-    assert_eq!(validators.len(), num_nodes);
+    println!("Network has {} node(s)", validators.len());
+    assert!(validators.len() >= num_nodes);
 
     let mut client = mk_client(&leader);
 
@@ -417,6 +418,12 @@ fn converge(
             println!("CONVERGED!");
             rv.extend(v.into_iter());
             break;
+        } else {
+            println!(
+                "{} node(s) discovered (looking for {} or more)",
+                v.len(),
+                num_nodes
+            );
         }
         sleep(Duration::new(1, 0));
     }
