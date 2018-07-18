@@ -83,28 +83,25 @@ reqwest = "0.8.6"
 influx_db_client = "0.3.4"
 dirs = "1.0.2"
 
-## [profile.release]
-## debug = true
-## 
-## [dev-dependencies]
-## criterion = "0.2"
-## 
-## [[bench]]
-## name = "bank"
-## harness = false
-## 
-## [[bench]]
-## name = "banking_stage"
-## harness = false
-## 
-## [[bench]]
-## name = "ledger"
-## harness = false
-## 
-## [[bench]]
-## name = "signature"
-## harness = false
-## 
-## [[bench]]
-## name = "streamer"
-## harness = false
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "bank"
+harness = false
+
+[[bench]]
+name = "banking_stage"
+harness = false
+
+[[bench]]
+name = "ledger"
+harness = false
+
+[[bench]]
+name = "signature"
+harness = false
+
+[[bench]]
+name = "streamer"
+harness = false
