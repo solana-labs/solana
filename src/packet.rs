@@ -25,7 +25,7 @@ pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
 pub const PACKET_DATA_SIZE: usize = 256;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,

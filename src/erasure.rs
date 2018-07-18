@@ -334,16 +334,19 @@ pub fn recover(
 
         // if we're not missing data, or if we have too much missin but have enough coding
         if data_missing == 0 || (data_missing + coding_missing) > NUM_CODING {
-            debug!(
+            trace!(
                 "1: start: {} skipping recovery data: {} coding: {}",
-                block_start, data_missing, coding_missing
+                block_start,
+                data_missing,
+                coding_missing
             );
             block_start += NUM_DATA;
             continue;
         }
-        debug!(
+        trace!(
             "2: recovering: data: {} coding: {}",
-            data_missing, coding_missing
+            data_missing,
+            coding_missing
         );
         let mut blobs: Vec<SharedBlob> = Vec::with_capacity(NUM_DATA + NUM_CODING);
         let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
@@ -359,6 +362,7 @@ pub fn recover(
                 if meta.is_none() {
                     let bl = window[j].data.clone().unwrap();
                     meta = Some(bl.read().unwrap().meta.clone());
+                    trace!("meta at {} {:?}", i, meta);
                 }
                 blobs.push(
                     window[j]
@@ -392,7 +396,7 @@ pub fn recover(
                 window[j].coding = Some(n.clone());
                 //mark the missing memory
                 blobs.push(n);
-                erasures.push((i - block_start + NUM_DATA) as i32);
+                erasures.push(((i - coding_start) + NUM_DATA) as i32);
             }
         }
         erasures.push(-1);
@@ -406,6 +410,7 @@ pub fn recover(
         for b in &blobs {
             locks.push(b.write().expect("'locks' arr in pb fn recover"));
         }
+
         {
             let mut coding_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_CODING);
             let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
@@ -427,7 +432,12 @@ pub fn recover(
         }
         for i in &erasures[..erasures.len() - 1] {
             let idx = *i as usize;
-            let data_size = locks[idx].get_data_size().unwrap() - BLOB_HEADER_SIZE as u64;
+            let mut data_size = locks[idx].get_data_size().unwrap();
+
+            trace!("data_size at {} {}", *i, data_size);
+
+            data_size -= BLOB_HEADER_SIZE as u64;
+
             locks[idx].meta = meta.clone().unwrap();
             locks[idx].set_size(data_size as usize);
             trace!(
@@ -519,7 +529,7 @@ mod test {
                     print!("{:>w$} ", window_l2.data()[i], w = 2);
                 }
             } else {
-                print!("data null");
+                print!("data null ");
             }
             if w.coding.is_some() {
                 let window_l1 = w.coding.clone().unwrap();
@@ -599,30 +609,71 @@ mod test {
         println!("** after-gen-coding:");
         print_window(&window);
 
+        println!("** whack data block:");
+        // test erasing a data block
         let erase_offset = offset;
         // Create a hole in the window
         let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
+        print_window(&window);
 
         // Recover it from coding
         assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
-        // Check the result
-        let window_l = window[erase_offset].data.clone().unwrap();
-        let window_l2 = window_l.read().unwrap();
-        let ref_l = refwindow.clone().unwrap();
-        let ref_l2 = ref_l.read().unwrap();
-        assert_eq!(
-            window_l2.data[..(data_len + BLOB_HEADER_SIZE)],
-            ref_l2.data[..(data_len + BLOB_HEADER_SIZE)]
-        );
-        assert_eq!(window_l2.meta.size, ref_l2.meta.size);
-        assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
-        assert_eq!(window_l2.meta.port, ref_l2.meta.port);
-        assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
-        assert_eq!(window_l2.get_index().unwrap(), erase_offset as u64);
+        {
+            // Check the result, block is here to drop locks
+
+            let window_l = window[erase_offset].data.clone().unwrap();
+            let window_l2 = window_l.read().unwrap();
+            let ref_l = refwindow.clone().unwrap();
+            let ref_l2 = ref_l.read().unwrap();
+            assert_eq!(
+                window_l2.data[..(data_len + BLOB_HEADER_SIZE)],
+                ref_l2.data[..(data_len + BLOB_HEADER_SIZE)]
+            );
+            assert_eq!(window_l2.meta.size, ref_l2.meta.size);
+            assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
+            assert_eq!(window_l2.meta.port, ref_l2.meta.port);
+            assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
+            assert_eq!(window_l2.get_index().unwrap(), erase_offset as u64);
+        }
+
+        println!("** whack coding block and data block");
+        // test erasing a coding block
+
+        let erase_offset = offset + erasure::NUM_DATA - erasure::NUM_CODING;
+        // Create a hole in the window
+
+        blob_recycler.recycle(window[erase_offset].data.clone().unwrap());
+        window[erase_offset].data = None;
+
+        let refwindow = window[erase_offset].coding.clone();
+        window[erase_offset].coding = None;
+        print_window(&window);
+
+        // Recover it from coding
+        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
+        println!("** after-recover:");
+        print_window(&window);
+
+        {
+            // Check the result, block is here to drop locks
+            let window_l = window[erase_offset].coding.clone().unwrap();
+            let window_l2 = window_l.read().unwrap();
+            let ref_l = refwindow.clone().unwrap();
+            let ref_l2 = ref_l.read().unwrap();
+            assert_eq!(
+                window_l2.data[..(data_len + BLOB_HEADER_SIZE)],
+                ref_l2.data[..(data_len + BLOB_HEADER_SIZE)]
+            );
+            assert_eq!(window_l2.meta.size, ref_l2.meta.size);
+            assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
+            assert_eq!(window_l2.meta.port, ref_l2.meta.port);
+            assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
+            assert_eq!(window_l2.get_index().unwrap(), erase_offset as u64);
+        }
     }
 
     //    //TODO This needs to be reworked
