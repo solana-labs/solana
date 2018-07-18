@@ -10,7 +10,7 @@ extern crate tokio_io;
 use bincode::deserialize;
 use clap::{App, Arg};
 use solana::crdt::NodeInfo;
-use solana::drone::{Drone, DroneRequest};
+use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
@@ -85,7 +85,7 @@ fn main() {
         request_cap = None;
     }
 
-    let drone_addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
+    let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,

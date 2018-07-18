@@ -16,6 +16,7 @@ use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 1_000_000;
+pub const DRONE_PORT: u16 = 9900;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum DroneRequest {
