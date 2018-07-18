@@ -79,7 +79,7 @@ common_start_setup() {
 
   # Killing sshguard for now. TODO: Find a better solution
   # sshguard is blacklisting IP address after ssh-keyscan and ssh login attempts
-  ssh -n -f "$remote_user@$ip_addr" " \
+  ssh "$remote_user@$ip_addr" " \
     set -ex; \
     sudo service sshguard stop; \
     sudo apt-get --assume-yes install rsync libssl-dev; \
@@ -92,6 +92,7 @@ common_start_setup() {
       rsync -vPrz "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
       rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
       rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
+      rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
     } >>log/"$ip_addr".log
   fi
 }
@@ -101,7 +102,6 @@ start_leader() {
 
   {
     rsync -vPrz ~/.cargo/bin/solana* "$remote_user@$ip_addr":~/.cargo/bin/
-    rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
     rsync -vPrz ./fetch-perf-libs.sh "$remote_user@$ip_addr":~/solana/
     ssh -n -f "$remote_user@$ip_addr" 'cd solana; FORCE=1 ./multinode-demo/remote_leader.sh'
   } >>log/"$1".log
@@ -114,7 +114,6 @@ start_leader() {
 start_validator() {
   common_start_setup "$1"
 
-  ssh "$remote_user@$ip_addr" "rsync -vPrz ""$remote_user@$leader_ip"":~/solana/multinode-demo ~/solana/" >>log/"$1".log
   ssh -n -f "$remote_user@$ip_addr" "cd solana; FORCE=1 ./multinode-demo/remote_validator.sh $leader_ip" >>log/"$1".log
 }
 
@@ -128,9 +127,6 @@ start_all_nodes() {
   mkdir -p log
 
   for ip_addr in "${ip_addr_array[@]}"; do
-    ssh-keygen -R "$ip_addr" >log/local.log
-    ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts 2>/dev/null
-
     if ((!count)); then
       # Start the leader on the first node
       echo "Leader node $ip_addr, killing previous instance and restarting"
@@ -159,6 +155,9 @@ stop_all_nodes() {
   SECONDS=0
   local count=0
   for ip_addr in "${ip_addr_array[@]}"; do
+    ssh-keygen -R "$ip_addr" >log/local.log
+    ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts 2>/dev/null
+
     echo "Stopping node[$count] $ip_addr. Remote user $remote_user"
 
     ssh -n -f "$remote_user@$ip_addr" " \
@@ -176,7 +175,7 @@ stop_all_nodes() {
 }
 
 if [[ $command == "start" ]]; then
-  #build_project
+  build_project
   stop_all_nodes
   start_all_nodes
 elif [[ $command == "stop" ]]; then
