@@ -49,9 +49,23 @@ while read -r vmName vmZone status; do
   vmlist+=("$vmName:$vmZone")
 done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
 
+
+wait_for_node() {
+  declare pid=$1
+
+  declare ok=true
+  wait "$pid" || ok=false
+  cat "log-$pid.txt"
+  if ! $ok; then
+    echo ^^^ +++
+    exit 1
+  fi
+}
+
+
 echo "--- Refreshing leader for $publicUrl"
 leader=true
-logfiles=()
+pids=()
 for info in "${vmlist[@]}"; do
   vmName=${info%:*}
   vmZone=${info#*:}
@@ -87,30 +101,30 @@ EOF
       --command="bash ./autogen-refresh-$vmName.sh"
     echo "Succeeded in ${SECONDS} seconds"
   ) > "log-$vmName.txt" 2>&1 &
+  pid=$!
+  # Rename log file so it can be discovered later by $pid
+  mv "log-$vmName.txt" "log-$pid.txt"
 
   if $leader; then
     echo Waiting for leader...
     # Wait for the leader to initialize before starting the validators
     # TODO: Remove this limitation eventually.
-    wait
+    wait_for_node "$pid"
 
-    cat "log-$vmName.txt"
     echo "--- Refreshing validators"
   else
     #  Slow down deployment to ~30 machines a minute to avoid triggering GCP login
     #  quota limits (the previous |scp| and |ssh| each count as a login)
-    sleep 2
+    sleep 3
 
-    logfiles+=("log-$vmName.txt")
+    pids+=("$pid")
   fi
   leader=false
 done
 
 echo --- Waiting for validators
-wait
-
-for log in "${logfiles[@]}"; do
-  cat "$log"
+for pid in "${pids[@]}"; do
+  wait_for_node "$pid"
 done
 
 echo "--- $publicUrl sanity test"
