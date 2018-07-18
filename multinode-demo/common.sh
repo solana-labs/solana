@@ -26,9 +26,10 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
     fi
   }
   rsync="$SNAP"/bin/rsync
-  leader_logger="$SNAP/bin/multilog t $SNAP_DATA/leader"
-  validator_logger="$SNAP/bin/multilog t $SNAP_DATA/validator"
-  drone_logger="$SNAP/bin/multilog t $SNAP_DATA/drone"
+  multilog="$SNAP/bin/multilog t s16777215"
+  leader_logger="$multilog $SNAP_DATA/leader"
+  validator_logger="$multilog t $SNAP_DATA/validator"
+  drone_logger="$multilog $SNAP_DATA/drone"
   # Create log directories manually to prevent multilog from creating them as
   # 0700
   mkdir "$SNAP_DATA"/{drone,leader,validator}
