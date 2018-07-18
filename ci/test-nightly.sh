@@ -15,6 +15,9 @@ _ cargo build --verbose --features unstable
 _ cargo test --verbose --features unstable
 _ cargo clippy -- --deny=warnings
 
+exit 0
+
+# Coverage disabled (see issue #433)
 _ cargo cov test
 _ cargo cov report
 
