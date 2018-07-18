@@ -29,6 +29,9 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   leader_logger="$SNAP/bin/multilog t $SNAP_DATA/leader"
   validator_logger="$SNAP/bin/multilog t $SNAP_DATA/validator"
   drone_logger="$SNAP/bin/multilog t $SNAP_DATA/drone"
+  # Create log directories manually to prevent multilog from creating them as
+  # 0700
+  mkdir "$SNAP_DATA"/{drone,leader,validator}
 
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
   SOLANA_CUDA="$(snapctl get enable-cuda)"
