@@ -421,6 +421,9 @@ impl Crdt {
                 v.debug_id(),
                 v.version
             );
+            if self.table.get(&v.id).is_none() {
+                inc_new_counter!("crdt-insert-new_entry", 1, 1);
+            }
 
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
