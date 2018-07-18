@@ -424,12 +424,12 @@ pub fn recover(
             let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
             let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
             for (i, l) in locks.iter_mut().enumerate() {
-                if i >= NUM_DATA {
-                    trace!("pushing coding: {}", i);
-                    coding_ptrs.push(&mut l.data[..size.unwrap()]);
-                } else {
+                if i < NUM_DATA {
                     trace!("pushing data: {}", i);
                     data_ptrs.push(&mut l.data[..size.unwrap()]);
+                } else {
+                    trace!("pushing coding: {}", i);
+                    coding_ptrs.push(&mut l.data_mut()[..size.unwrap()]);
                 }
             }
             trace!(
@@ -445,11 +445,14 @@ pub fn recover(
         }
         for i in &erasures[..erasures.len() - 1] {
             let idx = *i as usize;
-            let mut data_size = locks[idx].get_data_size().unwrap();
 
-            trace!("data_size at {} {}", *i, data_size);
-
-            data_size -= BLOB_HEADER_SIZE as u64;
+            let mut data_size;
+            if idx < NUM_DATA {
+                data_size = locks[idx].get_data_size().unwrap();
+                data_size -= BLOB_HEADER_SIZE as u64;
+            } else {
+                data_size = size.unwrap() as u64;
+            }
 
             locks[idx].meta = meta.clone().unwrap();
             locks[idx].set_size(data_size as usize);
