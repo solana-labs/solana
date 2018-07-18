@@ -423,7 +423,6 @@ fn converge(
     threads: &mut Vec<JoinHandle<()>>,
 ) -> Vec<NodeInfo> {
     //lets spy on the network
-    let daddr = "0.0.0.0:0".parse().unwrap();
     let (spy, spy_gossip) = spy_node();
     let mut spy_crdt = Crdt::new(spy).expect("Crdt::new");
     spy_crdt.insert(&leader);
@@ -447,7 +446,7 @@ fn converge(
             .table
             .values()
             .into_iter()
-            .filter(|x| x.contact_info.rpu != daddr)
+            .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
         if v.len() >= num_nodes {

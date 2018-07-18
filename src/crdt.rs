@@ -524,7 +524,6 @@ impl Crdt {
     pub fn compute_broadcast_table(&self) -> Vec<NodeInfo> {
         let live: Vec<_> = self.alive.iter().collect();
         //thread_rng().shuffle(&mut live);
-        let daddr = "0.0.0.0:0".parse().unwrap();
         let me = &self.table[&self.me];
         let cloned_table: Vec<NodeInfo> = live.iter()
             .map(|x| &self.table[x.0])
@@ -532,7 +531,7 @@ impl Crdt {
                 if me.id == v.id {
                     //filter myself
                     false
-                } else if v.contact_info.tvu == daddr {
+                } else if !(Self::is_valid_address(v.contact_info.tvu)) {
                     trace!(
                         "{:x}:broadcast skip not listening {:x}",
                         me.debug_id(),
@@ -640,7 +639,6 @@ impl Crdt {
             .set_id(me.id)
             .expect("set_id in pub fn retransmit");
         let rblob = blob.read().unwrap();
-        let daddr = "0.0.0.0:0".parse().unwrap();
         let orders: Vec<_> = table
             .iter()
             .filter(|v| {
@@ -649,7 +647,7 @@ impl Crdt {
                 } else if me.leader_id == v.id {
                     trace!("skip retransmit to leader {:?}", v.id);
                     false
-                } else if v.contact_info.tvu == daddr {
+                } else if !(Self::is_valid_address(v.contact_info.tvu)) {
                     trace!("skip nodes that are not listening {:?}", v.id);
                     false
                 } else {
@@ -710,10 +708,9 @@ impl Crdt {
     }
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
-        let daddr = "0.0.0.0:0".parse().unwrap();
         let valid: Vec<_> = self.table
             .values()
-            .filter(|r| r.id != self.me && r.contact_info.tvu_window != daddr)
+            .filter(|r| r.id != self.me && Self::is_valid_address(r.contact_info.tvu_window))
             .collect();
         if valid.is_empty() {
             Err(CrdtError::NoPeers)?;
@@ -1142,6 +1139,10 @@ impl Crdt {
                 }
             })
             .unwrap()
+    }
+
+    pub fn is_valid_address(addr: SocketAddr) -> bool {
+        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast()) 
     }
 }
 
