@@ -212,6 +212,7 @@ impl Packets {
                 Ok((nrecv, from)) => {
                     p.meta.size = nrecv;
                     p.meta.set_addr(&from);
+                    trace!("got {} bytes from {}", nrecv, from);
                     if i == 0 {
                         socket.set_nonblocking(true)?;
                     }
@@ -405,6 +406,7 @@ impl Blob {
                     Ok((nrecv, from)) => {
                         p.meta.size = nrecv;
                         p.meta.set_addr(&from);
+                        trace!("got {} bytes from {}", nrecv, from);
                         if i == 0 {
                             socket.set_nonblocking(true)?;
                         }

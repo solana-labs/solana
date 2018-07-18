@@ -126,7 +126,7 @@ pub fn responder(
 //TODO, we would need to stick block authentication before we create the
 //window.
 fn recv_blobs(recycler: &BlobRecycler, sock: &UdpSocket, s: &BlobSender) -> Result<()> {
-    trace!("receiving on {}", sock.local_addr().unwrap());
+    trace!("recv_blobs: receiving on {}", sock.local_addr().unwrap());
     let dq = Blob::recv_from(recycler, sock)?;
     if !dq.is_empty() {
         s.send(dq)?;

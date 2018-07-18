@@ -458,9 +458,11 @@ impl Crdt {
     /// challenging part is that we are on a permissionless network
     pub fn purge(&mut self, now: u64) {
         if self.table.len() <= MIN_TABLE_SIZE {
+            trace!("purge: skipped: table too small: {}", self.table.len());
             return;
         }
         if self.leader_data().is_none() {
+            trace!("purge: skipped: no leader_data");
             return;
         }
         let leader_id = self.leader_data().unwrap().id;
@@ -995,8 +997,8 @@ impl Crdt {
         match deserialize(&blob.data[..blob.meta.size]) {
             // TODO sigverify these
             Ok(Protocol::RequestUpdates(v, from_rd)) => {
-                trace!("RequestUpdates {}", v);
                 let addr = from_rd.contact_info.ncp;
+                trace!("RequestUpdates {} from {}", v, addr);
                 let me = obj.read().unwrap();
                 // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
                 let (from, ups, data) = me.get_updates_since(v);
@@ -1029,16 +1031,16 @@ impl Crdt {
                     None
                 }
             }
-            Ok(Protocol::ReceiveUpdates(from, ups, data, external_liveness)) => {
+            Ok(Protocol::ReceiveUpdates(from, update_index, data, external_liveness)) => {
                 trace!(
-                    "ReceivedUpdates {:x} {} {}",
+                    "ReceivedUpdates from={:x} update_index={} len={}",
                     make_debug_id(&from),
-                    ups,
+                    update_index,
                     data.len()
                 );
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
-                    .apply_updates(from, ups, &data, &external_liveness);
+                    .apply_updates(from, update_index, &data, &external_liveness);
                 None
             }
             Ok(Protocol::RequestWindowIndex(from, ix)) => {
