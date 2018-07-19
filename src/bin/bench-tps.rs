@@ -162,7 +162,7 @@ fn main() {
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
 
-    let matches = App::new("solana-client-demo")
+    let matches = App::new("solana-bench-tps")
         .arg(
             Arg::with_name("leader")
                 .short("l")

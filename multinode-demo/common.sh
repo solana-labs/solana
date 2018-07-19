@@ -24,7 +24,7 @@ fi
 if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
-    if [[ "$program" = wallet || "$program" = client-demo ]]; then
+    if [[ "$program" = wallet || "$program" = bench-tps ]]; then
       # TODO: Merge wallet.sh/client.sh functionality into
       #       solana-wallet/solana-demo-client proper and remove this special case
       printf "%s/bin/solana-%s" "$SNAP" "$program"
@@ -84,7 +84,7 @@ else
   fi
 fi
 
-solana_client_demo=$(solana_program client-demo)
+solana_bench_tps=$(solana_program bench-tps)
 solana_wallet=$(solana_program wallet)
 solana_drone=$(solana_program drone)
 solana_fullnode=$(solana_program fullnode)

@@ -46,7 +46,7 @@ while true; do
     client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
     [[ -r $client_json ]] || $solana_keygen -o "$client_json"
 
-    $solana_client_demo \
+    $solana_bench_tps \
       -n "$count" \
       -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
       -k "$SOLANA_CONFIG_CLIENT_DIR"/client.json \
