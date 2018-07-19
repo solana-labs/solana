@@ -1,4 +1,5 @@
 #!/bin/bash -e
+
 here=$(dirname "$0")
 cd "$here"/..
 export RUST_BACKTRACE=1
