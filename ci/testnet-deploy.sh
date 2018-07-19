@@ -75,7 +75,7 @@ if ! $ROLLING_UPDATE; then
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
       --command="echo sudo snap remove solana" &
 
-    if [[ $((count % 10)) = 0 ]]; then
+    if [[ $((count % 5)) = 0 ]]; then
       #  Slow down deployment to avoid triggering GCP login
       #  quota limits (each |ssh| counts as a login)
       sleep 3
