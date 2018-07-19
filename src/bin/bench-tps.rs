@@ -12,7 +12,7 @@ use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::hash::Hash;
-use solana::nat::{udp_public_bind, udp_random_bind};
+use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
@@ -166,6 +166,7 @@ fn main() {
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
+    let mut addr = None;
 
     let matches = App::new("solana-bench-tps")
         .arg(
@@ -214,6 +215,14 @@ fn main() {
                 .short("c")
                 .help("exit immediately after converging"),
         )
+        .arg(
+            Arg::with_name("addr")
+                .short("a")
+                .long("addr")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("address to advertise to the network"),
+        )
         .get_matches();
 
     let leader: NodeInfo;
@@ -238,12 +247,16 @@ fn main() {
         time_sec = s.to_string().parse().expect("integer");
     }
 
+    if let Some(s) = matches.value_of("addr") {
+        addr = Some(s.to_string());
+    }
+
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, &signal, num_nodes, &mut c_threads);
+    let validators = converge(&leader, &signal, num_nodes, &mut c_threads, addr);
 
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
@@ -439,8 +452,18 @@ fn mk_client(r: &NodeInfo) -> ThinClient {
     )
 }
 
-fn spy_node() -> (NodeInfo, UdpSocket) {
-    let gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
+fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
+    let gossip_socket_pair;
+    if let Some(a) = addr {
+        gossip_socket_pair = UdpSocketPair {
+            addr: a.parse().unwrap(),
+            receiver: UdpSocket::bind("0.0.0.0:0").unwrap(),
+            sender: UdpSocket::bind("0.0.0.0:0").unwrap(),
+        };
+    } else {
+        gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
+    }
+
     let pubkey = KeyPair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
     assert!(!gossip_socket_pair.addr.ip().is_unspecified());
@@ -462,9 +485,10 @@ fn converge(
     exit_signal: &Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
+    addr: Option<String>,
 ) -> Vec<NodeInfo> {
     //lets spy on the network
-    let (spy, spy_gossip) = spy_node();
+    let (spy, spy_gossip) = spy_node(addr);
     let mut spy_crdt = Crdt::new(spy).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
