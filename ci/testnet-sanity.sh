@@ -4,6 +4,7 @@
 #
 
 cd "$(dirname "$0")/.."
+source multinode-demo/common.sh
 
 TESTNET=$1
 if [[ -z $TESTNET ]]; then
@@ -13,5 +14,11 @@ fi
 echo "--- $TESTNET: wallet sanity"
 multinode-demo/test/wallet-sanity.sh $TESTNET
 
-echo --- fin
+echo "--- $TESTNET: node count"
+if [[ $TESTNET = testnet.solana.com ]]; then
+  echo "TODO: Remove this block when a release > 0.7.0 is deployed"
+else
+  $solana_client_demo $TESTNET 50 -c  # <-- Expect to see at least 50 nodes
+fi
+
 exit 0
