@@ -81,11 +81,13 @@ impl WriteStage {
                     blob.meta.set_addr(&addr);
                     blob.meta.size = len;
                 }
+                blobs.append(shared_blob);
+                inc_new_counter!("write_stage-broadcast_sent_vote", 1);
             }
         }
         if !blobs.is_empty() {
-            inc_new_counter!("write_stage-broadcast_vote-count", votes.len());
-            inc_new_counter!("write_stage-broadcast_blobs-count", blobs.len());
+            inc_new_counter!("write_stage-broadcast_recv_vote", votes.len());
+            inc_new_counter!("write_stage-broadcast_blobs", blobs.len());
             trace!("broadcasting {}", blobs.len());
             blob_sender.send(blobs)?;
         }
