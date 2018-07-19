@@ -181,114 +181,113 @@ pub fn decode_blocks(
 pub fn generate_coding(
     window: &mut [WindowSlot],
     recycler: &BlobRecycler,
-    consumed: usize,
+    start_idx: usize,
     num_blobs: usize,
 ) -> Result<()> {
-    let mut block_start = consumed - (consumed % NUM_DATA);
+    let mut block_start = start_idx - (start_idx % NUM_DATA);
 
-    for i in consumed..consumed + num_blobs {
-        if (i % NUM_DATA) == (NUM_DATA - 1) {
-            info!(
-                "generate_coding start: {} end: {} consumed: {} num_blobs: {}",
-                block_start,
-                block_start + NUM_DATA,
-                consumed,
-                num_blobs
-            );
-
-            let mut data_blobs = Vec::with_capacity(NUM_DATA);
-            let mut max_data_size = 0;
-
-            for i in block_start..block_start + NUM_DATA {
-                let n = i % window.len();
-                trace!("window[{}] = {:?}", n, window[n].data);
-                if window[n].data.is_none() {
-                    trace!("data block is null @ {}", n);
-                    return Ok(());
-                }
-
-                let data = window[n].data.clone().unwrap();
-                max_data_size = cmp::max(data.read().unwrap().meta.size, max_data_size);
-
-                data_blobs.push(data);
-            }
-            trace!("max_data_size: {}", max_data_size);
-
-            let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-
-            let coding_start = block_start + NUM_DATA - NUM_CODING;
-            let coding_end = block_start + NUM_DATA;
-            for i in coding_start..coding_end {
-                let n = i % window.len();
-                if window[n].coding.is_none() {
-                    window[n].coding = Some(recycler.allocate());
-                }
-
-                let coding = window[n].coding.clone().unwrap();
-                let mut coding_wl = coding.write().unwrap();
-                {
-                    // copy index and id from the data blob
-                    let data = window[n].data.clone().unwrap();
-                    let data_rl = data.read().unwrap();
-                    coding_wl.set_index(data_rl.get_index().unwrap()).unwrap();
-                    coding_wl.set_id(data_rl.get_id().unwrap()).unwrap();
-                }
-                coding_wl.set_size(max_data_size);
-                if coding_wl.set_coding().is_err() {
-                    return Err(ErasureError::EncodeError);
-                }
-                trace!("coding {:?}", coding_wl.meta);
-                trace!("coding.data_size {}", coding_wl.get_data_size().unwrap());
-
-                coding_blobs.push(
-                    window[n]
-                        .coding
-                        .clone()
-                        .expect("'coding_blobs' arr in pub fn generate_coding"),
-                );
-            }
-
-            trace!("max_data_size {}", max_data_size);
-
-            let mut data_locks = Vec::with_capacity(NUM_DATA);
-            for b in &data_blobs {
-                data_locks.push(
-                    b.write()
-                        .expect("'data_locks' write lock in pub fn generate_coding"),
-                );
-            }
-
-            let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
-            for (i, l) in data_locks.iter_mut().enumerate() {
-                trace!("i: {} data: {}", i, l.data[0]);
-                data_ptrs.push(&l.data[..max_data_size]);
-            }
-
-            let mut coding_locks = Vec::with_capacity(NUM_CODING);
-            for b in &coding_blobs {
-                coding_locks.push(
-                    b.write()
-                        .expect("'coding_locks' arr in pub fn generate_coding"),
-                );
-            }
-
-            let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
-            for (i, l) in coding_locks.iter_mut().enumerate() {
-                trace!("i: {} coding: {} size: {}", i, l.data[0], max_data_size);
-                coding_ptrs.push(&mut l.data_mut()[..max_data_size]);
-            }
-
-            generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
-            debug!(
-                "consumed: {} data: {}:{} coding: {}:{}",
-                consumed,
-                block_start,
-                block_start + NUM_DATA,
-                coding_start,
-                coding_end
-            );
-            block_start += NUM_DATA;
+    loop {
+        if (block_start + NUM_DATA) > (start_idx + num_blobs) {
+            break;
         }
+        info!(
+            "generate_coding start: {} end: {} start_idx: {} num_blobs: {}",
+            block_start,
+            block_start + NUM_DATA,
+            start_idx,
+            num_blobs
+        );
+
+        let mut data_blobs = Vec::with_capacity(NUM_DATA);
+        let mut max_data_size = 0;
+
+        for i in block_start..block_start + NUM_DATA {
+            let n = i % window.len();
+            trace!("window[{}] = {:?}", n, window[n].data);
+            if window[n].data.is_none() {
+                trace!("data block is null @ {}", n);
+                return Ok(());
+            }
+
+            let data = window[n].data.clone().unwrap();
+            max_data_size = cmp::max(data.read().unwrap().meta.size, max_data_size);
+
+            data_blobs.push(data);
+        }
+        trace!("max_data_size: {}", max_data_size);
+
+        let mut coding_blobs = Vec::with_capacity(NUM_CODING);
+
+        let coding_start = block_start + NUM_DATA - NUM_CODING;
+        let coding_end = block_start + NUM_DATA;
+        for i in coding_start..coding_end {
+            let n = i % window.len();
+            if window[n].coding.is_none() {
+                window[n].coding = Some(recycler.allocate());
+            }
+
+            let coding = window[n].coding.clone().unwrap();
+            let mut coding_wl = coding.write().unwrap();
+            {
+                // copy index and id from the data blob
+                let data = window[n].data.clone().unwrap();
+                let data_rl = data.read().unwrap();
+                coding_wl.set_index(data_rl.get_index().unwrap()).unwrap();
+                coding_wl.set_id(data_rl.get_id().unwrap()).unwrap();
+            }
+            coding_wl.set_size(max_data_size);
+            if coding_wl.set_coding().is_err() {
+                return Err(ErasureError::EncodeError);
+            }
+
+            coding_blobs.push(
+                window[n]
+                    .coding
+                    .clone()
+                    .expect("'coding_blobs' arr in pub fn generate_coding"),
+            );
+        }
+
+        trace!("max_data_size {}", max_data_size);
+
+        let mut data_locks = Vec::with_capacity(NUM_DATA);
+        for b in &data_blobs {
+            data_locks.push(
+                b.write()
+                    .expect("'data_locks' write lock in pub fn generate_coding"),
+            );
+        }
+
+        let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
+        for (i, l) in data_locks.iter_mut().enumerate() {
+            trace!("i: {} data: {}", i, l.data[0]);
+            data_ptrs.push(&l.data[..max_data_size]);
+        }
+
+        let mut coding_locks = Vec::with_capacity(NUM_CODING);
+        for b in &coding_blobs {
+            coding_locks.push(
+                b.write()
+                    .expect("'coding_locks' arr in pub fn generate_coding"),
+            );
+        }
+
+        let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
+        for (i, l) in coding_locks.iter_mut().enumerate() {
+            trace!("i: {} coding: {} size: {}", i, l.data[0], max_data_size);
+            coding_ptrs.push(&mut l.data_mut()[..max_data_size]);
+        }
+
+        generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
+        debug!(
+            "start_idx: {} data: {}:{} coding: {}:{}",
+            start_idx,
+            block_start,
+            block_start + NUM_DATA,
+            coding_start,
+            coding_end
+        );
+        block_start += NUM_DATA;
     }
     Ok(())
 }
@@ -300,27 +299,20 @@ pub fn generate_coding(
 pub fn recover(
     recycler: &BlobRecycler,
     window: &mut [WindowSlot],
-    consumed: usize,
-    received: usize,
+    start: usize,
+    num_blobs: usize,
 ) -> Result<()> {
-    //recover with erasure coding
-    if received <= consumed {
-        return Ok(());
-    }
-    let num_blocks = (received - consumed) / NUM_DATA;
-    let mut block_start = consumed - (consumed % NUM_DATA);
+    let num_blocks = num_blobs / NUM_DATA;
+    let mut block_start = start - (start % NUM_DATA);
 
     if num_blocks > 0 {
         debug!(
-            "num_blocks: {} received: {} consumed: {}",
-            num_blocks, received, consumed
+            "num_blocks: {} start: {} num_blobs: {} block_start: {}",
+            num_blocks, start, num_blobs, block_start
         );
     }
 
-    for i in 0..num_blocks {
-        if i > 100 {
-            break;
-        }
+    for _ in 0..num_blocks {
         let mut data_missing = 0;
         let mut coding_missing = 0;
         let coding_start = block_start + NUM_DATA - NUM_CODING;
@@ -635,7 +627,7 @@ mod test {
         print_window(&window);
 
         // Recover it from coding
-        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
+        assert!(erasure::recover(&blob_recycler, &mut window, offset, num_blobs).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
@@ -658,26 +650,25 @@ mod test {
         }
 
         println!("** whack coding block and data block");
-        // test erasing a coding block
-
+        // tests erasing a coding block
         let erase_offset = offset + erasure::NUM_DATA - erasure::NUM_CODING;
         // Create a hole in the window
-
-        blob_recycler.recycle(window[erase_offset].data.clone().unwrap());
+        let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
 
-        let refwindow = window[erase_offset].coding.clone();
+        blob_recycler.recycle(window[erase_offset].coding.clone().unwrap());
         window[erase_offset].coding = None;
+
         print_window(&window);
 
         // Recover it from coding
-        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + num_blobs).is_ok());
+        assert!(erasure::recover(&blob_recycler, &mut window, offset, num_blobs).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
         {
             // Check the result, block is here to drop locks
-            let window_l = window[erase_offset].coding.clone().unwrap();
+            let window_l = window[erase_offset].data.clone().unwrap();
             let window_l2 = window_l.read().unwrap();
             let ref_l = refwindow.clone().unwrap();
             let ref_l2 = ref_l.read().unwrap();

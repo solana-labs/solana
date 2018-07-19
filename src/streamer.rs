@@ -164,7 +164,7 @@ pub fn blob_receiver(
 }
 
 fn find_next_missing(
-    locked_window: &Window,
+    window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     consumed: &mut u64,
     received: &mut u64,
@@ -172,7 +172,7 @@ fn find_next_missing(
     if *received <= *consumed {
         Err(WindowError::GenericError)?;
     }
-    let window = locked_window.read().unwrap();
+    let window = window.read().unwrap();
     let reqs: Vec<_> = (*consumed..*received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
@@ -190,9 +190,8 @@ fn find_next_missing(
 
 fn repair_window(
     debug_id: u64,
-    locked_window: &Window,
+    window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
-    _recycler: &BlobRecycler,
     last: &mut u64,
     times: &mut usize,
     consumed: &mut u64,
@@ -215,7 +214,7 @@ fn repair_window(
         return Ok(());
     }
 
-    let reqs = find_next_missing(locked_window, crdt, consumed, received)?;
+    let reqs = find_next_missing(window, crdt, consumed, received)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if !reqs.is_empty() {
         inc_new_counter!("streamer-repair_window-repair", reqs.len());
@@ -308,7 +307,7 @@ fn retransmit_all_leader_blocks(
 ///            the entry height of this blob
 /// * `w` -  the index this blob would land at within the window
 /// * `consume_queue` - output, blobs to be rebroadcast are placed here
-/// * `locked_window` - the window we're operating on
+/// * `window` - the window we're operating on
 /// * `debug_id` - this node's id in a useful-for-debug format
 /// * `recycler` - where to return the blob once processed, also where
 ///                  to return old blobs from the window
@@ -319,13 +318,13 @@ fn process_blob(
     pix: u64,
     w: usize,
     consume_queue: &mut SharedBlobs,
-    locked_window: &Window,
+    window: &Window,
     debug_id: u64,
     recycler: &BlobRecycler,
     consumed: &mut u64,
     received: u64,
 ) {
-    let mut window = locked_window.write().unwrap();
+    let mut window = window.write().unwrap();
 
     // Search the window for old blobs in the window
     // of consumed to received and clear any old ones
@@ -334,7 +333,7 @@ fn process_blob(
 
         let mut old = false;
         if let Some(b) = &window[k].data {
-            old = b.read().unwrap().get_index().unwrap() < *consumed as u64;
+            old = b.read().unwrap().get_index().unwrap() < *consumed;
         }
         if old {
             if let Some(b) = mem::replace(&mut window[k].data, None) {
@@ -343,7 +342,7 @@ fn process_blob(
         }
         let mut old = false;
         if let Some(b) = &window[k].coding {
-            old = b.read().unwrap().get_index().unwrap() < *consumed as u64;
+            old = b.read().unwrap().get_index().unwrap() < *consumed;
         }
         if old {
             if let Some(b) = mem::replace(&mut window[k].coding, None) {
@@ -384,7 +383,13 @@ fn process_blob(
 
     #[cfg(feature = "erasure")]
     {
-        if erasure::recover(recycler, &mut window, *consumed as usize, received as usize).is_err() {
+        if erasure::recover(
+            recycler,
+            &mut window,
+            (*consumed % WINDOW_SIZE) as usize,
+            (received - *consumed) as usize,
+        ).is_err()
+        {
             trace!("erasure::recover failed");
         }
     }
@@ -397,14 +402,20 @@ fn process_blob(
         if window[k].data.is_none() {
             break;
         }
+        if let Some(blob) = &window[w].data {
+            assert!(blob.read().unwrap().meta.size < BLOB_SIZE);
+        }
         consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
         *consumed += 1;
+        if *consumed % WINDOW_SIZE == 0 {
+            eprintln!("window wrapped, consumed {}", *consumed);
+        }
     }
 }
 
 fn recv_window(
     debug_id: u64,
-    locked_window: &Window,
+    window: &Window,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut u64,
@@ -471,14 +482,14 @@ fn recv_window(
             pix,
             w,
             &mut consume_queue,
-            locked_window,
+            window,
             debug_id,
             recycler,
             consumed,
             *received,
         );
     }
-    print_window(debug_id, locked_window, *consumed);
+    print_window(debug_id, window, *consumed);
     trace!("sending consume_queue.len: {}", consume_queue.len());
     if !consume_queue.is_empty() {
         debug!(
@@ -495,8 +506,8 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(debug_id: u64, locked_window: &Window, consumed: u64) {
-    let buf: Vec<_> = locked_window
+fn print_window(debug_id: u64, window: &Window, consumed: u64) {
+    let buf: Vec<_> = window
         .read()
         .unwrap()
         .iter()
@@ -609,7 +620,6 @@ pub fn window(
                     debug_id,
                     &window,
                     &crdt,
-                    &recycler,
                     &mut last,
                     &mut times,
                     &mut consumed,
@@ -648,10 +658,6 @@ fn broadcast(
     print_window(me.debug_id(), window, *receive_index);
 
     for mut blobs in blobs_chunked {
-        // Insert the coding blobs into the blob stream
-        //        #[cfg(feature = "erasure")]
-        //        erasure::add_coding_blobs(recycler, &mut blobs, *receive_index);
-
         let blobs_len = blobs.len();
         debug!("{:x} broadcast blobs.len: {}", debug_id, blobs_len);
 
@@ -699,7 +705,7 @@ fn broadcast(
             erasure::generate_coding(
                 &mut window.write().unwrap(),
                 recycler,
-                *receive_index as usize,
+                (*receive_index % WINDOW_SIZE) as usize,
                 blobs_len,
             )?;
         }
