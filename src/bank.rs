@@ -307,12 +307,19 @@ impl Bank {
         );
 
         let mut tx_count = 0;
+        let mut err_count = 0;
         for r in &res {
             if r.is_ok() {
                 tx_count += 1;
             } else {
-                info!("tx error: {:?}", r);
+                if err_count == 0 {
+                    info!("tx error: {:?}", r);
+                }
+                err_count += 1;
             }
+        }
+        if err_count > 0 {
+            info!("{} errors of {} txs", err_count, err_count + tx_count);
         }
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
