@@ -328,7 +328,7 @@ fn process_blob(
 
     // Search the window for old blobs in the window
     // of consumed to received and clear any old ones
-    for ix in *consumed..(pix + 1) {
+    for ix in *consumed..(received + 1) {
         let k = (ix % WINDOW_SIZE) as usize;
 
         let mut old = false;
@@ -337,15 +337,16 @@ fn process_blob(
         }
         if old {
             if let Some(b) = mem::replace(&mut window[k].data, None) {
+                debug!("{:x}: recycling data blob at index {:}", debug_id, k);
                 recycler.recycle(b);
             }
         }
-        let mut old = false;
         if let Some(b) = &window[k].coding {
             old = b.read().unwrap().get_index().unwrap() < *consumed;
         }
         if old {
             if let Some(b) = mem::replace(&mut window[k].coding, None) {
+                debug!("{:x}: recycling coding blob at index {:}", debug_id, k);
                 recycler.recycle(b);
             }
         }
@@ -393,6 +394,15 @@ fn process_blob(
             trace!("erasure::recover failed");
         }
     }
+
+    //    // Search the window for wrong data blobs...
+    //    for ix in *consumed..(received + 1) {
+    //        let k = (ix % WINDOW_SIZE) as usize;
+    //
+    //        if let Some(b) = &window[k].data {
+    //            assert_eq!(ix, b.read().unwrap().get_index().unwrap());
+    //        }
+    //    }
 
     // push all contiguous blobs into consumed queue, increment consumed
     while *consumed < received {

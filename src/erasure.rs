@@ -167,8 +167,9 @@ pub fn decode_blocks(
     Ok(())
 }
 
-// Generate coding blocks in window starting from consumed,
-//   for each block place the coding blobs at the end of the block
+// Generate coding blocks in window starting from start_idx,
+//   for num_blobs..  For each block place the coding blobs
+//   at the end of the block like so:
 //
 //  block-size part of a Window, with each element a WindowSlot..
 //  |<======================= NUM_DATA ==============================>|
