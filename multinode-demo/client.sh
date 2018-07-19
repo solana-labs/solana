@@ -16,6 +16,7 @@ if [[ -z $leader ]]; then
   fi
 fi
 count=${2:-1}
+shift 2
 
 rsync_leader_url=$(rsync_url "$leader")
 
@@ -30,4 +31,4 @@ $solana_client_demo \
   -n "$count" \
   -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
   -k "$SOLANA_CONFIG_CLIENT_DIR"/client.json \
-
+  "$@"

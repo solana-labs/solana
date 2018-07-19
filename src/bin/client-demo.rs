@@ -195,6 +195,11 @@ fn main() {
                 .takes_value(true)
                 .help("send transactions for this many seconds"),
         )
+        .arg(
+            Arg::with_name("converge_only")
+                .short("c")
+                .help("exit immediately after converging"),
+        )
         .get_matches();
 
     let leader: NodeInfo;
@@ -225,8 +230,12 @@ fn main() {
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
     let validators = converge(&leader, &signal, num_nodes, &mut c_threads);
-    println!("Network has {} node(s)", validators.len());
+    println!("Nodes: {}", validators.len());
     assert!(validators.len() >= num_nodes);
+
+    if matches.is_present("converge_only") {
+        return;
+    }
 
     let mut client = mk_client(&leader);
 
