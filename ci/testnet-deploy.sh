@@ -7,6 +7,10 @@
 #
 cd "$(dirname "$0")/.."
 
+# TODO: Switch over to rolling updates
+ROLLING_UPDATE=false
+#ROLLING_UPDATE=true
+
 if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   echo Error: SOLANA_METRICS_CONFIG environment variable is unset
   exit 1
@@ -60,6 +64,28 @@ wait_for_node() {
   fi
 }
 
+if ! $ROLLING_UPDATE; then
+  count=1
+  for info in "${vmlist[@]}"; do
+    nodePosition="($count/${#vmlist[*]})"
+    vmName=${info%:*}
+    vmZone=${info#*:}
+    echo "--- Shutting down $vmName in zone $vmZone $nodePosition"
+    gcloud compute ssh "$vmName" --zone "$vmZone" \
+      --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+      --command="echo sudo snap remove solana" &
+
+    if [[ $((count % 10)) = 0 ]]; then
+      #  Slow down deployment to avoid triggering GCP login
+      #  quota limits (each |ssh| counts as a login)
+      sleep 3
+    fi
+
+    count=$((count + 1))
+  done
+
+  wait
+fi
 
 echo "--- Refreshing leader for $publicUrl"
 leader=true
