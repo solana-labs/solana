@@ -60,16 +60,16 @@ impl ReplicateStage {
         if res.is_err() {
             error!("process_entries {} {:?}", blobs_len, res);
         }
+        let _ = res?;
         let now = timing::timestamp();
         if now - *last_vote > VOTE_TIMEOUT_MS {
-            let height = res?;
             let last_id = bank.last_id();
             let shared_blob = blob_recycler.allocate();
             let (vote, addr) = {
                 let mut wcrdt = crdt.write().unwrap();
                 //TODO: doesn't seem like there is a synchronous call to get height and id
-                info!("replicate_stage {} {:?}", height, &last_id[..8]);
-                wcrdt.new_vote(height, last_id)
+                info!("replicate_stage {:?}", &last_id[..8]);
+                wcrdt.new_vote(last_id)
             }?;
             {
                 let mut blob = shared_blob.write().unwrap();
