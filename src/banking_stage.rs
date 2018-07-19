@@ -88,6 +88,7 @@ impl BankingStage {
             timing::duration_as_ms(&recv_start.elapsed()),
             mms.len(),
         );
+        let bank_starting_tx_count = bank.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
@@ -125,6 +126,10 @@ impl BankingStage {
             (reqs_len as f32) / (total_time_s)
         );
         inc_new_counter!("banking_stage-process_packets", count);
+        inc_new_counter!(
+            "banking_stage-process_transactions",
+            bank.transaction_count() - bank_starting_tx_count
+        );
         Ok(())
     }
 }
