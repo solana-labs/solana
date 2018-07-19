@@ -303,15 +303,13 @@ pub fn recover(
     start: usize,
     num_blobs: usize,
 ) -> Result<()> {
-    let num_blocks = num_blobs / NUM_DATA;
+    let num_blocks = (num_blobs / NUM_DATA) + 1;
     let mut block_start = start - (start % NUM_DATA);
 
-    if num_blocks > 0 {
-        debug!(
-            "num_blocks: {} start: {} num_blobs: {} block_start: {}",
-            num_blocks, start, num_blobs, block_start
-        );
-    }
+    debug!(
+        "num_blocks: {} start: {} num_blobs: {} block_start: {}",
+        num_blocks, start, num_blobs, block_start
+    );
 
     for _ in 0..num_blocks {
         let mut data_missing = 0;
