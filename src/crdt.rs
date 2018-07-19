@@ -1142,7 +1142,7 @@ impl Crdt {
     }
 
     pub fn is_valid_address(addr: SocketAddr) -> bool {
-        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast()) 
+        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast())
     }
 }
 
@@ -1376,6 +1376,12 @@ mod tests {
             "0.0.0.0:0".parse().unwrap(),
         );
         assert_eq!(Crdt::new(d8).is_ok(), true);
+        let bad_address_port = "127.0.0.1:0".parse().unwrap();
+        let bad_address_unspecified = "0.0.0.0:1234".parse().unwrap();
+        let bad_address_multicast = "224.254.0.0:1234".parse().unwrap();
+        assert!(!Crdt::is_valid_address(bad_address_port));
+        assert!(!Crdt::is_valid_address(bad_address_unspecified));
+        assert!(!Crdt::is_valid_address(bad_address_multicast));
     }
 
     #[test]
