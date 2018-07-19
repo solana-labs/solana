@@ -65,12 +65,7 @@ impl ReplicateStage {
         if now - *last_vote > VOTE_TIMEOUT_MS {
             let last_id = bank.last_id();
             let shared_blob = blob_recycler.allocate();
-            let (vote, addr) = {
-                let mut wcrdt = crdt.write().unwrap();
-                //TODO: doesn't seem like there is a synchronous call to get height and id
-                info!("replicate_stage {:?}", &last_id[..8]);
-                wcrdt.new_vote(last_id)
-            }?;
+            let (vote, addr) = crdt.write().unwrap().new_vote(last_id)?;
             {
                 let mut blob = shared_blob.write().unwrap();
                 let tx = Transaction::new_vote(&keypair, vote, last_id, 0);
@@ -82,7 +77,6 @@ impl ReplicateStage {
             }
             inc_new_counter!("replicate-vote_sent", 1);
             *last_vote = now;
-
             vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
         }
         while let Some(blob) = blobs.pop_front() {
