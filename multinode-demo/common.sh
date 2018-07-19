@@ -3,12 +3,6 @@
 # Disable complaints about unused variables in this file:
 # shellcheck disable=2034
 
-# shellcheck disable=2154 # 'here' is referenced but not assigned
-if [[ -z $here ]]; then
-  echo "|here| is not defined"
-  exit 1
-fi
-
 rsync=rsync
 leader_logger="cat"
 validator_logger="cat"
@@ -65,6 +59,12 @@ else
     printf "cargo run $maybe_release --bin solana-%s %s -- " "$program" "$features"
   }
   if [[ -n $SOLANA_CUDA ]]; then
+    # shellcheck disable=2154 # 'here' is referenced but not assigned
+    if [[ -z $here ]]; then
+      echo "|here| is not defined"
+      exit 1
+    fi
+
     # Locate perf libs downloaded by |./fetch-perf-libs.sh|
     LD_LIBRARY_PATH=$(cd "$here" && dirname "$PWD"):$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
@@ -91,7 +91,7 @@ export RUST_BACKTRACE=1
 #   export SOLANA_METRICS_CONFIG="host=<metrics host>,db=<database name>,u=<username>,p=<password>"
 #
 configure_metrics() {
-  [[ -n $SOLANA_METRICS_CONFIG ]] || return
+  [[ -n $SOLANA_METRICS_CONFIG ]] || return 0
 
   declare metrics_params
   IFS=',' read -r -a metrics_params <<< "$SOLANA_METRICS_CONFIG"
@@ -154,13 +154,13 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   if [[ "$url" =~ ^.*:.*$ ]]; then
     # assume remote-shell transport when colon is present, use $url unmodified
     echo "$url"
-    return
+    return 0
   fi
 
   if [[ -d "$url" ]]; then
     # assume local directory if $url is a valid directory, use $url unmodified
     echo "$url"
-    return
+    return 0
   fi
 
   # Default to rsync:// URL
