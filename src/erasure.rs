@@ -202,20 +202,34 @@ pub fn generate_coding(
         let mut data_blobs = Vec::with_capacity(NUM_DATA);
         let mut max_data_size = 0;
 
+        // find max_data_size, maybe bail if not all the data is here
         for i in block_start..block_start + NUM_DATA {
             let n = i % window.len();
             trace!("window[{}] = {:?}", n, window[n].data);
-            if window[n].data.is_none() {
+
+            if let Some(b) = &window[n].data {
+                max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
+            } else {
                 trace!("data block is null @ {}", n);
                 return Ok(());
             }
-
-            let data = window[n].data.clone().unwrap();
-            max_data_size = cmp::max(data.read().unwrap().meta.size, max_data_size);
-
-            data_blobs.push(data);
         }
+
         trace!("max_data_size: {}", max_data_size);
+
+        // make sure extra bytes in each blob are zero-d out for generation of
+        //  coding blobs
+        for i in block_start..block_start + NUM_DATA {
+            let n = i % window.len();
+
+            if let Some(b) = &window[n].data {
+                let mut b_wl = b.write().unwrap();
+                for i in b_wl.meta.size..max_data_size {
+                    b_wl.data[i] = 0;
+                }
+                data_blobs.push(b);
+            }
+        }
 
         let mut coding_blobs = Vec::with_capacity(NUM_CODING);
 
@@ -358,18 +372,12 @@ pub fn recover(
         for i in block_start..coding_end {
             let j = i % window.len();
 
-            if window[j].data.is_some() {
+            if let Some(b) = window[j].data.clone() {
                 if meta.is_none() {
-                    let bl = window[j].data.clone().unwrap();
-                    meta = Some(bl.read().unwrap().meta.clone());
+                    meta = Some(b.read().unwrap().meta.clone());
                     trace!("meta at {} {:?}", i, meta);
                 }
-                blobs.push(
-                    window[j]
-                        .data
-                        .clone()
-                        .expect("'blobs' arr in pb fn recover"),
-                );
+                blobs.push(b);
             } else {
                 let n = recycler.allocate();
                 window[j].data = Some(n.clone());
@@ -380,17 +388,11 @@ pub fn recover(
         }
         for i in coding_start..coding_end {
             let j = i % window.len();
-            if window[j].coding.is_some() {
+            if let Some(b) = window[j].coding.clone() {
                 if size.is_none() {
-                    let bl = window[j].coding.clone().unwrap();
-                    size = Some(bl.read().unwrap().meta.size - BLOB_HEADER_SIZE);
+                    size = Some(b.read().unwrap().meta.size - BLOB_HEADER_SIZE);
                 }
-                blobs.push(
-                    window[j]
-                        .coding
-                        .clone()
-                        .expect("'blobs' arr in pb fn recover"),
-                );
+                blobs.push(b);
             } else {
                 let n = recycler.allocate();
                 window[j].coding = Some(n.clone());
@@ -399,6 +401,19 @@ pub fn recover(
                 erasures.push(((i - coding_start) + NUM_DATA) as i32);
             }
         }
+        // now that we have size, zero out data blob tails
+        for i in block_start..coding_end {
+            let j = i % window.len();
+
+            if let Some(b) = &window[j].data {
+                let size = size.unwrap();
+                let mut b_wl = b.write().unwrap();
+                for i in b_wl.meta.size..size {
+                    b_wl.data[i] = 0;
+                }
+            }
+        }
+
         erasures.push(-1);
         trace!(
             "erasures: {:?} data_size: {} header_size: {}",
