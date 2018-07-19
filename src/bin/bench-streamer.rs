@@ -1,10 +1,5 @@
-#[macro_use]
-extern crate log;
 extern crate solana;
-#[macro_use]
-extern crate criterion;
 
-use criterion::{Bencher, Criterion};
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
@@ -62,7 +57,7 @@ fn sink(
     })
 }
 
-fn bench_streamer_with_result() -> Result<()> {
+fn main() -> Result<()> {
     let read = UdpSocket::bind("127.0.0.1:0")?;
     read.set_read_timeout(Some(Duration::new(1, 0)))?;
 
@@ -87,7 +82,7 @@ fn bench_streamer_with_result() -> Result<()> {
     let time = elapsed.as_secs() * 10000000000 + elapsed.subsec_nanos() as u64;
     let ftime = (time as f64) / 10000000000f64;
     let fcount = (end_val - start_val) as f64;
-    trace!("performance: {:?}", fcount / ftime);
+    println!("performance: {:?}", fcount / ftime);
     exit.store(true, Ordering::Relaxed);
     t_reader.join()?;
     t_producer1.join()?;
@@ -96,22 +91,3 @@ fn bench_streamer_with_result() -> Result<()> {
     t_sink.join()?;
     Ok(())
 }
-
-fn bench_streamer(bencher: &mut Bencher) {
-    bencher.iter(|| {
-        bench_streamer_with_result().unwrap();
-    });
-}
-
-fn bench(criterion: &mut Criterion) {
-    criterion.bench_function("bench_streamer", |bencher| {
-        bench_streamer(bencher);
-    });
-}
-
-criterion_group!(
-    name = benches;
-    config = Criterion::default().sample_size(2);
-    targets = bench
-);
-criterion_main!(benches);
