@@ -369,7 +369,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 60;
+    const N: usize = 300;
     let leader = TestNode::new_localhost();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
