@@ -66,7 +66,8 @@ impl WriteStage {
                 .map(|x| x.ledger_state.last_id)
                 .collect();
             let total = bank.count_valid_ids(&ids);
-            if total > 2 * ids.len() / 3 {
+            //TODO(anatoly): this isn't stake based voting
+            if total > (2 * ids.len()) / 3 {
                 *last_vote = now;
                 let last_id = bank.last_id();
                 let shared_blob = blob_recycler.allocate();
