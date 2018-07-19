@@ -749,7 +749,6 @@ mod tests {
     fn test_cound_valid_ids() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash

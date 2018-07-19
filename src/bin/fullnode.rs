@@ -76,11 +76,11 @@ fn main() -> () {
         let testnet_address_string = t.to_string();
         let testnet_addr = testnet_address_string.parse().unwrap();
 
-        FullNode::new(node, false, ledger, Some(keypair), Some(testnet_addr))
+        FullNode::new(node, false, ledger, keypair, Some(testnet_addr))
     } else {
         node.data.leader_id = node.data.id;
 
-        FullNode::new(node, true, ledger, None, None)
+        FullNode::new(node, true, ledger, keypair, None)
     };
     fullnode.join().expect("join");
 }

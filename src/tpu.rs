@@ -32,6 +32,7 @@ use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use service::Service;
+use signature::KeyPair;
 use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;

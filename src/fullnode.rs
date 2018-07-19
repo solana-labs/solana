@@ -103,7 +103,6 @@ impl FullNode {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
             let network_entry_point = NodeInfo::new_entry_point(testnet_addr);
-            let keypair = keypair_for_validator.expect("validator requires keypair");
             let server = FullNode::new_validator(
                 keypair,
                 bank,
