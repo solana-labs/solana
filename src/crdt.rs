@@ -132,7 +132,7 @@ pub struct NodeInfo {
     /// current leader identity
     pub leader_id: PublicKey,
     /// information about the state of the ledger
-    ledger_state: LedgerState,
+    pub ledger_state: LedgerState,
 }
 
 fn make_debug_id(buf: &[u8]) -> u64 {
