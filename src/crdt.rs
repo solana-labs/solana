@@ -1376,12 +1376,6 @@ mod tests {
             "0.0.0.0:0".parse().unwrap(),
         );
         assert_eq!(Crdt::new(d8).is_ok(), true);
-        let bad_address_port = "127.0.0.1:0".parse().unwrap();
-        let bad_address_unspecified = "0.0.0.0:1234".parse().unwrap();
-        let bad_address_multicast = "224.254.0.0:1234".parse().unwrap();
-        assert!(!Crdt::is_valid_address(bad_address_port));
-        assert!(!Crdt::is_valid_address(bad_address_unspecified));
-        assert!(!Crdt::is_valid_address(bad_address_multicast));
     }
 
     #[test]
@@ -1924,5 +1918,15 @@ mod tests {
         assert!(!me.alive.contains_key(&node.id));
         assert!(!me.alive.contains_key(&node_with_same_addr.id));
         assert!(me.alive[&node_with_diff_addr.id] > 0);
+    }
+    
+    #[test]
+    fn test_is_valid_address() {
+        let bad_address_port = "127.0.0.1:0".parse().unwrap();
+        assert!(!Crdt::is_valid_address(bad_address_port));
+        let bad_address_unspecified = "0.0.0.0:1234".parse().unwrap();
+        assert!(!Crdt::is_valid_address(bad_address_unspecified));
+        let bad_address_multicast = "224.254.0.0:1234".parse().unwrap();
+        assert!(!Crdt::is_valid_address(bad_address_multicast));
     }
 }
