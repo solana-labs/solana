@@ -237,8 +237,8 @@ impl Bank {
         Ok(())
     }
 
-    /// Apply only a transaction's credits. Credits from multiple transactions
-    /// may safely be applied in parallel.
+    /// Apply only a transaction's credits.
+    /// Note: It is safe to apply credits from multiple transactions in parallel.
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
