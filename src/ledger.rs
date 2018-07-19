@@ -47,7 +47,6 @@ pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> bincode::R
     for blob in blobs {
         let entry = {
             let msg = blob.read().unwrap();
-
             deserialize(&msg.data()[..msg.meta.size])
         };
 
