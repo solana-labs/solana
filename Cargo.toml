@@ -22,6 +22,10 @@ name = "solana-bench-tps"
 path = "src/bin/bench-tps.rs"
 
 [[bin]]
+name = "solana-bench-streamer"
+path = "src/bin/bench-streamer.rs"
+
+[[bin]]
 name = "solana-wallet"
 path = "src/bin/wallet.rs"
 
@@ -104,8 +108,4 @@ harness = false
 
 [[bench]]
 name = "signature"
-harness = false
-
-[[bench]]
-name = "streamer"
 harness = false
