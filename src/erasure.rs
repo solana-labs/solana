@@ -465,7 +465,8 @@ mod test {
     use crdt;
     use erasure;
     use logger;
-    use packet::{BlobRecycler, BLOB_HEADER_SIZE};
+    use packet::BlobRecycler;
+    use rand::{thread_rng, Rng};
     use signature::KeyPair;
     use signature::KeyPairUtil;
     //    use std::sync::{Arc, RwLock};
@@ -559,7 +560,6 @@ mod test {
     }
 
     fn generate_window(
-        data_len: usize,
         blob_recycler: &BlobRecycler,
         offset: usize,
         num_blobs: usize,
@@ -576,10 +576,17 @@ mod test {
             let b = blob_recycler.allocate();
             let b_ = b.clone();
             let mut w = b.write().unwrap();
+            // generate a random length, multiple of 4 between 8 and 32
+            let data_len = thread_rng().gen_range(2, 8) * 4;
+            eprintln!("data_len of {} is {}", i, data_len);
             w.set_size(data_len);
+
             for k in 0..data_len {
                 w.data_mut()[k] = (k + i) as u8;
             }
+            // overfill, simulates re-used blobs
+            w.data_mut()[data_len] = thread_rng().gen();
+
             blobs.push(b_);
         }
 
@@ -599,16 +606,29 @@ mod test {
         window
     }
 
+    fn scramble_window_tails(window: &mut [WindowSlot], num_blobs: usize) {
+        for i in 0..num_blobs {
+            if let Some(b) = &window[i].data {
+                let size = {
+                    let b_l = b.read().unwrap();
+                    b_l.meta.size
+                } as usize;
+
+                let mut b_l = b.write().unwrap();
+                b_l.data[size] = thread_rng().gen();
+            }
+        }
+    }
+
     #[test]
     pub fn test_window_recover_basic() {
         logger::setup();
-        let data_len = 16;
         let blob_recycler = BlobRecycler::default();
 
         // Generate a window
         let offset = 1;
         let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = generate_window(data_len, &blob_recycler, 0, num_blobs);
+        let mut window = generate_window(&blob_recycler, 0, num_blobs);
         println!("** after-gen-window:");
         print_window(&window);
 
@@ -625,6 +645,9 @@ mod test {
         window[erase_offset].data = None;
         print_window(&window);
 
+        // put junk in the tails, simulates re-used blobs
+        scramble_window_tails(&mut window, num_blobs);
+
         // Recover it from coding
         assert!(erasure::recover(&blob_recycler, &mut window, offset, num_blobs).is_ok());
         println!("** after-recover:");
@@ -637,11 +660,12 @@ mod test {
             let window_l2 = window_l.read().unwrap();
             let ref_l = refwindow.clone().unwrap();
             let ref_l2 = ref_l.read().unwrap();
-            assert_eq!(
-                window_l2.data[..(data_len + BLOB_HEADER_SIZE)],
-                ref_l2.data[..(data_len + BLOB_HEADER_SIZE)]
-            );
+
             assert_eq!(window_l2.meta.size, ref_l2.meta.size);
+            assert_eq!(
+                window_l2.data[..window_l2.meta.size],
+                ref_l2.data[..window_l2.meta.size]
+            );
             assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
@@ -671,11 +695,11 @@ mod test {
             let window_l2 = window_l.read().unwrap();
             let ref_l = refwindow.clone().unwrap();
             let ref_l2 = ref_l.read().unwrap();
-            assert_eq!(
-                window_l2.data[..(data_len + BLOB_HEADER_SIZE)],
-                ref_l2.data[..(data_len + BLOB_HEADER_SIZE)]
-            );
             assert_eq!(window_l2.meta.size, ref_l2.meta.size);
+            assert_eq!(
+                window_l2.data[..window_l2.meta.size],
+                ref_l2.data[..window_l2.meta.size]
+            );
             assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
