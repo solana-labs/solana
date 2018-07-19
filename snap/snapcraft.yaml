@@ -86,11 +86,10 @@ parts:
       - usr/lib
     override-build: |
       # Install CUDA 9.2 runtime
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/
-      cp -rav /usr/local/cuda-9.2/targets/x86_64-linux/lib/ $SNAPCRAFT_PART_INSTALL/usr/lib
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
-      cp -rav /usr/lib/x86_64-linux-gnu/libcuda.* $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/nvidia-396/
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
+      cp -rav /usr/local/cuda-9.2/targets/x86_64-linux/lib/libcudart.so* $SNAPCRAFT_PART_INSTALL/usr/lib
+      cp -rav /usr/lib/x86_64-linux-gnu/libcuda.so* $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
       cp -v /usr/lib/nvidia-396/libnvidia-fatbinaryloader.so* $SNAPCRAFT_PART_INSTALL/usr/lib/nvidia-396/
 
       # Build/install solana-fullnode-cuda
