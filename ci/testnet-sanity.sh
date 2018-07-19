@@ -30,7 +30,7 @@ else
   if [[ -n "$USE_SNAP" ]]; then
     # TODO: Merge client.sh functionality into solana-client-demo proper and
     #       remove this USE_SNAP case
-    cmd=$solana_client_demo
+    cmd=$solana_bench_tps
   else
     cmd=multinode-demo/client.sh
   fi

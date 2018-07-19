@@ -18,8 +18,8 @@ authors = [
 license = "Apache-2.0"
 
 [[bin]]
-name = "solana-client-demo"
-path = "src/bin/client-demo.rs"
+name = "solana-bench-tps"
+path = "src/bin/bench-tps.rs"
 
 [[bin]]
 name = "solana-wallet"
