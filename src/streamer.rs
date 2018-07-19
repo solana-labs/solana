@@ -395,21 +395,19 @@ fn process_blob(
     }
 
     // push all contiguous blobs into consumed queue, increment consumed
-    loop {
+    while *consumed < received {
         let k = (*consumed % WINDOW_SIZE) as usize;
         trace!("k: {} consumed: {}", k, *consumed);
 
         if window[k].data.is_none() {
             break;
         }
+
         if let Some(blob) = &window[w].data {
             assert!(blob.read().unwrap().meta.size < BLOB_SIZE);
         }
         consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
         *consumed += 1;
-        if *consumed % WINDOW_SIZE == 0 {
-            eprintln!("window wrapped, consumed {}", *consumed);
-        }
     }
 }
 
