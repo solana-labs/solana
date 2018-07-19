@@ -3,7 +3,7 @@
 cd "$(dirname "$0")/.."
 
 # shellcheck source=multinode-demo/common.sh
-source "$here"/common.sh
+source multinode-demo/common.sh
 
 tune_networking
 
