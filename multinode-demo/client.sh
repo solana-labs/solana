@@ -1,6 +1,11 @@
-#!/bin/bash
+#!/bin/bash -e
 #
-# usage: $0 <rsync network path to solana repo on leader machine> <number of nodes in the network>"
+# usage: $0 [leader_url] [num_nodes] [--loop] [extra args]
+#
+# leader_url       URL to the leader (defaults to ..)
+# num_nodes        Minimum number of nodes to look for while converging
+# --loop           Add this flag to cause the program to loop infinitely
+# "extra args"     Any additional arguments are pass along to solana-client-demo
 #
 
 here=$(dirname "$0")
@@ -8,6 +13,7 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 leader=$1
+shift
 if [[ -z $leader ]]; then
   if [[ -d "$SNAP" ]]; then
     leader=testnet.solana.com # Default to testnet when running as a Snap
@@ -15,20 +21,40 @@ if [[ -z $leader ]]; then
     leader=$here/.. # Default to local solana repo
   fi
 fi
-count=${2:-1}
-shift 2
+
+count=$1
+shift
+if [[ -z $count ]]; then
+  count=-1
+fi
+
+loop=
+if [[ $1 = --loop ]]; then
+  loop=1
+  shift
+fi
 
 rsync_leader_url=$(rsync_url "$leader")
 
-set -ex
-mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
-$rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
+iteration=0
+while true; do
+  (
+    set -x
+    mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
+    $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
 
-client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
-[[ -r $client_json ]] || $solana_keygen -o "$client_json"
+    client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
+    [[ -r $client_json ]] || $solana_keygen -o "$client_json"
 
-$solana_client_demo \
-  -n "$count" \
-  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
-  -k "$SOLANA_CONFIG_CLIENT_DIR"/client.json \
-  "$@"
+    $solana_client_demo \
+      -n "$count" \
+      -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
+      -k "$SOLANA_CONFIG_CLIENT_DIR"/client.json \
+      "$@"
+  )
+  [[ -n $loop ]] || exit 0
+  iteration=$((iteration + 1))
+  echo ------------------------------------------------------------------------
+  echo "Iteration: $iteration"
+  echo ------------------------------------------------------------------------
+done
