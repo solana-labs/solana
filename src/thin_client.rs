@@ -88,10 +88,11 @@ impl ThinClient {
 
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
-    pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<usize> {
+    pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<Signature> {
         let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
-            .send_to(&data, &self.transactions_addr)
+            .send_to(&data, &self.transactions_addr)?;
+        Ok(tx.sig)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -104,8 +105,7 @@ impl ThinClient {
     ) -> io::Result<Signature> {
         let now = Instant::now();
         let tx = Transaction::new(keypair, to, n, *last_id);
-        let sig = tx.sig;
-        let result = self.transfer_signed(&tx).map(|_| sig);
+        let result = self.transfer_signed(&tx);
         metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("transfer".to_string()))

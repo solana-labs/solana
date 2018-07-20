@@ -6,6 +6,7 @@
 
 use influx_db_client as influxdb;
 use metrics;
+use signature::Signature;
 use signature::{KeyPair, PublicKey};
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -94,7 +95,7 @@ impl Drone {
         }
     }
 
-    pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<usize, io::Error> {
+    pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<Signature, io::Error> {
         let tx: Transaction;
         let request_amount: u64;
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -302,15 +303,15 @@ mod tests {
             airdrop_request_amount: 50,
             client_public_key: bob_pubkey,
         };
-        let bob_result = drone.send_airdrop(bob_req).expect("send airdrop test");
-        assert!(bob_result > 0);
+        let bob_result = drone.send_airdrop(bob_req);
+        assert!(bob_result.is_ok());
 
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
             client_public_key: carlos_pubkey,
         };
-        let carlos_result = drone.send_airdrop(carlos_req).expect("send airdrop test");
-        assert!(carlos_result > 0);
+        let carlos_result = drone.send_airdrop(carlos_req);
+        assert!(carlos_result.is_ok());
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =
