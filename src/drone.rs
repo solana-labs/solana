@@ -96,7 +96,6 @@ impl Drone {
     }
 
     pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<Signature, io::Error> {
-        let tx: Transaction;
         let request_amount: u64;
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -109,7 +108,7 @@ impl Drone {
         );
         let last_id = client.get_last_id();
 
-        match req {
+        let tx = match req {
             DroneRequest::GetAirdrop {
                 airdrop_request_amount,
                 client_public_key,
@@ -119,14 +118,14 @@ impl Drone {
                     airdrop_request_amount, client_public_key
                 );
                 request_amount = airdrop_request_amount;
-                tx = Transaction::new(
+                Transaction::new(
                     &self.mint_keypair,
                     client_public_key,
                     airdrop_request_amount as i64,
                     last_id,
-                );
+                )
             }
-        }
+        };
         if self.check_request_limit(request_amount) {
             self.request_current += request_amount;
             metrics::submit(

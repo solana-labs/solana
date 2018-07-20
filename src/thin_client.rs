@@ -217,6 +217,19 @@ impl ThinClient {
         balance
     }
 
+    /// Poll the server to confirm a transaction.
+    pub fn poll_for_signature(&mut self, sig: &Signature) -> io::Result<()> {
+        let now = Instant::now();
+        while !self.check_signature(sig) {
+            if now.elapsed().as_secs() > 1 {
+                // TODO: Return a better error.
+                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
+            }
+            sleep(Duration::from_millis(100));
+        }
+        Ok(())
+    }
+
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
     pub fn check_signature(&mut self, sig: &Signature) -> bool {
@@ -304,10 +317,11 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        let _sig = client
+        let sig = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        let balance = client.poll_get_balance(&bob_pubkey);
+        client.poll_for_signature(&sig).unwrap();
+        let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
@@ -361,9 +375,10 @@ mod tests {
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
-        let _sig = client.transfer_signed(&tr2).unwrap();
+        let sig = client.transfer_signed(&tr2).unwrap();
+        client.poll_for_signature(&sig).unwrap();
 
-        let balance = client.poll_get_balance(&bob_pubkey);
+        let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
