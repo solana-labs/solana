@@ -15,18 +15,19 @@ use service::Service;
 use signature::KeyPair;
 use std::collections::VecDeque;
 use std::io::Write;
+use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{BlobReceiver, BlobSender};
+use streamer::{responder, BlobReceiver, BlobSender};
 use timing;
 use transaction::Transaction;
 use voting::entries_to_votes;
 
 pub struct WriteStage {
-    thread_hdl: JoinHandle<()>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 const VOTE_TIMEOUT_MS: u64 = 1000;
@@ -38,6 +39,7 @@ impl WriteStage {
         keypair: &KeyPair,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
+        vote_blob_sender: &BlobSender,
         entry_writer: &mut EntryWriter<W>,
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
@@ -81,7 +83,7 @@ impl WriteStage {
                     blob.meta.set_addr(&addr);
                     blob.meta.size = len;
                 }
-                blobs.append(shared_blob);
+                vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
                 inc_new_counter!("write_stage-broadcast_sent_vote", 1);
             }
         }
@@ -103,6 +105,14 @@ impl WriteStage {
         writer: W,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> (Self, BlobReceiver) {
+        let (vote_blob_sender, vote_blob_receiver) = channel();
+        let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
+        let t_responder = responder(
+            "write_stage_vote_sender",
+            send,
+            blob_recycler.clone(),
+            vote_blob_receiver,
+        );
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-writer".to_string())
@@ -114,6 +124,7 @@ impl WriteStage {
                         &keypair,
                         &bank,
                         &crdt,
+                        &vote_blob_sender,
                         &mut entry_writer,
                         &blob_sender,
                         &blob_recycler,
@@ -133,16 +144,19 @@ impl WriteStage {
             })
             .unwrap();
 
-        (WriteStage { thread_hdl }, blob_receiver)
+        let thread_hdls = vec![t_responder, thread_hdl];
+        (WriteStage { thread_hdls }, blob_receiver)
     }
 }
 
 impl Service for WriteStage {
     fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        vec![self.thread_hdl]
+        self.thread_hdls
     }
-
     fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls() {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
