@@ -20,6 +20,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
+use std::thread::Builder;
 use std::time::Duration;
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
@@ -389,27 +390,58 @@ fn test_multi_node_dynamic_network() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let validators: Vec<(NodeInfo, FullNode)> = (0..N)
+    let validators_per_thread = Arc::new(RwLock::new(Vec::new()));
+    let threads: Vec<_> = (0..10)
         .into_iter()
-        .map(|n| {
-            let keypair = KeyPair::new();
-            let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
-            let rd = validator.data.clone();
-            //send some tokens to the new validator
-            let bal =
-                send_tx_and_retry_get_balance(&leader_data, &alice, &keypair.pubkey(), Some(500));
-            assert_eq!(bal, Some(500));
-            let val = FullNode::new(
-                validator,
-                false,
-                LedgerFile::Path(ledger_path.clone()),
-                Some(keypair),
-                Some(leader_data.contact_info.ncp),
-            );
-            info!("started[{}/{}] {:x}", n, N, rd.debug_id());
-            (rd, val)
+        .map(move |i| {
+            let validators_per_thread = validators_per_thread.clone();
+            let t = Builder::new()
+                .name("child".to_string())
+                .spawn(move || {
+                    println!("Hello, world {}!", i);
+                    let validators: Vec<(NodeInfo, FullNode)> = (0..N / 10)
+                        .into_iter()
+                        .map(|n| {
+                            let keypair = KeyPair::new();
+                            let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+                            let rd = validator.data.clone();
+                            //send some tokens to the new validator
+                            let bal = send_tx_and_retry_get_balance(
+                                &leader_data,
+                                &alice,
+                                &keypair.pubkey(),
+                                Some(500),
+                            );
+                            assert_eq!(bal, Some(500));
+                            let val = FullNode::new(
+                                validator,
+                                false,
+                                LedgerFile::Path(ledger_path.clone()),
+                                Some(keypair),
+                                Some(leader_data.contact_info.ncp),
+                            );
+                            info!("started[{}/{}] {:x}", n, N, rd.debug_id());
+                            (rd, val)
+                        })
+                        .collect();
+
+                    validators_per_thread.write().unwrap().push(validators);
+                })
+                .unwrap();
+            t
         })
         .collect();
+
+    for t in threads {
+        t.join().unwrap();
+    }
+
+    let validators: Vec<(NodeInfo, FullNode)>;
+
+    for thread_vector in validators_per_thread.read().unwrap().iter() {
+        let mut validators: Vec<(NodeInfo, FullNode)>;
+        validators.extend(&thread_vector);
+    }
 
     let mut consecutive_success = 0;
     for i in 0..N {
