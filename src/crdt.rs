@@ -360,7 +360,7 @@ impl Crdt {
             warn!(
                 "{:x}: VOTE for unknown id: {:x}",
                 self.debug_id(),
-                make_debug_id(&pubkey)
+                make_debug_id(pubkey)
             );
             return;
         }
@@ -374,6 +374,15 @@ impl Crdt {
             );
             return;
         }
+        if *pubkey == self.my_data().leader_id {
+            info!(
+                "{:x}: LEADER_VOTED! {:x}",
+                self.debug_id(),
+                make_debug_id(&pubkey)
+            );
+            inc_new_counter!("crdt-insert_vote-leader_voted", 1);
+        }
+
         if v.version <= self.table[pubkey].version {
             debug!(
                 "{:x}: VOTE for old version: {:x}",
@@ -386,11 +395,13 @@ impl Crdt {
             let mut data = self.table[pubkey].clone();
             data.version = v.version;
             data.ledger_state.last_id = last_id;
+
             debug!(
                 "{:x}: INSERTING VOTE! for {:x}",
                 self.debug_id(),
                 data.debug_id()
             );
+            self.update_liveness(data.id);
             self.insert(&data);
         }
     }
@@ -1155,7 +1166,7 @@ impl Crdt {
                     return;
                 }
                 if e.is_err() {
-                    info!(
+                    debug!(
                         "{:x}: run_listen timeout, table size: {}",
                         debug_id,
                         obj.read().unwrap().table.len()

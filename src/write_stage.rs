@@ -36,15 +36,11 @@ impl WriteStage {
     /// Process any Entry items that have been published by the RecordStage.
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries<W: Write>(
-        keypair: &KeyPair,
-        bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
-        vote_blob_sender: &BlobSender,
         entry_writer: &mut EntryWriter<W>,
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
         entry_receiver: &Receiver<Vec<Entry>>,
-        last_vote: &mut u64,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
         let votes = entries_to_votes(&entries);
@@ -58,6 +54,23 @@ impl WriteStage {
         let mut blobs = VecDeque::new();
         entries.to_blobs(blob_recycler, &mut blobs);
 
+        if !blobs.is_empty() {
+            inc_new_counter!("write_stage-recv_vote", votes.len());
+            inc_new_counter!("write_stage-broadcast_blobs", blobs.len());
+            trace!("broadcasting {}", blobs.len());
+            blob_sender.send(blobs)?;
+        }
+        Ok(())
+    }
+    pub fn leader_vote(
+        debug_id: u64,
+        keypair: &KeyPair,
+        bank: &Arc<Bank>,
+        crdt: &Arc<RwLock<Crdt>>,
+        blob_recycler: &BlobRecycler,
+        vote_blob_sender: &BlobSender,
+        last_vote: &mut u64,
+    ) -> Result<()> {
         let now = timing::timestamp();
         if now - *last_vote > VOTE_TIMEOUT_MS {
             //TODO(anatoly): vote if the last id set is mostly valid
@@ -69,6 +82,13 @@ impl WriteStage {
                 .collect();
             let total = bank.count_valid_ids(&ids);
             //TODO(anatoly): this isn't stake based voting
+            info!(
+                "{:x}: valid_ids {}/{} {}",
+                debug_id,
+                total,
+                ids.len(),
+                (2 * ids.len()) / 3
+            );
             if total > (2 * ids.len()) / 3 {
                 *last_vote = now;
                 let last_id = bank.last_id();
@@ -84,18 +104,13 @@ impl WriteStage {
                     blob.meta.size = len;
                 }
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
-                inc_new_counter!("write_stage-broadcast_sent_vote", 1);
+                info!("{:x} leader_sent_vote", debug_id);
+                inc_new_counter!("write_stage-leader_sent_vote", 1);
+            } else {
             }
-        }
-        if !blobs.is_empty() {
-            inc_new_counter!("write_stage-broadcast_recv_vote", votes.len());
-            inc_new_counter!("write_stage-broadcast_blobs", blobs.len());
-            trace!("broadcasting {}", blobs.len());
-            blob_sender.send(blobs)?;
         }
         Ok(())
     }
-
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new<W: Write + Send + 'static>(
         keypair: KeyPair,
@@ -119,27 +134,36 @@ impl WriteStage {
             .spawn(move || {
                 let mut entry_writer = EntryWriter::new(&bank, writer);
                 let mut last_vote = 0;
+                let debug_id = crdt.read().unwrap().debug_id();
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
-                        &keypair,
-                        &bank,
                         &crdt,
-                        &vote_blob_sender,
                         &mut entry_writer,
                         &blob_sender,
                         &blob_recycler,
                         &entry_receiver,
-                        &mut last_vote,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                             _ => {
-                                inc_new_counter!("write_stage-error", 1);
+                                inc_new_counter!("write_stage-write_and_send_entries-error", 1);
                                 error!("{:?}", e);
                             }
                         }
                     };
+                    if let Err(e) = Self::leader_vote(
+                        debug_id,
+                        &keypair,
+                        &bank,
+                        &crdt,
+                        &blob_recycler,
+                        &vote_blob_sender,
+                        &mut last_vote,
+                    ) {
+                        inc_new_counter!("write_stage-leader_vote-error", 1);
+                        error!("{:?}", e);
+                    }
                 }
             })
             .unwrap();
