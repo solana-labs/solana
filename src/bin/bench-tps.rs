@@ -350,9 +350,13 @@ fn main() {
     let clients: Vec<_> = (0..threads).map(|_| mk_client(&leader)).collect();
 
     // generate and send transactions for the specified duration
-    let time = Duration::new(time_sec / 2, 0);
-    let mut now = Instant::now();
+    let time = Duration::new(time_sec, 0);
+    let now = Instant::now();
+    let mut reclaim_tokens_back_to_source_account = false;
     while now.elapsed() < time {
+        // ping-pong between source and destination accounts for each loop iteration
+        // this seems to be faster than trying to determine the balance of individaul
+        // accounts
         generate_and_send_txs(
             &mut client,
             &clients,
@@ -362,27 +366,9 @@ fn main() {
             txs,
             &mut last_id,
             threads,
-            false,
+            reclaim_tokens_back_to_source_account,
         );
-    }
-
-    println!("Get last ID...");
-    last_id = client.get_last_id();
-    println!("Got last ID {:?}", last_id);
-
-    now = Instant::now();
-    while now.elapsed() < time {
-        generate_and_send_txs(
-            &mut client,
-            &clients,
-            &id,
-            &keypairs,
-            &leader,
-            txs,
-            &mut last_id,
-            threads,
-            true,
-        );
+        reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
     }
 
     // Stop the sampling threads so it will collect the stats
@@ -439,6 +425,10 @@ fn main() {
         sample_period,
         total_txs,
         maxes.read().unwrap().len()
+    );
+    println!(
+        "\tAverage TPS: {}",
+        total_txs as f32 / duration_as_s(&now.elapsed())
     );
 
     // join the crdt client threads
