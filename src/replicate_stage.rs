@@ -1,7 +1,6 @@
 //! The `replicate_stage` replicates transactions broadcast by the leader.
 
 use bank::Bank;
-use bincode::serialize;
 use counter::Counter;
 use crdt::Crdt;
 use ledger;
@@ -9,35 +8,29 @@ use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::KeyPair;
-use std::collections::VecDeque;
 use std::net::UdpSocket;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{responder, BlobReceiver, BlobSender};
-use timing;
-use transaction::Transaction;
+use streamer::{responder, BlobReceiver};
+use vote_stage::VoteStage;
 use voting::entries_to_votes;
 
 pub struct ReplicateStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-const VOTE_TIMEOUT_MS: u64 = 1000;
-
 impl ReplicateStage {
     /// Process entry blobs, already in order
     fn replicate_requests(
-        keypair: &Arc<KeyPair>,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         blob_recycler: &BlobRecycler,
         window_receiver: &BlobReceiver,
-        vote_blob_sender: &BlobSender,
-        last_vote: &mut u64,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available blobs into a single vote
@@ -61,30 +54,6 @@ impl ReplicateStage {
             error!("process_entries {} {:?}", blobs_len, res);
         }
         let _ = res?;
-        let now = timing::timestamp();
-        if now - *last_vote > VOTE_TIMEOUT_MS {
-            let last_id = bank.last_id();
-            let shared_blob = blob_recycler.allocate();
-            let (vote, addr) = {
-                let mut wcrdt = crdt.write().unwrap();
-                //TODO: doesn't seem like there is a synchronous call to get height and id
-                info!("replicate_stage {:?}", &last_id[..8]);
-                wcrdt.new_vote(last_id)
-            }?;
-            {
-                let mut blob = shared_blob.write().unwrap();
-                let tx = Transaction::new_vote(&keypair, vote, last_id, 0);
-                let bytes = serialize(&tx)?;
-                let len = bytes.len();
-                blob.data[..len].copy_from_slice(&bytes);
-                blob.meta.set_addr(&addr);
-                blob.meta.size = len;
-            }
-            inc_new_counter!("replicate-vote_sent", 1);
-            *last_vote = now;
-
-            vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
-        }
         while let Some(blob) = blobs.pop_front() {
             blob_recycler.recycle(blob);
         }
@@ -96,6 +65,7 @@ impl ReplicateStage {
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
         window_receiver: BlobReceiver,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -105,34 +75,35 @@ impl ReplicateStage {
             blob_recycler.clone(),
             vote_blob_receiver,
         );
-        let skeypair = Arc::new(keypair);
+
+        let vote_stage = VoteStage::new(
+            Arc::new(keypair),
+            bank.clone(),
+            crdt.clone(),
+            blob_recycler.clone(),
+            vote_blob_sender,
+            exit,
+        );
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
-            .spawn(move || {
-                let mut timestamp: u64 = 0;
-                loop {
-                    if let Err(e) = Self::replicate_requests(
-                        &skeypair,
-                        &bank,
-                        &crdt,
-                        &blob_recycler,
-                        &window_receiver,
-                        &vote_blob_sender,
-                        &mut timestamp,
-                    ) {
-                        match e {
-                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            _ => error!("{:?}", e),
-                        }
+            .spawn(move || loop {
+                if let Err(e) =
+                    Self::replicate_requests(&bank, &crdt, &blob_recycler, &window_receiver)
+                {
+                    match e {
+                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                        _ => error!("{:?}", e),
                     }
                 }
             })
             .unwrap();
-        ReplicateStage {
-            thread_hdls: vec![t_responder, t_replicate],
-        }
+
+        let mut thread_hdls = vec![t_responder, t_replicate];
+        thread_hdls.extend(vote_stage.thread_hdls());
+
+        ReplicateStage { thread_hdls }
     }
 }
 
