@@ -360,8 +360,8 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
     assert_eq!(getbal, Some(expected));
 
-    leader_fullnode.close().unwrap();
     val_fullnode.close().unwrap();
+    leader_fullnode.close().unwrap();
     std::fs::remove_file(ledger_path).unwrap();
     std::fs::remove_file(stale_ledger_path).unwrap();
 }
