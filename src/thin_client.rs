@@ -10,6 +10,8 @@ use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
+use std::thread::sleep;
+use std::time::Duration;
 use std::time::Instant;
 use timing;
 use transaction::Transaction;
@@ -201,6 +203,7 @@ impl ThinClient {
             if balance.is_ok() && *balance.as_ref().unwrap() != 0 || now.elapsed().as_secs() > 1 {
                 break;
             }
+            sleep(Duration::from_millis(100));
         }
         metrics::submit(
             influxdb::Point::new("thinclient")
@@ -267,8 +270,6 @@ mod tests {
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use std::thread::sleep;
-    use std::time::Duration;
     use transaction::{Instruction, Plan};
 
     #[test]
