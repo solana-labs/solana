@@ -8,7 +8,20 @@ leader_logger="cat"
 validator_logger="cat"
 drone_logger="cat"
 
-if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
+if [[ $(uname) != Linux ]]; then
+  # Protect against unsupported configurations to prevent non-obvious errors
+  # later. Arguably these should be fatal errors but for now prefer tolerance.
+  if [[ -n $USE_SNAP ]]; then
+    echo "Warning: Snap is not supported on $(uname)"
+    USE_SNAP=
+  fi
+  if [[ -n $SOLANA_CUDA ]]; then
+    echo "Warning: CUDA is not supported on $(uname)"
+    SOLANA_CUDA=
+  fi
+fi
+
+if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
     if [[ "$program" = wallet || "$program" = client-demo ]]; then
@@ -33,12 +46,12 @@ if [[ -d "$SNAP" ]]; then # Running inside a Linux Snap?
   SOLANA_CUDA="$(snapctl get enable-cuda)"
   RUST_LOG="$(snapctl get rust-log)"
 
-elif [[ -n "$USE_SNAP" ]]; then # Use the Linux Snap binaries
+elif [[ -n $USE_SNAP ]]; then # Use the Linux Snap binaries
   solana_program() {
     declare program="$1"
     printf "solana.%s" "$program"
   }
-elif [[ -n "$USE_INSTALL" ]]; then # Assume |cargo install| was run
+elif [[ -n $USE_INSTALL ]]; then # Assume |cargo install| was run
   solana_program() {
     declare program="$1"
     printf "solana-%s" "$program"
@@ -53,7 +66,7 @@ else
       program=${BASH_REMATCH[1]}
       features="--features=cuda"
     fi
-    if [[ -z "$DEBUG" ]]; then
+    if [[ -z $DEBUG ]]; then
       maybe_release=--release
     fi
     printf "cargo run $maybe_release --bin solana-%s %s -- " "$program" "$features"
@@ -97,7 +110,7 @@ configure_metrics() {
   IFS=',' read -r -a metrics_params <<< "$SOLANA_METRICS_CONFIG"
   for param in "${metrics_params[@]}"; do
     IFS='=' read -r -a pair <<< "$param"
-    if [[ "${#pair[@]}" != 2 ]]; then
+    if [[ ${#pair[@]} != 2 ]]; then
       echo Error: invalid metrics parameter: "$param" >&2
     else
       declare name="${pair[0]}"
@@ -151,13 +164,13 @@ SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
 
-  if [[ "$url" =~ ^.*:.*$ ]]; then
+  if [[ $url =~ ^.*:.*$ ]]; then
     # assume remote-shell transport when colon is present, use $url unmodified
     echo "$url"
     return 0
   fi
 
-  if [[ -d "$url" ]]; then
+  if [[ -d $url ]]; then
     # assume local directory if $url is a valid directory, use $url unmodified
     echo "$url"
     return 0
