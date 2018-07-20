@@ -373,7 +373,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 60;
+    const N: usize = 25;
     let leader_kp = KeyPair::new();
     let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
