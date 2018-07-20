@@ -18,13 +18,27 @@ fi
 
 
 echo "--- $NET_URL: wallet sanity"
-multinode-demo/test/wallet-sanity.sh $NET_URL
+(
+  set -x
+  multinode-demo/test/wallet-sanity.sh $NET_URL
+)
 
 echo "--- $NET_URL: node count"
 if [[ $NET_URL = testnet.solana.com ]]; then
   echo "TODO: Remove this block when a release > 0.7.0 is deployed"
 else
-  $solana_client_demo $NET_URL $EXPECTED_NODE_COUNT -c
+  if [[ -n "$USE_SNAP" ]]; then
+    # TODO: Merge client.sh functionality into solana-client-demo proper and
+    #       remove this USE_SNAP case
+    progie=$solana_client_demo
+  else
+    progie=multinode-demo/client.sh
+  fi
+
+  (
+    set -x
+    $progie $NET_URL $EXPECTED_NODE_COUNT -c
+  )
 fi
 
 exit 0
