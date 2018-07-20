@@ -22,35 +22,48 @@ if [[ -z $SOLANA_SNAP_CHANNEL ]]; then
   SOLANA_SNAP_CHANNEL=edge
 fi
 
-case $SOLANA_SNAP_CHANNEL in
-edge)
-  publicUrl=master.testnet.solana.com
-  publicIp=$(dig +short $publicUrl | head -n1)
-  ;;
-beta)
-  publicUrl=testnet.solana.com
+# Select default network URL based on SOLANA_SNAP_CHANNEL if SOLANA_NET_URL is
+# unspecified
+if [[ -z $SOLANA_NET_URL ]]; then
+  case $SOLANA_SNAP_CHANNEL in
+  edge)
+    SOLANA_NET_URL=master.testnet.solana.com
+    ;;
+  beta)
+    SOLANA_NET_URL=testnet.solana.com
+    ;;
+  *)
+    echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
+    exit 1
+    ;;
+  esac
+fi
+
+echo "+++ Configuration"
+publicUrl="$SOLANA_NET_URL"
+if [[ $publicUrl = testnet.solana.com ]]; then
   publicIp="" # Use default value
-  ;;
-*)
-  echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
-  exit 1
-  ;;
-esac
+else
+  publicIp=$(dig +short $publicUrl | head -n1)
+fi
 
-resourcePrefix=${publicUrl//./-}
-vmlist=("$resourcePrefix":us-west1-b) # Leader is hard coded as the first entry
-validatorNamePrefix=$resourcePrefix-validator-
+echo "Network entrypoint URL: $publicUrl ($publicIp)"
+echo "Snap channel: $SOLANA_SNAP_CHANNEL"
 
-echo "--- Available validators for $publicUrl"
-filter="name~^$validatorNamePrefix"
-gcloud compute instances list --filter="$filter"
-while read -r vmName vmZone status; do
-  if [[ $status != RUNNING ]]; then
-    echo "Warning: $vmName is not RUNNING, ignoring it."
-    continue
-  fi
-  vmlist+=("$vmName:$vmZone")
-done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
+leaderName=${publicUrl//./-}
+vmlist=()
+
+findVms() {
+  declare filter="$1"
+  gcloud compute instances list --filter="$filter"
+  while read -r vmName vmZone status; do
+    if [[ $status != RUNNING ]]; then
+      echo "Warning: $vmName is not RUNNING, ignoring it."
+      continue
+    fi
+    vmlist+=("$vmName:$vmZone")
+  done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
+}
 
 wait_for_node() {
   declare pid=$1
@@ -63,6 +76,16 @@ wait_for_node() {
     exit 1
   fi
 }
+
+echo "Leader node:"
+findVms "name=$leaderName"
+[[ ${#vmlist[@]} = 1 ]] || {
+  echo "Unable to find $leaderName"
+  exit 1
+}
+
+echo "Validator nodes:"
+findVms "name~^$leaderName-validator-"
 
 if ! $ROLLING_UPDATE; then
   count=1
@@ -87,7 +110,7 @@ if ! $ROLLING_UPDATE; then
   wait
 fi
 
-echo "--- Refreshing leader for $publicUrl"
+echo "--- Refreshing leader"
 leader=true
 pids=()
 count=1
