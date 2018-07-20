@@ -30,14 +30,14 @@ else
   if [[ -n "$USE_SNAP" ]]; then
     # TODO: Merge client.sh functionality into solana-client-demo proper and
     #       remove this USE_SNAP case
-    progie=$solana_client_demo
+    cmd=$solana_client_demo
   else
-    progie=multinode-demo/client.sh
+    cmd=multinode-demo/client.sh
   fi
 
   (
     set -x
-    $progie $NET_URL $EXPECTED_NODE_COUNT -c
+    $cmd $NET_URL $EXPECTED_NODE_COUNT -c
   )
 fi
 
