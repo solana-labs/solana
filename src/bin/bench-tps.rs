@@ -151,13 +151,24 @@ fn generate_and_send_txs(
         txs as f32 / (duration_as_s(&transfer_start.elapsed()))
     );
 
-    loop {
+    let mut found_new_last_id = false;
+    // try for ~5s to get a new last_id
+    for i in 0..32 {
         let new_id = client.get_last_id();
         if *last_id != new_id {
             *last_id = new_id;
+            found_new_last_id = true;
             break;
         }
-        sleep(Duration::from_millis(100));
+        if i != 0 && (i % 8) == 0 {
+            println!("polling for new last_id try: {}", i);
+        }
+        sleep(Duration::from_millis(200));
+    }
+
+    if !found_new_last_id {
+        println!("Error: Couldn't get new last id!");
+        exit(1);
     }
 }
 
