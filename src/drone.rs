@@ -298,20 +298,6 @@ mod tests {
             Some(150_000),
         );
 
-        let bob_req = DroneRequest::GetAirdrop {
-            airdrop_request_amount: 50,
-            client_public_key: bob_pubkey,
-        };
-        let bob_result = drone.send_airdrop(bob_req);
-        assert!(bob_result.is_ok());
-
-        let carlos_req = DroneRequest::GetAirdrop {
-            airdrop_request_amount: 5_000_000,
-            client_public_key: carlos_pubkey,
-        };
-        let carlos_result = drone.send_airdrop(carlos_req);
-        assert!(carlos_result.is_ok());
-
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
@@ -323,11 +309,25 @@ mod tests {
             transactions_socket,
         );
 
-        let bob_balance = client.poll_get_balance(&bob_pubkey);
+        let bob_req = DroneRequest::GetAirdrop {
+            airdrop_request_amount: 50,
+            client_public_key: bob_pubkey,
+        };
+        let bob_sig = drone.send_airdrop(bob_req).unwrap();
+        assert!(client.poll_for_signature(&bob_sig).is_ok());
+
+        let carlos_req = DroneRequest::GetAirdrop {
+            airdrop_request_amount: 5_000_000,
+            client_public_key: carlos_pubkey,
+        };
+        let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
+        assert!(client.poll_for_signature(&carlos_sig).is_ok());
+
+        let bob_balance = client.get_balance(&bob_pubkey);
         info!("Small request balance: {:?}", bob_balance);
         assert_eq!(bob_balance.unwrap(), SMALL_BATCH);
 
-        let carlos_balance = client.poll_get_balance(&carlos_pubkey);
+        let carlos_balance = client.get_balance(&carlos_pubkey);
         info!("TPS request balance: {:?}", carlos_balance);
         assert_eq!(carlos_balance.unwrap(), TPS_BATCH);
 
