@@ -1919,7 +1919,7 @@ mod tests {
         assert!(!me.alive.contains_key(&node_with_same_addr.id));
         assert!(me.alive[&node_with_diff_addr.id] > 0);
     }
-    
+
     #[test]
     fn test_is_valid_address() {
         let bad_address_port = "127.0.0.1:0".parse().unwrap();
