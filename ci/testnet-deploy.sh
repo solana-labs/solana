@@ -183,6 +183,9 @@ for pid in "${pids[@]}"; do
 done
 
 echo "--- $publicUrl sanity test"
-USE_SNAP=1 ci/testnet-sanity.sh $publicUrl
+(
+  set -x
+  USE_SNAP=1 ci/testnet-sanity.sh $publicUrl ${#vmlist[@]}
+)
 
 exit 0
