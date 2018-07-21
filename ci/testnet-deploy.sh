@@ -84,6 +84,14 @@ findVms "name=$leaderName"
   exit 1
 }
 
+echo "Client node:"
+findVms "name=$leaderName-client"
+clientVm=
+if [[ ${#vmlist[@]} = 2 ]]; then
+  clientVm=${vmlist[1]}
+  unset 'vmlist[1]'
+fi
+
 echo "Validator nodes:"
 findVms "name~^$leaderName-validator-"
 
@@ -96,7 +104,7 @@ if ! $ROLLING_UPDATE; then
     echo "--- Shutting down $vmName in zone $vmZone $nodePosition"
     gcloud compute ssh "$vmName" --zone "$vmZone" \
       --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-      --command="echo sudo snap remove solana" &
+      --command="sudo snap remove solana" &
 
     if [[ $((count % 5)) = 0 ]]; then
       #  Slow down deployment to avoid triggering GCP login
@@ -109,6 +117,29 @@ if ! $ROLLING_UPDATE; then
 
   wait
 fi
+
+
+client_run() {
+  declare message=$1
+  declare cmd=$2
+  [[ -n $clientVm ]] || return 0;
+  vmName=${clientVm%:*}
+  vmZone=${clientVm#*:}
+  echo "--- $message $vmName in zone $vmZone"
+  gcloud compute ssh "$vmName" --zone "$vmZone" \
+    --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    --command="$cmd"
+}
+
+client_run \
+  "Shutting down" \
+  "\
+    set -x;
+    tmux list-sessions; \
+    tmux capture-pane -t solana -p; \
+    tmux kill-session -t solana; \
+    sudo snap remove solana; \
+  "
 
 echo "--- Refreshing leader"
 leader=true
@@ -187,5 +218,20 @@ echo "--- $publicUrl sanity test"
   set -x
   USE_SNAP=1 ci/testnet-sanity.sh $publicUrl ${#vmlist[@]}
 )
+
+client_run \
+  "Starting client on " \
+  "\
+    set -x;
+    sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+    snap info solana; \
+    tmux new -s solana -d \" \
+        /snap/bin/solana.client-demo $SOLANA_NET_URL ${#vmlist[@]} --loop; \
+        echo Error: client-demo should never exit; \
+        bash \
+      \"; \
+    sleep 2; \
+    tmux capture-pane -t solana -p -S -100 \
+  "
 
 exit 0
