@@ -1,9 +1,11 @@
 #[macro_use]
 extern crate log;
 extern crate bincode;
+extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
+use rayon::prelude::*;
 use solana::crdt::TestNode;
 use solana::crdt::{Crdt, NodeInfo};
 use solana::entry_writer::EntryWriter;
@@ -389,16 +391,25 @@ fn test_multi_node_dynamic_network() {
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let validators: Vec<(NodeInfo, FullNode)> = (0..N)
-        .into_iter()
+    let keypairs: Vec<(KeyPair)> = (0..N)
+        .into_par_iter()
         .map(|n| {
             let keypair = KeyPair::new();
-            let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
-            let rd = validator.data.clone();
             //send some tokens to the new validator
             let bal =
                 send_tx_and_retry_get_balance(&leader_data, &alice, &keypair.pubkey(), Some(500));
             assert_eq!(bal, Some(500));
+            info!("sent balance to[{}/{}] {:x}", n, N, keypair.pubkey());
+            keypair
+        })
+        .collect();
+
+    let validators: Vec<(NodeInfo, FullNode)> = keypairs
+        .into_par_iter()
+        .map(|keypair| {
+            let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+            let rd = validator.data.clone();
+            info!("starting {:8x} {:x}", keypair.pubkey(), rd.debug_id());
             let val = FullNode::new(
                 validator,
                 false,
@@ -406,7 +417,6 @@ fn test_multi_node_dynamic_network() {
                 Some(keypair),
                 Some(leader_data.contact_info.ncp),
             );
-            info!("started[{}/{}] {:x}", n, N, rd.debug_id());
             (rd, val)
         })
         .collect();
