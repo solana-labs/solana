@@ -28,7 +28,7 @@ if [[ $NET_URL = testnet.solana.com ]]; then
   echo "TODO: Remove this block when a release > 0.7.0 is deployed"
 else
   if [[ -n "$USE_SNAP" ]]; then
-    # TODO: Merge client.sh functionality into solana-client-demo proper and
+    # TODO: Merge client.sh functionality into solana-bench-tps proper and
     #       remove this USE_SNAP case
     cmd=$solana_bench_tps
   else
