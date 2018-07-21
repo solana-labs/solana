@@ -226,12 +226,13 @@ client_run \
     sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
     snap info solana; \
     tmux new -s solana -d \" \
-        /snap/bin/solana.client-demo $SOLANA_NET_URL ${#vmlist[@]} --loop; \
+        /snap/bin/solana.client-demo $SOLANA_NET_URL ${#vmlist[@]} --loop 2>&1 | tee /tmp/solana.log; \
         echo Error: client-demo should never exit; \
         bash \
       \"; \
     sleep 2; \
-    tmux capture-pane -t solana -p -S -100 \
+    tmux capture-pane -t solana -p -S -100; \
+    tail /tmp/solana.log; \
   "
 
 exit 0
