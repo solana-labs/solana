@@ -5,7 +5,7 @@
 # leader_url       URL to the leader (defaults to ..)
 # num_nodes        Minimum number of nodes to look for while converging
 # --loop           Add this flag to cause the program to loop infinitely
-# "extra args"     Any additional arguments are pass along to solana-client-demo
+# "extra args"     Any additional arguments are pass along to solana-bench-tps
 #
 
 here=$(dirname "$0")
