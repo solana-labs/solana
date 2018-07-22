@@ -146,7 +146,7 @@ impl ThinClient {
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will hang.
     pub fn transaction_count(&mut self) -> u64 {
-        info!("transaction_count");
+        debug!("transaction_count");
         let req = Request::GetTransactionCount;
         let data =
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
@@ -157,7 +157,7 @@ impl ThinClient {
                 .expect("buffer error in pub fn transaction_count");
 
             if let Ok(resp) = self.recv_response() {
-                info!("recv_response {:?}", resp);
+                debug!("transaction_count recv_response: {:?}", resp);
                 if let Response::TransactionCount { .. } = resp {
                     done = true;
                 }
