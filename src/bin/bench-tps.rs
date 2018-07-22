@@ -239,8 +239,21 @@ fn main() {
     let signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
     let validators = converge(&leader, &signal, num_nodes, &mut c_threads);
+
+    println!(" Node identifier | Gossip address");
+    println!("-----------------+--------------------");
+    for node in &validators {
+        println!("{:16x} | {}", node.debug_id(), node.contact_info.ncp);
+    }
     println!("Nodes: {}", validators.len());
-    assert!(validators.len() >= num_nodes);
+
+    if validators.len() < num_nodes {
+        println!(
+            "Error: Insufficient nodes discovered.  Expecting {} or more",
+            num_nodes
+        );
+        exit(1);
+    }
 
     if matches.is_present("converge_only") {
         return;
