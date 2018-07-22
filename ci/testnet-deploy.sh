@@ -118,6 +118,10 @@ if ! $ROLLING_UPDATE; then
   wait
 fi
 
+# Add "network stopping" datapoint
+netName=${SOLANA_NET_URL%testnet.solana.com}
+netName=${netName:0:8}
+ci/metrics_write_datapoint.sh "testnet-deploy,name=\"$netName\" stop=1"
 
 client_run() {
   declare message=$1
@@ -234,5 +238,8 @@ client_run \
     tmux capture-pane -t solana -p -S -100; \
     tail /tmp/solana.log; \
   "
+
+# Add "network started" datapoint
+ci/metrics_write_datapoint.sh "testnet-deploy,name=\"$netName\" start=1"
 
 exit 0

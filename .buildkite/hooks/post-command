@@ -40,11 +40,6 @@ else
   point_fields="${point_fields// /\\ }"  # Escape spaces
 
   point="job_stats,$point_tags $point_fields"
-  echo "Influx data point: $point"
-  if [[ -n $INFLUX_USERNAME && -n $INFLUX_PASSWORD ]]; then
-    echo "https://metrics.solana.com:8086/write?db=ci&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
-      | xargs curl -XPOST --data-binary "$point"
-  else
-    echo Influx user credentials not found
-  fi
+
+  ci/metrics_write_datapoint.sh "$point"
 fi
