@@ -12,6 +12,7 @@ use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::hash::Hash;
+use solana::metrics::set_panic_hook;
 use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
@@ -174,6 +175,7 @@ fn generate_and_send_txs(
 
 fn main() {
     env_logger::init();
+    set_panic_hook("bench-tps");
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
