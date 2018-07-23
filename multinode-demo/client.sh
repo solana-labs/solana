@@ -35,17 +35,19 @@ if [[ $1 = --loop ]]; then
 fi
 
 rsync_leader_url=$(rsync_url "$leader")
+(
+  set -x
+  mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
+  $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
+
+  client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
+  [[ -r $client_json ]] || $solana_keygen -o "$client_json"
+)
 
 iteration=0
 while true; do
   (
     set -x
-    mkdir -p "$SOLANA_CONFIG_CLIENT_DIR"
-    $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_CLIENT_DIR"/
-
-    client_json="$SOLANA_CONFIG_CLIENT_DIR"/client.json
-    [[ -r $client_json ]] || $solana_keygen -o "$client_json"
-
     $solana_bench_tps \
       -n "$count" \
       -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
