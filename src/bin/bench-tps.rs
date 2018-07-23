@@ -329,12 +329,11 @@ fn main() {
     let first_tx_count = client.transaction_count();
     println!("Initial transaction count {}", first_tx_count);
 
-    println!("Sampling TPS every second...",);
-
     // Setup a thread per validator to sample every period
     // collect the max transaction rate and total tx count seen
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
+    println!("Sampling TPS every {} second...", sample_period);
     let v_threads: Vec<_> = validators
         .into_iter()
         .map(|v| {
@@ -401,7 +400,7 @@ fn main() {
             maybe_flag
         );
 
-        if stats.tx == 0 {
+        if stats.tps == 0.0 {
             nodes_with_zero_tps += 1;
         }
         total_maxes += stats.tps;
