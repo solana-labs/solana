@@ -265,9 +265,9 @@ fn main() {
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
-    let signal = Arc::new(AtomicBool::new(false));
+    let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, &signal, num_nodes, &mut c_threads, addr);
+    let validators = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
 
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
@@ -336,7 +336,7 @@ fn main() {
     let v_threads: Vec<_> = validators
         .into_iter()
         .map(|v| {
-            let exit_signal = signal.clone();
+            let exit_signal = exit_signal.clone();
             let maxes = maxes.clone();
             Builder::new()
                 .name("solana-client-sample".to_string())
@@ -372,7 +372,7 @@ fn main() {
     }
 
     // Stop the sampling threads so it will collect the stats
-    signal.store(true, Ordering::Relaxed);
+    exit_signal.store(true, Ordering::Relaxed);
     for t in v_threads {
         t.join().unwrap();
     }
