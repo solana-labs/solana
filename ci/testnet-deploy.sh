@@ -228,6 +228,7 @@ client_run \
   "\
     set -x;
     sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+    sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG; \
     snap info solana; \
     tmux new -s solana -d \" \
         /snap/bin/solana.bench-tps $SOLANA_NET_URL ${#vmlist[@]} --loop 2>&1 | tee /tmp/solana.log; \
