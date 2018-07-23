@@ -115,8 +115,25 @@ impl Entry {
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the transaction is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
-        self.transactions.par_iter().all(|tx| tx.verify_plan())
-            && self.id == next_hash(start_hash, self.num_hashes, &self.transactions)
+        let tx_plans_verified = self.transactions.par_iter().all(|tx| {
+            let r = tx.verify_plan();
+            if !r {
+                error!("tx plan invalid: {:?}", tx);
+            }
+            r
+        });
+        if !tx_plans_verified {
+            return false;
+        }
+        let ref_hash = next_hash(start_hash, self.num_hashes, &self.transactions);
+        if self.id != ref_hash {
+            error!(
+                "next_hash is invalid expected: {:?} actual: {:?}",
+                self.id, ref_hash
+            );
+            return false;
+        }
+        true
     }
 }
 

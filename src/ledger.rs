@@ -22,7 +22,17 @@ impl Block for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry::new_tick(0, start_hash)];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
-        entry_pairs.all(|(x0, x1)| x1.verify(&x0.id))
+        entry_pairs.all(|(x0, x1)| {
+            let r = x1.verify(&x0.id);
+            if !r {
+                error!(
+                    "entry invalid!: {:?} num txs: {}",
+                    x1.id,
+                    x1.transactions.len()
+                );
+            }
+            r
+        })
     }
 
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>) {

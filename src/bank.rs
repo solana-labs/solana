@@ -389,6 +389,7 @@ impl Bank {
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
             if !block.verify(&self.last_id()) {
+                error!("Ledger proof of history failed at entry: {}", entry_count);
                 return Err(BankError::LedgerVerificationFailed);
             }
             entry_count += self.process_entries_tail(block, tail, tail_idx)?;
