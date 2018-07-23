@@ -372,19 +372,20 @@ fn main() {
     let mut total_txs = 0;
     let mut nodes_with_zero_tps = 0;
     let mut total_maxes = 0.0;
-    println!(" Node address        | Max TPS");
-    println!("---------------------+---------");
+    println!(" Node address        |       Max TPS | Total Transactions");
+    println!("---------------------+---------------+--------------------");
 
     for (sock, stats) in maxes.read().unwrap().iter() {
-        let mut maybe_flag = match stats.tx {
+        let maybe_flag = match stats.tx {
             0 => "!!!!!",
             _ => "",
         };
 
         println!(
-            "{:20} | {:.2} {}",
+            "{:20} | {:13.2} | {} {}",
             (*sock).to_string(),
             stats.tps,
+            stats.tx,
             maybe_flag
         );
 
