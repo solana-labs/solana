@@ -13,8 +13,9 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 leader=$1
-shift
-if [[ -z $leader ]]; then
+if [[ -n $leader ]]; then
+  shift
+else
   if [[ -d "$SNAP" ]]; then
     leader=testnet.solana.com # Default to testnet when running as a Snap
   else
@@ -23,9 +24,10 @@ if [[ -z $leader ]]; then
 fi
 
 count=$1
-shift
-if [[ -z $count ]]; then
-  count=-1
+if [[ -n $count ]]; then
+  shift
+else
+  count=1
 fi
 
 loop=
