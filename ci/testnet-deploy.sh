@@ -109,6 +109,13 @@ findVms client "name~^$leaderName-client"
 echo "Validator nodes:"
 findVms validator "name~^$leaderName-validator-"
 
+fullnode_count=0
+inc_fullnode_count() {
+  fullnode_count=$((fullnode_count + 1))
+}
+vm_foreach_in_class leader inc_fullnode_count
+vm_foreach_in_class validator inc_fullnode_count
+
 # Add "network stopping" datapoint
 netName=${SOLANA_NET_URL%testnet.solana.com}
 netName=${netName:0:8}
@@ -149,7 +156,7 @@ client_start() {
       sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG; \
       snap info solana; \
       tmux new -s solana -d \" \
-          /snap/bin/solana.bench-tps $SOLANA_NET_URL ${#vmlist[@]} --loop 2>&1 | tee /tmp/solana.log; \
+          /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop 2>&1 | tee /tmp/solana.log; \
           echo Error: bench-tps should never exit; \
           bash \
         \"; \
@@ -290,13 +297,6 @@ wait_for_pids validators
 
 echo "--- $publicUrl sanity test"
 (
-  fullnode_count=0
-  inc_fullnode_count() {
-    fullnode_count=$((fullnode_count + 1))
-  }
-  vm_foreach_in_class leader inc_fullnode_count
-  vm_foreach_in_class validator inc_fullnode_count
-
   set -x
   USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
 )
