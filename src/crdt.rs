@@ -506,19 +506,6 @@ impl Crdt {
         }
     }
 
-    pub fn index_blobs(me: &NodeInfo, blobs: &[SharedBlob], receive_index: &mut u64) -> Result<()> {
-        // enumerate all the blobs, those are the indices
-        trace!("{:x}: INDEX_BLOBS {}", me.debug_id(), blobs.len());
-        for (i, b) in blobs.iter().enumerate() {
-            // only leader should be broadcasting
-            let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
-            blob.set_id(me.id).expect("set_id in pub fn broadcast");
-            blob.set_index(*receive_index + i as u64)
-                .expect("set_index in pub fn broadcast");
-        }
-
-        Ok(())
-    }
     /// compute broadcast table
     /// # Remarks
     pub fn compute_broadcast_table(&self) -> Vec<NodeInfo> {

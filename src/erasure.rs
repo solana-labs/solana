@@ -1,6 +1,7 @@
 // Support erasure coding
-use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE};
+use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE, BLOB_SIZE};
 use std::cmp;
+use std::mem;
 use std::result;
 use streamer::WindowSlot;
 
@@ -179,7 +180,33 @@ pub fn decode_blocks(
 //  +---+ +---+ +---+ +---+ +---+  . . .  +---+ +---+ +---+ +---+ +---+
 //  |   | |   | |   | |   | |   |         |   | | C | | C | | C | | C |
 //  +---+ +---+ +---+ +---+ +---+         +---+ +---+ +---+ +---+ +---+
+//
+//  blob structure for coding, recover
+//
+//   + ------- meta is set and used by transport, meta.size is actual length
+//   |           of data in the byte array blob.data
+//   |
+//   |          + -- data is stuff shipped over the wire, and has an included
+//   |          |        header
+//   V          V
+//  +----------+------------------------------------------------------------+
+//  | meta     |  data                                                      |
+//  |+---+--   |+---+---+---+---+------------------------------------------+|
+//  || s | .   || i |   | f | s |                                          ||
+//  || i | .   || n | i | l | i |                                          ||
+//  || z | .   || d | d | a | z |     blob.data(), or blob.data_mut()      ||
+//  || e |     || e |   | g | e |                                          ||
+//  |+---+--   || x |   | s |   |                                          ||
+//  |          |+---+---+---+---+------------------------------------------+|
+//  +----------+------------------------------------------------------------+
+//             |                |<=== coding blob part for "coding" =======>|
+//             |                                                            |
+//             |<============== data blob part for "coding"  ==============>|
+//
+//
+//
 pub fn generate_coding(
+    debug_id: u64,
     window: &mut [WindowSlot],
     recycler: &BlobRecycler,
     start_idx: usize,
@@ -188,41 +215,39 @@ pub fn generate_coding(
     let mut block_start = start_idx - (start_idx % NUM_DATA);
 
     loop {
-        if (block_start + NUM_DATA) > (start_idx + num_blobs) {
+        let block_end = block_start + NUM_DATA;
+        if block_end > (start_idx + num_blobs) {
             break;
         }
         info!(
-            "generate_coding start: {} end: {} start_idx: {} num_blobs: {}",
-            block_start,
-            block_start + NUM_DATA,
-            start_idx,
-            num_blobs
+            "generate_coding {:x} start: {} end: {} start_idx: {} num_blobs: {}",
+            debug_id, block_start, block_end, start_idx, num_blobs
         );
 
-        let mut data_blobs = Vec::with_capacity(NUM_DATA);
         let mut max_data_size = 0;
 
         // find max_data_size, maybe bail if not all the data is here
-        for i in block_start..block_start + NUM_DATA {
+        for i in block_start..block_end {
             let n = i % window.len();
-            trace!("window[{}] = {:?}", n, window[n].data);
+            trace!("{:x} window[{}] = {:?}", debug_id, n, window[n].data);
 
             if let Some(b) = &window[n].data {
                 max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
             } else {
-                trace!("data block is null @ {}", n);
+                trace!("{:x} data block is null @ {}", debug_id, n);
                 return Ok(());
             }
         }
 
-        trace!("max_data_size: {}", max_data_size);
+        trace!("{:x} max_data_size: {}", debug_id, max_data_size);
 
-        // make sure extra bytes in each blob are zero-d out for generation of
-        //  coding blobs
-        for i in block_start..block_start + NUM_DATA {
+        let mut data_blobs = Vec::with_capacity(NUM_DATA);
+        for i in block_start..block_end {
             let n = i % window.len();
 
             if let Some(b) = &window[n].data {
+                // make sure extra bytes in each blob are zero-d out for generation of
+                //  coding blobs
                 let mut b_wl = b.write().unwrap();
                 for i in b_wl.meta.size..max_data_size {
                     b_wl.data[i] = 0;
@@ -233,37 +258,42 @@ pub fn generate_coding(
 
         let mut coding_blobs = Vec::with_capacity(NUM_CODING);
 
-        let coding_start = block_start + NUM_DATA - NUM_CODING;
-        let coding_end = block_start + NUM_DATA;
-        for i in coding_start..coding_end {
+        let coding_start = block_end - NUM_CODING;
+
+        for i in coding_start..block_end {
             let n = i % window.len();
-            if window[n].coding.is_none() {
-                window[n].coding = Some(recycler.allocate());
-            }
+            assert!(window[n].coding.is_none());
+
+            window[n].coding = Some(recycler.allocate());
 
             let coding = window[n].coding.clone().unwrap();
             let mut coding_wl = coding.write().unwrap();
-            {
-                // copy index and id from the data blob
-                let data = window[n].data.clone().unwrap();
+            for i in 0..max_data_size {
+                coding_wl.data[i] = 0;
+            }
+            // copy index and id from the data blob
+            if let Some(data) = &window[n].data {
                 let data_rl = data.read().unwrap();
-                coding_wl.set_index(data_rl.get_index().unwrap()).unwrap();
-                coding_wl.set_id(data_rl.get_id().unwrap()).unwrap();
+
+                let index = data_rl.get_index().unwrap();
+                let id = data_rl.get_id().unwrap();
+
+                trace!(
+                    "{:x} copying index {} id {:?} from data to coding",
+                    debug_id,
+                    index,
+                    id
+                );
+                coding_wl.set_index(index).unwrap();
+                coding_wl.set_id(id).unwrap();
             }
             coding_wl.set_size(max_data_size);
             if coding_wl.set_coding().is_err() {
                 return Err(ErasureError::EncodeError);
             }
 
-            coding_blobs.push(
-                window[n]
-                    .coding
-                    .clone()
-                    .expect("'coding_blobs' arr in pub fn generate_coding"),
-            );
+            coding_blobs.push(coding.clone());
         }
-
-        trace!("max_data_size {}", max_data_size);
 
         let mut data_locks = Vec::with_capacity(NUM_DATA);
         for b in &data_blobs {
@@ -275,7 +305,7 @@ pub fn generate_coding(
 
         let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
         for (i, l) in data_locks.iter_mut().enumerate() {
-            trace!("i: {} data: {}", i, l.data[0]);
+            trace!("{:x} i: {} data: {}", debug_id, i, l.data[0]);
             data_ptrs.push(&l.data[..max_data_size]);
         }
 
@@ -289,36 +319,110 @@ pub fn generate_coding(
 
         let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
         for (i, l) in coding_locks.iter_mut().enumerate() {
-            trace!("i: {} coding: {} size: {}", i, l.data[0], max_data_size);
+            trace!(
+                "{:x} i: {} coding: {} size: {}",
+                debug_id,
+                i,
+                l.data[0],
+                max_data_size
+            );
             coding_ptrs.push(&mut l.data_mut()[..max_data_size]);
         }
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(
-            "start_idx: {} data: {}:{} coding: {}:{}",
-            start_idx,
-            block_start,
-            block_start + NUM_DATA,
-            coding_start,
-            coding_end
+            "{:x} start_idx: {} data: {}:{} coding: {}:{}",
+            debug_id, start_idx, block_start, block_end, coding_start, block_end
         );
-        block_start += NUM_DATA;
+        block_start = block_end;
     }
     Ok(())
 }
 
+// examine the window beginning at block_start for missing or
+//  stale (based on block_start_idx) blobs
+// if a blob is stale, remove it from the window slot
+fn find_missing(
+    debug_id: u64,
+    block_start_idx: u64,
+    block_start: usize,
+    window: &mut [WindowSlot],
+    recycler: &BlobRecycler,
+) -> (usize, usize) {
+    let mut data_missing = 0;
+    let mut coding_missing = 0;
+    let block_end = block_start + NUM_DATA;
+    let coding_start = block_start + NUM_DATA - NUM_CODING;
+
+    // count missing blobs in the block
+    for i in block_start..block_end {
+        let idx = (i - block_start) as u64 + block_start_idx;
+        let n = i % window.len();
+
+        // swap blob out with None, if it's in the right place, put it back
+        if let Some(blob) = mem::replace(&mut window[n].data, None) {
+            let blob_idx = blob.read().unwrap().get_index().unwrap();
+            if blob_idx == idx {
+                trace!("recover {:x}: idx: {} good data", debug_id, idx);
+                mem::replace(&mut window[n].data, Some(blob));
+            } else {
+                trace!(
+                    "recover {:x}: idx: {} old data {}, recycling",
+                    debug_id,
+                    idx,
+                    blob_idx
+                );
+                recycler.recycle(blob);
+                data_missing += 1;
+            }
+        } else {
+            trace!("recover {:x}: idx: {} None data", debug_id, idx);
+            data_missing += 1;
+        }
+
+        if i >= coding_start {
+            // swap blob out with None, if it's in the right place, put it back
+            if let Some(blob) = mem::replace(&mut window[n].coding, None) {
+                let blob_idx = blob.read().unwrap().get_index().unwrap();
+                if blob_idx == idx {
+                    trace!("recover {:x}: idx: {} good coding", debug_id, idx);
+                    mem::replace(&mut window[n].coding, Some(blob));
+                } else {
+                    trace!(
+                        "recover {:x}: idx: {} old coding {}, recycling",
+                        debug_id,
+                        idx,
+                        blob_idx
+                    );
+                    recycler.recycle(blob);
+                    coding_missing += 1;
+                }
+            } else {
+                trace!("recover {:x}: idx: {} None coding", debug_id, idx);
+                coding_missing += 1;
+            }
+        }
+    }
+    (data_missing, coding_missing)
+}
+
 // Recover missing blocks into window
-//   missing blocks should be None, will use re
-//   to allocate new ones. Returns err if not enough
-//   coding blocks are present to restore
+//   missing blocks should be None or old...
+//   Use recycler to allocate new ones.
+//   If not enough coding or data blocks are present to restore
+//    any of the blocks, the block is skipped.
+//   Side effect: old blobs in a block are None'd
 pub fn recover(
+    debug_id: u64,
     recycler: &BlobRecycler,
     window: &mut [WindowSlot],
+    start_idx: u64,
     start: usize,
     num_blobs: usize,
 ) -> Result<()> {
     let num_blocks = (num_blobs / NUM_DATA) + 1;
     let mut block_start = start - (start % NUM_DATA);
+    let mut block_start_idx = start_idx - (start_idx % NUM_DATA as u64);
 
     debug!(
         "num_blocks: {} start: {} num_blobs: {} block_start: {}",
@@ -326,39 +430,37 @@ pub fn recover(
     );
 
     for _ in 0..num_blocks {
-        let mut data_missing = 0;
-        let mut coding_missing = 0;
         let coding_start = block_start + NUM_DATA - NUM_CODING;
-        let coding_end = block_start + NUM_DATA;
+        let block_end = block_start + NUM_DATA;
         trace!(
-            "recover: block_start: {} coding_start: {} coding_end: {}",
+            "recover {:x}: block_start_idx: {} block_start: {} coding_start: {} block_end: {}",
+            debug_id,
+            block_start_idx,
             block_start,
             coding_start,
-            coding_end
+            block_end
         );
-        for i in block_start..coding_end {
-            let n = i % window.len();
-            if window[n].coding.is_none() && i >= coding_start {
-                coding_missing += 1;
-            }
-            if window[n].data.is_none() {
-                data_missing += 1;
-            }
-        }
+
+        let (data_missing, coding_missing) =
+            find_missing(debug_id, block_start_idx, block_start, window, recycler);
 
         // if we're not missing data, or if we have too much missin but have enough coding
         if data_missing == 0 || (data_missing + coding_missing) > NUM_CODING {
             trace!(
-                "1: start: {} skipping recovery data: {} coding: {}",
+                "recover {:x}: start: {} skipping recovery data: {} coding: {}",
+                debug_id,
                 block_start,
                 data_missing,
                 coding_missing
             );
             block_start += NUM_DATA;
+            block_start_idx += NUM_DATA as u64;
+            // on to the next block
             continue;
         }
         trace!(
-            "2: recovering: data: {} coding: {}",
+            "recover {:x}: recovering: data: {} coding: {}",
+            debug_id,
             data_missing,
             coding_missing
         );
@@ -369,13 +471,13 @@ pub fn recover(
         let mut size = None;
 
         // add the data blobs we have into recovery blob vector
-        for i in block_start..coding_end {
+        for i in block_start..block_end {
             let j = i % window.len();
 
             if let Some(b) = window[j].data.clone() {
                 if meta.is_none() {
                     meta = Some(b.read().unwrap().meta.clone());
-                    trace!("meta at {} {:?}", i, meta);
+                    trace!("recover {:x} meta at {} {:?}", debug_id, j, meta);
                 }
                 blobs.push(b);
             } else {
@@ -386,7 +488,7 @@ pub fn recover(
                 erasures.push((i - block_start) as i32);
             }
         }
-        for i in coding_start..coding_end {
+        for i in coding_start..block_end {
             let j = i % window.len();
             if let Some(b) = window[j].coding.clone() {
                 if size.is_none() {
@@ -401,8 +503,8 @@ pub fn recover(
                 erasures.push(((i - coding_start) + NUM_DATA) as i32);
             }
         }
-        // now that we have size, zero out data blob tails
-        for i in block_start..coding_end {
+        // now that we have size (from coding), zero out data blob tails
+        for i in block_start..block_end {
             let j = i % window.len();
 
             if let Some(b) = &window[j].data {
@@ -414,14 +516,15 @@ pub fn recover(
             }
         }
 
+        // marks end of erasures
         erasures.push(-1);
         trace!(
-            "erasures: {:?} data_size: {} header_size: {}",
+            "erasures[]: {:x} {:?} data_size: {}",
+            debug_id,
             erasures,
             size.unwrap(),
-            BLOB_HEADER_SIZE
         );
-        //lock everything
+        //lock everything for write
         for b in &blobs {
             locks.push(b.write().expect("'locks' arr in pb fn recover"));
         }
@@ -431,15 +534,16 @@ pub fn recover(
             let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
             for (i, l) in locks.iter_mut().enumerate() {
                 if i < NUM_DATA {
-                    trace!("pushing data: {}", i);
+                    trace!("{:x} pushing data: {}", debug_id, i);
                     data_ptrs.push(&mut l.data[..size.unwrap()]);
                 } else {
-                    trace!("pushing coding: {}", i);
+                    trace!("{:x} pushing coding: {}", debug_id, i);
                     coding_ptrs.push(&mut l.data_mut()[..size.unwrap()]);
                 }
             }
             trace!(
-                "coding_ptrs.len: {} data_ptrs.len {}",
+                "{:x} coding_ptrs.len: {} data_ptrs.len {}",
+                debug_id,
                 coding_ptrs.len(),
                 data_ptrs.len()
             );
@@ -449,27 +553,41 @@ pub fn recover(
                 &erasures,
             )?;
         }
+
+        let mut corrupt = false;
+        // repopulate header data size from recovered blob contents
         for i in &erasures[..erasures.len() - 1] {
-            let idx = *i as usize;
+            let n = *i as usize;
+            let mut idx = n as u64 + block_start_idx;
 
             let mut data_size;
-            if idx < NUM_DATA {
-                data_size = locks[idx].get_data_size().unwrap();
+            if n < NUM_DATA {
+                data_size = locks[n].get_data_size().unwrap();
                 data_size -= BLOB_HEADER_SIZE as u64;
             } else {
                 data_size = size.unwrap() as u64;
+                idx -= NUM_CODING as u64;
+                locks[n].set_index(idx).unwrap();
             }
 
-            locks[idx].meta = meta.clone().unwrap();
-            locks[idx].set_size(data_size as usize);
+            locks[n].meta = meta.clone().unwrap();
+            locks[n].set_size(data_size as usize);
             trace!(
-                "erasures[{}] size: {} data[0]: {}",
+                "{:x} erasures[{}] ({}) size: {:x} data[0]: {}",
+                debug_id,
                 *i,
+                idx,
                 data_size,
-                locks[idx].data()[0]
+                locks[n].data()[0]
             );
+            if data_size > BLOB_SIZE as u64 {
+                corrupt = true;
+            }
         }
+        assert!(!corrupt, " {:x} ", debug_id);
+
         block_start += NUM_DATA;
+        block_start_idx += NUM_DATA as u64;
     }
 
     Ok(())
@@ -480,12 +598,12 @@ mod test {
     use crdt;
     use erasure;
     use logger;
-    use packet::BlobRecycler;
+    use packet::{BlobRecycler, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
     use signature::KeyPair;
     use signature::KeyPairUtil;
     //    use std::sync::{Arc, RwLock};
-    use streamer::WindowSlot;
+    use streamer::{index_blobs, WindowSlot};
 
     #[test]
     pub fn test_coding() {
@@ -549,12 +667,14 @@ mod test {
                     window_l2.get_index(),
                     window_l2.meta.size
                 );
-                for i in 0..8 {
-                    print!("{:>w$} ", window_l2.data()[i], w = 2);
+                for i in 0..64 {
+                    print!("{:>w$} ", window_l2.data()[i], w = 3);
                 }
             } else {
                 print!("data null ");
             }
+            println!("");
+            print!("window({:>w$}): ", i, w = 2);
             if w.coding.is_some() {
                 let window_l1 = w.coding.clone().unwrap();
                 let window_l2 = window_l1.read().unwrap();
@@ -564,16 +684,16 @@ mod test {
                     window_l2.meta.size
                 );
                 for i in 0..8 {
-                    print!("{:>w$} ", window_l2.data()[i], w = 2);
+                    print!("{:>w$} ", window_l2.data()[i], w = 3);
                 }
             } else {
                 print!("coding null");
             }
-
             println!("");
         }
     }
 
+    const WINDOW_SIZE: usize = 64;
     fn generate_window(
         blob_recycler: &BlobRecycler,
         offset: usize,
@@ -584,9 +704,9 @@ mod test {
                 data: None,
                 coding: None
             };
-            32
+            WINDOW_SIZE
         ];
-        let mut blobs = Vec::new();
+        let mut blobs = Vec::with_capacity(num_blobs);
         for i in 0..num_blobs {
             let b = blob_recycler.allocate();
             let b_ = b.clone();
@@ -599,8 +719,11 @@ mod test {
             for k in 0..data_len {
                 w.data_mut()[k] = (k + i) as u8;
             }
+
             // overfill, simulates re-used blobs
-            w.data_mut()[data_len] = thread_rng().gen();
+            for i in BLOB_HEADER_SIZE + data_len..BLOB_SIZE {
+                w.data[i] = thread_rng().gen();
+            }
 
             blobs.push(b_);
         }
@@ -613,9 +736,10 @@ mod test {
             "127.0.0.1:1237".parse().unwrap(),
             "127.0.0.1:1238".parse().unwrap(),
         );
-        assert!(crdt::Crdt::index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
+        assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
-            let idx = b.read().unwrap().get_index().unwrap() as usize;
+            let idx = b.read().unwrap().get_index().unwrap() as usize % WINDOW_SIZE;
+
             window[idx].data = Some(b);
         }
         window
@@ -630,7 +754,9 @@ mod test {
                 } as usize;
 
                 let mut b_l = b.write().unwrap();
-                b_l.data[size] = thread_rng().gen();
+                for i in size..BLOB_SIZE {
+                    b_l.data[i] = thread_rng().gen();
+                }
             }
         }
     }
@@ -640,15 +766,49 @@ mod test {
         logger::setup();
         let blob_recycler = BlobRecycler::default();
 
+        {
+            let mut blobs = Vec::with_capacity(WINDOW_SIZE * 2);
+            for _ in 0..WINDOW_SIZE * 10 {
+                let blob = blob_recycler.allocate();
+
+                {
+                    let mut b_l = blob.write().unwrap();
+
+                    for i in 0..BLOB_SIZE {
+                        b_l.data[i] = thread_rng().gen();
+                    }
+                    // some of the blobs should previously been used for coding
+                    if thread_rng().gen_bool(erasure::NUM_CODING as f64 / erasure::NUM_DATA as f64)
+                    {
+                        b_l.set_coding().unwrap();
+                    }
+                }
+                blobs.push(blob);
+            }
+            for blob in blobs {
+                blob_recycler.recycle(blob);
+            }
+        }
+
         // Generate a window
-        let offset = 1;
+        let offset = 0;
         let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = generate_window(&blob_recycler, 0, num_blobs);
+        let mut window = generate_window(&blob_recycler, WINDOW_SIZE, num_blobs);
+
+        for i in 0..window.len() {
+            if let Some(blob) = &window[i].data {
+                let blob_r = blob.read().unwrap();
+                assert!(!blob_r.is_coding());
+            }
+        }
+
         println!("** after-gen-window:");
         print_window(&window);
 
         // Generate the coding blocks
-        assert!(erasure::generate_coding(&mut window, &blob_recycler, offset, num_blobs).is_ok());
+        assert!(
+            erasure::generate_coding(0, &mut window, &blob_recycler, offset, num_blobs).is_ok()
+        );
         println!("** after-gen-coding:");
         print_window(&window);
 
@@ -664,7 +824,16 @@ mod test {
         scramble_window_tails(&mut window, num_blobs);
 
         // Recover it from coding
-        assert!(erasure::recover(&blob_recycler, &mut window, offset, num_blobs).is_ok());
+        assert!(
+            erasure::recover(
+                0,
+                &blob_recycler,
+                &mut window,
+                (offset + WINDOW_SIZE) as u64,
+                offset,
+                num_blobs
+            ).is_ok()
+        );
         println!("** after-recover:");
         print_window(&window);
 
@@ -684,7 +853,10 @@ mod test {
             assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
-            assert_eq!(window_l2.get_index().unwrap(), erase_offset as u64);
+            assert_eq!(
+                window_l2.get_index().unwrap(),
+                (erase_offset + WINDOW_SIZE) as u64
+            );
         }
 
         println!("** whack coding block and data block");
@@ -700,7 +872,16 @@ mod test {
         print_window(&window);
 
         // Recover it from coding
-        assert!(erasure::recover(&blob_recycler, &mut window, offset, num_blobs).is_ok());
+        assert!(
+            erasure::recover(
+                0,
+                &blob_recycler,
+                &mut window,
+                (offset + WINDOW_SIZE) as u64,
+                offset,
+                num_blobs
+            ).is_ok()
+        );
         println!("** after-recover:");
         print_window(&window);
 
@@ -718,7 +899,65 @@ mod test {
             assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
-            assert_eq!(window_l2.get_index().unwrap(), erase_offset as u64);
+            assert_eq!(
+                window_l2.get_index().unwrap(),
+                (erase_offset + WINDOW_SIZE) as u64
+            );
+        }
+
+        println!("** make stale data block index");
+        // tests erasing a coding block
+        let erase_offset = offset;
+        // Create a hole in the window by making the blob's index stale
+        let refwindow = window[offset].data.clone();
+        if let Some(blob) = &window[erase_offset].data {
+            blob.write()
+                .unwrap()
+                .set_index(erase_offset as u64)
+                .unwrap(); // this also writes to refwindow...
+        }
+        print_window(&window);
+
+        // Recover it from coding
+        assert!(
+            erasure::recover(
+                0,
+                &blob_recycler,
+                &mut window,
+                (offset + WINDOW_SIZE) as u64,
+                offset,
+                num_blobs
+            ).is_ok()
+        );
+        println!("** after-recover:");
+        print_window(&window);
+
+        // fix refwindow, we wrote to it above...
+        if let Some(blob) = &refwindow {
+            blob.write()
+                .unwrap()
+                .set_index((erase_offset + WINDOW_SIZE) as u64)
+                .unwrap(); // this also writes to refwindow...
+        }
+
+        {
+            // Check the result, block is here to drop locks
+            let window_l = window[erase_offset].data.clone().unwrap();
+            let window_l2 = window_l.read().unwrap();
+            let ref_l = refwindow.clone().unwrap();
+            let ref_l2 = ref_l.read().unwrap();
+            assert_eq!(window_l2.meta.size, ref_l2.meta.size);
+            assert_eq!(
+                window_l2.data[..window_l2.meta.size],
+                ref_l2.data[..window_l2.meta.size]
+            );
+            assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
+            assert_eq!(window_l2.meta.port, ref_l2.meta.port);
+            assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
+            assert_eq!(
+                window_l2.get_index().unwrap(),
+                (erase_offset + WINDOW_SIZE) as u64
+            );
         }
     }
 

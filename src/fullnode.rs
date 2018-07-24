@@ -142,7 +142,7 @@ impl FullNode {
     fn new_window(
         ledger_tail: Option<Vec<Entry>>,
         entry_height: u64,
-        crdt: &Arc<RwLock<Crdt>>,
+        node_info: &NodeInfo,
         blob_recycler: &BlobRecycler,
     ) -> streamer::Window {
         match ledger_tail {
@@ -153,7 +153,7 @@ impl FullNode {
 
                 // flatten deque to vec
                 let blobs: Vec<_> = blobs.into_iter().collect();
-                streamer::initialized_window(&crdt, blobs, entry_height)
+                streamer::initialized_window(&node_info, blobs, entry_height)
             }
             None => streamer::default_window(),
         }
@@ -203,6 +203,8 @@ impl FullNode {
         thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
+        let window = FullNode::new_window(ledger_tail, entry_height, &node.data, &blob_recycler);
+
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         let (tpu, blob_receiver) = Tpu::new(
             &bank,
@@ -214,7 +216,6 @@ impl FullNode {
             writer,
         );
         thread_hdls.extend(tpu.thread_hdls());
-        let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
         let ncp = Ncp::new(
             &crdt,
             window.clone(),
@@ -285,14 +286,13 @@ impl FullNode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
+        let blob_recycler = BlobRecycler::default();
+        let window = FullNode::new_window(ledger_tail, entry_height, &node.data, &blob_recycler);
+
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&entry_point);
-
-        let blob_recycler = BlobRecycler::default();
-
-        let window = FullNode::new_window(ledger_tail, entry_height, &crdt, &blob_recycler);
 
         let ncp = Ncp::new(
             &crdt,
