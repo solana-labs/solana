@@ -4,6 +4,7 @@ use counter::Counter;
 use crdt::{Crdt, CrdtError, NodeInfo};
 #[cfg(feature = "erasure")]
 use erasure;
+use log::Level::Trace;
 use packet::{
     Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedBlobs, SharedPackets, BLOB_SIZE,
 };
@@ -481,7 +482,9 @@ fn recv_window(
             consumed,
         );
     }
-    trace!("{}", print_window(debug_id, window, *consumed));
+    if log_enabled!(Trace) {
+        trace!("{}", print_window(debug_id, window, *consumed));
+    }
     trace!(
         "{:x}: sending consume_queue.len: {}",
         debug_id,
@@ -688,7 +691,9 @@ fn broadcast(
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    trace!("{}", print_window(debug_id, window, *receive_index));
+    if log_enabled!(Trace) {
+        trace!("{}", print_window(debug_id, window, *receive_index));
+    }
 
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();
