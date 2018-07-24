@@ -153,8 +153,12 @@ client_start() {
     "\
       set -x;
       sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
-      sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG; \
+      sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG \
+        rust-log=$RUST_LOG \
+        default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
+      ; \
       snap info solana; \
+      sudo snap get solana; \
       threadCount=\$(nproc); \
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux new -s solana -d \" \
@@ -215,6 +219,7 @@ fullnode_start() {
         sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
         sudo snap set solana $nodeConfig; \
         snap info solana; \
+        sudo snap get solana; \
         echo Slight delay to get more syslog output; \
         sleep 2; \
         sudo grep -Pzo \"\$logmarker(.|\\n)*\" /var/log/syslog \
