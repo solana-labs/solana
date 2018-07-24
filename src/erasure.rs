@@ -786,8 +786,8 @@ mod test {
         let num_blobs = erasure::NUM_DATA + 2;
         let mut window = generate_window(&blob_recycler, WINDOW_SIZE, num_blobs);
 
-        for i in 0..window.len() {
-            if let Some(blob) = &window[i].data {
+        for slot in &window {
+            if let Some(blob) = &slot.data {
                 let blob_r = blob.read().unwrap();
                 assert!(!blob_r.is_coding());
             }
