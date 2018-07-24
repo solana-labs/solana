@@ -315,7 +315,6 @@ fn process_blob(
     window: &Window,
     recycler: &BlobRecycler,
     consumed: &mut u64,
-    received: u64,
 ) {
     let mut window = window.write().unwrap();
     let w = (pix % WINDOW_SIZE) as usize;
@@ -395,13 +394,7 @@ fn process_blob(
     // push all contiguous blobs into consumed queue, increment consumed
     loop {
         let k = (*consumed % WINDOW_SIZE) as usize;
-        trace!(
-            "{:x}: k: {} consumed: {} received: {}",
-            debug_id,
-            k,
-            *consumed,
-            received
-        );
+        trace!("{:x}: k: {} consumed: {}", debug_id, k, *consumed,);
 
         if let Some(blob) = &window[k].data {
             if blob.read().unwrap().get_index().unwrap() < *consumed {
@@ -486,7 +479,6 @@ fn recv_window(
             window,
             recycler,
             consumed,
-            *received,
         );
     }
     print_window(debug_id, window, *consumed);
