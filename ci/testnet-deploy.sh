@@ -197,7 +197,6 @@ fullnode_start() {
       nodeConfig="mode=validator leader-address=$publicIp $commonNodeConfig"
     fi
 
-    set -x
     gcp_vm_exec "$vmName" "$vmZone" "Starting $class $count:" \
       "\
         set -ex; \
