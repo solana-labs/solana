@@ -374,9 +374,9 @@ fn main() {
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
-    while now.elapsed() < time {
+    while now.elapsed() < time || reclaim_tokens_back_to_source_account {
         // ping-pong between source and destination accounts for each loop iteration
-        // this seems to be faster than trying to determine the balance of individaul
+        // this seems to be faster than trying to determine the balance of individual
         // accounts
         generate_and_send_txs(
             &mut client,
