@@ -158,7 +158,7 @@ client_start() {
       threadCount=\$(nproc); \
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux new -s solana -d \" \
-          /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop -t \$threadCount 2>&1 | tee /tmp/solana.log; \
+          /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop -s 600 -t \$threadCount 2>&1 | tee /tmp/solana.log; \
           echo Error: bench-tps should never exit; \
           bash \
         \"; \
