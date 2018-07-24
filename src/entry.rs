@@ -64,7 +64,15 @@ impl Entry {
             has_more,
             pad: [0, 0, 0],
         };
-        assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
+
+        let size = serialized_size(&entry).unwrap();
+        if size > BLOB_DATA_SIZE as u64 {
+            panic!(
+                "Serialized entry size too large: {} ({} transactions):",
+                size,
+                entry.transactions.len()
+            );
+        }
         entry
     }
 
