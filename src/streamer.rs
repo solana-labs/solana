@@ -481,7 +481,7 @@ fn recv_window(
             consumed,
         );
     }
-    print_window(debug_id, window, *consumed);
+    trace!("{}", print_window(debug_id, window, *consumed));
     trace!(
         "{:x}: sending consume_queue.len: {}",
         debug_id,
@@ -506,7 +506,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(debug_id: u64, window: &Window, consumed: u64) {
+fn print_window(debug_id: u64, window: &Window, consumed: u64) -> String {
     let pointer: Vec<_> = window
         .read()
         .unwrap()
@@ -539,13 +539,15 @@ fn print_window(debug_id: u64, window: &Window, consumed: u64) {
             }
         })
         .collect();
-    trace!(
-        "{:x}: WINDOW ({}): {}",
+    format!(
+        "\n{:x}: WINDOW ({}): {}\n{:x}: WINDOW ({}): {}",
         debug_id,
         consumed,
-        pointer.join("")
-    );
-    trace!("{:x}: WINDOW ({}): {}", debug_id, consumed, buf.join(""));
+        pointer.join(""),
+        debug_id,
+        consumed,
+        buf.join("")
+    )
 }
 
 pub fn default_window() -> Window {
@@ -686,7 +688,7 @@ fn broadcast(
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    print_window(debug_id, window, *receive_index);
+    trace!("{}", print_window(debug_id, window, *receive_index));
 
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();

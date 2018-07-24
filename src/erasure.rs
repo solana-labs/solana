@@ -295,39 +295,33 @@ pub fn generate_coding(
             coding_blobs.push(coding.clone());
         }
 
-        let mut data_locks = Vec::with_capacity(NUM_DATA);
-        for b in &data_blobs {
-            data_locks.push(
-                b.write()
-                    .expect("'data_locks' write lock in pub fn generate_coding"),
-            );
-        }
+        let data_locks: Vec<_> = data_blobs
+            .iter()
+            .map(|b| b.read().expect("'data_locks' of data_blobs"))
+            .collect();
 
-        let mut data_ptrs: Vec<&[u8]> = Vec::with_capacity(NUM_DATA);
-        for (i, l) in data_locks.iter_mut().enumerate() {
-            trace!("{:x} i: {} data: {}", debug_id, i, l.data[0]);
-            data_ptrs.push(&l.data[..max_data_size]);
-        }
+        let data_ptrs: Vec<_> = data_locks
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                trace!("{:x} i: {} data: {}", debug_id, i, l.data[0]);
+                &l.data[..max_data_size]
+            })
+            .collect();
 
-        let mut coding_locks = Vec::with_capacity(NUM_CODING);
-        for b in &coding_blobs {
-            coding_locks.push(
-                b.write()
-                    .expect("'coding_locks' arr in pub fn generate_coding"),
-            );
-        }
+        let mut coding_locks: Vec<_> = coding_blobs
+            .iter()
+            .map(|b| b.write().expect("'coding_locks' of coding_blobs"))
+            .collect();
 
-        let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
-        for (i, l) in coding_locks.iter_mut().enumerate() {
-            trace!(
-                "{:x} i: {} coding: {} size: {}",
-                debug_id,
-                i,
-                l.data[0],
-                max_data_size
-            );
-            coding_ptrs.push(&mut l.data_mut()[..max_data_size]);
-        }
+        let mut coding_ptrs: Vec<_> = coding_locks
+            .iter_mut()
+            .enumerate()
+            .map(|(i, l)| {
+                trace!("{:x} i: {} coding: {}", debug_id, i, l.data[0],);
+                &mut l.data_mut()[..max_data_size]
+            })
+            .collect();
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(
@@ -337,6 +331,43 @@ pub fn generate_coding(
         block_start = block_end;
     }
     Ok(())
+}
+
+// examine the window slot at idx returns
+//  true if slot is empty
+//  true if slot is stale (i.e. has the wrong index), old blob is flushed
+//  false if slot has a blob with the right index
+fn is_missing(
+    debug_id: u64,
+    idx: u64,
+    window_slot: &mut Option<SharedBlob>,
+    recycler: &BlobRecycler,
+    c_or_d: &str,
+) -> bool {
+    if let Some(blob) = mem::replace(window_slot, None) {
+        let blob_idx = blob.read().unwrap().get_index().unwrap();
+        if blob_idx == idx {
+            trace!("recover {:x}: idx: {} good {}", debug_id, idx, c_or_d);
+            // put it back
+            mem::replace(window_slot, Some(blob));
+            false
+        } else {
+            trace!(
+                "recover {:x}: idx: {} old {} {}, recycling",
+                debug_id,
+                idx,
+                c_or_d,
+                blob_idx,
+            );
+            // recycle it
+            recycler.recycle(blob);
+            true
+        }
+    } else {
+        trace!("recover {:x}: idx: {} None {}", debug_id, idx, c_or_d);
+        // nothing there
+        true
+    }
 }
 
 // examine the window beginning at block_start for missing or
@@ -359,36 +390,6 @@ fn find_missing(
     for i in block_start..block_end {
         let idx = (i - block_start) as u64 + block_start_idx;
         let n = i % window.len();
-
-        fn is_missing(
-            debug_id: u64,
-            idx: u64,
-            window_slot: &mut Option<SharedBlob>,
-            recycler: &BlobRecycler,
-            c_or_d: &str,
-        ) -> bool {
-            if let Some(blob) = mem::replace(window_slot, None) {
-                let blob_idx = blob.read().unwrap().get_index().unwrap();
-                if blob_idx == idx {
-                    trace!("recover {:x}: idx: {} good {}", debug_id, idx, c_or_d);
-                    mem::replace(window_slot, Some(blob));
-                    false
-                } else {
-                    trace!(
-                        "recover {:x}: idx: {} old {} {}, recycling",
-                        debug_id,
-                        idx,
-                        c_or_d,
-                        blob_idx,
-                    );
-                    recycler.recycle(blob);
-                    true
-                }
-            } else {
-                trace!("recover {:x}: idx: {} None {}", debug_id, idx, c_or_d);
-                true
-            }
-        }
 
         if is_missing(debug_id, idx, &mut window[n].data, recycler, "data") {
             data_missing += 1;
