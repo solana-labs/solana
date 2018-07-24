@@ -297,23 +297,22 @@ fn retransmit_all_leader_blocks(
 ///      starting from consumed is thereby formed, add that continuous
 ///      range of blobs to a queue to be sent on to the next stage.
 ///
-/// * `b` -  the blob to be processed into the window and rebroadcast
+/// * `debug_id` - this node's id in a useful-for-debug format
+/// * `blob` -  the blob to be processed into the window and rebroadcast
 /// * `pix` -  the index of the blob, corresponds to
 ///            the entry height of this blob
-/// * `w` -  the index this blob would land at within the window
 /// * `consume_queue` - output, blobs to be rebroadcast are placed here
 /// * `window` - the window we're operating on
-/// * `debug_id` - this node's id in a useful-for-debug format
 /// * `recycler` - where to return the blob once processed, also where
 ///                  to return old blobs from the window
 /// * `consumed` - input/output, the entry-height to which this
 ///                 node has populated and rebroadcast entries
 fn process_blob(
+    debug_id: u64,
     blob: SharedBlob,
     pix: u64,
     consume_queue: &mut SharedBlobs,
     window: &Window,
-    debug_id: u64,
     recycler: &BlobRecycler,
     consumed: &mut u64,
     received: u64,
@@ -327,31 +326,52 @@ fn process_blob(
         blob_r.is_coding()
     };
 
+    // insert a newly received blob into a window slot, clearing out and recycling any previous
+    //  blob unless the incoming blob is a duplicate (based on idx)
+    // returns whether the incoming is a duplicate blob
+    fn insert_blob_is_dup(
+        debug_id: u64,
+        blob: SharedBlob,
+        pix: u64,
+        window_slot: &mut Option<SharedBlob>,
+        recycler: &BlobRecycler,
+        c_or_d: &str,
+    ) -> bool {
+        if let Some(old) = mem::replace(window_slot, Some(blob)) {
+            if old.read().unwrap().get_index().unwrap() == pix {
+                trace!(
+                    "{:x}: duplicate {} blob at index {:}",
+                    debug_id,
+                    c_or_d,
+                    pix
+                );
+            }
+            trace!(
+                "{:x}: recycling {} blob at index {:}",
+                debug_id,
+                c_or_d,
+                pix
+            );
+            recycler.recycle(old);
+            true
+        } else {
+            trace!("{:x}: empty {} window slot {:}", debug_id, c_or_d, pix);
+            false
+        }
+    }
+
     // insert the new blob into the window, overwrite and recycle old (or duplicate) entry
     let is_duplicate = if is_coding {
-        if let Some(old) = mem::replace(&mut window[w].coding, Some(blob)) {
-            if old.read().unwrap().get_index().unwrap() == pix {
-                trace!("{:x}: duplicate coding blob at index {:}", debug_id, pix);
-            }
-            trace!("{:x}: recycling coding blob at index {:}", debug_id, pix);
-            recycler.recycle(old);
-            true
-        } else {
-            trace!("{:x}: empty coding window slot {:}", debug_id, pix);
-            false
-        }
+        insert_blob_is_dup(
+            debug_id,
+            blob,
+            pix,
+            &mut window[w].coding,
+            recycler,
+            "coding",
+        )
     } else {
-        if let Some(old) = mem::replace(&mut window[w].data, Some(blob)) {
-            if old.read().unwrap().get_index().unwrap() == pix {
-                trace!("{:x}: duplicate data blob at index {:}", debug_id, pix);
-            }
-            trace!("{:x}: recycling data blob at index {:}", debug_id, pix);
-            recycler.recycle(old);
-            true
-        } else {
-            trace!("{:x}: empty data window slot {:}", debug_id, pix);
-            false
-        }
+        insert_blob_is_dup(debug_id, blob, pix, &mut window[w].data, recycler, "data")
     };
 
     if is_duplicate {
@@ -366,7 +386,6 @@ fn process_blob(
             &mut window,
             *consumed,
             (*consumed % WINDOW_SIZE) as usize,
-            (received - *consumed) as usize,
         ).is_err()
         {
             trace!("{:x}: erasure::recover failed", debug_id);
@@ -460,11 +479,11 @@ fn recv_window(
         trace!("{:x} window pix: {} size: {}", debug_id, pix, meta_size);
 
         process_blob(
+            debug_id,
             b,
             pix,
             &mut consume_queue,
             window,
-            debug_id,
             recycler,
             consumed,
             *received,
