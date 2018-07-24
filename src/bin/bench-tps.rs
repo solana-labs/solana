@@ -301,16 +301,36 @@ fn main() {
 
     if starting_balance < txs {
         let airdrop_amount = txs - starting_balance;
-        println!("Airdropping {:?} tokens", airdrop_amount);
+        println!(
+            "Airdropping {:?} tokens from {}",
+            airdrop_amount, drone_addr
+        );
+
+        let previous_balance = starting_balance;
         request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
-        // TODO: return airdrop Result from Drone
-        sleep(Duration::from_millis(100));
 
         let balance = client.poll_get_balance(&id.pubkey()).unwrap();
         println!("Your balance is: {:?}", balance);
 
         if balance < txs || (starting_balance == balance) {
             println!("TPS airdrop limit reached; wait 60sec to retry");
+            exit(1);
+        }
+
+        // TODO: return airdrop Result from Drone instead of polling the
+        //       network
+        let mut current_balance = previous_balance;
+        for _ in 0..20 {
+            sleep(Duration::from_millis(500));
+            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+            if starting_balance != current_balance {
+                break;
+            }
+            println!(".");
+        }
+        println!("Your balance is: {:?}", current_balance);
+        if current_balance - starting_balance != airdrop_amount {
+            println!("Airdrop failed!");
             exit(1);
         }
     }
