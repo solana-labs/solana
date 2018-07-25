@@ -598,7 +598,7 @@ impl Crdt {
                     v.contact_info.tvu,
                     blob.is_coding()
                 );
-                assert!(blob.meta.size < BLOB_SIZE);
+                assert!(blob.meta.size <= BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
                 trace!(
                     "{:x}: done broadcast {} to {:x} {}",
