@@ -20,8 +20,6 @@ use counter::Counter;
 
 #[cfg(feature = "erasure")]
 use erasure;
-#[cfg(feature = "erasure")]
-use rand::Rng;
 
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
@@ -578,19 +576,21 @@ impl Crdt {
         #[cfg(feature = "erasure")]
         let mut coding_index = None;
 
+        let mut br_idx = *transmit_index as usize % broadcast_table.len();
+
         for idx in *transmit_index..received_index {
             let w_idx = idx as usize % window_l.len();
-            let br_idx = idx as usize % broadcast_table.len();
 
-            assert!(window_l[w_idx].data.is_some());
-
-            orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
             trace!(
                 "{:x} broadcast order data w_idx {} br_idx {}",
                 me.debug_id(),
                 w_idx,
                 br_idx
             );
+
+            orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
+            br_idx += 1;
+            br_idx %= broadcast_table.len();
 
             #[cfg(feature = "erasure")]
             {
@@ -617,8 +617,6 @@ impl Crdt {
                     if window_l[w_idx].coding.is_none() {
                         continue;
                     }
-                    let br_idx = thread_rng().gen_range(0, broadcast_table.len());
-                    orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
 
                     trace!(
                         "{:x} broadcast order coding w_idx: {} br_idx  :{}",
@@ -626,6 +624,11 @@ impl Crdt {
                         w_idx,
                         br_idx,
                     );
+
+                    orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
+
+                    br_idx += 1;
+                    br_idx %= broadcast_table.len();
                 }
             }
         }
