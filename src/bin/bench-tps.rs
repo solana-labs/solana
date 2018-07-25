@@ -193,6 +193,102 @@ fn do_tx_transfers(
     }
 }
 
+fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_count: i64) {
+    let mut drone_addr = leader.contact_info.tpu;
+    drone_addr.set_port(DRONE_PORT);
+
+    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    println!("Token balance: {}", starting_balance);
+
+    if starting_balance < tx_count {
+        let airdrop_amount = tx_count - starting_balance;
+        println!(
+            "Airdropping {:?} tokens from {}",
+            airdrop_amount, drone_addr
+        );
+
+        let previous_balance = starting_balance;
+        request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
+
+        // TODO: return airdrop Result from Drone instead of polling the
+        //       network
+        let mut current_balance = previous_balance;
+        for _ in 0..20 {
+            sleep(Duration::from_millis(500));
+            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+            if starting_balance != current_balance {
+                break;
+            }
+            println!(".");
+        }
+        println!("Token balance: {}", current_balance);
+        if current_balance - starting_balance != airdrop_amount {
+            println!("Airdrop failed!");
+            exit(1);
+        }
+    }
+}
+
+fn compute_and_report_stats(
+    maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
+    sample_period: u64,
+    tx_send_elapsed: &Duration,
+) {
+    // Compute/report stats
+    let mut max_of_maxes = 0.0;
+    let mut total_txs = 0;
+    let mut nodes_with_zero_tps = 0;
+    let mut total_maxes = 0.0;
+    println!(" Node address        |       Max TPS | Total Transactions");
+    println!("---------------------+---------------+--------------------");
+
+    for (sock, stats) in maxes.read().unwrap().iter() {
+        let maybe_flag = match stats.tx {
+            0 => "!!!!!",
+            _ => "",
+        };
+
+        println!(
+            "{:20} | {:13.2} | {} {}",
+            (*sock).to_string(),
+            stats.tps,
+            stats.tx,
+            maybe_flag
+        );
+
+        if stats.tps == 0.0 {
+            nodes_with_zero_tps += 1;
+        }
+        total_maxes += stats.tps;
+
+        if stats.tps > max_of_maxes {
+            max_of_maxes = stats.tps;
+        }
+        total_txs += stats.tx;
+    }
+
+    if total_maxes > 0.0 {
+        let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
+        let average_max = total_maxes / num_nodes_with_tps as f64;
+        println!(
+            "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
+            average_max, nodes_with_zero_tps
+        );
+    }
+
+    println!(
+        "\nHighest TPS: {:.2} sampling period {}s total transactions: {} clients: {}",
+        max_of_maxes,
+        sample_period,
+        total_txs,
+        maxes.read().unwrap().len()
+    );
+    println!(
+        "\tAverage TPS: {}",
+        total_txs as f32 / duration_as_s(tx_send_elapsed)
+    );
+}
+
 fn main() {
     env_logger::init();
     set_panic_hook("bench-tps");
@@ -306,9 +402,6 @@ fn main() {
         sustained = true;
     }
 
-    let mut drone_addr = leader.contact_info.tpu;
-    drone_addr.set_port(DRONE_PORT);
-
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
     let validators = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
@@ -338,36 +431,8 @@ fn main() {
 
     let mut client = mk_client(&leader);
 
-    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-    println!("Token balance: {}", starting_balance);
-
-    if starting_balance < tx_count {
-        let airdrop_amount = tx_count - starting_balance;
-        println!(
-            "Airdropping {:?} tokens from {}",
-            airdrop_amount, drone_addr
-        );
-
-        let previous_balance = starting_balance;
-        request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
-
-        // TODO: return airdrop Result from Drone instead of polling the
-        //       network
-        let mut current_balance = previous_balance;
-        for _ in 0..20 {
-            sleep(Duration::from_millis(500));
-            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-            if starting_balance != current_balance {
-                break;
-            }
-            println!(".");
-        }
-        println!("Token balance: {}", current_balance);
-        if current_balance - starting_balance != airdrop_amount {
-            println!("Airdrop failed!");
-            exit(1);
-        }
-    }
+    // get some tokens
+    airdrop_tokens(&mut client, &leader, &id, tx_count);
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();
@@ -474,59 +539,7 @@ fn main() {
     let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
     println!("Token balance: {}", balance);
 
-    // Compute/report stats
-    let mut max_of_maxes = 0.0;
-    let mut total_txs = 0;
-    let mut nodes_with_zero_tps = 0;
-    let mut total_maxes = 0.0;
-    println!(" Node address        |       Max TPS | Total Transactions");
-    println!("---------------------+---------------+--------------------");
-
-    for (sock, stats) in maxes.read().unwrap().iter() {
-        let maybe_flag = match stats.tx {
-            0 => "!!!!!",
-            _ => "",
-        };
-
-        println!(
-            "{:20} | {:13.2} | {} {}",
-            (*sock).to_string(),
-            stats.tps,
-            stats.tx,
-            maybe_flag
-        );
-
-        if stats.tps == 0.0 {
-            nodes_with_zero_tps += 1;
-        }
-        total_maxes += stats.tps;
-
-        if stats.tps > max_of_maxes {
-            max_of_maxes = stats.tps;
-        }
-        total_txs += stats.tx;
-    }
-
-    if total_maxes > 0.0 {
-        let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
-        let average_max = total_maxes / num_nodes_with_tps as f64;
-        println!(
-            "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
-            average_max, nodes_with_zero_tps
-        );
-    }
-
-    println!(
-        "\nHighest TPS: {:.2} sampling period {}s total transactions: {} clients: {}",
-        max_of_maxes,
-        sample_period,
-        total_txs,
-        maxes.read().unwrap().len()
-    );
-    println!(
-        "\tAverage TPS: {}",
-        total_txs as f32 / duration_as_s(&now.elapsed())
-    );
+    compute_and_report_stats(&maxes, sample_period, &now.elapsed());
 
     // join the crdt client threads
     for t in c_threads {
