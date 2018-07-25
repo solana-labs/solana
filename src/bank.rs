@@ -746,7 +746,7 @@ mod tests {
         );
     }
     #[test]
-    fn test_cound_valid_ids() {
+    fn test_count_valid_ids() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)

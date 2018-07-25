@@ -1466,7 +1466,7 @@ mod tests {
         crdt.set_leader(leader.id);
         assert_eq!(crdt.table[&d.id].version, 1);
         let v = Vote {
-            version: 2, //version shoud increase when we vote
+            version: 2, //version should increase when we vote
             contact_info_version: 0,
         };
         let expected = (v, crdt.table[&leader.id].contact_info.tpu);
