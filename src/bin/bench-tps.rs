@@ -297,6 +297,7 @@ fn main() {
     let mut client = mk_client(&leader);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    println!("Token balance: {:?}", starting_balance);
     let txs: i64 = 500_000;
 
     if starting_balance < txs {
@@ -309,14 +310,6 @@ fn main() {
         let previous_balance = starting_balance;
         request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
 
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap();
-        println!("Your balance is: {:?}", balance);
-
-        if balance < txs || (starting_balance == balance) {
-            println!("TPS airdrop limit reached; wait 60sec to retry");
-            exit(1);
-        }
-
         // TODO: return airdrop Result from Drone instead of polling the
         //       network
         let mut current_balance = previous_balance;
@@ -328,7 +321,7 @@ fn main() {
             }
             println!(".");
         }
-        println!("Your balance is: {:?}", current_balance);
+        println!("Token balance: {:?}", current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!("Airdrop failed!");
             exit(1);
@@ -375,6 +368,9 @@ fn main() {
     let now = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
     while now.elapsed() < time || reclaim_tokens_back_to_source_account {
+        let balance = client.poll_get_balance(&id.pubkey()).unwrap();
+        println!("Token balance: {:?}", balance);
+
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
@@ -397,6 +393,9 @@ fn main() {
     for t in v_threads {
         t.join().unwrap();
     }
+
+    let balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    println!("Token balance: {:?}", balance);
 
     // Compute/report stats
     let mut max_of_maxes = 0.0;
