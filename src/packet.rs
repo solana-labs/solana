@@ -139,11 +139,11 @@ impl Default for Blob {
     }
 }
 
-//#[derive(Debug)]
-//pub enum BlobError {
-//    /// the Blob's meta and data are not self-consistent
-//    BadState,
-//}
+#[derive(Debug)]
+pub enum BlobError {
+    /// the Blob's meta and data are not self-consistent
+    BadState,
+}
 
 pub struct Recycler<T> {
     gc: Arc<Mutex<Vec<Arc<RwLock<T>>>>>,
@@ -379,26 +379,13 @@ impl Blob {
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data[BLOB_HEADER_SIZE..]
     }
-    pub fn get_size(&self) -> usize {
-        let size = self.get_data_size().unwrap() as usize;
-
+    pub fn get_size(&self) -> Result<usize> {
+        let size = self.get_data_size()? as usize;
         if self.meta.size == size {
-            size - BLOB_HEADER_SIZE
+            Ok(size - BLOB_HEADER_SIZE)
         } else {
-            0
+            Err(Error::BlobError(BlobError::BadState))
         }
-
-        // TODO: return a Result<usize> instead of
-        //        returning zero
-        //
-        //let size = self.get_data_size()? as usize;
-        //if self.meta.size == size {
-        //    Ok(size - BLOB_HEADER_SIZE)
-        //} else {
-        //    // these don't work...
-        //    Err("bad state")
-        //    // Err(BlobError::BadState)
-        //}
     }
     pub fn set_size(&mut self, size: usize) {
         let new_size = size + BLOB_HEADER_SIZE;
