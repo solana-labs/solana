@@ -160,11 +160,13 @@ client_start() {
       sudo snap get solana; \
       threadCount=\$(nproc); \
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
+      tmux kill-session -t solana; \
       tmux new -s solana -d \" \
+          set -x;
           /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee /tmp/solana.log; \
           echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
             | xargs curl -XPOST --data-binary 'testnet-deploy,name=$netName clientexit=1'; \
-          echo Error: bench-tps should never exit; \
+          echo Error: bench-tps should never exit | tee -a /tmp/solana.log; \
           bash \
         \"; \
       sleep 2; \
