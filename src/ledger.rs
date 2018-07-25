@@ -123,12 +123,13 @@ pub fn next_entries(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::serialized_size;
     use entry::{next_entry, Entry};
     use hash::hash;
-    use packet::{BlobRecycler, BLOB_DATA_SIZE};
+    use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{KeyPair, KeyPairUtil};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::Transaction;
+    use transaction::{Transaction, Vote};
 
     #[test]
     fn test_verify_slice() {
@@ -170,27 +171,55 @@ mod tests {
 
     #[test]
     fn test_next_entries() {
+        use logger;
+        logger::setup();
         let id = Hash::default();
         let next_id = hash(&id);
         let keypair = KeyPair::new();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+        let tx_small = Transaction::new_vote(
+            &keypair,
+            Vote {
+                version: 0,
+                contact_info_version: 2,
+            },
+            next_id,
+            2,
+        );
+        let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+
+        let tx_small_size = serialized_size(&tx_small).unwrap();
+        let tx_large_size = serialized_size(&tx_large).unwrap();
+        assert!(tx_small_size < tx_large_size);
+        assert!(tx_large_size < PACKET_DATA_SIZE as u64);
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
+        let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1;
 
         // verify no split
-        let transactions = vec![tx0.clone(); threshold];
+        let transactions = vec![tx_small.clone(); threshold];
         let entries0 = next_entries(&id, 0, transactions.clone());
         assert_eq!(entries0.len(), 1);
         assert!(entries0.verify(&id));
 
-        // verify the split
-        let transactions = vec![tx0.clone(); threshold * 2];
+        // verify the split with uniform transactions
+        let transactions = vec![tx_small.clone(); threshold * 2];
         let entries0 = next_entries(&id, 0, transactions.clone());
         assert_eq!(entries0.len(), 2);
         assert!(entries0[0].has_more);
         assert!(!entries0[entries0.len() - 1].has_more);
+        assert!(entries0.verify(&id));
 
+        // verify the split with small transactions followed by large
+        // transactions
+        let mut transactions = vec![tx_small.clone(); BLOB_DATA_SIZE / (tx_small_size as usize)];
+        let large_transactions = vec![tx_large.clone(); BLOB_DATA_SIZE / (tx_large_size as usize)];
+
+        transactions.extend(large_transactions);
+
+        let entries0 = next_entries(&id, 0, transactions.clone());
+        assert_eq!(entries0.len(), 5);
+        assert!(entries0[0].has_more);
+        assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
         // test hand-construction... brittle, changes if split method changes... ?
         //        let mut entries1 = vec![];
