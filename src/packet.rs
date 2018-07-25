@@ -373,11 +373,18 @@ impl Blob {
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data[BLOB_HEADER_SIZE..]
     }
+    pub fn get_size(&self) -> Result<usize> {
+        let size = self.get_data_size()? as usize;
+        assert_eq!(self.meta.size, size);
+        // TODO: return an error instead of panicking
+        Ok(size)
+    }
     pub fn set_size(&mut self, size: usize) {
         let new_size = size + BLOB_HEADER_SIZE;
         self.meta.size = new_size;
         self.set_data_size(new_size as u64).unwrap();
     }
+
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<SharedBlobs> {
         let mut v = VecDeque::new();
         //DOCUMENTED SIDE-EFFECT
