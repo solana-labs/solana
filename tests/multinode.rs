@@ -15,6 +15,7 @@ use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
+use std::env;
 use std::fs::File;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -370,7 +371,13 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 60;
+    let key = "SOLANA_DYNAMIC_NODES";
+    let num_nodes: usize = match env::var(key) {
+        Ok(val) => val.parse()
+            .expect(&format!("env var {} is not parse-able as usize", key)),
+        Err(_) => 60,
+    };
+
     let leader = TestNode::new_localhost();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
@@ -399,7 +406,7 @@ fn test_multi_node_dynamic_network() {
     ).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let t1: Vec<_> = (0..N)
+    let t1: Vec<_> = (0..num_nodes)
         .into_iter()
         .map(|n| {
             let leader_data = leader_data.clone();
@@ -417,7 +424,12 @@ fn test_multi_node_dynamic_network() {
                         Some(500),
                     );
                     assert_eq!(bal, Some(500));
-                    info!("sent balance to[{}/{}] {:x}", n, N, keypair.pubkey());
+                    info!(
+                        "sent balance to[{}/{}] {:x}",
+                        n,
+                        num_nodes,
+                        keypair.pubkey()
+                    );
                     keypair
                 })
                 .unwrap()
@@ -455,7 +467,7 @@ fn test_multi_node_dynamic_network() {
     let validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
     let mut consecutive_success = 0;
-    for i in 0..N {
+    for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
         let leader_balance = send_tx_and_retry_get_balance(
