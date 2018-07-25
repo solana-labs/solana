@@ -44,7 +44,7 @@ impl Block for [Entry] {
                 serialize_into(&mut out, &entry).expect("failed to serialize output");
                 out.position() as usize
             };
-            assert!(pos < BLOB_DATA_SIZE);
+            assert!(pos <= BLOB_DATA_SIZE, "pos: {}", pos);
             blob.write().unwrap().set_size(pos);
             q.push_back(blob);
         }
