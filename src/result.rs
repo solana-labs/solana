@@ -5,6 +5,7 @@ use bincode;
 use crdt;
 #[cfg(feature = "erasure")]
 use erasure;
+use packet;
 use serde_json;
 use std;
 use std::any::Any;
@@ -22,6 +23,7 @@ pub enum Error {
     BankError(bank::BankError),
     CrdtError(crdt::CrdtError),
     WindowError(streamer::WindowError),
+    BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
     ErasureError(erasure::ErasureError),
     SendError,

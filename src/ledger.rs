@@ -1,11 +1,12 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
-use bincode::{self, deserialize, serialize_into};
+use bincode::{deserialize, serialize_into};
 use entry::Entry;
 use hash::Hash;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
+use result::{Error, Result};
 use std::collections::VecDeque;
 use std::io::Cursor;
 use transaction::Transaction;
@@ -51,21 +52,21 @@ impl Block for [Entry] {
     }
 }
 
-pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> bincode::Result<Vec<Entry>> {
+pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
 
     for blob in blobs {
         let entry = {
             let msg = blob.read().unwrap();
-            let msg_size = msg.get_size();
+            let msg_size = msg.get_size()?;
             deserialize(&msg.data()[..msg_size])
         };
 
         match entry {
             Ok(entry) => entries.push(entry),
             Err(err) => {
-                trace!("reconstruct_entry_from_blobs: {}", err);
-                return Err(err);
+                trace!("reconstruct_entry_from_blobs: {:?}", err);
+                return Err(Error::Serialize(err));
             }
         }
     }
