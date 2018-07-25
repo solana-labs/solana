@@ -370,7 +370,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 60;
+    const N: usize = 85;
     let leader = TestNode::new_localhost();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
@@ -420,7 +420,7 @@ fn test_multi_node_dynamic_network() {
                     info!("sent balance to[{}/{}] {:x}", n, N, keypair.pubkey());
                     keypair
                 })
-                .unwrap()
+                .expect("Failed to spawn keypair-thread")
         })
         .collect();
 
@@ -433,6 +433,7 @@ fn test_multi_node_dynamic_network() {
         .map(|keypair| {
             let leader_data = leader_data.clone();
             let ledger_path = ledger_path.clone();
+            sleep(Duration::from_millis(100));
             Builder::new()
                 .name("validator-launch-thread".to_string())
                 .spawn(move || {
@@ -448,11 +449,12 @@ fn test_multi_node_dynamic_network() {
                     );
                     (rd, val)
                 })
-                .unwrap()
+                .expect("Failed to spawn validator-launch-thread")
         })
         .collect();
 
     let validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
+    info!(".....................Validators created");
 
     let mut consecutive_success = 0;
     for i in 0..N {
