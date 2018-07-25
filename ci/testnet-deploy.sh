@@ -117,9 +117,8 @@ vm_foreach_in_class leader inc_fullnode_count
 vm_foreach_in_class validator inc_fullnode_count
 
 # Add "network stopping" datapoint
-netName=${SOLANA_NET_URL%testnet.solana.com}
-netName=${netName:0:8}
-ci/metrics_write_datapoint.sh "testnet-deploy,name=\"$netName\" stop=1"
+netName=${SOLANA_NET_URL/.*/}
+ci/metrics_write_datapoint.sh "testnet-deploy,name=$netName stop=1"
 
 gcp_vm_exec() {
   declare vmName=$1
@@ -311,6 +310,6 @@ echo "--- $publicUrl sanity test"
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
-ci/metrics_write_datapoint.sh "testnet-deploy,name=\"$netName\" start=1"
+ci/metrics_write_datapoint.sh "testnet-deploy,name=$netName start=1"
 
 exit 0
