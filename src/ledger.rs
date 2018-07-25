@@ -78,33 +78,58 @@ pub fn next_entries_mut(
     cur_hashes: &mut u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
-    if transactions.is_empty() {
+    // TODO: find a magic number that works better than |  ?
+    //                                                  V
+    if transactions.is_empty() || transactions.len() == 1 {
         vec![Entry::new_mut(start_hash, cur_hashes, transactions, false)]
     } else {
-        let mut chunk_len = transactions.len();
+        let mut start = 0;
+        let mut entries = Vec::new();
 
-        // check for fit, make sure they can be serialized
-        while !Entry::will_fit(transactions[0..chunk_len].to_vec()) {
-            chunk_len /= 2;
-        }
+        while start < transactions.len() {
+            let mut chunk_end = transactions.len();
+            let mut upper = chunk_end;
+            let mut lower = start;
+            let mut next = chunk_end; // be optimistic that all will fit
 
-        let mut num_chunks = if transactions.len() % chunk_len == 0 {
-            transactions.len() / chunk_len
-        } else {
-            transactions.len() / chunk_len + 1
-        };
-
-        let mut entries = Vec::with_capacity(num_chunks);
-
-        for chunk in transactions.chunks(chunk_len) {
-            num_chunks -= 1;
+            // binary search for how many transactions will fit in an Entry (i.e. a BLOB)
+            loop {
+                debug!(
+                    "chunk_end {}, upper {} lower {} next {} transactions.len() {}",
+                    chunk_end,
+                    upper,
+                    lower,
+                    next,
+                    transactions.len()
+                );
+                if Entry::will_fit(transactions[start..chunk_end].to_vec()) {
+                    next = (upper + chunk_end) / 2;
+                    lower = chunk_end;
+                    debug!(
+                        "chunk_end {} fits, maybe too well? trying {}",
+                        chunk_end, next
+                    );
+                } else {
+                    next = (lower + chunk_end) / 2;
+                    upper = chunk_end;
+                    debug!("chunk_end {} doesn't fit! trying {}", chunk_end, next);
+                }
+                // same as last time
+                if next == chunk_end {
+                    debug!("converged on chunk_end {}", chunk_end);
+                    break;
+                }
+                chunk_end = next;
+            }
             entries.push(Entry::new_mut(
                 start_hash,
                 cur_hashes,
-                chunk.to_vec(),
-                num_chunks > 0,
+                transactions[start..chunk_end].to_vec(),
+                transactions.len() - chunk_end > 0,
             ));
+            start = chunk_end;
         }
+
         entries
     }
 }
@@ -217,7 +242,7 @@ mod tests {
         transactions.extend(large_transactions);
 
         let entries0 = next_entries(&id, 0, transactions.clone());
-        assert_eq!(entries0.len(), 5);
+        assert!(entries0.len() > 2);
         assert!(entries0[0].has_more);
         assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
