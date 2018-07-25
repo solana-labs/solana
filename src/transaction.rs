@@ -129,7 +129,7 @@ impl Transaction {
         let from = from_keypair.pubkey();
         let mut tx = Transaction {
             sig: Signature::default(),
-            instructions: instructions,
+            instructions,
             last_id,
             from,
             fee,
@@ -146,7 +146,7 @@ impl Transaction {
         fee: i64,
         last_id: Hash,
     ) -> Self {
-        let payment = Payment { tokens: tokens, to };
+        let payment = Payment { tokens, to };
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let contract = Contract::new(tokens, plan);
@@ -229,7 +229,7 @@ impl Transaction {
             return false;
         }
 
-        for i in self.instructions.iter() {
+        for i in &self.instructions {
             if let Instruction::NewContract(contract) = i {
                 if !contract.plan.verify(contract.tokens) {
                     return false;
@@ -237,7 +237,7 @@ impl Transaction {
             }
         }
 
-        return true;
+        true
     }
 
     /// Verify the number of instructions doesn't exceed the limit, and that

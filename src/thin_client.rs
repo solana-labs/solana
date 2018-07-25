@@ -4,12 +4,9 @@
 //! unstable and may change in future releases.
 
 use bincode::{deserialize, serialize};
-use budget::Condition;
-use chrono::prelude::Utc;
 use hash::Hash;
 use influx_db_client as influxdb;
 use metrics;
-use payment_plan::Payment;
 use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
@@ -19,7 +16,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::{Contract, Transaction, FEE_PER_INSTRUCTION};
+use transaction::Transaction;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -282,7 +279,7 @@ impl ThinClient {
         for run in 0..(LAST + 1) {
             let out = self.poll_get_balance(bob_pubkey);
             if expected.is_none() || run == LAST {
-                return out.ok().clone();
+                return out.ok();
             }
             trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
             if let (Some(e), Ok(o)) = (expected, out) {
@@ -306,16 +303,19 @@ mod tests {
     use super::*;
     use bank::Bank;
     use budget::Budget;
+    use budget::Condition::Timestamp;
+    use chrono::prelude::Utc;
     use crdt::TestNode;
     use fullnode::FullNode;
     use logger;
     use mint::Mint;
+    use payment_plan::Payment;
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::sink;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use transaction::{Instruction, Plan};
+    use transaction::{Contract, Instruction, Plan, FEE_PER_INSTRUCTION};
 
     #[test]
     fn test_thin_client() {

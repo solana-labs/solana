@@ -232,12 +232,13 @@ impl Bank {
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }
+
             let bal = option.unwrap();
 
             self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
 
-            /// Negative fee shouldn't be possible here, we checked for valid fees when
-            /// deserializing the transactions
+            // Negative fee shouldn't be possible here, we checked for valid fees when
+            // deserializing the transactions
             let total_cost_result = tx.instructions.iter().try_fold(tx.fee, |total, i| {
                 if let Instruction::NewContract(contract) = i {
                     if contract.tokens < 0 {
@@ -272,7 +273,7 @@ impl Bank {
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
-        for i in tx.instructions.iter() {
+        for i in &tx.instructions {
             match i {
                 Instruction::NewContract(contract) => {
                     let plan = contract.plan.clone();
@@ -452,7 +453,7 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            if tx.instructions.len() == 0 {
+            if tx.instructions.is_empty() {
                 panic!("invalid ledger, first transaction is empty");
             }
 
@@ -719,7 +720,7 @@ mod tests {
             .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
-        let mut contract_id: Signature = Signature::default();
+        let contract_id;
         if let Instruction::NewContract(contract) = &tx.instructions[0] {
             contract_id = contract.id;
         } else {
