@@ -297,7 +297,7 @@ fn main() {
     let mut client = mk_client(&leader);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-    println!("Token balance: {:?}", starting_balance);
+    println!("Token balance: {}", starting_balance);
     let txs: i64 = 500_000;
 
     if starting_balance < txs {
@@ -321,7 +321,7 @@ fn main() {
             }
             println!(".");
         }
-        println!("Token balance: {:?}", current_balance);
+        println!("Token balance: {}", current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!("Airdrop failed!");
             exit(1);
@@ -336,7 +336,7 @@ fn main() {
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
     let rnd = GenKeys::new(seed);
 
-    println!("Creating keypairs...");
+    println!("Creating {} keypairs...", txs / 2);
     let keypairs = rnd.gen_n_keypairs(txs / 2);
 
     let first_tx_count = client.transaction_count();
@@ -368,8 +368,8 @@ fn main() {
     let now = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
     while now.elapsed() < time || reclaim_tokens_back_to_source_account {
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap();
-        println!("Token balance: {:?}", balance);
+        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+        println!("Token balance: {}", balance);
 
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
@@ -394,8 +394,8 @@ fn main() {
         t.join().unwrap();
     }
 
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap();
-    println!("Token balance: {:?}", balance);
+    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+    println!("Token balance: {}", balance);
 
     // Compute/report stats
     let mut max_of_maxes = 0.0;
