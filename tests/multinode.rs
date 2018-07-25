@@ -89,7 +89,8 @@ fn test_multi_node_validator_catchup_from_zero() {
     logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_validator_catchup_from_zero");
-    let leader = TestNode::new_localhost();
+    let leader_kp = KeyPair::new();
+    let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
 
@@ -98,7 +99,7 @@ fn test_multi_node_validator_catchup_from_zero() {
         leader,
         true,
         LedgerFile::Path(ledger_path.clone()),
-        None,
+        leader_kp,
         None,
     );
     let mut nodes = vec![server];
@@ -109,7 +110,7 @@ fn test_multi_node_validator_catchup_from_zero() {
             validator,
             false,
             LedgerFile::Path(ledger_path.clone()),
-            Some(keypair),
+            keypair,
             Some(leader_data.contact_info.ncp),
         );
         nodes.push(val);
@@ -143,7 +144,7 @@ fn test_multi_node_validator_catchup_from_zero() {
         validator,
         false,
         LedgerFile::Path(ledger_path.clone()),
-        Some(keypair),
+        keypair,
         Some(leader_data.contact_info.ncp),
     );
     nodes.push(val);
@@ -189,7 +190,8 @@ fn test_multi_node_basic() {
     logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_basic");
-    let leader = TestNode::new_localhost();
+    let leader_kp = KeyPair::new();
+    let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(10_000);
@@ -197,7 +199,7 @@ fn test_multi_node_basic() {
         leader,
         true,
         LedgerFile::Path(ledger_path.clone()),
-        None,
+        leader_kp,
         None,
     );
     let mut nodes = vec![server];
@@ -208,7 +210,7 @@ fn test_multi_node_basic() {
             validator,
             false,
             LedgerFile::Path(ledger_path.clone()),
-            Some(keypair),
+            keypair,
             Some(leader_data.contact_info.ncp),
         );
         nodes.push(val);
@@ -242,7 +244,8 @@ fn test_multi_node_basic() {
 #[test]
 fn test_boot_validator_from_file() {
     logger::setup();
-    let leader = TestNode::new_localhost();
+    let leader_kp = KeyPair::new();
+    let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
     let leader_data = leader.data.clone();
@@ -250,7 +253,7 @@ fn test_boot_validator_from_file() {
         leader,
         true,
         LedgerFile::Path(ledger_path.clone()),
-        None,
+        leader_kp,
         None,
     );
     let leader_balance =
@@ -267,7 +270,7 @@ fn test_boot_validator_from_file() {
         validator,
         false,
         LedgerFile::Path(ledger_path.clone()),
-        Some(keypair),
+        keypair,
         Some(leader_data.contact_info.ncp),
     );
     let mut client = mk_client(&validator_data);
@@ -280,13 +283,14 @@ fn test_boot_validator_from_file() {
 }
 
 fn create_leader(ledger_path: &str) -> (NodeInfo, FullNode) {
-    let leader = TestNode::new_localhost();
+    let leader_kp = KeyPair::new();
+    let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let leader_data = leader.data.clone();
     let leader_fullnode = FullNode::new(
         leader,
         true,
         LedgerFile::Path(ledger_path.to_string()),
-        None,
+        leader_kp,
         None,
     );
     (leader_data, leader_fullnode)
@@ -337,7 +341,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
         validator,
         false,
         LedgerFile::Path(stale_ledger_path.clone()),
-        Some(keypair),
+        keypair,
         Some(leader_data.contact_info.ncp),
     );
 
@@ -371,8 +375,9 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 #[ignore]
 fn test_multi_node_dynamic_network() {
     logger::setup();
-    const N: usize = 60;
-    let leader = TestNode::new_localhost();
+    const N: usize = 25;
+    let leader_kp = KeyPair::new();
+    let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(100_000);
     let leader_data = leader.data.clone();
@@ -380,7 +385,7 @@ fn test_multi_node_dynamic_network() {
         leader,
         true,
         LedgerFile::Path(ledger_path.clone()),
-        None,
+        leader_kp,
         None,
     );
     info!("{:x} LEADER", leader_data.debug_id());
@@ -414,7 +419,7 @@ fn test_multi_node_dynamic_network() {
                 validator,
                 false,
                 LedgerFile::Path(ledger_path.clone()),
-                Some(keypair),
+                keypair,
                 Some(leader_data.contact_info.ncp),
             );
             (rd, val)
