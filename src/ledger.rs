@@ -4,7 +4,7 @@
 use bincode::{self, deserialize, serialize_into};
 use entry::Entry;
 use hash::Hash;
-use packet::{self, SharedBlob, BLOB_SIZE};
+use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use std::collections::VecDeque;
 use std::io::Cursor;
@@ -44,7 +44,7 @@ impl Block for [Entry] {
                 serialize_into(&mut out, &entry).expect("failed to serialize output");
                 out.position() as usize
             };
-            assert!(pos < BLOB_SIZE);
+            assert!(pos < BLOB_DATA_SIZE);
             blob.write().unwrap().set_size(pos);
             q.push_back(blob);
         }
@@ -57,7 +57,8 @@ pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> bincode::R
     for blob in blobs {
         let entry = {
             let msg = blob.read().unwrap();
-            deserialize(&msg.data()[..msg.get_data_size().unwrap() as usize])
+            let msg_size = msg.get_size().unwrap();
+            deserialize(&msg.data()[..msg_size])
         };
 
         match entry {
@@ -149,6 +150,7 @@ pub fn next_entries(
 mod tests {
     use super::*;
     use bincode::serialized_size;
+    use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
@@ -175,10 +177,30 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero);
         let keypair = KeyPair::new();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
-        let transactions = vec![tx0; 10_000];
+        let tx0 = Transaction::new_vote(
+            &keypair,
+            Vote {
+                version: 0,
+                contact_info_version: 1,
+            },
+            one,
+            1,
+        );
+        let tx1 = Transaction::new_timestamp(&keypair, Utc::now(), one);
+        //
+        // TODO: this magic number and the mix of transaction types
+        //       is designed to fill up a Blob more or less exactly,
+        //       to get near enough the the threshold that
+        //       deserialization falls over if it uses the wrong size()
+        //       parameter to index into blob.data()
+        //
+        // magic numbers -----------------+
+        //                                |
+        //                                V
+        let mut transactions = vec![tx0; 362];
+        transactions.extend(vec![tx1; 100]);
         let entries = next_entries(&zero, 0, transactions);
-
+        eprintln!("entries.len() {}", entries.len());
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);

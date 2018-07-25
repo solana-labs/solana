@@ -575,7 +575,7 @@ pub fn recover(
             data_size,
             locks[n].data()[0]
         );
-        if data_size > BLOB_SIZE as u64 {
+        if data_size > BLOB_DATA_SIZE as u64 {
             corrupt = true;
         }
     }
