@@ -57,7 +57,7 @@ pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> bincode::R
     for blob in blobs {
         let entry = {
             let msg = blob.read().unwrap();
-            let msg_size = msg.get_size().unwrap();
+            let msg_size = msg.get_size();
             deserialize(&msg.data()[..msg_size])
         };
 
@@ -200,7 +200,6 @@ mod tests {
         let mut transactions = vec![tx0; 362];
         transactions.extend(vec![tx1; 100]);
         let entries = next_entries(&zero, 0, transactions);
-        eprintln!("entries.len() {}", entries.len());
         let blob_recycler = BlobRecycler::default();
         let mut blob_q = VecDeque::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);

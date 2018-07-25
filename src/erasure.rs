@@ -1,5 +1,5 @@
 // Support erasure coding
-use packet::{BlobRecycler, SharedBlob, BLOB_HEADER_SIZE, BLOB_SIZE};
+use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
 use std::cmp;
 use std::mem;
 use std::result;
