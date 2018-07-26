@@ -209,9 +209,15 @@ pub fn generate_coding(
     debug_id: u64,
     window: &mut [WindowSlot],
     recycler: &BlobRecycler,
-    start_idx: usize,
+    receive_index: u64,
     num_blobs: usize,
+    transmit_index_coding: &mut u64,
 ) -> Result<()> {
+    // beginning of the coding blobs of the block that receive_index points into
+    let coding_index_start =
+        receive_index - (receive_index % NUM_DATA as u64) + (NUM_DATA - NUM_CODING) as u64;
+
+    let start_idx = receive_index as usize % window.len();
     let mut block_start = start_idx - (start_idx % NUM_DATA);
 
     loop {
@@ -256,10 +262,12 @@ pub fn generate_coding(
             }
         }
 
+        // getting ready to do erasure coding, means that we're potentially going back in time,
+        //  tell our caller we've inserted coding blocks starting at coding_index_start
+        *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
+
         let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-
         let coding_start = block_end - NUM_CODING;
-
         for i in coding_start..block_end {
             let n = i % window.len();
             assert!(window[n].coding.is_none());
@@ -613,7 +621,7 @@ mod test {
             assert!(
                 erasure::generate_coding_blocks(
                     coding_blocks_slices.as_mut_slice(),
-                    v_slices.as_slice()
+                    v_slices.as_slice(),
                 ).is_ok()
             );
         }
@@ -797,9 +805,19 @@ mod test {
         print_window(&window);
 
         // Generate the coding blocks
+        let mut index = (erasure::NUM_DATA + 2) as u64;
         assert!(
-            erasure::generate_coding(0, &mut window, &blob_recycler, offset, num_blobs).is_ok()
+            erasure::generate_coding(
+                0,
+                &mut window,
+                &blob_recycler,
+                offset as u64,
+                num_blobs,
+                &mut index
+            ).is_ok()
         );
+        assert_eq!(index, (erasure::NUM_DATA - erasure::NUM_CODING) as u64);
+
         println!("** after-gen-coding:");
         print_window(&window);
 

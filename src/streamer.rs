@@ -38,6 +38,12 @@ pub enum WindowError {
     GenericError,
 }
 
+#[derive(Debug)]
+pub struct WindowIndex {
+    pub data: u64,
+    pub coding: u64,
+}
+
 fn recv_loop(
     sock: &UdpSocket,
     exit: &Arc<AtomicBool>,
@@ -674,7 +680,7 @@ fn broadcast(
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
-    transmit_index: &mut u64,
+    transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
 ) -> Result<()> {
     let debug_id = node_info.debug_id();
@@ -747,8 +753,9 @@ fn broadcast(
                 debug_id,
                 &mut window.write().unwrap(),
                 recycler,
-                (*receive_index % WINDOW_SIZE) as usize,
+                *receive_index,
                 blobs_len,
+                &mut transmit_index.coding,
             )?;
         }
 
@@ -787,7 +794,10 @@ pub fn broadcaster(
     Builder::new()
         .name("solana-broadcaster".to_string())
         .spawn(move || {
-            let mut transmit_index = entry_height;
+            let mut transmit_index = WindowIndex {
+                data: entry_height,
+                coding: entry_height,
+            };
             let mut receive_index = entry_height;
             let me = crdt.read().unwrap().my_data().clone();
             loop {
