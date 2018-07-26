@@ -693,7 +693,7 @@ impl Crdt {
                     v.debug_id(),
                 );
                 //TODO profile this, may need multiple sockets for par_iter
-                assert!(rblob.meta.size < BLOB_SIZE);
+                assert!(rblob.meta.size <= BLOB_SIZE);
                 s.send_to(&rblob.data[..rblob.meta.size], &v.contact_info.tvu)
             })
             .collect();
