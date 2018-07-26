@@ -1,18 +1,20 @@
 extern crate bincode;
 extern crate clap;
 extern crate env_logger;
+extern crate influx_db_client;
 extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
 use bincode::serialize;
 use clap::{App, Arg};
+use influx_db_client as influxdb;
 use rayon::prelude::*;
 use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::hash::Hash;
-use solana::metrics::set_panic_hook;
+use solana::metrics;
 use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
@@ -38,6 +40,16 @@ use std::time::Instant;
 pub struct NodeStats {
     pub tps: f64, // Maximum TPS reported by this node
     pub tx: u64,  // Total transactions reported by this node
+}
+
+fn metrics_submit_token_balance(token_balance: i64) {
+    println!("Token balance: {}", token_balance);
+    metrics::submit(
+        influxdb::Point::new("bench-tps")
+            .add_tag("op", influxdb::Value::String("token_balance".to_string()))
+            .add_field("balance", influxdb::Value::Integer(token_balance as i64))
+            .to_owned(),
+    );
 }
 
 fn sample_tx_count(
@@ -124,6 +136,15 @@ fn generate_txs(
         nsps / 1_000_f64,
         duration_as_ms(&duration),
     );
+    metrics::submit(
+        influxdb::Point::new("bench-tps")
+            .add_tag("op", influxdb::Value::String("generate_txs".to_string()))
+            .add_field(
+                "duration",
+                influxdb::Value::Integer(duration_as_ms(&duration) as i64),
+            )
+            .to_owned(),
+    );
 
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
@@ -186,6 +207,16 @@ fn do_tx_transfers(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
+            metrics::submit(
+                influxdb::Point::new("bench-tps")
+                    .add_tag("op", influxdb::Value::String("do_tx_transfers".to_string()))
+                    .add_field(
+                        "duration",
+                        influxdb::Value::Integer(duration_as_ms(&transfer_start.elapsed()) as i64),
+                    )
+                    .add_field("count", influxdb::Value::Integer(tx_len as i64))
+                    .to_owned(),
+            );
         }
         if exit_signal.load(Ordering::Relaxed) {
             break;
@@ -198,7 +229,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_c
     drone_addr.set_port(DRONE_PORT);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-    println!("Token balance: {}", starting_balance);
+    metrics_submit_token_balance(starting_balance);
 
     if starting_balance < tx_count {
         let airdrop_amount = tx_count - starting_balance;
@@ -221,7 +252,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_c
             }
             println!(".");
         }
-        println!("Token balance: {}", current_balance);
+        metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!("Airdrop failed!");
             exit(1);
@@ -291,7 +322,7 @@ fn compute_and_report_stats(
 
 fn main() {
     env_logger::init();
-    set_panic_hook("bench-tps");
+    metrics::set_panic_hook("bench-tps");
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
@@ -498,7 +529,7 @@ fn main() {
     let mut reclaim_tokens_back_to_source_account = false;
     while now.elapsed() < time || reclaim_tokens_back_to_source_account {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
-        println!("Token balance: {}", balance);
+        metrics_submit_token_balance(balance);
 
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
@@ -537,7 +568,7 @@ fn main() {
     }
 
     let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
-    println!("Token balance: {}", balance);
+    metrics_submit_token_balance(balance);
 
     compute_and_report_stats(&maxes, sample_period, &now.elapsed());
 
