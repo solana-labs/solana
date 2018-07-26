@@ -193,6 +193,7 @@ fn test_multi_node_basic() {
     const N: usize = 5;
     trace!("test_multi_node_basic");
     let leader_kp = KeyPair::new();
+    let leader_pubkey = leader_kp.pubkey().clone();
     let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
@@ -204,6 +205,11 @@ fn test_multi_node_basic() {
         leader_kp,
         None,
     );
+
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, None).unwrap();
+    info!("leader balance {}", leader_balance);
+
     let mut nodes = vec![server];
     for _ in 0..N {
         let keypair = KeyPair::new();
@@ -392,6 +398,7 @@ fn test_multi_node_dynamic_network() {
     };
 
     let leader_kp = KeyPair::new();
+    let leader_pubkey = leader_kp.pubkey().clone();
     let leader = TestNode::new_localhost_with_pubkey(leader_kp.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(10_000_000);
@@ -404,6 +411,14 @@ fn test_multi_node_dynamic_network() {
         leader_kp,
         None,
     );
+    let leader_balance = send_tx_and_retry_get_balance(
+        &leader_data,
+        &alice_arc.read().unwrap(),
+        &leader_pubkey,
+        None,
+    ).unwrap();
+    info!("leader balance {}", leader_balance);
+
     info!("{:x} LEADER", leader_data.debug_id());
     let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
