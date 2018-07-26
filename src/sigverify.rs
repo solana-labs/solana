@@ -42,6 +42,7 @@ pub fn init() {
 }
 
 #[cfg(not(feature = "cuda"))]
+#[cfg(not(feature = "sigverify_cpu_disable"))]
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
     use signature::{PublicKey, Signature};
@@ -65,6 +66,13 @@ fn verify_packet(packet: &Packet) -> u8 {
         untrusted::Input::from(&packet.data[sig_start..sig_end]),
     ).is_ok() as u8
 }
+
+#[cfg(feature = "sigverify_cpu_disable")]
+fn verify_packet(_packet: &Packet) -> u8 {
+    warn!("signature verification is disabled");
+    return 1;
+}
+
 
 fn batch_size(batches: &[SharedPackets]) -> usize {
     batches
