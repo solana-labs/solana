@@ -380,9 +380,16 @@ fn test_multi_node_dynamic_network() {
         Err(_) => 60,
     };
 
+    let purge_key = "SOLANA_DYNAMIC_NODES_PURGE_LAG";
+    let purge_lag: usize = match env::var(purge_key) {
+        Ok(val) => val.parse()
+            .expect(&format!("env var {} is not parse-able as usize", purge_key)),
+        Err(_) => std::usize::MAX,
+    };
+
     let leader = TestNode::new_localhost();
     let bob_pubkey = KeyPair::new().pubkey();
-    let (alice, ledger_path) = genesis(100_000);
+    let (alice, ledger_path) = genesis(10_000_000);
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
     let server = FullNode::new(
@@ -393,14 +400,14 @@ fn test_multi_node_dynamic_network() {
         None,
     );
     info!("{:x} LEADER", leader_data.debug_id());
-    let leader_balance = send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(500),
     ).unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance = send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
@@ -419,7 +426,7 @@ fn test_multi_node_dynamic_network() {
                     info!("Spawned thread {}", n);
                     let keypair = KeyPair::new();
                     //send some tokens to the new validator
-                    let bal = send_tx_and_retry_get_balance(
+                    let bal = retry_send_tx_and_retry_get_balance(
                         &leader_data,
                         &alice_clone.read().unwrap(),
                         &keypair.pubkey(),
@@ -466,15 +473,16 @@ fn test_multi_node_dynamic_network() {
         })
         .collect();
 
-    let validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
+    let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
     let now = Instant::now();
     let mut consecutive_success = 0;
     let mut failures = 0;
+    let mut max_distance_increase = 0i64;
     for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
-        let leader_balance = send_tx_and_retry_get_balance(
+        let leader_balance = retry_send_tx_and_retry_get_balance(
             &leader_data,
             &alice_arc.read().unwrap(),
             &bob_pubkey,
@@ -491,7 +499,9 @@ fn test_multi_node_dynamic_network() {
             let mut success = 0usize;
             let mut max_distance = 0i64;
             let mut total_distance = 0i64;
-            for server in validators.iter() {
+            let mut num_nodes_behind = 0i64;
+            validators.retain(|server| {
+                let mut retain_me = true;
                 let mut client = mk_client(&server.0);
                 trace!("{:x} {} get_balance start", server.0.debug_id(), i);
                 let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -506,11 +516,27 @@ fn test_multi_node_dynamic_network() {
                 let distance = (leader_balance - bal) / 500;
                 max_distance = max(distance, max_distance);
                 total_distance += distance;
+                if distance > max_distance_increase {
+                    info!("Node {:x} is behind by {}", server.0.debug_id(), distance);
+                    max_distance_increase = distance;
+                    if max_distance_increase > purge_lag as i64 {
+                        server.1.exit();
+                        info!("Node {:x} is exiting", server.0.debug_id());
+                        retain_me = false;
+                    }
+                }
+                if distance > 0 {
+                    num_nodes_behind += 1;
+                }
                 if let Some(bal) = getbal {
                     if bal == leader_balance {
                         success += 1;
                     }
                 }
+                retain_me
+            });
+            if num_nodes_behind != 0 {
+                info!("{} nodes are lagging behind leader", num_nodes_behind);
             }
             info!(
                 "SUCCESS[{}] {} out of {} distance: {} max_distance: {}",
@@ -600,4 +626,34 @@ fn send_tx_and_retry_get_balance(
         .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
         .unwrap();
     retry_get_balance(&mut client, bob_pubkey, expected)
+}
+
+fn retry_send_tx_and_retry_get_balance(
+    leader: &NodeInfo,
+    alice: &Mint,
+    bob_pubkey: &PublicKey,
+    expected: Option<i64>,
+) -> Option<i64> {
+    let mut client = mk_client(leader);
+    trace!("getting leader last_id");
+    let last_id = client.get_last_id();
+    info!("executing leader transfer");
+    const LAST: usize = 30;
+    for run in 0..(LAST + 1) {
+        let _sig = client
+            .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
+            .unwrap();
+        let out = client.poll_get_balance(bob_pubkey);
+        if expected.is_none() || run == LAST {
+            return out.ok().clone();
+        }
+        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
+        if let (Some(e), Ok(o)) = (expected, out) {
+            if o == e {
+                return Some(o);
+            }
+        }
+        sleep(Duration::from_millis(20));
+    }
+    None
 }
