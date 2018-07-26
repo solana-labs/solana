@@ -17,10 +17,6 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
-
-#[cfg(feature = "erasure")]
-use erasure;
-
 use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -37,7 +33,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{BlobReceiver, BlobSender, Window};
+use streamer::{BlobReceiver, BlobSender, Window, WindowIndex};
 use timing::timestamp;
 use transaction::Vote;
 
@@ -552,7 +548,7 @@ impl Crdt {
         broadcast_table: &[NodeInfo],
         window: &Window,
         s: &UdpSocket,
-        transmit_index: &mut u64,
+        transmit_index: &mut WindowIndex,
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.is_empty() {
@@ -561,7 +557,7 @@ impl Crdt {
             Err(CrdtError::NoPeers)?;
         }
         trace!(
-            "{:x} transmit_index: {} received_index: {} broadcast_len: {}",
+            "{:x} transmit_index: {:?} received_index: {} broadcast_len: {}",
             me.debug_id(),
             *transmit_index,
             received_index,
@@ -570,15 +566,12 @@ impl Crdt {
 
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
-        let mut orders = Vec::with_capacity((received_index - *transmit_index) as usize);
+        let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
         let window_l = window.write().unwrap();
 
-        #[cfg(feature = "erasure")]
-        let mut coding_index = None;
+        let mut br_idx = transmit_index.data as usize % broadcast_table.len();
 
-        let mut br_idx = *transmit_index as usize % broadcast_table.len();
-
-        for idx in *transmit_index..received_index {
+        for idx in transmit_index.data..received_index {
             let w_idx = idx as usize % window_l.len();
 
             trace!(
@@ -591,46 +584,26 @@ impl Crdt {
             orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
             br_idx += 1;
             br_idx %= broadcast_table.len();
-
-            #[cfg(feature = "erasure")]
-            {
-                // remember first place we saw coding
-                // if we find a coding blob, it means that a full block has been
-                //  erasure coded, and it's safe to rewind to start of the coding
-                //   blob before current idx
-                if coding_index.is_none() && window_l[w_idx].coding.is_some() {
-                    coding_index = Some(idx - (idx % erasure::NUM_DATA as u64));
-                }
-            }
         }
-        // recall how many orders were actual data blobs
-        let mut data_orders_len = orders.len();
 
-        #[cfg(feature = "erasure")]
-        {
-            // if we have_coding, we've encoded a full erasure block, so rewind a bit...
-            if let Some(coding_index) = coding_index {
-                for idx in coding_index..received_index {
-                    let w_idx = idx as usize % window_l.len();
+        for idx in transmit_index.coding..received_index {
+            let w_idx = idx as usize % window_l.len();
 
-                    // skip over empty slots
-                    if window_l[w_idx].coding.is_none() {
-                        continue;
-                    }
-
-                    trace!(
-                        "{:x} broadcast order coding w_idx: {} br_idx  :{}",
-                        me.debug_id(),
-                        w_idx,
-                        br_idx,
-                    );
-
-                    orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
-
-                    br_idx += 1;
-                    br_idx %= broadcast_table.len();
-                }
+            // skip over empty slots
+            if window_l[w_idx].coding.is_none() {
+                continue;
             }
+
+            trace!(
+                "{:x} broadcast order coding w_idx: {} br_idx  :{}",
+                me.debug_id(),
+                w_idx,
+                br_idx,
+            );
+
+            orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
+            br_idx += 1;
+            br_idx %= broadcast_table.len();
         }
 
         trace!("broadcast orders table {}", orders.len());
@@ -666,16 +639,15 @@ impl Crdt {
 
         trace!("broadcast results {}", errs.len());
         for e in errs {
-            if data_orders_len == 0 {
-                break;
-            }
             if let Err(e) = &e {
-                error!("broadcast result {:?}", e);
+                eprintln!("broadcast result {:?}", e);
             }
             e?;
-            *transmit_index += 1;
-            data_orders_len -= 1;
+            if transmit_index.data < received_index {
+                transmit_index.data += 1;
+            }
         }
+        transmit_index.coding = transmit_index.data;
 
         Ok(())
     }
