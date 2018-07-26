@@ -103,6 +103,7 @@ impl WriteStage {
                     blob.meta.set_addr(&addr);
                     blob.meta.size = len;
                 }
+                bank.process_transaction(&tx)?;
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
                 info!("{:x} leader_sent_vote", debug_id);
                 inc_new_counter!("write_stage-leader_sent_vote", 1);
