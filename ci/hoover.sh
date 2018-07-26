@@ -55,28 +55,16 @@ else
   # NOTE: this will be horribly broken if we ever decide to run multiple
   #       agents on the same machine.
   (
-    cd .. || exit 1
-    for dir in *; do
-      if [[ -d $dir && $dir != "$BUILDKITE_PIPELINE_SLUG" ]]; then
-        echo "Removing $dir"
-        rm -rf "${dir:?}"/
-      fi
-    done
-
-    cd .. || exit 1
-    for dir in *; do
-      if [[ -d $dir && $dir != "$BUILDKITE_ORGANIZATION_SLUG" ]]; then
-        echo "Removing $dir"
-        rm -rf "${dir:?}"/
-      fi
-    done
-
-    cd .. || exit 1
-    for dir in *; do
-      if [[ -d $dir && $dir != "$BUILDKITE_AGENT_NAME" ]]; then
-        echo "Removing $dir"
-        rm -rf "${dir:?}"/
-      fi
+    for keepDir in "$BUILDKITE_PIPELINE_SLUG" \
+                   "$BUILDKITE_ORGANIZATION_SLUG" \
+                   "$BUILDKITE_AGENT_NAME"; do
+      cd .. || exit 1
+      for dir in *; do
+        if [[ -d $dir && $dir != "$keepDir" ]]; then
+          echo "Removing $dir"
+          rm -rf "${dir:?}"/
+        fi
+      done
     done
   )
 fi
