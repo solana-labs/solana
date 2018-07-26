@@ -3,6 +3,7 @@
 # Regular maintenance performed on a buildkite agent to control disk usage
 #
 
+
 echo --- Delete all exited containers first
 (
   set -x
@@ -44,6 +45,41 @@ echo "--- Delete /tmp files older than 1 day owned by $(whoami)"
   set -x
   find /tmp -maxdepth 1 -user "$(whoami)" -mtime +1 -print0 | xargs -0 rm -rf
 )
+
+echo --- Deleting stale buildkite agent build directories
+if [[ ! -d ../../../../builds/$BUILDKITE_AGENT_NAME ]]; then
+  # We might not be where we think we are, do nothing
+  echo Warning: Skipping flush of stale agent build directories
+  echo "  PWD=$PWD"
+else
+  # NOTE: this will be horribly broken if we ever decide to run multiple
+  #       agents on the same machine.
+  (
+    cd .. || exit 1
+    for dir in *; do
+      if [[ -d $dir && $dir != "$BUILDKITE_PIPELINE_SLUG" ]]; then
+        echo "Removing $dir"
+        rm -rf "${dir:?}"/
+      fi
+    done
+
+    cd .. || exit 1
+    for dir in *; do
+      if [[ -d $dir && $dir != "$BUILDKITE_ORGANIZATION_SLUG" ]]; then
+        echo "Removing $dir"
+        rm -rf "${dir:?}"/
+      fi
+    done
+
+    cd .. || exit 1
+    for dir in *; do
+      if [[ -d $dir && $dir != "$BUILDKITE_AGENT_NAME" ]]; then
+        echo "Removing $dir"
+        rm -rf "${dir:?}"/
+      fi
+    done
+  )
+fi
 
 echo --- System Status
 (
