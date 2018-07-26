@@ -151,11 +151,6 @@ client_start() {
     "Starting client $count:" \
     "\
       set -x;
-      sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
-      sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG \
-        rust-log=$RUST_LOG \
-        default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
-      ; \
       snap info solana; \
       sudo snap get solana; \
       threadCount=\$(nproc); \
@@ -180,15 +175,32 @@ client_stop() {
   declare vmZone=$2
   declare count=$3
 
-  gcp_vm_exec "$vmName" "$vmZone" \
-    "Stopping client $count:" \
-    "\
-      set -x;
-      tmux list-sessions; \
-      tmux capture-pane -t solana -p; \
-      tmux kill-session -t solana; \
-      sudo snap remove solana; \
-    "
+  (
+    SECONDS=0
+    gcp_vm_exec "$vmName" "$vmZone" \
+      "Stopping client $count:" \
+      "\
+        set -x;
+        tmux list-sessions; \
+        tmux capture-pane -t solana -p; \
+        tmux kill-session -t solana; \
+        sudo snap remove solana; \
+        sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+        sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG \
+          rust-log=$RUST_LOG \
+          default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
+        ; \
+      "
+    echo "Client stopped in ${SECONDS} seconds"
+  ) > "log-$vmName.txt" 2>&1 &
+  declare pid=$!
+
+  # Rename log file so it can be discovered later by $pid
+  while [[ ! -f "log-$vmName.txt" ]]; do
+    sleep 1
+  done
+  mv "log-$vmName.txt" "log-$pid.txt"
+  pids+=("$pid")
 }
 
 fullnode_start() {
@@ -285,7 +297,10 @@ wait_for_pids() {
 }
 
 
+pids=()
+echo "--- Stopping client node(s)"
 vm_foreach_in_class client client_stop
+client_stop_pids=("${pids[@]}")
 
 if ! $ROLLING_UPDATE; then
   pids=()
@@ -311,6 +326,8 @@ echo "--- $publicUrl sanity test"
   USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
 )
 
+pids=("${client_stop_pids[@]}")
+wait_for_pids client shutdown
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
