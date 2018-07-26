@@ -280,7 +280,7 @@ pub fn to_blob<T: Serialize>(
         let mut b = blob.write().unwrap();
         let v = serialize(&resp)?;
         let len = v.len();
-        assert!(len < BLOB_SIZE);
+        assert!(len <= BLOB_SIZE);
         b.data[..len].copy_from_slice(&v);
         b.meta.size = len;
         b.meta.set_addr(&rsp_addr);

@@ -236,7 +236,7 @@ fn repair_window(
             "{:x}: repair_window request {} {} {}",
             debug_id, consumed, received, to
         );
-        assert!(req.len() < BLOB_SIZE);
+        assert!(req.len() <= BLOB_SIZE);
         sock.send_to(&req, to)?;
     }
     Ok(())
