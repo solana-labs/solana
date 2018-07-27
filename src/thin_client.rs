@@ -196,11 +196,15 @@ impl ThinClient {
     }
 
     pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
-        let mut balance;
+        let mut balance_result;
+        let mut balance_value = -1;
         let now = Instant::now();
         loop {
-            balance = self.get_balance(pubkey);
-            if balance.is_ok() && *balance.as_ref().unwrap() != 0 || now.elapsed().as_secs() > 1 {
+            balance_result = self.get_balance(pubkey);
+            if balance_result.is_ok() {
+                balance_value = *balance_result.as_ref().unwrap();
+            }
+            if balance_value > 0 || now.elapsed().as_secs() > 1 {
                 break;
             }
             sleep(Duration::from_millis(100));
@@ -214,7 +218,12 @@ impl ThinClient {
                 )
                 .to_owned(),
         );
-        balance
+        if balance_value >= 0 {
+            Ok(balance_value)
+        } else {
+            assert!(balance_result.is_err());
+            balance_result
+        }
     }
 
     /// Poll the server to confirm a transaction.
