@@ -274,8 +274,8 @@ fn test_boot_validator_from_file() {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
     assert!(getbal == Some(leader_balance));
 
-    leader_fullnode.close().unwrap();
     val_fullnode.close().unwrap();
+    leader_fullnode.close().unwrap();
     std::fs::remove_file(ledger_path).unwrap();
 }
 
