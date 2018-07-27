@@ -434,11 +434,9 @@ impl Bank {
         let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
 
         // check f we need to rotate tail
-        let tail = if tail.len() == WINDOW_SIZE as usize {
-            rotate_vector(tail, tail_idx)
-        } else {
-            tail
-        };
+        if tail.len() == WINDOW_SIZE as usize {
+            tail.rotate_left(tail_idx)
+        }
 
         Ok((entry_count, tail))
     }
@@ -538,17 +536,6 @@ impl Bank {
             }
         }
         false
-    }
-}
-
-fn rotate_vector<T: Clone>(v: Vec<T>, at: usize) -> Vec<T> {
-    if at != 0 {
-        let mut ret = Vec::with_capacity(v.len());
-        ret.extend_from_slice(&v[at..]);
-        ret.extend_from_slice(&v[0..at]);
-        ret
-    } else {
-        v
     }
 }
 
@@ -878,16 +865,6 @@ mod tests {
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
-    }
-
-    #[test]
-    fn test_rotate_vector() {
-        let expect = vec![1, 2, 3, 4];
-
-        assert_eq!(rotate_vector(vec![4, 1, 2, 3], 1), expect);
-        assert_eq!(rotate_vector(vec![1, 2, 3, 4], 0), expect);
-        assert_eq!(rotate_vector(vec![2, 3, 4, 1], 3), expect);
-        assert_eq!(rotate_vector(vec![3, 4, 1, 2], 2), expect);
     }
 
 }
