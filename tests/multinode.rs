@@ -15,6 +15,7 @@ use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
+use solana::timing::duration_as_s;
 use std::env;
 use std::fs::File;
 use std::net::UdpSocket;
@@ -22,7 +23,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Builder;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     //lets spy on the network
@@ -466,7 +467,9 @@ fn test_multi_node_dynamic_network() {
 
     let validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
+    let now = Instant::now();
     let mut consecutive_success = 0;
+    let mut failures = 0;
     for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
@@ -485,7 +488,8 @@ fn test_multi_node_dynamic_network() {
         //verify all validators have the same balance
         {
             let mut success = 0usize;
-            let mut distance = 0i64;
+            let mut max_distance = 0i64;
+            let mut total_distance = 0i64;
             for server in validators.iter() {
                 let mut client = mk_client(&server.0);
                 trace!("{:x} {} get_balance start", server.0.debug_id(), i);
@@ -498,7 +502,11 @@ fn test_multi_node_dynamic_network() {
                     leader_balance
                 );
                 let bal = getbal.unwrap_or(0);
-                distance += (leader_balance - bal) / 500;
+                let distance = (leader_balance - bal) / 500;
+                if distance > max_distance {
+                    max_distance = distance;
+                }
+                total_distance += distance;
                 if let Some(bal) = getbal {
                     if bal == leader_balance {
                         success += 1;
@@ -506,16 +514,18 @@ fn test_multi_node_dynamic_network() {
                 }
             }
             info!(
-                "SUCCESS[{}] {} out of {} distance: {}",
+                "SUCCESS[{}] {} out of {} distance: {} max_distance: {}",
                 i,
                 success,
                 validators.len(),
-                distance
+                total_distance,
+                max_distance
             );
-            if success == validators.len() && distance == 0 {
+            if success == validators.len() && total_distance == 0 {
                 consecutive_success += 1;
             } else {
                 consecutive_success = 0;
+                failures += 1;
             }
             if consecutive_success == 10 {
                 break;
@@ -523,6 +533,11 @@ fn test_multi_node_dynamic_network() {
         }
     }
     assert_eq!(consecutive_success, 10);
+    info!(
+        "Took {} s to converge total failures: {}",
+        duration_as_s(&now.elapsed()),
+        failures
+    );
     for (_, node) in &validators {
         node.exit();
     }
