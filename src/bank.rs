@@ -259,7 +259,7 @@ impl Bank {
                 let _ = self.apply_signature(tx.from, *tx_sig);
             }
             Instruction::NewVote(_vote) => {
-                info!("GOT VOTE!");
+                info!("GOT VOTE! last_id={:?}", &tx.last_id[..8]);
                 // TODO: record the vote in the stake table...
             }
         }
