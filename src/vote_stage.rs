@@ -74,7 +74,7 @@ impl VoteStage {
         let (vote, addr) = {
             let mut wcrdt = crdt.write().unwrap();
             //TODO: doesn't seem like there is a synchronous call to get height and id
-            info!("replicate_stage {:?}", &last_id[..8]);
+            info!("voting on {:?}", &last_id[..8]);
             wcrdt.new_vote(*last_id)
         }?;
         {
