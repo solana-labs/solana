@@ -49,7 +49,7 @@ pub struct Contract {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
-    /// We send some gossip specific membershp information through the vote to shortcut
+    /// We send some gossip specific membership information through the vote to shortcut
     /// liveness voting
     /// The version of the CRDT struct that the last_id of this network voted with
     pub version: u64,
