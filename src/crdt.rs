@@ -328,7 +328,14 @@ impl Crdt {
         &self.table[&self.me]
     }
     pub fn leader_data(&self) -> Option<&NodeInfo> {
-        self.table.get(&(self.table[&self.me].leader_id))
+        let leader_id = self.table[&self.me].leader_id;
+
+        // leader_id can be 0s from network entry point
+        if leader_id == PublicKey::default() {
+            return None;
+        }
+
+        self.table.get(&leader_id)
     }
 
     pub fn set_leader(&mut self, key: PublicKey) -> () {
@@ -1817,6 +1824,7 @@ mod tests {
         crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
         assert_eq!(len as usize - 1, crdt.table.len());
         assert_eq!(crdt.my_data().leader_id, PublicKey::default());
+        assert!(crdt.leader_data().is_none());
     }
 
     /// test window requests respond with the right blob, and do not overrun
@@ -1955,5 +1963,22 @@ mod tests {
         assert!(!Crdt::is_valid_address(bad_address_unspecified));
         let bad_address_multicast = "224.254.0.0:1234".parse().unwrap();
         assert!(!Crdt::is_valid_address(bad_address_multicast));
+    }
+
+    #[test]
+    fn test_default_leader() {
+        logger::setup();
+        let node_info = NodeInfo::new(
+            KeyPair::new().pubkey(),
+            "127.0.0.1:1234".parse().unwrap(),
+            "127.0.0.1:1235".parse().unwrap(),
+            "127.0.0.1:1236".parse().unwrap(),
+            "127.0.0.1:1237".parse().unwrap(),
+            "127.0.0.1:1238".parse().unwrap(),
+        );
+        let mut crdt = Crdt::new(node_info).unwrap();
+        let network_entry_point = NodeInfo::new_entry_point("127.0.0.1:1239".parse().unwrap());
+        crdt.insert(&network_entry_point);
+        assert!(crdt.leader_data().is_none());
     }
 }

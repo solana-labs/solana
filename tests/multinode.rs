@@ -16,6 +16,7 @@ use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::duration_as_s;
+use std::cmp::max;
 use std::env;
 use std::fs::File;
 use std::net::UdpSocket;
@@ -503,9 +504,7 @@ fn test_multi_node_dynamic_network() {
                 );
                 let bal = getbal.unwrap_or(0);
                 let distance = (leader_balance - bal) / 500;
-                if distance > max_distance {
-                    max_distance = distance;
-                }
+                max_distance = max(distance, max_distance);
                 total_distance += distance;
                 if let Some(bal) = getbal {
                     if bal == leader_balance {
