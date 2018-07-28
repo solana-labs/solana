@@ -69,7 +69,12 @@ fn sample_tx_count(
 
     loop {
         let tx_count = client.transaction_count();
-        assert!(tx_count >= initial_tx_count);
+        assert!(
+            tx_count >= initial_tx_count,
+            "expected tx_count({}) >= initial_tx_count({})",
+            tx_count,
+            initial_tx_count
+        );
         let duration = now.elapsed();
         now = Instant::now();
         let sample = tx_count - initial_tx_count;
