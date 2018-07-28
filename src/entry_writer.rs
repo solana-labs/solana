@@ -19,24 +19,16 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 
     fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
-        let raw =
+        let entry_bytes =
             bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
-        trace!("write_entry raw = {:?}", raw);
+        let len = entry_bytes.len();
+        let len_bytes =
+            bincode::serialize(&len).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
-        let mut escaped = Vec::with_capacity(raw.len());
-        for mut c in raw {
-            if c == b'\\' || c == b'\n' {
-                trace!("escaping '{}' to {}", c, c + b'\\');
-                escaped.push(b'\\');
-                c += b'\\';
-            }
-            escaped.push(c);
-        }
-        trace!("write_entry escaped = {:?}", escaped);
+        writer.write_all(&len_bytes[..])?;
+        writer.write_all(&entry_bytes[..])?;
 
-        writer.write_all(&escaped[..])?;
-        writer.write_all(&[b'\n'])?;
         writer.flush()
     }
 
@@ -93,7 +85,25 @@ fn read_entry(escaped: &[u8]) -> io::Result<Entry> {
 
 /// Return an iterator for all the entries in the given file.
 pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
-    reader.split(b'\n').map(|s| read_entry(&s?))
+    let mut entry_bytes = Vec::with_capacity(BLOB_SIZE);
+    let mut entry_len: usize = 0;
+    let mut len_bytes = Vec::with_capacity(bincode::serialized_size(&entry_len).unwrap() as usize);
+
+    pub enum mode {
+        Length,
+        Entry,
+    }
+    let mut mode = reader.bytes().map(|b| {
+        match mode {
+            Length -> {
+            }
+            Entry -> {
+                
+            }
+        len = bincode::deserialize(&len_bytes).unwrap();
+
+        read_entry(&s?)
+    });
 }
 
 #[cfg(test)]
