@@ -1,5 +1,4 @@
 extern crate clap;
-extern crate env_logger;
 extern crate getopts;
 extern crate log;
 extern crate serde_json;
@@ -8,6 +7,7 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::crdt::{NodeInfo, TestNode};
 use solana::fullnode::{Config, FullNode, LedgerFile};
+use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil};
@@ -17,7 +17,7 @@ use std::process::exit;
 //use std::time::Duration;
 
 fn main() -> () {
-    env_logger::init();
+    logger::setup();
     set_panic_hook("fullnode");
     let matches = App::new("fullnode")
         .arg(

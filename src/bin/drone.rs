@@ -1,6 +1,5 @@
 extern crate bincode;
 extern crate clap;
-extern crate env_logger;
 extern crate serde_json;
 extern crate solana;
 extern crate tokio;
@@ -12,6 +11,7 @@ use clap::{App, Arg};
 use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
+use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
 use std::fs::File;
@@ -23,7 +23,7 @@ use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
 fn main() {
-    env_logger::init();
+    logger::setup();
     set_panic_hook("drone");
     let matches = App::new("drone")
         .arg(

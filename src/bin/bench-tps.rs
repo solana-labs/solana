@@ -1,6 +1,5 @@
 extern crate bincode;
 extern crate clap;
-extern crate env_logger;
 extern crate influx_db_client;
 extern crate rayon;
 extern crate serde_json;
@@ -14,6 +13,7 @@ use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::hash::Hash;
+use solana::logger;
 use solana::metrics;
 use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
@@ -326,7 +326,7 @@ fn compute_and_report_stats(
 }
 
 fn main() {
-    env_logger::init();
+    logger::setup();
     metrics::set_panic_hook("bench-tps");
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
