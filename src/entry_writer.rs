@@ -21,7 +21,6 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
         let raw =
             bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        // TODO quote new lines...
 
         trace!("write_entry raw = {:?}", raw);
 
@@ -36,8 +35,8 @@ impl<'a, W: Write> EntryWriter<'a, W> {
         }
         trace!("write_entry escaped = {:?}", escaped);
 
-        writer.write(&escaped[..])?;
-        writer.write(&[b'\n'])?;
+        writer.write_all(&escaped[..])?;
+        writer.write_all(&[b'\n'])?;
         writer.flush()
     }
 
