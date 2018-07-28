@@ -5,7 +5,7 @@
 # This script must be run by a user/machine that has successfully authenticated
 # with GCP and has sufficient permission.
 #
-cd "$(dirname "$0")/.."
+here=$(dirname "$0")
 
 # TODO: Switch over to rolling updates
 ROLLING_UPDATE=false
@@ -39,6 +39,16 @@ if [[ -z $SOLANA_NET_URL ]]; then
   esac
 fi
 
+SNAP_INSTALL_CMD="sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode"
+LOCAL_SNAP=$1
+if [[ -n $LOCAL_SNAP ]]; then
+  if [[ ! -f $LOCAL_SNAP ]]; then
+    echo "Error: $LOCAL_SNAP is not a file"
+    exit 1
+  fi
+  SNAP_INSTALL_CMD="sudo snap install ~/solana_local.snap --devmode --dangerous"
+fi
+
 echo "+++ Configuration"
 publicUrl="$SOLANA_NET_URL"
 if [[ $publicUrl = testnet.solana.com ]]; then
@@ -49,6 +59,7 @@ fi
 
 echo "Network entrypoint URL: $publicUrl ($publicIp)"
 echo "Snap channel: $SOLANA_SNAP_CHANNEL"
+[[ -z $LOCAL_SNAP ]] || echo "Local snap: $LOCAL_SNAP"
 
 leaderName=${publicUrl//./-}
 
@@ -150,7 +161,7 @@ vm_foreach_in_class validator inc_fullnode_count
 
 # Add "network stopping" datapoint
 netName=${SOLANA_NET_URL/.*/}
-ci/metrics_write_datapoint.sh "testnet-deploy,name=$netName stop=1"
+"$here"/metrics_write_datapoint.sh "testnet-deploy,name=$netName stop=1"
 
 gcp_vm_exec() {
   declare vmName=$1
@@ -217,7 +228,7 @@ client_stop() {
         tmux capture-pane -t solana -p; \
         tmux kill-session -t solana; \
         sudo snap remove solana; \
-        sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+        $SNAP_INSTALL_CMD; \
         sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG \
           rust-log=$RUST_LOG \
           default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
@@ -263,7 +274,7 @@ fullnode_start() {
         logmarker='solana deploy $(date)/$RANDOM'; \
         sudo snap remove solana; \
         logger \$logmarker; \
-        sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode; \
+        $SNAP_INSTALL_CMD; \
         sudo snap set solana $nodeConfig; \
         snap info solana; \
         sudo snap get solana; \
@@ -325,9 +336,26 @@ wait_for_pids() {
       echo ^^^ +++
       exit 1
     fi
+    rm "log-$pid.txt"
   done
 }
 
+if [[ -n $LOCAL_SNAP ]]; then
+  echo "--- Transferring $LOCAL_SNAP to node(s)"
+
+  transfer_local_snap() {
+    declare vmName=$1
+    declare vmZone=$2
+    declare vmClass=$3
+    declare count=$4
+
+    echo "--- $vmName in zone $vmZone ($count)"
+    SECONDS=0
+    gcloud compute scp --zone "$vmZone" "$LOCAL_SNAP" "$vmName":solana_local.snap
+    echo "Succeeded in ${SECONDS} seconds"
+  }
+  vm_foreach transfer_local_snap
+fi
 
 pids=()
 echo "--- Stopping client node(s)"
@@ -363,6 +391,6 @@ wait_for_pids client shutdown
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
-ci/metrics_write_datapoint.sh "testnet-deploy,name=$netName start=1"
+"$here"/metrics_write_datapoint.sh "testnet-deploy,name=$netName start=1"
 
 exit 0
