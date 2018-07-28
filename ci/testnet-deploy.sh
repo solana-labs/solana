@@ -55,6 +55,34 @@ leaderName=${publicUrl//./-}
 vmlist=() # Each array element is the triple "class:vmName:vmZone"
 
 #
+# vm_foreach [cmd] [extra args to cmd]
+# where
+#   cmd   - the command to execute on each VM
+#           The command will receive three fixed arguments, followed by any
+#           additionl arguments supplied to vm_foreach:
+#               vmName - GCP name of the VM
+#               vmZone - The GCP zone the VM is located in
+#               vmClass - The 'class' of this VM
+#               count  - Monotonically increasing count for each
+#                        invocation of cmd, starting at 1
+#               ...    - Extra args to cmd..
+#
+#
+vm_foreach() {
+  declare cmd=$1
+  shift
+
+  declare count=1
+  for info in "${vmlist[@]}"; do
+    declare vmClass vmName vmZone
+    IFS=: read -r vmClass vmName vmZone < <(echo "$info")
+
+    eval "$cmd" "$vmName" "$vmZone" "$vmClass" "$count" "$@"
+    count=$((count + 1))
+  done
+}
+
+#
 # vm_foreach_in_class [class] [cmd]
 # where
 #   class - the desired VM class to operate on
@@ -66,23 +94,27 @@ vmlist=() # Each array element is the triple "class:vmName:vmZone"
 #                        invocation of cmd, starting at 1
 #
 #
+_run_cmd_if_class() {
+  declare vmName=$1
+  declare vmZone=$2
+  declare vmClass=$3
+  declare count=$4
+  declare class=$5
+  declare cmd=$6
+  if [[ $class = "$vmClass" ]]; then
+    eval "$cmd" "$vmName" "$vmZone" "$count"
+  fi
+}
+
 vm_foreach_in_class() {
   declare class=$1
   declare cmd=$2
-
-  declare count=1
-  for info in "${vmlist[@]}"; do
-    declare vmClass vmName vmZone
-    IFS=: read -r vmClass vmName vmZone < <(echo "$info")
-
-    if [[ $class = "$vmClass" ]]; then
-      eval "$cmd" "$vmName" "$vmZone" "$count"
-      count=$((count + 1))
-    fi
-  done
+  vm_foreach _run_cmd_if_class "$1" "$2"
 }
 
-
+#
+# Load all VMs matching the specified filter and tag them with the specified
+# class into the `vmlist` array.
 findVms() {
   declare class="$1"
   declare filter="$2"
