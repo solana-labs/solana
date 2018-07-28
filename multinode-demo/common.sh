@@ -33,7 +33,7 @@ if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
     fi
   }
   rsync="$SNAP"/bin/rsync
-  multilog="$SNAP/bin/multilog t s16777215"
+  multilog="$SNAP/bin/multilog t s16777215 n200"
   leader_logger="$multilog $SNAP_DATA/leader"
   validator_logger="$multilog t $SNAP_DATA/validator"
   drone_logger="$multilog $SNAP_DATA/drone"
