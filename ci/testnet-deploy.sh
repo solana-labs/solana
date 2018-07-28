@@ -381,10 +381,16 @@ vm_foreach_in_class validator validator_start
 wait_for_pids validators
 
 echo "--- $publicUrl sanity test"
-(
-  set -x
-  USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
-)
+if [[ -z $CI ]]; then
+  # TODO: ssh into a node and run testnet-sanity.sh there.  It's not safe to
+  #       assume the correct Snap is installed on the current non-CI machine
+  echo Skipped for non-CI deploy
+else
+  (
+    set -x
+    USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
+  )
+fi
 
 pids=("${client_stop_pids[@]}")
 wait_for_pids client shutdown
