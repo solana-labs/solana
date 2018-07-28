@@ -58,52 +58,50 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 }
 
-/// Parse an escaped byte slice containing an Entry.
-fn read_entry(escaped: &[u8]) -> io::Result<Entry> {
-    let mut raw = Vec::with_capacity(escaped.len());
+struct EntryReader<R: BufRead> {
+    reader: R,
+    entry_bytes: Vec<u8>,
+    len_len: u64,
+}
 
-    trace!("read_entry escaped = {:?}", escaped);
+impl Iterator for EntryReader<BufRead> {
+    type Item = io::Result<Entry>;
 
-    let mut back = false;
-    for pc in escaped {
-        let mut c = *pc;
-        if back {
-            trace!("de-escaping '{}' to '{}'", c, c - b'\\');
-            back = false;
-            c -= b'\\';
-        } else if c == b'\\' {
-            back = true;
-            continue;
+    fn next(&mut self) -> Option<io::Result<Entry>> {
+        let mut entry_len: usize = 0;
+
+        let mut entry_len_bytes = [0u8; 8];
+
+        if let Err(e) = self.reader.read_exact(&mut entry_len_bytes[..self.len_len]) {
+            None // EOF, probably
+        } else {
+            entry_len = bincode::deserialize(&entry_len_bytes).unwrap();
+
+            if entry_len > self.entry_bytes.len() {
+                self.entry_bytes.resize(entry_len);
+            }
+
+            if let Err(e) = self.reader.read_exact(&mut self.entry_bytes[..entry_len]) {
+                Some(Error::new(ErrorKind::Other, e.to_string()))
+            } else {
+                Some(
+                    bincode::deserialize(&self.entry_bytes)
+                        .map_err(|e| Error::new(ErrorKind::Other, e.to_string())),
+                )
+            }
         }
-        raw.push(c);
     }
-
-    trace!("read_entry raw = {:?}", raw);
-
-    bincode::deserialize(&raw[..]).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
 /// Return an iterator for all the entries in the given file.
 pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
-    let mut entry_bytes = Vec::with_capacity(BLOB_SIZE);
-    let mut entry_len: usize = 0;
-    let mut len_bytes = Vec::with_capacity(bincode::serialized_size(&entry_len).unwrap() as usize);
+    let entry_len: usize = 0;
 
-    pub enum mode {
-        Length,
-        Entry,
+    EntryReader {
+        reader,
+        entry_bytes: Vec::new(),
+        len_len: bincode::serialized_size(&entry_len).unwrap(),
     }
-    let mut mode = reader.bytes().map(|b| {
-        match mode {
-            Length -> {
-            }
-            Entry -> {
-                
-            }
-        len = bincode::deserialize(&len_bytes).unwrap();
-
-        read_entry(&s?)
-    });
 }
 
 #[cfg(test)]
