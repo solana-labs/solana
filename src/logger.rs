@@ -9,6 +9,8 @@ static INIT: Once = ONCE_INIT;
 /// Setup function that is only run once, even if called multiple times.
 pub fn setup() {
     INIT.call_once(|| {
-        env_logger::init();
+        env_logger::Builder::from_default_env()
+            .default_format_timestamp_nanos(true)
+            .init();
     });
 }
