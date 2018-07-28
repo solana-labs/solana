@@ -23,10 +23,9 @@ impl<'a, W: Write> EntryWriter<'a, W> {
             bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
         let len = entry_bytes.len();
-        let len_bytes =
-            bincode::serialize(&len).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        bincode::serialize_into(writer, &len)
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
-        writer.write_all(&len_bytes[..])?;
         writer.write_all(&entry_bytes[..])?;
 
         writer.flush()
