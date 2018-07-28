@@ -563,13 +563,20 @@ fn main() {
 
     // Stop the sampling threads so it will collect the stats
     exit_signal.store(true, Ordering::Relaxed);
+
+    println!("Waiting for validator threads...");
     for t in v_threads {
-        t.join().unwrap();
+        if let Err(err) = t.join() {
+            println!("  join() failed with: {:?}", err);
+        }
     }
 
     // join the tx send threads
+    println!("Waiting for transmit threads...");
     for t in s_threads {
-        t.join().unwrap();
+        if let Err(err) = t.join() {
+            println!("  join() failed with: {:?}", err);
+        }
     }
 
     let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
