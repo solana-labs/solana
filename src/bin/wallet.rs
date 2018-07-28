@@ -3,7 +3,6 @@ extern crate bincode;
 extern crate bs58;
 extern crate clap;
 extern crate dirs;
-extern crate env_logger;
 extern crate serde_json;
 extern crate solana;
 
@@ -12,6 +11,7 @@ use clap::{App, Arg, SubCommand};
 use solana::crdt::NodeInfo;
 use solana::drone::{DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
+use solana::logger;
 use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use std::error;
@@ -350,7 +350,7 @@ fn request_airdrop(
 }
 
 fn main() -> Result<(), Box<error::Error>> {
-    env_logger::init();
+    logger::setup();
     let config = parse_args()?;
     let mut client = mk_client(&config.leader)?;
     process_command(&config, &mut client)
