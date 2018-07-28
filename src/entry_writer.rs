@@ -3,9 +3,9 @@
 //! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
+use bincode;
 use entry::Entry;
-use serde_json;
-use std::io::{self, BufRead, Cursor, Error, ErrorKind, Write};
+use std::io::{self, BufRead, Error, ErrorKind, Write};
 
 pub struct EntryWriter<'a, W> {
     bank: &'a Bank,
@@ -19,8 +19,25 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 
     fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
-        let serialized = serde_json::to_string(entry).unwrap();
-        writeln!(writer, "{}", serialized)?;
+        let raw =
+            bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        // TODO quote new lines...
+
+        trace!("write_entry raw = {:?}", raw);
+
+        let mut escaped = Vec::with_capacity(raw.len());
+        for mut c in raw {
+            if c == b'\\' || c == b'\n' {
+                trace!("escaping '{}' to {}", c, c + b'\\');
+                escaped.push(b'\\');
+                c += b'\\';
+            }
+            escaped.push(c);
+        }
+        trace!("write_entry escaped = {:?}", escaped);
+
+        writer.write(&escaped[..])?;
+        writer.write(&[b'\n'])?;
         writer.flush()
     }
 
@@ -50,28 +67,34 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     }
 }
 
-/// Parse a string containing an Entry.
-pub fn read_entry(s: &str) -> io::Result<Entry> {
-    serde_json::from_str(s).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
+/// Parse an escaped byte slice containing an Entry.
+fn read_entry(escaped: &[u8]) -> io::Result<Entry> {
+    let mut raw = Vec::with_capacity(escaped.len());
+
+    trace!("read_entry escaped = {:?}", escaped);
+
+    let mut back = false;
+    for pc in escaped {
+        let mut c = *pc;
+        if back {
+            trace!("de-escaping '{}' to '{}'", c, c - b'\\');
+            back = false;
+            c -= b'\\';
+        } else if c == b'\\' {
+            back = true;
+            continue;
+        }
+        raw.push(c);
+    }
+
+    trace!("read_entry raw = {:?}", raw);
+
+    bincode::deserialize(&raw[..]).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))
 }
 
 /// Return an iterator for all the entries in the given file.
 pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
-    reader.lines().map(|s| read_entry(&s?))
-}
-
-/// Same as read_entries() but returning a vector. Handy for debugging short logs.
-pub fn read_entries_to_vec<R: BufRead>(reader: R) -> io::Result<Vec<Entry>> {
-    let mut result = vec![];
-    for x in read_entries(reader) {
-        result.push(x?);
-    }
-    Ok(result)
-}
-
-/// Same as read_entries() but parsing a string and returning a vector.
-pub fn read_entries_from_str(s: &str) -> io::Result<Vec<Entry>> {
-    read_entries_to_vec(Cursor::new(s))
+    reader.split(b'\n').map(|s| read_entry(&s?))
 }
 
 #[cfg(test)]
@@ -81,7 +104,7 @@ mod tests {
     use mint::Mint;
     use packet::BLOB_DATA_SIZE;
     use signature::{KeyPair, KeyPairUtil};
-    use std::str;
+    use std::io::Cursor;
     use transaction::Transaction;
 
     #[test]
@@ -114,12 +137,29 @@ mod tests {
         assert_eq!(bank.last_id(), entries[1].id);
     }
 
+    /// Same as read_entries() but parsing a buffer and returning a vector.
+    fn read_entries_from_buf(s: &[u8]) -> io::Result<Vec<Entry>> {
+        let mut result = vec![];
+        let reader = Cursor::new(s);
+        for x in read_entries(reader) {
+            trace!("entry... {:?}", x);
+            result.push(x?);
+        }
+        Ok(result)
+    }
+
     #[test]
-    fn test_read_entries_from_str() {
-        let mint = Mint::new(1);
+    fn test_read_entries_from_buf() {
+        let mint = Mint::new(b'\\' as i64); // guarantee we have a backslash in the buffer
         let mut buf = vec![];
         EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
-        let entries = read_entries_from_str(str::from_utf8(&buf).unwrap()).unwrap();
+        let entries = read_entries_from_buf(&buf).unwrap();
+        assert_eq!(entries, mint.create_entries());
+
+        let mint = Mint::new(b'\n' as i64); // guarantee we have a newline in the buffer
+        let mut buf = vec![];
+        EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
+        let entries = read_entries_from_buf(&buf).unwrap();
         assert_eq!(entries, mint.create_entries());
     }
 }
