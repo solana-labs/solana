@@ -72,14 +72,6 @@ rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
 $rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 
-# migrate from old ledger format?  why not...
-if [[ ! -f "$SOLANA_LEADER_CONFIG_DIR"/ledger.log &&
-          -f "$SOLANA_LEADER_CONFIG_DIR"/genesis.log ]]; then
-  (shopt -s nullglob &&
-     cat "$SOLANA_LEADER_CONFIG_DIR"/genesis.log \
-         "$SOLANA_LEADER_CONFIG_DIR"/tx-*.log) > "$SOLANA_LEADER_CONFIG_DIR"/ledger.log
-fi
-
 # Ensure the validator has at least 1 token before connecting to the network
 # TODO: Remove this workaround
 while ! $solana_wallet \
