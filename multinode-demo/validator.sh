@@ -70,7 +70,11 @@ tune_networking
 SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
-$rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+$rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+[[ -r "$SOLANA_LEADER_CONFIG_DIR"/ledger.log ]] || {
+  echo "Unable to retrieve ledger.log from $rsync_leader_url"
+  exit 1
+}
 
 # Ensure the validator has at least 1 token before connecting to the network
 # TODO: Remove this workaround
