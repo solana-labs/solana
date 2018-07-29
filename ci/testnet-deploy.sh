@@ -39,6 +39,7 @@ if [[ -z $SOLANA_NET_URL ]]; then
   esac
 fi
 
+# Figure installation command
 SNAP_INSTALL_CMD="sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode"
 LOCAL_SNAP=$1
 if [[ -n $LOCAL_SNAP ]]; then
@@ -47,6 +48,12 @@ if [[ -n $LOCAL_SNAP ]]; then
     exit 1
   fi
   SNAP_INSTALL_CMD="sudo snap install ~/solana_local.snap --devmode --dangerous"
+fi
+SNAP_INSTALL_CMD="sudo snap remove solana; $SNAP_INSTALL_CMD"
+
+# `export SKIP_INSTALL=1` to reset the network without reinstalling the snap
+if [[ -n $SKIP_INSTALL ]]; then
+  SNAP_INSTALL_CMD="echo Install skipped"
 fi
 
 echo "+++ Configuration"
@@ -57,8 +64,9 @@ else
   publicIp=$(dig +short $publicUrl | head -n1)
 fi
 
-echo "Network entrypoint URL: $publicUrl ($publicIp)"
+echo "Network entry point URL: $publicUrl ($publicIp)"
 echo "Snap channel: $SOLANA_SNAP_CHANNEL"
+echo "Install command: $SNAP_INSTALL_CMD"
 [[ -z $LOCAL_SNAP ]] || echo "Local snap: $LOCAL_SNAP"
 
 leaderName=${publicUrl//./-}
@@ -227,7 +235,6 @@ client_stop() {
         tmux list-sessions; \
         tmux capture-pane -t solana -p; \
         tmux kill-session -t solana; \
-        sudo snap remove solana; \
         $SNAP_INSTALL_CMD; \
         sudo snap set solana metrics-config=$SOLANA_METRICS_CONFIG \
           rust-log=$RUST_LOG \
@@ -272,7 +279,6 @@ fullnode_start() {
       "\
         set -ex; \
         logmarker='solana deploy $(date)/$RANDOM'; \
-        sudo snap remove solana; \
         logger \$logmarker; \
         $SNAP_INSTALL_CMD; \
         sudo snap set solana $nodeConfig; \
@@ -311,7 +317,10 @@ fullnode_stop() {
 
   (
     SECONDS=0
-    gcp_vm_exec "$vmName" "$vmZone" "Shutting down" "sudo snap remove solana"
+    gcp_vm_exec "$vmName" "$vmZone" "Shutting down" "\
+      if snap list solana; then \
+        sudo snap set solana mode=; \
+      fi"
     echo "Succeeded in ${SECONDS} seconds"
   ) > "log-$vmName.txt" 2>&1 &
   declare pid=$!
