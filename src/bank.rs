@@ -240,12 +240,12 @@ impl Bank {
             // Negative fee shouldn't be possible here, we checked for valid fees when
             // deserializing the transactions
             let total_cost_result = tx.instructions.iter().try_fold(tx.fee, |total, i| {
-                if let Instruction::NewContract(contract) = i {
-                    if contract.tokens < 0 {
+                if let Instruction::NewContract(box_contract) = i {
+                    if box_contract.tokens < 0 {
                         return Err(BankError::NegativeTokens);
                     }
 
-                    Ok(total + contract.tokens)
+                    Ok(total + box_contract.tokens)
                 } else {
                     Ok(total)
                 }
@@ -275,8 +275,8 @@ impl Bank {
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
         for i in &tx.instructions {
             match i {
-                Instruction::NewContract(contract) => {
-                    let plan = contract.plan.clone();
+                Instruction::NewContract(box_contract) => {
+                    let plan = box_contract.plan.clone();
                     if let Some(payment) = plan.final_payment() {
                         self.apply_payment(&payment, balances);
                     } else {
@@ -284,7 +284,7 @@ impl Bank {
                             .pending
                             .write()
                             .expect("'pending' write lock in apply_credits");
-                        pending.insert(contract.id, plan);
+                        pending.insert(box_contract.id, plan);
                     }
                 }
                 Instruction::ApplyTimestamp(dt) => {
@@ -457,8 +457,8 @@ impl Bank {
                 panic!("invalid ledger, first transaction is empty");
             }
 
-            let deposit = if let Instruction::NewContract(contract) = &tx.instructions[0] {
-                contract.plan.final_payment()
+            let deposit = if let Instruction::NewContract(box_contract) = &tx.instructions[0] {
+                box_contract.plan.final_payment()
             } else {
                 None
             }.expect("invalid ledger, needs to start with a contract");
@@ -721,8 +721,8 @@ mod tests {
             .unwrap();
 
         let contract_id;
-        if let Instruction::NewContract(contract) = &tx.instructions[0] {
-            contract_id = contract.id;
+        if let Instruction::NewContract(box_contract) = &tx.instructions[0] {
+            contract_id = box_contract.id;
         } else {
             panic!("expecting contract instruction");
         }

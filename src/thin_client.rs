@@ -409,9 +409,9 @@ mod tests {
         let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        if let Instruction::NewContract(contract) = &mut tr2.instructions[0] {
-            contract.tokens = 502;
-            contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
+        if let Instruction::NewContract(box_contract) = &mut tr2.instructions[0] {
+            box_contract.tokens = 502;
+            box_contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
         let sig = client.transfer_signed(&tr2).unwrap();
         client.poll_for_signature(&sig).unwrap();
@@ -524,7 +524,7 @@ mod tests {
             let budget = Budget::Pay(payment);
             let plan = Plan::Budget(budget);
             let contract = Contract::new(transfer_value, plan);
-            let instruction = Instruction::NewContract(contract);
+            let instruction = Instruction::NewContract(Box::new(contract));
             multi_instructions.push(instruction);
         }
 
@@ -600,7 +600,7 @@ mod tests {
             expected_balance += transfer_value;
 
             let date_condition = (
-                Condition::Timestamp(Utc::now(), alice.pubkey()),
+                Timestamp(Utc::now(), alice.pubkey()),
                 Payment {
                     tokens: transfer_value,
                     to: bob_pubkey,
@@ -610,7 +610,7 @@ mod tests {
             let budget = Budget::Or(date_condition.clone(), date_condition);
             let plan = Plan::Budget(budget);
             let contract = Contract::new(transfer_value, plan);
-            contract_instructions.push(Instruction::NewContract(contract));
+            contract_instructions.push(Instruction::NewContract(Box::new(contract)));
         }
 
         // Make contracts that need a signature
@@ -623,7 +623,7 @@ mod tests {
             let plan = Plan::Budget(budget);
             let contract = Contract::new(transfer_value, plan);
             contract_ids.push(contract.id);
-            contract_instructions.push(Instruction::NewContract(contract));
+            contract_instructions.push(Instruction::NewContract(Box::new(contract)));
         }
 
         let contract_transaction = Transaction::new_from_instructions(

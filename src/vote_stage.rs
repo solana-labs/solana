@@ -362,8 +362,8 @@ pub mod tests {
     fn test_get_last_id_to_vote_on() {
         logger::setup();
 
-        let mint = Mint::new(1234);
-        let bank = Arc::new(Bank::new(&mint));
+        let mut mint = Mint::new(1234);
+        let bank = Arc::new(Bank::new(&mut mint));
         let mut last_vote = 0;
 
         // generate 10 last_ids, register 6 with the bank

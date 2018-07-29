@@ -106,7 +106,6 @@ mod tests {
     use packet::BLOB_DATA_SIZE;
     use signature::{KeyPair, KeyPairUtil};
     use std::io::Cursor;
-    use std::str;
     use transaction::{Transaction, BASE_TRANSACTION_SIZE, MAX_INSTRUCTION_SIZE};
 
     #[test]
@@ -153,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_read_entries_from_buf() {
-        let mint = Mint::new(1);
+        let mut mint = Mint::new(1);
         let mut buf = vec![];
         let created_entries = mint.create_entries();
         EntryWriter::write_entries(&mut buf, created_entries.clone()).unwrap();

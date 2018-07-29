@@ -13,7 +13,7 @@ pub const PUB_KEY_OFFSET: usize = 80;
 pub const MAX_ALLOWED_INSTRUCTIONS: usize = 20;
 // The biggest current instruction is a Budget with a payment plan of 'Or' with two
 // datetime 'Condition' branches. This is the serialized size of that instruction
-pub const MAX_INSTRUCTION_SIZE: usize = 314;
+pub const MAX_INSTRUCTION_SIZE: usize = 352;
 // Serialized size of everything in the transaction excluding the instructions
 pub const BASE_TRANSACTION_SIZE: usize = 168;
 pub const FEE_PER_INSTRUCTION: usize = 0;
@@ -86,7 +86,7 @@ pub struct Vote {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
     /// Declare and instanstansiate `Contract`.
-    NewContract(Contract),
+    NewContract(Box<Contract>),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
@@ -150,7 +150,7 @@ impl Transaction {
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let contract = Contract::new(tokens, plan);
-        let instruction = Instruction::NewContract(contract);
+        let instruction = Instruction::NewContract(Box::new(contract));
         Self::new_from_instructions(from_keypair, vec![instruction], last_id, fee)
     }
 
@@ -195,7 +195,7 @@ impl Transaction {
         );
         let plan = Plan::Budget(budget);
         let contract = Contract::new(tokens, plan);
-        let instructions = vec![Instruction::NewContract(contract)];
+        let instructions = vec![Instruction::NewContract(Box::new(contract))];
         Self::new_from_instructions(from_keypair, instructions, last_id, 0)
     }
 
@@ -230,8 +230,8 @@ impl Transaction {
         }
 
         for i in &self.instructions {
-            if let Instruction::NewContract(contract) = i {
-                if !contract.plan.verify(contract.tokens) {
+            if let Instruction::NewContract(contract_box) = i {
+                if !contract_box.plan.verify(contract_box.tokens) {
                     return false;
                 }
             }
@@ -310,7 +310,7 @@ mod tests {
         });
         let plan = Plan::Budget(budget);
         let contract = Contract::new(0, plan);
-        let instruction = Instruction::NewContract(contract);
+        let instruction = Instruction::NewContract(Box::new(contract));
         let claim0 = Transaction {
             instructions: vec![instruction],
             from: Default::default(),
@@ -329,10 +329,11 @@ mod tests {
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
-            contract.tokens = 1_000_000; // <-- attack, part 1!
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
-                payment.tokens = contract.tokens; // <-- attack, part 2!
+        if let Instruction::NewContract(contract_box) = &mut tx.instructions[0] {
+            let tokens = 1_000_000; // <-- attack, part 1!
+            contract_box.tokens = tokens;
+            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract_box.plan {
+                payment.tokens = tokens; // <-- attack, part 2!
             }
         }
         assert!(tx.verify_plan());
@@ -347,8 +348,8 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+        if let Instruction::NewContract(contract_box) = &mut tx.instructions[0] {
+            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract_box.plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -371,16 +372,16 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+        if let Instruction::NewContract(contract_box) = &mut tx.instructions[0] {
+            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract_box.plan {
                 payment.tokens = 2; // <-- attack!
             }
         }
         assert!(!tx.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+        if let Instruction::NewContract(contract_box) = &mut tx.instructions[0] {
+            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract_box.plan {
                 payment.tokens = 0; // <-- whoops!
             }
         }
