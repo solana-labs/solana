@@ -23,9 +23,10 @@ impl<'a, W: Write> EntryWriter<'a, W> {
             bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
         let len = entry_bytes.len();
-        bincode::serialize_into(writer, &len)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        let len_bytes =
+            bincode::serialize(&len).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
+        writer.write_all(&len_bytes[..])?;
         writer.write_all(&entry_bytes[..])?;
         writer.flush()
     }
@@ -66,39 +67,41 @@ impl<R: BufRead> Iterator for EntryReader<R> {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
-        let mut entry_len: usize = 0;
-
         let mut entry_len_bytes = [0u8; 8];
 
-        if let Err(e) = self.reader.read_exact(&mut entry_len_bytes[..self.len_len]) {
-            None // EOF, probably
-        } else {
-            entry_len = bincode::deserialize(&entry_len_bytes).unwrap();
+        if self.reader
+            .read_exact(&mut entry_len_bytes[..self.len_len])
+            .is_ok()
+        {
+            let entry_len = bincode::deserialize(&entry_len_bytes).unwrap();
 
             if entry_len > self.entry_bytes.len() {
                 self.entry_bytes.resize(entry_len, 0);
             }
 
             if let Err(e) = self.reader.read_exact(&mut self.entry_bytes[..entry_len]) {
-                Some(Error::new(ErrorKind::Other, e.to_string()))
+                Some(Err(e))
             } else {
                 Some(
                     bincode::deserialize(&self.entry_bytes)
                         .map_err(|e| Error::new(ErrorKind::Other, e.to_string())),
                 )
             }
+        } else {
+            None // EOF (probably)
         }
     }
 }
 
 /// Return an iterator for all the entries in the given file.
 pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<Entry>> {
-    let entry_len: usize = 0;
-
     EntryReader {
         reader,
         entry_bytes: Vec::new(),
-        len_len: bincode::serialized_size(&entry_len).unwrap() as usize,
+        len_len: {
+            let entry_len: usize = 0;
+            bincode::serialized_size(&entry_len).unwrap() as usize
+        },
     }
 }
 
@@ -155,13 +158,7 @@ mod tests {
 
     #[test]
     fn test_read_entries_from_buf() {
-        let mint = Mint::new(b'\\' as i64); // guarantee we have a backslash in the buffer
-        let mut buf = vec![];
-        EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
-        let entries = read_entries_from_buf(&buf).unwrap();
-        assert_eq!(entries, mint.create_entries());
-
-        let mint = Mint::new(b'\n' as i64); // guarantee we have a newline in the buffer
+        let mint = Mint::new(1);
         let mut buf = vec![];
         EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
         let entries = read_entries_from_buf(&buf).unwrap();
