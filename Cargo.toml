@@ -57,6 +57,7 @@ unstable = []
 ipv6 = []
 cuda = []
 erasure = []
+sigverify_cpu_disable = []
 
 [dependencies]
 rayon = "1.0.0"
