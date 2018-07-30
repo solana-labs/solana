@@ -84,9 +84,11 @@ while ! $solana_wallet \
   sleep 1
 done
 
-set -o pipefail
+trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/validator.json \
   --testnet "$leader_address:$leader_port" \
   --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log \
-2>&1 | $validator_logger
+  > >($validator_logger) 2>&1 &
+pid=$!
+wait "$pid"
