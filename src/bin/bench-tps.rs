@@ -609,10 +609,15 @@ fn mk_client(r: &NodeInfo) -> ThinClient {
 fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
     let gossip_socket_pair;
     if let Some(a) = addr {
+        let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
+        let gossip_addr = SocketAddr::new(
+            a.parse().unwrap(),
+            gossip_socket.local_addr().unwrap().port(),
+        );
         gossip_socket_pair = UdpSocketPair {
-            addr: a.parse().unwrap(),
-            receiver: UdpSocket::bind("0.0.0.0:0").unwrap(),
-            sender: UdpSocket::bind("0.0.0.0:0").unwrap(),
+            addr: gossip_addr,
+            receiver: gossip_socket.try_clone().unwrap(),
+            sender: gossip_socket,
         };
     } else {
         gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
