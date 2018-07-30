@@ -17,7 +17,7 @@ use std::time::Duration;
 use streamer::BlobSender;
 use transaction::Transaction;
 
-const VOTE_TIMEOUT_MS: u64 = 1000;
+pub const VOTE_TIMEOUT_MS: u64 = 1000;
 
 pub struct VoteStage {
     thread_hdl: JoinHandle<()>,
