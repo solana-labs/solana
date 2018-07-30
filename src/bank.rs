@@ -274,10 +274,10 @@ impl Bank {
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
-                let _ = self.apply_timestamp(tx.from, *dt);
+                let _ = self.apply_timestamp(tx.from, *dt, balances);
             }
             Instruction::ApplySignature(tx_sig) => {
-                let _ = self.apply_signature(tx.from, *tx_sig);
+                let _ = self.apply_signature(tx.from, *tx_sig, balances);
             }
             Instruction::NewVote(_vote) => {
                 trace!("GOT VOTE! last_id={:?}", &tx.last_id.as_ref()[..8]);
@@ -465,7 +465,12 @@ impl Bank {
 
     /// Process a Witness Signature. Any payment plans waiting on this signature
     /// will progress one step.
-    fn apply_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
+    fn apply_signature(
+        &self,
+        from: PublicKey,
+        tx_sig: Signature,
+        balances: &mut HashMap<PublicKey, i64>,
+    ) -> Result<()> {
         if let Occupied(mut e) = self
             .pending
             .write()
@@ -474,7 +479,7 @@ impl Bank {
         {
             e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment, balances);
                 e.remove_entry();
             }
         };
@@ -484,7 +489,12 @@ impl Bank {
 
     /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
     /// will progress one step.
-    fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+    fn apply_timestamp(
+        &self,
+        from: PublicKey,
+        dt: DateTime<Utc>,
+        balances: &mut HashMap<PublicKey, i64>,
+    ) -> Result<()> {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
 
@@ -497,7 +507,7 @@ impl Bank {
         for (key, plan) in pending.iter_mut() {
             plan.apply_witness(&Witness::Timestamp(dt), &from);
             if let Some(payment) = plan.final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment, balances);
                 completed.push(key.clone());
             }
         }
@@ -667,14 +677,18 @@ mod tests {
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
-        bank.apply_timestamp(mint.pubkey(), dt).unwrap();
+        bank.apply_timestamp(mint.pubkey(), dt, &mut bank.balances.write().unwrap())
+            .unwrap();
+
         assert_eq!(bank.get_balance(&pubkey), 1);
 
         // tx count is still 1, because we chose not to count timestamp transactions
         // tx count.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.apply_timestamp(mint.pubkey(), dt).unwrap(); // <-- Attack! Attempt to process completed transaction.
+        bank.apply_timestamp(mint.pubkey(), dt, &mut bank.balances.write().unwrap())
+            .unwrap(); // <-- Attack! Attempt to process completed transaction.
+
         assert_ne!(bank.get_balance(&pubkey), 2);
     }
 
@@ -699,14 +713,24 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
-        bank.apply_signature(mint.pubkey(), sig).unwrap();
+        bank.apply_signature(
+            mint.pubkey(),
+            sig,
+            &mut bank.balances.write().unwrap(),
+        ).unwrap();
+
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
         assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.apply_signature(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        bank.apply_signature(
+            mint.pubkey(),
+            sig,
+            &mut bank.balances.write().unwrap(),
+        ).unwrap();
+
         assert_ne!(bank.get_balance(&mint.pubkey()), 2);
     }
 
