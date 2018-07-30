@@ -6,13 +6,23 @@ use transaction::{Instruction, Transaction, Vote};
 pub fn entries_to_votes(entries: &[Entry]) -> Vec<(PublicKey, Vote, Hash)> {
     entries
         .iter()
-        .flat_map(|entry| entry.transactions.iter().filter_map(transaction_to_vote))
+        .flat_map(|entry| {
+            entry
+                .transactions
+                .iter()
+                .flat_map(|tx| transaction_to_votes(tx))
+        })
         .collect()
 }
 
-pub fn transaction_to_vote(tx: &Transaction) -> Option<(PublicKey, Vote, Hash)> {
-    match tx.instruction {
-        Instruction::NewVote(ref vote) => Some((tx.from, vote.clone(), tx.last_id)),
-        _ => None,
-    }
+fn transaction_to_votes(tx: &Transaction) -> Vec<(PublicKey, Vote, Hash)> {
+    tx.instructions
+        .iter()
+        .filter_map(|i| match &i {
+            &Instruction::NewVote(ref vote) => {
+                Some((tx.from, vote.clone(), tx.last_id))
+            }
+            _ => None,
+        })
+        .collect()
 }

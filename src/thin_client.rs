@@ -4,8 +4,11 @@
 //! unstable and may change in future releases.
 
 use bincode::{deserialize, serialize};
+use budget::Condition;
+use chrono::prelude::Utc;
 use hash::Hash;
 use request::{Request, Response};
+use payment_plan::Payment;
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
@@ -14,8 +17,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::Transaction;
-
+use transaction::{Contract, FEE_PER_INSTRUCTION, Transaction};
 use influx_db_client as influxdb;
 use metrics;
 
@@ -270,6 +272,27 @@ impl ThinClient {
         );
         self.signature_status
     }
+
+    pub fn retry_get_balance(
+        &mut self,
+        bob_pubkey: &PublicKey,
+        expected: Option<i64>,
+    ) -> Option<i64> {
+        const LAST: usize = 20;
+        for run in 0..(LAST + 1) {
+            let out = self.poll_get_balance(bob_pubkey);
+            if expected.is_none() || run == LAST {
+                return out.ok().clone();
+            }
+            trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
+            if let (Some(e), Ok(o)) = (expected, out) {
+                if o == e {
+                    return Some(o);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl Drop for ThinClient {
@@ -386,7 +409,7 @@ mod tests {
         let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        if let Instruction::NewContract(contract) = &mut tr2.instruction {
+        if let Instruction::NewContract(contract) = &mut tr2.instructions[0] {
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
@@ -440,6 +463,201 @@ mod tests {
         sleep(Duration::from_millis(100));
 
         assert!(client.check_signature(&sig));
+
+        exit.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn test_multiple_transfers() {
+        logger::setup();
+        let leader_keypair = KeyPair::new();
+        let leader = TestNode::new_localhost();
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+        let leader_data = leader.data.clone();
+
+        let server = FullNode::new_leader(
+            leader_keypair,
+            bank,
+            0,
+            None,
+            Some(Duration::from_millis(30)),
+            leader,
+            exit.clone(),
+            sink(),
+            false,
+        );
+        //TODO: remove this sleep, or add a retry so CI is stable
+        sleep(Duration::from_millis(300));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(
+            leader_data.contact_info.rpu,
+            requests_socket,
+            leader_data.contact_info.tpu,
+            transactions_socket,
+        );
+        let last_id = client.get_last_id();
+        
+        // Make new contract instructions
+        let initial_transfer_value: i64 = 500;
+        let num_contracts: usize = 10;
+        let mut expected_balance: i64 = 0;
+
+        // Create multiple transfer instructions
+        let mut multi_instructions = Vec::new();
+
+        for i in 0..num_contracts {
+            let transfer_value = initial_transfer_value + i as i64;
+            expected_balance += transfer_value;
+            let payment = Payment {
+                tokens: transfer_value as i64,
+                to: bob_pubkey,
+            };
+            let budget = Budget::Pay(payment);
+            let plan = Plan::Budget(budget);
+            let contract = Contract::new(transfer_value, plan);
+            let instruction = Instruction::NewContract(contract);
+            multi_instructions.push(instruction);
+        }
+        
+        let final_transaction = Transaction::new_from_instructions(
+            &alice.keypair(),
+            multi_instructions,
+            last_id,
+            (num_contracts * FEE_PER_INSTRUCTION) as i64,
+        );
+
+        let _sig = client.transfer_signed(&final_transaction).unwrap();
+
+        let balance = client.retry_get_balance(&bob_pubkey, Some(expected_balance)).unwrap();
+
+        assert_eq!(balance, expected_balance);
+
+        exit.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn test_contract_fulfillment() {
+        logger::setup();
+        let leader_keypair = KeyPair::new();
+        let leader = TestNode::new_localhost();
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = KeyPair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+        let leader_data = leader.data.clone();
+
+        let server = FullNode::new_leader(
+            leader_keypair,
+            bank,
+            0,
+            None,
+            Some(Duration::from_millis(30)),
+            leader,
+            exit.clone(),
+            sink(),
+            false,
+        );
+        //TODO: remove this sleep, or add a retry so CI is stable
+        sleep(Duration::from_millis(300));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(
+            leader_data.contact_info.rpu,
+            requests_socket,
+            leader_data.contact_info.tpu,
+            transactions_socket,
+        );
+        let last_id = client.get_last_id();
+        
+        // Set up all the contracts
+        let initial_transfer_value = 100;
+        let num_signature_contracts = 10;
+        let num_timestamp_contracts = 10;
+        let num_contracts = num_signature_contracts + num_timestamp_contracts;
+        let mut contract_ids = Vec::new();
+        let mut contract_instructions = Vec::new();
+        let mut expected_balance = 0;
+
+        // Make contracts that require timestamps
+        for i in 0..num_timestamp_contracts {
+            let transfer_value = initial_transfer_value + i as i64;
+            expected_balance += transfer_value;
+
+            let date_condition = 
+                (Condition::Timestamp(
+                    Utc::now(),
+                    alice.pubkey()),
+                Payment { tokens: transfer_value, to: bob_pubkey });
+
+            let budget = Budget::Or(
+                date_condition.clone(),
+                date_condition,
+            );
+            let plan = Plan::Budget(budget);
+            let contract = Contract::new(transfer_value, plan);
+            contract_instructions.push(Instruction::NewContract(contract));
+        }
+
+        // Make contracts that need a signature
+        for i in 0..num_signature_contracts {
+            let transfer_value = initial_transfer_value + i as i64;
+            expected_balance += transfer_value;
+
+            let budget = Budget::new_authorized_payment(
+                alice.pubkey(),
+                transfer_value,
+                bob_pubkey,
+            );
+
+            let plan = Plan::Budget(budget);
+            let contract = Contract::new(transfer_value, plan);
+            contract_ids.push(contract.id);
+            contract_instructions.push(Instruction::NewContract(contract));
+        }
+
+        let contract_transaction = Transaction::new_from_instructions(
+            &alice.keypair(),
+            contract_instructions,
+            last_id,
+            (num_contracts * FEE_PER_INSTRUCTION) as i64,
+        );
+
+        let _sig = client.transfer_signed(&contract_transaction).unwrap();
+
+        // Create instructions to fulfill all the above contracts
+        let mut fulfill_instructions: Vec<Instruction> = contract_ids.iter().map(
+            |id| Instruction::ApplySignature(*id)).collect();
+        
+        let fulfill_timestamp_instruction = Instruction::ApplyTimestamp(Utc::now());
+        fulfill_instructions.push(fulfill_timestamp_instruction);
+
+        let num_instructions = fulfill_instructions.len();
+
+        let final_transaction = Transaction::new_from_instructions(
+            &alice.keypair(),
+            fulfill_instructions,
+            last_id,
+            (num_instructions * FEE_PER_INSTRUCTION) as i64,
+        );
+
+        let _sig = client.transfer_signed(&final_transaction).unwrap();
+        let balance = client.retry_get_balance(&bob_pubkey, Some(expected_balance)).unwrap();
+
+        assert_eq!(balance, expected_balance);
 
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();

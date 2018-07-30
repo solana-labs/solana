@@ -290,7 +290,7 @@ fn test_boot_validator_from_file() {
         Some(leader_data.contact_info.ncp),
     );
     let mut client = mk_client(&validator_data);
-    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+    let getbal = client.retry_get_balance(&bob_pubkey, Some(leader_balance));
     assert!(getbal == Some(leader_balance));
 
     val_fullnode.close().unwrap();
@@ -371,13 +371,13 @@ fn test_leader_restart_validator_start_from_old_ledger() {
             send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(expected))
                 .unwrap();
         assert_eq!(leader_balance, expected);
-        let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+        let getbal = client.retry_get_balance(&bob_pubkey, Some(leader_balance));
         if getbal == Some(leader_balance) {
             break;
         }
         expected += 500;
     }
-    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
+    let getbal = client.retry_get_balance(&bob_pubkey, Some(expected));
     assert_eq!(getbal, Some(expected));
 
     val_fullnode.close().unwrap();
@@ -531,7 +531,7 @@ fn test_multi_node_dynamic_network() {
                 let mut retain_me = true;
                 let mut client = mk_client(&server.0);
                 trace!("{:x} {} get_balance start", server.0.debug_id(), i);
-                let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
+                let getbal = client.retry_get_balance(&bob_pubkey, Some(leader_balance));
                 trace!(
                     "{:x} {} get_balance: {:?} leader_balance: {}",
                     server.0.debug_id(),
@@ -618,28 +618,7 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
     )
 }
 
-fn retry_get_balance(
-    client: &mut ThinClient,
-    bob_pubkey: &PublicKey,
-    expected: Option<i64>,
-) -> Option<i64> {
-    const LAST: usize = 20;
-    for run in 0..(LAST + 1) {
-        let out = client.poll_get_balance(bob_pubkey);
-        if expected.is_none() || run == LAST {
-            return out.ok().clone();
-        }
-        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
-        if let (Some(e), Ok(o)) = (expected, out) {
-            if o == e {
-                return Some(o);
-            }
-        }
-    }
-    None
-}
-
-fn send_tx_and_retry_get_balance(
+pub fn send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Mint,
     bob_pubkey: &PublicKey,
@@ -652,7 +631,7 @@ fn send_tx_and_retry_get_balance(
     let _sig = client
         .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
         .unwrap();
-    retry_get_balance(&mut client, bob_pubkey, expected)
+    client.retry_get_balance(bob_pubkey, expected)
 }
 
 fn retry_send_tx_and_retry_get_balance(

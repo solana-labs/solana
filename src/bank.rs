@@ -223,10 +223,12 @@ impl Bank {
         {
             let option = bals.get_mut(&tx.from);
             if option.is_none() {
-                if let Instruction::NewVote(_) = &tx.instruction {
-                    inc_new_counter!("bank-appy_debits-vote_account_not_found", 1);
-                } else {
-                    inc_new_counter!("bank-appy_debits-generic_account_not_found", 1);
+                for i in &tx.instructions {
+                    if let Instruction::NewVote(_) = i {
+                        inc_new_counter!("bank-appy_debits-vote_account_not_found", 1);
+                    } else {
+                        inc_new_counter!("bank-appy_debits-generic_account_not_found", 1);
+                    }
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }
@@ -234,20 +236,33 @@ impl Bank {
 
             self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
 
-            if let Instruction::NewContract(contract) = &tx.instruction {
-                if contract.tokens < 0 {
-                    return Err(BankError::NegativeTokens);
-                }
+            /// Negative fee shouldn't be possible here, we checked for valid fees when 
+            /// deserializing the transactions
+            let total_cost_result = tx.instructions.iter().try_fold(
+                tx.fee,
+                |total, i| {
+                    if let Instruction::NewContract(contract) = i {
+                        if contract.tokens < 0 {
+                            return Err(BankError::NegativeTokens);
+                        }
+                        
+                        Ok(total + contract.tokens)
+                    } else {
+                        Ok(total)
+                    }
+                },
+            );
 
-                if *bal < contract.tokens {
-                    self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
-                    return Err(BankError::InsufficientFunds(tx.from));
-                } else if *bal == contract.tokens {
-                    purge = true;
-                } else {
-                    *bal -= contract.tokens;
-                }
-            };
+            let total_cost = total_cost_result?;
+
+            if *bal < total_cost {
+                self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                return Err(BankError::InsufficientFunds(tx.from));
+            } else if *bal == total_cost {
+                purge = true;
+            } else {
+                *bal -= total_cost;
+            }
         }
 
         if purge {
@@ -260,28 +275,30 @@ impl Bank {
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
     fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
-        match &tx.instruction {
-            Instruction::NewContract(contract) => {
-                let plan = contract.plan.clone();
-                if let Some(payment) = plan.final_payment() {
-                    self.apply_payment(&payment, balances);
-                } else {
-                    let mut pending = self
-                        .pending
-                        .write()
-                        .expect("'pending' write lock in apply_credits");
-                    pending.insert(tx.sig, plan);
+        for i in tx.instructions.iter() {
+            match i {
+                Instruction::NewContract(contract) => {
+                    let plan = contract.plan.clone();
+                    if let Some(payment) = plan.final_payment() {
+                        self.apply_payment(&payment, balances);
+                    } else {
+                        let mut pending = self
+                            .pending
+                            .write()
+                            .expect("'pending' write lock in apply_credits");
+                        pending.insert(contract.id, plan);
+                    }
                 }
-            }
-            Instruction::ApplyTimestamp(dt) => {
-                let _ = self.apply_timestamp(tx.from, *dt, balances);
-            }
-            Instruction::ApplySignature(tx_sig) => {
-                let _ = self.apply_signature(tx.from, *tx_sig, balances);
-            }
-            Instruction::NewVote(_vote) => {
-                trace!("GOT VOTE! last_id={:?}", &tx.last_id.as_ref()[..8]);
-                // TODO: record the vote in the stake table...
+                Instruction::ApplyTimestamp(dt) => {
+                    let _ = self.apply_timestamp(tx.from, *dt, balances);
+                }
+                Instruction::ApplySignature(contract_id) => {
+                    let _ = self.apply_signature(tx.from, *contract_id, balances);
+                }
+                Instruction::NewVote(_vote) => {
+                    info!("GOT VOTE! last_id={:?}", &tx.last_id.as_ref()[..8]);
+                    // TODO: record the vote in the stake table...
+                }
             }
         }
     }
@@ -438,7 +455,11 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            let deposit = if let Instruction::NewContract(contract) = &tx.instruction {
+            if tx.instructions.len() == 0 {
+                panic!("invalid ledger, first transaction is empty");
+            }
+
+            let deposit = if let Instruction::NewContract(contract) = &tx.instructions[0] {
                 contract.plan.final_payment()
             } else {
                 None
@@ -468,14 +489,14 @@ impl Bank {
     fn apply_signature(
         &self,
         from: PublicKey,
-        tx_sig: Signature,
+        contract_id: Signature,
         balances: &mut HashMap<PublicKey, i64>,
     ) -> Result<()> {
         if let Occupied(mut e) = self
             .pending
             .write()
             .expect("write() in apply_signature")
-            .entry(tx_sig)
+            .entry(contract_id)
         {
             e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {

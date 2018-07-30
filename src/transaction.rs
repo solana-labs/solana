@@ -10,6 +10,13 @@ use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 pub const SIGNED_DATA_OFFSET: usize = 112;
 pub const SIG_OFFSET: usize = 8;
 pub const PUB_KEY_OFFSET: usize = 80;
+pub const MAX_ALLOWED_INSTRUCTIONS: usize = 20;
+// The biggest current instruction is a Budget with a payment plan of 'Or' with two
+// datetime 'Condition' branches. This is the serialized size of that instruction
+pub const MAX_INSTRUCTION_SIZE: usize = 280;
+// Serialized size of everything in the transaction excluding the instructions
+pub const BASE_TRANSACTION_SIZE: usize = 168;
+pub const FEE_PER_INSTRUCTION: usize = 0;
 
 /// The type of payment plan. Each item must implement the PaymentPlan trait.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -45,6 +52,27 @@ pub struct Contract {
     /// The number of tokens allocated to the `Plan` and any transaction fees.
     pub tokens: i64,
     pub plan: Plan,
+    pub id: Signature,
+}
+
+impl Contract {
+    pub fn new(tokens: i64, plan: Plan) -> Self {
+        let id = Self::generate_id(tokens, &plan);
+        Contract {
+            tokens,
+            plan,
+            id,
+        }
+    }
+
+    // TODO: this is a dummy random id generator, come up with better solution later.
+    fn generate_id(tokens: i64, plan: &Plan) -> Signature {
+        let keypair = KeyPair::new();
+        let mut data = serialize(&tokens).expect("serialize Contract");
+        let plan_data = serialize(plan).expect("serialize last_id");
+        data.extend_from_slice(&plan_data);
+        Signature::new(keypair.sign(&data).as_ref())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -85,7 +113,7 @@ pub struct Transaction {
     pub from: PublicKey,
 
     /// The action the server should take.
-    pub instruction: Instruction,
+    pub instructions: Vec<Instruction>,
 
     /// The ID of a recent ledger entry.
     pub last_id: Hash,
@@ -96,16 +124,16 @@ pub struct Transaction {
 
 impl Transaction {
     /// Create a signed transaction from the given `Instruction`.
-    fn new_from_instruction(
+    pub fn new_from_instructions(
         from_keypair: &KeyPair,
-        instruction: Instruction,
+        instructions: Vec<Instruction>,
         last_id: Hash,
         fee: i64,
     ) -> Self {
         let from = from_keypair.pubkey();
         let mut tx = Transaction {
             sig: Signature::default(),
-            instruction,
+            instructions: instructions,
             last_id,
             from,
             fee,
@@ -123,13 +151,14 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let payment = Payment {
-            tokens: tokens - fee,
+            tokens: tokens,
             to,
         };
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens });
-        Self::new_from_instruction(from_keypair, instruction, last_id, fee)
+        let contract = Contract::new(tokens, plan);
+        let instruction = Instruction::NewContract(contract);
+        Self::new_from_instructions(from_keypair, vec![instruction], last_id, fee)
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -140,17 +169,22 @@ impl Transaction {
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
     pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: Hash) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
-        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
+        Self::new_from_instructions(from_keypair, vec![instruction], last_id, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
-        let instruction = Instruction::ApplySignature(tx_sig);
-        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
+    pub fn new_signature(from_keypair: &KeyPair, contract_id: Signature, last_id: Hash) -> Self {
+        let instruction = Instruction::ApplySignature(contract_id);
+        Self::new_from_instructions(from_keypair, vec![instruction], last_id, 0)
     }
 
     pub fn new_vote(from_keypair: &KeyPair, vote: Vote, last_id: Hash, fee: i64) -> Self {
-        Transaction::new_from_instruction(&from_keypair, Instruction::NewVote(vote), last_id, fee)
+        Transaction::new_from_instructions(
+            &from_keypair,
+            vec![Instruction::NewVote(vote)],
+            last_id,
+            fee,
+        )
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -167,13 +201,14 @@ impl Transaction {
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens });
-        Self::new_from_instruction(from_keypair, instruction, last_id, 0)
+        let contract = Contract::new(tokens, plan);
+        let instructions = vec![Instruction::NewContract(contract)];
+        Self::new_from_instructions(from_keypair, instructions, last_id, 0)
     }
 
     /// Get the transaction data to sign.
     fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&(&self.instruction)).expect("serialize Contract");
+        let mut data = serialize(&(&self.instructions)).expect("serialize Contract");
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
 
@@ -197,13 +232,28 @@ impl Transaction {
 
     /// Verify only the payment plan.
     pub fn verify_plan(&self) -> bool {
-        if let Instruction::NewContract(contract) = &self.instruction {
-            self.fee >= 0
-                && self.fee <= contract.tokens
-                && contract.plan.verify(contract.tokens - self.fee)
-        } else {
-            true
+        if self.fee < 0 {
+            return false;
         }
+
+        for i in self.instructions.iter(){
+            if let Instruction::NewContract(contract) = i {
+                if !contract.plan.verify(contract.tokens) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// Verify the number of instructions doesn't exceed the limit, and that
+    /// an appropriate fee was supplied for the number of instructions
+    pub fn verify_instructions(&self) -> bool {
+        let num_instructions = self.instructions.len();
+
+        num_instructions <= MAX_ALLOWED_INSTRUCTIONS
+            && self.fee >= (num_instructions * FEE_PER_INSTRUCTION) as i64
     }
 }
 
@@ -255,7 +305,7 @@ mod tests {
         let keypair0 = KeyPair::new();
         let pubkey1 = KeyPair::new().pubkey();
         assert!(Transaction::new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
-        assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
+        assert!(Transaction::new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
         assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
     }
 
@@ -266,9 +316,10 @@ mod tests {
             to: Default::default(),
         });
         let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens: 0 });
+        let contract = Contract::new(0, plan);
+        let instruction = Instruction::NewContract(contract);
         let claim0 = Transaction {
-            instruction,
+            instructions: vec![instruction],
             from: Default::default(),
             last_id: Default::default(),
             sig: Default::default(),
@@ -285,7 +336,7 @@ mod tests {
         let keypair = KeyPair::new();
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instruction {
+        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
             contract.tokens = 1_000_000; // <-- attack, part 1!
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
@@ -303,7 +354,7 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instruction {
+        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
@@ -327,7 +378,7 @@ mod tests {
         let keypair1 = KeyPair::new();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        if let Instruction::NewContract(contract) = &mut tx.instruction {
+        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.tokens = 2; // <-- attack!
             }
@@ -335,7 +386,7 @@ mod tests {
         assert!(!tx.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        if let Instruction::NewContract(contract) = &mut tx.instruction {
+        if let Instruction::NewContract(contract) = &mut tx.instructions[0] {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.tokens = 0; // <-- whoops!
             }
