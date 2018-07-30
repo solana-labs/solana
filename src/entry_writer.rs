@@ -6,6 +6,7 @@ use bank::Bank;
 use bincode;
 use entry::Entry;
 use std::io::{self, BufRead, Error, ErrorKind, Write};
+use std::mem::size_of;
 
 pub struct EntryWriter<'a, W> {
     bank: &'a Bank,
@@ -60,19 +61,15 @@ impl<'a, W: Write> EntryWriter<'a, W> {
 struct EntryReader<R: BufRead> {
     reader: R,
     entry_bytes: Vec<u8>,
-    len_len: usize,
 }
 
 impl<R: BufRead> Iterator for EntryReader<R> {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
-        let mut entry_len_bytes = [0u8; 8];
+        let mut entry_len_bytes = [0u8; size_of::<usize>()];
 
-        if self.reader
-            .read_exact(&mut entry_len_bytes[..self.len_len])
-            .is_ok()
-        {
+        if self.reader.read_exact(&mut entry_len_bytes[..]).is_ok() {
             let entry_len = bincode::deserialize(&entry_len_bytes).unwrap();
 
             if entry_len > self.entry_bytes.len() {
@@ -98,10 +95,6 @@ pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<En
     EntryReader {
         reader,
         entry_bytes: Vec::new(),
-        len_len: {
-            let entry_len: usize = 0;
-            bincode::serialized_size(&entry_len).unwrap() as usize
-        },
     }
 }
 
