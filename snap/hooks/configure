@@ -16,8 +16,8 @@ num_tokens="$(snapctl get num-tokens)"
 case $mode in
 leader+drone)
   $SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg} -t leader
-  snapctl start --enable solana.daemon-leader
   snapctl start --enable solana.daemon-drone
+  snapctl start --enable solana.daemon-leader
   ;;
 leader)
   $SNAP/bin/setup.sh ${num_tokens:+-n $num_tokens} ${ip_address_arg} -t leader
