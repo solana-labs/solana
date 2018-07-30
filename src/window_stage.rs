@@ -7,7 +7,7 @@ use std::net::UdpSocket;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use streamer::{self, BlobReceiver, Window};
+use streamer::{self, BlobReceiver, SharedWindow};
 
 pub struct WindowStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -16,7 +16,7 @@ pub struct WindowStage {
 impl WindowStage {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
-        window: Window,
+        window: SharedWindow,
         entry_height: u64,
         retransmit_socket: UdpSocket,
         blob_recycler: &BlobRecycler,
