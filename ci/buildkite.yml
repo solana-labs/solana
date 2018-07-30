@@ -1,5 +1,5 @@
 steps:
-  - command: "ci/docker-run.sh rust ci/test-stable.sh"
+  - command: "ci/docker-run.sh solanalabs/rust ci/test-stable.sh"
     name: "stable [public]"
     env:
       CARGO_TARGET_CACHE_NAME: "stable"
