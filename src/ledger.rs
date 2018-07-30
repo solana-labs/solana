@@ -10,9 +10,57 @@ use result::{Error, Result};
 use std::collections::VecDeque;
 use std::io::Cursor;
 use transaction::Transaction;
+use std::fs::{File, OpenOptions};
+
+// ledger 
+pub struct Ledger{
+    entry_len_len: usize;
+    
+    entry_height: u64; // current index
+
+    pub struct Files {
+        index: File; // an array of usize elements
+        data:  File; // concatenated entries
+    }
+
+    reader: Files;
+    writer: Files;
+
+    pub fn new(directory: String) -> Self {
+        
+    }
+
+    pub fn get_entry_height(&self) -> u64 {
+        entry_height
+    }
+    
+    pub fn entry_at(&self, index: u64) -> Result<Entry> {
+        
+    }
+    pub fn append_entry(&self, entry: &Entry) -> io::Result<u64> {
+        Ok(0)
+    }
+    pub fn append_entries(&self, entries: &[Entry]) -> io::Result<u64> {
+       Ok(0)
+    }
+}
+
+impl<R: BufRead> Iterator for Ledger<R> {
+    type Item = io::Result<Entry>;
+
+    fn next(&mut self) -> Option<io::Result<Entry>> {
+        let mut entry_len_bytes = [0u8; sizeof(::<usize>()]; // TODO: sizeof()?
+        
+        let mut entry_len =
+            if self.reader.index
+            .read_exact(&mut entry_len_bytes[..self.entry_len_len])
+            .is_ok()
+
+    }
+}
+
 
 // a Block is a slice of Entries
-
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
