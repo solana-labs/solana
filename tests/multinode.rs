@@ -382,7 +382,7 @@ fn test_multi_node_dynamic_network() {
 
     let leader = TestNode::new_localhost();
     let bob_pubkey = KeyPair::new().pubkey();
-    let (alice, ledger_path) = genesis(100_000);
+    let (alice, ledger_path) = genesis(10_000_000);
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
     let server = FullNode::new(
@@ -393,14 +393,14 @@ fn test_multi_node_dynamic_network() {
         None,
     );
     info!("{:x} LEADER", leader_data.debug_id());
-    let leader_balance = send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(500),
     ).unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance = send_tx_and_retry_get_balance(
+    let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
@@ -419,7 +419,7 @@ fn test_multi_node_dynamic_network() {
                     info!("Spawned thread {}", n);
                     let keypair = KeyPair::new();
                     //send some tokens to the new validator
-                    let bal = send_tx_and_retry_get_balance(
+                    let bal = retry_send_tx_and_retry_get_balance(
                         &leader_data,
                         &alice_clone.read().unwrap(),
                         &keypair.pubkey(),
@@ -474,7 +474,7 @@ fn test_multi_node_dynamic_network() {
     for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
-        let leader_balance = send_tx_and_retry_get_balance(
+        let leader_balance = retry_send_tx_and_retry_get_balance(
             &leader_data,
             &alice_arc.read().unwrap(),
             &bob_pubkey,
@@ -600,4 +600,33 @@ fn send_tx_and_retry_get_balance(
         .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
         .unwrap();
     retry_get_balance(&mut client, bob_pubkey, expected)
+}
+
+fn retry_send_tx_and_retry_get_balance(
+    leader: &NodeInfo,
+    alice: &Mint,
+    bob_pubkey: &PublicKey,
+    expected: Option<i64>,
+) -> Option<i64> {
+    let mut client = mk_client(leader);
+    trace!("getting leader last_id");
+    let last_id = client.get_last_id();
+    info!("executing leader transfer");
+    const LAST: usize = 30;
+    for run in 0..(LAST + 1) {
+    	let _sig = client
+    	    .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
+    	    .unwrap();
+        let out = client.poll_get_balance(bob_pubkey);
+        if expected.is_none() || run == LAST {
+            return out.ok().clone();
+        }
+        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
+        if let (Some(e), Ok(o)) = (expected, out) {
+            if o == e {
+                return Some(o);
+            }
+        }
+    }
+    None
 }
