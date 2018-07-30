@@ -116,8 +116,14 @@ fn main() {
 
             let processor = reader
                 .for_each(move |bytes| {
-                    let req: DroneRequest =
-                        deserialize(&bytes).expect("deserialize packet in drone");
+                    let req: DroneRequest = deserialize(&bytes).or_else(|err| {
+                        use std::io;
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("deserialize packet in drone: {:?}", err),
+                        ))
+                    })?;
+
                     println!("Airdrop requested...");
                     // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
                     let res1 = drone2.lock().unwrap().send_airdrop(req);
@@ -126,14 +132,6 @@ fn main() {
                         Err(_) => println!("Request limit reached for this time slice"),
                     }
                     Ok(())
-                })
-                .and_then(|()| {
-                    println!("Socket received FIN packet and closed connection");
-                    Ok(())
-                })
-                .or_else(|err| {
-                    println!("Socket closed with error: {:?}", err);
-                    Err(err)
                 })
                 .then(|result| {
                     println!("Socket closed with result: {:?}", result);
