@@ -283,6 +283,7 @@ mod tests {
             leader,
             exit.clone(),
             sink(),
+            false,
         );
         //TODO: this seems unstable
         sleep(Duration::from_millis(900));

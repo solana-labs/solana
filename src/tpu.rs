@@ -59,13 +59,15 @@ impl Tpu {
         blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
         writer: W,
+        sigverify_disabled: bool,
     ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
 
         let (fetch_stage, packet_receiver) =
             FetchStage::new(transactions_socket, exit, &packet_recycler);
 
-        let (sigverify_stage, verified_receiver) = SigVerifyStage::new(packet_receiver);
+        let (sigverify_stage, verified_receiver) =
+            SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
         let (banking_stage, signal_receiver) =
             BankingStage::new(bank.clone(), verified_receiver, packet_recycler.clone());

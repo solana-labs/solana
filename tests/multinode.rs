@@ -392,7 +392,7 @@ fn test_multi_node_dynamic_network() {
     let (alice, ledger_path) = genesis(10_000_000);
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
-    let server = FullNode::new(
+    let server = FullNode::new_without_sigverify(
         leader,
         true,
         LedgerFile::Path(ledger_path.clone()),
@@ -460,7 +460,7 @@ fn test_multi_node_dynamic_network() {
                     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
                     let rd = validator.data.clone();
                     info!("starting {:8x} {:x}", keypair.pubkey(), rd.debug_id());
-                    let val = FullNode::new(
+                    let val = FullNode::new_without_sigverify(
                         validator,
                         false,
                         LedgerFile::Path(ledger_path.clone()),
@@ -519,7 +519,7 @@ fn test_multi_node_dynamic_network() {
                 if distance > max_distance_increase {
                     info!("Node {:x} is behind by {}", server.0.debug_id(), distance);
                     max_distance_increase = distance;
-                    if max_distance_increase > purge_lag as i64 {
+                    if max_distance_increase as u64 > purge_lag as u64 {
                         server.1.exit();
                         info!("Node {:x} is exiting", server.0.debug_id());
                         retain_me = false;

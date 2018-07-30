@@ -24,21 +24,30 @@ pub struct SigVerifyStage {
 }
 
 impl SigVerifyStage {
-    pub fn new(packet_receiver: Receiver<SharedPackets>) -> (Self, Receiver<VerifiedPackets>) {
+    pub fn new(
+        packet_receiver: Receiver<SharedPackets>,
+        sigverify_disabled: bool,
+    ) -> (Self, Receiver<VerifiedPackets>) {
         sigverify::init();
         let (verified_sender, verified_receiver) = channel();
-        let thread_hdls = Self::verifier_services(packet_receiver, verified_sender);
+        let thread_hdls =
+            Self::verifier_services(packet_receiver, verified_sender, sigverify_disabled);
         (SigVerifyStage { thread_hdls }, verified_receiver)
     }
 
-    fn verify_batch(batch: Vec<SharedPackets>) -> VerifiedPackets {
-        let r = sigverify::ed25519_verify(&batch);
+    fn verify_batch(batch: Vec<SharedPackets>, sigverify_disabled: bool) -> VerifiedPackets {
+        let r = if sigverify_disabled {
+            sigverify::ed25519_verify_disabled(&batch)
+        } else {
+            sigverify::ed25519_verify(&batch)
+        };
         batch.into_iter().zip(r).collect()
     }
 
     fn verifier(
         recvr: &Arc<Mutex<PacketReceiver>>,
         sendr: &Arc<Mutex<Sender<VerifiedPackets>>>,
+        sigverify_disabled: bool,
     ) -> Result<()> {
         let (batch, len) =
             streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
@@ -53,7 +62,7 @@ impl SigVerifyStage {
             rand_id
         );
 
-        let verified_batch = Self::verify_batch(batch);
+        let verified_batch = Self::verify_batch(batch, sigverify_disabled);
         sendr
             .lock()
             .expect("lock in fn verify_batch in tpu")
@@ -76,9 +85,10 @@ impl SigVerifyStage {
     fn verifier_service(
         packet_receiver: Arc<Mutex<PacketReceiver>>,
         verified_sender: Arc<Mutex<Sender<VerifiedPackets>>>,
+        sigverify_disabled: bool,
     ) -> JoinHandle<()> {
         spawn(move || loop {
-            if let Err(e) = Self::verifier(&packet_receiver, &verified_sender) {
+            if let Err(e) = Self::verifier(&packet_receiver, &verified_sender, sigverify_disabled) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -91,11 +101,12 @@ impl SigVerifyStage {
     fn verifier_services(
         packet_receiver: PacketReceiver,
         verified_sender: Sender<VerifiedPackets>,
+        sigverify_disabled: bool,
     ) -> Vec<JoinHandle<()>> {
         let sender = Arc::new(Mutex::new(verified_sender));
         let receiver = Arc::new(Mutex::new(packet_receiver));
         (0..4)
-            .map(|_| Self::verifier_service(receiver.clone(), sender.clone()))
+            .map(|_| Self::verifier_service(receiver.clone(), sender.clone(), sigverify_disabled))
             .collect()
     }
 }
