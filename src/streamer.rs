@@ -31,7 +31,7 @@ pub struct WindowSlot {
     pub coding: Option<SharedBlob>,
 }
 
-pub type Window = Arc<RwLock<Vec<WindowSlot>>>;
+pub type SharedWindow = Arc<RwLock<Vec<WindowSlot>>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum WindowError {
@@ -171,7 +171,7 @@ pub fn blob_receiver(
 }
 
 fn find_next_missing(
-    window: &Window,
+    window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     consumed: u64,
     received: u64,
@@ -197,7 +197,7 @@ fn find_next_missing(
 
 fn repair_window(
     debug_id: u64,
-    window: &Window,
+    window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     last: &mut u64,
     times: &mut usize,
@@ -319,7 +319,7 @@ fn process_blob(
     blob: SharedBlob,
     pix: u64,
     consume_queue: &mut SharedBlobs,
-    window: &Window,
+    window: &SharedWindow,
     recycler: &BlobRecycler,
     consumed: &mut u64,
 ) {
@@ -419,7 +419,7 @@ fn process_blob(
 
 fn recv_window(
     debug_id: u64,
-    window: &Window,
+    window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut u64,
@@ -515,7 +515,7 @@ fn recv_window(
     Ok(())
 }
 
-fn print_window(debug_id: u64, window: &Window, consumed: u64) -> String {
+fn print_window(debug_id: u64, window: &SharedWindow, consumed: u64) -> String {
     let pointer: Vec<_> = window
         .read()
         .unwrap()
@@ -559,7 +559,7 @@ fn print_window(debug_id: u64, window: &Window, consumed: u64) -> String {
     )
 }
 
-pub fn default_window() -> Window {
+pub fn default_window() -> SharedWindow {
     Arc::new(RwLock::new(vec![
         WindowSlot::default();
         WINDOW_SIZE as usize
@@ -594,7 +594,7 @@ pub fn initialized_window(
     node_info: &NodeInfo,
     blobs: Vec<SharedBlob>,
     entry_height: u64,
-) -> Window {
+) -> SharedWindow {
     let window = default_window();
     let debug_id = node_info.debug_id();
 
@@ -628,7 +628,7 @@ pub fn initialized_window(
 
 pub fn window(
     crdt: Arc<RwLock<Crdt>>,
-    window: Window,
+    window: SharedWindow,
     entry_height: u64,
     recycler: BlobRecycler,
     r: BlobReceiver,
@@ -676,7 +676,7 @@ pub fn window(
 fn broadcast(
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
-    window: &Window,
+    window: &SharedWindow,
     recycler: &BlobRecycler,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -786,7 +786,7 @@ fn broadcast(
 pub fn broadcaster(
     sock: UdpSocket,
     crdt: Arc<RwLock<Crdt>>,
-    window: Window,
+    window: SharedWindow,
     entry_height: u64,
     recycler: BlobRecycler,
     r: BlobReceiver,

@@ -29,7 +29,7 @@
 //!
 //! 1. Fetch Stage
 //! - Incoming blobs are picked up from the replicate socket and repair socket.
-//! 2. Window Stage
+//! 2. SharedWindow Stage
 //! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
 //! retransmits blobs that are in the queue.
 //! 3. Replicate Stage
@@ -47,7 +47,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use streamer::Window;
+use streamer::SharedWindow;
 use window_stage::WindowStage;
 
 pub struct Tvu {
@@ -73,7 +73,7 @@ impl Tvu {
         bank: &Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
-        window: Window,
+        window: SharedWindow,
         replicate_socket: UdpSocket,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
@@ -156,7 +156,7 @@ pub mod tests {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{self, Window};
+    use streamer::{self, SharedWindow};
     use transaction::Transaction;
     use tvu::Tvu;
 
@@ -164,7 +164,7 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<(Ncp, Window)> {
+    ) -> Result<(Ncp, SharedWindow)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let ncp = Ncp::new(&crdt, window.clone(), listen, send_sock, exit)?;

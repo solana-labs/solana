@@ -19,7 +19,7 @@ pub struct Ncp {
 impl Ncp {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
-        window: streamer::Window,
+        window: streamer::SharedWindow,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
         exit: Arc<AtomicBool>,

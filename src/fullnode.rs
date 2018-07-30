@@ -144,7 +144,7 @@ impl FullNode {
         entry_height: u64,
         node_info: &NodeInfo,
         blob_recycler: &BlobRecycler,
-    ) -> streamer::Window {
+    ) -> streamer::SharedWindow {
         match ledger_tail {
             Some(ledger_tail) => {
                 // convert to blobs

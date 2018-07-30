@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{BlobReceiver, BlobSender, Window, WindowIndex};
+use streamer::{BlobReceiver, BlobSender, SharedWindow, WindowIndex};
 use timing::timestamp;
 use transaction::Vote;
 
@@ -553,7 +553,7 @@ impl Crdt {
     pub fn broadcast(
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
-        window: &Window,
+        window: &SharedWindow,
         s: &UdpSocket,
         transmit_index: &mut WindowIndex,
         received_index: u64,
@@ -944,7 +944,7 @@ impl Crdt {
             .unwrap()
     }
     fn run_window_request(
-        window: &Window,
+        window: &SharedWindow,
         me: &NodeInfo,
         from: &NodeInfo,
         ix: u64,
@@ -1010,7 +1010,7 @@ impl Crdt {
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
-        window: &Window,
+        window: &SharedWindow,
         blob_recycler: &BlobRecycler,
         blob: &Blob,
     ) -> Option<SharedBlob> {
@@ -1026,7 +1026,7 @@ impl Crdt {
     fn handle_protocol(
         request: Protocol,
         obj: &Arc<RwLock<Self>>,
-        window: &Window,
+        window: &SharedWindow,
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         match request {
@@ -1122,7 +1122,7 @@ impl Crdt {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        window: &Window,
+        window: &SharedWindow,
         blob_recycler: &BlobRecycler,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
@@ -1144,7 +1144,7 @@ impl Crdt {
     }
     pub fn listen(
         obj: Arc<RwLock<Self>>,
-        window: Window,
+        window: SharedWindow,
         blob_recycler: BlobRecycler,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
