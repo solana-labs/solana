@@ -25,8 +25,10 @@ fi
 
 tune_networking
 
-set -xo pipefail
+trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/ledger.log \
-2>&1 | $leader_logger
+  > >($leader_logger) 2>&1 &
+pid=$!
+wait "$pid"

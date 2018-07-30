@@ -36,7 +36,10 @@ set -ex
 mkdir -p "$SOLANA_CONFIG_DIR"
 $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_DIR"/
 
-set -o pipefail
+
+trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_drone \
   -l "$SOLANA_CONFIG_DIR"/leader.json -k "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json \
-2>&1 | $drone_logger
+  > >($drone_logger) 2>&1 &
+pid=$!
+wait "$pid"
