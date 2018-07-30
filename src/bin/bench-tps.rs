@@ -656,10 +656,10 @@ fn converge(
         gossip_send_socket,
         exit_signal.clone(),
     ).expect("DataReplicator::new");
-    let mut rv = vec![];
+    let mut v: Vec<NodeInfo> = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
-        let v: Vec<NodeInfo> = spy_ref
+        v = spy_ref
             .read()
             .unwrap()
             .table
@@ -670,7 +670,6 @@ fn converge(
             .collect();
         if v.len() >= num_nodes {
             println!("CONVERGED!");
-            rv.extend(v.into_iter());
             break;
         } else {
             println!(
@@ -682,7 +681,7 @@ fn converge(
         sleep(Duration::new(1, 0));
     }
     threads.extend(ncp.thread_hdls().into_iter());
-    rv
+    v
 }
 
 fn read_leader(path: &str) -> Config {
