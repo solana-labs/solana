@@ -27,7 +27,6 @@ impl<'a, W: Write> EntryWriter<'a, W> {
             .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
         writer.write_all(&entry_bytes[..])?;
-
         writer.flush()
     }
 
@@ -60,10 +59,10 @@ impl<'a, W: Write> EntryWriter<'a, W> {
 struct EntryReader<R: BufRead> {
     reader: R,
     entry_bytes: Vec<u8>,
-    len_len: u64,
+    len_len: usize,
 }
 
-impl Iterator for EntryReader<BufRead> {
+impl<R: BufRead> Iterator for EntryReader<R> {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
@@ -77,7 +76,7 @@ impl Iterator for EntryReader<BufRead> {
             entry_len = bincode::deserialize(&entry_len_bytes).unwrap();
 
             if entry_len > self.entry_bytes.len() {
-                self.entry_bytes.resize(entry_len);
+                self.entry_bytes.resize(entry_len, 0);
             }
 
             if let Err(e) = self.reader.read_exact(&mut self.entry_bytes[..entry_len]) {
@@ -99,7 +98,7 @@ pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<En
     EntryReader {
         reader,
         entry_bytes: Vec::new(),
-        len_len: bincode::serialized_size(&entry_len).unwrap(),
+        len_len: bincode::serialized_size(&entry_len).unwrap() as usize,
     }
 }
 
