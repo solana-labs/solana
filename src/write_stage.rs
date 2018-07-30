@@ -194,8 +194,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use packet::BlobRecycler;
-    use signature::{KeyPair, KeyPairUtil, PublicKey};
-    use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+    use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use timing;

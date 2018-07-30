@@ -76,14 +76,6 @@ $rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_
   exit 1
 }
 
-# Ensure the validator has at least 1 token before connecting to the network
-# TODO: Remove this workaround
-while ! $solana_wallet \
-          -l "$SOLANA_LEADER_CONFIG_DIR"/leader.json \
-          -k "$SOLANA_CONFIG_PRIVATE_DIR"/validator-id.json airdrop --tokens 1; do
-  sleep 1
-done
-
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/validator.json \
