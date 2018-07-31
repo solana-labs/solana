@@ -8,7 +8,6 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg, SubCommand};
-use generic_array::GenericArray;
 use solana::client::mk_client;
 use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
@@ -182,7 +181,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                     display_actions();
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
-                PublicKey(GenericArray::clone_from_slice(&pubkey_vec))
+                PublicKey::new(&pubkey_vec)
             } else {
                 id.pubkey()
             };
