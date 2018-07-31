@@ -22,6 +22,7 @@ for cmd in $backgroundCommands; do
 done
 
 shutdown() {
+  exitcode=$?
   set +e
   echo --- Shutdown
   for pid in "${pids[@]}"; do
@@ -37,9 +38,11 @@ shutdown() {
     upload_ci_artifact "$logfile"
     tail "$logfile"
   done
+
+  exit $exitcode
 }
 
-trap shutdown EXIT
+trap shutdown EXIT INT
 
 set -e
 
