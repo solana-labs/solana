@@ -5,12 +5,9 @@ use generic_array::typenum::{U32, U64};
 use generic_array::GenericArray;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rayon::prelude::*;
-use ring::error::Unspecified;
-use ring::rand::SecureRandom;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use serde_json;
-use std::cell::RefCell;
 use std::error;
 use std::fmt;
 use std::fs::File;
@@ -79,44 +76,30 @@ impl SignatureUtil for GenericArray<u8, U64> {
 }
 
 pub struct GenKeys {
-    // This is necessary because the rng needs to mutate its state to remain
-    // deterministic, and the fill trait requires an immuatble reference to self
-    generator: RefCell<ChaChaRng>,
+    generator: ChaChaRng,
 }
 
 impl GenKeys {
     pub fn new(seed: [u8; 32]) -> GenKeys {
-        let rng = ChaChaRng::from_seed(seed);
-        GenKeys {
-            generator: RefCell::new(rng),
-        }
+        let generator = ChaChaRng::from_seed(seed);
+        GenKeys { generator }
     }
 
-    fn gen_keypair(&mut self) -> [u8; 85] {
-        KeyPair::generate_pkcs8(self).unwrap()
+    fn gen_seed(&mut self) -> [u8; 32] {
+        let mut seed = [0u8; 32];
+        self.generator.fill(&mut seed);
+        seed
     }
 
     fn gen_n_seeds(&mut self, n: i64) -> Vec<[u8; 32]> {
-        let mut rng = self.generator.borrow_mut();
-        (0..n).map(|_| rng.gen()).collect()
+        (0..n).map(|_| self.gen_seed()).collect()
     }
 
     pub fn gen_n_keypairs(&mut self, n: i64) -> Vec<KeyPair> {
         self.gen_n_seeds(n)
             .into_par_iter()
-            .map(|seed| {
-                let pkcs8 = GenKeys::new(seed).gen_keypair();
-                KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap()
-            })
+            .map(|seed| KeyPair::from_seed_unchecked(Input::from(&seed)).unwrap())
             .collect()
-    }
-}
-
-impl SecureRandom for GenKeys {
-    fn fill(&self, dest: &mut [u8]) -> Result<(), Unspecified> {
-        let mut rng = self.generator.borrow_mut();
-        rng.fill(dest);
-        Ok(())
     }
 }
 
@@ -144,7 +127,7 @@ mod tests {
         let mut gen1 = GenKeys::new(seed);
 
         for _ in 0..100 {
-            assert_eq!(gen0.gen_keypair().to_vec(), gen1.gen_keypair().to_vec());
+            assert_eq!(gen0.gen_seed().to_vec(), gen1.gen_seed().to_vec());
         }
     }
 
