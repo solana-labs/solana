@@ -475,7 +475,7 @@ fn main() {
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
-    let rnd = GenKeys::new(seed);
+    let mut rnd = GenKeys::new(seed);
 
     println!("Creating {} keypairs...", tx_count / 2);
     let keypairs = rnd.gen_n_keypairs(tx_count / 2);

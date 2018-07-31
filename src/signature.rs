@@ -92,16 +92,16 @@ impl GenKeys {
         }
     }
 
-    fn gen_keypair(&self) -> [u8; 85] {
+    fn gen_keypair(&mut self) -> [u8; 85] {
         KeyPair::generate_pkcs8(self).unwrap()
     }
 
-    fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 32]> {
+    fn gen_n_seeds(&mut self, n: i64) -> Vec<[u8; 32]> {
         let mut rng = self.generator.borrow_mut();
         (0..n).map(|_| rng.gen()).collect()
     }
 
-    pub fn gen_n_keypairs(&self, n: i64) -> Vec<KeyPair> {
+    pub fn gen_n_keypairs(&mut self, n: i64) -> Vec<KeyPair> {
         self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| {
@@ -140,11 +140,11 @@ mod tests {
     #[test]
     fn test_new_key_is_deterministic() {
         let seed = [0u8; 32];
-        let rng0 = GenKeys::new(seed);
-        let rng1 = GenKeys::new(seed);
+        let mut gen0 = GenKeys::new(seed);
+        let mut gen1 = GenKeys::new(seed);
 
         for _ in 0..100 {
-            assert_eq!(rng0.gen_keypair().to_vec(), rng1.gen_keypair().to_vec());
+            assert_eq!(gen0.gen_keypair().to_vec(), gen1.gen_keypair().to_vec());
         }
     }
 
