@@ -3,10 +3,12 @@ extern crate bincode;
 extern crate bs58;
 extern crate clap;
 extern crate dirs;
+extern crate generic_array;
 extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg, SubCommand};
+use generic_array::GenericArray;
 use solana::client::mk_client;
 use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
@@ -180,7 +182,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                     display_actions();
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
-                PublicKey::clone_from_slice(&pubkey_vec)
+                PublicKey(GenericArray::clone_from_slice(&pubkey_vec))
             } else {
                 id.pubkey()
             };
@@ -228,7 +230,7 @@ fn process_command(
     match config.command {
         // Check client balance
         WalletCommand::Address => {
-            println!("{}", bs58::encode(config.id.pubkey()).into_string());
+            println!("{}", config.id.pubkey());
         }
         WalletCommand::Balance => {
             println!("Balance requested...");

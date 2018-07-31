@@ -192,7 +192,7 @@ impl Transaction {
     /// Verify only the transaction signature.
     pub fn verify_sig(&self) -> bool {
         warn!("transaction signature verification called");
-        self.sig.verify(&self.from, &self.get_sign_data())
+        self.sig.verify(&self.from.0, &self.get_sign_data())
     }
 
     /// Verify only the payment plan.
@@ -319,7 +319,7 @@ mod tests {
         let tx_bytes = serialize(&tx).unwrap();
         assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
         assert_matches!(memfind(&tx_bytes, &tx.sig), Some(SIG_OFFSET));
-        assert_matches!(memfind(&tx_bytes, &tx.from), Some(PUB_KEY_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.from.0), Some(PUB_KEY_OFFSET));
     }
 
     #[test]

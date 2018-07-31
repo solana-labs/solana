@@ -101,7 +101,7 @@ fn gossip_star() {
             let mut yd = yv.table[&yv.me].clone();
             yd.version = 0;
             xv.insert(&yd);
-            trace!("star leader {:?}", &xv.me[..4]);
+            trace!("star leader {:?}", &xv.me.0[..4]);
         }
     });
 }
@@ -116,12 +116,12 @@ fn gossip_rstar() {
             let xv = listen[0].0.read().unwrap();
             xv.table[&xv.me].clone()
         };
-        trace!("rstar leader {:?}", &xd.id[..4]);
+        trace!("rstar leader {:?}", &xd.id.0[..4]);
         for n in 0..(num - 1) {
             let y = (n + 1) % listen.len();
             let mut yv = listen[y].0.write().unwrap();
             yv.insert(&xd);
-            trace!("rstar insert {:?} into {:?}", &xd.id[..4], &yv.me[..4]);
+            trace!("rstar insert {:?} into {:?}", &xd.id.0[..4], &yv.me.0[..4]);
         }
     });
 }
