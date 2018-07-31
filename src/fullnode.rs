@@ -58,12 +58,13 @@ impl Config {
 }
 
 impl FullNode {
-    pub fn new(
+    fn new_internal(
         mut node: TestNode,
         leader: bool,
         ledger: LedgerFile,
         keypair_for_validator: Option<KeyPair>,
         network_entry_for_validator: Option<SocketAddr>,
+        sigverify_disabled: bool,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
@@ -112,6 +113,7 @@ impl FullNode {
                 node,
                 &network_entry_point,
                 exit.clone(),
+                sigverify_disabled,
             );
             info!(
                 "validator ready... local request address: {} (advertising {}) connected to: {}",
@@ -130,6 +132,7 @@ impl FullNode {
                 node,
                 exit.clone(),
                 outfile,
+                sigverify_disabled,
             );
             info!(
                 "leader ready... local request address: {} (advertising {})",
@@ -137,6 +140,40 @@ impl FullNode {
             );
             server
         }
+    }
+
+    pub fn new(
+        node: TestNode,
+        leader: bool,
+        ledger: LedgerFile,
+        keypair_for_validator: Option<KeyPair>,
+        network_entry_for_validator: Option<SocketAddr>,
+    ) -> FullNode {
+        FullNode::new_internal(
+            node,
+            leader,
+            ledger,
+            keypair_for_validator,
+            network_entry_for_validator,
+            false,
+        )
+    }
+
+    pub fn new_without_sigverify(
+        node: TestNode,
+        leader: bool,
+        ledger: LedgerFile,
+        keypair_for_validator: Option<KeyPair>,
+        network_entry_for_validator: Option<SocketAddr>,
+    ) -> FullNode {
+        FullNode::new_internal(
+            node,
+            leader,
+            ledger,
+            keypair_for_validator,
+            network_entry_for_validator,
+            true,
+        )
     }
 
     fn new_window(
@@ -191,6 +228,7 @@ impl FullNode {
         node: TestNode,
         exit: Arc<AtomicBool>,
         writer: W,
+        sigverify_disabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
@@ -214,6 +252,7 @@ impl FullNode {
             &blob_recycler,
             exit.clone(),
             writer,
+            sigverify_disabled,
         );
         thread_hdls.extend(tpu.thread_hdls());
         let ncp = Ncp::new(
@@ -275,6 +314,7 @@ impl FullNode {
         node: TestNode,
         entry_point: &NodeInfo,
         exit: Arc<AtomicBool>,
+        _sigverify_disabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
@@ -359,7 +399,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit);
+        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false);
         v.exit();
         v.join().unwrap();
     }
@@ -373,7 +413,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit)
+                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`

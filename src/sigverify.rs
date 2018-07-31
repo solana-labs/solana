@@ -6,13 +6,8 @@
 
 use counter::Counter;
 use packet::{Packet, SharedPackets};
-
-#[cfg(not(feature = "sigverify_cpu_disable"))]
 use std::mem::size_of;
-
 use std::sync::atomic::AtomicUsize;
-
-#[cfg(not(feature = "sigverify_cpu_disable"))]
 use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 
 pub const TX_OFFSET: usize = 0;
@@ -47,7 +42,6 @@ pub fn init() {
 }
 
 #[cfg(not(feature = "cuda"))]
-#[cfg(not(feature = "sigverify_cpu_disable"))]
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
     use signature::{PublicKey, Signature};
@@ -72,10 +66,9 @@ fn verify_packet(packet: &Packet) -> u8 {
     ).is_ok() as u8
 }
 
-#[cfg(feature = "sigverify_cpu_disable")]
-fn verify_packet(_packet: &Packet) -> u8 {
+fn verify_packet_disabled(_packet: &Packet) -> u8 {
     warn!("signature verification is disabled");
-    return 1;
+    1
 }
 
 fn batch_size(batches: &[SharedPackets]) -> usize {
@@ -99,6 +92,26 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
                 .packets
                 .par_iter()
                 .map(verify_packet)
+                .collect()
+        })
+        .collect();
+    inc_new_counter!("ed25519_verify", count);
+    rv
+}
+
+#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
+pub fn ed25519_verify_disabled(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+    use rayon::prelude::*;
+    let count = batch_size(batches);
+    info!("CPU ECDSA for {}", batch_size(batches));
+    let rv = batches
+        .into_par_iter()
+        .map(|p| {
+            p.read()
+                .expect("'p' read lock in ed25519_verify")
+                .packets
+                .par_iter()
+                .map(verify_packet_disabled)
                 .collect()
         })
         .collect();

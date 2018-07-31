@@ -313,6 +313,7 @@ mod tests {
             leader,
             exit.clone(),
             sink(),
+            false,
         );
         sleep(Duration::from_millis(900));
 
@@ -356,6 +357,7 @@ mod tests {
             leader,
             exit.clone(),
             sink(),
+            false,
         );
         //TODO: remove this sleep, or add a retry so CI is stable
         sleep(Duration::from_millis(300));
@@ -410,6 +412,7 @@ mod tests {
             leader,
             exit.clone(),
             sink(),
+            false,
         );
         sleep(Duration::from_millis(300));
 
