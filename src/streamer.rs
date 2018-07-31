@@ -179,10 +179,17 @@ fn find_next_missing(
     if received <= consumed {
         Err(WindowError::GenericError)?;
     }
-    let window = window.read().unwrap();
+    let mut window = window.write().unwrap();
     let reqs: Vec<_> = (consumed..received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
+
+            if let Some(blob) = mem::replace(&mut window[i].data, None) {
+                let blob_idx = blob.read().unwrap().get_index().unwrap();
+                if blob_idx == pix {
+                    mem::replace(&mut window[i].data, Some(blob));
+                }
+            }
             if window[i].data.is_none() {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
