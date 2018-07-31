@@ -18,7 +18,19 @@ use untrusted::Input;
 
 pub type KeyPair = Ed25519KeyPair;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct PublicKey(pub GenericArray<u8, U32>);
+pub struct PublicKey(GenericArray<u8, U32>);
+
+impl PublicKey {
+    pub fn new(pubkey_vec: &[u8]) -> Self {
+        PublicKey(GenericArray::clone_from_slice(&pubkey_vec))
+    }
+}
+
+impl AsRef<GenericArray<u8, U32>> for PublicKey {
+    fn as_ref(&self) -> &GenericArray<u8, U32> {
+        &self.0
+    }
+}
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

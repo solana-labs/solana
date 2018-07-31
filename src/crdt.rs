@@ -136,7 +136,7 @@ pub struct NodeInfo {
 }
 
 fn make_debug_id(key: &PublicKey) -> u64 {
-    let buf: &[u8] = &key.0;
+    let buf: &[u8] = &key.as_ref();
     let mut rdr = Cursor::new(&buf[..8]);
     rdr.read_u64::<LittleEndian>()
         .expect("rdr.read_u64 in fn debug_id")
