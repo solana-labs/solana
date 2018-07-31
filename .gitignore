@@ -9,3 +9,7 @@ Cargo.lock
 /config-drone/
 /config-validator/
 /config-client/
+/multinode-demo/test/config-client/
+
+# Generated log files
+/log-*.txt
