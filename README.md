@@ -166,8 +166,14 @@ $ sudo snap refresh solana --devmode
 The snap supports running a leader, validator or leader+drone node as a system
 daemon.
 
-Run `sudo snap get solana` to view the current daemon configuration, and
-`sudo snap logs -f solana` to view the daemon logs.
+Run `sudo snap get solana` to view the current daemon configuration.  To view
+daemon logs:
+1. Run `sudo snap logs -n=all solana` to view the daemon initialization log
+2. Runtime logging can be found under `/var/snap/solana/current/leader/`,
+`/var/snap/solana/current/validator/`, or `/var/snap/solana/current/drone/` depending
+on which `mode=` was selected.  Within each log directory the file `current`
+contains the latest log, and the files `*.s` (if present) contain older rotated
+logs.
 
 Disable the daemon at any time by running:
 ```bash
