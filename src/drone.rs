@@ -4,6 +4,7 @@
 //! checking requests against a request cap for a given time time_slice
 //! and (to come) an IP rate limit.
 
+use bs58;
 use influx_db_client as influxdb;
 use metrics;
 use signature::Signature;
@@ -114,8 +115,9 @@ impl Drone {
                 client_public_key,
             } => {
                 info!(
-                    "Requesting airdrop of {} to {:?}",
-                    airdrop_request_amount, client_public_key
+                    "Requesting airdrop of {} to {}",
+                    airdrop_request_amount,
+                    bs58::encode(client_public_key).into_string()
                 );
                 request_amount = airdrop_request_amount;
                 Transaction::new(
