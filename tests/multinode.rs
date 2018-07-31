@@ -75,11 +75,10 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 
 fn genesis(num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
-    let id = {
-        let ids: Vec<_> = mint.pubkey().iter().map(|id| format!("{}", id)).collect();
-        ids.join("")
-    };
-    let path = format!("target/test_multi_node_dynamic_network-{}.log", id);
+    let path = format!(
+        "target/test_multi_node_dynamic_network-{}.log",
+        mint.pubkey()
+    );
     let mut writer = File::create(path.clone()).unwrap();
 
     EntryWriter::write_entries(&mut writer, mint.create_entries()).unwrap();
@@ -464,12 +463,7 @@ fn test_multi_node_dynamic_network() {
                         Some(500),
                     );
                     assert_eq!(bal, Some(500));
-                    info!(
-                        "sent balance to[{}/{}] {:x}",
-                        n,
-                        num_nodes,
-                        keypair.pubkey()
-                    );
+                    info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
                     keypair
                 })
                 .unwrap()
@@ -490,7 +484,7 @@ fn test_multi_node_dynamic_network() {
                 .spawn(move || {
                     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
                     let rd = validator.data.clone();
-                    info!("starting {:8x} {:x}", keypair.pubkey(), rd.debug_id());
+                    info!("starting {} {:x}", keypair.pubkey(), rd.debug_id());
                     let val = FullNode::new_without_sigverify(
                         validator,
                         false,
