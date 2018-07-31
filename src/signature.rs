@@ -92,11 +92,11 @@ impl GenKeys {
         }
     }
 
-    pub fn new_key(&self) -> [u8; 85] {
+    fn new_key(&self) -> [u8; 85] {
         KeyPair::generate_pkcs8(self).unwrap()
     }
 
-    pub fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 32]> {
+    fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 32]> {
         let mut rng = self.generator.borrow_mut();
         (0..n).map(|_| rng.gen()).collect()
     }
