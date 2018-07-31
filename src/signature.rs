@@ -92,7 +92,7 @@ impl GenKeys {
         }
     }
 
-    fn new_key(&self) -> [u8; 85] {
+    fn gen_keypair(&self) -> [u8; 85] {
         KeyPair::generate_pkcs8(self).unwrap()
     }
 
@@ -105,7 +105,7 @@ impl GenKeys {
         self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| {
-                let pkcs8 = GenKeys::new(seed).new_key();
+                let pkcs8 = GenKeys::new(seed).gen_keypair();
                 KeyPair::from_pkcs8(Input::from(&pkcs8)).unwrap()
             })
             .collect()
@@ -144,7 +144,7 @@ mod tests {
         let rng1 = GenKeys::new(seed);
 
         for _ in 0..100 {
-            assert_eq!(rng0.new_key().to_vec(), rng1.new_key().to_vec());
+            assert_eq!(rng0.gen_keypair().to_vec(), rng1.gen_keypair().to_vec());
         }
     }
 
