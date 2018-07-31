@@ -5,6 +5,7 @@
 
 extern crate libc;
 
+use bs58;
 use chrono::prelude::*;
 use counter::Counter;
 use entry::Entry;
@@ -16,6 +17,7 @@ use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt;
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
@@ -35,7 +37,7 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum BankError {
     /// Attempt to debit from `PublicKey`, but no found no record of a prior credit.
     AccountNotFound(PublicKey),
@@ -60,6 +62,28 @@ pub enum BankError {
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
+}
+
+// Custom formatter to display base58 public keys, signatures, and hashes
+impl fmt::Debug for BankError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BankError::AccountNotFound(key) => {
+                write!(f, "AccountNotFound({})", bs58::encode(key).into_string())
+            }
+            BankError::InsufficientFunds(key) => {
+                write!(f, "InsufficientFunds({})", bs58::encode(key).into_string())
+            }
+            BankError::DuplicateSignature(sig) => {
+                write!(f, "DuplicateSignature({})", bs58::encode(sig).into_string())
+            }
+            BankError::LastIdNotFound(hash) => {
+                write!(f, "LastIdNotFound({})", bs58::encode(hash).into_string())
+            }
+            BankError::NegativeTokens => write!(f, "NegativeTokens"),
+            BankError::LedgerVerificationFailed => write!(f, "LedgerVerificationFailed"),
+        }
+    }
 }
 
 pub type Result<T> = result::Result<T, BankError>;
