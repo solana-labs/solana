@@ -92,8 +92,8 @@ impl GenKeys {
         }
     }
 
-    pub fn new_key(&self) -> Vec<u8> {
-        KeyPair::generate_pkcs8(self).unwrap().to_vec()
+    pub fn new_key(&self) -> [u8; 85] {
+        KeyPair::generate_pkcs8(self).unwrap()
     }
 
     pub fn gen_n_seeds(&self, n: i64) -> Vec<[u8; 32]> {
@@ -144,7 +144,7 @@ mod tests {
         let rng1 = GenKeys::new(seed);
 
         for _ in 0..100 {
-            assert_eq!(rng0.new_key(), rng1.new_key());
+            assert_eq!(rng0.new_key().to_vec(), rng1.new_key().to_vec());
         }
     }
 
