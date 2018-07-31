@@ -24,3 +24,5 @@ echo --- ci/localnet-sanity.sh
   export PATH=$PWD/target/debug:$PATH
   USE_INSTALL=1 ci/localnet-sanity.sh
 )
+
+_ ci/audit.sh
