@@ -28,7 +28,7 @@ impl Ncp {
         let (request_sender, request_receiver) = channel();
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
-            &crdt.read().unwrap().me[..4],
+            &crdt.read().unwrap().me.0[..4],
             gossip_listen_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::blob_receiver(
