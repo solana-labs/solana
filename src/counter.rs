@@ -91,8 +91,23 @@ mod tests {
     use counter::{Counter, DEFAULT_METRICS_RATE};
     use std::env;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Once, RwLock, ONCE_INIT};
+
+    fn get_env_lock() -> &'static RwLock<()> {
+        static mut ENV_LOCK: Option<RwLock<()>> = None;
+        static INIT_HOOK: Once = ONCE_INIT;
+
+        unsafe {
+            INIT_HOOK.call_once(|| {
+                ENV_LOCK = Some(RwLock::new(()));
+            });
+            &ENV_LOCK.as_ref().unwrap()
+        }
+    }
+
     #[test]
     fn test_counter() {
+        let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 100);
         let count = 1;
         inc_counter!(COUNTER, count);
@@ -116,6 +131,7 @@ mod tests {
     }
     #[test]
     fn test_inc_new_counter() {
+        let _readlock = get_env_lock().read();
         //make sure that macros are syntactically correct
         //the variable is internal to the macro scope so there is no way to introspect it
         inc_new_counter!("counter-1", 1);
@@ -123,6 +139,14 @@ mod tests {
     }
     #[test]
     fn test_lograte() {
+        let _readlock = get_env_lock().read();
+        assert_eq!(
+            Counter::default_log_rate(),
+            DEFAULT_METRICS_RATE,
+            "default_log_rate() is {}, expected {}, SOLANA_DEFAULT_METRICS_RATE environment variable set?",
+            Counter::default_log_rate(),
+            DEFAULT_METRICS_RATE,
+        );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0);
         inc_counter!(COUNTER, 2);
         unsafe {
@@ -132,9 +156,11 @@ mod tests {
             );
         }
     }
+
     #[test]
     fn test_lograte_env() {
         assert_ne!(DEFAULT_METRICS_RATE, 0);
+        let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0);
         env::set_var("SOLANA_DEFAULT_METRICS_RATE", "50");
         inc_counter!(COUNTER, 2);
