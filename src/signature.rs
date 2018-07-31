@@ -1,5 +1,6 @@
 //! The `signature` module provides functionality for public, and private keys.
 
+use bs58;
 use generic_array::typenum::{U32, U64};
 use generic_array::GenericArray;
 use rand::{ChaChaRng, Rng, SeedableRng};
@@ -11,11 +12,26 @@ use ring::{rand, signature};
 use serde_json;
 use std::cell::RefCell;
 use std::error;
+use std::fmt;
 use std::fs::File;
 use untrusted::Input;
 
 pub type KeyPair = Ed25519KeyPair;
-pub type PublicKey = GenericArray<u8, U32>;
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PublicKey(pub GenericArray<u8, U32>);
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
+
+impl fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
+
 pub type Signature = GenericArray<u8, U64>;
 
 pub trait KeyPairUtil {
@@ -33,7 +49,7 @@ impl KeyPairUtil for Ed25519KeyPair {
 
     /// Return the public key for the given keypair
     fn pubkey(&self) -> PublicKey {
-        GenericArray::clone_from_slice(self.public_key_bytes())
+        PublicKey(GenericArray::clone_from_slice(self.public_key_bytes()))
     }
 }
 

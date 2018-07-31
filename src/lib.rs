@@ -56,6 +56,7 @@ pub mod wallet;
 pub mod window_stage;
 pub mod write_stage;
 extern crate bincode;
+extern crate bs58;
 extern crate byteorder;
 extern crate chrono;
 extern crate generic_array;
