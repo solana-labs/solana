@@ -118,7 +118,7 @@ impl Entry {
         let tx_plans_verified = self.transactions.par_iter().all(|tx| {
             let r = tx.verify_plan();
             if !r {
-                error!("tx plan invalid: {:?}", tx);
+                warn!("tx plan invalid: {:?}", tx);
             }
             r
         });
@@ -127,7 +127,7 @@ impl Entry {
         }
         let ref_hash = next_hash(start_hash, self.num_hashes, &self.transactions);
         if self.id != ref_hash {
-            error!(
+            warn!(
                 "next_hash is invalid expected: {:?} actual: {:?}",
                 self.id, ref_hash
             );
