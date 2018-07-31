@@ -187,7 +187,7 @@ impl Block for [Entry] {
         entry_pairs.all(|(x0, x1)| {
             let r = x1.verify(&x0.id);
             if !r {
-                error!(
+                warn!(
                     "entry invalid!: {:?} num txs: {}",
                     x1.id,
                     x1.transactions.len()

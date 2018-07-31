@@ -176,6 +176,7 @@ impl Bank {
         }
         Err(BankError::LastIdNotFound(*last_id))
     }
+
     /// Look through the last_ids and find all the valid ids
     /// This is batched to avoid holding the lock for a significant amount of time
     pub fn count_valid_ids(&self, ids: &[Hash]) -> usize {
@@ -397,7 +398,7 @@ impl Bank {
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
             if !block.verify(&self.last_id()) {
-                error!("Ledger proof of history failed at entry: {}", entry_count);
+                warn!("Ledger proof of history failed at entry: {}", entry_count);
                 return Err(BankError::LedgerVerificationFailed);
             }
             entry_count += self.process_entries_tail(block, tail, tail_idx)?;
@@ -745,6 +746,7 @@ mod tests {
             Err(BankError::LastIdNotFound(mint.last_id()))
         );
     }
+
     #[test]
     fn test_count_valid_ids() {
         let mint = Mint::new(1);
@@ -760,6 +762,7 @@ mod tests {
         assert_eq!(bank.count_valid_ids(&[mint.last_id()]), 0);
         assert_eq!(bank.count_valid_ids(&ids), ids.len());
     }
+
     #[test]
     fn test_debits_before_credits() {
         let mint = Mint::new(2);
