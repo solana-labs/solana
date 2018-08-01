@@ -13,4 +13,4 @@ if [[ -z $INFLUX_DATABASE || -z $INFLUX_USERNAME || -z $INFLUX_PASSWORD ]]; then
 fi
 
 echo "https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
-  | xargs curl -XPOST --data-binary "$point"
+  | xargs curl --max-time 5 -XPOST --data-binary "$point"
