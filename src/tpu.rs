@@ -32,7 +32,6 @@ use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use service::Service;
-use signature::KeyPair;
 use sigverify_stage::SigVerifyStage;
 use std::io::Write;
 use std::net::UdpSocket;
@@ -53,7 +52,6 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new<W: Write + Send + 'static>(
-        keypair: KeyPair,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
@@ -82,7 +80,6 @@ impl Tpu {
         };
 
         let (write_stage, blob_receiver) = WriteStage::new(
-            keypair,
             bank.clone(),
             crdt.clone(),
             blob_recycler.clone(),
