@@ -26,9 +26,9 @@ impl PublicKey {
     }
 }
 
-impl AsRef<GenericArray<u8, U32>> for PublicKey {
-    fn as_ref(&self) -> &GenericArray<u8, U32> {
-        &self.0
+impl AsRef<[u8]> for PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
     }
 }
 
