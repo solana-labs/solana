@@ -355,24 +355,10 @@ fn process_blob(
         c_or_d: &str,
     ) -> bool {
         if let Some(old) = mem::replace(window_slot, Some(blob)) {
-            if old.read().unwrap().get_index().unwrap() == pix {
-                trace!(
-                    "{:x}: duplicate {} blob at index {:}",
-                    debug_id,
-                    c_or_d,
-                    pix
-                );
-            }
-            trace!(
-                "{:x}: recycling {} blob at index {:}",
-                debug_id,
-                c_or_d,
-                pix
-            );
+            let is_dup = old.read().unwrap().get_index().unwrap() == pix;
             recycler.recycle(old);
-            true
+            is_dup
         } else {
-            trace!("{:x}: empty {} window slot {:}", debug_id, c_or_d, pix);
             false
         }
     }
