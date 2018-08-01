@@ -116,3 +116,7 @@ harness = false
 [[bench]]
 name = "signature"
 harness = false
+
+[[bench]]
+name = "sigverify"
+harness = false

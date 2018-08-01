@@ -207,7 +207,6 @@ impl Transaction {
     }
 }
 
-#[cfg(test)]
 pub fn test_tx() -> Transaction {
     let keypair1 = KeyPair::new();
     let pubkey1 = keypair1.pubkey();
