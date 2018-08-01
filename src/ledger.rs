@@ -1,7 +1,7 @@
 //! The `ledger` module provides functions for parallel verification of the
 //! Proof of History ledger.
 
-use bincode::{deserialize, deserialize_from, serialize_into};
+use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
 use entry::Entry;
 use hash::Hash;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
@@ -9,9 +9,8 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use std::collections::VecDeque;
 use std::fs::{create_dir_all, File, OpenOptions};
-use std::io;
 use std::io::prelude::*;
-use std::io::{Cursor, ErrorKind, Seek, SeekFrom};
+use std::io::{self, Cursor, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
 use transaction::Transaction;
@@ -25,6 +24,35 @@ pub struct LedgerWindow {
 
 // use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
+const SIZEOF_USIZE: u64 = size_of::<usize>() as u64;
+
+fn err_bincode_to_io(e: Box<bincode::ErrorKind>) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, e.to_string())
+}
+
+fn entry_at(file: &mut File, at: u64) -> io::Result<Entry> {
+    file.seek(SeekFrom::Start(at))?;
+
+    let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
+
+    deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+}
+
+fn next_offset(file: &mut File) -> io::Result<u64> {
+    deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
+}
+
+// unused, but could work if we only have data file...
+//
+//fn next_entry(file: &mut File) -> io::Result<Entry> {
+//    let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
+//    deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+//}
+
+fn u64_at(file: &mut File, at: u64) -> io::Result<u64> {
+    file.seek(SeekFrom::Start(at))?;
+    deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
+}
 
 impl LedgerWindow {
     // opens a Ledger in directory, provides "infinite" window
@@ -38,28 +66,8 @@ impl LedgerWindow {
     }
 
     pub fn get_entry(&mut self, index: u64) -> io::Result<Entry> {
-        fn u64_at(file: &mut File, at: u64) -> io::Result<u64> {
-            file.seek(SeekFrom::Start(at))?;
-            deserialize_from(file.take(SIZEOF_U64))
-                .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
-        }
-
-        let end_offset = u64_at(&mut self.index, index * SIZEOF_U64)?;
-
-        let start_offset = if index != 0 {
-            u64_at(&mut self.index, (index - 1) * SIZEOF_U64)?
-        } else {
-            0u64
-        };
-
-        fn entry_at(file: &mut File, at: u64, len: u64) -> io::Result<Entry> {
-            file.seek(SeekFrom::Start(at))?;
-
-            deserialize_from(file.take(len))
-                .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
-        }
-
-        entry_at(&mut self.data, start_offset, end_offset - start_offset)
+        let offset = u64_at(&mut self.index, index * SIZEOF_U64)?;
+        entry_at(&mut self.data, offset)
     }
 }
 
@@ -90,13 +98,15 @@ impl LedgerWriter {
     }
 
     fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
-        serialize_into(&mut self.data, &entry)
-            .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+        let offset = self.data.seek(SeekFrom::Current(0))?;
+
+        let len = serialized_size(&entry).map_err(err_bincode_to_io)?;
+
+        serialize_into(&mut self.data, &len).map_err(err_bincode_to_io)?;
+        serialize_into(&mut self.data, &entry).map_err(err_bincode_to_io)?;
         self.data.flush()?;
 
-        let offset = self.data.seek(SeekFrom::Current(0))?;
-        serialize_into(&mut self.index, &offset)
-            .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))?;
+        serialize_into(&mut self.index, &offset).map_err(err_bincode_to_io)?;
         self.index.flush()
     }
 
@@ -113,7 +123,6 @@ impl LedgerWriter {
 
 #[derive(Debug)]
 pub struct LedgerReader {
-    offset: u64, // next start_offset
     index: File,
     data: File,
 }
@@ -122,21 +131,8 @@ impl Iterator for LedgerReader {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
-        fn next_offset(file: &mut File) -> io::Result<u64> {
-            deserialize_from(file.take(SIZEOF_U64))
-                .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
-        }
-
-        fn next_entry(file: &mut File, len: u64) -> io::Result<Entry> {
-            deserialize_from(file.take(len))
-                .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
-        }
         match next_offset(&mut self.index) {
-            Ok(end_offset) => {
-                let len = end_offset - self.offset;
-                self.offset = end_offset;
-                Some(next_entry(&mut self.data, len))
-            }
+            Ok(offset) => Some(entry_at(&mut self.data, offset)),
             Err(_) => None,
         }
     }
@@ -149,11 +145,17 @@ pub fn read_ledger(directory: &str) -> io::Result<impl Iterator<Item = io::Resul
     let index = File::open(directory.join("index"))?;
     let data = File::open(directory.join("data"))?;
 
-    Ok(LedgerReader {
-        offset: 0,
-        index,
-        data,
-    })
+    Ok(LedgerReader { index, data })
+}
+
+pub fn copy(from: &str, to: &str) -> io::Result<()> {
+    let mut to = LedgerWriter::new(to)?;
+
+    for entry in read_ledger(from)? {
+        let entry = entry?;
+        to.write_entry(&entry)?;
+    }
+    Ok(())
 }
 
 // a Block is a slice of Entries
@@ -465,6 +467,29 @@ mod tests {
         assert!(read_ledger(&ledger_path).is_err());
 
         std::fs::remove_dir_all(ledger_path).unwrap();
+    }
+    #[test]
+    fn test_ledger_copy() {
+        let from = tmp_ledger_path();
+        let entries = make_test_entries();
+
+        let mut writer = LedgerWriter::new(&from).unwrap();
+        writer.write_entries(entries.clone()).unwrap();
+
+        let to = tmp_ledger_path();
+
+        copy(&from, &to).unwrap();
+
+        let mut read_entries = vec![];
+        for x in read_ledger(&to).unwrap() {
+            let entry = x.unwrap();
+            trace!("entry... {:?}", entry);
+            read_entries.push(entry);
+        }
+        assert_eq!(read_entries, entries);
+
+        std::fs::remove_dir_all(from).unwrap();
+        std::fs::remove_dir_all(to).unwrap();
     }
 
 }
