@@ -79,9 +79,11 @@ fn main() -> () {
     };
 
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
+    let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 0)), DRONE_PORT);
     let fullnode = if let Some(t) = matches.value_of("testnet") {
         let testnet_address_string = t.to_string();
-        let testnet_addr = testnet_address_string.parse().unwrap();
+        let testnet_addr: SocketAddr = testnet_address_string.parse().unwrap();
+        drone_addr.set_ip(testnet_addr.ip());
 
         FullNode::new(node, false, ledger, keypair, Some(testnet_addr))
     } else {
@@ -95,9 +97,7 @@ fn main() -> () {
     eprintln!("balance is {}", previous_balance);
 
     if previous_balance == 0 {
-        let mut drone_addr = repl_clone.contact_info.tpu;
-        drone_addr.set_port(DRONE_PORT);
-
+        eprintln!("requesting airdrop from {}", drone_addr);
         request_airdrop(&drone_addr, &leader_pubkey, 50).unwrap_or_else(|_| {
             panic!(
                 "Airdrop failed, is the drone address correct {:?} drone running?",
