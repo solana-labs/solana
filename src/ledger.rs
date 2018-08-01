@@ -26,6 +26,7 @@ pub struct LedgerWindow {
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 const SIZEOF_USIZE: u64 = size_of::<usize>() as u64;
 
+#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 fn err_bincode_to_io(e: Box<bincode::ErrorKind>) -> io::Error {
     io::Error::new(io::ErrorKind::Other, e.to_string())
 }
@@ -42,7 +43,7 @@ fn next_offset(file: &mut File) -> io::Result<u64> {
     deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
 }
 
-// unused, but could work if we only have data file...
+// unused, but would work for the iterator if we only have the data file...
 //
 //fn next_entry(file: &mut File) -> io::Result<Entry> {
 //    let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
@@ -70,6 +71,20 @@ impl LedgerWindow {
         entry_at(&mut self.data, offset)
     }
 }
+
+// TODO?? ... we could open the files on demand to support [], but today
+//   LedgerWindow needs "&mut self"
+//
+//impl Index<u64> for LedgerWindow {
+//    type Output = io::Result<Entry>;
+//
+//    fn index(&mut self, index: u64) -> &io::Result<Entry> {
+//        match u64_at(&mut self.index, index * SIZEOF_U64) {
+//            Ok(offset) => &entry_at(&mut self.data, offset),
+//            Err(e) => &Err(e),
+//        }
+//    }
+//}
 
 #[derive(Debug)]
 pub struct LedgerWriter {
