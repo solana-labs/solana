@@ -440,16 +440,10 @@ mod tests {
     fn tmp_ledger_path() -> String {
         let keypair = KeyPair::new();
 
-        let id = {
-            let ids: Vec<_> = keypair
-                .pubkey()
-                .iter()
-                .map(|id| format!("{}", id))
-                .collect();
-            ids.join("")
-        };
-
-        format!("target/test_ledger_reader_writer_window-{}", id)
+        format!(
+            "target/test_ledger_reader_writer_window-{}",
+            keypair.pubkey()
+        )
     }
 
     #[test]
