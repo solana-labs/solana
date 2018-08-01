@@ -17,10 +17,14 @@ use std::path::Path;
 use transaction::Transaction;
 
 // ledger window
+#[derive(Debug)]
 pub struct LedgerWindow {
     index: File,
     data: File,
 }
+
+// use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
+const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
 impl LedgerWindow {
     // opens a Ledger in directory, provides "infinite" window
@@ -36,14 +40,14 @@ impl LedgerWindow {
     pub fn get_entry(&mut self, index: u64) -> io::Result<Entry> {
         fn u64_at(file: &mut File, at: u64) -> io::Result<u64> {
             file.seek(SeekFrom::Start(at))?;
-            deserialize_from(file.take(size_of::<u64>() as u64))
+            deserialize_from(file.take(SIZEOF_U64))
                 .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
         }
 
-        let end_offset = u64_at(&mut self.index, index * size_of::<u64>() as u64)?;
+        let end_offset = u64_at(&mut self.index, index * SIZEOF_U64)?;
 
         let start_offset = if index != 0 {
-            u64_at(&mut self.index, (index - 1) * size_of::<u64>() as u64)?
+            u64_at(&mut self.index, (index - 1) * SIZEOF_U64)?
         } else {
             0u64
         };
@@ -59,6 +63,7 @@ impl LedgerWindow {
     }
 }
 
+#[derive(Debug)]
 pub struct LedgerWriter {
     index: File,
     data: File,
@@ -106,6 +111,7 @@ impl LedgerWriter {
     }
 }
 
+#[derive(Debug)]
 pub struct LedgerReader {
     offset: u64, // next start_offset
     index: File,
@@ -117,7 +123,7 @@ impl Iterator for LedgerReader {
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
         fn next_offset(file: &mut File) -> io::Result<u64> {
-            deserialize_from(file.take(size_of::<u64>() as u64))
+            deserialize_from(file.take(SIZEOF_U64))
                 .map_err(|e| io::Error::new(ErrorKind::Other, e.to_string()))
         }
 
@@ -338,7 +344,7 @@ mod tests {
         //                                V
         let mut transactions = vec![tx0; 362];
         transactions.extend(vec![tx1; 100]);
-        next_entries(&zero, 0, transactions);
+        next_entries(&zero, 0, transactions)
     }
 
     #[test]
@@ -414,23 +420,24 @@ mod tests {
         assert!(entries0.verify(&id));
     }
 
-    #[test]
-    fn test_ledger_reader_writer() {
+    fn tmp_ledger_path() -> String {
         let keypair = KeyPair::new();
 
-        let ledger_path = {
-            let id = {
-                let ids: Vec<_> = keypair
-                    .pubkey()
-                    .iter()
-                    .map(|id| format!("{}", id))
-                    .collect();
-                ids.join("")
-            };
-
-            format!("target/test_ledger_reader_writer_window-{}", id)
+        let id = {
+            let ids: Vec<_> = keypair
+                .pubkey()
+                .iter()
+                .map(|id| format!("{}", id))
+                .collect();
+            ids.join("")
         };
 
+        format!("target/test_ledger_reader_writer_window-{}", id)
+    }
+
+    #[test]
+    fn test_ledger_reader_writer() {
+        let ledger_path = tmp_ledger_path();
         let entries = make_test_entries();
 
         let mut writer = LedgerWriter::new(ledger_path.clone()).unwrap();
@@ -450,6 +457,11 @@ mod tests {
             let read_entry = window.get_entry(i as u64).unwrap();
             assert_eq!(*entry, read_entry);
         }
+
+        std::fs::remove_file(Path::new(&ledger_path).join("data")).unwrap();
+        // empty data file should fall over
+        assert!(LedgerWindow::new(ledger_path.clone()).is_err());
+        assert!(read_ledger(ledger_path.clone()).is_err());
 
         std::fs::remove_dir_all(ledger_path).unwrap();
     }
