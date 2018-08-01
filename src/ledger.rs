@@ -28,7 +28,7 @@ const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
 impl LedgerWindow {
     // opens a Ledger in directory, provides "infinite" window
-    pub fn new(directory: String) -> io::Result<Self> {
+    pub fn new(directory: &str) -> io::Result<Self> {
         let directory = Path::new(&directory);
 
         let index = File::open(directory.join("index"))?;
@@ -71,7 +71,7 @@ pub struct LedgerWriter {
 
 impl LedgerWriter {
     // opens or creates a LedgerWriter in directory
-    pub fn new(directory: String) -> io::Result<Self> {
+    pub fn new(directory: &str) -> io::Result<Self> {
         let directory = Path::new(&directory);
 
         create_dir_all(directory)?;
@@ -143,7 +143,7 @@ impl Iterator for LedgerReader {
 }
 
 /// Return an iterator for all the entries in the given file.
-pub fn read_ledger(directory: String) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
+pub fn read_ledger(directory: &str) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
     let directory = Path::new(&directory);
 
     let index = File::open(directory.join("index"))?;
@@ -457,6 +457,7 @@ mod tests {
             let read_entry = window.get_entry(i as u64).unwrap();
             assert_eq!(*entry, read_entry);
         }
+        assert!(window.get_entry(100).is_err());
 
         std::fs::remove_file(Path::new(&ledger_path).join("data")).unwrap();
         // empty data file should fall over
