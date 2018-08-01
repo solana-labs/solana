@@ -79,7 +79,7 @@ fn main() -> () {
     };
 
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
-    let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 0)), DRONE_PORT);
+    let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DRONE_PORT);
     let fullnode = if let Some(t) = matches.value_of("testnet") {
         let testnet_address_string = t.to_string();
         let testnet_addr: SocketAddr = testnet_address_string.parse().unwrap();
