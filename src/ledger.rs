@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn test_verify_slice() {
         let zero = Hash::default();
-        let one = hash(&zero);
+        let one = hash(&zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
         assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
         assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
@@ -337,7 +337,7 @@ mod tests {
 
     fn make_test_entries() -> Vec<Entry> {
         let zero = Hash::default();
-        let one = hash(&zero);
+        let one = hash(&zero.as_ref());
         let keypair = KeyPair::new();
         let tx0 = Transaction::new_vote(
             &keypair,
@@ -388,7 +388,7 @@ mod tests {
         use logger;
         logger::setup();
         let id = Hash::default();
-        let next_id = hash(&id);
+        let next_id = hash(&id.as_ref());
         let keypair = KeyPair::new();
         let tx_small = Transaction::new_vote(
             &keypair,

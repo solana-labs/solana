@@ -149,7 +149,7 @@ fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
 fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
     let mut id = *start_hash;
     for _ in 1..num_hashes {
-        id = hash(&id);
+        id = hash(&id.as_ref());
     }
 
     // Hash all the transaction data
@@ -161,7 +161,7 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
     if !hash_data.is_empty() {
         extend_and_hash(&id, &hash_data)
     } else if num_hashes != 0 {
-        hash(&id)
+        hash(&id.as_ref())
     } else {
         id
     }
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_entry_verify() {
         let zero = Hash::default();
-        let one = hash(&zero);
+        let one = hash(&zero.as_ref());
         assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
         assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
         assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
