@@ -6,20 +6,19 @@ extern crate dirs;
 extern crate serde_json;
 extern crate solana;
 
-use bincode::serialize;
 use clap::{App, Arg, SubCommand};
+use solana::client::mk_client;
 use solana::crdt::NodeInfo;
-use solana::drone::{DroneRequest, DRONE_PORT};
+use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
 use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
+use solana::wallet::request_airdrop;
 use std::error;
 use std::fmt;
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -255,7 +254,7 @@ fn process_command(
                 tokens, config.drone_addr
             );
             let previous_balance = client.poll_get_balance(&config.id.pubkey())?;
-            request_airdrop(&config.drone_addr, &config.id, tokens as u64)?;
+            request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
@@ -318,40 +317,9 @@ fn read_leader(path: &str) -> Result<Config, WalletError> {
     })
 }
 
-fn mk_client(r: &NodeInfo) -> io::Result<ThinClient> {
-    let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    requests_socket
-        .set_read_timeout(Some(Duration::new(1, 0)))
-        .unwrap();
-
-    Ok(ThinClient::new(
-        r.contact_info.rpu,
-        requests_socket,
-        r.contact_info.tpu,
-        transactions_socket,
-    ))
-}
-
-fn request_airdrop(
-    drone_addr: &SocketAddr,
-    id: &KeyPair,
-    tokens: u64,
-) -> Result<(), Box<error::Error>> {
-    let mut stream = TcpStream::connect(drone_addr)?;
-    let req = DroneRequest::GetAirdrop {
-        airdrop_request_amount: tokens,
-        client_public_key: id.pubkey(),
-    };
-    let tx = serialize(&req).expect("serialize drone request");
-    stream.write_all(&tx).unwrap();
-    // TODO: add timeout to this function, in case of unresponsive drone
-    Ok(())
-}
-
 fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
     let config = parse_args()?;
-    let mut client = mk_client(&config.leader)?;
+    let mut client = mk_client(&config.leader);
     process_command(&config, &mut client)
 }

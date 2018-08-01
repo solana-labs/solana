@@ -266,7 +266,8 @@ mod tests {
         const TPS_BATCH: i64 = 5_000_000;
 
         logger::setup();
-        let leader = TestNode::new_localhost();
+        let leader_keypair = KeyPair::new();
+        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
         let bank = Bank::new(&alice);
@@ -276,6 +277,7 @@ mod tests {
         let leader_data = leader.data.clone();
 
         let server = FullNode::new_leader(
+            leader_keypair,
             bank,
             0,
             None,

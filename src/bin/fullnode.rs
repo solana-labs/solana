@@ -5,12 +5,15 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
+use solana::client::mk_client;
 use solana::crdt::{NodeInfo, TestNode};
+use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, FullNode, LedgerFile};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil};
+use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -65,6 +68,10 @@ fn main() -> () {
             exit(1);
         }
     }
+
+    let leader_pubkey = keypair.pubkey();
+    let repl_clone = repl_data.clone();
+
     let ledger = if let Some(l) = matches.value_of("ledger") {
         LedgerFile::Path(l.to_string())
     } else {
@@ -76,11 +83,32 @@ fn main() -> () {
         let testnet_address_string = t.to_string();
         let testnet_addr = testnet_address_string.parse().unwrap();
 
-        FullNode::new(node, false, ledger, Some(keypair), Some(testnet_addr))
+        FullNode::new(node, false, ledger, keypair, Some(testnet_addr))
     } else {
         node.data.leader_id = node.data.id;
 
-        FullNode::new(node, true, ledger, None, None)
+        FullNode::new(node, true, ledger, keypair, None)
     };
+
+    let mut client = mk_client(&repl_clone);
+    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap();
+    eprintln!("balance is {}", previous_balance);
+
+    if previous_balance == 0 {
+        let mut drone_addr = repl_clone.contact_info.tpu;
+        drone_addr.set_port(DRONE_PORT);
+
+        request_airdrop(&drone_addr, &leader_pubkey, 50).unwrap_or_else(|_| {
+            panic!(
+                "Airdrop failed, is the drone address correct {:?} drone running?",
+                drone_addr
+            )
+        });
+
+        let balance = client.poll_get_balance(&leader_pubkey).unwrap();
+        eprintln!("new balance is {}", balance);
+        assert!(balance > 0);
+    }
+
     fullnode.join().expect("join");
 }

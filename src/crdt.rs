@@ -132,7 +132,7 @@ pub struct NodeInfo {
     /// current leader identity
     pub leader_id: PublicKey,
     /// information about the state of the ledger
-    ledger_state: LedgerState,
+    pub ledger_state: LedgerState,
 }
 
 fn make_debug_id(buf: &[u8]) -> u64 {
@@ -360,7 +360,7 @@ impl Crdt {
             warn!(
                 "{:x}: VOTE for unknown id: {:x}",
                 self.debug_id(),
-                make_debug_id(&pubkey)
+                make_debug_id(pubkey)
             );
             return;
         }
@@ -374,7 +374,15 @@ impl Crdt {
             );
             return;
         }
-        self.update_leader_liveness();
+        if *pubkey == self.my_data().leader_id {
+            info!(
+                "{:x}: LEADER_VOTED! {:x}",
+                self.debug_id(),
+                make_debug_id(&pubkey)
+            );
+            inc_new_counter!("crdt-insert_vote-leader_voted", 1);
+        }
+
         if v.version <= self.table[pubkey].version {
             debug!(
                 "{:x}: VOTE for old version: {:x}",
@@ -387,21 +395,14 @@ impl Crdt {
             let mut data = self.table[pubkey].clone();
             data.version = v.version;
             data.ledger_state.last_id = last_id;
+
             debug!(
                 "{:x}: INSERTING VOTE! for {:x}",
                 self.debug_id(),
                 data.debug_id()
             );
+            self.update_liveness(data.id);
             self.insert(&data);
-        }
-    }
-    fn update_leader_liveness(&mut self) {
-        //TODO: (leaders should vote)
-        //until then we pet their liveness every time we see some votes from anyone
-        let ld = self.leader_data().map(|x| x.id);
-        trace!("leader_id {:?}", ld);
-        if let Some(leader_id) = ld {
-            self.update_liveness(leader_id);
         }
     }
     pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
@@ -1165,7 +1166,7 @@ impl Crdt {
                     return;
                 }
                 if e.is_err() {
-                    info!(
+                    debug!(
                         "{:x}: run_listen timeout, table size: {}",
                         debug_id,
                         obj.read().unwrap().table.len()
@@ -1465,7 +1466,7 @@ mod tests {
         crdt.set_leader(leader.id);
         assert_eq!(crdt.table[&d.id].version, 1);
         let v = Vote {
-            version: 2, //version shoud increase when we vote
+            version: 2, //version should increase when we vote
             contact_info_version: 0,
         };
         let expected = (v, crdt.table[&leader.id].contact_info.tpu);
@@ -1501,34 +1502,6 @@ mod tests {
         //should be accepted, since the update is for the same address field as the one we know
         assert_eq!(crdt.table[&d.id].version, 1);
     }
-
-    #[test]
-    fn test_insert_vote_leader_liveness() {
-        logger::setup();
-        // TODO: remove this test once leaders vote
-        let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone()).unwrap();
-        let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
-        assert_ne!(d.id, leader.id);
-        crdt.insert(&leader);
-        crdt.set_leader(leader.id);
-        let live: u64 = crdt.alive[&leader.id];
-        trace!("{:x} live {}", leader.debug_id(), live);
-        let vote_new_version_old_addrs = Vote {
-            version: d.version + 1,
-            contact_info_version: 0,
-        };
-        sleep(Duration::from_millis(100));
-        let votes = vec![(d.id.clone(), vote_new_version_old_addrs, Hash::default())];
-        crdt.insert_votes(&votes);
-        let updated = crdt.alive[&leader.id];
-        //should be accepted, since the update is for the same address field as the one we know
-        assert_eq!(crdt.table[&d.id].version, 1);
-        trace!("{:x} {} {}", leader.debug_id(), updated, live);
-        assert!(updated > live);
-    }
-
     fn sorted(ls: &Vec<NodeInfo>) -> Vec<NodeInfo> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();
         copy.sort_by(|x, y| x.id.cmp(&y.id));

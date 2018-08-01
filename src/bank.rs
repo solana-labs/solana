@@ -176,6 +176,14 @@ impl Bank {
         }
         Err(BankError::LastIdNotFound(*last_id))
     }
+    /// Look through the last_ids and find all the valid ids
+    /// This is batched to avoid holding the lock for a significant amount of time
+    pub fn count_valid_ids(&self, ids: &[Hash]) -> usize {
+        let last_ids = self.last_ids_sigs.read().unwrap();
+        ids.iter()
+            .map(|id| last_ids.get(id).is_some() as usize)
+            .sum()
+    }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
@@ -737,7 +745,21 @@ mod tests {
             Err(BankError::LastIdNotFound(mint.last_id()))
         );
     }
-
+    #[test]
+    fn test_count_valid_ids() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let ids: Vec<_> = (0..MAX_ENTRY_IDS)
+            .map(|i| {
+                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+                bank.register_entry_id(&last_id);
+                last_id
+            })
+            .collect();
+        assert_eq!(bank.count_valid_ids(&[]), 0);
+        assert_eq!(bank.count_valid_ids(&[mint.last_id()]), 0);
+        assert_eq!(bank.count_valid_ids(&ids), ids.len());
+    }
     #[test]
     fn test_debits_before_credits() {
         let mint = Mint::new(2);

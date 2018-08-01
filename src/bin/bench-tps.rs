@@ -5,12 +5,12 @@ extern crate rayon;
 extern crate serde_json;
 extern crate solana;
 
-use bincode::serialize;
 use clap::{App, Arg};
 use influx_db_client as influxdb;
 use rayon::prelude::*;
+use solana::client::mk_client;
 use solana::crdt::{Crdt, NodeInfo};
-use solana::drone::{DroneRequest, DRONE_PORT};
+use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
@@ -23,11 +23,10 @@ use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
+use solana::wallet::request_airdrop;
 use std::collections::VecDeque;
-use std::error;
 use std::fs::File;
-use std::io::Write;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -244,7 +243,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_c
         );
 
         let previous_balance = starting_balance;
-        request_airdrop(&drone_addr, &id, airdrop_amount as u64).unwrap();
+        request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
 
         // TODO: return airdrop Result from Drone instead of polling the
         //       network
@@ -590,22 +589,6 @@ fn main() {
     }
 }
 
-fn mk_client(r: &NodeInfo) -> ThinClient {
-    let requests_socket = udp_random_bind(8000, 10000, 5).unwrap();
-    let transactions_socket = udp_random_bind(8000, 10000, 5).unwrap();
-
-    requests_socket
-        .set_read_timeout(Some(Duration::new(1, 0)))
-        .unwrap();
-
-    ThinClient::new(
-        r.contact_info.rpu,
-        requests_socket,
-        r.contact_info.tpu,
-        transactions_socket,
-    )
-}
-
 fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
     let gossip_socket_pair;
     if let Some(a) = addr {
@@ -692,20 +675,4 @@ fn converge(
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
-}
-
-fn request_airdrop(
-    drone_addr: &SocketAddr,
-    id: &KeyPair,
-    tokens: u64,
-) -> Result<(), Box<error::Error>> {
-    let mut stream = TcpStream::connect(drone_addr)?;
-    let req = DroneRequest::GetAirdrop {
-        airdrop_request_amount: tokens,
-        client_public_key: id.pubkey(),
-    };
-    let tx = serialize(&req).expect("serialize drone request");
-    stream.write_all(&tx).unwrap();
-    // TODO: add timeout to this function, in case of unresponsive drone
-    Ok(())
 }

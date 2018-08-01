@@ -62,7 +62,7 @@ impl FullNode {
         mut node: TestNode,
         leader: bool,
         ledger: LedgerFile,
-        keypair_for_validator: Option<KeyPair>,
+        keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
     ) -> FullNode {
@@ -104,7 +104,6 @@ impl FullNode {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
             let network_entry_point = NodeInfo::new_entry_point(testnet_addr);
-            let keypair = keypair_for_validator.expect("validator requires keypair");
             let server = FullNode::new_validator(
                 keypair,
                 bank,
@@ -124,6 +123,7 @@ impl FullNode {
             node.data.leader_id = node.data.id;
 
             let server = FullNode::new_leader(
+                keypair,
                 bank,
                 entry_height,
                 Some(ledger_tail),
@@ -221,6 +221,7 @@ impl FullNode {
     ///              `---------------------`
     /// ```
     pub fn new_leader<W: Write + Send + 'static>(
+        keypair: KeyPair,
         bank: Bank,
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
@@ -245,6 +246,7 @@ impl FullNode {
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         let (tpu, blob_receiver) = Tpu::new(
+            keypair,
             &bank,
             &crdt,
             tick_duration,

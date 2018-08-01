@@ -175,8 +175,8 @@ pub mod tests {
     fn test_replicate() {
         logger::setup();
         let leader = TestNode::new_localhost();
-        let target1_kp = KeyPair::new();
-        let target1 = TestNode::new_localhost_with_pubkey(target1_kp.pubkey());
+        let target1_keypair = KeyPair::new();
+        let target1 = TestNode::new_localhost_with_pubkey(target1_keypair.pubkey());
         let target2 = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -230,7 +230,7 @@ pub mod tests {
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
 
         let tvu = Tvu::new(
-            target1_kp,
+            target1_keypair,
             &bank,
             0,
             cref1,
