@@ -41,5 +41,5 @@ else
 
   point="job_stats,$point_tags $point_fields"
 
-  ci/metrics_write_datapoint.sh "$point"
+  ci/metrics_write_datapoint.sh "$point" || true
 fi
