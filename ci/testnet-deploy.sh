@@ -279,7 +279,7 @@ fullnode_start() {
       "\
         set -ex; \
         logmarker='solana deploy $(date)/$RANDOM'; \
-        logger \$logmarker; \
+        logger \"\$logmarker\"; \
         $SNAP_INSTALL_CMD; \
         sudo snap set solana $nodeConfig; \
         snap info solana; \
