@@ -195,6 +195,7 @@ fn test_multi_node_validator_catchup_from_zero() {
 }
 
 #[test]
+#[ignore]
 fn test_multi_node_basic() {
     logger::setup();
     const N: usize = 5;
