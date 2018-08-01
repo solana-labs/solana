@@ -3,7 +3,6 @@ extern crate bincode;
 extern crate bs58;
 extern crate clap;
 extern crate dirs;
-extern crate generic_array;
 extern crate serde_json;
 extern crate solana;
 
@@ -196,7 +195,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .expect("base58-encoded signature");
 
             if sig_vec.len() == std::mem::size_of::<Signature>() {
-                let sig = Signature::clone_from_slice(&sig_vec);
+                let sig = Signature::new(&sig_vec);
                 Ok(WalletCommand::Confirm(sig))
             } else {
                 display_actions();
@@ -277,7 +276,7 @@ fn process_command(
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
             let sig = client.transfer(tokens, &config.id, to, &last_id)?;
-            println!("{}", bs58::encode(sig).into_string());
+            println!("{}", sig);
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(sig) => {
