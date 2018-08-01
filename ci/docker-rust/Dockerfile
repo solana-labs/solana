@@ -9,5 +9,6 @@ RUN apt update && \
       buildkite-agent \
       rsync \
       sudo \
+      cmake \
       && \
     rm -rf /var/lib/apt/lists/*
