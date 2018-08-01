@@ -251,7 +251,7 @@ pub mod tests {
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![], false);
             bank.register_entry_id(&cur_hash);
-            cur_hash = hash(&cur_hash);
+            cur_hash = hash(&cur_hash.as_ref());
 
             let tx0 = Transaction::new(
                 &mint.keypair(),
@@ -260,10 +260,10 @@ pub mod tests {
                 cur_hash,
             );
             bank.register_entry_id(&cur_hash);
-            cur_hash = hash(&cur_hash);
+            cur_hash = hash(&cur_hash.as_ref());
             let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0], false);
             bank.register_entry_id(&cur_hash);
-            cur_hash = hash(&cur_hash);
+            cur_hash = hash(&cur_hash.as_ref());
 
             alice_ref_balance -= transfer_amount;
 

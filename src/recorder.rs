@@ -23,7 +23,7 @@ impl Recorder {
     }
 
     pub fn hash(&mut self) {
-        self.last_hash = hash(&self.last_hash);
+        self.last_hash = hash(&self.last_hash.as_ref());
         self.num_hashes += 1;
     }
 

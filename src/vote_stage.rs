@@ -34,7 +34,7 @@ pub fn create_vote_tx_and_blob(
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
-        info!("voting on {:?}", &last_id[..8]);
+        info!("voting on {:?}", &last_id.as_ref()[..8]);
         wcrdt.new_vote(last_id)
     }?;
     let tx = Transaction::new_vote(&keypair, vote, last_id, 0);
