@@ -297,8 +297,7 @@ mod tests {
     #[test]
     fn test_thin_client() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = TestNode::new_localhost();
         let leader_data = leader.data.clone();
 
         let alice = Mint::new(10_000);
@@ -307,7 +306,6 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let server = FullNode::new_leader(
-            leader_keypair,
             bank,
             0,
             None,
@@ -344,8 +342,7 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = TestNode::new_localhost();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
@@ -353,7 +350,6 @@ mod tests {
         let leader_data = leader.data.clone();
 
         let server = FullNode::new_leader(
-            leader_keypair,
             bank,
             0,
             None,
@@ -402,15 +398,13 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = TestNode::new_localhost();
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
         let server = FullNode::new_leader(
-            leader_keypair,
             bank,
             0,
             None,
