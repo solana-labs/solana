@@ -146,14 +146,14 @@ impl FullNode {
         node: TestNode,
         leader: bool,
         ledger: LedgerFile,
-        keypair_for_validator: Option<KeyPair>,
+        keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         FullNode::new_internal(
             node,
             leader,
             ledger,
-            keypair_for_validator,
+            keypair,
             network_entry_for_validator,
             false,
         )
@@ -163,14 +163,14 @@ impl FullNode {
         node: TestNode,
         leader: bool,
         ledger: LedgerFile,
-        keypair_for_validator: Option<KeyPair>,
+        keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         FullNode::new_internal(
             node,
             leader,
             ledger,
-            keypair_for_validator,
+            keypair,
             network_entry_for_validator,
             true,
         )
