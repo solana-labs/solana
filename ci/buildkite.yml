@@ -17,10 +17,6 @@ steps:
     env:
       CARGO_TARGET_CACHE_NAME: "stable-perf"
     timeout_in_minutes: 20
-    retry:
-      automatic:
-      - exit_status: "*"
-        limit: 2
     agents:
       - "queue=cuda"
   - command: "ci/test-large-network.sh"
