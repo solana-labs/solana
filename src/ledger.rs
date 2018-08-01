@@ -440,18 +440,18 @@ mod tests {
         let ledger_path = tmp_ledger_path();
         let entries = make_test_entries();
 
-        let mut writer = LedgerWriter::new(ledger_path.clone()).unwrap();
+        let mut writer = LedgerWriter::new(&ledger_path).unwrap();
         writer.write_entries(entries.clone()).unwrap();
 
         let mut read_entries = vec![];
-        for x in read_ledger(ledger_path.clone()).unwrap() {
+        for x in read_ledger(&ledger_path).unwrap() {
             let entry = x.unwrap();
             trace!("entry... {:?}", entry);
             read_entries.push(entry);
         }
         assert_eq!(read_entries, entries);
 
-        let mut window = LedgerWindow::new(ledger_path.clone()).unwrap();
+        let mut window = LedgerWindow::new(&ledger_path).unwrap();
 
         for (i, entry) in entries.iter().enumerate() {
             let read_entry = window.get_entry(i as u64).unwrap();
@@ -461,8 +461,8 @@ mod tests {
 
         std::fs::remove_file(Path::new(&ledger_path).join("data")).unwrap();
         // empty data file should fall over
-        assert!(LedgerWindow::new(ledger_path.clone()).is_err());
-        assert!(read_ledger(ledger_path.clone()).is_err());
+        assert!(LedgerWindow::new(&ledger_path).is_err());
+        assert!(read_ledger(&ledger_path).is_err());
 
         std::fs::remove_dir_all(ledger_path).unwrap();
     }
