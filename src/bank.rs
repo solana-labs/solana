@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
 use streamer::WINDOW_SIZE;
-use timing::duration_as_us;
+use timing::{duration_as_us, timestamp};
 use transaction::{Instruction, Plan, Transaction};
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -79,9 +79,9 @@ pub struct Bank {
     /// values are so old that the `last_id` has been pulled out of the queue.
     last_ids: RwLock<VecDeque<Hash>>,
 
-    // Mapping of hashes to signature sets. The bank uses this data to
+    /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
     /// reject transactions with signatures its seen before
-    last_ids_sigs: RwLock<HashMap<Hash, HashSet<Signature>>>,
+    last_ids_sigs: RwLock<HashMap<Hash, (HashSet<Signature>, u64)>>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -155,14 +155,14 @@ impl Bank {
             .expect("'last_ids' read lock in forget_signature_with_last_id")
             .get_mut(last_id)
         {
-            Self::forget_signature(entry, signature);
+            Self::forget_signature(&mut entry.0, signature);
         }
     }
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
         for (_, sigs) in self.last_ids_sigs.write().unwrap().iter_mut() {
-            sigs.clear();
+            sigs.0.clear();
         }
     }
 
@@ -172,18 +172,25 @@ impl Bank {
             .expect("'last_ids' read lock in reserve_signature_with_last_id")
             .get_mut(last_id)
         {
-            return Self::reserve_signature(entry, signature);
+            return Self::reserve_signature(&mut entry.0, signature);
         }
         Err(BankError::LastIdNotFound(*last_id))
     }
 
     /// Look through the last_ids and find all the valid ids
     /// This is batched to avoid holding the lock for a significant amount of time
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> usize {
+    ///
+    /// Return a vec of tuple of (valid index, timestamp)
+    /// index is into the passed ids slice to avoid copying hashes
+    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
         let last_ids = self.last_ids_sigs.read().unwrap();
-        ids.iter()
-            .map(|id| last_ids.get(id).is_some() as usize)
-            .sum()
+        let mut ret = Vec::new();
+        for (i, id) in ids.iter().enumerate() {
+            if let Some(entry) = last_ids.get(id) {
+                ret.push((i, entry.1));
+            }
+        }
+        ret
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -201,7 +208,7 @@ impl Bank {
             let id = last_ids.pop_front().unwrap();
             last_ids_sigs.remove(&id);
         }
-        last_ids_sigs.insert(*last_id, HashSet::new());
+        last_ids_sigs.insert(*last_id, (HashSet::new(), timestamp()));
         last_ids.push_back(*last_id);
     }
 
@@ -540,7 +547,7 @@ impl Bank {
             .read()
             .expect("'last_ids_sigs' read lock");
         for (_hash, signatures) in last_ids_sigs.iter() {
-            if signatures.contains(signature) {
+            if signatures.0.contains(signature) {
                 return true;
             }
         }
@@ -758,9 +765,11 @@ mod tests {
                 last_id
             })
             .collect();
-        assert_eq!(bank.count_valid_ids(&[]), 0);
-        assert_eq!(bank.count_valid_ids(&[mint.last_id()]), 0);
-        assert_eq!(bank.count_valid_ids(&ids), ids.len());
+        assert_eq!(bank.count_valid_ids(&[]).len(), 0);
+        assert_eq!(bank.count_valid_ids(&[mint.last_id()]).len(), 0);
+        for (i, id) in bank.count_valid_ids(&ids).iter().enumerate() {
+            assert_eq!(id.0, i);
+        }
     }
 
     #[test]
