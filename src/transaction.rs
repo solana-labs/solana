@@ -5,7 +5,7 @@ use budget::{Budget, Condition};
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::{KeyPair, KeyPairUtil, PublicKey, Signature, SignatureUtil};
+use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
 pub const SIG_OFFSET: usize = 8;
@@ -186,7 +186,7 @@ impl Transaction {
     /// Sign this transaction.
     pub fn sign(&mut self, keypair: &KeyPair) {
         let sign_data = self.get_sign_data();
-        self.sig = Signature::clone_from_slice(keypair.sign(&sign_data).as_ref());
+        self.sig = Signature::new(keypair.sign(&sign_data).as_ref());
     }
 
     /// Verify only the transaction signature.
@@ -317,7 +317,7 @@ mod tests {
         let sign_data = tx.get_sign_data();
         let tx_bytes = serialize(&tx).unwrap();
         assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
-        assert_matches!(memfind(&tx_bytes, &tx.sig), Some(SIG_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.sig.as_ref()), Some(SIG_OFFSET));
         assert_matches!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
     }
 

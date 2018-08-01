@@ -139,7 +139,7 @@ impl Entry {
 
 fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
     hash_data.push(0u8);
-    hash_data.extend_from_slice(&tx.sig);
+    hash_data.extend_from_slice(&tx.sig.as_ref());
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains

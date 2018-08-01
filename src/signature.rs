@@ -41,7 +41,38 @@ impl fmt::Display for PublicKey {
     }
 }
 
-pub type Signature = GenericArray<u8, U64>;
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Signature(GenericArray<u8, U64>);
+
+impl Signature {
+    pub fn new(signature_slice: &[u8]) -> Self {
+        Signature(GenericArray::clone_from_slice(&signature_slice))
+    }
+    pub fn verify(&self, peer_public_key_bytes: &[u8], msg_bytes: &[u8]) -> bool {
+        let peer_public_key = Input::from(peer_public_key_bytes);
+        let msg = Input::from(msg_bytes);
+        let sig = Input::from(self.0.as_slice());
+        signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
+    }
+}
+
+impl AsRef<[u8]> for Signature {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl fmt::Debug for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.0).into_string())
+    }
+}
 
 pub trait KeyPairUtil {
     fn new() -> Self;
@@ -59,19 +90,6 @@ impl KeyPairUtil for Ed25519KeyPair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> PublicKey {
         PublicKey(GenericArray::clone_from_slice(self.public_key_bytes()))
-    }
-}
-
-pub trait SignatureUtil {
-    fn verify(&self, peer_public_key_bytes: &[u8], msg_bytes: &[u8]) -> bool;
-}
-
-impl SignatureUtil for GenericArray<u8, U64> {
-    fn verify(&self, peer_public_key_bytes: &[u8], msg_bytes: &[u8]) -> bool {
-        let peer_public_key = Input::from(peer_public_key_bytes);
-        let msg = Input::from(msg_bytes);
-        let sig = Input::from(self);
-        signature::verify(&signature::ED25519, peer_public_key, msg, sig).is_ok()
     }
 }
 
