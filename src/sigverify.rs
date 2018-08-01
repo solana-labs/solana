@@ -41,7 +41,6 @@ pub fn init() {
     // stub
 }
 
-#[cfg(not(feature = "cuda"))]
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
     use signature::{PublicKey, Signature};
@@ -81,6 +80,11 @@ fn batch_size(batches: &[SharedPackets]) -> usize {
 #[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
 #[cfg(not(feature = "cuda"))]
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+    ed25519_verify_cpu(batches)
+}
+
+#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
+pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
@@ -134,6 +138,16 @@ pub fn init() {
 pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
+
+    // micro-benchmarks show GPU time for smallest batch around 15-20ms
+    // and CPU speed for 64-128 sig verifies around 10-20ms. 64 is a nice
+    // power-of-two number around that accounting for the fact that the CPU
+    // may be busy doing other things while being a real fullnode
+    // TODO: dynamically adjust this crossover
+    if count < 64 {
+        return ed25519_verify_cpu(batches);
+    }
+
     info!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
