@@ -181,7 +181,7 @@ fn find_next_missing(
         Err(WindowError::GenericError)?;
     }
     let mut window = window.write().unwrap();
-    let max = std::cmp::min(consumed + WINDOW_SIZE, received);
+    let max = cmp::min(consumed + WINDOW_SIZE, received);
     let reqs: Vec<_> = (consumed..max)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
