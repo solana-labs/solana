@@ -4,10 +4,9 @@ extern crate bincode;
 extern crate serde_json;
 extern crate solana;
 
-use solana::crdt::TestNode;
-use solana::crdt::{Crdt, NodeInfo};
-use solana::entry_writer::EntryWriter;
-use solana::fullnode::{FullNode, LedgerFile};
+use solana::crdt::{Crdt, NodeInfo, TestNode};
+use solana::fullnode::FullNode;
+use solana::ledger::{copy_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -18,7 +17,7 @@ use solana::thin_client::ThinClient;
 use solana::timing::duration_as_s;
 use std::cmp::max;
 use std::env;
-use std::fs::File;
+use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -73,16 +72,27 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     rv
 }
 
-fn genesis(num: i64) -> (Mint, String) {
-    let mint = Mint::new(num);
-    let path = format!(
-        "target/test_multi_node_dynamic_network-{}.log",
-        mint.pubkey()
-    );
-    let mut writer = File::create(path.clone()).unwrap();
+fn tmp_ledger_path(name: &str) -> String {
+    let keypair = KeyPair::new();
 
-    EntryWriter::write_entries(&mut writer, mint.create_entries()).unwrap();
-    (mint, path.to_string())
+    format!("farf/{}-{}", name, keypair.pubkey())
+}
+
+fn genesis(name: &str, num: i64) -> (Mint, String) {
+    let mint = Mint::new(num);
+
+    let path = tmp_ledger_path(name);
+    let mut writer = LedgerWriter::new(&path).unwrap();
+
+    writer.write_entries(mint.create_entries()).unwrap();
+
+    (mint, path)
+}
+
+fn tmp_copy_ledger(from: &str, name: &str) -> String {
+    let to = tmp_ledger_path(name);
+    copy_ledger(from, &to).unwrap();
+    to
 }
 
 #[test]
@@ -95,15 +105,12 @@ fn test_multi_node_validator_catchup_from_zero() {
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
+    let mut ledger_paths = Vec::new();
 
-    let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(
-        leader,
-        true,
-        LedgerFile::Path(ledger_path.clone()),
-        leader_keypair,
-        None,
-    );
+    let (alice, leader_ledger_path) = genesis("multi_node_validator_catchup_from_zero", 10_000);
+    ledger_paths.push(leader_ledger_path.clone());
+
+    let server = FullNode::new(leader, true, &leader_ledger_path, leader_keypair, None);
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -114,10 +121,16 @@ fn test_multi_node_validator_catchup_from_zero() {
     for _ in 0..N {
         let keypair = KeyPair::new();
         let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+        let ledger_path = tmp_copy_ledger(
+            &leader_ledger_path,
+            "multi_node_validator_catchup_from_zero_validator",
+        );
+        ledger_paths.push(ledger_path.clone());
+
         let mut val = FullNode::new(
             validator,
             false,
-            LedgerFile::Path(ledger_path.clone()),
+            &ledger_path,
             keypair,
             Some(leader_data.contact_info.ncp),
         );
@@ -148,10 +161,15 @@ fn test_multi_node_validator_catchup_from_zero() {
     // start up another validator, converge and then check everyone's balances
     let keypair = KeyPair::new();
     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+    let ledger_path = tmp_copy_ledger(
+        &leader_ledger_path,
+        "multi_node_validator_catchup_from_zero",
+    );
+    ledger_paths.push(ledger_path.clone());
     let val = FullNode::new(
         validator,
         false,
-        LedgerFile::Path(ledger_path.clone()),
+        &ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
     );
@@ -191,6 +209,9 @@ fn test_multi_node_validator_catchup_from_zero() {
     for node in nodes {
         node.close().unwrap();
     }
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
 }
 
 #[test]
@@ -204,14 +225,11 @@ fn test_multi_node_basic() {
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.data.clone();
     let bob_pubkey = KeyPair::new().pubkey();
-    let (alice, ledger_path) = genesis(10_000);
-    let server = FullNode::new(
-        leader,
-        true,
-        LedgerFile::Path(ledger_path.clone()),
-        leader_keypair,
-        None,
-    );
+    let mut ledger_paths = Vec::new();
+
+    let (alice, leader_ledger_path) = genesis("multi_node_basic", 10_000);
+    ledger_paths.push(leader_ledger_path.clone());
+    let server = FullNode::new(leader, true, &leader_ledger_path, leader_keypair, None);
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -222,10 +240,12 @@ fn test_multi_node_basic() {
     for _ in 0..N {
         let keypair = KeyPair::new();
         let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+        let ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_basic");
+        ledger_paths.push(ledger_path.clone());
         let val = FullNode::new(
             validator,
             false,
-            LedgerFile::Path(ledger_path.clone()),
+            &ledger_path,
             keypair,
             Some(leader_data.contact_info.ncp),
         );
@@ -254,7 +274,9 @@ fn test_multi_node_basic() {
     for node in nodes {
         node.close().unwrap();
     }
-    std::fs::remove_file(ledger_path).unwrap();
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
 }
 
 #[test]
@@ -263,15 +285,12 @@ fn test_boot_validator_from_file() {
     let leader_keypair = KeyPair::new();
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
-    let (alice, ledger_path) = genesis(100_000);
+    let (alice, leader_ledger_path) = genesis("boot_validator_from_file", 100_000);
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+
     let leader_data = leader.data.clone();
-    let leader_fullnode = FullNode::new(
-        leader,
-        true,
-        LedgerFile::Path(ledger_path.clone()),
-        leader_keypair,
-        None,
-    );
+    let leader_fullnode = FullNode::new(leader, true, &leader_ledger_path, leader_keypair, None);
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
     assert_eq!(leader_balance, 500);
@@ -282,10 +301,12 @@ fn test_boot_validator_from_file() {
     let keypair = KeyPair::new();
     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.data.clone();
+    let ledger_path = tmp_copy_ledger(&leader_ledger_path, "boot_validator_from_file");
+    ledger_paths.push(ledger_path.clone());
     let val_fullnode = FullNode::new(
         validator,
         false,
-        LedgerFile::Path(ledger_path.clone()),
+        &ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
     );
@@ -295,20 +316,16 @@ fn test_boot_validator_from_file() {
 
     val_fullnode.close().unwrap();
     leader_fullnode.close().unwrap();
-    std::fs::remove_file(ledger_path).unwrap();
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
 }
 
 fn create_leader(ledger_path: &str) -> (NodeInfo, FullNode) {
     let leader_keypair = KeyPair::new();
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.data.clone();
-    let leader_fullnode = FullNode::new(
-        leader,
-        true,
-        LedgerFile::Path(ledger_path.to_string()),
-        leader_keypair,
-        None,
-    );
+    let leader_fullnode = FullNode::new(leader, true, &ledger_path, leader_keypair, None);
     (leader_data, leader_fullnode)
 }
 
@@ -319,7 +336,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     //    ledger (currently up to WINDOW_SIZE entries)
     logger::setup();
 
-    let (alice, ledger_path) = genesis(100_000);
+    let (alice, ledger_path) = genesis("leader_restart_validator_start_from_old_ledger", 100_000);
     let bob_pubkey = KeyPair::new().pubkey();
 
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
@@ -330,11 +347,10 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     assert_eq!(leader_balance, 500);
 
     // create a "stale" ledger by copying current ledger
-    let mut stale_ledger_path = ledger_path.clone();
-    stale_ledger_path.insert_str(ledger_path.rfind("/").unwrap() + 1, "stale_");
-
-    std::fs::copy(&ledger_path, &stale_ledger_path)
-        .expect(format!("copy {} to {}", &ledger_path, &stale_ledger_path,).as_str());
+    let stale_ledger_path = tmp_copy_ledger(
+        &ledger_path,
+        "leader_restart_validator_start_from_old_ledger",
+    );
 
     // restart the leader
     leader_fullnode.close().unwrap();
@@ -353,10 +369,11 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let keypair = KeyPair::new();
     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.data.clone();
+
     let val_fullnode = FullNode::new(
         validator,
         false,
-        LedgerFile::Path(stale_ledger_path.clone()),
+        &stale_ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
     );
@@ -382,8 +399,8 @@ fn test_leader_restart_validator_start_from_old_ledger() {
 
     val_fullnode.close().unwrap();
     leader_fullnode.close().unwrap();
-    std::fs::remove_file(ledger_path).unwrap();
-    std::fs::remove_file(stale_ledger_path).unwrap();
+    remove_dir_all(ledger_path).unwrap();
+    remove_dir_all(stale_ledger_path).unwrap();
 }
 
 //TODO: this test will run a long time so it's disabled for CI
@@ -409,16 +426,16 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
-    let (alice, ledger_path) = genesis(10_000_000);
+    let (alice, leader_ledger_path) = genesis("multi_node_dynamic_network", 10_000_000);
+
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
-    let server = FullNode::new_without_sigverify(
-        leader,
-        true,
-        LedgerFile::Path(ledger_path.clone()),
-        leader_keypair,
-        None,
-    );
+
+    let server =
+        FullNode::new_without_sigverify(leader, true, &leader_ledger_path, leader_keypair, None);
 
     // Send leader some tokens to vote
     let leader_balance = send_tx_and_retry_get_balance(
@@ -478,7 +495,8 @@ fn test_multi_node_dynamic_network() {
         .into_iter()
         .map(|keypair| {
             let leader_data = leader_data.clone();
-            let ledger_path = ledger_path.clone();
+            let ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_dynamic_network");
+            ledger_paths.push(ledger_path.clone());
             Builder::new()
                 .name("validator-launch-thread".to_string())
                 .spawn(move || {
@@ -488,7 +506,7 @@ fn test_multi_node_dynamic_network() {
                     let val = FullNode::new_without_sigverify(
                         validator,
                         false,
-                        LedgerFile::Path(ledger_path.clone()),
+                        &ledger_path,
                         keypair,
                         Some(leader_data.contact_info.ncp),
                     );
@@ -597,7 +615,9 @@ fn test_multi_node_dynamic_network() {
     }
     server.join().unwrap();
 
-    std::fs::remove_file(ledger_path).unwrap();
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
 }
 
 fn mk_client(leader: &NodeInfo) -> ThinClient {
