@@ -28,7 +28,7 @@ tune_networking
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/leader.json \
-  --ledger "$SOLANA_CONFIG_DIR"/ledger.log \
+  --ledger "$SOLANA_CONFIG_DIR"/ledger \
   > >($leader_logger) 2>&1 &
 pid=$!
 wait "$pid"

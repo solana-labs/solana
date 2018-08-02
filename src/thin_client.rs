@@ -289,10 +289,25 @@ mod tests {
     use mint::Mint;
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
-    use std::io::sink;
+    use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use transaction::{Instruction, Plan};
+
+    fn tmp_ledger_path(name: &str) -> String {
+        let keypair = KeyPair::new();
+
+        let id = {
+            let ids: Vec<_> = keypair
+                .pubkey()
+                .iter()
+                .map(|id| format!("{}", id))
+                .collect();
+            ids.join("")
+        };
+
+        format!("farf/{}-{}", name, id)
+    }
 
     #[test]
     fn test_thin_client() {
@@ -305,6 +320,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
+        let ledger_path = tmp_ledger_path("thin_client");
 
         let server = FullNode::new_leader(
             leader_keypair,
@@ -314,7 +330,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
-            sink(),
+            &ledger_path,
             false,
         );
         sleep(Duration::from_millis(900));
@@ -351,6 +367,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
+        let ledger_path = tmp_ledger_path("bad_sig");
 
         let server = FullNode::new_leader(
             leader_keypair,
@@ -360,7 +377,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
-            sink(),
+            &ledger_path,
             false,
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -397,6 +414,7 @@ mod tests {
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     #[test]
@@ -409,6 +427,8 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
+        let ledger_path = tmp_ledger_path("client_check_signature");
+
         let server = FullNode::new_leader(
             leader_keypair,
             bank,
@@ -417,7 +437,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
-            sink(),
+            &ledger_path,
             false,
         );
         sleep(Duration::from_millis(300));
@@ -443,5 +463,6 @@ mod tests {
 
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 }

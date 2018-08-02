@@ -71,8 +71,8 @@ SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
 $rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
-[[ -r "$SOLANA_LEADER_CONFIG_DIR"/ledger.log ]] || {
-  echo "Unable to retrieve ledger.log from $rsync_leader_url"
+[[ -d "$SOLANA_LEADER_CONFIG_DIR"/ledger ]] || {
+  echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
 }
 
@@ -80,7 +80,7 @@ trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/validator.json \
   --testnet "$leader_address:$leader_port" \
-  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log \
+  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger \
   > >($validator_logger) 2>&1 &
 pid=$!
 wait "$pid"

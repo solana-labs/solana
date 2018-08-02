@@ -3,17 +3,13 @@
 use bank::Bank;
 use crdt::{Crdt, NodeInfo, TestNode};
 use entry::Entry;
-use entry_writer;
-use ledger::Block;
+use ledger::{read_ledger, Block};
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
 use service::Service;
 use signature::{KeyPair, KeyPairUtil};
 use std::collections::VecDeque;
-use std::fs::{File, OpenOptions};
-use std::io::{stdin, stdout, BufReader};
-use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -28,11 +24,6 @@ use untrusted::Input;
 pub struct FullNode {
     exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
-}
-
-pub enum LedgerFile {
-    StdInOut,
-    Path(String),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -61,28 +52,17 @@ impl FullNode {
     fn new_internal(
         mut node: TestNode,
         leader: bool,
-        ledger: LedgerFile,
+        ledger_path: &str,
         keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
     ) -> FullNode {
         info!("creating bank...");
         let bank = Bank::default();
-        let (infile, outfile): (Box<Read>, Box<Write + Send>) = match ledger {
-            LedgerFile::Path(path) => (
-                Box::new(File::open(path.clone()).expect("opening ledger file")),
-                Box::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(path)
-                        .expect("opening ledger file"),
-                ),
-            ),
-            LedgerFile::StdInOut => (Box::new(stdin()), Box::new(stdout())),
-        };
-        let reader = BufReader::new(infile);
-        let entries = entry_writer::read_entries(reader).map(|e| e.expect("failed to parse entry"));
+
+        let entries = read_ledger(ledger_path).expect("opening ledger");
+
+        let entries = entries.map(|e| e.expect("failed to parse entry"));
 
         info!("processing ledger...");
         let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
@@ -112,6 +92,7 @@ impl FullNode {
                 node,
                 &network_entry_point,
                 exit.clone(),
+                ledger_path,
                 sigverify_disabled,
             );
             info!(
@@ -131,7 +112,7 @@ impl FullNode {
                 None,
                 node,
                 exit.clone(),
-                outfile,
+                ledger_path,
                 sigverify_disabled,
             );
             info!(
@@ -145,7 +126,7 @@ impl FullNode {
     pub fn new(
         node: TestNode,
         leader: bool,
-        ledger: LedgerFile,
+        ledger: &str,
         keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
@@ -162,7 +143,7 @@ impl FullNode {
     pub fn new_without_sigverify(
         node: TestNode,
         leader: bool,
-        ledger: LedgerFile,
+        ledger: &str,
         keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
@@ -220,7 +201,7 @@ impl FullNode {
     ///              |                     |    `------------`
     ///              `---------------------`
     /// ```
-    pub fn new_leader<W: Write + Send + 'static>(
+    pub fn new_leader(
         keypair: KeyPair,
         bank: Bank,
         entry_height: u64,
@@ -228,7 +209,7 @@ impl FullNode {
         tick_duration: Option<Duration>,
         node: TestNode,
         exit: Arc<AtomicBool>,
-        writer: W,
+        ledger_path: &str,
         sigverify_disabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
@@ -245,6 +226,9 @@ impl FullNode {
         let window = FullNode::new_window(ledger_tail, entry_height, &node.data, &blob_recycler);
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
+
+        //        let mut ledger_writer = LedgerWriter::new(ledger_path);
+
         let (tpu, blob_receiver) = Tpu::new(
             keypair,
             &bank,
@@ -253,7 +237,7 @@ impl FullNode {
             node.sockets.transaction,
             &blob_recycler,
             exit.clone(),
-            writer,
+            ledger_path,
             sigverify_disabled,
         );
         thread_hdls.extend(tpu.thread_hdls());
@@ -316,6 +300,7 @@ impl FullNode {
         node: TestNode,
         entry_point: &NodeInfo,
         exit: Arc<AtomicBool>,
+        ledger_path: &str,
         _sigverify_disabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
@@ -353,6 +338,7 @@ impl FullNode {
             node.sockets.replicate,
             node.sockets.repair,
             node.sockets.retransmit,
+            ledger_path,
             exit.clone(),
         );
         thread_hdls.extend(tvu.thread_hdls());
@@ -391,8 +377,25 @@ mod tests {
     use mint::Mint;
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
+    use std::fs::remove_dir_all;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
+
+    fn tmp_ledger_path(name: &str) -> String {
+        let keypair = KeyPair::new();
+
+        let id = {
+            let ids: Vec<_> = keypair
+                .pubkey()
+                .iter()
+                .map(|id| format!("{}", id))
+                .collect();
+            ids.join("")
+        };
+
+        format!("farf/{}-{}", name, id)
+    }
+
     #[test]
     fn validator_exit() {
         let kp = KeyPair::new();
@@ -401,13 +404,15 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false);
+        let lp = tmp_ledger_path("validator_exit");
+        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, &lp, false);
         v.exit();
         v.join().unwrap();
+        remove_dir_all(lp).unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
-        let vals: Vec<FullNode> = (0..2)
+        let vals: Vec<(FullNode, String)> = (0..2)
             .map(|_| {
                 let kp = KeyPair::new();
                 let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
@@ -415,13 +420,20 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, false)
+                let lp = tmp_ledger_path("validator_parallel_exit");
+                (
+                    FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, &lp, false),
+                    lp,
+                )
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
-        vals.iter().for_each(|v| v.exit());
+        vals.iter().for_each(|v| v.0.exit());
         //while join is called sequentially, the above exit call notified all the
         //validators to exit from all their threads
-        vals.into_iter().for_each(|v| v.join().unwrap());
+        vals.into_iter().for_each(|v| {
+            v.0.join().unwrap();
+            remove_dir_all(v.1).unwrap()
+        });
     }
 }
