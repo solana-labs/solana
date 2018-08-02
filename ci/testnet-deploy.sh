@@ -71,7 +71,7 @@ echo "Install command: $SNAP_INSTALL_CMD"
 
 leaderName=${publicUrl//./-}
 
-vmlist=() # Each array element is the triple "class:vmName:vmZone"
+vmlist=() # Each array element is formatted as "class:vmName:vmZone:vmPublicIp"
 
 #
 # vm_foreach [cmd] [extra args to cmd]
@@ -81,6 +81,7 @@ vmlist=() # Each array element is the triple "class:vmName:vmZone"
 #           additionl arguments supplied to vm_foreach:
 #               vmName - GCP name of the VM
 #               vmZone - The GCP zone the VM is located in
+#               vmPublicIp - The public IP address of this VM
 #               vmClass - The 'class' of this VM
 #               count  - Monotonically increasing count for each
 #                        invocation of cmd, starting at 1
@@ -93,10 +94,10 @@ vm_foreach() {
 
   declare count=1
   for info in "${vmlist[@]}"; do
-    declare vmClass vmName vmZone
-    IFS=: read -r vmClass vmName vmZone < <(echo "$info")
+    declare vmClass vmName vmZone vmPublicIp
+    IFS=: read -r vmClass vmName vmZone vmPublicIp < <(echo "$info")
 
-    eval "$cmd" "$vmName" "$vmZone" "$vmClass" "$count" "$@"
+    eval "$cmd" "$vmName" "$vmZone" "$vmPublicIp" "$vmClass" "$count" "$@"
     count=$((count + 1))
   done
 }
@@ -109,6 +110,7 @@ vm_foreach() {
 #           The command will receive three arguments:
 #               vmName - GCP name of the VM
 #               vmZone - The GCP zone the VM is located in
+#               vmPublicIp - The public IP address of this VM
 #               count  - Monotonically increasing count for each
 #                        invocation of cmd, starting at 1
 #
@@ -116,12 +118,13 @@ vm_foreach() {
 _run_cmd_if_class() {
   declare vmName=$1
   declare vmZone=$2
-  declare vmClass=$3
-  declare count=$4
-  declare class=$5
-  declare cmd=$6
+  declare vmPublicIp=$3
+  declare vmClass=$4
+  declare count=$5
+  declare class=$6
+  declare cmd=$7
   if [[ $class = "$vmClass" ]]; then
-    eval "$cmd" "$vmName" "$vmZone" "$count"
+    eval "$cmd" "$vmName" "$vmZone" "$vmPublicIp" "$count"
   fi
 }
 
@@ -138,13 +141,15 @@ findVms() {
   declare class="$1"
   declare filter="$2"
   gcloud compute instances list --filter="$filter"
-  while read -r vmName vmZone status; do
+  while read -r vmName vmZone vmPublicIp status; do
     if [[ $status != RUNNING ]]; then
       echo "Warning: $vmName is not RUNNING, ignoring it."
       continue
     fi
-    vmlist+=("$class:$vmName:$vmZone")
-  done < <(gcloud compute instances list --filter="$filter" --format 'value(name,zone,status)')
+    vmlist+=("$class:$vmName:$vmZone:$vmPublicIp")
+  done < <(gcloud compute instances list \
+             --filter="$filter" \
+             --format 'value(name,zone,networkInterfaces[0].accessConfigs[0].natIP,status)')
 }
 
 echo "Leader node:"
@@ -174,31 +179,25 @@ netName=${SOLANA_NET_URL/.*/}
 gcp_vm_exec() {
   declare vmName=$1
   declare vmZone=$2
-  declare message=$3
-  declare cmd=$4
+  declare vmPublicIp=$3
+  declare message=$4
+  declare cmd=$5
 
-  echo "--- $message $vmName in zone $vmZone"
-  gcloud compute ssh "$vmName" --zone "$vmZone" \
-    --ssh-flag="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-    --command="$cmd"
-}
-
-gcp_login_quota_workaround() {
-  declare count=$1
-
-  if [[ $((count % 5)) = 0 ]]; then
-    #  Slow down deployment to avoid triggering GCP login
-    #  quota limits (each |ssh| counts as a login)
-    sleep 3
-  fi
+  echo "--- $message $vmName in zone $vmZone ($vmPublicIp)"
+  (
+    set -x
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      testnet-deploy@"$vmPublicIp" "$cmd"
+  )
 }
 
 client_start() {
   declare vmName=$1
   declare vmZone=$2
-  declare count=$3
+  declare vmPublicIp=$3
+  declare count=$4
 
-  gcp_vm_exec "$vmName" "$vmZone" \
+  gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
     "Starting client $count:" \
     "\
       set -x;
@@ -208,7 +207,8 @@ client_start() {
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux kill-session -t solana; \
       tmux new -s solana -d \" \
-          set -x;
+          set -x; \
+          sudo rm /tmp/solana.log; \
           /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee /tmp/solana.log; \
           echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
             | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netName clientexit=1'; \
@@ -224,12 +224,13 @@ client_start() {
 client_stop() {
   declare vmName=$1
   declare vmZone=$2
-  declare count=$3
+  declare vmPublicIp=$3
+  declare count=$4
 
   (
     SECONDS=0
-    gcp_vm_exec "$vmName" "$vmZone" \
-      "Stopping client $count:" \
+    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
+      "Stopping client $vmName ($count):" \
       "\
         set -x;
         tmux list-sessions; \
@@ -257,7 +258,8 @@ fullnode_start() {
   declare class=$1
   declare vmName=$2
   declare vmZone=$3
-  declare count=$4
+  declare vmPublicIp=$4
+  declare count=$5
 
   (
     SECONDS=0
@@ -275,7 +277,7 @@ fullnode_start() {
       nodeConfig="mode=validator leader-address=$publicIp $commonNodeConfig"
     fi
 
-    gcp_vm_exec "$vmName" "$vmZone" "Starting $class $count:" \
+    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Starting $class $count:" \
       "\
         set -ex; \
         logmarker='solana deploy $(date)/$RANDOM'; \
@@ -298,7 +300,6 @@ fullnode_start() {
   done
   mv "log-$vmName.txt" "log-$pid.txt"
 
-  gcp_login_quota_workaround "$count"
   pids+=("$pid")
 }
 
@@ -313,11 +314,12 @@ validator_start() {
 fullnode_stop() {
   declare vmName=$1
   declare vmZone=$2
-  declare count=$3
+  declare vmPublicIp=$3
+  declare count=$4
 
   (
     SECONDS=0
-    gcp_vm_exec "$vmName" "$vmZone" "Shutting down" "\
+    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Shutting down" "\
       if snap list solana; then \
         sudo snap set solana mode=; \
       fi"
@@ -331,7 +333,6 @@ fullnode_stop() {
   done
   mv "log-$vmName.txt" "log-$pid.txt"
 
-  gcp_login_quota_workaround "$count"
   pids+=("$pid")
 }
 
@@ -355,12 +356,14 @@ if [[ -n $LOCAL_SNAP ]]; then
   transfer_local_snap() {
     declare vmName=$1
     declare vmZone=$2
-    declare vmClass=$3
-    declare count=$4
+    declare vmPublicIp=$3
+    declare vmClass=$4
+    declare count=$5
 
     echo "--- $vmName in zone $vmZone ($count)"
     SECONDS=0
-    gcloud compute scp --zone "$vmZone" "$LOCAL_SNAP" "$vmName":solana_local.snap
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      "$LOCAL_SNAP" testnet-deploy@"$vmPublicIp":solana_local.snap
     echo "Succeeded in ${SECONDS} seconds"
   }
   vm_foreach transfer_local_snap
