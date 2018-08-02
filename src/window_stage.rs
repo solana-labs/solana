@@ -30,6 +30,15 @@ impl WindowStage {
             blob_recycler.clone(),
             retransmit_receiver,
         );
+        let repair_socket = UdpSocket::bind("0.0.0.0:0").expect("udp socket bind to 0.0.0.0:0");
+        let (repair_sender, repair_receiver) = channel();
+        let t_repair_sender = streamer::responder(
+            "repair_sender",
+            repair_socket,
+            blob_recycler.clone(),
+            repair_receiver,
+        );
+
         let (blob_sender, blob_receiver) = channel();
         let t_window = streamer::window(
             crdt.clone(),
@@ -39,8 +48,9 @@ impl WindowStage {
             fetch_stage_receiver,
             blob_sender,
             retransmit_sender,
+            repair_sender,
         );
-        let thread_hdls = vec![t_retransmit, t_window];
+        let thread_hdls = vec![t_retransmit, t_window, t_repair_sender];
 
         (WindowStage { thread_hdls }, blob_receiver)
     }

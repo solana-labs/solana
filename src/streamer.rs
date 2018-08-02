@@ -181,7 +181,8 @@ fn find_next_missing(
         Err(WindowError::GenericError)?;
     }
     let mut window = window.write().unwrap();
-    let reqs: Vec<_> = (consumed..received)
+    let max = cmp::min(consumed + WINDOW_SIZE, received);
+    let reqs: Vec<_> = (consumed..max)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
 
@@ -210,6 +211,7 @@ fn repair_window(
     window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
+    repair_sender: &BlobSender,
     last: &mut u64,
     times: &mut usize,
     consumed: u64,
@@ -240,16 +242,25 @@ fn repair_window(
             reqs.len()
         );
     }
-    let sock = UdpSocket::bind("0.0.0.0:0")?;
-    for (to, req) in reqs {
-        //todo cache socket
-        debug!(
-            "{:x}: repair_window request {} {} {}",
-            debug_id, consumed, received, to
-        );
-        assert!(req.len() <= BLOB_SIZE);
-        sock.send_to(&req, to)?;
-    }
+    let out: VecDeque<_> = reqs.into_iter()
+        .map(|(to, req)| {
+            let shared_blob = recycler.allocate();
+            {
+                let mut blob = shared_blob.write().unwrap();
+                let sz = req.len();
+                assert!(req.len() <= BLOB_SIZE);
+                blob.meta.set_addr(&to);
+                blob.meta.size = sz;
+                blob.data[..sz].copy_from_slice(&req);
+                debug!(
+                    "{:x}: repair_window request {} {} {}",
+                    debug_id, consumed, received, to
+                );
+            }
+            shared_blob
+        })
+        .collect();
+    repair_sender.send(out)?;
     Ok(())
 }
 
@@ -468,6 +479,9 @@ fn recv_window(
             let p = b.write().expect("'b' write lock in fn recv_window");
             (p.get_index()?, p.meta.size)
         };
+        if pix > *consumed + WINDOW_SIZE {
+            continue;
+        }
         if pix > *received {
             *received = pix;
         }
@@ -639,6 +653,7 @@ pub fn window(
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
+    repair_sender: BlobSender,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
@@ -671,7 +686,15 @@ pub fn window(
                     }
                 }
                 let _ = repair_window(
-                    debug_id, &window, &crdt, &recycler, &mut last, &mut times, consumed, received,
+                    debug_id,
+                    &window,
+                    &crdt,
+                    &recycler,
+                    &repair_sender,
+                    &mut last,
+                    &mut times,
+                    consumed,
+                    received,
                 );
             }
         })
@@ -1002,6 +1025,7 @@ mod test {
             tn.sockets.gossip,
             s_reader,
         ).unwrap();
+        let (s_repair, _r_repair) = channel();
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
@@ -1013,6 +1037,7 @@ mod test {
             r_reader,
             s_window,
             s_retransmit,
+            s_repair,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
