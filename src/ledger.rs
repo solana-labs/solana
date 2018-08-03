@@ -39,14 +39,16 @@ fn entry_at(file: &mut File, at: u64) -> io::Result<Entry> {
     deserialize_from(file.take(len)).map_err(err_bincode_to_io)
 }
 
-//fn next_offset(file: &mut File) -> io::Result<u64> {
-//    deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
-//}
-
-fn next_entry(file: &mut File) -> io::Result<Entry> {
-    let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
-    deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+fn next_offset(file: &mut File) -> io::Result<u64> {
+    deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
 }
+
+// unused, but would work for the iterator if we only have the data file...
+//
+//fn next_entry(file: &mut File) -> io::Result<Entry> {
+//    let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
+//    deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+//}
 
 fn u64_at(file: &mut File, at: u64) -> io::Result<u64> {
     file.seek(SeekFrom::Start(at))?;
@@ -110,7 +112,7 @@ impl LedgerWriter {
         Ok(LedgerWriter { index, data })
     }
 
-    pub fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
+    fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
         let offset = self.data.seek(SeekFrom::Current(0))?;
 
         let len = serialized_size(&entry).map_err(err_bincode_to_io)?;
@@ -144,8 +146,8 @@ impl Iterator for LedgerReader {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
-        match next_entry(&mut self.data) {
-            Ok(entry) => Some(Ok(entry)),
+        match next_offset(&mut self.index) {
+            Ok(offset) => Some(entry_at(&mut self.data, offset)),
             Err(_) => None,
         }
     }
@@ -161,7 +163,7 @@ pub fn read_ledger(directory: &str) -> io::Result<impl Iterator<Item = io::Resul
     Ok(LedgerReader { index, data })
 }
 
-pub fn copy_ledger(from: &str, to: &str) -> io::Result<()> {
+pub fn copy(from: &str, to: &str) -> io::Result<()> {
     let mut to = LedgerWriter::new(to)?;
 
     for entry in read_ledger(from)? {
@@ -319,12 +321,6 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::{Transaction, Vote};
 
-    fn tmp_ledger_path(name: &str) -> String {
-        let keypair = KeyPair::new();
-
-        format!("farf/{}-{}", name, keypair.pubkey())
-    }
-
     #[test]
     fn test_verify_slice() {
         let zero = Hash::default();
@@ -441,11 +437,18 @@ mod tests {
         assert!(entries0.verify(&id));
     }
 
-    fn tmp_ledger_path() -> String {}
+    fn tmp_ledger_path() -> String {
+        let keypair = KeyPair::new();
+
+        format!(
+            "target/test_ledger_reader_writer_window-{}",
+            keypair.pubkey()
+        )
+    }
 
     #[test]
     fn test_ledger_reader_writer() {
-        let ledger_path = tmp_ledger_path("test_ledger_reader_writer");
+        let ledger_path = tmp_ledger_path();
         let entries = make_test_entries();
 
         let mut writer = LedgerWriter::new(&ledger_path).unwrap();
@@ -475,16 +478,16 @@ mod tests {
         std::fs::remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_copy_ledger() {
-        let from = tmp_ledger_path("test_ledger_copy_from");
+    fn test_ledger_copy() {
+        let from = tmp_ledger_path();
         let entries = make_test_entries();
 
         let mut writer = LedgerWriter::new(&from).unwrap();
         writer.write_entries(entries.clone()).unwrap();
 
-        let to = tmp_ledger_path("test_ledger_copy_to");
+        let to = tmp_ledger_path();
 
-        copy_ledger(&from, &to).unwrap();
+        copy(&from, &to).unwrap();
 
         let mut read_entries = vec![];
         for x in read_ledger(&to).unwrap() {

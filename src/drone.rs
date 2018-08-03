@@ -164,7 +164,7 @@ mod tests {
     use mint::Mint;
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
-    use std::fs::remove_dir_all;
+    use std::io::sink;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -259,21 +259,6 @@ mod tests {
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
 
-    fn tmp_ledger_path(name: &str) -> String {
-        let keypair = KeyPair::new();
-
-        let id = {
-            let ids: Vec<_> = keypair
-                .pubkey()
-                .iter()
-                .map(|id| format!("{}", id))
-                .collect();
-            ids.join("")
-        };
-
-        format!("farf/{}-{}", name, id)
-    }
-
     #[test]
     #[ignore]
     fn test_send_airdrop() {
@@ -290,7 +275,6 @@ mod tests {
         let carlos_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
-        let ledger_path = tmp_ledger_path("send_airdrop");
 
         let server = FullNode::new_leader(
             leader_keypair,
@@ -300,7 +284,7 @@ mod tests {
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
-            &ledger_path,
+            sink(),
             false,
         );
         //TODO: this seems unstable
@@ -352,6 +336,5 @@ mod tests {
 
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
-        remove_dir_all(ledger_path).unwrap();
     }
 }
