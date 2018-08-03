@@ -66,7 +66,7 @@ fn verify_packet(packet: &Packet) -> u8 {
 }
 
 fn verify_packet_disabled(_packet: &Packet) -> u8 {
-    warn!("signature verification is disabled");
+    debug!("signature verification is disabled");
     1
 }
 
@@ -77,17 +77,15 @@ fn batch_size(batches: &[SharedPackets]) -> usize {
         .sum()
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
 #[cfg(not(feature = "cuda"))]
-pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     ed25519_verify_cpu(batches)
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
-pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
-    info!("CPU ECDSA for {}", batch_size(batches));
+    debug!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
         .map(|p| {
@@ -103,11 +101,10 @@ pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     rv
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
-pub fn ed25519_verify_disabled(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
-    info!("CPU ECDSA for {}", batch_size(batches));
+    debug!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
         .map(|p| {
@@ -135,7 +132,7 @@ pub fn init() {
 }
 
 #[cfg(feature = "cuda")]
-pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
@@ -148,7 +145,7 @@ pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
         return ed25519_verify_cpu(batches);
     }
 
-    info!("CUDA ECDSA for {}", batch_size(batches));
+    debug!("CUDA ECDSA for {}", batch_size(batches));
     let mut out = Vec::new();
     let mut elems = Vec::new();
     let mut locks = Vec::new();

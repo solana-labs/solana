@@ -30,16 +30,23 @@ macro_rules! create_counter {
 
 macro_rules! inc_counter {
     ($name:expr, $count:expr) => {
-        unsafe { $name.inc($count) };
+        #[cfg(feature = "perf_counters")]
+        {
+            unsafe { $name.inc($count) };
+        }
     };
 }
 
 macro_rules! inc_new_counter {
-    ($name:expr, $count:expr) => {{
+    ($name:expr, $count:expr) => {
+    #[cfg(feature = "perf_counters")]
+    {
         static mut INC_NEW_COUNTER: Counter = create_counter!($name, 0);
         inc_counter!(INC_NEW_COUNTER, $count);
     }};
-    ($name:expr, $count:expr, $lograte:expr) => {{
+    ($name:expr, $count:expr, $lograte:expr) => {
+    #[cfg(feature = "perf_counters")]
+    {
         static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
         inc_counter!(INC_NEW_COUNTER, $count);
     }};
@@ -66,7 +73,7 @@ impl Counter {
         }
         if times % lograte == 0 && times > 0 {
             let lastlog = self.lastlog.load(Ordering::Relaxed);
-            info!(
+            debug!(
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}}}",
                 self.name,
                 counts,
