@@ -143,6 +143,9 @@ configure_metrics() {
 configure_metrics
 
 tune_networking() {
+  # Skip in CI
+  [[ -z $CI ]] || return 0
+
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
   if [[ $(uname) = Linux ]]; then
     (
