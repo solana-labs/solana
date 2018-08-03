@@ -11,4 +11,5 @@ RUN apt update && \
       sudo \
       cmake \
       && \
+    rustup component add rustfmt-preview && \
     rm -rf /var/lib/apt/lists/*
