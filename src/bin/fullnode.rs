@@ -105,9 +105,15 @@ fn main() -> () {
             )
         });
 
-        let balance = client.poll_get_balance(&leader_pubkey).unwrap();
-        eprintln!("new balance is {}", balance);
-        assert!(balance > 0);
+        // Try multiple times to confirm a non-zero balance.  |poll_get_balance| currently times
+        // out after 1 second, and sometimes this is not enough time while the network is
+        // booting
+        let balance_ok = (0..30).any(|i| {
+            let balance = client.poll_get_balance(&leader_pubkey).unwrap();
+            eprintln!("new balance is {} (attempt #{})", balance, i);
+            balance > 0
+        });
+        assert!(balance_ok, "0 balance, airdrop failed?");
     }
 
     fullnode.join().expect("join");
