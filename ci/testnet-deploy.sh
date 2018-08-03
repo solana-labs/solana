@@ -81,7 +81,7 @@ vm_exec() {
   declare cmd=$5
 
   echo "--- $message $vmName in zone $vmZone ($vmPublicIp)"
-  ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     testnet-deploy@"$vmPublicIp" "$cmd"
 }
 
@@ -194,7 +194,7 @@ delete_unreachable_validators() {
       echo "Warning: $vmName is unreachable, deleting it"
       gcloud compute instances delete "$vmName" --zone "$vmZone"
     fi
-    echo "Checked in ${SECONDS} seconds"
+    echo "validator checked in ${SECONDS} seconds"
   ) >> "log-$vmName.txt" 2>&1 &
   declare pid=$!
 
@@ -360,6 +360,10 @@ fullnode_stop() {
   touch "log-$vmName.txt"
   (
     SECONDS=0
+    # Try to ping the machine first.  When a machine (validator) is restarted,
+    # there can be a delay between when the instance is reported as RUNNING and when
+    # it's reachable over the network
+    timeout 30s bash -c "set -o pipefail; until ping -c 3 $vmPublicIp | tr - _; do echo .; done"
     vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Shutting down" "\
       if snap list solana; then \
         sudo snap set solana mode=; \
