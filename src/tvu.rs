@@ -68,7 +68,6 @@ impl Tvu {
     /// * `repair_socket` - my repair socket
     /// * `retransmit_socket` - my retransmit socket
     /// * `exit` - The exit signal.
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: KeyPair,
         bank: &Arc<Bank>,
