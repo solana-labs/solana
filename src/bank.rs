@@ -150,7 +150,8 @@ impl Bank {
 
     /// Forget the given `signature` with `last_id` because the transaction was rejected.
     fn forget_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) {
-        if let Some(entry) = self.last_ids_sigs
+        if let Some(entry) = self
+            .last_ids_sigs
             .write()
             .expect("'last_ids' read lock in forget_signature_with_last_id")
             .get_mut(last_id)
@@ -167,7 +168,8 @@ impl Bank {
     }
 
     fn reserve_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) -> Result<()> {
-        if let Some(entry) = self.last_ids_sigs
+        if let Some(entry) = self
+            .last_ids_sigs
             .write()
             .expect("'last_ids' read lock in reserve_signature_with_last_id")
             .get_mut(last_id)
@@ -198,10 +200,12 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_entry_id(&self, last_id: &Hash) {
-        let mut last_ids = self.last_ids
+        let mut last_ids = self
+            .last_ids
             .write()
             .expect("'last_ids' write lock in register_entry_id");
-        let mut last_ids_sigs = self.last_ids_sigs
+        let mut last_ids_sigs = self
+            .last_ids_sigs
             .write()
             .expect("last_ids_sigs write lock");
         if last_ids.len() >= MAX_ENTRY_IDS {
@@ -262,7 +266,8 @@ impl Bank {
                 if let Some(payment) = plan.final_payment() {
                     self.apply_payment(&payment, balances);
                 } else {
-                    let mut pending = self.pending
+                    let mut pending = self
+                        .pending
                         .write()
                         .expect("'pending' write lock in apply_credits");
                     pending.insert(tx.sig, plan);
@@ -298,7 +303,8 @@ impl Bank {
         debug!("processing Transactions {}", txs.len());
         let txs_len = txs.len();
         let now = Instant::now();
-        let results: Vec<_> = txs.into_iter()
+        let results: Vec<_> = txs
+            .into_iter()
             .map(|tx| self.apply_debits(&tx, bals).map(|_| tx))
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
@@ -460,7 +466,8 @@ impl Bank {
     /// Process a Witness Signature. Any payment plans waiting on this signature
     /// will progress one step.
     fn apply_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
-        if let Occupied(mut e) = self.pending
+        if let Occupied(mut e) = self
+            .pending
             .write()
             .expect("write() in apply_signature")
             .entry(tx_sig)
@@ -483,7 +490,8 @@ impl Bank {
 
         // Hold 'pending' write lock until the end of this function. Otherwise another thread can
         // double-spend if it enters before the modified plan is removed from 'pending'.
-        let mut pending = self.pending
+        let mut pending = self
+            .pending
             .write()
             .expect("'pending' write lock in apply_timestamp");
         for (key, plan) in pending.iter_mut() {
@@ -532,7 +540,8 @@ impl Bank {
     }
 
     pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
-        let bals = self.balances
+        let bals = self
+            .balances
             .read()
             .expect("'balances' read lock in get_balance");
         bals.get(pubkey).cloned().unwrap_or(0)
@@ -543,7 +552,8 @@ impl Bank {
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        let last_ids_sigs = self.last_ids_sigs
+        let last_ids_sigs = self
+            .last_ids_sigs
             .read()
             .expect("'last_ids_sigs' read lock");
         for (_hash, signatures) in last_ids_sigs.iter() {
@@ -674,7 +684,8 @@ mod tests {
         let bank = Bank::new(&mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
+        let sig = bank
+            .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
         // Assert the debit counts as a transaction.

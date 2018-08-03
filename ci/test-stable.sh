@@ -12,7 +12,7 @@ _() {
 }
 
 _ rustup component add rustfmt-preview
-_ cargo fmt -- --write-mode=check
+_ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose
 _ cargo bench --verbose

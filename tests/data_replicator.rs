@@ -263,7 +263,8 @@ fn test_external_liveness_table() {
     c4.write().unwrap().insert(&c1_data);
     c4.write().unwrap().set_leader(c1_data.id);
     for _ in 0..30 {
-        done = c1.read()
+        done = c1
+            .read()
             .unwrap()
             .get_external_liveness_entry(&c4_id)
             .is_none();

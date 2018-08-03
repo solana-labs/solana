@@ -168,7 +168,8 @@ impl<T: Default> Clone for Recycler<T> {
 impl<T: Default> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
-        let x = gc.pop()
+        let x = gc
+            .pop()
             .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())));
 
         // Only return the item if this recycler is the last reference to it.

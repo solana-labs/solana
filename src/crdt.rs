@@ -473,7 +473,8 @@ impl Crdt {
         }
         let leader_id = self.leader_data().unwrap().id;
         let limit = GOSSIP_PURGE_MILLIS;
-        let dead_ids: Vec<PublicKey> = self.alive
+        let dead_ids: Vec<PublicKey> = self
+            .alive
             .iter()
             .filter_map(|(&k, v)| {
                 if k != self.me && (now - v) > limit {
@@ -521,7 +522,8 @@ impl Crdt {
         let live: Vec<_> = self.alive.iter().collect();
         //thread_rng().shuffle(&mut live);
         let me = &self.table[&self.me];
-        let cloned_table: Vec<NodeInfo> = live.iter()
+        let cloned_table: Vec<NodeInfo> = live
+            .iter()
             .map(|x| &self.table[x.0])
             .filter(|v| {
                 if me.id == v.id {
@@ -733,7 +735,8 @@ impl Crdt {
 
     fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<NodeInfo>) {
         //trace!("get updates since {}", v);
-        let data = self.table
+        let data = self
+            .table
             .values()
             .filter(|x| x.id != PublicKey::default() && self.local[&x.id] > v)
             .cloned()
@@ -744,7 +747,8 @@ impl Crdt {
     }
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
-        let valid: Vec<_> = self.table
+        let valid: Vec<_> = self
+            .table
             .values()
             .filter(|r| r.id != self.me && Self::is_valid_address(r.contact_info.tvu_window))
             .collect();
@@ -764,7 +768,8 @@ impl Crdt {
     /// * A - Address to send to
     /// * B - RequestUpdates protocol message
     fn gossip_request(&self) -> Result<(SocketAddr, Protocol)> {
-        let options: Vec<_> = self.table
+        let options: Vec<_> = self
+            .table
             .values()
             .filter(|v| {
                 v.id != self.me
@@ -826,7 +831,8 @@ impl Crdt {
 
         // Lock the object only to do this operation and not for any longer
         // especially not when doing the `sock.send_to`
-        let (remote_gossip_addr, req) = obj.read()
+        let (remote_gossip_addr, req) = obj
+            .read()
             .expect("'obj' read lock in fn run_gossip")
             .gossip_request()?;
 
@@ -902,7 +908,8 @@ impl Crdt {
                 continue;
             }
 
-            let liveness_entry = self.external_liveness
+            let liveness_entry = self
+                .external_liveness
                 .entry(*pk)
                 .or_insert_with(HashMap::new);
             let peer_index = *liveness_entry.entry(from).or_insert(*external_remote_index);
@@ -1135,7 +1142,8 @@ impl Crdt {
         while let Ok(mut more) = requests_receiver.try_recv() {
             reqs.append(&mut more);
         }
-        let resp: VecDeque<_> = reqs.iter()
+        let resp: VecDeque<_> = reqs
+            .iter()
             .filter_map(|b| Self::handle_blob(obj, window, blob_recycler, &b.read().unwrap()))
             .collect();
         response_sender.send(resp)?;

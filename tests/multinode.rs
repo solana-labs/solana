@@ -393,14 +393,16 @@ fn test_multi_node_dynamic_network() {
     logger::setup();
     let key = "SOLANA_DYNAMIC_NODES";
     let num_nodes: usize = match env::var(key) {
-        Ok(val) => val.parse()
+        Ok(val) => val
+            .parse()
             .expect(&format!("env var {} is not parse-able as usize", key)),
         Err(_) => 60,
     };
 
     let purge_key = "SOLANA_DYNAMIC_NODES_PURGE_LAG";
     let purge_lag: usize = match env::var(purge_key) {
-        Ok(val) => val.parse()
+        Ok(val) => val
+            .parse()
             .expect(&format!("env var {} is not parse-able as usize", purge_key)),
         Err(_) => std::usize::MAX,
     };
