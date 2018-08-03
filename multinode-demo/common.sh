@@ -159,6 +159,17 @@ tune_networking() {
           sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
     ) || true
   fi
+
+  if [[ $(uname) = Darwin ]]; then
+    (
+      if [[ $(sysctl net.inet.udp.maxdgram | cut -d\  -f2) != 65535 ]]; then
+        echo "Adjusting maxdgram to allow for large UDP packets, see BLOB_SIZE in src/packet.rs:"
+        set -x
+        sudo sysctl net.inet.udp.maxdgram=65535
+      fi
+    )
+
+  fi
 }
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
