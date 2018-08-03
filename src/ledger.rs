@@ -39,6 +39,10 @@ fn entry_at(file: &mut File, at: u64) -> io::Result<Entry> {
     deserialize_from(file.take(len)).map_err(err_bincode_to_io)
 }
 
+//fn next_offset(file: &mut File) -> io::Result<u64> {
+//    deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
+//}
+
 fn next_entry(file: &mut File) -> io::Result<Entry> {
     let len = deserialize_from(file.take(SIZEOF_USIZE)).map_err(err_bincode_to_io)?;
     deserialize_from(file.take(len)).map_err(err_bincode_to_io)
@@ -436,6 +440,8 @@ mod tests {
         assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
     }
+
+    fn tmp_ledger_path() -> String {}
 
     #[test]
     fn test_ledger_reader_writer() {
