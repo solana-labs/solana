@@ -16,6 +16,13 @@ if [[ "$1" = "-h" || -n "$3" ]]; then
   usage
 fi
 
+if [[ "$1" == "-x" ]]; then
+  self_setup=1
+  shift
+else
+  self_setup=0
+fi
+
 if [[ -d "$SNAP" ]]; then
   # Exit if mode is not yet configured
   # (typically the case after the Snap is first installed)
@@ -29,10 +36,6 @@ if [[ -d "$SNAP" ]]; then
   fi
   leader="$leader_address"
 else
-  if [[ -n "$3" ]]; then
-    usage
-  fi
-
   if [[ -z "$1" ]]; then
     leader=${1:-${here}/..}    # Default to local solana repo
     leader_address=${2:-127.0.0.1}  # Default to local leader
@@ -55,19 +58,30 @@ else
   program="$solana_fullnode"
 fi
 
+if (( ! self_setup)); then
+  [[ -f "$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json ]] || {
+    echo "$SOLANA_CONFIG_VALIDATOR_DIR/validator.json not found, create it by running:"
+    echo
+    echo "  ${here}/setup.sh"
+    exit 1
+  }
+  validator_json_path="$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json
+  SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_VALIDATOR_DIR"/leader-config
+else
 
-[[ -f "$SOLANA_CONFIG_DIR"/validator.json ]] || {
-  echo "$SOLANA_CONFIG_DIR/validator.json not found, create it by running:"
-  echo
-  echo "  ${here}/setup.sh"
-  exit 1
-}
+  validator_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/validator-id-x$$.json
+  $solana_keygen -o "$validator_id_path"
+
+  validator_json_path="$SOLANA_CONFIG_VALIDATOR_DIR"/validator-x$$.json
+  $solana_fullnode_config --keypair="$validator_id_path" -l -b $((9000+($$%1000))) > "$validator_json_path"
+
+  SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_VALIDATOR_DIR"/leader-config-x$$
+fi
 
 rsync_leader_url=$(rsync_url "$leader")
 
 tune_networking
 
-SOLANA_LEADER_CONFIG_DIR="$SOLANA_CONFIG_DIR"/leader-config
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
 $rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
@@ -78,7 +92,7 @@ $rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
-  --identity "$SOLANA_CONFIG_DIR"/validator.json \
+  --identity "$validator_json_path" \
   --testnet "$leader_address:$leader_port" \
   --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger.log \
   > >($validator_logger) 2>&1 &
