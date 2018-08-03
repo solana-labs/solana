@@ -73,6 +73,18 @@ leaderName=${publicUrl//./-}
 
 vmlist=() # Each array element is formatted as "class:vmName:vmZone:vmPublicIp"
 
+vm_exec() {
+  declare vmName=$1
+  declare vmZone=$2
+  declare vmPublicIp=$3
+  declare message=$4
+  declare cmd=$5
+
+  echo "--- $message $vmName in zone $vmZone ($vmPublicIp)"
+  ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    testnet-deploy@"$vmPublicIp" "$cmd"
+}
+
 #
 # vm_foreach [cmd] [extra args to cmd]
 # where
@@ -152,6 +164,53 @@ findVms() {
              --format 'value(name,zone,networkInterfaces[0].accessConfigs[0].natIP,status)')
 }
 
+wait_for_pids() {
+  echo "--- Waiting for $*"
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    cat "log-$pid.txt"
+    if ! $ok; then
+      echo ^^^ +++
+      exit 1
+    fi
+    rm "log-$pid.txt"
+  done
+}
+
+delete_unreachable_validators() {
+  declare vmName=$1
+  declare vmZone=$2
+  declare vmPublicIp=$3
+
+  touch "log-$vmName.txt"
+  (
+    SECONDS=0
+    if ! vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Checking $vmName" uptime; then
+      echo "^^^ +++"
+
+      # Validators are managed by a Compute Engine Instance Group, so deleting
+      # one will just cause a new one to be spawned.
+      echo "Warning: $vmName is unreachable, deleting it"
+      gcloud compute instances delete "$vmName" --zone "$vmZone"
+    fi
+    echo "Checked in ${SECONDS} seconds"
+  ) >> "log-$vmName.txt" 2>&1 &
+  declare pid=$!
+
+  # Rename log file so it can be discovered later by $pid
+  mv "log-$vmName.txt" "log-$pid.txt"
+  pids+=("$pid")
+}
+
+
+echo "Validator nodes (unverified):"
+findVms validator "name~^$leaderName-validator-"
+pids=()
+vm_foreach_in_class validator delete_unreachable_validators
+wait_for_pids validator sanity check
+vmlist=()
+
 echo "Leader node:"
 findVms leader "name=$leaderName"
 [[ ${#vmlist[@]} = 1 ]] || {
@@ -176,28 +235,13 @@ vm_foreach_in_class validator inc_fullnode_count
 netName=${SOLANA_NET_URL/.*/}
 "$here"/metrics_write_datapoint.sh "testnet-deploy,name=$netName stop=1"
 
-gcp_vm_exec() {
-  declare vmName=$1
-  declare vmZone=$2
-  declare vmPublicIp=$3
-  declare message=$4
-  declare cmd=$5
-
-  echo "--- $message $vmName in zone $vmZone ($vmPublicIp)"
-  (
-    set -x
-    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-      testnet-deploy@"$vmPublicIp" "$cmd"
-  )
-}
-
 client_start() {
   declare vmName=$1
   declare vmZone=$2
   declare vmPublicIp=$3
   declare count=$4
 
-  gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
+  vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
     "Starting client $count:" \
     "\
       set -x;
@@ -227,9 +271,10 @@ client_stop() {
   declare vmPublicIp=$3
   declare count=$4
 
+  touch "log-$vmName.txt"
   (
     SECONDS=0
-    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
+    vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
       "Stopping client $vmName ($count):" \
       "\
         set -x;
@@ -243,13 +288,10 @@ client_stop() {
         ; \
       "
     echo "Client stopped in ${SECONDS} seconds"
-  ) > "log-$vmName.txt" 2>&1 &
+  ) >> "log-$vmName.txt" 2>&1 &
   declare pid=$!
 
   # Rename log file so it can be discovered later by $pid
-  while [[ ! -f "log-$vmName.txt" ]]; do
-    sleep 1
-  done
   mv "log-$vmName.txt" "log-$pid.txt"
   pids+=("$pid")
 }
@@ -261,6 +303,7 @@ fullnode_start() {
   declare vmPublicIp=$4
   declare count=$5
 
+  touch "log-$vmName.txt"
   (
     SECONDS=0
     commonNodeConfig="\
@@ -277,7 +320,7 @@ fullnode_start() {
       nodeConfig="mode=validator leader-address=$publicIp $commonNodeConfig"
     fi
 
-    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Starting $class $count:" \
+    vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Starting $class $count:" \
       "\
         set -ex; \
         logmarker='solana deploy $(date)/$RANDOM'; \
@@ -291,13 +334,10 @@ fullnode_start() {
         sudo grep -Pzo \"\$logmarker(.|\\n)*\" /var/log/syslog \
       "
     echo "Succeeded in ${SECONDS} seconds"
-  ) > "log-$vmName.txt" 2>&1 &
+  ) >> "log-$vmName.txt" 2>&1 &
   declare pid=$!
 
   # Rename log file so it can be discovered later by $pid
-  while [[ ! -f "log-$vmName.txt" ]]; do
-    sleep 1
-  done
   mv "log-$vmName.txt" "log-$pid.txt"
 
   pids+=("$pid")
@@ -317,37 +357,21 @@ fullnode_stop() {
   declare vmPublicIp=$3
   declare count=$4
 
+  touch "log-$vmName.txt"
   (
     SECONDS=0
-    gcp_vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Shutting down" "\
+    vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Shutting down" "\
       if snap list solana; then \
         sudo snap set solana mode=; \
       fi"
     echo "Succeeded in ${SECONDS} seconds"
-  ) > "log-$vmName.txt" 2>&1 &
+  ) >> "log-$vmName.txt" 2>&1 &
   declare pid=$!
 
   # Rename log file so it can be discovered later by $pid
-  while [[ ! -f "log-$vmName.txt" ]]; do
-    sleep 1
-  done
   mv "log-$vmName.txt" "log-$pid.txt"
 
   pids+=("$pid")
-}
-
-wait_for_pids() {
-  echo "--- Waiting for $*"
-  for pid in "${pids[@]}"; do
-    declare ok=true
-    wait "$pid" || ok=false
-    cat "log-$pid.txt"
-    if ! $ok; then
-      echo ^^^ +++
-      exit 1
-    fi
-    rm "log-$pid.txt"
-  done
 }
 
 if [[ -n $LOCAL_SNAP ]]; then
@@ -369,8 +393,8 @@ if [[ -n $LOCAL_SNAP ]]; then
   vm_foreach transfer_local_snap
 fi
 
-pids=()
 echo "--- Stopping client node(s)"
+pids=()
 vm_foreach_in_class client client_stop
 client_stop_pids=("${pids[@]}")
 
