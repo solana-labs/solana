@@ -68,6 +68,7 @@ impl Tvu {
     /// * `repair_socket` - my repair socket
     /// * `retransmit_socket` - my retransmit socket
     /// * `exit` - The exit signal.
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: KeyPair,
         bank: &Arc<Bank>,
@@ -77,6 +78,7 @@ impl Tvu {
         replicate_socket: UdpSocket,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
+        ledger_path: &str,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let blob_recycler = BlobRecycler::default();
@@ -103,6 +105,7 @@ impl Tvu {
             crdt,
             blob_recycler,
             blob_window_receiver,
+            ledger_path,
             exit,
         );
 
@@ -151,6 +154,7 @@ pub mod tests {
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
     use std::collections::VecDeque;
+    use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
@@ -170,6 +174,13 @@ pub mod tests {
         let ncp = Ncp::new(&crdt, window.clone(), listen, send_sock, exit)?;
         Ok((ncp, window))
     }
+
+    fn tmp_ledger_path(name: &str) -> String {
+        let keypair = KeyPair::new();
+
+        format!("farf/{}-{}", name, keypair.pubkey())
+    }
+
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]
     fn test_replicate() {
@@ -229,6 +240,7 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(crdt1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
 
+        let ledger_path = tmp_ledger_path("replicate");
         let tvu = Tvu::new(
             target1_keypair,
             &bank,
@@ -238,6 +250,7 @@ pub mod tests {
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
+            &ledger_path,
             exit.clone(),
         );
 
@@ -307,5 +320,6 @@ pub mod tests {
         dr_1.0.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        remove_dir_all(ledger_path).unwrap();
     }
 }
