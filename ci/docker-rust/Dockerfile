@@ -1,4 +1,4 @@
-FROM rust
+FROM rust:1.28
 
 RUN apt update && \
     apt-get install apt-transport-https && \
