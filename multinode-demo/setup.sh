@@ -77,12 +77,13 @@ mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
 set -e
 
-echo "Cleaning $SOLANA_CONFIG_DIR"
-rm -rvf "$SOLANA_CONFIG_DIR"
-mkdir -p "$SOLANA_CONFIG_DIR"
+for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_PRIVATE_DIR" "$SOLANA_CONFIG_VALIDATOR_DIR"
+do
+  echo "Cleaning $i"
+  rm -rvf "$i"
+  mkdir -p "$i"
+done
 
-rm -rvf "$SOLANA_CONFIG_PRIVATE_DIR"
-mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
 
 $solana_keygen -o "$leader_id_path"
 $solana_keygen -o "$validator_id_path"
@@ -100,8 +101,8 @@ fi
 
 
 if $node_type_validator; then
-  echo "Creating $SOLANA_CONFIG_DIR/validator.json"
-  $solana_fullnode_config --keypair="$validator_id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_DIR"/validator.json
+  echo "Creating $SOLANA_CONFIG_VALIDATOR_DIR/validator.json"
+  $solana_fullnode_config --keypair="$validator_id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json
 fi
 
 ls -lh "$SOLANA_CONFIG_DIR"/
