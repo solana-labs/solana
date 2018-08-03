@@ -77,8 +77,7 @@ mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
 
 set -e
 
-for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_PRIVATE_DIR" "$SOLANA_CONFIG_VALIDATOR_DIR"
-do
+for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_PRIVATE_DIR" "$SOLANA_CONFIG_VALIDATOR_DIR"; do
   echo "Cleaning $i"
   rm -rvf "$i"
   mkdir -p "$i"

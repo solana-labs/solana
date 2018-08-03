@@ -9,7 +9,7 @@ source ci/upload_ci_artifact.sh
 
 ./multinode-demo/setup.sh
 
-backgroundCommands="drone leader validator"
+backgroundCommands="drone leader validator validator-x"
 pids=()
 
 for cmd in $backgroundCommands; do
