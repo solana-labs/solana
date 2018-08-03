@@ -100,7 +100,8 @@ pub fn send_leader_vote(
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
-        let ids: Vec<_> = crdt.read()
+        let ids: Vec<_> = crdt
+            .read()
             .unwrap()
             .table
             .values()

@@ -53,7 +53,8 @@ fn recv_loop(
     loop {
         let msgs = re.allocate();
         loop {
-            let result = msgs.write()
+            let result = msgs
+                .write()
                 .expect("write lock in fn recv_loop")
                 .recv_from(sock);
             match result {
@@ -351,7 +352,8 @@ fn process_blob(
     let w = (pix % WINDOW_SIZE) as usize;
 
     let is_coding = {
-        let blob_r = blob.read()
+        let blob_r = blob
+            .read()
             .expect("blob read lock for flogs streamer::window");
         blob_r.is_coding()
     };
@@ -448,7 +450,8 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let maybe_leader: Option<NodeInfo> = crdt.read()
+    let maybe_leader: Option<NodeInfo> = crdt
+        .read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
         .cloned();
