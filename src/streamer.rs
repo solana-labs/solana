@@ -494,6 +494,7 @@ fn recv_window(
                 "{:x}: received: {} but older than consumed: {} skipping..",
                 debug_id, pix, *consumed
             );
+            recycler.recycle(b);
             continue;
         }
 
