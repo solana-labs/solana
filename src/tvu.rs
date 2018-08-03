@@ -177,16 +177,7 @@ pub mod tests {
     fn tmp_ledger_path(name: &str) -> String {
         let keypair = KeyPair::new();
 
-        let id = {
-            let ids: Vec<_> = keypair
-                .pubkey()
-                .iter()
-                .map(|id| format!("{}", id))
-                .collect();
-            ids.join("")
-        };
-
-        format!("farf/{}-{}", name, id)
+        format!("farf/{}-{}", name, keypair.pubkey())
     }
 
     /// Test that message sent from leader to target1 and replicated to target2
