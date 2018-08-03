@@ -1,6 +1,5 @@
 Cargo.lock
 /target/
-
 **/*.rs.bk
 .cargo
 
@@ -12,5 +11,5 @@ Cargo.lock
 /config-client/
 /multinode-demo/test/config-client/
 
-# test temp files, ledgers, etc.
-/farf/
+# Generated log files
+/log-*.txt

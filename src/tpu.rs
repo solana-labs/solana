@@ -34,6 +34,7 @@ use record_stage::RecordStage;
 use service::Service;
 use signature::KeyPair;
 use sigverify_stage::SigVerifyStage;
+use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -51,7 +52,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
-    pub fn new(
+    pub fn new<W: Write + Send + 'static>(
         keypair: KeyPair,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
@@ -59,7 +60,7 @@ impl Tpu {
         transactions_socket: UdpSocket,
         blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
-        ledger_path: &str,
+        writer: W,
         sigverify_disabled: bool,
     ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
@@ -85,7 +86,7 @@ impl Tpu {
             bank.clone(),
             crdt.clone(),
             blob_recycler.clone(),
-            ledger_path,
+            writer,
             entry_receiver,
         );
 
