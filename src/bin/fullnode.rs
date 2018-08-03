@@ -8,7 +8,7 @@ use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::crdt::{NodeInfo, TestNode};
 use solana::drone::DRONE_PORT;
-use solana::fullnode::{Config, FullNode, LedgerFile};
+use solana::fullnode::{Config, FullNode};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
@@ -41,11 +41,12 @@ fn main() -> () {
         )
         .arg(
             Arg::with_name("ledger")
-                .short("L")
+                .short("l")
                 .long("ledger")
-                .value_name("FILE")
+                .value_name("DIR")
                 .takes_value(true)
-                .help("use FILE as persistent ledger (defaults to stdin/stdout)"),
+                .required(true)
+                .help("use DIR as persistent ledger location"),
         )
         .get_matches();
 
@@ -72,11 +73,7 @@ fn main() -> () {
     let leader_pubkey = keypair.pubkey();
     let repl_clone = repl_data.clone();
 
-    let ledger = if let Some(l) = matches.value_of("ledger") {
-        LedgerFile::Path(l.to_string())
-    } else {
-        LedgerFile::StdInOut
-    };
+    let ledger_path = matches.value_of("ledger").unwrap();
 
     let mut node = TestNode::new_with_bind_addr(repl_data, bind_addr);
     let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DRONE_PORT);
@@ -85,11 +82,11 @@ fn main() -> () {
         let testnet_addr: SocketAddr = testnet_address_string.parse().unwrap();
         drone_addr.set_ip(testnet_addr.ip());
 
-        FullNode::new(node, false, ledger, keypair, Some(testnet_addr))
+        FullNode::new(node, false, ledger_path, keypair, Some(testnet_addr))
     } else {
         node.data.leader_id = node.data.id;
 
-        FullNode::new(node, true, ledger, keypair, None)
+        FullNode::new(node, true, ledger_path, keypair, None)
     };
 
     let mut client = mk_client(&repl_clone);

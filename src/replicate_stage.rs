@@ -3,7 +3,7 @@
 use bank::Bank;
 use counter::Counter;
 use crdt::Crdt;
-use ledger;
+use ledger::{reconstruct_entries_from_blobs, LedgerWriter};
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
@@ -31,6 +31,7 @@ impl ReplicateStage {
         crdt: &Arc<RwLock<Crdt>>,
         blob_recycler: &BlobRecycler,
         window_receiver: &BlobReceiver,
+        ledger_writer: &mut LedgerWriter,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available blobs into a single vote
@@ -39,7 +40,7 @@ impl ReplicateStage {
             blobs.append(&mut more);
         }
         let blobs_len = blobs.len();
-        let entries = ledger::reconstruct_entries_from_blobs(blobs.clone())?;
+        let entries = reconstruct_entries_from_blobs(blobs.clone())?;
         {
             let votes = entries_to_votes(&entries);
             let mut wcrdt = crdt.write().unwrap();
@@ -49,7 +50,11 @@ impl ReplicateStage {
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
+
+        ledger_writer.write_entries(entries.clone())?;
+
         let res = bank.process_entries(entries);
+
         if res.is_err() {
             error!("process_entries {} {:?}", blobs_len, res);
         }
@@ -65,6 +70,7 @@ impl ReplicateStage {
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
         window_receiver: BlobReceiver,
+        ledger_path: &str,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
@@ -84,13 +90,18 @@ impl ReplicateStage {
             vote_blob_sender,
             exit,
         );
+        let mut ledger_writer = LedgerWriter::new(ledger_path).unwrap();
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || loop {
-                if let Err(e) =
-                    Self::replicate_requests(&bank, &crdt, &blob_recycler, &window_receiver)
-                {
+                if let Err(e) = Self::replicate_requests(
+                    &bank,
+                    &crdt,
+                    &blob_recycler,
+                    &window_receiver,
+                    &mut ledger_writer,
+                ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),

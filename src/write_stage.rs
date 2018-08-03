@@ -6,14 +6,12 @@ use bank::Bank;
 use counter::Counter;
 use crdt::Crdt;
 use entry::Entry;
-use entry_writer::EntryWriter;
-use ledger::Block;
+use ledger::{Block, LedgerWriter};
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::KeyPair;
 use std::collections::VecDeque;
-use std::io::Write;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -31,21 +29,30 @@ pub struct WriteStage {
 impl WriteStage {
     /// Process any Entry items that have been published by the RecordStage.
     /// continuosly broadcast blobs of entries out
-    pub fn write_and_send_entries<W: Write>(
+    pub fn write_and_send_entries(
         crdt: &Arc<RwLock<Crdt>>,
-        entry_writer: &mut EntryWriter<W>,
+        bank: &Arc<Bank>,
+        ledger_writer: &mut LedgerWriter,
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
         entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
+
         let votes = entries_to_votes(&entries);
         crdt.write().unwrap().insert_votes(&votes);
+
+        for entry in entries.clone() {
+            ledger_writer.write_entry(&entry)?;
+            if !entry.has_more {
+                bank.register_entry_id(&entry.id);
+            }
+        }
 
         //TODO(anatoly): real stake based voting needs to change this
         //leader simply votes if the current set of validators have voted
         //on a valid last id
-        entry_writer.write_and_register_entries(&entries)?;
+
         trace!("New blobs? {}", entries.len());
         let mut blobs = VecDeque::new();
         entries.to_blobs(blob_recycler, &mut blobs);
@@ -60,12 +67,12 @@ impl WriteStage {
     }
 
     /// Create a new WriteStage for writing and broadcasting entries.
-    pub fn new<W: Write + Send + 'static>(
+    pub fn new(
         keypair: KeyPair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
-        writer: W,
+        ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> (Self, BlobReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
@@ -77,16 +84,18 @@ impl WriteStage {
             vote_blob_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
+        let mut ledger_writer = LedgerWriter::new(ledger_path).unwrap();
+
         let thread_hdl = Builder::new()
             .name("solana-writer".to_string())
             .spawn(move || {
-                let mut entry_writer = EntryWriter::new(&bank, writer);
                 let mut last_vote = 0;
                 let debug_id = crdt.read().unwrap().debug_id();
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
                         &crdt,
-                        &mut entry_writer,
+                        &bank,
+                        &mut ledger_writer,
                         &blob_sender,
                         &blob_recycler,
                         &entry_receiver,
