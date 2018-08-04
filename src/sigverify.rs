@@ -89,7 +89,7 @@ pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
-        .into_par_iter()
+        .into_iter()
         .map(|p| {
             p.read()
                 .expect("'p' read lock in ed25519_verify")
