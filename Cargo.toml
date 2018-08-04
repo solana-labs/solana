@@ -70,9 +70,7 @@ untrusted = "0.6.2"
 bincode = "1.0.0"
 chrono = { version = "0.4.0", features = ["serde"] }
 log = "0.4.2"
-#TODO: Uncomment the next line and remove the [dependencies.env_logger]
-#      section below once env_logger 0.5.12 is published
-#env_logger = "0.5.12"
+env_logger = "0.5.12"
 matches = "0.1.6"
 byteorder = "1.2.1"
 libc = "0.2.1"
@@ -92,11 +90,6 @@ clap = "2.31"
 reqwest = "0.8.6"
 influx_db_client = "0.3.4"
 dirs = "1.0.2"
-
-# TODO: Remove this section once env_logger 0.5.12 is published
-[dependencies.env_logger]
-git = "https://github.com/sebasmagri/env_logger.git"
-rev = "a8da396c2e7ed912c9f926f9e7bb2c53e9e7aee0"
 
 [dev-dependencies]
 criterion = "0.2"
