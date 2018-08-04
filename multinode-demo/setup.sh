@@ -104,7 +104,7 @@ if $node_type_validator; then
   $solana_fullnode_config --keypair="$validator_id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json
 fi
 
-ls -lh "$SOLANA_CONFIG_DIR"/
+ls -lhR "$SOLANA_CONFIG_DIR"/
 if $node_type_leader; then
-  ls -lh "$SOLANA_CONFIG_PRIVATE_DIR"
+  ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"
 fi
