@@ -1,5 +1,6 @@
 //! The `ledger` module provides functions for parallel verification of the
-//! Proof of History ledger.
+//! Proof of History ledger as well as iterative read, append write, and random
+//! access read to a persistent file-based ledger.
 
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
 use entry::Entry;
@@ -14,6 +15,44 @@ use std::io::{self, Cursor, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
 use transaction::Transaction;
+
+///
+/// A persistent ledger is 2 files:
+///  ledger_path/ --+
+///                 +-- index <== an array of u64 offsets into data,
+///                 |               each offset points to the first bytes
+///                 |               of a usize that contains the length of
+///                 |               the entry
+///                 +-- data  <== concatenated usize length + entry data
+///
+/// When opening a ledger, we have the ability to "audit" it, which means
+///  we need to pick which file to use as "truth", and correct the other
+///  file as necessary, if possible.
+///
+/// The protocol for writing the ledger is to append to the data file first,
+///   the index file 2nd.  If interupted while writing, there are 2
+///   possibilities we need to cover:
+///
+///     1. a partial write of data, which might be a partial write of length
+///          or a partial write entry data.
+///     2. a partial or missing write to index for that entry
+///
+/// There is also the possibility of "unsynchronized" reading of the ledger
+///   during transfer across nodes via rsync (or whatever).  In this case,
+///   if the transfer of the data file is done before the transfer of the
+///   index file, it's possible (likely?) that the index file will be far
+///   ahead of the data file in time.
+///
+/// The quickest and most reliable strategy for recovery is therefore to
+///   treat the data file as nearest to the "truth".
+///
+/// The logic for "recovery/audit" is to open index, reading backwards
+///   from the last u64-aligned entry to get to where index and data
+///   agree (i.e. where a successful deserialization of an entry can
+///   be performed). If index is ahead in time, truncate the index file
+///   to match data.  If index is behind in time, truncate data to the
+///   last entry listed in index.
+///
 
 // ledger window
 #[derive(Debug)]
@@ -132,7 +171,7 @@ impl LedgerWriter {
 
 #[derive(Debug)]
 pub struct LedgerReader {
-    index: File,
+    //    index: File,
     data: File,
 }
 
@@ -151,10 +190,12 @@ impl Iterator for LedgerReader {
 pub fn read_ledger(directory: &str) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
     let directory = Path::new(&directory);
 
-    let index = File::open(directory.join("index"))?;
+    //    let index = OpenOptions::new().write(true).open(directory.join("index"));
     let data = File::open(directory.join("data"))?;
 
-    Ok(LedgerReader { index, data })
+    //    audit_ledger(index, data)?;
+
+    Ok(LedgerReader { data })
 }
 
 pub fn copy_ledger(from: &str, to: &str) -> io::Result<()> {
