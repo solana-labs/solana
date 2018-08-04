@@ -179,7 +179,7 @@ impl<T: Default> Recycler<T> {
         // reference-counted recyclables are awkwardly being recycled by hand,
         // which allows this race condition to exist.
         if Arc::strong_count(&x) > 1 {
-            warn!("Recycled item still in use. Booting it.");
+            debug!("Recycled item still in use. Booting it.");
             drop(gc);
             self.allocate()
         } else {
@@ -304,6 +304,7 @@ const BLOB_INDEX_END: usize = size_of::<u64>();
 const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
 const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
 const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
+const BLOB_TS_END: usize = BLOB_SIZE_END + size_of::<u64>();
 
 macro_rules! align {
     ($x:expr, $align:expr) => {
@@ -312,7 +313,9 @@ macro_rules! align {
 }
 
 pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
-pub const BLOB_HEADER_SIZE: usize = align!(BLOB_SIZE_END, 64);
+pub const BLOB_FLAG_IS_REPAIR: u32 = 0x2;
+pub const BLOB_FLAG_IS_RETRANSMIT: u32 = 0x4;
+pub const BLOB_HEADER_SIZE: usize = align!(BLOB_TS_END, 64);
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
@@ -361,6 +364,24 @@ impl Blob {
         self.set_flags(flags | BLOB_FLAG_IS_CODING)
     }
 
+    pub fn is_repair(&self) -> bool {
+        (self.get_flags().unwrap() & BLOB_FLAG_IS_REPAIR) != 0
+    }
+
+    pub fn set_repair(&mut self) -> Result<()> {
+        let flags = self.get_flags().unwrap();
+        self.set_flags(flags | BLOB_FLAG_IS_REPAIR)
+    }
+
+    pub fn is_retransmit(&self) -> bool {
+        (self.get_flags().unwrap() & BLOB_FLAG_IS_RETRANSMIT) != 0
+    }
+
+    pub fn set_retransmit(&mut self) -> Result<()> {
+        let flags = self.get_flags().unwrap();
+        self.set_flags(flags | BLOB_FLAG_IS_RETRANSMIT)
+    }
+
     pub fn get_data_size(&self) -> Result<u64> {
         let mut rdr = io::Cursor::new(&self.data[BLOB_FLAGS_END..BLOB_SIZE_END]);
         let r = rdr.read_u64::<LittleEndian>()?;
@@ -371,6 +392,19 @@ impl Blob {
         let mut wtr = vec![];
         wtr.write_u64::<LittleEndian>(ix)?;
         self.data[BLOB_FLAGS_END..BLOB_SIZE_END].clone_from_slice(&wtr);
+        Ok(())
+    }
+
+    pub fn get_ts(&self) -> Result<u64> {
+        let mut rdr = io::Cursor::new(&self.data[BLOB_SIZE_END..BLOB_TS_END]);
+        let r = rdr.read_u64::<LittleEndian>()?;
+        Ok(r)
+    }
+
+    pub fn set_ts(&mut self, ix: u64) -> Result<()> {
+        let mut wtr = vec![];
+        wtr.write_u64::<LittleEndian>(ix)?;
+        self.data[BLOB_SIZE_END..BLOB_TS_END].clone_from_slice(&wtr);
         Ok(())
     }
 

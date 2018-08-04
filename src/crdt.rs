@@ -32,9 +32,9 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender, SharedWindow, WindowIndex};
-use timing::timestamp;
+use timing::{timestamp, duration_as_ms, duration_as_us};
 use transaction::Vote;
 
 /// milliseconds we sleep for between gossip requests
@@ -280,7 +280,7 @@ enum Protocol {
     ReceiveUpdates(PublicKey, u64, Vec<NodeInfo>, Vec<(PublicKey, u64)>),
     /// ask for a missing index
     /// (my replicated data to keep alive, missing window index)
-    RequestWindowIndex(NodeInfo, u64),
+    RequestWindowIndex(NodeInfo, u64, u64),
 }
 
 impl Crdt {
@@ -376,7 +376,7 @@ impl Crdt {
             return;
         }
         if *pubkey == self.my_data().leader_id {
-            info!(
+            debug!(
                 "{:x}: LEADER_VOTED! {:x}",
                 self.debug_id(),
                 make_debug_id(&pubkey)
@@ -409,18 +409,25 @@ impl Crdt {
     pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
         inc_new_counter!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
-            info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
+            debug!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
         }
         for v in votes {
             self.insert_vote(&v.0, &v.1, v.2);
         }
     }
+
     pub fn insert(&mut self, v: &NodeInfo) {
+        let mut total = 0;
+        self.insert_instrumented(v, &mut total);
+    }
+
+    pub fn insert_instrumented(&mut self, v: &NodeInfo, table_insert_time: &mut u64) -> usize {
         // TODO check that last_verified types are always increasing
         //update the peer table
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
             //somehow we signed a message for our own identity with a higher version that
             // we have stored ourselves
+            let now = Instant::now();
             trace!(
                 "{:x}: insert v.id: {:x} version: {}",
                 self.debug_id(),
@@ -435,7 +442,9 @@ impl Crdt {
             let _ = self.table.insert(v.id, v.clone());
             let _ = self.local.insert(v.id, self.update_index);
             inc_new_counter!("crdt-update-count", 1);
+            *table_insert_time += duration_as_us(&now.elapsed());
             self.update_liveness(v.id);
+            return 1;
         } else {
             trace!(
                 "{:x}: INSERT FAILED data: {:x} new.version: {} me.version: {}",
@@ -444,6 +453,7 @@ impl Crdt {
                 v.version,
                 self.table[&v.id].version
             );
+            return 0;
         }
     }
 
@@ -757,7 +767,7 @@ impl Crdt {
         }
         let n = (Self::random() as usize) % valid.len();
         let addr = valid[n].contact_info.ncp;
-        let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix);
+        let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix, timestamp());
         let out = serialize(&req)?;
         Ok((addr, out))
     }
@@ -889,13 +899,19 @@ impl Crdt {
         update_index: u64,
         data: &[NodeInfo],
         external_liveness: &[(PublicKey, u64)],
+        debug_id: u64,
     ) {
+        let now = Instant::now();
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
+        let mut total = 0;
+        let mut updates = 0;
         for v in data {
-            self.insert(&v);
+            updates += self.insert_instrumented(&v, &mut total);
         }
+
+        let data_insert_time = duration_as_ms(&now.elapsed());
 
         for (pk, external_remote_index) in external_liveness {
             let remote_entry = if let Some(v) = self.remote.get(pk) {
@@ -923,6 +939,11 @@ impl Crdt {
         // Clear the remote liveness table for this node, b/c we've heard directly from them
         // so we don't need to rely on rumors
         self.external_liveness.remove(&from);
+
+        let count = duration_as_ms(&now.elapsed());
+        if count > 0 {
+            info!("{:x} apply_updates ({}) took {} ms data_insert_time: {} total: {}", debug_id, data.len(), count, data_insert_time, total);
+        }
     }
 
     /// randomly pick a node and ask them for updates asynchronously
@@ -957,6 +978,7 @@ impl Crdt {
         me: &NodeInfo,
         from: &NodeInfo,
         ix: u64,
+        ts: u64,
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         let pos = (ix as usize) % window.read().unwrap().len();
@@ -990,26 +1012,30 @@ impl Crdt {
                     outblob.data[..sz].copy_from_slice(&wblob.data[..sz]);
                     outblob.meta.set_addr(&from.contact_info.tvu_window);
                     outblob.set_id(sender_id).expect("blob set_id");
+                    outblob.set_ts(timestamp()).expect("blob set_ts");
+                    outblob.set_repair().unwrap();
                 }
                 inc_new_counter!("crdt-window-request-pass", 1);
+                info!("{:x} responded with window req: {} to: {:x} in {} ms", me.debug_id(), ix, from.debug_id(), timestamp() - ts);
 
                 return Some(out);
             } else {
                 inc_new_counter!("crdt-window-request-outside", 1);
                 info!(
-                    "requested ix {} != blob_ix {}, outside window!",
-                    ix, blob_ix
+                    "{:x} requested ix {} != blob_ix {}, outside window!",
+                    me.debug_id(), ix, blob_ix
                 );
             }
         } else {
             inc_new_counter!("crdt-window-request-fail", 1);
             assert!(window.read().unwrap()[pos].data.is_none());
             info!(
-                "{:x}: failed RequestWindowIndex {:x} {} {}",
+                "{:x}: failed RequestWindowIndex {:x} {} {} age: {} ms",
                 me.debug_id(),
                 from.debug_id(),
                 ix,
                 pos,
+                timestamp() - ts,
             );
         }
 
@@ -1041,9 +1067,11 @@ impl Crdt {
         match request {
             // TODO sigverify these
             Protocol::RequestUpdates(v, from_rd) => {
+                let now = Instant::now();
                 let addr = from_rd.contact_info.ncp;
                 trace!("RequestUpdates {} from {}", v, addr);
                 let me = obj.read().unwrap();
+                let debug_id = me.debug_id();
                 if addr == me.table[&me.me].contact_info.ncp {
                     warn!(
                         "RequestUpdates ignored, I'm talking to myself: me={:x} remoteme={:x}",
@@ -1073,6 +1101,12 @@ impl Crdt {
                         me.update_index,
                         v
                     );
+
+                    let duration = duration_as_ms(&now.elapsed());
+                    if duration > 0 {
+                        info!("{:x} handled RequestUpdates (empty) in {} ms", me.debug_id(), duration);
+                    }
+
                     None
                 } else if let Ok(r) = to_blob(rsp, addr, &blob_recycler) {
                     trace!(
@@ -1082,13 +1116,22 @@ impl Crdt {
                         from_rd.debug_id(),
                         addr,
                     );
+
+                    let duration = duration_as_ms(&now.elapsed());
+                    if duration > 0 {
+                        info!("{:x} handled RequestUpdates (sent) in {} ms", debug_id, duration);
+                    }
+
                     Some(r)
+
                 } else {
                     warn!("to_blob failed");
                     None
                 }
             }
             Protocol::ReceiveUpdates(from, update_index, data, external_liveness) => {
+                let now = Instant::now();
+                let debug_id = obj.read().unwrap().debug_id();
                 trace!(
                     "ReceivedUpdates from={:x} update_index={} len={}",
                     make_debug_id(&from),
@@ -1097,10 +1140,16 @@ impl Crdt {
                 );
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
-                    .apply_updates(from, update_index, &data, &external_liveness);
+                    .apply_updates(from, update_index, &data, &external_liveness, debug_id);
+
+                let duration = duration_as_ms(&now.elapsed());
+                if duration > 0 {
+                    info!("{:x} handled ReceiveUpdates in {} ms", debug_id, duration_as_ms(&now.elapsed()));
+                }
                 None
             }
-            Protocol::RequestWindowIndex(from, ix) => {
+            Protocol::RequestWindowIndex(from, ix, ts) => {
+                let now = Instant::now();
                 //TODO this doesn't depend on CRDT module, can be moved
                 //but we are using the listen thread to service these request
                 //TODO verify from is signed
@@ -1123,7 +1172,12 @@ impl Crdt {
                     inc_new_counter!("crdt-window-request-address-eq", 1);
                     return None;
                 }
-                Self::run_window_request(&window, &me, &from, ix, blob_recycler)
+                let ret = Self::run_window_request(&window, &me, &from, ix, ts, blob_recycler);
+                let duration = duration_as_ms(&now.elapsed());
+                if duration > 0 {
+                    info!("{:x} handled RequestWindowIndex in {} ms", me.debug_id(), duration_as_ms(&now.elapsed()));
+                }
+                ret
             }
         }
     }
@@ -1135,13 +1189,18 @@ impl Crdt {
         blob_recycler: &BlobRecycler,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
+        started: &Instant,
+        debug_id: u64,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs = requests_receiver.recv_timeout(timeout)?;
+        trace!("{:x} listen waited for {} ms", debug_id, duration_as_ms(&started.elapsed()));
         while let Ok(mut more) = requests_receiver.try_recv() {
             reqs.append(&mut more);
         }
+        let now = Instant::now();
+        let num_reqs = reqs.len();
         let resp: VecDeque<_> = reqs
             .iter()
             .filter_map(|b| Self::handle_blob(obj, window, blob_recycler, &b.read().unwrap()))
@@ -1150,6 +1209,7 @@ impl Crdt {
         while let Some(r) = reqs.pop_front() {
             blob_recycler.recycle(r);
         }
+        trace!("{:x} listen processed {} blobs in {} ms", debug_id, num_reqs, duration_as_ms(&now.elapsed()));
         Ok(())
     }
     pub fn listen(
@@ -1164,12 +1224,15 @@ impl Crdt {
         Builder::new()
             .name("solana-listen".to_string())
             .spawn(move || loop {
+                let now = Instant::now();
                 let e = Self::run_listen(
                     &obj,
                     &window,
                     &blob_recycler,
                     &requests_receiver,
                     &response_sender,
+                    &now,
+                    debug_id,
                 );
                 if exit.load(Ordering::Relaxed) {
                     return;
@@ -1581,7 +1644,7 @@ mod tests {
             sorted(&vec![d1.clone(), d2.clone(), d3.clone()])
         );
         let mut crdt2 = Crdt::new(d2.clone()).expect("Crdt::new");
-        crdt2.apply_updates(key, ix, &ups, &vec![]);
+        crdt2.apply_updates(key, ix, &ups, &vec![], 0);
         assert_eq!(crdt2.table.values().len(), 3);
         assert_eq!(
             sorted(&crdt2.table.values().map(|x| x.clone()).collect()),
@@ -1822,18 +1885,18 @@ mod tests {
             "127.0.0.1:1238".parse().unwrap(),
         );
         let recycler = BlobRecycler::default();
-        let rv = Crdt::run_window_request(&window, &me, &me, 0, &recycler);
+        let rv = Crdt::run_window_request(&window, &me, &me, 0, 0, &recycler);
         assert!(rv.is_none());
         let out = recycler.allocate();
         out.write().unwrap().meta.size = 200;
         window.write().unwrap()[0].data = Some(out);
-        let rv = Crdt::run_window_request(&window, &me, &me, 0, &recycler);
+        let rv = Crdt::run_window_request(&window, &me, &me, 0, 0, &recycler);
         assert!(rv.is_some());
         let v = rv.unwrap();
         //test we copied the blob
         assert_eq!(v.read().unwrap().meta.size, 200);
         let len = window.read().unwrap().len() as u64;
-        let rv = Crdt::run_window_request(&window, &me, &me, len, &recycler);
+        let rv = Crdt::run_window_request(&window, &me, &me, len, 0, &recycler);
         assert!(rv.is_none());
     }
 
@@ -1850,7 +1913,7 @@ mod tests {
         let recycler = BlobRecycler::default();
 
         // Simulate handling a repair request from mock_peer
-        let rv = Crdt::run_window_request(&window, &me, &mock_peer, 0, &recycler);
+        let rv = Crdt::run_window_request(&window, &me, &mock_peer, 0, 0, &recycler);
         assert!(rv.is_none());
         let blob = recycler.allocate();
         let blob_size = 200;
@@ -1860,7 +1923,7 @@ mod tests {
         let num_requests: u32 = 64;
         for i in 0..num_requests {
             let shared_blob =
-                Crdt::run_window_request(&window, &me, &mock_peer, 0, &recycler).unwrap();
+                Crdt::run_window_request(&window, &me, &mock_peer, 0, 0, &recycler).unwrap();
             let blob = shared_blob.read().unwrap();
             // Test we copied the blob
             assert_eq!(blob.meta.size, blob_size);

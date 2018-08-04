@@ -25,25 +25,25 @@ impl RequestProcessor {
             Request::GetBalance { key } => {
                 let val = self.bank.get_balance(&key);
                 let rsp = (Response::Balance { key, val }, rsp_addr);
-                info!("Response::Balance {:?}", rsp);
+                debug!("Response::Balance {:?}", rsp);
                 Some(rsp)
             }
             Request::GetLastId => {
                 let id = self.bank.last_id();
                 let rsp = (Response::LastId { id }, rsp_addr);
-                info!("Response::LastId {:?}", rsp);
+                debug!("Response::LastId {:?}", rsp);
                 Some(rsp)
             }
             Request::GetTransactionCount => {
                 let transaction_count = self.bank.transaction_count() as u64;
                 let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);
-                info!("Response::TransactionCount {:?}", rsp);
+                debug!("Response::TransactionCount {:?}", rsp);
                 Some(rsp)
             }
             Request::GetSignature { signature } => {
                 let signature_status = self.bank.has_signature(&signature);
                 let rsp = (Response::SignatureStatus { signature_status }, rsp_addr);
-                info!("Response::Signature {:?}", rsp);
+                debug!("Response::Signature {:?}", rsp);
                 Some(rsp)
             }
         }

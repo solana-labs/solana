@@ -17,7 +17,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Instant, Duration};
+use timing::{timestamp, duration_as_ms};
 
 pub const WINDOW_SIZE: u64 = 2 * 1024;
 pub type PacketReceiver = Receiver<SharedPackets>;
@@ -172,6 +173,7 @@ pub fn blob_receiver(
 }
 
 fn find_next_missing(
+    debug_id: u64,
     window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
@@ -181,7 +183,9 @@ fn find_next_missing(
     if received <= consumed {
         Err(WindowError::GenericError)?;
     }
+    let now = Instant::now();
     let mut window = window.write().unwrap();
+    let mut pixs = Vec::new();
     let reqs: Vec<_> = (consumed..received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
@@ -197,12 +201,18 @@ fn find_next_missing(
             if window[i].data.is_none() {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
+                    pixs.push(pix);
+                    debug!("{:x} {} window req to: {:?}", debug_id, pix, to);
                     return Some((to, req));
                 }
             }
             None
         })
         .collect();
+    let duration = duration_as_ms(&now.elapsed());
+    if duration >= 0 {
+        info!("{:x} took {} ms to generate {} reqs: {:?}", debug_id, duration, reqs.len(), pixs);
+    }
     Ok(reqs)
 }
 
@@ -241,7 +251,7 @@ fn repair_window(
         consumed,
         received,
     );
-    let reqs = find_next_missing(window, crdt, recycler, consumed, highest_lost)?;
+    let reqs = find_next_missing(debug_id, window, crdt, recycler, consumed, highest_lost)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if !reqs.is_empty() {
         inc_new_counter!("streamer-repair_window-repair", reqs.len());
@@ -254,6 +264,7 @@ fn repair_window(
             reqs.len()
         );
     }
+    let now = Instant::now();
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     for (to, req) in reqs {
         //todo cache socket
@@ -263,6 +274,10 @@ fn repair_window(
         );
         assert!(req.len() <= BLOB_SIZE);
         sock.send_to(&req, to)?;
+    }
+    let spent = duration_as_ms(&now.elapsed());
+    if spent > 0 {
+        info!("{:x} repair time spent: {} ms", debug_id, spent);
     }
     Ok(())
 }
@@ -304,6 +319,7 @@ fn retransmit_all_leader_blocks(
                     let sz = p.meta.size;
                     mnv.meta.size = sz;
                     mnv.data[..sz].copy_from_slice(&p.data[..sz]);
+                    mnv.set_retransmit().unwrap();
                 }
                 retransmit_queue.push_back(nv);
             }
@@ -347,6 +363,7 @@ fn process_blob(
     window: &SharedWindow,
     recycler: &BlobRecycler,
     consumed: &mut u64,
+    received: u64,
 ) {
     let mut window = window.write().unwrap();
     let w = (pix % WINDOW_SIZE) as usize;
@@ -434,6 +451,9 @@ fn process_blob(
         }
         consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
         *consumed += 1;
+        if ((*consumed) % 256) == 0 {
+            info!("{:x}: k: {} consumed: {} received: {}", debug_id, k, *consumed, received);
+        }
     }
 }
 
@@ -479,14 +499,14 @@ fn recv_window(
 
     //send a contiguous set of blocks
     let mut consume_queue = VecDeque::new();
+    let mut oldest_blob_time = 0;
+    let mut num_repair = 0;
+    let mut num_retransmit = 0;
     while let Some(b) = dq.pop_front() {
-        let (pix, meta_size) = {
+        let (pix, meta_size, ts, is_repair, is_retransmit) = {
             let p = b.write().expect("'b' write lock in fn recv_window");
-            (p.get_index()?, p.meta.size)
+            (p.get_index()?, p.meta.size, p.get_ts().unwrap(), p.is_repair(), p.is_retransmit())
         };
-        if pix > *received {
-            *received = pix;
-        }
         // Got a blob which has already been consumed, skip it
         // probably from a repair window request
         if pix < *consumed {
@@ -498,7 +518,21 @@ fn recv_window(
             continue;
         }
 
-        trace!("{:x} window pix: {} size: {}", debug_id, pix, meta_size);
+        oldest_blob_time = cmp::max(timestamp() - ts, oldest_blob_time);
+        if is_repair {
+            num_repair += 1;
+        }
+        if is_retransmit {
+            num_retransmit += 1;
+        }
+
+        if pix < *received {
+            trace!("{:x} repair?: {} retransmit?: {} pix: {} size: {} age: {}", debug_id, is_repair, is_retransmit, pix, meta_size, timestamp() - ts);
+        }
+
+        if pix > *received {
+            *received = pix;
+        }
 
         process_blob(
             debug_id,
@@ -508,6 +542,7 @@ fn recv_window(
             window,
             recycler,
             consumed,
+            *received,
         );
     }
     if log_enabled!(Trace) {
@@ -519,13 +554,18 @@ fn recv_window(
         consume_queue.len()
     );
     if !consume_queue.is_empty() {
-        debug!(
-            "{:x}: RECV_WINDOW {} {}: forwarding consume_queue {}",
-            debug_id,
-            *consumed,
-            *received,
-            consume_queue.len(),
-        );
+        if oldest_blob_time > 10 {
+            info!(
+                "{:x}: RECV_WINDOW {} {}: #blobs {} oldest_blob: {} ms #repair: {} #retransmit: {}",
+                debug_id,
+                *consumed,
+                *received,
+                consume_queue.len(),
+                oldest_blob_time,
+                num_retransmit,
+                num_repair,
+            );
+        }
         trace!(
             "{:x}: sending consume_queue.len: {}",
             debug_id,
@@ -603,6 +643,7 @@ pub fn index_blobs(
         blob.set_index(*receive_index + i as u64)
             .expect("set_index in pub fn broadcast");
         blob.set_flags(0).unwrap();
+        blob.set_ts(timestamp()).unwrap();
     }
 
     Ok(())

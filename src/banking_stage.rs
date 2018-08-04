@@ -89,7 +89,7 @@ impl BankingStage {
             mms.len(),
         );
         let bank_starting_tx_count = bank.transaction_count();
-        let count = mms.iter().map(|x| x.1.len()).sum();
+        let count: usize = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());

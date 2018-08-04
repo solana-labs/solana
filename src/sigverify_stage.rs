@@ -55,7 +55,7 @@ impl SigVerifyStage {
         let now = Instant::now();
         let batch_len = batch.len();
         let rand_id = thread_rng().gen_range(0, 100);
-        info!(
+        debug!(
             "@{:?} verifier: verifying: {} id: {}",
             timing::timestamp(),
             batch.len(),
@@ -70,7 +70,7 @@ impl SigVerifyStage {
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());
         let total_time_s = timing::duration_as_s(&now.elapsed());
-        info!(
+        debug!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} id: {} verified: {} v/s {}",
             timing::timestamp(),
             batch_len,
