@@ -74,10 +74,11 @@ if ((!self_setup)); then
   validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator.json
   SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config
 else
-
+  mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
   validator_id_path=$SOLANA_CONFIG_PRIVATE_DIR/validator-id-x$$.json
   $solana_keygen -o "$validator_id_path"
 
+  mkdir -p "$SOLANA_CONFIG_VALIDATOR_DIR"
   validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator-x$$.json
   $solana_fullnode_config --keypair="$validator_id_path" -l -b $((9000 + ($$ % 1000))) > "$validator_json_path"
 
