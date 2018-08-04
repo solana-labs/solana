@@ -14,7 +14,7 @@ usage() {
   exit 1
 }
 
-if [[ $1 = -h || -n $3 ]]; then
+if [[ $1 = -h ]]; then
   usage
 fi
 
@@ -25,13 +25,17 @@ else
   self_setup=0
 fi
 
+if [[ -n $3 ]]; then
+  usage
+fi
+
 if [[ -d $SNAP ]]; then
   # Exit if mode is not yet configured
   # (typically the case after the Snap is first installed)
   [[ -n $(snapctl get mode) ]] || exit 0
 
   # Select leader from the Snap configuration
-  leader_address="$(snapctl get leader-address)"
+  leader_address=$(snapctl get leader-address)
   if [[ -z $leader_address ]]; then
     # Assume public testnet by default
     leader_address=35.230.65.68  # testnet.solana.com
@@ -41,9 +45,9 @@ else
   if [[ -z $1 ]]; then
     leader=${1:-${here}/..}    # Default to local solana repo
     leader_address=${2:-127.0.0.1}  # Default to local leader
-  elif [[ -z "$2" ]]; then
+  elif [[ -z $2 ]]; then
     leader=$1
-    leader_address=$(dig +short "$1" | head -n1)
+    leader_address=$(dig +short "${leader%:*}" | head -n1)
     if [[ -z $leader_address ]]; then
       usage "Error: unable to resolve IP address for $leader"
     fi
