@@ -90,7 +90,7 @@ tune_networking
 
 rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
-$rsync -vPrz --max-size=100M "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+$rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 [[ -r $SOLANA_LEADER_CONFIG_DIR/ledger.log ]] || {
   echo "Unable to retrieve ledger.log from $rsync_leader_url"
   exit 1
