@@ -55,7 +55,7 @@ echo "--- Wallet sanity"
 echo "--- Node count"
 (
   set -x
-  ./multinode-demo/client.sh "$PWD" 2 -c --addr 127.0.0.1
+  ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
 )
 
 
