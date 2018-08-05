@@ -1,12 +1,12 @@
 #!/bin/bash -e
 #
-# usage: $0 [leader_url] [num_nodes] [--loop] [extra args]
-#
-# leader_url       URL to the leader (defaults to ..)
-# num_nodes        Minimum number of nodes to look for while converging
-# --loop           Add this flag to cause the program to loop infinitely
-# "extra args"     Any additional arguments are pass along to solana-bench-tps
-#
+USAGE=" usage: $0 [leader_url] [num_nodes] [--loop] [extra args]
+
+ leader_url       URL to the leader (defaults to ..)
+ num_nodes        Minimum number of nodes to look for while converging
+ --loop           Add this flag to cause the program to loop infinitely
+ \"extra args\"     Any additional arguments are pass along to solana-bench-tps
+"
 
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
@@ -14,6 +14,10 @@ source "$here"/common.sh
 
 leader=$1
 if [[ -n $leader ]]; then
+  if [[ $leader == "-h" || $leader == "--help" ]]; then
+    echo "$USAGE"
+    exit 0
+  fi
   shift
 else
   if [[ -d "$SNAP" ]]; then
