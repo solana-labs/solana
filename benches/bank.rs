@@ -6,7 +6,6 @@ extern crate solana;
 
 use bincode::serialize;
 use criterion::{Bencher, Criterion};
-use rayon::prelude::*;
 use solana::bank::*;
 use solana::hash::hash;
 use solana::mint::Mint;

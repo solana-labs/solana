@@ -495,7 +495,7 @@ impl PageTable {
             &mut ctx.pages,
         );
     }
-    pub fn allocate_keys_with_ctx(&self, transactions: &Vec<Call>, ctx: &mut Context) {
+    pub fn allocate_keys_with_ctx(&self, transactions: &[Call], ctx: &mut Context) {
         self.allocate_keys(
             &transactions,
             &ctx.checked,
@@ -503,7 +503,7 @@ impl PageTable {
             &mut ctx.pages,
         );
     }
-    pub fn execute_with_ctx(transactions: &Vec<Call>, ctx: &mut Context) {
+    pub fn execute_with_ctx(transactions: &[Call], ctx: &mut Context) {
         PageTable::execute(
             &transactions,
             &ctx.checked,
@@ -668,9 +668,9 @@ impl PageTable {
     }
     pub fn allocate_keys(
         &self,
-        packet: &Vec<Call>,
-        checked: &Vec<bool>,
-        needs_alloc: &Vec<bool>,
+        packet: &[Call],
+        checked: &[bool],
+        needs_alloc: &[bool],
         pages: &mut Vec<Vec<Option<usize>>>,
     ) {
         let mut allocated_pages = self.allocated_pages.write().unwrap();
@@ -762,10 +762,10 @@ impl PageTable {
     /// dependencies
     pub fn execute(
         // Pass the _allocated_pages argument to make sure the lock is held for this call
-        packet: &Vec<Call>,
-        checked: &Vec<bool>,
+        packet: &[Call],
+        checked: &[bool],
         loaded_page_table: &mut Vec<Vec<Page>>,
-        commit: &mut Vec<bool>,
+        commit: &mut [bool],
     ) {
         #[cfg(not(feature = "parex"))]
         let iter = packet
@@ -849,8 +849,8 @@ impl PageTable {
     /// safely call them all in parallel
     pub fn commit(
         &self,
-        packet: &Vec<Call>,
-        commits: &Vec<bool>,
+        packet: &[Call],
+        commits: &[bool],
         pages: &Vec<Vec<Option<usize>>>,
         loaded_page_table: &Vec<Vec<Page>>,
     ) {
@@ -868,7 +868,7 @@ impl PageTable {
         }
         self.transaction_count.fetch_add(count, Ordering::Relaxed);
     }
-    pub fn commit_release_with_ctx(&self, packet: &Vec<Call>, ctx: &Context) {
+    pub fn commit_release_with_ctx(&self, packet: &[Call], ctx: &Context) {
         self.commit(packet, &ctx.commit, &ctx.pages, &ctx.loaded_page_table);
         //TODO(anatoly): generate blobs here
         self.release_memory_lock(packet, &ctx.lock);
@@ -893,7 +893,7 @@ impl PageTable {
         let pt = self.page_table.read().unwrap();
         ap.lookup(key).map(|dx| (pt[dx].version, pt[dx].signature))
     }
-    pub fn release_memory_lock(&self, packet: &Vec<Call>, lock: &Vec<bool>) {
+    pub fn release_memory_lock(&self, packet: &[Call], lock: &Vec<bool>) {
         //holds mem_locks mutex
         let mut mem_locks = self.mem_locks.lock().unwrap();
         for (i, call) in packet.iter().enumerate() {
@@ -1090,7 +1090,7 @@ mod test {
         }
     }
     #[test]
-    fn load_and_execute() {
+    pub fn load_and_execute() {
         logger::setup();
         let pt = PageTable::default();
         let transactions: Vec<_> = (0..N).map(|_r| Call::random_tx()).collect();
@@ -1485,7 +1485,6 @@ mod bench {
     use packet::Recycler;
     use page_table::{self, Call, Context, PageTable, N};
     use rand::{thread_rng, RngCore};
-    use signature::Signature;
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::spawn;
@@ -1725,6 +1724,7 @@ mod bench {
                         *is_valid = true;
                     }
                     for transactions in recv.iter() {
+                        let transactions: Vec<Call> = transactions;
                         lpt.acquire_validate_find(&transactions, &mut ctx);
                         lpt.allocate_keys_with_ctx(&transactions, &mut ctx);
                         lpt.load_pages_with_ctx(&transactions, &mut ctx);
@@ -1780,6 +1780,7 @@ mod bench {
             let recycler = context_recycler.clone();
             spawn(move || {
                 for transactions in recv_transactions.iter() {
+                    let transactions: Vec<Call> = transactions;
                     let octx = recycler.allocate();
                     {
                         let mut ctx = octx.write().unwrap();
@@ -1800,6 +1801,7 @@ mod bench {
         let _executor = {
             spawn(move || {
                 for (transactions, octx) in recv_execute.iter() {
+                    let transactions: Vec<Call> = transactions;
                     {
                         let mut ctx = octx.write().unwrap();
                         PageTable::execute_with_ctx(&transactions, &mut ctx);
@@ -1815,6 +1817,7 @@ mod bench {
             let recycler = context_recycler.clone();
             spawn(move || {
                 for (transactions, octx) in recv_commit.iter() {
+                    let transactions: Vec<Call> = transactions;
                     {
                         let ctx = octx.read().unwrap();
                         lpt.commit_release_with_ctx(&transactions, &ctx);
@@ -1829,6 +1832,7 @@ mod bench {
         let _sender = {
             spawn(move || {
                 while let Some(tt) = ttx.pop() {
+                    let tt: Vec<Call> = tt;
                     if send_transactions.send(tt).is_err() {
                         return;
                     }
