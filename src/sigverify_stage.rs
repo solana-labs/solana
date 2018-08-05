@@ -5,6 +5,8 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
+use influx_db_client as influxdb;
+use metrics;
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
@@ -79,6 +81,18 @@ impl SigVerifyStage {
             len,
             (len as f32 / total_time_s)
         );
+
+        metrics::submit(
+            influxdb::Point::new("sigverify_stage-total_verify_time")
+                .add_field("batch_len", influxdb::Value::Integer(batch_len as i64))
+                .add_field("len", influxdb::Value::Integer(len as i64))
+                .add_field(
+                    "total_time_ms",
+                    influxdb::Value::Integer(total_time_ms as i64),
+                )
+                .to_owned(),
+        );
+
         Ok(())
     }
 
