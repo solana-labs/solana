@@ -105,13 +105,74 @@ fn sample_tx_count(
     }
 }
 
+/// Send loopback payment of 0 tokens and confirm the network processed it
+fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &KeyPair) {
+    let transfer_start = Instant::now();
+
+    let mut poll_count = 0;
+    loop {
+        if poll_count > 0 && poll_count % 8 == 0 {
+            println!(
+                "polling for barrier transaction confirmation, attempt {}",
+                poll_count
+            );
+        }
+
+        *last_id = barrier_client.get_last_id();
+        let sig = barrier_client
+            .transfer(0, &id, id.pubkey(), last_id)
+            .expect("Unable to send barrier transaction");
+
+        let confirmatiom = barrier_client.poll_for_signature(&sig);
+        let duration_ms = duration_as_ms(&transfer_start.elapsed());
+        if confirmatiom.is_ok() {
+            println!("barrier transaction confirmed in {}ms", duration_ms);
+
+            metrics::submit(
+                influxdb::Point::new("bench-tps")
+                    .add_tag(
+                        "op",
+                        influxdb::Value::String("send_barrier_transaction".to_string()),
+                    )
+                    .add_field("poll_count", influxdb::Value::Integer(poll_count))
+                    .add_field("duration", influxdb::Value::Integer(duration_ms as i64))
+                    .to_owned(),
+            );
+
+            // Sanity check that the client balance is still 1
+            let balance = barrier_client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+            if balance != 1 {
+                panic!("Expected an account balance of 1 (balance: {}", balance);
+            }
+            break;
+        }
+
+        // Timeout after 3 minutes.  When running a CPU-only leader+validator+drone+bench-tps on a dev
+        // machine, some batches of transactions can take upwards of 1 minute...
+        if duration_ms > 1000 * 60 * 3 {
+            println!("Error: Couldn't confirm barrier transaction!");
+            exit(1);
+        }
+
+        let new_last_id = barrier_client.get_last_id();
+        if new_last_id == *last_id {
+            if poll_count > 0 && poll_count % 8 == 0 {
+                println!("last_id is not advancing, still at {:?}", *last_id);
+            }
+        } else {
+            *last_id = new_last_id;
+        }
+
+        poll_count += 1;
+    }
+}
+
 fn generate_txs(
-    client: &mut ThinClient,
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
     id: &KeyPair,
     keypairs: &[KeyPair],
     txs: i64,
-    last_id: &mut Hash,
+    last_id: &Hash,
     threads: usize,
     reclaim: bool,
 ) {
@@ -157,26 +218,6 @@ fn generate_txs(
         for chunk in chunks {
             shared_txs_wl.push_back(chunk.to_vec());
         }
-    }
-
-    let mut found_new_last_id = false;
-    // try for ~5s to get a new last_id
-    for i in 0..32 {
-        let new_id = client.get_last_id();
-        if *last_id != new_id {
-            *last_id = new_id;
-            found_new_last_id = true;
-            break;
-        }
-        if i != 0 && (i % 8) == 0 {
-            println!("polling for new last_id try: {}", i);
-        }
-        sleep(Duration::from_millis(200));
-    }
-
-    if !found_new_last_id {
-        println!("Error: Couldn't get new last id!");
-        exit(1);
     }
 }
 
@@ -465,13 +506,7 @@ fn main() {
     }
 
     let mut client = mk_client(&leader);
-
-    // get some tokens
-    airdrop_tokens(&mut client, &leader, &id, tx_count);
-
-    println!("Get last ID...");
-    let mut last_id = client.get_last_id();
-    println!("Got last ID {:?}", last_id);
+    let mut barrier_client = mk_client(&leader);
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
@@ -479,6 +514,15 @@ fn main() {
 
     println!("Creating {} keypairs...", tx_count / 2);
     let keypairs = rnd.gen_n_keypairs(tx_count / 2);
+    let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
+
+    println!("Get tokens...");
+    airdrop_tokens(&mut client, &leader, &id, tx_count);
+    airdrop_tokens(&mut barrier_client, &leader, &barrier_id, 1);
+
+    println!("Get last ID...");
+    let mut last_id = client.get_last_id();
+    println!("Got last ID {:?}", last_id);
 
     let first_tx_count = client.transaction_count();
     println!("Initial transaction count {}", first_tx_count);
@@ -539,12 +583,11 @@ fn main() {
         // this seems to be faster than trying to determine the balance of individual
         // accounts
         generate_txs(
-            &mut client,
             &shared_txs,
             &id,
             &keypairs,
             tx_count,
-            &mut last_id,
+            &last_id,
             threads,
             reclaim_tokens_back_to_source_account,
         );
@@ -558,6 +601,10 @@ fn main() {
                 sleep(Duration::from_millis(100));
             }
         }
+        // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
+        // transactions sent by `generate_txs()` so instead send and confirm a single transaction
+        // to validate the network is still functional.
+        send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
     }
 
     // Stop the sampling threads so it will collect the stats
