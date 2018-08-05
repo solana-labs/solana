@@ -26,6 +26,6 @@ fn main() {
     for entry in entries {
         let entry = entry.unwrap();
         serde_json::to_writer(stdout(), &entry).expect("serialize");
-        stdout().write(b"\n").expect("newline");
+        stdout().write_all(b"\n").expect("newline");
     }
 }
