@@ -137,9 +137,12 @@ impl Entry {
     }
 }
 
+//TODO(anatoly): call contains multiple signatures now
 fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
     hash_data.push(0u8);
-    hash_data.extend_from_slice(&tx.sig.as_ref());
+    for sig in tx.sigs() {
+        hash_data.extend_from_slice(sig.as_ref());
+    }
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
@@ -204,8 +207,9 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
-        let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
+        let pubkey = KeyPair::new().pubkey();
+        let tx0 = Transaction::new(&keypair, pubkey, 0, zero, 0);
+        let tx1 = Transaction::new(&keypair, pubkey, 1, zero, 1);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 
@@ -221,8 +225,9 @@ mod tests {
 
         // First, verify entries
         let keypair = KeyPair::new();
-        let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
-        let tx1 = Transaction::new_signature(&keypair, Default::default(), zero);
+        let tx0 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), zero, 0);
+        let tx1 =
+            Transaction::new_signature(&keypair, keypair.pubkey(), Default::default(), zero, 1);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 
@@ -244,7 +249,7 @@ mod tests {
         assert_eq!(tick.id, zero);
 
         let keypair = KeyPair::new();
-        let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
+        let tx0 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), zero, 0);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
         assert_eq!(entry0.id, next_hash(&zero, 1, &vec![tx0]));
@@ -255,7 +260,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = KeyPair::new();
-        let tx = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        let tx = Transaction::new(&keypair, keypair.pubkey(), 0, zero, 0);
         next_entry(&zero, 0, vec![tx]);
     }
 }

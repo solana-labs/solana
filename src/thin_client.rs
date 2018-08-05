@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use hash::Hash;
 use request::{Request, Response};
-use signature::{KeyPair, PublicKey, Signature};
+use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
@@ -28,7 +28,8 @@ pub struct ThinClient {
     last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<PublicKey, i64>,
-    signature_status: bool,
+    pubkey_version: u64,
+    pubkey_signature: Signature,
 }
 
 impl ThinClient {
@@ -49,7 +50,8 @@ impl ThinClient {
             last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
-            signature_status: false,
+            pubkey_version: 0,
+            pubkey_signature: Signature::default(),
         }
     }
 
@@ -75,12 +77,13 @@ impl ThinClient {
                 trace!("Response transaction count {:?}", transaction_count);
                 self.transaction_count = transaction_count;
             }
-            Response::SignatureStatus { signature_status } => {
-                self.signature_status = signature_status;
-                if signature_status {
-                    trace!("Response found signature");
-                } else {
+            Response::PubKeyVersion { version, signature } => {
+                if self.pubkey_version == version {
                     trace!("Response signature not found");
+                } else {
+                    self.pubkey_version = version;
+                    self.pubkey_signature = signature;
+                    trace!("Response found signature");
                 }
             }
         }
@@ -92,7 +95,7 @@ impl ThinClient {
         let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
             .send_to(&data, &self.transactions_addr)?;
-        Ok(tx.sig)
+        Ok(*tx.sig())
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -102,9 +105,10 @@ impl ThinClient {
         keypair: &KeyPair,
         to: PublicKey,
         last_id: &Hash,
+        version: u64,
     ) -> io::Result<Signature> {
         let now = Instant::now();
-        let tx = Transaction::new(keypair, to, n, *last_id);
+        let tx = Transaction::new(keypair, to, n, *last_id, version);
         let result = self.transfer_signed(&tx);
         metrics::submit(
             influxdb::Point::new("thinclient")
@@ -226,25 +230,12 @@ impl ThinClient {
         }
     }
 
-    /// Poll the server to confirm a transaction.
-    pub fn poll_for_signature(&mut self, sig: &Signature) -> io::Result<()> {
-        let now = Instant::now();
-        while !self.check_signature(sig) {
-            if now.elapsed().as_secs() > 1 {
-                // TODO: Return a better error.
-                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
-            }
-            sleep(Duration::from_millis(100));
-        }
-        Ok(())
-    }
-
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
-    pub fn check_signature(&mut self, sig: &Signature) -> bool {
+    pub fn get_version(&mut self, pubkey: &PublicKey) -> (u64, Signature) {
         trace!("check_signature");
-        let req = Request::GetSignature { signature: *sig };
-        let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
+        let req = Request::GetPubKeyVersion { pubkey: *pubkey };
+        let data = serialize(&req).expect("serialize GetPubKeyVersion in pub fn get_version");
         let now = Instant::now();
         let mut done = false;
         while !done {
@@ -253,7 +244,7 @@ impl ThinClient {
                 .expect("buffer error in pub fn get_last_id");
 
             if let Ok(resp) = self.recv_response() {
-                if let Response::SignatureStatus { .. } = resp {
+                if let Response::PubKeyVersion { .. } = resp {
                     done = true;
                 }
                 self.process_response(&resp);
@@ -268,7 +259,40 @@ impl ThinClient {
                 )
                 .to_owned(),
         );
-        self.signature_status
+        (self.pubkey_version, self.pubkey_signature)
+    }
+    /// Retry the transfer until it succeeds
+    /// To retry correctly
+    /// 1. client gets the current version of the sender
+    /// 2. client generates a transfer transaction for that version
+    /// 3. client check the updated version of the sender
+    /// 4. If the updated version didn't change, retry the transfer at current version
+    /// 5. If the updated version changed but signature doesn't match, retry the transfer at new
+    ///    version
+    /// 6. If the updated version changed and signature matches, return
+    /// * returns the destination key's balance
+    pub fn retry_transfer(
+        &mut self,
+        alice: &KeyPair,
+        bob_pubkey: &PublicKey,
+        amount: i64,
+        retries: usize,
+    ) -> Option<(u64, Signature)> {
+        let last_id = self.get_last_id();
+        let mut version = self.get_version(&alice.pubkey());
+        for _ in 0..retries {
+            let sig = self
+                .transfer(amount, &alice, *bob_pubkey, &last_id, version.0)
+                .unwrap();
+            let next_version = self.get_version(&alice.pubkey());
+            if next_version.1 == sig {
+                return Some(next_version);
+            } else if version.0 != next_version.0 {
+                version = next_version;
+            }
+            sleep(Duration::from_millis(100));
+        }
+        None
     }
 }
 
@@ -317,7 +341,6 @@ mod tests {
             sink(),
             false,
         );
-        sleep(Duration::from_millis(900));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -329,19 +352,23 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        let sig = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
-        client.poll_for_signature(&sig).unwrap();
-        let balance = client.get_balance(&bob_pubkey);
+        let version = client.get_version(&alice.keypair().pubkey());
+        for _ in 0..30 {
+            let sig = client
+                .transfer(500, &alice.keypair(), bob_pubkey, &last_id, version.0)
+                .unwrap();
+            if sig == client.get_version(&alice.keypair().pubkey()).1 {
+                break;
+            }
+            sleep(Duration::from_millis(300));
+        }
+        let balance = client.poll_get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
     }
 
-    // sleep(Duration::from_millis(300)); is unstable
     #[test]
-    #[ignore]
     fn test_bad_sig() {
         logger::setup();
         let leader_keypair = KeyPair::new();
@@ -363,8 +390,6 @@ mod tests {
             sink(),
             false,
         );
-        //TODO: remove this sleep, or add a retry so CI is stable
-        sleep(Duration::from_millis(300));
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         requests_socket
@@ -378,21 +403,33 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-
-        let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
-
-        let _sig = client.transfer_signed(&tx).unwrap();
+        let version = client.get_version(&alice.keypair().pubkey());
+        let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id, version.0);
+        for _ in 0..30 {
+            let _ = client.transfer_signed(&tx).unwrap();
+            if *tx.sig() == client.get_version(&alice.keypair().pubkey()).1 {
+                break;
+            }
+            sleep(Duration::from_millis(300));
+        }
 
         let last_id = client.get_last_id();
+        let version = client.get_version(&alice.keypair().pubkey());
 
-        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        if let Instruction::NewContract(contract) = &mut tr2.instruction {
+        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id, version.0);
+        if let Instruction::NewContract(contract) = tr2.instruction() {
+            let mut contract = contract.clone();
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
+            tr2.call.data.user_data = serialize(&Instruction::NewContract(contract)).unwrap();
         }
-        let sig = client.transfer_signed(&tr2).unwrap();
-        client.poll_for_signature(&sig).unwrap();
-
+        for _ in 0..30 {
+            let _sig = client.transfer_signed(&tr2).unwrap();
+            if version.0 != client.get_version(&alice.keypair().pubkey()).0 {
+                break;
+            }
+            sleep(Duration::from_millis(300));
+        }
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
@@ -400,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn test_client_check_signature() {
+    fn test_client_retry_transfer() {
         logger::setup();
         let leader_keypair = KeyPair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -433,13 +470,8 @@ mod tests {
             leader_data.contact_info.tpu,
             transactions_socket,
         );
-        let last_id = client.get_last_id();
-        let sig = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
-        sleep(Duration::from_millis(100));
-
-        assert!(client.check_signature(&sig));
+        let result = client.retry_transfer(&alice.keypair(), &bob_pubkey, 500, 30);
+        assert!(result.is_some());
 
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();

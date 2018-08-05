@@ -61,6 +61,7 @@ unstable = []
 ipv6 = []
 cuda = []
 erasure = []
+parex = []
 
 [dependencies]
 rayon = "1.0.0"
@@ -95,6 +96,9 @@ reqwest = "0.8.6"
 influx_db_client = "0.3.4"
 dirs = "1.0.2"
 
+[profile.release]
+debug = true
+
 [dev-dependencies]
 criterion = "0.2"
 
@@ -116,4 +120,8 @@ harness = false
 
 [[bench]]
 name = "sigverify"
+harness = false
+
+[[bench]]
+name = "crit_page_table"
 harness = false

@@ -9,7 +9,7 @@ pub enum Request {
     GetBalance { key: PublicKey },
     GetLastId,
     GetTransactionCount,
-    GetSignature { signature: Signature },
+    GetPubKeyVersion { pubkey: PublicKey },
 }
 
 impl Request {
@@ -24,5 +24,5 @@ pub enum Response {
     Balance { key: PublicKey, val: i64 },
     LastId { id: Hash },
     TransactionCount { transaction_count: u64 },
-    SignatureStatus { signature_status: bool },
+    PubKeyVersion { version: u64, signature: Signature },
 }

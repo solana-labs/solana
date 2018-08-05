@@ -31,6 +31,7 @@ pub mod mint;
 pub mod nat;
 pub mod ncp;
 pub mod packet;
+pub mod page_table;
 pub mod payment_plan;
 pub mod record_stage;
 pub mod recorder;

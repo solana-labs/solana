@@ -187,8 +187,8 @@ mod tests {
         let (_record_stage, entry_receiver) = RecordStage::new(signal_receiver, &zero);
         let alice_keypair = KeyPair::new();
         let bob_pubkey = KeyPair::new().pubkey();
-        let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
-        let tx1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
+        let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero, 0);
+        let tx1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero, 1);
         tx_sender
             .send(Signal::Transactions(vec![tx0, tx1]))
             .unwrap();

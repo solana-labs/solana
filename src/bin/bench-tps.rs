@@ -121,12 +121,12 @@ fn generate_txs(
     let transactions: Vec<_> = if !reclaim {
         keypairs
             .par_iter()
-            .map(|keypair| Transaction::new(&id, keypair.pubkey(), 1, *last_id))
+            .map(|keypair| Transaction::new_noplan(&id, keypair.pubkey(), 1, 0, *last_id, 0))
             .collect()
     } else {
         keypairs
             .par_iter()
-            .map(|keypair| Transaction::new(keypair, id.pubkey(), 1, *last_id))
+            .map(|keypair| Transaction::new_noplan(&keypair, id.pubkey(), 1, 0, *last_id, 0))
             .collect()
     };
 
