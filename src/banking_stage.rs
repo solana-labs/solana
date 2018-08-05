@@ -79,7 +79,10 @@ impl BankingStage {
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
-        let mms = verified_receiver.recv_timeout(timer)?;
+        let mut mms = verified_receiver.recv_timeout(timer)?;
+        while let Ok(mut nq) = verified_receiver.try_recv() {
+            mms.append(&mut nq)
+        }
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
@@ -91,30 +94,32 @@ impl BankingStage {
         let bank_starting_tx_count = bank.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
-        for (msgs, vers) in mms {
-            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
-            reqs_len += transactions.len();
-            let transactions = transactions
-                .into_iter()
-                .zip(vers)
-                .filter_map(|(tx, ver)| match tx {
-                    None => None,
-                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
-                })
-                .collect();
+        let transactions: Vec<_> = mms.into_iter()
+            .flat_map(|(msgs, vers)| {
+                let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
+                reqs_len += transactions.len();
+                let transactions = transactions
+                    .into_iter()
+                    .zip(vers)
+                    .filter_map(|(tx, ver)| match tx {
+                        None => None,
+                        Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
+                            Some(tx)
+                        } else {
+                            None
+                        },
+                    })
+                    .collect();
 
-            debug!("process_transactions");
-            let results = bank.process_transactions(transactions);
-            let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
-            signal_sender.send(Signal::Transactions(transactions))?;
-            debug!("done process_transactions");
+                debug!("process_transactions");
+                let results = bank.process_transactions(transactions);
+                packet_recycler.recycle(msgs);
+                results.into_iter().filter_map(|x| x.ok())
+            })
+            .collect();
+        signal_sender.send(Signal::Transactions(transactions))?;
+        debug!("done process_transactions");
 
-            packet_recycler.recycle(msgs);
-        }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(
