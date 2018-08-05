@@ -76,6 +76,16 @@ fn get_last_id_to_vote_on(
         super_majority_index,
     );
 
+    metrics::submit(
+        influxdb::Point::new("vote_stage-peer_count")
+            .add_field("total_peers", influxdb::Value::Integer(ids.len() as i64))
+            .add_field(
+                "valid_peers",
+                influxdb::Value::Integer(valid_ids.len() as i64),
+            )
+            .to_owned(),
+    );
+
     if valid_ids.len() > super_majority_index {
         *last_vote = now;
 
