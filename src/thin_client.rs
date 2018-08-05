@@ -281,7 +281,8 @@ impl ThinClient {
         let last_id = self.get_last_id();
         let mut version = self.get_version(&alice.pubkey());
         for _ in 0..retries {
-            let sig = self.transfer(amount, &alice, *bob_pubkey, &last_id, version.0)
+            let sig = self
+                .transfer(amount, &alice, *bob_pubkey, &last_id, version.0)
                 .unwrap();
             let next_version = self.get_version(&alice.pubkey());
             if next_version.1 == sig {

@@ -143,7 +143,9 @@ fn send_validator_vote(
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&bank, &last_id, keypair, crdt, blob_recycler) {
+    if let Ok((_, shared_blob)) =
+        create_vote_tx_and_blob(&bank, &last_id, keypair, crdt, blob_recycler)
+    {
         inc_new_counter!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;

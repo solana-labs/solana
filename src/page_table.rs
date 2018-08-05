@@ -16,7 +16,7 @@
 ///    tag allows the contract to Write to the memory owned by the page.  Contracts can spend money
 use bank::{Bank, BANK_PROCESS_TRANSACTION_METHOD};
 use bincode::{deserialize, serialize};
-use hash::{hash,Hash};
+use hash::{hash, Hash};
 use rand::{thread_rng, Rng, RngCore};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 use std::collections::{BTreeMap, HashSet};
@@ -344,7 +344,7 @@ impl Call {
         let mut data = [0u8; 32];
         r.fill_bytes(&mut data);
         hash(&data)
-    } 
+    }
     pub fn random_tx() -> Call {
         //sanity check
         assert_ne!(Self::rand_key(), Self::rand_key());
@@ -470,7 +470,8 @@ impl PageTable {
             if !valid_ledger[i] {
                 continue;
             }
-            let collision: u64 = tx.data
+            let collision: u64 = tx
+                .data
                 .keys
                 .iter()
                 .map({ |k| mem_locks.contains(k) as u64 })
@@ -792,7 +793,8 @@ impl PageTable {
             loaded_pages[0].version += 1;
             loaded_pages[0].signature = tx.proofs[0];
 
-            let mut call_pages: Vec<Page> = tx.data
+            let mut call_pages: Vec<Page> = tx
+                .data
                 .keys
                 .iter()
                 .zip(loaded_pages.iter())

@@ -416,25 +416,19 @@ fn test_multi_node_dynamic_network() {
     );
 
     // Send leader some tokens to vote
-    let leader_balance = retry_send_tx_and_get_balance(
-        &leader_data,
-        &alice_arc.read().unwrap(),
-        &leader_pubkey,
-    ).unwrap();
+    let leader_balance =
+        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &leader_pubkey)
+            .unwrap();
     info!("leader balance {}", leader_balance);
 
     info!("{:x} LEADER", leader_data.debug_id());
-    let leader_balance = retry_send_tx_and_get_balance(
-        &leader_data,
-        &alice_arc.read().unwrap(),
-        &bob_pubkey,
-    ).unwrap();
+    let leader_balance =
+        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
+            .unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance = retry_send_tx_and_get_balance(
-        &leader_data,
-        &alice_arc.read().unwrap(),
-        &bob_pubkey,
-    ).unwrap();
+    let leader_balance =
+        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
+            .unwrap();
     assert_eq!(leader_balance, 1000);
 
     let t1: Vec<_> = (0..num_nodes)
@@ -498,11 +492,9 @@ fn test_multi_node_dynamic_network() {
     for i in 0..num_nodes {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
-        let leader_balance = retry_send_tx_and_get_balance(
-            &leader_data,
-            &alice_arc.read().unwrap(),
-            &bob_pubkey,
-        ).unwrap();
+        let leader_balance =
+            retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
+                .unwrap();
         if leader_balance != expected {
             info!(
                 "leader dropped transaction {} {:?} {:?}",
@@ -636,4 +628,3 @@ fn retry_send_tx_and_get_balance(
     let _ = client.retry_transfer(&alice.keypair(), bob_pubkey, 500, 30);
     client.poll_get_balance(bob_pubkey).ok()
 }
-

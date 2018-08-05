@@ -303,7 +303,8 @@ impl Bank {
             duration_as_us(&now.elapsed()),
             txs_len
         );
-        let res: Vec<_> = txs.into_iter()
+        let res: Vec<_> = txs
+            .into_iter()
             .enumerate()
             .map(|(i, t)| {
                 if !ctx.valid_ledger[i] {
@@ -593,10 +594,10 @@ mod tests {
     use entry::next_entry;
     use entry::Entry;
     use entry_writer::{self, EntryWriter};
+    use hash::hash;
     use logger;
     use signature::KeyPairUtil;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
-    use hash::hash;
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -715,7 +716,8 @@ mod tests {
         let bank = Bank::new(&mint);
         let pubkey = KeyPair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id(), 0)
+        let sig = bank
+            .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id(), 0)
             .unwrap();
 
         // Assert the debit counts as a transaction.
@@ -750,7 +752,13 @@ mod tests {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             bank.register_entry_id(&last_id);
         }
-        let tx0 = Transaction::new(&mint.keypair(), mint.keypair().pubkey(), 1, mint.last_id(), 0);
+        let tx0 = Transaction::new(
+            &mint.keypair(),
+            mint.keypair().pubkey(),
+            1,
+            mint.last_id(),
+            0,
+        );
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
             bank.process_transaction(&tx0),

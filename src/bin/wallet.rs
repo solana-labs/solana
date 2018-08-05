@@ -297,7 +297,9 @@ fn process_command(
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
-            let sig = client.retry_transfer(&config.id, &to, tokens, 30).expect("retry transfer");
+            let sig = client
+                .retry_transfer(&config.id, &to, tokens, 30)
+                .expect("retry transfer");
             println!("{:?}", sig);
             println!(
                 "{} {} {}",
