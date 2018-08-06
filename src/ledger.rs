@@ -222,6 +222,9 @@ fn recover_ledger(ledger_path: &Path) -> io::Result<()> {
             }
         }
     }
+    let num_entries = index.metadata()?.len() / SIZEOF_U64;
+    trace!("recover: done. {} entries", num_entries);
+
     // flush everything to disk...
     index.sync_all()?;
     data.sync_all()
@@ -258,24 +261,24 @@ impl LedgerWriter {
         } else {
             recover_ledger(ledger_path)?;
         }
-        let mut index = OpenOptions::new()
+        let index = OpenOptions::new()
             .create(create)
             .append(true)
             .open(ledger_path.join("index"))?;
 
         if log_enabled!(Trace) {
-            let offset = index.seek(SeekFrom::Current(0))?;
-            trace!("LedgerWriter::new: index fp:{}", offset);
+            let len = index.metadata()?.len();
+            trace!("LedgerWriter::new: index fp:{}", len);
         }
 
-        let mut data = OpenOptions::new()
+        let data = OpenOptions::new()
             .create(create)
             .append(true)
             .open(ledger_path.join("data"))?;
 
         if log_enabled!(Trace) {
-            let offset = data.seek(SeekFrom::Current(0))?;
-            trace!("LedgerWriter::new: data fp:{}", offset);
+            let len = data.metadata()?.len();
+            trace!("LedgerWriter::new: data fp:{}", len);
         }
 
         Ok(LedgerWriter { index, data })
@@ -347,6 +350,22 @@ pub fn read_ledger(ledger_path: &str) -> io::Result<impl Iterator<Item = io::Res
     let data = File::open(ledger_path.join("data"))?;
 
     Ok(LedgerReader { data })
+}
+
+/// copy ledger is doesn't fix up the "from" ledger
+pub fn copy_ledger(from: &str, to: &str) -> io::Result<()> {
+    let mut to = LedgerWriter::new(to, true)?;
+
+    let from = Path::new(&from);
+
+    // for a copy, we read "readonly" from data
+    let data = File::open(from.join("data"))?;
+
+    for entry in (LedgerReader { data }) {
+        let entry = entry?;
+        to.write_entry(&entry)?;
+    }
+    Ok(())
 }
 
 // a Block is a slice of Entries
@@ -762,6 +781,33 @@ mod tests {
 
         assert!(verify_ledger(&ledger_path, false).is_ok());
         let _ignored = remove_dir_all(&ledger_path);
+    }
+
+    #[test]
+    fn test_copy_ledger() {
+        use logger;
+        logger::setup();
+
+        let from = tmp_ledger_path("test_ledger_copy_from");
+        let entries = make_tiny_test_entries(10);
+
+        let mut writer = LedgerWriter::new(&from, true).unwrap();
+        writer.write_entries(entries.clone()).unwrap();
+
+        let to = tmp_ledger_path("test_ledger_copy_to");
+
+        copy_ledger(&from, &to).unwrap();
+
+        let mut read_entries = vec![];
+        for x in read_ledger(&to).unwrap() {
+            let entry = x.unwrap();
+            trace!("entry... {:?}", entry);
+            read_entries.push(entry);
+        }
+        assert_eq!(read_entries, entries);
+
+        std::fs::remove_dir_all(from).unwrap();
+        std::fs::remove_dir_all(to).unwrap();
     }
 
 }

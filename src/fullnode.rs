@@ -143,14 +143,14 @@ impl FullNode {
     pub fn new_without_sigverify(
         node: TestNode,
         leader: bool,
-        ledger: &str,
+        ledger_path: &str,
         keypair: KeyPair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         FullNode::new_internal(
             node,
             leader,
-            ledger,
+            ledger_path,
             keypair,
             network_entry_for_validator,
             true,

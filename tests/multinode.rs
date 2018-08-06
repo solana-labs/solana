@@ -6,7 +6,7 @@ extern crate solana;
 
 use solana::crdt::{Crdt, NodeInfo, TestNode};
 use solana::fullnode::FullNode;
-use solana::ledger::{read_ledger, LedgerWriter};
+use solana::ledger::{copy_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -18,7 +18,6 @@ use solana::timing::duration_as_s;
 use std::cmp::max;
 use std::env;
 use std::fs::remove_dir_all;
-use std::io;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -88,40 +87,6 @@ fn genesis(name: &str, num: i64) -> (Mint, String) {
     writer.write_entries(mint.create_entries()).unwrap();
 
     (mint, path)
-}
-
-//#[test]
-//fn test_copy_ledger() {
-//    let from = tmp_ledger_path("test_ledger_copy_from");
-//    let entries = make_tiny_test_entries(10);
-//
-//    let mut writer = LedgerWriter::new(&from, true).unwrap();
-//    writer.write_entries(entries.clone()).unwrap();
-//
-//    let to = tmp_ledger_path("test_ledger_copy_to");
-//
-//    copy_ledger(&from, &to).unwrap();
-//
-//    let mut read_entries = vec![];
-//    for x in read_ledger(&to).unwrap() {
-//        let entry = x.unwrap();
-//        trace!("entry... {:?}", entry);
-//        read_entries.push(entry);
-//    }
-//    assert_eq!(read_entries, entries);
-//
-//    std::fs::remove_dir_all(from).unwrap();
-//    std::fs::remove_dir_all(to).unwrap();
-//}
-//
-fn copy_ledger(from: &str, to: &str) -> io::Result<()> {
-    let mut to = LedgerWriter::new(to, true)?;
-
-    for entry in read_ledger(from)? {
-        let entry = entry?;
-        to.write_entry(&entry)?;
-    }
-    Ok(())
 }
 
 fn tmp_copy_ledger(from: &str, name: &str) -> String {
