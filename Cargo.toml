@@ -117,7 +117,3 @@ harness = false
 [[bench]]
 name = "sigverify"
 harness = false
-
-[[bench]]
-name = "crit_page_table"
-harness = false
