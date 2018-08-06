@@ -34,14 +34,21 @@ macro_rules! inc_counter {
     };
 }
 
-macro_rules! inc_new_counter {
+macro_rules! inc_new_counter_info {
     ($name:expr, $count:expr) => {{
-        static mut INC_NEW_COUNTER: Counter = create_counter!($name, 0);
-        inc_counter!(INC_NEW_COUNTER, $count);
+        inc_new_counter!($name, $count, Level::Info, 0);
     }};
     ($name:expr, $count:expr, $lograte:expr) => {{
-        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
-        inc_counter!(INC_NEW_COUNTER, $count);
+        inc_new_counter!($name, $count, Level::Info, $lograte);
+    }};
+}
+
+macro_rules! inc_new_counter {
+    ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
+        if log_enabled!($level) {
+            static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
+            inc_counter!(INC_NEW_COUNTER, $count);
+        }
     }};
 }
 
@@ -89,6 +96,7 @@ impl Counter {
 #[cfg(test)]
 mod tests {
     use counter::{Counter, DEFAULT_METRICS_RATE};
+    use log::Level;
     use std::env;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Once, RwLock, ONCE_INIT};
@@ -134,8 +142,8 @@ mod tests {
         let _readlock = get_env_lock().read();
         //make sure that macros are syntactically correct
         //the variable is internal to the macro scope so there is no way to introspect it
-        inc_new_counter!("counter-1", 1);
-        inc_new_counter!("counter-2", 1, 2);
+        inc_new_counter_info!("counter-1", 1);
+        inc_new_counter_info!("counter-2", 1, 2);
     }
     #[test]
     fn test_lograte() {

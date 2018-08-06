@@ -5,6 +5,7 @@
 use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
+use log::Level;
 use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
@@ -43,7 +44,7 @@ fn recv_multiple_packets(
         mms.append(&mut nq);
 
         if recv_tries >= max_tries {
-            inc_new_counter!("banking_stage-max_packets_coalesced", 1);
+            inc_new_counter_info!("banking_stage-max_packets_coalesced", 1);
             break;
         }
     }
@@ -165,8 +166,8 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
-        inc_new_counter!("banking_stage-process_packets", count);
-        inc_new_counter!(
+        inc_new_counter_info!("banking_stage-process_packets", count);
+        inc_new_counter_info!(
             "banking_stage-process_transactions",
             bank.transaction_count() - bank_starting_tx_count
         );

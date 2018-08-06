@@ -11,6 +11,7 @@ use entry::Entry;
 use hash::Hash;
 use itertools::Itertools;
 use ledger::Block;
+use log::Level;
 use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{KeyPair, PublicKey, Signature};
@@ -224,9 +225,9 @@ impl Bank {
             let option = bals.get_mut(&tx.from);
             if option.is_none() {
                 if let Instruction::NewVote(_) = &tx.instruction {
-                    inc_new_counter!("bank-appy_debits-vote_account_not_found", 1);
+                    inc_new_counter_info!("bank-appy_debits-vote_account_not_found", 1);
                 } else {
-                    inc_new_counter!("bank-appy_debits-generic_account_not_found", 1);
+                    inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }

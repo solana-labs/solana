@@ -623,12 +623,12 @@ fn test_multi_node_dynamic_network() {
             }
         }
     }
-    assert_eq!(consecutive_success, 10);
     info!(
         "Took {} s to converge total failures: {}",
         duration_as_s(&now.elapsed()),
         failures
     );
+    assert_eq!(consecutive_success, 10);
     for (_, node) in &validators {
         node.exit();
     }

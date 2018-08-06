@@ -6,6 +6,7 @@ use counter::Counter;
 use crdt::Crdt;
 use hash::Hash;
 use influx_db_client as influxdb;
+use log::Level;
 use metrics;
 use packet::{BlobRecycler, SharedBlob};
 use result::Result;
@@ -150,7 +151,7 @@ pub fn send_leader_vote(
                     "{:x} leader_sent_vote finality: {} ms",
                     debug_id, finality_ms
                 );
-                inc_new_counter!("vote_stage-leader_sent_vote", 1);
+                inc_new_counter_info!("vote_stage-leader_sent_vote", 1);
 
                 metrics::submit(
                     influxdb::Point::new(&"leader-finality")
@@ -172,7 +173,7 @@ fn send_validator_vote(
 ) -> Result<()> {
     let last_id = bank.last_id();
     if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
-        inc_new_counter!("replicate-vote_sent", 1);
+        inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
     }
