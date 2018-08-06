@@ -155,7 +155,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         path.to_str().unwrap()
     };
     let id = read_keypair(id_path).or_else(|err| {
-        display_actions();
         Err(WalletError::BadParameter(format!(
             "{}: Unable to open keypair file: {}",
             err, id_path
@@ -177,7 +176,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                     .expect("base58-encoded public key");
 
                 if pubkey_vec.len() != std::mem::size_of::<PublicKey>() {
-                    display_actions();
+                    eprintln!("{}", pay_matches.usage());
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
                 PublicKey::new(&pubkey_vec)
@@ -198,14 +197,14 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 let sig = Signature::new(&sig_vec);
                 Ok(WalletCommand::Confirm(sig))
             } else {
-                display_actions();
+                eprintln!("{}", confirm_matches.usage());
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
             }
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("", None) => {
-            display_actions();
+            println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
                 "no subcommand given".to_string(),
             ))
@@ -288,17 +287,6 @@ fn process_command(
         }
     }
     Ok(())
-}
-
-fn display_actions() {
-    println!();
-    println!("Commands:");
-    println!("  address   Get your public key");
-    println!("  balance   Get your account balance");
-    println!("  airdrop   Request a batch of tokens");
-    println!("  pay       Send tokens to a public key");
-    println!("  confirm   Confirm your last payment by signature");
-    println!();
 }
 
 fn read_leader(path: &str) -> Result<Config, WalletError> {
