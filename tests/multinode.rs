@@ -10,6 +10,7 @@ use solana::ledger::LedgerWriter;
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
+use solana::result;
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
 use solana::streamer::default_window;
@@ -107,7 +108,7 @@ fn tmp_copy_ledger(from: &str, name: &str) -> String {
 }
 
 #[test]
-fn test_multi_node_validator_catchup_from_zero() {
+fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_validator_catchup_from_zero");
@@ -195,7 +196,7 @@ fn test_multi_node_validator_catchup_from_zero() {
     info!("leader balance {}", leader_balance);
     loop {
         let mut client = mk_client(&leader_data);
-        leader_balance = client.poll_get_balance(&bob_pubkey).unwrap();
+        leader_balance = client.poll_get_balance(&bob_pubkey)?;
         if leader_balance == 1000 {
             break;
         }
@@ -220,11 +221,13 @@ fn test_multi_node_validator_catchup_from_zero() {
     assert_eq!(success, servers.len());
 
     for node in nodes {
-        node.close().unwrap();
+        node.close()?;
     }
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
     }
+
+    Ok(())
 }
 
 #[test]
@@ -293,7 +296,7 @@ fn test_multi_node_basic() {
 }
 
 #[test]
-fn test_boot_validator_from_file() {
+fn test_boot_validator_from_file() -> result::Result<()> {
     logger::setup();
     let leader_keypair = KeyPair::new();
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -327,11 +330,13 @@ fn test_boot_validator_from_file() {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
     assert!(getbal == Some(leader_balance));
 
-    val_fullnode.close().unwrap();
-    leader_fullnode.close().unwrap();
+    val_fullnode.close()?;
+    leader_fullnode.close()?;
     for path in ledger_paths {
-        remove_dir_all(path).unwrap();
+        remove_dir_all(path)?;
     }
+
+    Ok(())
 }
 
 fn create_leader(ledger_path: &str) -> (NodeInfo, FullNode) {
@@ -343,7 +348,7 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, FullNode) {
 }
 
 #[test]
-fn test_leader_restart_validator_start_from_old_ledger() {
+fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // this test verifies that a freshly started leader makes his ledger available
     //    in the repair window to validators that are started with an older
     //    ledger (currently up to WINDOW_SIZE entries)
@@ -366,7 +371,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     );
 
     // restart the leader
-    leader_fullnode.close().unwrap();
+    leader_fullnode.close()?;
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // lengthen the ledger
@@ -375,7 +380,7 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     assert_eq!(leader_balance, 1000);
 
     // restart the leader
-    leader_fullnode.close().unwrap();
+    leader_fullnode.close()?;
     let (leader_data, leader_fullnode) = create_leader(&ledger_path);
 
     // start validator from old ledger
@@ -410,10 +415,12 @@ fn test_leader_restart_validator_start_from_old_ledger() {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
     assert_eq!(getbal, Some(expected));
 
-    val_fullnode.close().unwrap();
-    leader_fullnode.close().unwrap();
-    remove_dir_all(ledger_path).unwrap();
-    remove_dir_all(stale_ledger_path).unwrap();
+    val_fullnode.close()?;
+    leader_fullnode.close()?;
+    remove_dir_all(ledger_path)?;
+    remove_dir_all(stale_ledger_path)?;
+
+    Ok(())
 }
 
 //TODO: this test will run a long time so it's disabled for CI
