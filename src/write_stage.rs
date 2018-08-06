@@ -90,6 +90,7 @@ impl WriteStage {
             .name("solana-writer".to_string())
             .spawn(move || {
                 let mut last_vote = 0;
+                let mut last_valid_validator_timestamp = 0;
                 let debug_id = crdt.read().unwrap().debug_id();
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
@@ -117,6 +118,7 @@ impl WriteStage {
                         &blob_recycler,
                         &vote_blob_sender,
                         &mut last_vote,
+                        &mut last_valid_validator_timestamp,
                     ) {
                         inc_new_counter!("write_stage-leader_vote-error", 1);
                         error!("{:?}", e);

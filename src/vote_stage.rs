@@ -63,6 +63,7 @@ fn get_last_id_to_vote_on(
     bank: &Arc<Bank>,
     now: u64,
     last_vote: &mut u64,
+    last_valid_validator_timestamp: &mut u64,
 ) -> result::Result<(Hash, u64), VoteError> {
     let mut valid_ids = bank.count_valid_ids(&ids);
     let super_majority_index = (2 * ids.len()) / 3;
@@ -96,6 +97,17 @@ fn get_last_id_to_vote_on(
         return Ok((last_id, valid_ids[super_majority_index].1));
     }
 
+    if *last_valid_validator_timestamp != 0 {
+        metrics::submit(
+            influxdb::Point::new(&"leader-finality")
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer((now - *last_valid_validator_timestamp) as i64),
+                )
+                .to_owned(),
+        );
+    }
+
     Err(VoteError::NoValidLastIdsToVoteOn)
 }
 
@@ -107,6 +119,7 @@ pub fn send_leader_vote(
     blob_recycler: &BlobRecycler,
     vote_blob_sender: &BlobSender,
     last_vote: &mut u64,
+    last_valid_validator_timestamp: &mut u64,
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
@@ -117,15 +130,22 @@ pub fn send_leader_vote(
             .values()
             .map(|x| x.ledger_state.last_id)
             .collect();
-        if let Ok((last_id, super_majority_timestamp)) =
-            get_last_id_to_vote_on(debug_id, &ids, bank, now, last_vote)
-        {
+        if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
+            debug_id,
+            &ids,
+            bank,
+            now,
+            last_vote,
+            last_valid_validator_timestamp,
+        ) {
             if let Ok((tx, shared_blob)) =
                 create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
             {
                 bank.process_transaction(&tx)?;
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
                 let finality_ms = now - super_majority_timestamp;
+
+                *last_valid_validator_timestamp = super_majority_timestamp;
                 debug!(
                     "{:x} leader_sent_vote finality: {} ms",
                     debug_id, finality_ms
@@ -311,6 +331,7 @@ pub mod tests {
         let blob_recycler = BlobRecycler::default();
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
+        let mut last_valid_validator_timestamp = 0;
         let res = send_leader_vote(
             1234,
             &mint.keypair(),
@@ -319,6 +340,7 @@ pub mod tests {
             &blob_recycler,
             &vote_blob_sender,
             &mut last_vote,
+            &mut last_valid_validator_timestamp,
         );
         trace!("vote result: {:?}", res);
         assert!(res.is_ok());
@@ -358,6 +380,7 @@ pub mod tests {
             &blob_recycler,
             &vote_blob_sender,
             &mut last_vote,
+            &mut last_valid_validator_timestamp,
         );
         trace!("vote result: {:?}", res);
         assert!(res.is_ok());
@@ -375,6 +398,7 @@ pub mod tests {
         let mint = Mint::new(1234);
         let bank = Arc::new(Bank::new(&mint));
         let mut last_vote = 0;
+        let mut last_valid_validator_timestamp = 0;
 
         // generate 10 last_ids, register 6 with the bank
         let ids: Vec<_> = (0..10)
@@ -390,12 +414,28 @@ pub mod tests {
             .collect();
 
         // see that we fail to have 2/3rds consensus
-        assert!(get_last_id_to_vote_on(1234, &ids, &bank, 0, &mut last_vote).is_err());
+        assert!(
+            get_last_id_to_vote_on(
+                1234,
+                &ids,
+                &bank,
+                0,
+                &mut last_vote,
+                &mut last_valid_validator_timestamp
+            ).is_err()
+        );
 
         // register another, see passing
         bank.register_entry_id(&ids[6]);
 
-        let res = get_last_id_to_vote_on(1234, &ids, &bank, 0, &mut last_vote);
+        let res = get_last_id_to_vote_on(
+            1234,
+            &ids,
+            &bank,
+            0,
+            &mut last_vote,
+            &mut last_valid_validator_timestamp,
+        );
         if let Ok((hash, timestamp)) = res {
             assert!(hash == ids[6]);
             assert!(timestamp != 0);
