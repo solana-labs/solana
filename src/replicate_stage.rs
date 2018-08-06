@@ -39,30 +39,35 @@ impl ReplicateStage {
         while let Ok(mut more) = window_receiver.try_recv() {
             blobs.append(&mut more);
         }
-        let blobs_len = blobs.len();
         let entries = reconstruct_entries_from_blobs(blobs.clone())?;
+
+        while let Some(blob) = blobs.pop_front() {
+            blob_recycler.recycle(blob);
+        }
+
         {
             let votes = entries_to_votes(&entries);
             let mut wcrdt = crdt.write().unwrap();
             wcrdt.insert_votes(&votes);
-        };
+        }
+
         inc_new_counter!(
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
-        if let Some(ledger_writer) = ledger_writer {
-            ledger_writer.write_entries(entries.clone())?;
-        }
 
-        let res = bank.process_entries(entries);
+        let res = bank.process_entries(entries.clone());
+
+        // TODO: move this to another stage?
+        if let Some(ledger_writer) = ledger_writer {
+            ledger_writer.write_entries(entries)?;
+        }
 
         if res.is_err() {
-            error!("process_entries {} {:?}", blobs_len, res);
+            error!("process_entries {:?}", res);
         }
         let _ = res?;
-        while let Some(blob) = blobs.pop_front() {
-            blob_recycler.recycle(blob);
-        }
+
         Ok(())
     }
     pub fn new(
