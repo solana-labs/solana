@@ -399,15 +399,7 @@ impl Block for [Entry] {
 
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>) {
         for entry in self {
-            let blob = blob_recycler.allocate();
-            let pos = {
-                let mut bd = blob.write().unwrap();
-                let mut out = Cursor::new(bd.data_mut());
-                serialize_into(&mut out, &entry).expect("failed to serialize output");
-                out.position() as usize
-            };
-            assert!(pos <= BLOB_DATA_SIZE, "pos: {}", pos);
-            blob.write().unwrap().set_size(pos);
+            let blob = entry.to_blob(blob_recycler, None, None);
             q.push_back(blob);
         }
     }

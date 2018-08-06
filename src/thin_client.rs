@@ -350,6 +350,7 @@ mod tests {
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 
     // sleep(Duration::from_millis(300)); is unstable

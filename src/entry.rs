@@ -2,10 +2,12 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use bincode::serialized_size;
+use bincode::{serialize_into, serialized_size};
 use hash::{extend_and_hash, hash, Hash};
-use packet::BLOB_DATA_SIZE;
+use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
+use signature::PublicKey;
+use std::io::Cursor;
 use transaction::Transaction;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
@@ -74,6 +76,32 @@ impl Entry {
             );
         }
         entry
+    }
+
+    pub fn to_blob(
+        &self,
+        blob_recycler: &BlobRecycler,
+        idx: Option<u64>,
+        id: Option<PublicKey>,
+    ) -> SharedBlob {
+        let blob = blob_recycler.allocate();
+        {
+            let mut blob_w = blob.write().unwrap();
+            let pos = {
+                let mut out = Cursor::new(blob_w.data_mut());
+                serialize_into(&mut out, &self).expect("failed to serialize output");
+                out.position() as usize
+            };
+            blob_w.set_size(pos);
+
+            if let Some(idx) = idx {
+                blob_w.set_index(idx).expect("set_index()");
+            }
+            if let Some(id) = id {
+                blob_w.set_id(id).expect("set_id()");
+            }
+        }
+        blob
     }
 
     pub fn will_fit(transactions: Vec<Transaction>) -> bool {

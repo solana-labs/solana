@@ -20,6 +20,7 @@ impl Ncp {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
         window: streamer::SharedWindow,
+        ledger_path: Option<&str>,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
         exit: Arc<AtomicBool>,
@@ -47,6 +48,7 @@ impl Ncp {
         let t_listen = Crdt::listen(
             crdt.clone(),
             window,
+            ledger_path,
             blob_recycler.clone(),
             request_receiver,
             response_sender.clone(),
@@ -95,6 +97,7 @@ mod tests {
         let d = Ncp::new(
             &c,
             w,
+            None,
             tn.sockets.gossip,
             tn.sockets.gossip_send,
             exit.clone(),
