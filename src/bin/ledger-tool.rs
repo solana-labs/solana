@@ -23,9 +23,11 @@ fn main() {
 
     let entries = read_ledger(ledger_path).expect("opening ledger");
 
+    stdout().write_all(b"{\"ledger\":[\n").expect("open array");
     for entry in entries {
         let entry = entry.unwrap();
         serde_json::to_writer(stdout(), &entry).expect("serialize");
-        stdout().write_all(b"\n").expect("newline");
+        stdout().write_all(b",\n").expect("newline");
     }
+    stdout().write_all(b"\n]}\n").expect("close array");
 }

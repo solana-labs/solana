@@ -285,6 +285,7 @@ mod tests {
     use budget::Budget;
     use crdt::TestNode;
     use fullnode::FullNode;
+    use ledger::LedgerWriter;
     use logger;
     use mint::Mint;
     use service::Service;
@@ -294,10 +295,15 @@ mod tests {
     use std::sync::Arc;
     use transaction::{Instruction, Plan};
 
-    fn tmp_ledger_path(name: &str) -> String {
+    fn tmp_ledger(name: &str, mint: &Mint) -> String {
         let keypair = KeyPair::new();
 
-        format!("farf/{}-{}", name, keypair.pubkey())
+        let path = format!("/tmp/farf/{}-{}", name, keypair.pubkey());
+
+        let mut writer = LedgerWriter::new(&path, true).unwrap();
+        writer.write_entries(mint.create_entries()).unwrap();
+
+        path
     }
 
     #[test]
@@ -311,7 +317,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let ledger_path = tmp_ledger_path("thin_client");
+        let ledger_path = tmp_ledger("thin_client", &alice);
 
         let server = FullNode::new_leader(
             leader_keypair,
@@ -358,7 +364,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
-        let ledger_path = tmp_ledger_path("bad_sig");
+        let ledger_path = tmp_ledger("bad_sig", &alice);
 
         let server = FullNode::new_leader(
             leader_keypair,
@@ -418,7 +424,7 @@ mod tests {
         let bob_pubkey = KeyPair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
-        let ledger_path = tmp_ledger_path("client_check_signature");
+        let ledger_path = tmp_ledger("client_check_signature", &alice);
 
         let server = FullNode::new_leader(
             leader_keypair,

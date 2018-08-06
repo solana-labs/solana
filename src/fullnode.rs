@@ -92,7 +92,7 @@ impl FullNode {
                 node,
                 &network_entry_point,
                 exit.clone(),
-                ledger_path,
+                Some(ledger_path),
                 sigverify_disabled,
             );
             info!(
@@ -300,7 +300,7 @@ impl FullNode {
         node: TestNode,
         entry_point: &NodeInfo,
         exit: Arc<AtomicBool>,
-        ledger_path: &str,
+        ledger_path: Option<&str>,
         _sigverify_disabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
@@ -377,15 +377,8 @@ mod tests {
     use mint::Mint;
     use service::Service;
     use signature::{KeyPair, KeyPairUtil};
-    use std::fs::remove_dir_all;
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
-
-    fn tmp_ledger_path(name: &str) -> String {
-        let keypair = KeyPair::new();
-
-        format!("farf/{}-{}", name, keypair.pubkey())
-    }
 
     #[test]
     fn validator_exit() {
@@ -395,15 +388,13 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let lp = tmp_ledger_path("validator_exit");
-        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, &lp, false);
+        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, None, false);
         v.exit();
         v.join().unwrap();
-        remove_dir_all(lp).unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
-        let vals: Vec<(FullNode, String)> = (0..2)
+        let vals: Vec<FullNode> = (0..2)
             .map(|_| {
                 let kp = KeyPair::new();
                 let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
@@ -411,20 +402,15 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                let lp = tmp_ledger_path("validator_parallel_exit");
-                (
-                    FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, &lp, false),
-                    lp,
-                )
+                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
-        vals.iter().for_each(|v| v.0.exit());
+        vals.iter().for_each(|v| v.exit());
         //while join is called sequentially, the above exit call notified all the
         //validators to exit from all their threads
         vals.into_iter().for_each(|v| {
-            v.0.join().unwrap();
-            remove_dir_all(v.1).unwrap()
+            v.join().unwrap();
         });
     }
 }
