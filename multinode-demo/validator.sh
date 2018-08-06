@@ -80,7 +80,11 @@ else
 
   mkdir -p "$SOLANA_CONFIG_VALIDATOR_DIR"
   validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator-x$$.json
-  $solana_fullnode_config --keypair="$validator_id_path" -l -b $((9000 + ($$ % 1000))) > "$validator_json_path"
+
+  port=9000
+  (((port += ($$ % 1000)) && (port == 9000) && port++))
+
+  $solana_fullnode_config --keypair="$validator_id_path" -l -b "$port" > "$validator_json_path"
 
   SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config-x$$
 fi
