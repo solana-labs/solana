@@ -262,7 +262,7 @@ mod tests {
     fn tmp_ledger_path(name: &str) -> String {
         let keypair = KeyPair::new();
 
-        format!("/tmp/farf/{}-{}", name, keypair.pubkey())
+        format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
     }
 
     #[test]

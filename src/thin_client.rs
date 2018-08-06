@@ -298,7 +298,7 @@ mod tests {
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
         let keypair = KeyPair::new();
 
-        let path = format!("/tmp/farf/{}-{}", name, keypair.pubkey());
+        let path = format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey());
 
         let mut writer = LedgerWriter::new(&path, true).unwrap();
         writer.write_entries(mint.create_entries()).unwrap();

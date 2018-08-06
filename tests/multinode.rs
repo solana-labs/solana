@@ -76,7 +76,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 fn tmp_ledger_path(name: &str) -> String {
     let keypair = KeyPair::new();
 
-    format!("/tmp/farf/{}-{}", name, keypair.pubkey())
+    format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
 }
 
 fn genesis(name: &str, num: i64) -> (Mint, String) {
