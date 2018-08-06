@@ -308,10 +308,13 @@ impl Bank {
             .enumerate()
             .map(|(i, t)| {
                 if !ctx.valid_ledger[i] {
+                    trace!("LastIdNotFound");
                     Err(BankError::LastIdNotFound(t.data.last_hash))
                 } else if !ctx.lock[i] {
+                    trace!("AccountInUse");
                     Err(BankError::AccountInUse)
                 } else if !ctx.checked[i] || !ctx.commit[i] {
+                    trace!("InsufficientFunds");
                     Err(BankError::InsufficientFunds(t.data.keys[0]))
                 } else {
                     Ok(t)

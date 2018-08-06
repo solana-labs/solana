@@ -17,6 +17,7 @@
 use bank::{Bank, BANK_PROCESS_TRANSACTION_METHOD};
 use bincode::{deserialize, serialize};
 use hash::{hash, Hash};
+use packet::NUM_PACKETS;
 use rand::{thread_rng, Rng, RngCore};
 use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
 use std::collections::{BTreeMap, HashSet};
@@ -412,7 +413,7 @@ pub struct PageTable {
     transaction_count: AtomicUsize,
 }
 
-pub const N: usize = 256;
+pub const N: usize = NUM_PACKETS;
 pub const K: usize = 16;
 pub struct Context {
     pub valid_ledger: Vec<bool>,

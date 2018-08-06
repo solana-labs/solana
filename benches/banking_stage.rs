@@ -5,11 +5,10 @@ extern crate rayon;
 extern crate solana;
 
 use criterion::{Bencher, Criterion};
-use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::banking_stage::BankingStage;
 use solana::mint::Mint;
-use solana::packet::{to_packets_chunked, PacketRecycler};
+use solana::packet::{to_packets_chunked, PacketRecycler, NUM_PACKETS};
 use solana::record_stage::Signal;
 use solana::signature::{KeyPair, KeyPairUtil};
 use solana::transaction::Transaction;
@@ -93,7 +92,7 @@ fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
 }
 
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
-    let tx = 10_000_usize;
+    let tx = NUM_PACKETS;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
     let num_dst_accounts = 8 * 1024;
@@ -111,7 +110,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 dstkeys[i % num_dst_accounts],
                 i as i64,
                 mint.last_id(),
-                i as u64,
+                0,
             )
         })
         .collect();
@@ -120,23 +119,32 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (signal_sender, signal_receiver) = channel();
     let packet_recycler = PacketRecycler::default();
 
-    let setup_transactions: Vec<_> = (0..num_src_accounts)
-        .map(|i| {
-            Transaction::new(
-                &mint.keypair(),
-                srckeys[i].pubkey(),
-                mint_total / num_src_accounts as i64,
-                mint.last_id(),
-                i as u64,
-            )
-        })
-        .collect();
+    let bank = Arc::new(Bank::new(&mint));
+    (0..num_src_accounts).for_each(|i| {
+        let t = Transaction::new(
+            &mint.keypair(),
+            srckeys[i].pubkey(),
+            mint_total / num_src_accounts as i64,
+            mint.last_id(),
+            i as u64,
+        );
+        let tx = bank.process_transaction(&t);
+        if tx.is_err() {
+            println!("{:?}", tx);
+        }
+        assert!(tx.is_ok());
+    });
 
-    bencher.iter(move || {
-        let bank = Arc::new(Bank::new(&mint));
-
-        let verified_setup: Vec<_> =
-            to_packets_chunked(&packet_recycler, &setup_transactions.clone(), tx)
+    let mut version: u64 = 0;
+    bencher.iter_with_setup(
+        || {
+            let mut txs = transactions.clone();
+            txs.iter_mut().for_each(|tx| tx.call.data.version = version);
+            version += 1;
+            txs
+        },
+        |transactions| {
+            let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions, 192)
                 .into_iter()
                 .map(|x| {
                     let len = (*x).read().unwrap().packets.len();
@@ -144,81 +152,71 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 })
                 .collect();
 
-        let verified_setup_len = verified_setup.len();
-        verified_sender.send(verified_setup).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
+            let verified_len = verified.len();
+            verified_sender.send(verified).unwrap();
+            BankingStage::process_packets(
+                &bank,
+                &verified_receiver,
+                &signal_sender,
+                &packet_recycler,
+            ).unwrap();
 
-        check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
-
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
-            .into_iter()
-            .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
-                (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
-
-        let verified_len = verified.len();
-        verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
-
-        check_txs(verified_len, &signal_receiver, tx);
-    });
+            check_txs(verified_len, &signal_receiver, tx);
+        },
+    );
 }
 
-fn bench_banking_stage_single_from(bencher: &mut Bencher) {
-    let tx = 10_000_usize;
-    let mint = Mint::new(1_000_000_000_000);
-    let mut pubkeys = Vec::new();
-    let num_keys = 8;
-    for _ in 0..num_keys {
-        pubkeys.push(KeyPair::new().pubkey());
-    }
-
-    let transactions: Vec<_> = (0..tx)
-        .into_par_iter()
-        .map(|i| {
-            Transaction::new(
-                &mint.keypair(),
-                pubkeys[i % num_keys],
-                i as i64,
-                mint.last_id(),
-                i as u64,
-            )
-        })
-        .collect();
-
-    let (verified_sender, verified_receiver) = channel();
-    let (signal_sender, signal_receiver) = channel();
-    let packet_recycler = PacketRecycler::default();
-
-    bencher.iter(move || {
-        let bank = Arc::new(Bank::new(&mint));
-        let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), tx)
-            .into_iter()
-            .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
-                (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
-        let verified_len = verified.len();
-        verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
-
-        check_txs(verified_len, &signal_receiver, tx);
-    });
-}
+//fn bench_banking_stage_single_from(bencher: &mut Bencher) {
+//    let tx = 10_000_usize;
+//    let mint = Mint::new(1_000_000_000_000);
+//    let mut pubkeys = Vec::new();
+//    let num_keys = 8;
+//    for _ in 0..num_keys {
+//        pubkeys.push(KeyPair::new().pubkey());
+//    }
+//
+//    let transactions: Vec<_> = (0..tx)
+//        .into_par_iter()
+//        .map(|i| {
+//            Transaction::new(
+//                &mint.keypair(),
+//                pubkeys[i % num_keys],
+//                i as i64,
+//                mint.last_id(),
+//                i as u64,
+//            )
+//        })
+//        .collect();
+//
+//    let (verified_sender, verified_receiver) = channel();
+//    let (signal_sender, signal_receiver) = channel();
+//    let packet_recycler = PacketRecycler::default();
+//
+//    bencher.iter(move || {
+//        let bank = Arc::new(Bank::new(&mint));
+//        let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), tx)
+//            .into_iter()
+//            .map(|x| {
+//                let len = (*x).read().unwrap().packets.len();
+//                (x, iter::repeat(1).take(len).collect())
+//            })
+//            .collect();
+//        let verified_len = verified.len();
+//        verified_sender.send(verified).unwrap();
+//        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
+//            .unwrap();
+//
+//        check_txs(verified_len, &signal_receiver, tx);
+//    });
+//}
 
 fn bench(criterion: &mut Criterion) {
     criterion.bench_function("bench_banking_stage_multi_accounts", |bencher| {
         bench_banking_stage_multi_accounts(bencher);
     });
-    criterion.bench_function("bench_process_stage_single_from", |bencher| {
-        bench_banking_stage_single_from(bencher);
-    });
+    //criterion.bench_function("bench_process_stage_single_from", |bencher| {
+    //    bench_banking_stage_single_from(bencher);
+    //});
 }
 
 criterion_group!(

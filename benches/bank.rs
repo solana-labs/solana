@@ -18,6 +18,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
     // Create transactions between unrelated parties.
     // page_table requires sequential debits from the same account
+    let mut version: u64 = 0;
     let transactions: Vec<_> = (0..4096)
         .into_iter()
         .map(|i| {
@@ -37,7 +38,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
             bank.register_entry_id(&last_id);
 
             let rando1 = KeyPair::new();
-            let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id, 0);
+            let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id, version);
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Finally, return the transaction to the benchmark.
@@ -48,7 +49,8 @@ fn bench_process_transaction(bencher: &mut Bencher) {
     bencher.iter_with_setup(
         || {
             let mut txs = transactions.clone();
-            txs.iter_mut().for_each(|tx| tx.call.data.version += 1);
+            version += 1;
+            txs.iter_mut().for_each(|tx| tx.call.data.version = version);
             txs
         },
         |transactions| {
