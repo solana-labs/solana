@@ -405,7 +405,6 @@ fn test_multi_node_dynamic_network() {
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = KeyPair::new().pubkey();
     let (alice, ledger_path) = genesis(10_000_000);
-    let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
     let server = FullNode::new_without_sigverify(
         leader,
@@ -417,18 +416,13 @@ fn test_multi_node_dynamic_network() {
 
     // Send leader some tokens to vote
     let leader_balance =
-        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &leader_pubkey)
-            .unwrap();
+        retry_send_tx_and_get_balance(&leader_data, &alice, &leader_pubkey).unwrap();
     info!("leader balance {}", leader_balance);
 
     info!("{:x} LEADER", leader_data.debug_id());
-    let leader_balance =
-        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
-            .unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 500);
-    let leader_balance =
-        retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
-            .unwrap();
+    let leader_balance = retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
     assert_eq!(leader_balance, 1000);
 
     info!("Waiting for keypairs to be created");
@@ -438,11 +432,7 @@ fn test_multi_node_dynamic_network() {
             info!("Spawned thread {}", n);
             let keypair = KeyPair::new();
             //send some tokens to the new validator
-            let bal = retry_send_tx_and_get_balance(
-                &leader_data,
-                &alice_clone.read().unwrap(),
-                &keypair.pubkey(),
-            );
+            let bal = retry_send_tx_and_get_balance(&leader_data, &alice, &keypair.pubkey());
             assert_eq!(bal, Some(500));
             info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
             keypair
@@ -484,8 +474,7 @@ fn test_multi_node_dynamic_network() {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
         let leader_balance =
-            retry_send_tx_and_get_balance(&leader_data, &alice_arc.read().unwrap(), &bob_pubkey)
-                .unwrap();
+            retry_send_tx_and_get_balance(&leader_data, &alice, &bob_pubkey).unwrap();
         if leader_balance != expected {
             info!(
                 "leader dropped transaction {} {:?} {:?}",
