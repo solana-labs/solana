@@ -301,19 +301,19 @@ impl LedgerWriter {
         //    trace!("write_entry: after entry data fp:{}", offset);
         //}
 
-        self.data.sync_data()?;
+        //self.data.sync_data()?;
 
         let offset = self.data.seek(SeekFrom::Current(0))? - len - SIZEOF_U64;
         //trace!("write_entry: offset:{} len:{}", offset, len);
 
-        serialize_into(&mut self.index, &offset).map_err(err_bincode_to_io)?;
+        serialize_into(&mut self.index, &offset).map_err(err_bincode_to_io)
 
         //if log_enabled!(Trace) {
         //    let offset = self.index.seek(SeekFrom::Current(0))?;
         //    trace!("write_entry: end index fp:{}", offset);
         //}
 
-        self.index.sync_data()
+        //self.index.sync_data()
     }
 
     pub fn write_entries<I>(&mut self, entries: I) -> io::Result<()>
