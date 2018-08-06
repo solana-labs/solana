@@ -6,7 +6,7 @@ extern crate solana;
 
 use solana::crdt::{Crdt, NodeInfo, TestNode};
 use solana::fullnode::FullNode;
-use solana::ledger::{copy_ledger, LedgerWriter};
+use solana::ledger::{read_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -18,6 +18,7 @@ use solana::timing::duration_as_s;
 use std::cmp::max;
 use std::env;
 use std::fs::remove_dir_all;
+use std::io;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -75,18 +76,52 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 fn tmp_ledger_path(name: &str) -> String {
     let keypair = KeyPair::new();
 
-    format!("farf/{}-{}", name, keypair.pubkey())
+    format!("/tmp/farf/{}-{}", name, keypair.pubkey())
 }
 
 fn genesis(name: &str, num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
 
     let path = tmp_ledger_path(name);
-    let mut writer = LedgerWriter::new(&path).unwrap();
+    let mut writer = LedgerWriter::new(&path, true).unwrap();
 
     writer.write_entries(mint.create_entries()).unwrap();
 
     (mint, path)
+}
+
+//#[test]
+//fn test_copy_ledger() {
+//    let from = tmp_ledger_path("test_ledger_copy_from");
+//    let entries = make_tiny_test_entries(10);
+//
+//    let mut writer = LedgerWriter::new(&from, true).unwrap();
+//    writer.write_entries(entries.clone()).unwrap();
+//
+//    let to = tmp_ledger_path("test_ledger_copy_to");
+//
+//    copy_ledger(&from, &to).unwrap();
+//
+//    let mut read_entries = vec![];
+//    for x in read_ledger(&to).unwrap() {
+//        let entry = x.unwrap();
+//        trace!("entry... {:?}", entry);
+//        read_entries.push(entry);
+//    }
+//    assert_eq!(read_entries, entries);
+//
+//    std::fs::remove_dir_all(from).unwrap();
+//    std::fs::remove_dir_all(to).unwrap();
+//}
+//
+fn copy_ledger(from: &str, to: &str) -> io::Result<()> {
+    let mut to = LedgerWriter::new(to, true)?;
+
+    for entry in read_ledger(from)? {
+        let entry = entry?;
+        to.write_entry(&entry)?;
+    }
+    Ok(())
 }
 
 fn tmp_copy_ledger(from: &str, name: &str) -> String {
@@ -109,6 +144,12 @@ fn test_multi_node_validator_catchup_from_zero() {
 
     let (alice, leader_ledger_path) = genesis("multi_node_validator_catchup_from_zero", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
+
+    let zero_ledger_path = tmp_copy_ledger(
+        &leader_ledger_path,
+        "multi_node_validator_catchup_from_zero",
+    );
+    ledger_paths.push(zero_ledger_path.clone());
 
     let server = FullNode::new(leader, true, &leader_ledger_path, leader_keypair, None);
 
@@ -158,18 +199,14 @@ fn test_multi_node_validator_catchup_from_zero() {
     assert_eq!(success, servers.len());
 
     success = 0;
-    // start up another validator, converge and then check everyone's balances
+    // start up another validator from zero, converge and then check everyone's
+    // balances
     let keypair = KeyPair::new();
     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
-    let ledger_path = tmp_copy_ledger(
-        &leader_ledger_path,
-        "multi_node_validator_catchup_from_zero",
-    );
-    ledger_paths.push(ledger_path.clone());
     let val = FullNode::new(
         validator,
         false,
-        &ledger_path,
+        &zero_ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
     );

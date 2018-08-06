@@ -84,7 +84,7 @@ impl WriteStage {
             vote_blob_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
-        let mut ledger_writer = LedgerWriter::new(ledger_path).unwrap();
+        let mut ledger_writer = LedgerWriter::new(ledger_path, false).unwrap();
 
         let thread_hdl = Builder::new()
             .name("solana-writer".to_string())

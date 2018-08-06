@@ -31,7 +31,7 @@ impl ReplicateStage {
         crdt: &Arc<RwLock<Crdt>>,
         blob_recycler: &BlobRecycler,
         window_receiver: &BlobReceiver,
-        ledger_writer: &mut LedgerWriter,
+        ledger_writer: Option<&mut LedgerWriter>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available blobs into a single vote
@@ -50,8 +50,9 @@ impl ReplicateStage {
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
-
-        ledger_writer.write_entries(entries.clone())?;
+        if let Some(ledger_writer) = ledger_writer {
+            ledger_writer.write_entries(entries.clone())?;
+        }
 
         let res = bank.process_entries(entries);
 
@@ -70,7 +71,7 @@ impl ReplicateStage {
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
         window_receiver: BlobReceiver,
-        ledger_path: &str,
+        ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
@@ -90,7 +91,8 @@ impl ReplicateStage {
             vote_blob_sender,
             exit,
         );
-        let mut ledger_writer = LedgerWriter::new(ledger_path).unwrap();
+
+        let mut ledger_writer = ledger_path.map(|p| LedgerWriter::new(p, false).unwrap());
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
@@ -100,7 +102,7 @@ impl ReplicateStage {
                     &crdt,
                     &blob_recycler,
                     &window_receiver,
-                    &mut ledger_writer,
+                    ledger_writer.as_mut(),
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
