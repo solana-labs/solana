@@ -78,19 +78,21 @@ fn sample_tx_count(
         now = Instant::now();
         let sample = tx_count - initial_tx_count;
         initial_tx_count = tx_count;
-        println!("{} Transactions processed {}", log_prefix, sample);
+
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
         let tps = (sample * 1_000_000_000) as f64 / ns as f64;
         if tps > max_tps {
             max_tps = tps;
         }
-        println!("{} {:.2} TPS", log_prefix, tps);
         if tx_count > first_tx_count {
             total = tx_count - first_tx_count;
         } else {
             total = 0;
         }
-        println!("{} Total transactions processed {}", log_prefix, total);
+        println!(
+            "{} {:9.2} TPS, Transactions: {:6}, Total transactions: {}",
+            log_prefix, tps, sample, total
+        );
         sleep(Duration::new(sample_period, 0));
 
         if exit_signal.load(Ordering::Relaxed) {
