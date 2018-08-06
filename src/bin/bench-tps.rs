@@ -173,16 +173,12 @@ fn generate_txs(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
     id: &KeyPair,
     keypairs: &[KeyPair],
-    tx_count: i64,
     last_id: &Hash,
     threads: usize,
     reclaim: bool,
 ) {
-    println!(
-        "Signing transactions... {} (reclaim={})",
-        tx_count / 2,
-        reclaim
-    );
+    let tx_count = keypairs.len();
+    println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
 
     let transactions: Vec<_> = keypairs
@@ -198,8 +194,8 @@ fn generate_txs(
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = (tx_count / 2) as f64 / ns as f64;
-    let nsps = ns as f64 / (tx_count / 2) as f64;
+    let bsps = (tx_count) as f64 / ns as f64;
+    let nsps = ns as f64 / (tx_count) as f64;
     println!(
         "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time",
         bsps * 1_000_000_f64,
@@ -591,7 +587,6 @@ fn main() {
             &shared_txs,
             &id,
             &keypairs,
-            tx_count,
             &last_id,
             threads,
             reclaim_tokens_back_to_source_account,
