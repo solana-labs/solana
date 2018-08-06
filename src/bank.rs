@@ -407,7 +407,7 @@ impl Bank {
     {
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
-        let mut entry_count = 0;
+        let mut entry_count = *tail_idx as u64;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
             if !block.verify(&self.last_id()) {
@@ -453,7 +453,7 @@ impl Bank {
         tail.push(entry0);
         tail.push(entry1);
         let mut tail_idx = 2;
-        let entry_count = 2 + self.process_blocks(entries, &mut tail, &mut tail_idx)?;
+        let entry_count = self.process_blocks(entries, &mut tail, &mut tail_idx)?;
 
         // check f we need to rotate tail
         if tail.len() == WINDOW_SIZE as usize {
