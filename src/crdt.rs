@@ -1262,11 +1262,20 @@ impl TestNode {
         let mut local_repair_addr = bind_addr;
         local_repair_addr.set_port(data.contact_info.tvu_window.port());
 
-        let transaction = UdpSocket::bind(local_transactions_addr).unwrap();
-        let gossip = UdpSocket::bind(local_gossip_addr).unwrap();
-        let replicate = UdpSocket::bind(local_replicate_addr).unwrap();
-        let repair = UdpSocket::bind(local_repair_addr).unwrap();
-        let requests = UdpSocket::bind(local_requests_addr).unwrap();
+        fn bind(addr: SocketAddr) -> UdpSocket {
+            match UdpSocket::bind(addr) {
+                Ok(socket) => socket,
+                Err(err) => {
+                    panic!("Failed to bind to {:?}: {:?}", addr, err);
+                }
+            }
+        };
+
+        let transaction = bind(local_transactions_addr);
+        let gossip = bind(local_gossip_addr);
+        let replicate = bind(local_replicate_addr);
+        let repair = bind(local_repair_addr);
+        let requests = bind(local_requests_addr);
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
