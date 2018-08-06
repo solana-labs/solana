@@ -170,7 +170,7 @@ pub mod tests {
     ) -> Result<(Ncp, SharedWindow)> {
         let window = streamer::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let ncp = Ncp::new(&crdt, window.clone(), listen, send_sock, exit)?;
+        let ncp = Ncp::new(&crdt, window.clone(), None, listen, send_sock, exit)?;
         Ok((ncp, window))
     }
 

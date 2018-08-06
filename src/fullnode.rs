@@ -227,8 +227,6 @@ impl FullNode {
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
 
-        //        let mut ledger_writer = LedgerWriter::new(ledger_path);
-
         let (tpu, blob_receiver) = Tpu::new(
             keypair,
             &bank,
@@ -244,6 +242,7 @@ impl FullNode {
         let ncp = Ncp::new(
             &crdt,
             window.clone(),
+            Some(ledger_path),
             node.sockets.gossip,
             node.sockets.gossip_send,
             exit.clone(),
@@ -324,6 +323,7 @@ impl FullNode {
         let ncp = Ncp::new(
             &crdt,
             window.clone(),
+            ledger_path,
             node.sockets.gossip,
             node.sockets.gossip_send,
             exit.clone(),

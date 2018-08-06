@@ -689,6 +689,7 @@ fn converge(
     let ncp = Ncp::new(
         &spy_ref,
         window.clone(),
+        None,
         spy_gossip,
         gossip_send_socket,
         exit_signal.clone(),

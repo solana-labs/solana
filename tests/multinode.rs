@@ -43,6 +43,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     let ncp = Ncp::new(
         &spy_ref,
         spy_window,
+        None,
         spy.sockets.gossip,
         spy.sockets.gossip_send,
         exit.clone(),
