@@ -4,6 +4,7 @@ use bank::Bank;
 use counter::Counter;
 use crdt::Crdt;
 use ledger::{reconstruct_entries_from_blobs, LedgerWriter};
+use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
@@ -53,7 +54,7 @@ impl ReplicateStage {
             wcrdt.insert_votes(&votes);
         }
 
-        inc_new_counter!(
+        inc_new_counter_info!(
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );

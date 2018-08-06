@@ -5,6 +5,7 @@
 //!
 
 use counter::Counter;
+use log::Level;
 use packet::{Packet, SharedPackets};
 use std::mem::size_of;
 use std::sync::atomic::AtomicUsize;
@@ -97,7 +98,7 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .collect()
         })
         .collect();
-    inc_new_counter!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify", count);
     rv
 }
 
@@ -116,7 +117,7 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .collect()
         })
         .collect();
-    inc_new_counter!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify", count);
     rv
 }
 
@@ -203,7 +204,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
             num += 1;
         }
     }
-    inc_new_counter!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify", count);
     rvs
 }
 

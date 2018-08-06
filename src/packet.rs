@@ -2,6 +2,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
+use log::Level;
 use result::{Error, Result};
 use serde::Serialize;
 use signature::PublicKey;
@@ -208,7 +209,7 @@ impl Packets {
             trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    inc_new_counter!("packets-recv_count", 1);
+                    inc_new_counter_info!("packets-recv_count", 1);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }

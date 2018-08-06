@@ -7,6 +7,7 @@ use counter::Counter;
 use crdt::Crdt;
 use entry::Entry;
 use ledger::{Block, LedgerWriter};
+use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
@@ -58,8 +59,8 @@ impl WriteStage {
         entries.to_blobs(blob_recycler, &mut blobs);
 
         if !blobs.is_empty() {
-            inc_new_counter!("write_stage-recv_vote", votes.len());
-            inc_new_counter!("write_stage-broadcast_blobs", blobs.len());
+            inc_new_counter_info!("write_stage-recv_vote", votes.len());
+            inc_new_counter_info!("write_stage-broadcast_blobs", blobs.len());
             trace!("broadcasting {}", blobs.len());
             blob_sender.send(blobs)?;
         }
@@ -105,7 +106,10 @@ impl WriteStage {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                             _ => {
-                                inc_new_counter!("write_stage-write_and_send_entries-error", 1);
+                                inc_new_counter_info!(
+                                    "write_stage-write_and_send_entries-error",
+                                    1
+                                );
                                 error!("{:?}", e);
                             }
                         }
@@ -120,7 +124,7 @@ impl WriteStage {
                         &mut last_vote,
                         &mut last_valid_validator_timestamp,
                     ) {
-                        inc_new_counter!("write_stage-leader_vote-error", 1);
+                        inc_new_counter_info!("write_stage-leader_vote-error", 1);
                         error!("{:?}", e);
                     }
                 }

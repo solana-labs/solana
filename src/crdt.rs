@@ -19,6 +19,7 @@ use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerSt
 use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
+use log::Level;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
 use rand::{thread_rng, RngCore};
@@ -382,7 +383,7 @@ impl Crdt {
                 self.debug_id(),
                 make_debug_id(&pubkey)
             );
-            inc_new_counter!("crdt-insert_vote-leader_voted", 1);
+            inc_new_counter_info!("crdt-insert_vote-leader_voted", 1);
         }
 
         if v.version <= self.table[pubkey].version {
@@ -408,7 +409,7 @@ impl Crdt {
         }
     }
     pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
-        inc_new_counter!("crdt-vote-count", votes.len());
+        inc_new_counter_info!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
         }
@@ -429,13 +430,13 @@ impl Crdt {
                 v.version
             );
             if self.table.get(&v.id).is_none() {
-                inc_new_counter!("crdt-insert-new_entry", 1, 1);
+                inc_new_counter_info!("crdt-insert-new_entry", 1, 1);
             }
 
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
             let _ = self.local.insert(v.id, self.update_index);
-            inc_new_counter!("crdt-update-count", 1);
+            inc_new_counter_info!("crdt-update-count", 1);
             self.update_liveness(v.id);
         } else {
             trace!(
@@ -493,7 +494,7 @@ impl Crdt {
             })
             .collect();
 
-        inc_new_counter!("crdt-purge-count", dead_ids.len());
+        inc_new_counter_info!("crdt-purge-count", dead_ids.len());
 
         for id in &dead_ids {
             self.alive.remove(id);
@@ -511,7 +512,7 @@ impl Crdt {
                     self.debug_id(),
                     make_debug_id(id),
                 );
-                inc_new_counter!("crdt-purge-purged_leader", 1, 1);
+                inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
                 self.set_leader(PublicKey::default());
             }
         }
@@ -565,7 +566,7 @@ impl Crdt {
     ) -> Result<()> {
         if broadcast_table.is_empty() {
             warn!("{:x}:not enough peers in crdt table", me.debug_id());
-            inc_new_counter!("crdt-broadcast-not_enough_peers_error", 1);
+            inc_new_counter_info!("crdt-broadcast-not_enough_peers_error", 1);
             Err(CrdtError::NoPeers)?;
         }
         trace!(
@@ -661,7 +662,7 @@ impl Crdt {
                 transmit_index.data += 1;
             }
         }
-        inc_new_counter!(
+        inc_new_counter_info!(
             "crdt-broadcast-max_idx",
             (transmit_index.data - old_transmit_index) as usize
         );
@@ -717,7 +718,7 @@ impl Crdt {
             .collect();
         for e in errs {
             if let Err(e) = &e {
-                inc_new_counter!("crdt-retransmit-send_to_error", 1, 1);
+                inc_new_counter_info!("crdt-retransmit-send_to_error", 1, 1);
                 error!("retransmit result {:?}", e);
             }
             e?;
@@ -999,11 +1000,11 @@ impl Crdt {
                     outblob.meta.set_addr(&from.contact_info.tvu_window);
                     outblob.set_id(sender_id).expect("blob set_id");
                 }
-                inc_new_counter!("crdt-window-request-pass", 1);
+                inc_new_counter_info!("crdt-window-request-pass", 1);
 
                 return Some(out);
             } else {
-                inc_new_counter!("crdt-window-request-outside", 1);
+                inc_new_counter_info!("crdt-window-request-outside", 1);
                 info!(
                     "requested ix {} != blob_ix {}, outside window!",
                     ix, blob_ix
@@ -1014,7 +1015,7 @@ impl Crdt {
 
         if let Some(ledger_window) = ledger_window {
             if let Ok(entry) = ledger_window.get_entry(ix) {
-                inc_new_counter!("crdt-window-request-ledger", 1);
+                inc_new_counter_info!("crdt-window-request-ledger", 1);
 
                 let out = entry.to_blob(
                     blob_recycler,
@@ -1027,7 +1028,7 @@ impl Crdt {
             }
         }
 
-        inc_new_counter!("crdt-window-request-fail", 1);
+        inc_new_counter_info!("crdt-window-request-fail", 1);
         info!(
             "{:x}: failed RequestWindowIndex {:x} {} {}",
             me.debug_id(),
@@ -1077,7 +1078,7 @@ impl Crdt {
                         me.debug_id(),
                         make_debug_id(&from_rd.id)
                     );
-                    inc_new_counter!("crdt-window-request-loopback", 1);
+                    inc_new_counter_info!("crdt-window-request-loopback", 1);
                     return None;
                 }
                 // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
@@ -1133,7 +1134,7 @@ impl Crdt {
                 //TODO verify from is signed
                 obj.write().unwrap().insert(&from);
                 let me = obj.read().unwrap().my_data().clone();
-                inc_new_counter!("crdt-window-request-recv", 1);
+                inc_new_counter_info!("crdt-window-request-recv", 1);
                 trace!(
                     "{:x}:received RequestWindowIndex {:x} {} ",
                     me.debug_id(),
@@ -1147,7 +1148,7 @@ impl Crdt {
                         from.debug_id(),
                         ix,
                     );
-                    inc_new_counter!("crdt-window-request-address-eq", 1);
+                    inc_new_counter_info!("crdt-window-request-address-eq", 1);
                     return None;
                 }
                 Self::run_window_request(&window, ledger_window, &me, &from, ix, blob_recycler)

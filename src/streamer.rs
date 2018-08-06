@@ -4,7 +4,7 @@ use counter::Counter;
 use crdt::{Crdt, CrdtError, NodeInfo};
 #[cfg(feature = "erasure")]
 use erasure;
-use log::Level::Trace;
+use log::Level;
 use packet::{
     Blob, BlobRecycler, PacketRecycler, SharedBlob, SharedBlobs, SharedPackets, BLOB_SIZE,
 };
@@ -250,7 +250,7 @@ fn repair_window(
     let reqs = find_next_missing(window, crdt, recycler, consumed, highest_lost)?;
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if !reqs.is_empty() {
-        inc_new_counter!("streamer-repair_window-repair", reqs.len());
+        inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
         debug!(
             "{:x}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
             debug_id,
@@ -325,7 +325,7 @@ fn retransmit_all_leader_blocks(
             received,
             retransmit_queue.len(),
         );
-        inc_new_counter!("streamer-recv_window-retransmit", retransmit_queue.len());
+        inc_new_counter_info!("streamer-recv_window-retransmit", retransmit_queue.len());
         retransmit.send(retransmit_queue)?;
     }
     Ok(())
@@ -500,7 +500,7 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
-    inc_new_counter!("streamer-recv_window-recv", dq.len());
+    inc_new_counter_info!("streamer-recv_window-recv", dq.len());
     debug!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
@@ -548,7 +548,7 @@ fn recv_window(
             consumed,
         );
     }
-    if log_enabled!(Trace) {
+    if log_enabled!(Level::Trace) {
         trace!("{}", print_window(debug_id, window, *consumed));
     }
     trace!(
@@ -569,7 +569,7 @@ fn recv_window(
             debug_id,
             consume_queue.len()
         );
-        inc_new_counter!("streamer-recv_window-consume", consume_queue.len());
+        inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
         s.send(consume_queue)?;
     }
     Ok(())
@@ -720,7 +720,7 @@ pub fn window(
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         _ => {
-                            inc_new_counter!("streamer-window-error", 1, 1);
+                            inc_new_counter_info!("streamer-window-error", 1, 1);
                             error!("window error: {:?}", e);
                         }
                     }
@@ -757,7 +757,7 @@ fn broadcast(
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    if log_enabled!(Trace) {
+    if log_enabled!(Level::Trace) {
         trace!("{}", print_window(debug_id, window, *receive_index));
     }
 
@@ -769,7 +769,7 @@ fn broadcast(
         index_blobs(node_info, &blobs, receive_index).expect("index blobs for initial window");
 
         // keep the cache of blobs that are broadcast
-        inc_new_counter!("streamer-broadcast-sent", blobs.len());
+        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
@@ -877,7 +877,7 @@ pub fn broadcaster(
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         Error::CrdtError(CrdtError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                         _ => {
-                            inc_new_counter!("streamer-broadcaster-error", 1, 1);
+                            inc_new_counter_info!("streamer-broadcaster-error", 1, 1);
                             error!("broadcaster error: {:?}", e);
                         }
                     }
@@ -933,7 +933,7 @@ pub fn retransmitter(
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                         _ => {
-                            inc_new_counter!("streamer-retransmit-error", 1, 1);
+                            inc_new_counter_info!("streamer-retransmit-error", 1, 1);
                             error!("retransmitter error: {:?}", e);
                         }
                     }
