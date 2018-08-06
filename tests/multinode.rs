@@ -6,7 +6,7 @@ extern crate solana;
 
 use solana::crdt::{Crdt, NodeInfo, TestNode};
 use solana::fullnode::FullNode;
-use solana::ledger::{copy_ledger, LedgerWriter};
+use solana::ledger::LedgerWriter;
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -17,8 +17,9 @@ use solana::thin_client::ThinClient;
 use solana::timing::duration_as_s;
 use std::cmp::max;
 use std::env;
-use std::fs::remove_dir_all;
+use std::fs::{copy, create_dir_all, remove_dir_all};
 use std::net::UdpSocket;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
@@ -90,9 +91,19 @@ fn genesis(name: &str, num: i64) -> (Mint, String) {
 }
 
 fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let to = tmp_ledger_path(name);
-    copy_ledger(from, &to).unwrap();
-    to
+    let tostr = tmp_ledger_path(name);
+
+    {
+        let to = Path::new(&tostr);
+        let from = Path::new(&from);
+
+        create_dir_all(to).unwrap();
+
+        copy(from.join("data"), to.join("data")).unwrap();
+        copy(from.join("index"), to.join("index")).unwrap();
+    }
+
+    tostr
 }
 
 #[test]
