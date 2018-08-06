@@ -41,6 +41,8 @@ impl ReplicateStage {
         }
         let entries = reconstruct_entries_from_blobs(blobs.clone())?;
 
+        let res = bank.process_entries(entries.clone());
+
         while let Some(blob) = blobs.pop_front() {
             blob_recycler.recycle(blob);
         }
@@ -55,8 +57,6 @@ impl ReplicateStage {
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
-
-        let res = bank.process_entries(entries.clone());
 
         // TODO: move this to another stage?
         if let Some(ledger_writer) = ledger_writer {
