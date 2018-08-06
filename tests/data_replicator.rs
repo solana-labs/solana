@@ -8,6 +8,7 @@ use solana::crdt::{Crdt, TestNode};
 use solana::logger;
 use solana::ncp::Ncp;
 use solana::packet::Blob;
+use solana::result;
 use solana::service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -71,7 +72,7 @@ where
 }
 /// ring a -> b -> c -> d -> e -> a
 #[test]
-fn gossip_ring() {
+fn gossip_ring() -> result::Result<()> {
     logger::setup();
     run_gossip_topo(|listen| {
         let num = listen.len();
@@ -85,6 +86,8 @@ fn gossip_ring() {
             xv.insert(&d);
         }
     });
+
+    Ok(())
 }
 
 /// star a -> (b,c,d,e)
@@ -131,7 +134,7 @@ fn gossip_rstar() {
 }
 
 #[test]
-pub fn crdt_retransmit() {
+pub fn crdt_retransmit() -> result::Result<()> {
     logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
@@ -164,7 +167,7 @@ pub fn crdt_retransmit() {
     assert!(done);
     let mut b = Blob::default();
     b.meta.size = 10;
-    Crdt::retransmit(&c1, &Arc::new(RwLock::new(b)), &tn1).unwrap();
+    Crdt::retransmit(&c1, &Arc::new(RwLock::new(b)), &tn1)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {
@@ -181,6 +184,8 @@ pub fn crdt_retransmit() {
     dr1.join().unwrap();
     dr2.join().unwrap();
     dr3.join().unwrap();
+
+    Ok(())
 }
 
 #[test]
