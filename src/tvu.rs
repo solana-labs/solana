@@ -218,9 +218,9 @@ pub mod tests {
         );
 
         let starting_balance = 10_000;
-        let mint = Mint::new(starting_balance);
+        let mut mint = Mint::new(starting_balance);
         let replicate_addr = target1.data.contact_info.tvu;
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(Bank::new(&mut mint));
 
         //start crdt1
         let mut crdt1 = Crdt::new(target1.data.clone()).expect("Crdt::new");

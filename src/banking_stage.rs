@@ -94,16 +94,18 @@ impl BankingStage {
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
             reqs_len += transactions.len();
-            let transactions = transactions
+            let transactions: Vec<Transaction> = transactions
                 .into_iter()
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
+                    Some((tx, _addr)) => {
+                        if tx.verify_instructions() && tx.verify_plan() && ver != 0 {
+                            Some(tx)
+                        } else {
+                            None
+                        }
+                    }
                 })
                 .collect();
 

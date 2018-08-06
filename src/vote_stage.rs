@@ -233,8 +233,8 @@ pub mod tests {
     fn test_vote_cadence() {
         let keypair = KeyPair::new();
 
-        let mint = Mint::new(1234);
-        let bank = Arc::new(Bank::new(&mint));
+        let mut mint = Mint::new(1234);
+        let bank = Arc::new(Bank::new(&mut mint));
 
         let node = TestNode::new_localhost();
         let mut crdt = Crdt::new(node.data.clone()).expect("Crdt::new");
@@ -267,8 +267,8 @@ pub mod tests {
         logger::setup();
 
         // create a mint/bank
-        let mint = Mint::new(1000);
-        let bank = Arc::new(Bank::new(&mint));
+        let mut mint = Mint::new(1000);
+        let bank = Arc::new(Bank::new(&mut mint));
         let hash0 = Hash::default();
 
         // get a non-default hash last_id
@@ -372,8 +372,8 @@ pub mod tests {
     fn test_get_last_id_to_vote_on() {
         logger::setup();
 
-        let mint = Mint::new(1234);
-        let bank = Arc::new(Bank::new(&mint));
+        let mut mint = Mint::new(1234);
+        let bank = Arc::new(Bank::new(&mut mint));
         let mut last_vote = 0;
 
         // generate 10 last_ids, register 6 with the bank

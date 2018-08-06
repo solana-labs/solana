@@ -12,6 +12,7 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex, RwLock};
+use transaction::{BASE_TRANSACTION_SIZE, MAX_ALLOWED_INSTRUCTIONS, MAX_INSTRUCTION_SIZE};
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -22,7 +23,8 @@ pub type BlobRecycler = Recycler<Blob>;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = 64 * 1024;
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
-pub const PACKET_DATA_SIZE: usize = 256;
+pub const PACKET_DATA_SIZE: usize =
+    BASE_TRANSACTION_SIZE + MAX_ALLOWED_INSTRUCTIONS * MAX_INSTRUCTION_SIZE;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default, Debug)]

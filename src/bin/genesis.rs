@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<error::Error>> {
     }
 
     let pkcs8: Vec<u8> = serde_json::from_str(&buffer)?;
-    let mint = Mint::new_with_pkcs8(tokens, pkcs8);
+    let mut mint = Mint::new_with_pkcs8(tokens, pkcs8);
 
     let mut writer = stdout();
     EntryWriter::write_entries(&mut writer, mint.create_entries())?;

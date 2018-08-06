@@ -11,6 +11,7 @@ use untrusted::Input;
 pub struct Mint {
     pub pkcs8: Vec<u8>,
     pubkey: PublicKey,
+    last_id: Option<Hash>,
     pub tokens: i64,
 }
 
@@ -23,6 +24,7 @@ impl Mint {
             pkcs8,
             pubkey,
             tokens,
+            last_id: None,
         }
     }
 
@@ -38,8 +40,12 @@ impl Mint {
         hash(&self.pkcs8)
     }
 
-    pub fn last_id(&self) -> Hash {
-        self.create_entries()[1].id
+    pub fn last_id(&mut self) -> Hash {
+        if self.last_id.is_none() {
+            self.create_entries();
+        }
+
+        self.last_id.unwrap()
     }
 
     pub fn keypair(&self) -> KeyPair {
@@ -56,9 +62,10 @@ impl Mint {
         vec![tx]
     }
 
-    pub fn create_entries(&self) -> Vec<Entry> {
+    pub fn create_entries(&mut self) -> Vec<Entry> {
         let e0 = Entry::new(&self.seed(), 0, vec![], false);
         let e1 = Entry::new(&e0.id, 0, self.create_transactions(), false);
+        self.last_id = Some(e1.id);
         vec![e0, e1]
     }
 }
@@ -74,8 +81,8 @@ mod tests {
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        if let Instruction::NewContract(contract) = tx.instruction {
-            if let Plan::Budget(Budget::Pay(payment)) = contract.plan {
+        if let Instruction::NewContract(box_contract) = &tx.instructions[0] {
+            if let Plan::Budget(Budget::Pay(payment)) = &box_contract.plan {
                 assert_eq!(tx.from, payment.to);
             }
         }

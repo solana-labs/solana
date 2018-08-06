@@ -312,14 +312,19 @@ pub fn next_entries(
 mod tests {
     use super::*;
     use bincode::serialized_size;
+    use budget::{Budget, Condition};
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
-    use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
+    use packet::{BlobRecycler, BLOB_DATA_SIZE};
+    use payment_plan::Payment;
     use signature::{KeyPair, KeyPairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::{Transaction, Vote};
+    use transaction::{
+        Contract, Instruction, Plan, Transaction, Vote, BASE_TRANSACTION_SIZE, FEE_PER_INSTRUCTION,
+        MAX_INSTRUCTION_SIZE,
+    };
 
     #[test]
     fn test_verify_slice() {
@@ -399,15 +404,34 @@ mod tests {
             next_id,
             2,
         );
-        let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
 
-        let tx_small_size = serialized_size(&tx_small).unwrap();
-        let tx_large_size = serialized_size(&tx_large).unwrap();
+        // Create large transaction
+        let transfer_value = 1000;
+        let date_condition = (
+            Condition::Timestamp(Utc::now(), keypair.pubkey()),
+            Payment {
+                tokens: transfer_value,
+                to: keypair.pubkey(),
+            },
+        );
+
+        let budget = Budget::Or(date_condition.clone(), date_condition);
+        let plan = Plan::Budget(budget);
+        let contract = Contract::new(transfer_value, plan);
+        let tx_large = Transaction::new_from_instructions(
+            &keypair,
+            vec![Instruction::NewContract(Box::new(contract))],
+            next_id,
+            FEE_PER_INSTRUCTION as i64,
+        );
+
+        let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
+        let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
         assert!(tx_small_size < tx_large_size);
-        assert!(tx_large_size < PACKET_DATA_SIZE as u64);
+        assert!(tx_large_size <= BASE_TRANSACTION_SIZE + MAX_INSTRUCTION_SIZE);
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1;
+        let threshold = (BLOB_DATA_SIZE / (tx_small_size as usize)) - 1;
 
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];
@@ -431,7 +455,7 @@ mod tests {
         transactions.extend(large_transactions);
 
         let entries0 = next_entries(&id, 0, transactions.clone());
-        assert!(entries0.len() > 2);
+        assert!(entries0.len() >= 2);
         assert!(entries0[0].has_more);
         assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
