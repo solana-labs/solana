@@ -31,4 +31,5 @@ $program \
   --ledger "$SOLANA_CONFIG_DIR"/ledger \
   > >($leader_logger) 2>&1 &
 pid=$!
+oom_score_adj "$pid" 1000
 wait "$pid"

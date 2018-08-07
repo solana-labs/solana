@@ -173,6 +173,21 @@ tune_networking() {
   fi
 }
 
+oom_score_adj() {
+  declare pid=$1
+  declare score=$2
+  if [[ $(uname) != Linux ]]; then
+    return
+  fi
+
+  (
+    echo "$score" > "/proc/$pid/oom_score_adj"
+    if [[ $score != $(cat "/proc/$pid/oom_score_adj") ]]; then
+      echo "Failed to set oom_score_adj for pid $pid"
+    fi
+  )
+}
+
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
 SOLANA_CONFIG_VALIDATOR_DIR=${SNAP_DATA:-$PWD}/config-validator
