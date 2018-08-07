@@ -180,12 +180,12 @@ oom_score_adj() {
     return
   fi
 
-  (
-    echo "$score" > "/proc/$pid/oom_score_adj"
-    if [[ $score != $(cat "/proc/$pid/oom_score_adj") ]]; then
-      echo "Failed to set oom_score_adj for pid $pid"
-    fi
-  )
+  echo "$score" > "/proc/$pid/oom_score_adj" || true
+  declare currentScore
+  currentScore=$(cat "/proc/$pid/oom_score_adj" || true)
+  if [[ $score != "$currentScore" ]]; then
+    echo "Failed to set oom_score_adj to $score for pid $pid (current score: $currentScore)"
+  fi
 }
 
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
