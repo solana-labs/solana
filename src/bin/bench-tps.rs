@@ -1,4 +1,5 @@
 extern crate bincode;
+#[macro_use]
 extern crate clap;
 extern crate influx_db_client;
 extern crate rayon;
@@ -377,6 +378,7 @@ fn main() {
     let mut tx_count = 500_000;
 
     let matches = App::new("solana-bench-tps")
+        .version(crate_version!())
         .arg(
             Arg::with_name("leader")
                 .short("l")

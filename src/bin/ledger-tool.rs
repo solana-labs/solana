@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate serde_json;
 extern crate solana;
@@ -12,6 +13,7 @@ use std::process::exit;
 fn main() {
     logger::setup();
     let matches = App::new("ledger-tool")
+        .version(crate_version!())
         .arg(
             Arg::with_name("ledger")
                 .short("l")

@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate dirs;
 extern crate ring;
@@ -13,6 +14,7 @@ use std::path::Path;
 
 fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("solana-keygen")
+        .version(crate_version!())
         .arg(
             Arg::with_name("outfile")
                 .short("o")
