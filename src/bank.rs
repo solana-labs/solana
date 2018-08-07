@@ -398,6 +398,7 @@ impl Bank {
     /// Append entry blocks to the ledger, verifying them along the way.
     fn process_blocks<I>(
         &self,
+        start_hash: Hash,
         entries: I,
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
@@ -408,7 +409,7 @@ impl Bank {
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
         let mut entry_count = *tail_idx as u64;
-        let mut id = self.last_id();
+        let mut id = start_hash;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
             if !block.verify(&id) {
@@ -450,12 +451,13 @@ impl Bank {
         }
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
+        let entry1_id = entry1.id;
 
         let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
         tail.push(entry0);
         tail.push(entry1);
         let mut tail_idx = 2;
-        let entry_count = self.process_blocks(entries, &mut tail, &mut tail_idx)?;
+        let entry_count = self.process_blocks(entry1_id, entries, &mut tail, &mut tail_idx)?;
 
         // check f we need to rotate tail
         if tail.len() == WINDOW_SIZE as usize {
@@ -575,8 +577,11 @@ mod tests {
     use entry::Entry;
     use entry_writer::{self, EntryWriter};
     use hash::hash;
+    use ledger;
+    use packet::BLOB_DATA_SIZE;
     use signature::KeyPairUtil;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
+    use std::mem::size_of;
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -828,6 +833,25 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
+    fn create_sample_block_with_next_entries(
+        mint: &Mint,
+        length: usize,
+    ) -> impl Iterator<Item = Entry> {
+        let keypair = KeyPair::new();
+        let hash = mint.last_id();
+        let mut txs = Vec::with_capacity(length);
+        for i in 0..length {
+            txs.push(Transaction::new(
+                &mint.keypair(),
+                keypair.pubkey(),
+                i as i64,
+                hash,
+            ));
+        }
+        let entries = ledger::next_entries(&hash, 0, txs);
+        entries.into_iter()
+    }
+
     fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
@@ -840,6 +864,16 @@ mod tests {
         }
         entries.into_iter()
     }
+
+    fn create_sample_ledger_with_next_entries(
+        length: usize,
+    ) -> (impl Iterator<Item = Entry>, PublicKey) {
+        let mint = Mint::new((length * length) as i64);
+        let genesis = mint.create_entries();
+        let block = create_sample_block_with_next_entries(&mint, length);
+        (genesis.into_iter().chain(block), mint.pubkey())
+    }
+
     fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, PublicKey) {
         let mint = Mint::new(1 + length as i64);
         let genesis = mint.create_entries();
@@ -912,6 +946,17 @@ mod tests {
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+    }
+
+    #[test]
+    fn test_process_ledger_has_more_cross_block() {
+        // size_of<Transaction> is quite large for serialized size, so
+        // use 2 * verify_block_size to ensure we get enough txes to cross that
+        // block boundary with has_more set
+        let num_txs = (2 * VERIFY_BLOCK_SIZE) * BLOB_DATA_SIZE / size_of::<Transaction>();
+        let (ledger, _pubkey) = create_sample_ledger_with_next_entries(num_txs);
+        let bank = Bank::default();
+        assert!(bank.process_ledger(ledger).is_ok());
     }
 
 }
