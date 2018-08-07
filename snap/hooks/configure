@@ -4,6 +4,7 @@ echo Stopping daemons
 snapctl stop --disable solana.daemon-drone
 snapctl stop --disable solana.daemon-leader
 snapctl stop --disable solana.daemon-validator
+snapctl stop --disable solana.daemon-oom-monitor
 
 mode="$(snapctl get mode)"
 if [[ -z "$mode" ]]; then
@@ -32,3 +33,5 @@ validator)
   exit 1
   ;;
 esac
+
+snapctl start --enable solana.daemon-oom-monitor
