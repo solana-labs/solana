@@ -20,7 +20,7 @@ use transaction::Transaction;
 /// world's fastest processor at the time the entry was recorded. Or said another way, it
 /// is physically not possible for a shorter duration to have occurred if one assumes the
 /// hash was computed by the world's fastest processor at that time. The hash chain is both
-/// a Verifiable Delay Function (VDF) and a Proof of Work (not to be confused with Proof or
+/// a Verifiable Delay Function (VDF) and a Proof of Work (not to be confused with Proof of
 /// Work consensus!)
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
