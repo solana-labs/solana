@@ -52,6 +52,12 @@ if [[ -n $LOCAL_SNAP ]]; then
 fi
 SNAP_INSTALL_CMD="sudo snap remove solana; $SNAP_INSTALL_CMD"
 
+EARLYOOM_INSTALL_CMD="\
+  wget -O install-earlyoom.sh https://raw.githubusercontent.com/solana-labs/solana/master/ci/install-earlyoom.sh; \
+  bash install-earlyoom.sh \
+"
+SNAP_INSTALL_CMD="$EARLYOOM_INSTALL_CMD; $SNAP_INSTALL_CMD"
+
 # `export SKIP_INSTALL=1` to reset the network without reinstalling the snap
 if [[ -n $SKIP_INSTALL ]]; then
   SNAP_INSTALL_CMD="echo Install skipped"
