@@ -42,4 +42,5 @@ $solana_drone \
   -l "$SOLANA_CONFIG_DIR"/leader.json -k "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json \
   > >($drone_logger) 2>&1 &
 pid=$!
+oom_score_adj "$pid" 1000
 wait "$pid"

@@ -108,4 +108,5 @@ $program \
   --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger \
   > >($validator_logger) 2>&1 &
 pid=$!
+oom_score_adj "$pid" 1000
 wait "$pid"
