@@ -658,6 +658,7 @@ impl Crdt {
                 transmit_index.data += 1;
             }
         }
+        inc_new_counter!("crdt-broadcast-max_idx", transmit_index.data as usize);
         transmit_index.coding = transmit_index.data;
 
         Ok(())

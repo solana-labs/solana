@@ -46,6 +46,7 @@ fn recv_multiple_packets(
             break;
         }
     }
+    inc_new_counter!("banking_stage-coalesced_packets", recv_tries);
     Ok(mms)
 }
 
