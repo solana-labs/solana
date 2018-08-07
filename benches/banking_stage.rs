@@ -85,6 +85,9 @@ fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
         let signal = receiver.recv().unwrap();
         if let Signal::Transactions(transactions) = signal {
             total += transactions.len();
+            if total >= ref_tx_count {
+                break;
+            }
         } else {
             assert!(false);
         }

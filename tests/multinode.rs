@@ -663,7 +663,7 @@ fn retry_get_balance(
     bob_pubkey: &PublicKey,
     expected: Option<i64>,
 ) -> Option<i64> {
-    const LAST: usize = 20;
+    const LAST: usize = 30;
     for run in 0..(LAST + 1) {
         let out = client.poll_get_balance(bob_pubkey);
         if expected.is_none() || run == LAST {
@@ -714,7 +714,12 @@ fn retry_send_tx_and_retry_get_balance(
         if expected.is_none() || run == LAST {
             return out.ok().clone();
         }
-        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
+        trace!(
+            "retry_send_tx_and_retry_get_balance[{}] {:?} {:?}",
+            run,
+            out,
+            expected
+        );
         if let (Some(e), Ok(o)) = (expected, out) {
             if o == e {
                 return Some(o);

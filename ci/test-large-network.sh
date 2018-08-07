@@ -16,5 +16,10 @@ export LD_LIBRARY_PATH+=:$PWD
 
 export RUST_LOG=multinode=info
 
+if [[ $(ulimit -n) -le 65000 ]]; then
+  echo 'Error: nofiles too small, run "ulimit -n 65000" to continue'
+  exit 1
+fi
+
 set -x
 exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored
