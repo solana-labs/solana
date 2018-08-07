@@ -77,6 +77,11 @@ apps:
     plugs:
       - network
       - network-bind
+  daemon-oom-monitor:
+    daemon: simple
+    command: oom_monitor.sh
+    plugs:
+      - network
 
 parts:
   solana:
