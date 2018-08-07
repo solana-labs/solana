@@ -421,11 +421,12 @@ impl Crdt {
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
             //somehow we signed a message for our own identity with a higher version that
             // we have stored ourselves
-            trace!(
-                "{:x}: insert v.id: {:x} version: {}",
+            info!(
+                "{:x}: insert v.id: {:x} version: {} contact {:?}",
                 self.debug_id(),
                 v.debug_id(),
-                v.version
+                v.version,
+                v.contact_info
             );
             if self.table.get(&v.id).is_none() {
                 inc_new_counter!("crdt-insert-new_entry", 1, 1);
