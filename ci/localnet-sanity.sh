@@ -6,6 +6,7 @@
 
 cd "$(dirname "$0")"/..
 source ci/upload_ci_artifact.sh
+source multinode-demo/common.sh
 
 ./multinode-demo/setup.sh
 
@@ -21,10 +22,8 @@ for cmd in $backgroundCommands; do
   echo "pid: $pid"
 done
 
-shutdown() {
-  exitcode=$?
+killBackgroundCommands() {
   set +e
-  echo --- Shutdown
   for pid in "${pids[@]}"; do
     if kill "$pid"; then
       wait "$pid"
@@ -32,7 +31,17 @@ shutdown() {
       echo -e "^^^ +++\\nWarning: unable to kill $pid"
     fi
   done
+  set -e
+  pids=()
+}
 
+shutdown() {
+  exitcode=$?
+  killBackgroundCommands
+
+  set +e
+
+  echo "--- Upload artifacts"
   for cmd in $backgroundCommands; do
     declare logfile=log-$cmd.txt
     upload_ci_artifact "$logfile"
@@ -58,6 +67,9 @@ echo "--- Node count"
   ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
 )
 
+echo "--- Ledger verification"
+killBackgroundCommands
+$solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/ledger verify
 
 echo +++
 echo Ok

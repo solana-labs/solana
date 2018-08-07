@@ -93,6 +93,7 @@ solana_fullnode_config=$(solana_program fullnode-config)
 solana_fullnode_cuda=$(solana_program fullnode-cuda)
 solana_genesis=$(solana_program genesis)
 solana_keygen=$(solana_program keygen)
+solana_ledger_tool=$(solana_program ledger-tool)
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
