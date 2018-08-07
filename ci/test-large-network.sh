@@ -16,5 +16,10 @@ export LD_LIBRARY_PATH+=:$PWD
 
 export RUST_LOG=multinode=info
 
+ulimit -Hn
+ulimit -Sn
+ulimit -Ha
+ulimit -Sa
+
 set -x
 exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored
