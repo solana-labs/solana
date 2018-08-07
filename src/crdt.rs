@@ -575,6 +575,8 @@ impl Crdt {
             broadcast_table.len()
         );
 
+        let old_transmit_index = transmit_index.data;
+
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
         let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
@@ -658,7 +660,10 @@ impl Crdt {
                 transmit_index.data += 1;
             }
         }
-        inc_new_counter!("crdt-broadcast-max_idx", transmit_index.data as usize);
+        inc_new_counter!(
+            "crdt-broadcast-max_idx",
+            (transmit_index.data - old_transmit_index) as usize
+        );
         transmit_index.coding = transmit_index.data;
 
         Ok(())
