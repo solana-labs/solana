@@ -6,6 +6,7 @@
 # with GCP and has sufficient permission.
 #
 here=$(dirname "$0")
+metrics_write_datapoint="$here"/../multinode-demo/metrics_write_datapoint.sh
 
 # TODO: Switch over to rolling updates
 ROLLING_UPDATE=false
@@ -233,7 +234,7 @@ vm_foreach_in_class validator inc_fullnode_count
 
 # Add "network stopping" datapoint
 netName=${SOLANA_NET_URL/.*/}
-"$here"/metrics_write_datapoint.sh "testnet-deploy,name=$netName stop=1"
+$metrics_write_datapoint "testnet-deploy,name=$netName stop=1"
 
 client_start() {
   declare vmName=$1
@@ -437,6 +438,6 @@ wait_for_pids client shutdown
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
-"$here"/metrics_write_datapoint.sh "testnet-deploy,name=$netName start=1"
+$metrics_write_datapoint "testnet-deploy,name=$netName start=1"
 
 exit 0
