@@ -77,14 +77,12 @@ fn batch_size(batches: &[SharedPackets]) -> usize {
         .sum()
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
 #[cfg(not(feature = "cuda"))]
-pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     ed25519_verify_cpu(batches)
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
-pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
@@ -103,8 +101,7 @@ pub fn ed25519_verify_cpu(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
     rv
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(ptr_arg))]
-pub fn ed25519_verify_disabled(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use rayon::prelude::*;
     let count = batch_size(batches);
     info!("CPU ECDSA for {}", batch_size(batches));
@@ -135,7 +132,7 @@ pub fn init() {
 }
 
 #[cfg(feature = "cuda")]
-pub fn ed25519_verify(batches: &Vec<SharedPackets>) -> Vec<Vec<u8>> {
+pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
