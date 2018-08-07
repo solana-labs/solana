@@ -12,7 +12,7 @@ use result::{Error, Result};
 use std::collections::VecDeque;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
-use std::io::{self, BufReader, BufWriter, Cursor, Seek, SeekFrom};
+use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
 use streamer::WINDOW_SIZE;
