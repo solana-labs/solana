@@ -32,7 +32,7 @@ pub struct Entry {
     pub id: Hash,
 
     /// An unordered list of transactions that were observed before the Entry ID was
-    /// generated. The may have been observed before a previous Entry ID but were
+    /// generated. They may have been observed before a previous Entry ID but were
     /// pushed back into this list to ensure deterministic interpretation of the ledger.
     pub transactions: Vec<Transaction>,
 
