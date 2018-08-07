@@ -408,12 +408,14 @@ impl Bank {
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
         let mut entry_count = *tail_idx as u64;
+        let mut id = self.last_id();
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
-            if !block.verify(&self.last_id()) {
+            if !block.verify(&id) {
                 warn!("Ledger proof of history failed at entry: {}", entry_count);
                 return Err(BankError::LedgerVerificationFailed);
             }
+            id = block.last().unwrap().id;
             entry_count += self.process_entries_tail(block, tail, tail_idx)?;
         }
         Ok(entry_count)
