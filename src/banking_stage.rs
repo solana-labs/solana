@@ -43,10 +43,10 @@ fn recv_multiple_packets(
         mms.append(&mut nq);
 
         if recv_tries >= max_tries {
+            inc_new_counter!("banking_stage-max_packets_coalesced", 1);
             break;
         }
     }
-    inc_new_counter!("banking_stage-coalesced_packets", recv_tries);
     Ok(mms)
 }
 
