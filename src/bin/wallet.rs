@@ -1,6 +1,7 @@
 extern crate atty;
 extern crate bincode;
 extern crate bs58;
+#[macro_use]
 extern crate clap;
 extern crate dirs;
 extern crate serde_json;
@@ -74,6 +75,7 @@ impl Default for WalletConfig {
 
 fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
     let matches = App::new("solana-wallet")
+        .version(crate_version!())
         .arg(
             Arg::with_name("leader")
                 .short("l")

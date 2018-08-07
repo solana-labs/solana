@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate dirs;
 extern crate serde_json;
@@ -13,6 +14,7 @@ use std::net::SocketAddr;
 
 fn main() {
     let matches = App::new("fullnode-config")
+        .version(crate_version!())
         .arg(
             Arg::with_name("local")
                 .short("l")

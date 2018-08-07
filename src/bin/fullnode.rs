@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate clap;
 extern crate getopts;
 extern crate log;
@@ -23,6 +24,7 @@ fn main() -> () {
     logger::setup();
     set_panic_hook("fullnode");
     let matches = App::new("fullnode")
+        .version(crate_version!())
         .arg(
             Arg::with_name("identity")
                 .short("i")

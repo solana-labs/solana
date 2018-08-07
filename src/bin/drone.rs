@@ -1,4 +1,5 @@
 extern crate bincode;
+#[macro_use]
 extern crate clap;
 extern crate serde_json;
 extern crate solana;
@@ -26,6 +27,7 @@ fn main() {
     logger::setup();
     set_panic_hook("drone");
     let matches = App::new("drone")
+        .version(crate_version!())
         .arg(
             Arg::with_name("leader")
                 .short("l")
