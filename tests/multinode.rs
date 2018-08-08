@@ -1,11 +1,14 @@
 #[macro_use]
 extern crate log;
 extern crate bincode;
+extern crate chrono;
 extern crate serde_json;
 extern crate solana;
 
 use solana::crdt::{Crdt, NodeInfo, TestNode};
+use solana::entry::Entry;
 use solana::fullnode::FullNode;
+use solana::hash::Hash;
 use solana::ledger::LedgerWriter;
 use solana::logger;
 use solana::mint::Mint;
@@ -13,7 +16,7 @@ use solana::ncp::Ncp;
 use solana::result;
 use solana::service::Service;
 use solana::signature::{KeyPair, KeyPairUtil, PublicKey};
-use solana::streamer::default_window;
+use solana::streamer::{default_window, WINDOW_SIZE};
 use solana::thin_client::ThinClient;
 use solana::timing::duration_as_s;
 use std::cmp::max;
@@ -106,6 +109,92 @@ fn tmp_copy_ledger(from: &str, name: &str) -> String {
     }
 
     tostr
+}
+
+fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
+    let mut id = start_hash;
+    let mut num_hashes = 0;
+    (0..num)
+        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![], false))
+        .collect()
+}
+
+#[test]
+fn test_multi_node_ledger_window() -> result::Result<()> {
+    logger::setup();
+
+    let leader_keypair = KeyPair::new();
+    let leader_pubkey = leader_keypair.pubkey().clone();
+    let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_data = leader.data.clone();
+    let bob_pubkey = KeyPair::new().pubkey();
+    let mut ledger_paths = Vec::new();
+
+    let (alice, leader_ledger_path) = genesis("multi_node_ledger_window", 10_000);
+    ledger_paths.push(leader_ledger_path.clone());
+
+    // make a copy at zero
+    let zero_ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_ledger_window");
+    ledger_paths.push(zero_ledger_path.clone());
+
+    // write a bunch more ledger into leader's ledger, this should populate his window
+    // and force him to respond to repair from the ledger window
+    {
+        let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize * 2);
+        let mut writer = LedgerWriter::new(&leader_ledger_path, false).unwrap();
+
+        writer.write_entries(entries).unwrap();
+    }
+
+    let leader = FullNode::new(leader, true, &leader_ledger_path, leader_keypair, None);
+
+    // Send leader some tokens to vote
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, None).unwrap();
+    info!("leader balance {}", leader_balance);
+
+    // start up another validator from zero, converge and then check
+    // balances
+    let keypair = KeyPair::new();
+    let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+    let validator_data = validator.data.clone();
+    let validator = FullNode::new(
+        validator,
+        false,
+        &zero_ledger_path,
+        keypair,
+        Some(leader_data.contact_info.ncp),
+    );
+
+    // contains the leader and new node
+    info!("converging....");
+    let _servers = converge(&leader_data, 2);
+
+    // another transaction with leader
+    let leader_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, None).unwrap();
+    info!("bob balance on leader {}", leader_balance);
+    assert_eq!(leader_balance, 500);
+
+    loop {
+        let mut client = mk_client(&validator_data);
+        let bal = client.poll_get_balance(&bob_pubkey)?;
+        if bal == leader_balance {
+            break;
+        }
+        sleep(Duration::from_millis(300));
+        info!("bob balance on validator {}...", bal);
+    }
+    info!("done!");
+
+    validator.close()?;
+    leader.close()?;
+
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
+
+    Ok(())
 }
 
 #[test]
