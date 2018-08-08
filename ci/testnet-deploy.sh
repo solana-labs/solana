@@ -50,7 +50,12 @@ fi
 netBasename=${SOLANA_NET_NAME/-*/}
 
 # Figure installation command
-SNAP_INSTALL_CMD="sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode"
+SNAP_INSTALL_CMD="\
+  for i in {1..3}; do \
+    sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode && break;
+    sleep 1; \
+  done \
+"
 LOCAL_SNAP=$1
 if [[ -n $LOCAL_SNAP ]]; then
   if [[ ! -f $LOCAL_SNAP ]]; then
