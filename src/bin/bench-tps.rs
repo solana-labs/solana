@@ -16,7 +16,7 @@ use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
-use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
+use solana::nat::{udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
@@ -640,21 +640,16 @@ fn main() {
 
 fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
     let gossip_socket_pair;
-    if let Some(a) = addr {
-        let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
-        let gossip_addr = SocketAddr::new(
-            a.parse().unwrap(),
-            gossip_socket.local_addr().unwrap().port(),
-        );
-        gossip_socket_pair = UdpSocketPair {
-            addr: gossip_addr,
-            receiver: gossip_socket.try_clone().unwrap(),
-            sender: gossip_socket,
-        };
-    } else {
-        gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
-    }
-
+    let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
+    let gossip_addr = SocketAddr::new(
+        addr.unwrap().parse().unwrap(),
+        gossip_socket.local_addr().unwrap().port(),
+    );
+    gossip_socket_pair = UdpSocketPair {
+        addr: gossip_addr,
+        receiver: gossip_socket.try_clone().unwrap(),
+        sender: gossip_socket,
+    };
     let pubkey = Keypair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
     assert!(!gossip_socket_pair.addr.ip().is_unspecified());
