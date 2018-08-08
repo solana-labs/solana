@@ -44,6 +44,10 @@ apps:
     command: solana-keygen
     plugs:
       - home
+  ledger-tool:
+    command: solana-ledger-tool
+    plugs:
+      - home
   bench-tps:
     # TODO: Merge client.sh functionality into solana-bench-tps proper
     command: client.sh
