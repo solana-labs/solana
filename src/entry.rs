@@ -105,6 +105,7 @@ impl Entry {
             if let Some(addr) = addr {
                 blob_w.meta.set_addr(addr);
             }
+            blob_w.set_flags(0).unwrap();
         }
         blob
     }

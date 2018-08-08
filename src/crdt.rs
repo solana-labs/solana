@@ -1005,9 +1005,10 @@ impl Crdt {
                 return Some(out);
             } else {
                 inc_new_counter_info!("crdt-window-request-outside", 1);
-                info!(
+                trace!(
                     "requested ix {} != blob_ix {}, outside window!",
-                    ix, blob_ix
+                    ix,
+                    blob_ix
                 );
                 // falls through to checking window_ledger
             }
@@ -1029,7 +1030,7 @@ impl Crdt {
         }
 
         inc_new_counter_info!("crdt-window-request-fail", 1);
-        info!(
+        trace!(
             "{:x}: failed RequestWindowIndex {:x} {} {}",
             me.debug_id(),
             from.debug_id(),

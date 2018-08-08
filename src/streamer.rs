@@ -13,7 +13,6 @@ use std::cmp;
 use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
-use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
@@ -443,40 +442,37 @@ fn process_blob(
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum RecvWindowError {
-    WindowOverrun,
-    AlreadyReceived,
-}
-
-fn validate_blob_against_window(
-    debug_id: u64,
-    pix: u64,
-    consumed: u64,
-    received: u64,
-) -> result::Result<u64, RecvWindowError> {
+fn blob_idx_in_window(debug_id: u64, pix: u64, consumed: u64, received: &mut u64) -> bool {
     // Prevent receive window from running over
-    if pix >= consumed + WINDOW_SIZE {
-        debug!(
-            "{:x}: received: {} will overrun window: {} skipping..",
-            debug_id,
-            pix,
-            consumed + WINDOW_SIZE
-        );
-        return Err(RecvWindowError::WindowOverrun);
-    }
-
     // Got a blob which has already been consumed, skip it
     // probably from a repair window request
     if pix < consumed {
-        debug!(
+        trace!(
             "{:x}: received: {} but older than consumed: {} skipping..",
-            debug_id, pix, consumed
+            debug_id,
+            pix,
+            consumed
         );
-        return Err(RecvWindowError::AlreadyReceived);
-    }
+        false
+    } else {
+        // received always has to be updated even if we don't accept the packet into
+        //  the window.  The worst case here is the server *starts* outside
+        //  the window, none of the packets it receives fits in the window
+        //  and repair requests (which are based on received) are never generated
+        *received = cmp::min(consumed + WINDOW_SIZE, cmp::max(pix, *received));
 
-    Ok(cmp::max(pix, received))
+        if pix >= consumed + WINDOW_SIZE {
+            trace!(
+                "{:x}: received: {} will overrun window: {} skipping..",
+                debug_id,
+                pix,
+                consumed + WINDOW_SIZE
+            );
+            false
+        } else {
+            true
+        }
+    }
 }
 
 fn recv_window(
@@ -527,13 +523,9 @@ fn recv_window(
             (p.get_index()?, p.meta.size)
         };
 
-        let result = validate_blob_against_window(debug_id, pix, *consumed, *received);
-        match result {
-            Ok(v) => *received = v,
-            Err(_e) => {
-                recycler.recycle(b);
-                continue;
-            }
+        if !blob_idx_in_window(debug_id, pix, *consumed, received) {
+            recycler.recycle(b);
+            continue;
         }
 
         trace!("{:x} window pix: {} size: {}", debug_id, pix, meta_size);
@@ -957,9 +949,8 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
+    use streamer::blob_idx_in_window;
     use streamer::calculate_highest_lost_blob_index;
-    use streamer::validate_blob_against_window;
-    use streamer::RecvWindowError;
     use streamer::{blob_receiver, receiver, responder, window};
     use streamer::{default_window, BlobReceiver, PacketReceiver, WINDOW_SIZE};
 
@@ -1138,27 +1129,29 @@ mod test {
         );
     }
 
+    fn wrap_blob_idx_in_window(
+        debug_id: u64,
+        pix: u64,
+        consumed: u64,
+        received: u64,
+    ) -> (bool, u64) {
+        let mut received = received;
+        let is_in_window = blob_idx_in_window(debug_id, pix, consumed, &mut received);
+        (is_in_window, received)
+    }
     #[test]
-    pub fn validate_blob_against_window_test() {
+    pub fn blob_idx_in_window_test() {
         assert_eq!(
-            validate_blob_against_window(0, 90 + WINDOW_SIZE, 90, 100).unwrap_err(),
-            RecvWindowError::WindowOverrun
+            wrap_blob_idx_in_window(0, 90 + WINDOW_SIZE, 90, 100),
+            (false, 90 + WINDOW_SIZE)
         );
         assert_eq!(
-            validate_blob_against_window(0, 91 + WINDOW_SIZE, 90, 100).unwrap_err(),
-            RecvWindowError::WindowOverrun
+            wrap_blob_idx_in_window(0, 91 + WINDOW_SIZE, 90, 100),
+            (false, 90 + WINDOW_SIZE)
         );
-        assert_eq!(
-            validate_blob_against_window(0, 89, 90, 100).unwrap_err(),
-            RecvWindowError::AlreadyReceived
-        );
-        assert_eq!(
-            validate_blob_against_window(0, 91, 90, 100).ok().unwrap(),
-            100
-        );
-        assert_eq!(
-            validate_blob_against_window(0, 101, 90, 100).ok().unwrap(),
-            101
-        );
+        assert_eq!(wrap_blob_idx_in_window(0, 89, 90, 100), (false, 100));
+
+        assert_eq!(wrap_blob_idx_in_window(0, 91, 90, 100), (true, 100));
+        assert_eq!(wrap_blob_idx_in_window(0, 101, 90, 100), (true, 101));
     }
 }
