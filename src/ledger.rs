@@ -399,7 +399,7 @@ impl Block for [Entry] {
 
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>) {
         for entry in self {
-            let blob = entry.to_blob(blob_recycler, None, None);
+            let blob = entry.to_blob(blob_recycler, None, None, None);
             q.push_back(blob);
         }
     }

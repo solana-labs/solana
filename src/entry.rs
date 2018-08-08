@@ -8,6 +8,7 @@ use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use signature::PublicKey;
 use std::io::Cursor;
+use std::net::SocketAddr;
 use transaction::Transaction;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
@@ -83,6 +84,7 @@ impl Entry {
         blob_recycler: &BlobRecycler,
         idx: Option<u64>,
         id: Option<PublicKey>,
+        addr: Option<&SocketAddr>,
     ) -> SharedBlob {
         let blob = blob_recycler.allocate();
         {
@@ -99,6 +101,9 @@ impl Entry {
             }
             if let Some(id) = id {
                 blob_w.set_id(id).expect("set_id()");
+            }
+            if let Some(addr) = addr {
+                blob_w.meta.set_addr(addr);
             }
         }
         blob
