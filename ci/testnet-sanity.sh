@@ -16,6 +16,9 @@ if [[ -z $EXPECTED_NODE_COUNT ]]; then
   EXPECTED_NODE_COUNT=50
 fi
 
+echo "--- $NET_URL: verify ledger"
+# Note: here we assume this script is actually running on the leader node...
+sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
 
 echo "--- $NET_URL: wallet sanity"
 (
