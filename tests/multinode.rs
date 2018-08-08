@@ -30,7 +30,7 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::{Duration, Instant};
 
-fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+fn converge(leader: &NodeInfo, node_count: usize) -> Vec<NodeInfo> {
     //lets spy on the network
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = TestNode::new_localhost();
@@ -66,7 +66,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
             .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
-        if num >= num_nodes as u64 && v.len() >= num_nodes {
+        if num >= node_count as u64 && v.len() >= node_count {
             rv.append(&mut v);
             converged = true;
             break;
@@ -113,9 +113,9 @@ fn tmp_copy_ledger(from: &str, name: &str) -> String {
 
 fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
     let mut id = start_hash;
-    let mut num_hashes = 0;
+    let mut hash_count = 0;
     (0..num)
-        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![], false))
+        .map(|_| Entry::new_mut(&mut id, &mut hash_count, vec![], false))
         .collect()
 }
 
@@ -519,7 +519,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 fn test_multi_node_dynamic_network() {
     logger::setup();
     let key = "SOLANA_DYNAMIC_NODES";
-    let num_nodes: usize = match env::var(key) {
+    let node_count: usize = match env::var(key) {
         Ok(val) => val
             .parse()
             .expect(&format!("env var {} is not parse-able as usize", key)),
@@ -574,7 +574,7 @@ fn test_multi_node_dynamic_network() {
     ).unwrap();
     assert_eq!(leader_balance, 1000);
 
-    let t1: Vec<_> = (0..num_nodes)
+    let t1: Vec<_> = (0..node_count)
         .into_iter()
         .map(|n| {
             let leader_data = leader_data.clone();
@@ -592,7 +592,7 @@ fn test_multi_node_dynamic_network() {
                         Some(500),
                     );
                     assert_eq!(bal, Some(500));
-                    info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
+                    info!("sent balance to[{}/{}] {}", n, node_count, keypair.pubkey());
                     keypair
                 })
                 .unwrap()
@@ -634,7 +634,7 @@ fn test_multi_node_dynamic_network() {
     let mut consecutive_success = 0;
     let mut failures = 0;
     let mut max_distance_increase = 0i64;
-    for i in 0..num_nodes {
+    for i in 0..node_count {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
         let leader_balance = retry_send_tx_and_retry_get_balance(
@@ -654,7 +654,7 @@ fn test_multi_node_dynamic_network() {
             let mut success = 0usize;
             let mut max_distance = 0i64;
             let mut total_distance = 0i64;
-            let mut num_nodes_behind = 0i64;
+            let mut nodes_behind_count = 0i64;
             validators.retain(|server| {
                 let mut retain_me = true;
                 let mut client = mk_client(&server.0);
@@ -681,7 +681,7 @@ fn test_multi_node_dynamic_network() {
                     }
                 }
                 if distance > 0 {
-                    num_nodes_behind += 1;
+                    nodes_behind_count += 1;
                 }
                 if let Some(bal) = getbal {
                     if bal == leader_balance {
@@ -690,8 +690,8 @@ fn test_multi_node_dynamic_network() {
                 }
                 retain_me
             });
-            if num_nodes_behind != 0 {
-                info!("{} nodes are lagging behind leader", num_nodes_behind);
+            if nodes_behind_count != 0 {
+                info!("{} nodes are lagging behind leader", nodes_behind_count);
             }
             info!(
                 "SUCCESS[{}] {} out of {} distance: {} max_distance: {}",

@@ -250,10 +250,10 @@ pub mod tests {
         let mut msgs = VecDeque::new();
         let mut cur_hash = Hash::default();
         let mut blob_id = 0;
-        let num_transfers = 10;
+        let transfer_count = 10;
         let transfer_amount = 501;
         let bob_keypair = KeyPair::new();
-        for i in 0..num_transfers {
+        for i in 0..transfer_count {
             let entry0 = Entry::new(&cur_hash, i, vec![], false);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
@@ -266,7 +266,7 @@ pub mod tests {
             );
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
-            let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0], false);
+            let entry1 = Entry::new(&cur_hash, i + transfer_count, vec![tx0], false);
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 

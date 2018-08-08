@@ -119,7 +119,7 @@ impl BankingStage {
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         let mut txs: Vec<Transaction> = Vec::new();
-        let mut num_sent = 0;
+        let mut sent_count = 0;
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
             reqs_len += transactions.len();
@@ -144,7 +144,7 @@ impl BankingStage {
             if txs.len() >= max_coalesced_txs {
                 signal_sender.send(Signal::Transactions(txs.clone()))?;
                 txs.clear();
-                num_sent += 1;
+                sent_count += 1;
             }
             debug!("done process_transactions");
 
@@ -153,7 +153,7 @@ impl BankingStage {
 
         // Send now, if there are pending transactions, or if there was
         // no transactions sent to the next stage yet.
-        if !txs.is_empty() || num_sent == 0 {
+        if !txs.is_empty() || sent_count == 0 {
             signal_sender.send(Signal::Transactions(txs))?;
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());

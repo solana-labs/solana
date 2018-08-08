@@ -430,7 +430,7 @@ impl Bank {
     {
         let mut entries = entries.into_iter();
 
-        // The first item in the ledger is required to be an entry with zero num_hashes,
+        // The first item in the ledger is required to be an entry with zero hash_count,
         // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().expect("invalid ledger: empty");
 
@@ -954,8 +954,8 @@ mod tests {
         // size_of<Transaction> is quite large for serialized size, so
         // use 2 * verify_block_size to ensure we get enough txes to cross that
         // block boundary with has_more set
-        let num_txs = (2 * VERIFY_BLOCK_SIZE) * BLOB_DATA_SIZE / size_of::<Transaction>();
-        let (ledger, _pubkey) = create_sample_ledger_with_next_entries(num_txs);
+        let tx_count = (2 * VERIFY_BLOCK_SIZE) * BLOB_DATA_SIZE / size_of::<Transaction>();
+        let (ledger, _pubkey) = create_sample_ledger_with_next_entries(tx_count);
         let bank = Bank::default();
         assert!(bank.process_ledger(ledger).is_ok());
     }
