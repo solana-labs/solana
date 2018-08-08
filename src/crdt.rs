@@ -586,7 +586,7 @@ impl Crdt {
         trace!("broadcast results {}", errs.len());
         for e in errs {
             if let Err(e) = &e {
-                eprintln!("broadcast result {:?}", e);
+                trace!("broadcast result {:?}", e);
             }
             e?;
             if transmit_index.data < received_index {
@@ -1196,7 +1196,7 @@ impl Crdt {
             ) {
                 resps.push(resp);
             }
-            blob_recycler.recycle(req);
+            blob_recycler.recycle(req, "run_listen");
         }
         response_sender.send(resps)?;
         Ok(())

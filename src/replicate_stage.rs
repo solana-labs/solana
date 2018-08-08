@@ -44,7 +44,7 @@ impl ReplicateStage {
         let res = bank.process_entries(entries.clone());
 
         for blob in blobs {
-            blob_recycler.recycle(blob);
+            blob_recycler.recycle(blob, "replicate_requests");
         }
 
         {

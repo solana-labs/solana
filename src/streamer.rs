@@ -34,7 +34,7 @@ fn recv_loop(
                 }
                 Err(_) => {
                     if exit.load(Ordering::Relaxed) {
-                        re.recycle(msgs);
+                        re.recycle(msgs, "recv_loop");
                         return Ok(());
                     }
                 }
