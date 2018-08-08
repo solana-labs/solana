@@ -1025,7 +1025,7 @@ impl Crdt {
                 let out = entry.to_blob(
                     blob_recycler,
                     Some(ix),
-                    Some(from.id),
+                    Some(me.id), // causes retransmission if I'm the leader
                     Some(&from.contact_info.tvu_window),
                 );
 
