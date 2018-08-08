@@ -93,9 +93,9 @@ rsync_leader_url=$(rsync_url "$leader")
 
 tune_networking
 
-rm -rf "$SOLANA_LEADER_CONFIG_DIR"
 set -ex
-$rsync -vPrz "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+$rsync --append --verbose --partial --progress --recursive \
+  "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 [[ -d $SOLANA_LEADER_CONFIG_DIR/ledger ]] || {
   echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
