@@ -74,6 +74,7 @@ fi
 echo "Network entry point URL: $publicUrl ($publicIp)"
 echo "Snap channel: $SOLANA_SNAP_CHANNEL"
 echo "Install command: $SNAP_INSTALL_CMD"
+echo "Setup args: $SOLANA_SETUP_ARGS"
 [[ -z $LOCAL_SNAP ]] || echo "Local snap: $LOCAL_SNAP"
 
 leaderName=${publicUrl//./-}
@@ -317,6 +318,7 @@ fullnode_start() {
       rust-log=$RUST_LOG \
       default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
       metrics-config=$SOLANA_METRICS_CONFIG \
+      setup-args=$SOLANA_SETUP_ARGS \
     "
     if [[ $class = leader ]]; then
       nodeConfig="mode=leader+drone $commonNodeConfig"
