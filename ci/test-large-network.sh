@@ -16,8 +16,18 @@ export LD_LIBRARY_PATH+=:$PWD
 
 export RUST_LOG=multinode=info
 
-if [[ $(ulimit -n) -le 65000 ]]; then
+if [[ $(ulimit -n) -lt 65000 ]]; then
   echo 'Error: nofiles too small, run "ulimit -n 65000" to continue'
+  exit 1
+fi
+
+if [[ $(sysctl -n net.core.rmem_default) -lt 1610612736 ]]; then
+  echo 'Error: rmem_default too small, run "sysctl -w net.core.rmem_default 1610612736" to continue'
+  exit 1
+fi
+
+if [[ $(sysctl -n net.core.rmem_max) -lt 1610612736 ]]; then
+  echo 'Error: rmem_max too small, run "sysctl -w net.core.rmem_max 1610612736" to continue'
   exit 1
 fi
 
