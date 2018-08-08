@@ -23,15 +23,17 @@ if [[ -z $SOLANA_SNAP_CHANNEL ]]; then
   SOLANA_SNAP_CHANNEL=edge
 fi
 
-# Select default network URL based on SOLANA_SNAP_CHANNEL if SOLANA_NET_URL is
+# Select default network URL based on SOLANA_SNAP_CHANNEL if SOLANA_NET_ENTRYPOINT is
 # unspecified
-if [[ -z $SOLANA_NET_URL ]]; then
+if [[ -z $SOLANA_NET_ENTRYPOINT ]]; then
   case $SOLANA_SNAP_CHANNEL in
   edge)
-    SOLANA_NET_URL=master.testnet.solana.com
+    SOLANA_NET_ENTRYPOINT=master.testnet.solana.com
+    unset SOLANA_NET_NAME
     ;;
   beta)
-    SOLANA_NET_URL=testnet.solana.com
+    SOLANA_NET_ENTRYPOINT=testnet.solana.com
+    unset SOLANA_NET_NAME
     ;;
   *)
     echo Error: Unknown SOLANA_SNAP_CHANNEL=$SOLANA_SNAP_CHANNEL
@@ -39,6 +41,13 @@ if [[ -z $SOLANA_NET_URL ]]; then
     ;;
   esac
 fi
+
+if [[ -z $SOLANA_NET_NAME ]]; then
+  SOLANA_NET_NAME=${SOLANA_NET_ENTRYPOINT//./-}
+fi
+
+: ${SOLANA_NET_NAME:?$SOLANA_NET_ENTRYPOINT}
+netBasename=${SOLANA_NET_NAME/-*/}
 
 # Figure installation command
 SNAP_INSTALL_CMD="sudo snap install solana --$SOLANA_SNAP_CHANNEL --devmode"
@@ -63,21 +72,20 @@ if [[ -n $SKIP_INSTALL ]]; then
   SNAP_INSTALL_CMD="echo Install skipped"
 fi
 
-echo "+++ Configuration"
-publicUrl="$SOLANA_NET_URL"
+echo "+++ Configuration for $netBasename"
+publicUrl="$SOLANA_NET_ENTRYPOINT"
 if [[ $publicUrl = testnet.solana.com ]]; then
   publicIp="" # Use default value
 else
   publicIp=$(dig +short $publicUrl | head -n1)
 fi
 
+echo "Network name: $SOLANA_NET_NAME"
 echo "Network entry point URL: $publicUrl ($publicIp)"
 echo "Snap channel: $SOLANA_SNAP_CHANNEL"
 echo "Install command: $SNAP_INSTALL_CMD"
 echo "Setup args: $SOLANA_SETUP_ARGS"
 [[ -z $LOCAL_SNAP ]] || echo "Local snap: $LOCAL_SNAP"
-
-leaderName=${publicUrl//./-}
 
 vmlist=() # Each array element is formatted as "class:vmName:vmZone:vmPublicIp"
 
@@ -213,24 +221,24 @@ delete_unreachable_validators() {
 
 
 echo "Validator nodes (unverified):"
-findVms validator "name~^$leaderName-validator-"
+findVms validator "name~^$SOLANA_NET_NAME-validator-"
 pids=()
 vm_foreach_in_class validator delete_unreachable_validators
 wait_for_pids validator sanity check
 vmlist=()
 
 echo "Leader node:"
-findVms leader "name=$leaderName"
+findVms leader "name=$SOLANA_NET_NAME"
 [[ ${#vmlist[@]} = 1 ]] || {
-  echo "Unable to find $leaderName"
+  echo "Unable to find $SOLANA_NET_NAME"
   exit 1
 }
 
 echo "Client node(s):"
-findVms client "name~^$leaderName-client"
+findVms client "name~^$SOLANA_NET_NAME-client"
 
 echo "Validator nodes:"
-findVms validator "name~^$leaderName-validator-"
+findVms validator "name~^$SOLANA_NET_NAME-validator-"
 
 fullnode_count=0
 inc_fullnode_count() {
@@ -240,8 +248,7 @@ vm_foreach_in_class leader inc_fullnode_count
 vm_foreach_in_class validator inc_fullnode_count
 
 # Add "network stopping" datapoint
-netName=${SOLANA_NET_URL/.*/}
-$metrics_write_datapoint "testnet-deploy,name=$netName stop=1"
+$metrics_write_datapoint "testnet-deploy,name=$netBasename stop=1"
 
 client_start() {
   declare vmName=$1
@@ -261,9 +268,9 @@ client_start() {
       tmux new -s solana -d \" \
           set -x; \
           sudo rm /tmp/solana.log; \
-          /snap/bin/solana.bench-tps $SOLANA_NET_URL $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee /tmp/solana.log; \
+          /snap/bin/solana.bench-tps $SOLANA_NET_ENTRYPOINT $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee /tmp/solana.log; \
           echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
-            | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netName clientexit=1'; \
+            | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netBasename clientexit=1'; \
           echo Error: bench-tps should never exit | tee -a /tmp/solana.log; \
           bash \
         \"; \
@@ -446,6 +453,6 @@ wait_for_pids client shutdown
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
-$metrics_write_datapoint "testnet-deploy,name=$netName start=1"
+$metrics_write_datapoint "testnet-deploy,name=$netBasename start=1"
 
 exit 0
