@@ -1016,7 +1016,12 @@ impl Crdt {
             if let Ok(entry) = ledger_window.get_entry(ix) {
                 inc_new_counter!("crdt-window-request-ledger", 1);
 
-                let out = entry.to_blob(blob_recycler, Some(ix), Some(from.id));
+                let out = entry.to_blob(
+                    blob_recycler,
+                    Some(ix),
+                    Some(from.id),
+                    Some(&from.contact_info.tvu_window),
+                );
 
                 return Some(out);
             }
