@@ -75,6 +75,13 @@ pub enum Instruction {
     NewVote(Vote),
 }
 
+pub type Height = u64;
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+pub struct LastId {
+    pub height: Height,
+    pub hash: Hash,
+}
+
 /// An instruction signed by a client with `PublicKey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
@@ -88,7 +95,7 @@ pub struct Transaction {
     pub instruction: Instruction,
 
     /// The ID of a recent ledger entry.
-    pub last_id: Hash,
+    pub last_id: LastId,
 
     /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
@@ -99,7 +106,7 @@ impl Transaction {
     fn new_from_instruction(
         from_keypair: &KeyPair,
         instruction: Instruction,
-        last_id: Hash,
+        last_id: LastId,
         fee: i64,
     ) -> Self {
         let from = from_keypair.pubkey();
@@ -120,7 +127,7 @@ impl Transaction {
         to: PublicKey,
         tokens: i64,
         fee: i64,
-        last_id: Hash,
+        last_id: LastId,
     ) -> Self {
         let payment = Payment {
             tokens: tokens - fee,
@@ -133,23 +140,23 @@ impl Transaction {
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: LastId) -> Self {
         Self::new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
-    pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: Hash) -> Self {
+    pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: LastId) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
+    pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: LastId) -> Self {
         let instruction = Instruction::ApplySignature(tx_sig);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
-    pub fn new_vote(from_keypair: &KeyPair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+    pub fn new_vote(from_keypair: &KeyPair, vote: Vote, last_id: LastId, fee: i64) -> Self {
         Transaction::new_from_instruction(&from_keypair, Instruction::NewVote(vote), last_id, fee)
     }
 
@@ -159,7 +166,7 @@ impl Transaction {
         to: PublicKey,
         dt: DateTime<Utc>,
         tokens: i64,
-        last_id: Hash,
+        last_id: LastId,
     ) -> Self {
         let from = from_keypair.pubkey();
         let budget = Budget::Or(
@@ -210,7 +217,7 @@ impl Transaction {
 pub fn test_tx() -> Transaction {
     let keypair1 = KeyPair::new();
     let pubkey1 = keypair1.pubkey();
-    let zero = Hash::default();
+    let zero = LastId::default();
     Transaction::new(&keypair1, pubkey1, 42, zero)
 }
 

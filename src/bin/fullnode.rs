@@ -90,8 +90,8 @@ fn main() -> () {
     };
 
     let mut client = mk_client(&repl_clone);
-    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap();
-    eprintln!("balance is {}", previous_balance);
+    let previous_balance = client.get_versioned_account(&leader_pubkey).unwrap();
+    eprintln!("balance is {:?}", previous_balance);
 
     if previous_balance == 0 {
         eprintln!("requesting airdrop from {}", drone_addr);
@@ -105,11 +105,9 @@ fn main() -> () {
         // Try multiple times to confirm a non-zero balance.  |poll_get_balance| currently times
         // out after 1 second, and sometimes this is not enough time while the network is
         // booting
-        let balance_ok = (0..30).any(|i| {
-            let balance = client.poll_get_balance(&leader_pubkey).unwrap();
-            eprintln!("new balance is {} (attempt #{})", balance, i);
-            balance > 0
-        });
+        let balance_ok = client
+            .poll_update(previous_balance.verison, 10000, &leader_pubkey)
+            .is_ok();
         assert!(balance_ok, "0 balance, airdrop failed?");
     }
 

@@ -45,7 +45,7 @@ impl<'a, W: Write> EntryWriter<'a, W> {
     fn write_and_register_entry(&mut self, entry: &Entry) -> io::Result<()> {
         trace!("write_and_register_entry entry");
         if !entry.has_more {
-            self.bank.register_entry_id(&entry.id);
+            self.bank.register_entry_hash(&entry.id);
         }
         Self::write_entry(&mut self.writer, entry)
     }

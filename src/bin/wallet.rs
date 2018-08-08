@@ -232,7 +232,7 @@ fn process_command(
         }
         WalletCommand::Balance => {
             println!("Balance requested...");
-            let balance = client.poll_get_balance(&config.id.pubkey());
+            let balance = client.get_balance(&config.id.pubkey());
             match balance {
                 Ok(balance) => {
                     println!("Your balance is: {:?}", balance);
@@ -253,22 +253,15 @@ fn process_command(
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, config.drone_addr
             );
-            let previous_balance = client.poll_get_balance(&config.id.pubkey())?;
+            let previous_balance = client.get_balance(&config.id.pubkey())?;
             request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
-            let mut current_balance = previous_balance;
-            for _ in 0..20 {
-                sleep(Duration::from_millis(500));
-                current_balance = client.poll_get_balance(&config.id.pubkey())?;
-                if previous_balance != current_balance {
-                    break;
-                }
-                println!(".");
-            }
+            current_balance =
+                client.poll_update(previous_balance.verison, 10000, &config.id.pubkey())?;
             println!("Your balance is: {:?}", current_balance);
-            if current_balance - previous_balance != tokens {
+            if current_balance.tokens - previous_balance.tokens != tokens {
                 Err("Airdrop failed!")?;
             }
         }

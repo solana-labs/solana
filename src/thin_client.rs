@@ -3,8 +3,8 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
+use bank::VersionedAccount;
 use bincode::{deserialize, serialize};
-use hash::Hash;
 use request::{Request, Response};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::Transaction;
+use transaction::{LastId, Transaction};
 
 use influx_db_client as influxdb;
 use metrics;
@@ -25,10 +25,9 @@ pub struct ThinClient {
     requests_socket: UdpSocket,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
-    last_id: Option<Hash>,
+    last_id: Option<LastId>,
     transaction_count: u64,
-    balances: HashMap<PublicKey, i64>,
-    signature_status: bool,
+    balances: HashMap<PublicKey, VersionedAccount>,
 }
 
 impl ThinClient {
@@ -49,7 +48,6 @@ impl ThinClient {
             last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
-            signature_status: false,
         }
     }
 
@@ -63,25 +61,21 @@ impl ThinClient {
 
     pub fn process_response(&mut self, resp: &Response) {
         match *resp {
-            Response::Balance { key, val } => {
-                trace!("Response balance {:?} {:?}", key, val);
-                self.balances.insert(key, val);
+            Response::Balance { key, val, height } => {
+                trace!("Response balance {:?} {:?} {}", key, val, height);
+                let v = VersionedAccount {
+                    tokens: val,
+                    version: height,
+                };
+                self.balances.insert(key, v);
             }
-            Response::LastId { id } => {
+            Response::LastId { ref id } => {
                 trace!("Response last_id {:?}", id);
-                self.last_id = Some(id);
+                self.last_id = Some(id.clone());
             }
             Response::TransactionCount { transaction_count } => {
                 trace!("Response transaction count {:?}", transaction_count);
                 self.transaction_count = transaction_count;
-            }
-            Response::SignatureStatus { signature_status } => {
-                self.signature_status = signature_status;
-                if signature_status {
-                    trace!("Response found signature");
-                } else {
-                    trace!("Response signature not found");
-                }
             }
         }
     }
@@ -101,10 +95,10 @@ impl ThinClient {
         n: i64,
         keypair: &KeyPair,
         to: PublicKey,
-        last_id: &Hash,
+        last_id: LastId,
     ) -> io::Result<Signature> {
         let now = Instant::now();
-        let tx = Transaction::new(keypair, to, n, *last_id);
+        let tx = Transaction::new(keypair, to, n, last_id);
         let result = self.transfer_signed(&tx);
         metrics::submit(
             influxdb::Point::new("thinclient")
@@ -118,11 +112,8 @@ impl ThinClient {
         result
     }
 
-    /// Request the balance of the user holding `pubkey`. This method blocks
-    /// until the server sends a response. If the response packet is dropped
-    /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
-        trace!("get_balance");
+    pub fn get_versioned_account(&mut self, pubkey: &PublicKey) -> io::Result<VersionedAccount> {
+        trace!("get_versioned_account");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
         self.requests_socket
@@ -141,6 +132,13 @@ impl ThinClient {
             .get(pubkey)
             .cloned()
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
+    }
+    /// Request the balance of the user holding `pubkey`. This method blocks
+    /// until the server sends a response. If the response packet is dropped
+    /// by the network, this method will hang indefinitely.
+    pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
+        let v = self.get_versioned_account(pubkey)?;
+        Ok(v.tokens)
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
@@ -169,7 +167,7 @@ impl ThinClient {
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> Hash {
+    pub fn get_last_id(&mut self) -> LastId {
         trace!("get_last_id");
         let req = Request::GetLastId;
         let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
@@ -192,83 +190,41 @@ impl ThinClient {
                 }
             }
         }
-        self.last_id.expect("some last_id")
+        self.last_id.clone().expect("some last_id")
     }
 
-    pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
-        let mut balance_result;
-        let mut balance_value = -1;
+    /// poll until the account version is equal or greater than the version for millies
+    pub fn poll_update(
+        &mut self,
+        millies: u64,
+        pubkey: &PublicKey,
+    ) -> io::Result<VersionedAccount> {
         let now = Instant::now();
+        // version 0 is the starting value, so poll for something after 0
+        let version = self.balances.get(pubkey).map(|v| v.version).unwrap_or(1);
         loop {
-            balance_result = self.get_balance(pubkey);
-            if balance_result.is_ok() {
-                balance_value = *balance_result.as_ref().unwrap();
+            if let Ok(bal) = self.get_versioned_account(pubkey) {
+                if bal.version >= version {
+                    return Ok(bal);
+                }
             }
-            if balance_value > 0 || now.elapsed().as_secs() > 1 {
+            let elapsed = now.elapsed();
+            let elapsed_ms = elapsed.as_secs() * 1_000_000u64 + (elapsed.subsec_millis() as u64);
+            if elapsed_ms > millies {
                 break;
             }
             sleep(Duration::from_millis(100));
         }
         metrics::submit(
             influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("get_balance".to_string()))
+                .add_tag("op", influxdb::Value::String("poll_update".to_string()))
                 .add_field(
                     "duration_ms",
                     influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
                 )
                 .to_owned(),
         );
-        if balance_value >= 0 {
-            Ok(balance_value)
-        } else {
-            assert!(balance_result.is_err());
-            balance_result
-        }
-    }
-
-    /// Poll the server to confirm a transaction.
-    pub fn poll_for_signature(&mut self, sig: &Signature) -> io::Result<()> {
-        let now = Instant::now();
-        while !self.check_signature(sig) {
-            if now.elapsed().as_secs() > 1 {
-                // TODO: Return a better error.
-                return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
-            }
-            sleep(Duration::from_millis(100));
-        }
-        Ok(())
-    }
-
-    /// Check a signature in the bank. This method blocks
-    /// until the server sends a response.
-    pub fn check_signature(&mut self, sig: &Signature) -> bool {
-        trace!("check_signature");
-        let req = Request::GetSignature { signature: *sig };
-        let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
-        let now = Instant::now();
-        let mut done = false;
-        while !done {
-            self.requests_socket
-                .send_to(&data, &self.requests_addr)
-                .expect("buffer error in pub fn get_last_id");
-
-            if let Ok(resp) = self.recv_response() {
-                if let Response::SignatureStatus { .. } = resp {
-                    done = true;
-                }
-                self.process_response(&resp);
-            }
-        }
-        metrics::submit(
-            influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("check_signature".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
-        );
-        self.signature_status
+        Err(io::Error::new(io::ErrorKind::Other, "poll_update timeout"))
     }
 }
 

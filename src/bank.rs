@@ -15,14 +15,14 @@ use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{KeyPair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
 use streamer::WINDOW_SIZE;
 use timing::{duration_as_us, timestamp};
-use transaction::{Instruction, Plan, Transaction};
+use transaction::{Height, Instruction, LastId, Plan, Transaction};
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -52,7 +52,11 @@ pub enum BankError {
 
     /// The bank has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
-    LastIdNotFound(Hash),
+    LastIdNotFound(LastId),
+
+    /// Account version is the LastId height
+    /// A spend transaction's LastId height must be higher than the account
+    InvalidAccountVersion(Height),
 
     /// The transaction is invalid and has requested a debit or credit of negative
     /// tokens.
@@ -63,11 +67,62 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
+#[derive(Default, Clone, Debug)]
+pub struct VersionedAccount {
+    pub version: Height,
+    pub tokens: i64,
+}
+
+/// circular buffer of last ids
+struct LastIds {
+    /// next_height - 1 % ids.len() is the last valid entry of the vector
+    next_height: Height,
+    /// circular buffer covering ids from next_height - ids.len()
+    ids: Vec<(Hash, u64)>,
+}
+
+impl LastIds {
+    pub fn new(capacity: usize) -> Self {
+        let mut ids = vec![];
+        ids.resize(capacity, Default::default());
+        LastIds {
+            next_height: 0,
+            ids,
+        }
+    }
+    pub fn register_entry_hash(&mut self, id: &Hash) {
+        let pos = (self.next_height as usize) % self.ids.len();
+        self.ids[pos] = (*id, timestamp());
+        self.next_height += 1;
+    }
+    pub fn last_id(&self) -> LastId {
+        let height = self.next_height;
+        let pos = (height as usize) % self.ids.len();
+        let hash = self.ids[pos].0;
+        LastId { height, hash }
+    }
+    pub fn check_pos(&self, id: &LastId) -> Option<usize> {
+        if id.height < self.next_height - (self.ids.len() as u64) {
+            None
+        } else if id.height >= self.next_height {
+            None
+        } else {
+            let check = (id.height as usize) % self.ids.len();
+            Some(check)
+        }
+    }
+    pub fn timestamp(&self, id: &LastId) -> Option<u64> {
+        self.check_pos(id).map(|pos| self.ids[pos].1)
+    }
+    pub fn check_id(&self, id: &LastId) -> bool {
+        self.check_pos(id).is_some()
+    }
+}
 
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    balances: RwLock<HashMap<PublicKey, i64>>,
+    balances: RwLock<HashMap<PublicKey, VersionedAccount>>,
 
     /// A map of smart contract transaction signatures to what remains of its payment
     /// plan. Each transaction that targets the plan should cause it to be reduced.
@@ -77,11 +132,7 @@ pub struct Bank {
     /// A FIFO queue of `last_id` items, where each item is a set of signatures
     /// that have been processed using that `last_id`. Rejected `last_id`
     /// values are so old that the `last_id` has been pulled out of the queue.
-    last_ids: RwLock<VecDeque<Hash>>,
-
-    /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
-    /// reject transactions with signatures its seen before
-    last_ids_sigs: RwLock<HashMap<Hash, (HashSet<Signature>, u64)>>,
+    last_ids: RwLock<LastIds>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -93,8 +144,7 @@ impl Default for Bank {
         Bank {
             balances: RwLock::new(HashMap::new()),
             pending: RwLock::new(HashMap::new()),
-            last_ids: RwLock::new(VecDeque::new()),
-            last_ids_sigs: RwLock::new(HashMap::new()),
+            last_ids: RwLock::new(LastIds::new(MAX_ENTRY_IDS)),
             transaction_count: AtomicUsize::new(0),
         }
     }
@@ -115,68 +165,36 @@ impl Bank {
             tokens: mint.tokens,
         };
         let bank = Self::new_from_deposit(&deposit);
-        bank.register_entry_id(&mint.last_id());
+        for e in mint.create_entries() {
+            bank.register_entry_hash(&e.id)
+        }
         bank
     }
 
     /// Commit funds to the `payment.to` party.
-    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<PublicKey, i64>) {
-        *balances.entry(payment.to).or_insert(0) += payment.tokens;
+    fn apply_payment(
+        &self,
+        payment: &Payment,
+        balances: &mut HashMap<PublicKey, VersionedAccount>,
+    ) {
+        balances
+            .entry(payment.to)
+            .or_insert(VersionedAccount::default())
+            .tokens += payment.tokens;
     }
 
     /// Return the last entry ID registered.
-    pub fn last_id(&self) -> Hash {
+    pub fn last_id(&self) -> LastId {
         let last_ids = self.last_ids.read().expect("'last_ids' read lock");
-        let last_item = last_ids
-            .iter()
-            .last()
-            .expect("get last item from 'last_ids' list");
-        *last_item
+        last_ids.last_id()
     }
 
-    /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(signatures: &mut HashSet<Signature>, sig: &Signature) -> Result<()> {
-        if let Some(sig) = signatures.get(sig) {
-            return Err(BankError::DuplicateSignature(*sig));
+    fn check_last_id(&self, last_id: &LastId) -> Result<()> {
+        if !self.last_ids.read().unwrap().check_id(&last_id) {
+            Err(BankError::LastIdNotFound(last_id.clone()))
+        } else {
+            Ok(())
         }
-        signatures.insert(*sig);
-        Ok(())
-    }
-
-    /// Forget the given `signature` because its transaction was rejected.
-    fn forget_signature(signatures: &mut HashSet<Signature>, signature: &Signature) {
-        signatures.remove(signature);
-    }
-
-    /// Forget the given `signature` with `last_id` because the transaction was rejected.
-    fn forget_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) {
-        if let Some(entry) = self
-            .last_ids_sigs
-            .write()
-            .expect("'last_ids' read lock in forget_signature_with_last_id")
-            .get_mut(last_id)
-        {
-            Self::forget_signature(&mut entry.0, signature);
-        }
-    }
-
-    /// Forget all signatures. Useful for benchmarking.
-    pub fn clear_signatures(&self) {
-        for (_, sigs) in self.last_ids_sigs.write().unwrap().iter_mut() {
-            sigs.0.clear();
-        }
-    }
-
-    fn reserve_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) -> Result<()> {
-        if let Some(entry) = self
-            .last_ids_sigs
-            .write()
-            .expect("'last_ids' read lock in reserve_signature_with_last_id")
-            .get_mut(last_id)
-        {
-            return Self::reserve_signature(&mut entry.0, signature);
-        }
-        Err(BankError::LastIdNotFound(*last_id))
     }
 
     /// Look through the last_ids and find all the valid ids
@@ -184,12 +202,12 @@ impl Bank {
     ///
     /// Return a vec of tuple of (valid index, timestamp)
     /// index is into the passed ids slice to avoid copying hashes
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        let last_ids = self.last_ids_sigs.read().unwrap();
+    pub fn count_valid_ids(&self, ids: &[LastId]) -> Vec<(usize, u64)> {
+        let last_ids = self.last_ids.read().unwrap();
         let mut ret = Vec::new();
         for (i, id) in ids.iter().enumerate() {
-            if let Some(entry) = last_ids.get(id) {
-                ret.push((i, entry.1));
+            if let Some(ts) = last_ids.timestamp(id) {
+                ret.push((i, ts));
             }
         }
         ret
@@ -199,26 +217,20 @@ impl Bank {
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
-    pub fn register_entry_id(&self, last_id: &Hash) {
-        let mut last_ids = self
-            .last_ids
+    pub fn register_entry_hash(&self, last_hash: &Hash) {
+        self.last_ids
             .write()
-            .expect("'last_ids' write lock in register_entry_id");
-        let mut last_ids_sigs = self
-            .last_ids_sigs
-            .write()
-            .expect("last_ids_sigs write lock");
-        if last_ids.len() >= MAX_ENTRY_IDS {
-            let id = last_ids.pop_front().unwrap();
-            last_ids_sigs.remove(&id);
-        }
-        last_ids_sigs.insert(*last_id, (HashSet::new(), timestamp()));
-        last_ids.push_back(*last_id);
+            .unwrap()
+            .register_entry_hash(last_hash);
     }
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<PublicKey, i64>) -> Result<()> {
+    fn apply_debits(
+        &self,
+        tx: &Transaction,
+        bals: &mut HashMap<PublicKey, VersionedAccount>,
+    ) -> Result<()> {
         let mut purge = false;
         {
             let option = bals.get_mut(&tx.from);
@@ -230,22 +242,22 @@ impl Bank {
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }
-            let bal = option.unwrap();
 
-            self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
+            let bal = option.unwrap();
+            if bal.version >= tx.last_id.height {
+                return Err(BankError::InvalidAccountVersion(bal.version));
+            }
 
             if let Instruction::NewContract(contract) = &tx.instruction {
                 if contract.tokens < 0 {
                     return Err(BankError::NegativeTokens);
                 }
-
-                if *bal < contract.tokens {
-                    self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                if bal.tokens < contract.tokens {
                     return Err(BankError::InsufficientFunds(tx.from));
-                } else if *bal == contract.tokens {
+                } else if bal.tokens == contract.tokens {
                     purge = true;
                 } else {
-                    *bal -= contract.tokens;
+                    bal.tokens -= contract.tokens;
                 }
             };
         }
@@ -259,7 +271,7 @@ impl Bank {
 
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
+    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, VersionedAccount>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let plan = contract.plan.clone();
@@ -280,7 +292,7 @@ impl Bank {
                 let _ = self.apply_signature(tx.from, *tx_sig);
             }
             Instruction::NewVote(_vote) => {
-                trace!("GOT VOTE! last_id={:?}", &tx.last_id.as_ref()[..8]);
+                trace!("GOT VOTE! last_id={:?}", &tx.last_id.hash.as_ref()[..8]);
                 // TODO: record the vote in the stake table...
             }
         }
@@ -290,6 +302,8 @@ impl Bank {
     /// to progress, the payment plan will be stored in the bank.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let bals = &mut self.balances.write().unwrap();
+        //fast check to fail last id
+        self.check_last_id(&tx.last_id)?;
         self.apply_debits(tx, bals)?;
         self.apply_credits(tx, bals);
         self.transaction_count.fetch_add(1, Ordering::Relaxed);
@@ -355,7 +369,7 @@ impl Bank {
             }
         }
         if !entry.has_more {
-            self.register_entry_id(&entry.id);
+            self.register_entry_hash(&entry.id);
         }
         Ok(())
     }
@@ -410,7 +424,7 @@ impl Bank {
         let mut entry_count = *tail_idx as u64;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
-            if !block.verify(&self.last_id()) {
+            if !block.verify(&self.last_id().hash) {
                 warn!("Ledger proof of history failed at entry: {}", entry_count);
                 return Err(BankError::LedgerVerificationFailed);
             }
@@ -446,8 +460,8 @@ impl Bank {
 
             self.apply_payment(&deposit, &mut self.balances.write().unwrap());
         }
-        self.register_entry_id(&entry0.id);
-        self.register_entry_id(&entry1.id);
+        self.register_entry_hash(&entry0.id);
+        self.register_entry_hash(&entry1.id);
 
         let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
         tail.push(entry0);
@@ -516,7 +530,7 @@ impl Bank {
         n: i64,
         keypair: &KeyPair,
         to: PublicKey,
-        last_id: Hash,
+        last_id: LastId,
     ) -> Result<Signature> {
         let tx = Transaction::new(keypair, to, n, last_id);
         let sig = tx.sig;
@@ -532,36 +546,28 @@ impl Bank {
         keypair: &KeyPair,
         to: PublicKey,
         dt: DateTime<Utc>,
-        last_id: Hash,
+        last_id: LastId,
     ) -> Result<Signature> {
         let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
         let sig = tx.sig;
         self.process_transaction(&tx).map(|_| sig)
     }
 
-    pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
+    pub fn get_versioned_account(&self, pubkey: &PublicKey) -> VersionedAccount {
         let bals = self
             .balances
             .read()
-            .expect("'balances' read lock in get_balance");
-        bals.get(pubkey).cloned().unwrap_or(0)
+            .expect("'balances' read lock in get_versioned_account");
+        bals.get(pubkey)
+            .cloned()
+            .unwrap_or(VersionedAccount::default())
+    }
+    pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
+        self.get_versioned_account(pubkey).tokens
     }
 
     pub fn transaction_count(&self) -> usize {
         self.transaction_count.load(Ordering::Relaxed)
-    }
-
-    pub fn has_signature(&self, signature: &Signature) -> bool {
-        let last_ids_sigs = self
-            .last_ids_sigs
-            .read()
-            .expect("'last_ids_sigs' read lock");
-        for (_hash, signatures) in last_ids_sigs.iter() {
-            if signatures.0.contains(signature) {
-                return true;
-            }
-        }
-        false
     }
 }
 
@@ -756,7 +762,7 @@ mod tests {
         let sig = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_entry_id(&last_id);
+            bank.register_entry_hash(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
@@ -772,7 +778,7 @@ mod tests {
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_entry_id(&last_id);
+                bank.register_entry_hash(&last_id);
                 last_id
             })
             .collect();

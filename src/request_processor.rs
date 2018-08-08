@@ -23,8 +23,15 @@ impl RequestProcessor {
     ) -> Option<(Response, SocketAddr)> {
         match msg {
             Request::GetBalance { key } => {
-                let val = self.bank.get_balance(&key);
-                let rsp = (Response::Balance { key, val }, rsp_addr);
+                let val = self.bank.get_versioned_account(&key);
+                let rsp = (
+                    Response::Balance {
+                        key: key,
+                        val: val.tokens,
+                        height: val.version,
+                    },
+                    rsp_addr,
+                );
                 info!("Response::Balance {:?}", rsp);
                 Some(rsp)
             }
@@ -38,12 +45,6 @@ impl RequestProcessor {
                 let transaction_count = self.bank.transaction_count() as u64;
                 let rsp = (Response::TransactionCount { transaction_count }, rsp_addr);
                 info!("Response::TransactionCount {:?}", rsp);
-                Some(rsp)
-            }
-            Request::GetSignature { signature } => {
-                let signature_status = self.bank.has_signature(&signature);
-                let rsp = (Response::SignatureStatus { signature_status }, rsp_addr);
-                info!("Response::Signature {:?}", rsp);
                 Some(rsp)
             }
         }

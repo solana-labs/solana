@@ -4,7 +4,7 @@ use entry::Entry;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use signature::{KeyPair, KeyPairUtil, PublicKey};
-use transaction::Transaction;
+use transaction::{LastId, Transaction};
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,8 +38,11 @@ impl Mint {
         hash(&self.pkcs8)
     }
 
-    pub fn last_id(&self) -> Hash {
-        self.create_entries()[1].id
+    pub fn last_id(&self) -> LastId {
+        LastId {
+            height: 2,
+            hash: self.create_entries()[1].id,
+        }
     }
 
     pub fn keypair(&self) -> KeyPair {
@@ -52,7 +55,11 @@ impl Mint {
 
     pub fn create_transactions(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
-        let tx = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
+        let id = LastId {
+            hash: self.seed(),
+            height: 1,
+        };
+        let tx = Transaction::new(&keypair, self.pubkey(), self.tokens, id);
         vec![tx]
     }
 

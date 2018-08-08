@@ -22,7 +22,7 @@ use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
-use solana::transaction::Transaction;
+use solana::transaction::{LastId, Transaction};
 use solana::wallet::request_airdrop;
 use std::collections::VecDeque;
 use std::fs::File;
@@ -108,7 +108,7 @@ fn sample_tx_count(
 }
 
 /// Send loopback payment of 0 tokens and confirm the network processed it
-fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &KeyPair) {
+fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut LastId, id: &KeyPair) {
     let transfer_start = Instant::now();
 
     let mut poll_count = 0;
@@ -122,7 +122,7 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
 
         *last_id = barrier_client.get_last_id();
         let sig = barrier_client
-            .transfer(0, &id, id.pubkey(), last_id)
+            .transfer(0, &id, id.pubkey(), *last_id)
             .expect("Unable to send barrier transaction");
 
         let confirmatiom = barrier_client.poll_for_signature(&sig);
@@ -142,7 +142,10 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
             );
 
             // Sanity check that the client balance is still 1
-            let balance = barrier_client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+            let balance = barrier_client
+                .poll_get_balance(&id.pubkey())
+                .map(|x| x.tokens)
+                .unwrap_or(-1);
             if balance != 1 {
                 panic!("Expected an account balance of 1 (balance: {}", balance);
             }
@@ -169,6 +172,70 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
     }
 }
 
+fn distribute(
+    client: &mut ThinClient,
+    keypairs: &mut [KeyPair],
+) { 
+    let mut distributed = 0;
+    while distributed < keypairs.len() {
+        distributed = 0;
+        let last_id = client.get_last_id();
+        let sources = keypairs.iter().filter_map(|key| {
+                let balance = client.get_balance(i.pubkey());
+                if balance > 1 {
+                    Some(key)
+                } else {
+                    None
+                }
+            });
+        let destinations = keypairs.iter().filter_map(|key| {
+                let balance = client.get_balance(i.pubkey());
+                if balance > 0 {
+                    None
+                } else {
+                    Some(key)
+                }
+        });
+        sources.zip(destinations).foreach(|s,d| {
+            let balance = client.get_balance(s.pubkey());
+            let spend = balance/2;
+            let tx = Transaction::new(s, d.pubkey(), spend, last_id);
+            client.transfer_signed(&tx).unwrap();
+        });
+        distributed += sources.map(|s| {
+            let update = client.poll_update(1000, s);
+            (update.is_ok() && client.get_balance() > 0) as u64
+        }).sum();
+        distributed += destinations.map(|s| {
+            let update = client.poll_update(1000, s);
+            (update.is_ok() && client.get_balance() > 0) as u64
+        }).sum();
+}
+
+fn flood(
+    client: &mut ThinClient,
+    keypairs: &mut [KeyPair],
+) { 
+    let mut source = 1;
+    let mut filled = 2;
+    while filled <= keypairs.len() {
+        let last_id = client.get_last_id();
+        for i in 0..source {
+            for j in source .. filled {
+                let balance = client.get_balance(keypairs[i].0);
+                let spend = balance/(filled - source + 1);
+                let tx = Transaction::new(&keypairs[i] keypairs[j].pubkey(), spend, *last_id);
+                client.transfer_signed(&tx).unwrap();
+            }
+        }
+        source = filled;
+        filled = cmp::min(filled + source, keypairs.len());
+        for k in &keypairs[0..source] {
+            client.poll_update(10000, key)
+        }
+    }
+}
+ 
 fn generate_txs(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
     id: &KeyPair,

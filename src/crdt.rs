@@ -17,7 +17,6 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
-use hash::Hash;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
 use rand::{thread_rng, RngCore};
@@ -35,7 +34,7 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{BlobReceiver, BlobSender, SharedWindow, WindowIndex};
 use timing::timestamp;
-use transaction::Vote;
+use transaction::{LastId, Vote};
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -118,8 +117,8 @@ pub struct ContactInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LedgerState {
-    /// last verified hash that was submitted to the leader
-    pub last_id: Hash,
+    /// last verified LastId that was submitted to the leader
+    pub last_id: LastId,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -164,7 +163,7 @@ impl NodeInfo {
             },
             leader_id: PublicKey::default(),
             ledger_state: LedgerState {
-                last_id: Hash::default(),
+                last_id: LastId::default(),
             },
         }
     }
@@ -356,7 +355,7 @@ impl Crdt {
         self.external_liveness.get(key)
     }
 
-    pub fn insert_vote(&mut self, pubkey: &PublicKey, v: &Vote, last_id: Hash) {
+    pub fn insert_vote(&mut self, pubkey: &PublicKey, v: &Vote, last_id: &LastId) {
         if self.table.get(pubkey).is_none() {
             warn!(
                 "{:x}: VOTE for unknown id: {:x}",
@@ -395,7 +394,7 @@ impl Crdt {
         } else {
             let mut data = self.table[pubkey].clone();
             data.version = v.version;
-            data.ledger_state.last_id = last_id;
+            data.ledger_state.last_id = last_id.clone();
 
             debug!(
                 "{:x}: INSERTING VOTE! for {:x}",
@@ -406,13 +405,13 @@ impl Crdt {
             self.insert(&data);
         }
     }
-    pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
+    pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, LastId)]) {
         inc_new_counter!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
         }
         for v in votes {
-            self.insert_vote(&v.0, &v.1, v.2);
+            self.insert_vote(&v.0, &v.1, &v.2);
         }
     }
     pub fn insert(&mut self, v: &NodeInfo) {
@@ -807,7 +806,7 @@ impl Crdt {
         Ok((v.contact_info.ncp, req))
     }
 
-    pub fn new_vote(&mut self, last_id: Hash) -> Result<(Vote, SocketAddr)> {
+    pub fn new_vote(&mut self, last_id: LastId) -> Result<(Vote, SocketAddr)> {
         let mut me = self.my_data().clone();
         let leader = self.leader_data().ok_or(CrdtError::NoLeader)?.clone();
         me.version += 1;

@@ -4,7 +4,6 @@ use bank::Bank;
 use bincode::serialize;
 use counter::Counter;
 use crdt::Crdt;
-use hash::Hash;
 use influx_db_client as influxdb;
 use metrics;
 use packet::{BlobRecycler, SharedBlob};
@@ -19,7 +18,7 @@ use std::thread::{self, sleep, spawn, JoinHandle};
 use std::time::Duration;
 use streamer::BlobSender;
 use timing;
-use transaction::Transaction;
+use transaction::{LastId, Transaction};
 
 pub const VOTE_TIMEOUT_MS: u64 = 1000;
 
@@ -33,7 +32,7 @@ enum VoteError {
 }
 
 pub fn create_vote_tx_and_blob(
-    last_id: &Hash,
+    last_id: LastId,
     keypair: &KeyPair,
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
@@ -42,10 +41,10 @@ pub fn create_vote_tx_and_blob(
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
-        debug!("voting on {:?}", &last_id.as_ref()[..8]);
-        wcrdt.new_vote(*last_id)
+        debug!("voting on {}", last_id.hash);
+        wcrdt.new_vote(last_id.clone())
     }?;
-    let tx = Transaction::new_vote(&keypair, vote, *last_id, 0);
+    let tx = Transaction::new_vote(&keypair, vote, last_id, 0);
     {
         let mut blob = shared_blob.write().unwrap();
         let bytes = serialize(&tx)?;
@@ -59,13 +58,13 @@ pub fn create_vote_tx_and_blob(
 
 fn get_last_id_to_vote_on(
     debug_id: u64,
-    ids: &[Hash],
+    ids: &[LastId],
     bank: &Arc<Bank>,
     now: u64,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
-) -> result::Result<(Hash, u64), VoteError> {
-    let mut valid_ids = bank.count_valid_ids(&ids);
+) -> result::Result<(LastId, u64), VoteError> {
+    let mut valid_ids = bank.count_valid_ids(ids);
     let super_majority_index = (2 * ids.len()) / 3;
 
     //TODO(anatoly): this isn't stake based voting
@@ -93,7 +92,7 @@ fn get_last_id_to_vote_on(
         // Sort by timestamp
         valid_ids.sort_by(|a, b| a.1.cmp(&b.1));
 
-        let last_id = ids[valid_ids[super_majority_index].0];
+        let last_id = ids[valid_ids[super_majority_index].0].clone();
         return Ok((last_id, valid_ids[super_majority_index].1));
     }
 
@@ -123,12 +122,13 @@ pub fn send_leader_vote(
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
-        let ids: Vec<_> = crdt
+        let ids: Vec<LastId> = crdt
             .read()
             .unwrap()
             .table
             .values()
-            .map(|x| x.ledger_state.last_id)
+            .map(|x| &x.ledger_state.last_id)
+            .cloned()
             .collect();
         if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
             debug_id,
@@ -139,7 +139,7 @@ pub fn send_leader_vote(
             last_valid_validator_timestamp,
         ) {
             if let Ok((tx, shared_blob)) =
-                create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
+                create_vote_tx_and_blob(last_id, keypair, crdt, blob_recycler)
             {
                 bank.process_transaction(&tx)?;
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
@@ -171,7 +171,7 @@ fn send_validator_vote(
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
+    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(last_id, keypair, crdt, blob_recycler) {
         inc_new_counter!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
