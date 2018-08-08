@@ -34,9 +34,9 @@ use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender, SharedWindow, WindowIndex};
-use timing::timestamp;
+use timing::{duration_as_ms, timestamp};
 use transaction::Vote;
 
 /// milliseconds we sleep for between gossip requests
@@ -417,7 +417,8 @@ impl Crdt {
             self.insert_vote(&v.0, &v.1, v.2);
         }
     }
-    pub fn insert(&mut self, v: &NodeInfo) {
+
+    pub fn insert(&mut self, v: &NodeInfo) -> usize {
         // TODO check that last_verified types are always increasing
         //update the peer table
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
@@ -436,8 +437,8 @@ impl Crdt {
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
             let _ = self.local.insert(v.id, self.update_index);
-            inc_new_counter_info!("crdt-update-count", 1);
             self.update_liveness(v.id);
+            1
         } else {
             trace!(
                 "{:x}: INSERT FAILED data: {:x} new.version: {} me.version: {}",
@@ -446,6 +447,7 @@ impl Crdt {
                 v.version,
                 self.table[&v.id].version
             );
+            0
         }
     }
 
@@ -901,9 +903,11 @@ impl Crdt {
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
         // sig verify the whole update and slash anyone who sends a bad update
+        let mut insert_total = 0;
         for v in data {
-            self.insert(&v);
+            insert_total += self.insert(&v);
         }
+        inc_new_counter_info!("crdt-update-count", insert_total);
 
         for (pk, external_remote_index) in external_liveness {
             let remote_entry = if let Some(v) = self.remote.get(pk) {
@@ -1118,6 +1122,7 @@ impl Crdt {
                 }
             }
             Protocol::ReceiveUpdates(from, update_index, data, external_liveness) => {
+                let now = Instant::now();
                 trace!(
                     "ReceivedUpdates from={:x} update_index={} len={}",
                     make_debug_id(&from),
@@ -1127,9 +1132,16 @@ impl Crdt {
                 obj.write()
                     .expect("'obj' write lock in ReceiveUpdates")
                     .apply_updates(from, update_index, &data, &external_liveness);
+
+                report_time_spent(
+                    "ReceiveUpdates",
+                    &now.elapsed(),
+                    &format!(" len: {}", data.len()),
+                );
                 None
             }
             Protocol::RequestWindowIndex(from, ix) => {
+                let now = Instant::now();
                 //TODO this doesn't depend on CRDT module, can be moved
                 //but we are using the listen thread to service these request
                 //TODO verify from is signed
@@ -1152,7 +1164,14 @@ impl Crdt {
                     inc_new_counter_info!("crdt-window-request-address-eq", 1);
                     return None;
                 }
-                Self::run_window_request(&window, ledger_window, &me, &from, ix, blob_recycler)
+                let res =
+                    Self::run_window_request(&window, ledger_window, &me, &from, ix, blob_recycler);
+                report_time_spent(
+                    "RequestWindowIndex",
+                    &now.elapsed(),
+                    &format!(" ix: {}", ix),
+                );
+                res
             }
         }
     }
@@ -1340,6 +1359,13 @@ impl TestNode {
                 retransmit,
             },
         }
+    }
+}
+
+fn report_time_spent(label: &str, time: &Duration, extra: &str) {
+    let count = duration_as_ms(time);
+    if count > 5 {
+        info!("{} took: {} ms {}", label, count, extra);
     }
 }
 

@@ -17,7 +17,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use timing::duration_as_ms;
 
 pub const WINDOW_SIZE: u64 = 2 * 1024;
 pub type PacketReceiver = Receiver<SharedPackets>;
@@ -250,7 +251,7 @@ fn repair_window(
     trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
     if !reqs.is_empty() {
         inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
-        debug!(
+        info!(
             "{:x}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
             debug_id,
             *times,
@@ -496,7 +497,8 @@ fn recv_window(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq)
     }
-    inc_new_counter_info!("streamer-recv_window-recv", dq.len());
+    let now = Instant::now();
+    inc_new_counter_info!("streamer-recv_window-recv", dq.len(), 100);
     debug!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
@@ -515,6 +517,7 @@ fn recv_window(
         retransmit,
     )?;
 
+    let mut pixs = Vec::new();
     //send a contiguous set of blocks
     let mut consume_queue = VecDeque::new();
     while let Some(b) = dq.pop_front() {
@@ -522,6 +525,7 @@ fn recv_window(
             let p = b.write().expect("'b' write lock in fn recv_window");
             (p.get_index()?, p.meta.size)
         };
+        pixs.push(pix);
 
         if !blob_idx_in_window(debug_id, pix, *consumed, received) {
             recycler.recycle(b);
@@ -543,10 +547,14 @@ fn recv_window(
     if log_enabled!(Level::Trace) {
         trace!("{}", print_window(debug_id, window, *consumed));
     }
-    trace!(
-        "{:x}: sending consume_queue.len: {}",
+    info!(
+        "{:x}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
         debug_id,
-        consume_queue.len()
+        *consumed,
+        *received,
+        consume_queue.len(),
+        pixs,
+        duration_as_ms(&now.elapsed())
     );
     if !consume_queue.is_empty() {
         debug!(
