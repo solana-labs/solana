@@ -460,7 +460,7 @@ fn blob_idx_in_window(debug_id: u64, pix: u64, consumed: u64, received: &mut u64
         //  the window.  The worst case here is the server *starts* outside
         //  the window, none of the packets it receives fits in the window
         //  and repair requests (which are based on received) are never generated
-        *received = cmp::min(consumed + WINDOW_SIZE, cmp::max(pix, *received));
+        *received = cmp::max(pix, *received);
 
         if pix >= consumed + WINDOW_SIZE {
             trace!(
@@ -1155,7 +1155,7 @@ mod test {
         );
         assert_eq!(
             wrap_blob_idx_in_window(0, 91 + WINDOW_SIZE, 90, 100),
-            (false, 90 + WINDOW_SIZE)
+            (false, 91 + WINDOW_SIZE)
         );
         assert_eq!(wrap_blob_idx_in_window(0, 89, 90, 100), (false, 100));
 
