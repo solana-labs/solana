@@ -26,20 +26,12 @@ name = "solana-bench-streamer"
 path = "src/bin/bench-streamer.rs"
 
 [[bin]]
-name = "solana-wallet"
-path = "src/bin/wallet.rs"
+name = "solana-drone"
+path = "src/bin/drone.rs"
 
 [[bin]]
 name = "solana-fullnode"
 path = "src/bin/fullnode.rs"
-
-[[bin]]
-name = "solana-ledger-tool"
-path = "src/bin/ledger-tool.rs"
-
-[[bin]]
-name = "solana-keygen"
-path = "src/bin/keygen.rs"
 
 [[bin]]
 name = "solana-fullnode-config"
@@ -50,8 +42,16 @@ name = "solana-genesis"
 path = "src/bin/genesis.rs"
 
 [[bin]]
-name = "solana-drone"
-path = "src/bin/drone.rs"
+name = "solana-ledger-tool"
+path = "src/bin/ledger-tool.rs"
+
+[[bin]]
+name = "solana-keygen"
+path = "src/bin/keygen.rs"
+
+[[bin]]
+name = "solana-wallet"
+path = "src/bin/wallet.rs"
 
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
