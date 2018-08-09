@@ -285,8 +285,8 @@ mod tests {
         remote.insert(key1, 0);
 
         for i in 0..num_peers {
-            let pk = Keypair::new().pubkey();
-            rumors.insert(pk, i);
+            let pubkey = Keypair::new().pubkey();
+            rumors.insert(pubkey, i);
         }
 
         external_liveness.insert(key1, rumors);
@@ -316,8 +316,8 @@ mod tests {
         remote.insert(key1, old_index);
 
         for _i in 0..num_peers {
-            let pk = Keypair::new().pubkey();
-            rumors.insert(pk, old_index);
+            let pubkey = Keypair::new().pubkey();
+            rumors.insert(pubkey, old_index);
         }
 
         external_liveness.insert(key1, rumors);
