@@ -8,7 +8,8 @@ use std::net::UdpSocket;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use streamer::{self, BlobReceiver, SharedWindow};
+use streamer::BlobReceiver;
+use window::{self, SharedWindow};
 
 pub struct RetransmitStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -32,7 +33,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
-        let t_window = streamer::window(
+        let t_window = window::window(
             crdt.clone(),
             window,
             entry_height,

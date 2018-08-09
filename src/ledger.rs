@@ -15,8 +15,8 @@ use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
-use streamer::WINDOW_SIZE;
 use transaction::Transaction;
+use window::WINDOW_SIZE;
 
 //
 // A persistent ledger is 2 files:

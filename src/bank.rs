@@ -22,9 +22,9 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
-use streamer::WINDOW_SIZE;
 use timing::{duration_as_us, timestamp};
 use transaction::{Instruction, Plan, Transaction};
+use window::WINDOW_SIZE;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use

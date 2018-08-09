@@ -55,6 +55,7 @@ pub mod tvu;
 pub mod vote_stage;
 pub mod voting;
 pub mod wallet;
+pub mod window;
 pub mod write_stage;
 extern crate bincode;
 extern crate bs58;

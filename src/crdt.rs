@@ -35,9 +35,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use streamer::{BlobReceiver, BlobSender, SharedWindow, WindowIndex};
+use streamer::{BlobReceiver, BlobSender};
 use timing::{duration_as_ms, timestamp};
 use transaction::Vote;
+use window::{SharedWindow, WindowIndex};
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -1381,8 +1382,8 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use streamer::default_window;
     use transaction::Vote;
+    use window::default_window;
 
     #[test]
     fn test_parse_port_or_addr() {

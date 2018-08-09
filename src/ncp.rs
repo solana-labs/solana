@@ -10,6 +10,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer;
+use window::SharedWindow;
 
 pub struct Ncp {
     exit: Arc<AtomicBool>,
@@ -19,7 +20,7 @@ pub struct Ncp {
 impl Ncp {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
-        window: streamer::SharedWindow,
+        window: SharedWindow,
         ledger_path: Option<&str>,
         gossip_listen_socket: UdpSocket,
         gossip_send_socket: UdpSocket,
