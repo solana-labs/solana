@@ -198,6 +198,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
 }
 
 #[test]
+#[ignore]
 fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     logger::setup();
     const N: usize = 5;
