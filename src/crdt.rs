@@ -909,8 +909,8 @@ impl Crdt {
         }
         inc_new_counter_info!("crdt-update-count", insert_total);
 
-        for (pk, external_remote_index) in external_liveness {
-            let remote_entry = if let Some(v) = self.remote.get(pk) {
+        for (pubkey, external_remote_index) in external_liveness {
+            let remote_entry = if let Some(v) = self.remote.get(pubkey) {
                 *v
             } else {
                 0
@@ -922,7 +922,7 @@ impl Crdt {
 
             let liveness_entry = self
                 .external_liveness
-                .entry(*pk)
+                .entry(*pubkey)
                 .or_insert_with(HashMap::new);
             let peer_index = *liveness_entry.entry(from).or_insert(*external_remote_index);
             if *external_remote_index > peer_index {
