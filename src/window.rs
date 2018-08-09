@@ -2,8 +2,10 @@
 //!
 use counter::Counter;
 use crdt::{Crdt, NodeInfo};
+use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use ledger::Block;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob, SharedBlobs, BLOB_SIZE};
 use result::{Error, Result};
@@ -552,6 +554,21 @@ pub fn initialized_window(
     }
 
     window
+}
+
+pub fn new_window_from_entries(
+    ledger_tail: &[Entry],
+    entry_height: u64,
+    node_info: &NodeInfo,
+    blob_recycler: &BlobRecycler,
+) -> SharedWindow {
+    // convert to blobs
+    let mut blobs = VecDeque::new();
+    ledger_tail.to_blobs(&blob_recycler, &mut blobs);
+
+    // flatten deque to vec
+    let blobs: Vec<_> = blobs.into_iter().collect();
+    initialized_window(&node_info, blobs, entry_height)
 }
 
 pub fn window(
