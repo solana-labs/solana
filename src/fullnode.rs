@@ -1,6 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use bank::Bank;
+use broadcaster;
 use crdt::{Crdt, NodeInfo, TestNode};
 use entry::Entry;
 use ledger::{read_ledger, Block};
@@ -244,7 +245,7 @@ impl FullNode {
         ).expect("Ncp::new");
         thread_hdls.extend(ncp.thread_hdls());
 
-        let t_broadcast = streamer::broadcaster(
+        let t_broadcast = broadcaster::broadcaster(
             node.sockets.broadcast,
             crdt,
             window,

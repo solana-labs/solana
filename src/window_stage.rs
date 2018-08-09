@@ -1,5 +1,6 @@
 //! The `window_stage` maintains the blob window
 
+use broadcaster;
 use crdt::Crdt;
 use packet::BlobRecycler;
 use service::Service;
@@ -24,7 +25,7 @@ impl WindowStage {
     ) -> (Self, BlobReceiver) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_retransmit = streamer::retransmitter(
+        let t_retransmit = broadcaster::retransmitter(
             retransmit_socket,
             crdt.clone(),
             blob_recycler.clone(),
