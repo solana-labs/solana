@@ -12,6 +12,7 @@ pub mod counter;
 pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
+pub mod broadcaster;
 pub mod budget;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
