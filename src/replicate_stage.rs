@@ -8,7 +8,7 @@ use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
-use signature::KeyPair;
+use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -72,7 +72,7 @@ impl ReplicateStage {
         Ok(())
     }
     pub fn new(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,

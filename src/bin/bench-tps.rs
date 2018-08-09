@@ -19,7 +19,7 @@ use solana::metrics;
 use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
-use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
+use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
@@ -109,7 +109,7 @@ fn sample_tx_count(
 }
 
 /// Send loopback payment of 0 tokens and confirm the network processed it
-fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &KeyPair) {
+fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &Keypair) {
     let transfer_start = Instant::now();
 
     let mut poll_count = 0;
@@ -172,8 +172,8 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
 
 fn generate_txs(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
-    id: &KeyPair,
-    keypairs: &[KeyPair],
+    id: &Keypair,
+    keypairs: &[Keypair],
     last_id: &Hash,
     threads: usize,
     reclaim: bool,
@@ -271,7 +271,7 @@ fn do_tx_transfers(
     }
 }
 
-fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_count: i64) {
+fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: i64) {
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
@@ -655,7 +655,7 @@ fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
         gossip_socket_pair = udp_public_bind("gossip", 8000, 10000);
     }
 
-    let pubkey = KeyPair::new().pubkey();
+    let pubkey = Keypair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
     assert!(!gossip_socket_pair.addr.ip().is_unspecified());
     assert!(!gossip_socket_pair.addr.ip().is_multicast());

@@ -10,7 +10,7 @@ use rayon::prelude::*;
 use solana::bank::*;
 use solana::hash::hash;
 use solana::mint::Mint;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{Keypair, KeypairUtil};
 use solana::transaction::Transaction;
 
 fn bench_process_transaction(bencher: &mut Bencher) {
@@ -22,7 +22,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .into_par_iter()
         .map(|i| {
             // Seed the 'from' account.
-            let rando0 = KeyPair::new();
+            let rando0 = Keypair::new();
             let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 10_000, mint.last_id());
             assert!(bank.process_transaction(&tx).is_ok());
 
@@ -30,7 +30,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             bank.register_entry_id(&last_id);
 
-            let rando1 = KeyPair::new();
+            let rando1 = Keypair::new();
             let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
             assert!(bank.process_transaction(&tx).is_ok());
 

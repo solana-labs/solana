@@ -219,7 +219,7 @@ mod tests {
     use chrono::prelude::*;
     use entry::Entry;
     use hash::hash;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use transaction::Transaction;
 
     #[test]
@@ -237,7 +237,7 @@ mod tests {
         let zero = Hash::default();
 
         // First, verify entries
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
         let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
@@ -254,7 +254,7 @@ mod tests {
         let zero = Hash::default();
 
         // First, verify entries
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
         let tx1 = Transaction::new_signature(&keypair, Default::default(), zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
@@ -277,7 +277,7 @@ mod tests {
         assert_eq!(tick.num_hashes, 0);
         assert_eq!(tick.id, zero);
 
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx0 = Transaction::new_timestamp(&keypair, Utc::now(), zero);
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
@@ -288,7 +288,7 @@ mod tests {
     #[should_panic]
     fn test_next_entry_panic() {
         let zero = Hash::default();
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
     }

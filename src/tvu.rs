@@ -42,7 +42,7 @@ use crdt::Crdt;
 use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
 use service::Service;
-use signature::KeyPair;
+use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -70,7 +70,7 @@ impl Tvu {
     /// * `exit` - The exit signal.
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: &Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
@@ -152,7 +152,7 @@ pub mod tests {
     use packet::BlobRecycler;
     use result::Result;
     use service::Service;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::collections::VecDeque;
     use std::net::UdpSocket;
     use std::sync::atomic::AtomicBool;
@@ -179,7 +179,7 @@ pub mod tests {
     fn test_replicate() {
         logger::setup();
         let leader = TestNode::new_localhost();
-        let target1_keypair = KeyPair::new();
+        let target1_keypair = Keypair::new();
         let target1 = TestNode::new_localhost_with_pubkey(target1_keypair.pubkey());
         let target2 = TestNode::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
@@ -252,7 +252,7 @@ pub mod tests {
         let mut blob_id = 0;
         let num_transfers = 10;
         let transfer_amount = 501;
-        let bob_keypair = KeyPair::new();
+        let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![], false);
             bank.register_entry_id(&cur_hash);

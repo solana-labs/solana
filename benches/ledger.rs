@@ -6,14 +6,14 @@ use criterion::{Bencher, Criterion};
 use solana::hash::{hash, Hash};
 use solana::ledger::{next_entries, reconstruct_entries_from_blobs, Block};
 use solana::packet::BlobRecycler;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{Keypair, KeypairUtil};
 use solana::transaction::Transaction;
 use std::collections::VecDeque;
 
 fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
     let zero = Hash::default();
     let one = hash(&zero.as_ref());
-    let keypair = KeyPair::new();
+    let keypair = Keypair::new();
     let tx0 = Transaction::new(&keypair, keypair.pubkey(), 1, one);
     let transactions = vec![tx0; 10];
     let entries = next_entries(&zero, 1, transactions);

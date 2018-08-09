@@ -7,7 +7,7 @@
 use influx_db_client as influxdb;
 use metrics;
 use signature::Signature;
-use signature::{KeyPair, PublicKey};
+use signature::{Keypair, PublicKey};
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
@@ -28,7 +28,7 @@ pub enum DroneRequest {
 }
 
 pub struct Drone {
-    mint_keypair: KeyPair,
+    mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     _airdrop_addr: SocketAddr,
     transactions_addr: SocketAddr,
@@ -40,7 +40,7 @@ pub struct Drone {
 
 impl Drone {
     pub fn new(
-        mint_keypair: KeyPair,
+        mint_keypair: Keypair,
         _airdrop_addr: SocketAddr,
         transactions_addr: SocketAddr,
         requests_addr: SocketAddr,
@@ -163,7 +163,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use service::Service;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_check_request_limit() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_clear_request_count() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_add_ip_to_cache() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_clear_ip_cache() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_drone_default_init() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
         let transactions_addr = "0.0.0.0:0".parse().unwrap();
@@ -260,7 +260,7 @@ mod tests {
     }
 
     fn tmp_ledger_path(name: &str) -> String {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
 
         format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
     }
@@ -272,13 +272,13 @@ mod tests {
         const TPS_BATCH: i64 = 5_000_000;
 
         logger::setup();
-        let leader_keypair = KeyPair::new();
+        let leader_keypair = Keypair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
         let bank = Bank::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
-        let carlos_pubkey = KeyPair::new().pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
+        let carlos_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");

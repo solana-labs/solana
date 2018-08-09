@@ -508,13 +508,13 @@ mod tests {
     use entry::{next_entry, Entry};
     use hash::hash;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::{Transaction, Vote};
 
     fn tmp_ledger_path(name: &str) -> String {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
 
         format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
     }
@@ -538,7 +538,7 @@ mod tests {
     fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
 
         let mut id = one;
         let mut num_hashes = 0;
@@ -557,7 +557,7 @@ mod tests {
     fn make_test_entries() -> Vec<Entry> {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx0 = Transaction::new_vote(
             &keypair,
             Vote {
@@ -612,7 +612,7 @@ mod tests {
         logger::setup();
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx_small = Transaction::new_vote(
             &keypair,
             Vote {

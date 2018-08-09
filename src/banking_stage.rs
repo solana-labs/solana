@@ -238,7 +238,7 @@ mod test {
 //mod tests {
 //    use bank::Bank;
 //    use mint::Mint;
-//    use signature::{KeyPair, KeyPairUtil};
+//    use signature::{Keypair, KeypairUtil};
 //    use transaction::Transaction;
 //
 //    #[test]
@@ -253,7 +253,7 @@ mod test {
 //        let banking_stage = EventProcessor::new(bank, &mint.last_id(), None);
 //
 //        // Process a batch that includes a transaction that receives two tokens.
-//        let alice = KeyPair::new();
+//        let alice = Keypair::new();
 //        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 //        let transactions = vec![tx];
 //        let entry0 = banking_stage.process_transactions(transactions).unwrap();

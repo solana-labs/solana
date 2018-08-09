@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use hash::Hash;
 use request::{Request, Response};
-use signature::{KeyPair, PublicKey, Signature};
+use signature::{Keypair, PublicKey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
@@ -99,7 +99,7 @@ impl ThinClient {
     pub fn transfer(
         &self,
         n: i64,
-        keypair: &KeyPair,
+        keypair: &Keypair,
         to: PublicKey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
@@ -289,14 +289,14 @@ mod tests {
     use logger;
     use mint::Mint;
     use service::Service;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use transaction::{Instruction, Plan};
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
 
         let path = format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey());
 
@@ -309,13 +309,13 @@ mod tests {
     #[test]
     fn test_thin_client() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
+        let leader_keypair = Keypair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.data.clone();
 
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = tmp_ledger("thin_client", &alice);
 
@@ -358,11 +358,11 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
+        let leader_keypair = Keypair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
@@ -418,11 +418,11 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         logger::setup();
-        let leader_keypair = KeyPair::new();
+        let leader_keypair = Keypair::new();
         let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
-        let bob_pubkey = KeyPair::new().pubkey();
+        let bob_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);

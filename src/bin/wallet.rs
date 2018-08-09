@@ -13,7 +13,7 @@ use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
-use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
+use solana::signature::{read_keypair, Keypair, KeypairUtil, PublicKey, Signature};
 use solana::thin_client::ThinClient;
 use solana::wallet::request_airdrop;
 use std::error;
@@ -56,7 +56,7 @@ impl error::Error for WalletError {
 
 struct WalletConfig {
     leader: NodeInfo,
-    id: KeyPair,
+    id: Keypair,
     drone_addr: SocketAddr,
     command: WalletCommand,
 }
@@ -66,7 +66,7 @@ impl Default for WalletConfig {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         WalletConfig {
             leader: NodeInfo::new_leader(&default_addr),
-            id: KeyPair::new(),
+            id: Keypair::new(),
             drone_addr: default_addr,
             command: WalletCommand::Balance,
         }

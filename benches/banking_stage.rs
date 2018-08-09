@@ -11,7 +11,7 @@ use solana::banking_stage::BankingStage;
 use solana::mint::Mint;
 use solana::packet::{to_packets_chunked, PacketRecycler};
 use solana::record_stage::Signal;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{Keypair, KeypairUtil};
 use solana::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
@@ -23,7 +23,7 @@ use std::sync::Arc;
 // use hash::hash;
 // use mint::Mint;
 // use rayon::prelude::*;
-// use signature::{KeyPair, KeyPairUtil};
+// use signature::{Keypair, KeypairUtil};
 // use std::collections::HashSet;
 // use std::time::Instant;
 // use transaction::Transaction;
@@ -49,11 +49,11 @@ use std::sync::Arc;
 //             }
 //
 //             // Seed the 'from' account.
-//             let rando0 = KeyPair::new();
+//             let rando0 = Keypair::new();
 //             let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 1_000, last_id);
 //             bank.process_transaction(&tx).unwrap();
 //
-//             let rando1 = KeyPair::new();
+//             let rando1 = Keypair::new();
 //             let tx = Transaction::new(&rando0, rando1.pubkey(), 2, last_id);
 //             bank.process_transaction(&tx).unwrap();
 //
@@ -102,9 +102,9 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let num_dst_accounts = 8 * 1024;
     let num_src_accounts = 8 * 1024;
 
-    let srckeys: Vec<_> = (0..num_src_accounts).map(|_| KeyPair::new()).collect();
+    let srckeys: Vec<_> = (0..num_src_accounts).map(|_| Keypair::new()).collect();
     let dstkeys: Vec<_> = (0..num_dst_accounts)
-        .map(|_| KeyPair::new().pubkey())
+        .map(|_| Keypair::new().pubkey())
         .collect();
 
     let transactions: Vec<_> = (0..tx)
@@ -175,7 +175,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let mut pubkeys = Vec::new();
     let num_keys = 8;
     for _ in 0..num_keys {
-        pubkeys.push(KeyPair::new().pubkey());
+        pubkeys.push(Keypair::new().pubkey());
     }
 
     let transactions: Vec<_> = (0..tx)
