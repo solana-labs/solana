@@ -323,7 +323,6 @@ fn main() {
     }
 
     let mut client = mk_client(&leader);
-    let mut barrier_client = mk_client(&leader);
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
@@ -333,7 +332,7 @@ fn main() {
     airdrop_tokens(&mut client, &leader, &id, RESERVE_AMOUNT * tx_count);
 
     println!("Get last ID...");
-    let mut last_id = client.get_last_id();
+    let last_id = client.get_last_id();
     println!("Got last ID {:?}", last_id);
 
     let first_tx_count = client.transaction_count();
@@ -362,6 +361,8 @@ fn main() {
         .map(|_| {
             let exit_signal = exit_signal.clone();
             let leader = leader.clone();
+            let keypair =
+                read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
             Builder::new()
                 .name("solana-client-sender".to_string())
                 .spawn(move || {
@@ -370,7 +371,7 @@ fn main() {
                     bench_versioned::execute(
                         &leader,
                         &mut client,
-                        &id,
+                        &keypair,
                         my_tx_count as usize,
                         RESERVE_AMOUNT,
                         exit_signal,
