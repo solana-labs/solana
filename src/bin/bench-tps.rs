@@ -405,7 +405,8 @@ fn main() {
     let mut rnd = GenKeys::new(seed);
 
     println!("Get tokens...");
-    airdrop_tokens(&mut client, &leader, &id, tx_count);
+    const RESERVE_AMOUNT = 1000i64;
+    airdrop_tokens(&mut client, &leader, &id, RESERVE_AMOUNT * tx_count);
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();
@@ -451,11 +452,10 @@ fn main() {
                     let mut client = mk_client(&leader);
                     let mut bal = 0;
 
-                    let amount = 1000;
                     while bal == 0 {
                         let last_id = client.get_last_id();
                         let tx =
-                            Transaction::new(id, keys[0].pubkey(), amount * my_tx_count, last_id);
+                            Transaction::new(id, keys[0].pubkey(), RESERVE_AMOUNT * my_tx_count, last_id);
                         client.transfer_signed(&tx).unwrap();
                         let _ = client
                             .poll_update(1000, &keys[0].pubkey())
@@ -463,9 +463,8 @@ fn main() {
                         bal = client.get_balance(&keys[0].pubkey());
                     }
 
-                    bench_versined::distribute(&mut client, &keys, amount);
+                    bench_versined::distribute(&mut client, &keys, RESERVE_AMOUNT);
 
-                    let len = my_tx_count / 2;
 
                     while !exit_signal.load(Ordering::Relaxed) {
                         let transfer_start = Instant::now();
@@ -474,8 +473,9 @@ fn main() {
                             my_tx_count, leader.contact_info.tpu
                         );
 
-                        bench_versined::swap(&mut client, &keys[..len], &keys[len..]);
-                        bench_versined::swap(&mut client, &keys[len..], &keys[..len]);
+                        let half = my_tx_count / 2;
+                        bench_versined::swap(&mut client, &keys[..half], &keys[half..]);
+                        bench_versined::swap(&mut client, &keys[half..], &keys[..half]);
 
                         println!(
                             "Tx send done. {} ms {} tps",
