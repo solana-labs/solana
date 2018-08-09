@@ -192,7 +192,8 @@ impl Transaction {
     /// Verify only the transaction signature.
     pub fn verify_signature(&self) -> bool {
         warn!("transaction signature verification called");
-        self.signature.verify(&self.from.as_ref(), &self.get_sign_data())
+        self.signature
+            .verify(&self.from.as_ref(), &self.get_sign_data())
     }
 
     /// Verify only the payment plan.

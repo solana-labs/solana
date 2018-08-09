@@ -58,12 +58,7 @@ impl Budget {
     }
 
     /// Create a budget that pays `tokens` to `to` after the given DateTime.
-    pub fn new_future_payment(
-        dt: DateTime<Utc>,
-        from: Pubkey,
-        tokens: i64,
-        to: Pubkey,
-    ) -> Self {
+    pub fn new_future_payment(dt: DateTime<Utc>, from: Pubkey, tokens: i64, to: Pubkey) -> Self {
         Budget::After(Condition::Timestamp(dt, from), Payment { tokens, to })
     }
 
