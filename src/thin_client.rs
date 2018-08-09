@@ -243,7 +243,9 @@ impl ThinClient {
     /// until the server sends a response.
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
-        let req = Request::GetSignature { signature: *signature };
+        let req = Request::GetSignature {
+            signature: *signature,
+        };
         let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
         let now = Instant::now();
         let mut done = false;

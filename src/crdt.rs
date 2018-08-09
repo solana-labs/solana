@@ -228,14 +228,7 @@ impl NodeInfo {
     }
     pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
         let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
-        NodeInfo::new(
-            Pubkey::default(),
-            gossip_addr,
-            daddr,
-            daddr,
-            daddr,
-            daddr,
-        )
+        NodeInfo::new(Pubkey::default(), gossip_addr, daddr, daddr, daddr, daddr)
     }
 }
 
