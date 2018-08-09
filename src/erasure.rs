@@ -3,7 +3,7 @@ use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
 use std::cmp;
 use std::mem;
 use std::result;
-use streamer::WindowSlot;
+use window::WindowSlot;
 
 //TODO(sakridge) pick these values
 pub const NUM_DATA: usize = 16; // number of data blobs
@@ -611,7 +611,7 @@ mod test {
     use signature::Keypair;
     use signature::KeypairUtil;
     //    use std::sync::{Arc, RwLock};
-    use streamer::{index_blobs, WindowSlot};
+    use window::{index_blobs, WindowSlot};
 
     #[test]
     pub fn test_coding() {
