@@ -9,35 +9,35 @@ use transaction::Transaction;
 
 pub struct Recorder {
     last_hash: Hash,
-    num_hashes: u64,
-    num_ticks: u32,
+    hash_count: u64,
+    tick_count: u32,
 }
 
 impl Recorder {
     pub fn new(last_hash: Hash) -> Self {
         Recorder {
             last_hash,
-            num_hashes: 0,
-            num_ticks: 0,
+            hash_count: 0,
+            tick_count: 0,
         }
     }
 
     pub fn hash(&mut self) {
         self.last_hash = hash(&self.last_hash.as_ref());
-        self.num_hashes += 1;
+        self.hash_count += 1;
     }
 
     pub fn record(&mut self, transactions: Vec<Transaction>) -> Vec<Entry> {
-        ledger::next_entries_mut(&mut self.last_hash, &mut self.num_hashes, transactions)
+        ledger::next_entries_mut(&mut self.last_hash, &mut self.hash_count, transactions)
     }
 
     pub fn tick(&mut self, start_time: Instant, tick_duration: Duration) -> Option<Entry> {
-        if start_time.elapsed() > tick_duration * (self.num_ticks + 1) {
+        if start_time.elapsed() > tick_duration * (self.tick_count + 1) {
             // TODO: don't let this overflow u32
-            self.num_ticks += 1;
+            self.tick_count += 1;
             Some(Entry::new_mut(
                 &mut self.last_hash,
-                &mut self.num_hashes,
+                &mut self.hash_count,
                 vec![],
                 false,
             ))

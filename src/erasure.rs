@@ -169,7 +169,7 @@ pub fn decode_blocks(
 }
 
 // Generate coding blocks in window starting from start_idx,
-//   for num_blobs..  For each block place the coding blobs
+//   for blob_count..  For each block place the coding blobs
 //   at the end of the block like so:
 //
 //  block-size part of a Window, with each element a WindowSlot..
@@ -210,7 +210,7 @@ pub fn generate_coding(
     window: &mut [WindowSlot],
     recycler: &BlobRecycler,
     receive_index: u64,
-    num_blobs: usize,
+    blob_count: usize,
     transmit_index_coding: &mut u64,
 ) -> Result<()> {
     // beginning of the coding blobs of the block that receive_index points into
@@ -222,12 +222,12 @@ pub fn generate_coding(
 
     loop {
         let block_end = block_start + NUM_DATA;
-        if block_end > (start_idx + num_blobs) {
+        if block_end > (start_idx + blob_count) {
             break;
         }
         info!(
-            "generate_coding {:x} start: {} end: {} start_idx: {} num_blobs: {}",
-            debug_id, block_start, block_end, start_idx, num_blobs
+            "generate_coding {:x} start: {} end: {} start_idx: {} blob_count: {}",
+            debug_id, block_start, block_end, start_idx, blob_count
         );
 
         let mut max_data_size = 0;
@@ -696,7 +696,7 @@ mod test {
     fn generate_window(
         blob_recycler: &BlobRecycler,
         offset: usize,
-        num_blobs: usize,
+        blob_count: usize,
     ) -> Vec<WindowSlot> {
         let mut window = vec![
             WindowSlot {
@@ -705,8 +705,8 @@ mod test {
             };
             WINDOW_SIZE
         ];
-        let mut blobs = Vec::with_capacity(num_blobs);
-        for i in 0..num_blobs {
+        let mut blobs = Vec::with_capacity(blob_count);
+        for i in 0..blob_count {
             let b = blob_recycler.allocate();
             let b_ = b.clone();
             let mut w = b.write().unwrap();
@@ -744,8 +744,8 @@ mod test {
         window
     }
 
-    fn scramble_window_tails(window: &mut [WindowSlot], num_blobs: usize) {
-        for i in 0..num_blobs {
+    fn scramble_window_tails(window: &mut [WindowSlot], blob_count: usize) {
+        for i in 0..blob_count {
             if let Some(b) = &window[i].data {
                 let size = {
                     let b_l = b.read().unwrap();
@@ -791,8 +791,8 @@ mod test {
 
         // Generate a window
         let offset = 0;
-        let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = generate_window(&blob_recycler, WINDOW_SIZE, num_blobs);
+        let blob_count = erasure::NUM_DATA + 2;
+        let mut window = generate_window(&blob_recycler, WINDOW_SIZE, blob_count);
 
         for slot in &window {
             if let Some(blob) = &slot.data {
@@ -812,7 +812,7 @@ mod test {
                 &mut window,
                 &blob_recycler,
                 offset as u64,
-                num_blobs,
+                blob_count,
                 &mut index
             ).is_ok()
         );
@@ -830,7 +830,7 @@ mod test {
         print_window(&window);
 
         // put junk in the tails, simulates re-used blobs
-        scramble_window_tails(&mut window, num_blobs);
+        scramble_window_tails(&mut window, blob_count);
 
         // Recover it from coding
         assert!(
@@ -975,8 +975,9 @@ mod test {
     //        let blob_recycler = BlobRecycler::default();
     //        let offset = 4;
     //        let data_len = 16;
-    //        let num_blobs = erasure::NUM_DATA + 2;
-    //        let (mut window, blobs_len) = generate_window(data_len, &blob_recycler, offset, num_blobs);
+    //        let blob_count = erasure::NUM_DATA + 2;
+    //        let (mut window, blobs_len) = generate_window(data_len, &blob_recycler, offset,
+    //        blob_count);
     //        println!("** after-gen:");
     //        print_window(&window);
     //        assert!(erasure::generate_coding(&mut window, offset, blobs_len).is_ok());

@@ -977,8 +977,8 @@ impl Crdt {
             let mut wblob = blob.write().unwrap();
             let blob_ix = wblob.get_index().expect("run_window_request get_index");
             if blob_ix == ix {
-                let num_retransmits = wblob.meta.num_retransmits;
-                wblob.meta.num_retransmits += 1;
+                let retransmit_count = wblob.meta.retransmit_count;
+                wblob.meta.retransmit_count += 1;
                 // Setting the sender id to the requester id
                 // prevents the requester from retransmitting this response
                 // to other peers
@@ -988,7 +988,7 @@ impl Crdt {
                 // is the leader and the number of repair requests equals
                 // a power of two
                 if me.leader_id == me.id
-                    && (num_retransmits == 0 || num_retransmits.is_power_of_two())
+                    && (retransmit_count == 0 || retransmit_count.is_power_of_two())
                 {
                     sender_id = me.id
                 }
@@ -1966,8 +1966,8 @@ mod tests {
         blob.write().unwrap().meta.size = blob_size;
         window.write().unwrap()[0].data = Some(blob);
 
-        let num_requests: u32 = 64;
-        for i in 0..num_requests {
+        let request_count: u32 = 64;
+        for i in 0..request_count {
             let shared_blob = Crdt::run_window_request(
                 &window, &mut None, &me, &mock_peer, 0, &recycler,
             ).unwrap();

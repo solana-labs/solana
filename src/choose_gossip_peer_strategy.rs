@@ -279,12 +279,12 @@ mod tests {
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
         // Test many validators' rumors in external_liveness
-        let num_peers = 10;
+        let peer_count = 10;
         let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
 
         remote.insert(key1, 0);
 
-        for i in 0..num_peers {
+        for i in 0..peer_count {
             let pk = KeyPair::new().pubkey();
             rumors.insert(pk, i);
         }
@@ -295,7 +295,7 @@ mod tests {
             ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
 
         let result = weighted_strategy.calculate_weighted_remote_index(key1);
-        assert_eq!(result, (num_peers / 2) as u32);
+        assert_eq!(result, (peer_count / 2) as u32);
     }
 
     #[test]
@@ -309,13 +309,13 @@ mod tests {
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
 
         // Test many validators' rumors in external_liveness
-        let num_peers = 10;
+        let peer_count = 10;
         let old_index = 20;
         let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
 
         remote.insert(key1, old_index);
 
-        for _i in 0..num_peers {
+        for _i in 0..peer_count {
             let pk = KeyPair::new().pubkey();
             rumors.insert(pk, old_index);
         }

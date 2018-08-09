@@ -346,8 +346,8 @@ fn compute_and_report_stats(
     }
 
     if total_maxes > 0.0 {
-        let num_nodes_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
-        let average_max = total_maxes / num_nodes_with_tps as f64;
+        let node_count_with_tps = maxes.read().unwrap().len() - nodes_with_zero_tps;
+        let average_max = total_maxes / node_count_with_tps as f64;
         println!(
             "\nAverage max TPS: {:.2}, {} nodes had 0 TPS",
             average_max, nodes_with_zero_tps
@@ -371,7 +371,7 @@ fn main() {
     logger::setup();
     metrics::set_panic_hook("bench-tps");
     let mut threads = 4usize;
-    let mut num_nodes = 1usize;
+    let mut node_count = 1usize;
     let mut time_sec = 90;
     let mut addr = None;
     let mut sustained = false;
@@ -397,7 +397,7 @@ fn main() {
                 .help("/path/to/id.json"),
         )
         .arg(
-            Arg::with_name("num_nodes")
+            Arg::with_name("node_count")
                 .short("n")
                 .long("nodes")
                 .value_name("NUMBER")
@@ -461,8 +461,8 @@ fn main() {
         threads = t.to_string().parse().expect("integer");
     }
 
-    if let Some(n) = matches.value_of("num_nodes") {
-        num_nodes = n.to_string().parse().expect("integer");
+    if let Some(n) = matches.value_of("node_count") {
+        node_count = n.to_string().parse().expect("integer");
     }
 
     if let Some(s) = matches.value_of("seconds") {
@@ -483,7 +483,7 @@ fn main() {
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
+    let validators = converge(&leader, &exit_signal, node_count, &mut c_threads, addr);
 
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
@@ -496,10 +496,10 @@ fn main() {
     }
     println!("Nodes: {}", validators.len());
 
-    if validators.len() < num_nodes {
+    if validators.len() < node_count {
         println!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",
-            num_nodes
+            node_count
         );
         exit(1);
     }
@@ -674,7 +674,7 @@ fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
 fn converge(
     leader: &NodeInfo,
     exit_signal: &Arc<AtomicBool>,
-    num_nodes: usize,
+    node_count: usize,
     threads: &mut Vec<JoinHandle<()>>,
     addr: Option<String>,
 ) -> Vec<NodeInfo> {
@@ -706,14 +706,14 @@ fn converge(
             .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
-        if v.len() >= num_nodes {
+        if v.len() >= node_count {
             println!("CONVERGED!");
             break;
         } else {
             println!(
                 "{} node(s) discovered (looking for {} or more)",
                 v.len(),
-                num_nodes
+                node_count
             );
         }
         sleep(Duration::new(1, 0));

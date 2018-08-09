@@ -46,8 +46,8 @@ fn main() -> Result<(), Box<error::Error>> {
     }
 
     let mut buffer = String::new();
-    let num_bytes = stdin().read_to_string(&mut buffer)?;
-    if num_bytes == 0 {
+    let byte_count = stdin().read_to_string(&mut buffer)?;
+    if byte_count == 0 {
         eprintln!("empty file on stdin, expected a json file");
         exit(1);
     }

@@ -99,19 +99,19 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
-    let num_dst_accounts = 8 * 1024;
-    let num_src_accounts = 8 * 1024;
+    let dst_account_count = 8 * 1024;
+    let src_account_count = 8 * 1024;
 
-    let srckeys: Vec<_> = (0..num_src_accounts).map(|_| KeyPair::new()).collect();
-    let dstkeys: Vec<_> = (0..num_dst_accounts)
+    let srckeys: Vec<_> = (0..src_account_count).map(|_| KeyPair::new()).collect();
+    let dstkeys: Vec<_> = (0..dst_account_count)
         .map(|_| KeyPair::new().pubkey())
         .collect();
 
     let transactions: Vec<_> = (0..tx)
         .map(|i| {
             Transaction::new(
-                &srckeys[i % num_src_accounts],
-                dstkeys[i % num_dst_accounts],
+                &srckeys[i % src_account_count],
+                dstkeys[i % dst_account_count],
                 i as i64,
                 mint.last_id(),
             )
@@ -122,12 +122,12 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (signal_sender, signal_receiver) = channel();
     let packet_recycler = PacketRecycler::default();
 
-    let setup_transactions: Vec<_> = (0..num_src_accounts)
+    let setup_transactions: Vec<_> = (0..src_account_count)
         .map(|i| {
             Transaction::new(
                 &mint.keypair(),
                 srckeys[i].pubkey(),
-                mint_total / num_src_accounts as i64,
+                mint_total / src_account_count as i64,
                 mint.last_id(),
             )
         })
@@ -150,7 +150,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
 
-        check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
+        check_txs(verified_setup_len, &signal_receiver, src_account_count);
 
         let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
             .into_iter()
@@ -173,8 +173,8 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint = Mint::new(1_000_000_000_000);
     let mut pubkeys = Vec::new();
-    let num_keys = 8;
-    for _ in 0..num_keys {
+    let key_count = 8;
+    for _ in 0..key_count {
         pubkeys.push(KeyPair::new().pubkey());
     }
 
@@ -183,7 +183,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         .map(|i| {
             Transaction::new(
                 &mint.keypair(),
-                pubkeys[i % num_keys],
+                pubkeys[i % key_count],
                 i as i64,
                 mint.last_id(),
             )

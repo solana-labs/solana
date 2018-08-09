@@ -160,9 +160,9 @@ mod tests {
         let entry1 = entry_receiver.recv().unwrap()[0].clone();
         let entry2 = entry_receiver.recv().unwrap()[0].clone();
 
-        assert_eq!(entry0.num_hashes, 0);
-        assert_eq!(entry1.num_hashes, 0);
-        assert_eq!(entry2.num_hashes, 0);
+        assert_eq!(entry0.hash_count, 0);
+        assert_eq!(entry1.hash_count, 0);
+        assert_eq!(entry2.hash_count, 0);
 
         drop(tx_sender);
         assert_eq!(record_stage.thread_hdl.join().unwrap(), ());

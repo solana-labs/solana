@@ -207,12 +207,12 @@ fn find_next_missing(
     Ok(reqs)
 }
 
-fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u64) -> u64 {
+fn calculate_highest_lost_blob_index(peer_count: u64, consumed: u64, received: u64) -> u64 {
     // Calculate the highest blob index that this node should have already received
     // via avalanche. The avalanche splits data stream into nodes and each node retransmits
     // the data to their peer nodes. So there's a possibility that a blob (with index lower
     // than current received index) is being retransmitted by a peer node.
-    let highest_lost = cmp::max(consumed, received.saturating_sub(num_peers));
+    let highest_lost = cmp::max(consumed, received.saturating_sub(peer_count));
 
     // This check prevents repairing a blob that will cause window to roll over. Even if
     // the highes_lost blob is actually missing, asking to repair it might cause our

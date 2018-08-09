@@ -226,8 +226,8 @@ fn recover_ledger(ledger_path: &Path) -> io::Result<()> {
         }
     }
     if log_enabled!(Trace) {
-        let num_entries = index.metadata()?.len() / SIZEOF_U64;
-        trace!("recover: done. {} entries", num_entries);
+        let entry_count = index.metadata()?.len() / SIZEOF_U64;
+        trace!("recover: done. {} entries", entry_count);
     }
 
     // flush everything to disk...
@@ -388,7 +388,7 @@ impl Block for [Entry] {
             let r = x1.verify(&x0.id);
             if !r {
                 warn!(
-                    "entry invalid!: {:?} num txs: {}",
+                    "entry invalid!: {:?} tx count: {}",
                     x1.id,
                     x1.transactions.len()
                 );
@@ -496,8 +496,8 @@ pub fn next_entries(
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
     let mut id = *start_hash;
-    let mut num_hashes = cur_hashes;
-    next_entries_mut(&mut id, &mut num_hashes, transactions)
+    let mut hash_count = cur_hashes;
+    next_entries_mut(&mut id, &mut hash_count, transactions)
 }
 
 #[cfg(test)]
@@ -541,12 +541,12 @@ mod tests {
         let keypair = KeyPair::new();
 
         let mut id = one;
-        let mut num_hashes = 0;
+        let mut hash_count = 0;
         (0..num)
             .map(|_| {
                 Entry::new_mut(
                     &mut id,
-                    &mut num_hashes,
+                    &mut hash_count,
                     vec![Transaction::new_timestamp(&keypair, Utc::now(), one)],
                     false,
                 )
