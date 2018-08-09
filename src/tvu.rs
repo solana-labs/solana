@@ -2,29 +2,29 @@
 //! 3-stage transaction validation pipeline in software.
 //!
 //! ```text
-//!      .--------------------------------------------.
-//!      |                                            |
-//!      |           .--------------------------------+------------.
-//!      |           |  TVU                           |            |
-//!      |           |                                |            |
-//!      |           |                                |            |  .------------.
-//!      |           |                   .------------+-------------->| Validators |
-//!      v           |  .-------.        |            |            |  `------------`
-//! .----+---.       |  |       |   .----+---.   .----+---------.  |
-//! | Leader |--------->| Blob  |   | Window |   | Replicate    |  |
-//! `--------`       |  | Fetch |-->| Stage  |-->| Stage /      |  |
-//! .------------.   |  | Stage |   |        |   | Vote Stage   |  |
-//! | Validators |----->|       |   `--------`   `----+---------`  |
-//! `------------`   |  `-------`                     |            |
-//!                  |                                |            |
-//!                  |                                |            |
-//!                  |                                |            |
-//!                  `--------------------------------|------------`
-//!                                                   |
-//!                                                   v
-//!                                                .------.
-//!                                                | Bank |
-//!                                                `------`
+//!      .------------------------------------------------.
+//!      |                                                |
+//!      |           .------------------------------------+------------.
+//!      |           |  TVU                               |            |
+//!      |           |                                    |            |
+//!      |           |                                    |            |  .------------.
+//!      |           |                   .----------------+-------------->| Validators |
+//!      v           |  .-------.        |                |            |  `------------`
+//! .----+---.       |  |       |   .----+-------.   .----+---------.  |
+//! | Leader |--------->| Blob  |   | Retransmit |   | Replicate    |  |
+//! `--------`       |  | Fetch |-->|   Stage    |-->| Stage /      |  |
+//! .------------.   |  | Stage |   |            |   | Vote Stage   |  |
+//! | Validators |----->|       |   `------------`   `----+---------`  |
+//! `------------`   |  `-------`                         |            |
+//!                  |                                    |            |
+//!                  |                                    |            |
+//!                  |                                    |            |
+//!                  `------------------------------------|------------`
+//!                                                       |
+//!                                                       v
+//!                                                    .------.
+//!                                                    | Bank |
+//!                                                    `------`
 //! ```
 //!
 //! 1. Fetch Stage
@@ -41,6 +41,7 @@ use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
 use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
+use retransmit_stage::RetransmitStage;
 use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
@@ -48,12 +49,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer::SharedWindow;
-use window_stage::WindowStage;
 
 pub struct Tvu {
     replicate_stage: ReplicateStage,
     fetch_stage: BlobFetchStage,
-    window_stage: WindowStage,
+    retransmit_stage: RetransmitStage,
 }
 
 impl Tvu {
@@ -90,7 +90,7 @@ impl Tvu {
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
-        let (window_stage, blob_window_receiver) = WindowStage::new(
+        let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &crdt,
             window,
             entry_height,
@@ -112,7 +112,7 @@ impl Tvu {
         Tvu {
             replicate_stage,
             fetch_stage,
-            window_stage,
+            retransmit_stage,
         }
     }
 
@@ -127,7 +127,7 @@ impl Service for Tvu {
         let mut thread_hdls = vec![];
         thread_hdls.extend(self.replicate_stage.thread_hdls().into_iter());
         thread_hdls.extend(self.fetch_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.window_stage.thread_hdls().into_iter());
+        thread_hdls.extend(self.retransmit_stage.thread_hdls().into_iter());
         thread_hdls
     }
 

@@ -1,4 +1,4 @@
-//! The `window_stage` maintains the blob window
+//! The `retransmit_stage` retransmits blobs between validators
 
 use broadcaster;
 use crdt::Crdt;
@@ -10,11 +10,11 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer::{self, BlobReceiver, SharedWindow};
 
-pub struct WindowStage {
+pub struct RetransmitStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl WindowStage {
+impl RetransmitStage {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
         window: SharedWindow,
@@ -43,11 +43,11 @@ impl WindowStage {
         );
         let thread_hdls = vec![t_retransmit, t_window];
 
-        (WindowStage { thread_hdls }, blob_receiver)
+        (RetransmitStage { thread_hdls }, blob_receiver)
     }
 }
 
-impl Service for WindowStage {
+impl Service for RetransmitStage {
     fn thread_hdls(self) -> Vec<JoinHandle<()>> {
         self.thread_hdls
     }
