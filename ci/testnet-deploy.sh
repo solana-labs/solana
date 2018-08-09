@@ -48,6 +48,9 @@ fi
 
 : ${SOLANA_NET_NAME:?$SOLANA_NET_ENTRYPOINT}
 netBasename=${SOLANA_NET_NAME/-*/}
+if [[ $netBasename != testnet ]]; then
+  netBasename="testnet-$netBasename"
+fi
 
 # Figure installation command
 SNAP_INSTALL_CMD="\
@@ -446,11 +449,14 @@ if [[ -z $CI ]]; then
   # TODO: ssh into a node and run testnet-sanity.sh there.  It's not safe to
   #       assume the correct Snap is installed on the current non-CI machine
   echo Skipped for non-CI deploy
+  snapVersion=unknown
 else
   (
     set -x
     USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
   )
+  IFS=\  read -r _ snapVersion _ < <(snap info solana | grep "^installed:")
+  snapVersion=${snapVersion:/0+git./}
 fi
 
 pids=("${client_stop_pids[@]}")
@@ -458,6 +464,6 @@ wait_for_pids client shutdown
 vm_foreach_in_class client client_start
 
 # Add "network started" datapoint
-$metrics_write_datapoint "testnet-deploy,name=$netBasename start=1"
+$metrics_write_datapoint "testnet-deploy,name=$netBasename start=1,version=\"$snapVersion\""
 
 exit 0
