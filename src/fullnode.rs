@@ -14,7 +14,6 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{JoinHandle, Result};
-use std::time::Duration;
 use tpu::Tpu;
 use tvu::Tvu;
 use untrusted::Input;
@@ -107,8 +106,6 @@ impl Fullnode {
                 bank,
                 entry_height,
                 &ledger_tail,
-                //Some(Duration::from_millis(1000)),
-                None,
                 node,
                 exit.clone(),
                 ledger_path,
@@ -185,12 +182,15 @@ impl Fullnode {
         bank: Bank,
         entry_height: u64,
         ledger_tail: &[Entry],
-        tick_duration: Option<Duration>,
         node: TestNode,
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
     ) -> Self {
+        let tick_duration = None;
+        // TODO: To light up PoH, uncomment the following line:
+        //let tick_duration = Some(Duration::from_millis(1000));
+
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
