@@ -287,7 +287,7 @@ mod tests {
             leader_keypair,
             bank,
             0,
-            None,
+            &[],
             Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
