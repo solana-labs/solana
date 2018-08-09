@@ -126,12 +126,12 @@ pub struct BroadcastStage {
 
 impl BroadcastStage {
     fn run(
-        sock: UdpSocket,
-        crdt: Arc<RwLock<Crdt>>,
-        window: SharedWindow,
+        sock: &UdpSocket,
+        crdt: &Arc<RwLock<Crdt>>,
+        window: &SharedWindow,
         entry_height: u64,
-        recycler: BlobRecycler,
-        receiver: BlobReceiver,
+        recycler: &BlobRecycler,
+        receiver: &BlobReceiver,
     ) {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -184,7 +184,7 @@ impl BroadcastStage {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                Self::run(sock, crdt, window, entry_height, recycler, receiver);
+                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
             })
             .unwrap();
 
