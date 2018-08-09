@@ -1,4 +1,4 @@
-//! The `broadcaster` broadcasts data from a leader node to validators
+//! The `broadcast_stage` broadcasts data from a leader node to validators
 //!
 use counter::Counter;
 use crdt::{Crdt, CrdtError, NodeInfo};
@@ -168,63 +168,6 @@ pub fn broadcaster(
                     }
                 }
             }
-        })
-        .unwrap()
-}
-
-fn retransmit(
-    crdt: &Arc<RwLock<Crdt>>,
-    recycler: &BlobRecycler,
-    r: &BlobReceiver,
-    sock: &UdpSocket,
-) -> Result<()> {
-    let timer = Duration::new(1, 0);
-    let mut dq = r.recv_timeout(timer)?;
-    while let Ok(mut nq) = r.try_recv() {
-        dq.append(&mut nq);
-    }
-    {
-        for b in &dq {
-            Crdt::retransmit(&crdt, b, sock)?;
-        }
-    }
-    while let Some(b) = dq.pop_front() {
-        recycler.recycle(b);
-    }
-    Ok(())
-}
-
-/// Service to retransmit messages from the leader to layer 1 nodes.
-/// See `crdt` for network layer definitions.
-/// # Arguments
-/// * `sock` - Socket to read from.  Read timeout is set to 1.
-/// * `exit` - Boolean to signal system exit.
-/// * `crdt` - This structure needs to be updated and populated by the bank and via gossip.
-/// * `recycler` - Blob recycler.
-/// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-pub fn retransmitter(
-    sock: UdpSocket,
-    crdt: Arc<RwLock<Crdt>>,
-    recycler: BlobRecycler,
-    r: BlobReceiver,
-) -> JoinHandle<()> {
-    Builder::new()
-        .name("solana-retransmitter".to_string())
-        .spawn(move || {
-            trace!("retransmitter started");
-            loop {
-                if let Err(e) = retransmit(&crdt, &recycler, &r, &sock) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => {
-                            inc_new_counter_info!("streamer-retransmit-error", 1, 1);
-                            error!("retransmitter error: {:?}", e);
-                        }
-                    }
-                }
-            }
-            trace!("exiting retransmitter");
         })
         .unwrap()
 }
