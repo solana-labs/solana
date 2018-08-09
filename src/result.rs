@@ -9,7 +9,7 @@ use packet;
 use serde_json;
 use std;
 use std::any::Any;
-use streamer;
+use window;
 
 #[derive(Debug)]
 pub enum Error {
@@ -22,7 +22,7 @@ pub enum Error {
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     BankError(bank::BankError),
     CrdtError(crdt::CrdtError),
-    WindowError(streamer::WindowError),
+    WindowError(window::WindowError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
     ErasureError(erasure::ErasureError),
@@ -51,8 +51,8 @@ impl std::convert::From<crdt::CrdtError> for Error {
         Error::CrdtError(e)
     }
 }
-impl std::convert::From<streamer::WindowError> for Error {
-    fn from(e: streamer::WindowError) -> Error {
+impl std::convert::From<window::WindowError> for Error {
+    fn from(e: window::WindowError) -> Error {
         Error::WindowError(e)
     }
 }

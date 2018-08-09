@@ -48,7 +48,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use streamer::SharedWindow;
+use window::SharedWindow;
 
 pub struct Tvu {
     replicate_stage: ReplicateStage,
@@ -159,16 +159,17 @@ pub mod tests {
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{self, SharedWindow};
+    use streamer;
     use transaction::Transaction;
     use tvu::Tvu;
+    use window::{self, SharedWindow};
 
     fn new_ncp(
         crdt: Arc<RwLock<Crdt>>,
         listen: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Result<(Ncp, SharedWindow)> {
-        let window = streamer::default_window();
+        let window = window::default_window();
         let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
         let ncp = Ncp::new(&crdt, window.clone(), None, listen, send_sock, exit)?;
         Ok((ncp, window))

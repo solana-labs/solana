@@ -16,10 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{JoinHandle, Result};
 use std::time::Duration;
-use streamer;
 use tpu::Tpu;
 use tvu::Tvu;
 use untrusted::Input;
+use window::{self, SharedWindow};
 
 //use std::time::Duration;
 pub struct FullNode {
@@ -163,14 +163,14 @@ impl FullNode {
         entry_height: u64,
         node_info: &NodeInfo,
         blob_recycler: &BlobRecycler,
-    ) -> streamer::SharedWindow {
+    ) -> SharedWindow {
         // convert to blobs
         let mut blobs = VecDeque::new();
         ledger_tail.to_blobs(&blob_recycler, &mut blobs);
 
         // flatten deque to vec
         let blobs: Vec<_> = blobs.into_iter().collect();
-        streamer::initialized_window(&node_info, blobs, entry_height)
+        window::initialized_window(&node_info, blobs, entry_height)
     }
 
     /// Create a server instance acting as a leader.
