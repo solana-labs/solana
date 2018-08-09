@@ -382,13 +382,13 @@ mod tests {
 
     #[test]
     fn validator_exit() {
-        let kp = Keypair::new();
-        let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
+        let keypair = Keypair::new();
+        let tn = TestNode::new_localhost_with_pubkey(keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, None, false);
+        let v = FullNode::new_validator(keypair, bank, 0, None, tn, &entry, exit, None, false);
         v.exit();
         v.join().unwrap();
     }
@@ -396,13 +396,13 @@ mod tests {
     fn validator_parallel_exit() {
         let vals: Vec<FullNode> = (0..2)
             .map(|_| {
-                let kp = Keypair::new();
-                let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
+                let keypair = Keypair::new();
+                let tn = TestNode::new_localhost_with_pubkey(keypair.pubkey());
                 let alice = Mint::new(10_000);
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                FullNode::new_validator(kp, bank, 0, None, tn, &entry, exit, None, false)
+                FullNode::new_validator(keypair, bank, 0, None, tn, &entry, exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`

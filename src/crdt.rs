@@ -1597,12 +1597,12 @@ mod tests {
     }
     #[test]
     fn replicated_data_new_leader_with_pubkey() {
-        let kp = Keypair::new();
+        let keypair = Keypair::new();
         let d1 = NodeInfo::new_leader_with_pubkey(
-            kp.pubkey().clone(),
+            keypair.pubkey().clone(),
             &"127.0.0.1:1234".parse().unwrap(),
         );
-        assert_eq!(d1.id, kp.pubkey());
+        assert_eq!(d1.id, keypair.pubkey());
         assert_eq!(d1.contact_info.ncp, "127.0.0.1:1235".parse().unwrap());
         assert_eq!(d1.contact_info.tvu, "127.0.0.1:1236".parse().unwrap());
         assert_eq!(d1.contact_info.rpu, "127.0.0.1:1237".parse().unwrap());
