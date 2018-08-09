@@ -1,13 +1,13 @@
 use bincode::serialize;
 use drone::DroneRequest;
-use signature::PublicKey;
+use signature::Pubkey;
 use std::error;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 
 pub fn request_airdrop(
     drone_addr: &SocketAddr,
-    id: &PublicKey,
+    id: &Pubkey,
     tokens: u64,
 ) -> Result<(), Box<error::Error>> {
     let mut stream = TcpStream::connect(drone_addr)?;

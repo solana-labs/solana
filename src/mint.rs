@@ -3,14 +3,14 @@
 use entry::Entry;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
-use signature::{Keypair, KeypairUtil, PublicKey};
+use signature::{Keypair, KeypairUtil, Pubkey};
 use transaction::Transaction;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Mint {
     pub pkcs8: Vec<u8>,
-    pubkey: PublicKey,
+    pubkey: Pubkey,
     pub tokens: i64,
 }
 
@@ -46,7 +46,7 @@ impl Mint {
         Keypair::from_pkcs8(Input::from(&self.pkcs8)).expect("from_pkcs8 in mint pub fn keypair")
     }
 
-    pub fn pubkey(&self) -> PublicKey {
+    pub fn pubkey(&self) -> Pubkey {
         self.pubkey
     }
 

@@ -14,7 +14,7 @@ use ledger::Block;
 use log::Level;
 use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::{Keypair, PublicKey, Signature};
+use signature::{Keypair, Pubkey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
@@ -38,13 +38,13 @@ pub const VERIFY_BLOCK_SIZE: usize = 16;
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
-    /// Attempt to debit from `PublicKey`, but no found no record of a prior credit.
-    AccountNotFound(PublicKey),
+    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
+    AccountNotFound(Pubkey),
 
-    /// The requested debit from `PublicKey` has the potential to draw the balance
+    /// The requested debit from `Pubkey` has the potential to draw the balance
     /// below zero. This can occur when a debit and credit are processed in parallel.
     /// The bank may reject the debit or push it to a future entry.
-    InsufficientFunds(PublicKey),
+    InsufficientFunds(Pubkey),
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
@@ -68,7 +68,7 @@ pub type Result<T> = result::Result<T, BankError>;
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    balances: RwLock<HashMap<PublicKey, i64>>,
+    balances: RwLock<HashMap<Pubkey, i64>>,
 
     /// A map of smart contract transaction signatures to what remains of its payment
     /// plan. Each transaction that targets the plan should cause it to be reduced.
@@ -121,7 +121,7 @@ impl Bank {
     }
 
     /// Commit funds to the `payment.to` party.
-    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<PublicKey, i64>) {
+    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<Pubkey, i64>) {
         *balances.entry(payment.to).or_insert(0) += payment.tokens;
     }
 
@@ -219,7 +219,7 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<PublicKey, i64>) -> Result<()> {
+    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<Pubkey, i64>) -> Result<()> {
         let mut purge = false;
         {
             let option = bals.get_mut(&tx.from);
@@ -260,7 +260,7 @@ impl Bank {
 
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<PublicKey, i64>) {
+    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, i64>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let plan = contract.plan.clone();
@@ -470,7 +470,7 @@ impl Bank {
 
     /// Process a Witness Signature. Any payment plans waiting on this signature
     /// will progress one step.
-    fn apply_signature(&self, from: PublicKey, tx_sig: Signature) -> Result<()> {
+    fn apply_signature(&self, from: Pubkey, tx_sig: Signature) -> Result<()> {
         if let Occupied(mut e) = self
             .pending
             .write()
@@ -489,7 +489,7 @@ impl Bank {
 
     /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
     /// will progress one step.
-    fn apply_timestamp(&self, from: PublicKey, dt: DateTime<Utc>) -> Result<()> {
+    fn apply_timestamp(&self, from: Pubkey, dt: DateTime<Utc>) -> Result<()> {
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
 
@@ -520,7 +520,7 @@ impl Bank {
         &self,
         n: i64,
         keypair: &Keypair,
-        to: PublicKey,
+        to: Pubkey,
         last_id: Hash,
     ) -> Result<Signature> {
         let tx = Transaction::new(keypair, to, n, last_id);
@@ -535,7 +535,7 @@ impl Bank {
         &self,
         n: i64,
         keypair: &Keypair,
-        to: PublicKey,
+        to: Pubkey,
         dt: DateTime<Utc>,
         last_id: Hash,
     ) -> Result<Signature> {
@@ -544,7 +544,7 @@ impl Bank {
         self.process_transaction(&tx).map(|_| sig)
     }
 
-    pub fn get_balance(&self, pubkey: &PublicKey) -> i64 {
+    pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
         let bals = self
             .balances
             .read()
@@ -868,14 +868,14 @@ mod tests {
 
     fn create_sample_ledger_with_next_entries(
         length: usize,
-    ) -> (impl Iterator<Item = Entry>, PublicKey) {
+    ) -> (impl Iterator<Item = Entry>, Pubkey) {
         let mint = Mint::new((length * length) as i64);
         let genesis = mint.create_entries();
         let block = create_sample_block_with_next_entries(&mint, length);
         (genesis.into_iter().chain(block), mint.pubkey())
     }
 
-    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, PublicKey) {
+    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
         let mint = Mint::new(1 + length as i64);
         let genesis = mint.create_entries();
         let block = create_sample_block(&mint, length);

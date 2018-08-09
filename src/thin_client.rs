@@ -6,7 +6,7 @@
 use bincode::{deserialize, serialize};
 use hash::Hash;
 use request::{Request, Response};
-use signature::{Keypair, PublicKey, Signature};
+use signature::{Keypair, Pubkey, Signature};
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
@@ -27,7 +27,7 @@ pub struct ThinClient {
     transactions_socket: UdpSocket,
     last_id: Option<Hash>,
     transaction_count: u64,
-    balances: HashMap<PublicKey, i64>,
+    balances: HashMap<Pubkey, i64>,
     signature_status: bool,
 }
 
@@ -100,7 +100,7 @@ impl ThinClient {
         &self,
         n: i64,
         keypair: &Keypair,
-        to: PublicKey,
+        to: Pubkey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
         let now = Instant::now();
@@ -121,7 +121,7 @@ impl ThinClient {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
+    pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
         trace!("get_balance");
         let req = Request::GetBalance { key: *pubkey };
         let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
@@ -195,7 +195,7 @@ impl ThinClient {
         self.last_id.expect("some last_id")
     }
 
-    pub fn poll_get_balance(&mut self, pubkey: &PublicKey) -> io::Result<i64> {
+    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
         let mut balance_result;
         let mut balance_value = -1;
         let now = Instant::now();

@@ -6,7 +6,7 @@ use bincode::{serialize_into, serialized_size};
 use hash::{extend_and_hash, hash, Hash};
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
-use signature::PublicKey;
+use signature::Pubkey;
 use std::io::Cursor;
 use std::net::SocketAddr;
 use transaction::Transaction;
@@ -83,7 +83,7 @@ impl Entry {
         &self,
         blob_recycler: &BlobRecycler,
         idx: Option<u64>,
-        id: Option<PublicKey>,
+        id: Option<Pubkey>,
         addr: Option<&SocketAddr>,
     ) -> SharedBlob {
         let blob = blob_recycler.allocate();

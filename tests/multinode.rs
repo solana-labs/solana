@@ -15,7 +15,7 @@ use solana::mint::Mint;
 use solana::ncp::Ncp;
 use solana::result;
 use solana::service::Service;
-use solana::signature::{Keypair, KeypairUtil, PublicKey};
+use solana::signature::{Keypair, KeypairUtil, Pubkey};
 use solana::streamer::{default_window, WINDOW_SIZE};
 use solana::thin_client::ThinClient;
 use solana::timing::duration_as_s;
@@ -751,7 +751,7 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
 
 fn retry_get_balance(
     client: &mut ThinClient,
-    bob_pubkey: &PublicKey,
+    bob_pubkey: &Pubkey,
     expected: Option<i64>,
 ) -> Option<i64> {
     const LAST: usize = 30;
@@ -773,7 +773,7 @@ fn retry_get_balance(
 fn send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Mint,
-    bob_pubkey: &PublicKey,
+    bob_pubkey: &Pubkey,
     expected: Option<i64>,
 ) -> Option<i64> {
     let mut client = mk_client(leader);
@@ -789,7 +789,7 @@ fn send_tx_and_retry_get_balance(
 fn retry_send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Mint,
-    bob_pubkey: &PublicKey,
+    bob_pubkey: &Pubkey,
     expected: Option<i64>,
 ) -> Option<i64> {
     let mut client = mk_client(leader);

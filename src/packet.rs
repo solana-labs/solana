@@ -5,7 +5,7 @@ use counter::Counter;
 use log::Level;
 use result::{Error, Result};
 use serde::Serialize;
-use signature::PublicKey;
+use signature::Pubkey;
 use std::collections::VecDeque;
 use std::fmt;
 use std::io;
@@ -302,7 +302,7 @@ pub fn to_blobs<T: Serialize>(
 }
 
 const BLOB_INDEX_END: usize = size_of::<u64>();
-const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<PublicKey>();
+const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<Pubkey>();
 const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
 const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
 
@@ -329,12 +329,12 @@ impl Blob {
     }
     /// sender id, we use this for identifying if its a blob from the leader that we should
     /// retransmit.  eventually blobs should have a signature that we can use ffor spam filtering
-    pub fn get_id(&self) -> Result<PublicKey> {
+    pub fn get_id(&self) -> Result<Pubkey> {
         let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
         Ok(e)
     }
 
-    pub fn set_id(&mut self, id: PublicKey) -> Result<()> {
+    pub fn set_id(&mut self, id: Pubkey) -> Result<()> {
         let wtr = serialize(&id)?;
         self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
         Ok(())

@@ -13,7 +13,7 @@ use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
-use solana::signature::{read_keypair, Keypair, KeypairUtil, PublicKey, Signature};
+use solana::signature::{read_keypair, Keypair, KeypairUtil, Pubkey, Signature};
 use solana::thin_client::ThinClient;
 use solana::wallet::request_airdrop;
 use std::error;
@@ -27,7 +27,7 @@ enum WalletCommand {
     Address,
     Balance,
     AirDrop(i64),
-    Pay(i64, PublicKey),
+    Pay(i64, Pubkey),
     Confirm(Signature),
 }
 
@@ -177,11 +177,11 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                     .into_vec()
                     .expect("base58-encoded public key");
 
-                if pubkey_vec.len() != std::mem::size_of::<PublicKey>() {
+                if pubkey_vec.len() != std::mem::size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
-                PublicKey::new(&pubkey_vec)
+                Pubkey::new(&pubkey_vec)
             } else {
                 id.pubkey()
             };

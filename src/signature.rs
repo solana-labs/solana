@@ -15,27 +15,27 @@ use untrusted::Input;
 
 pub type Keypair = Ed25519KeyPair;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct PublicKey(GenericArray<u8, U32>);
+pub struct Pubkey(GenericArray<u8, U32>);
 
-impl PublicKey {
+impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
-        PublicKey(GenericArray::clone_from_slice(&pubkey_vec))
+        Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
     }
 }
 
-impl AsRef<[u8]> for PublicKey {
+impl AsRef<[u8]> for Pubkey {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
     }
 }
 
-impl fmt::Debug for PublicKey {
+impl fmt::Debug for Pubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
 
-impl fmt::Display for PublicKey {
+impl fmt::Display for Pubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
@@ -76,7 +76,7 @@ impl fmt::Display for Signature {
 
 pub trait KeypairUtil {
     fn new() -> Self;
-    fn pubkey(&self) -> PublicKey;
+    fn pubkey(&self) -> Pubkey;
 }
 
 impl KeypairUtil for Ed25519KeyPair {
@@ -88,8 +88,8 @@ impl KeypairUtil for Ed25519KeyPair {
     }
 
     /// Return the public key for the given keypair
-    fn pubkey(&self) -> PublicKey {
-        PublicKey(GenericArray::clone_from_slice(self.public_key_bytes()))
+    fn pubkey(&self) -> Pubkey {
+        Pubkey(GenericArray::clone_from_slice(self.public_key_bytes()))
     }
 }
 
@@ -149,7 +149,7 @@ mod tests {
         }
     }
 
-    fn gen_n_pubkeys(seed: [u8; 32], n: i64) -> HashSet<PublicKey> {
+    fn gen_n_pubkeys(seed: [u8; 32], n: i64) -> HashSet<Pubkey> {
         GenKeys::new(seed)
             .gen_n_keypairs(n)
             .into_iter()
