@@ -13,7 +13,7 @@ pub fn request_airdrop(
     let mut stream = TcpStream::connect(drone_addr)?;
     let req = DroneRequest::GetAirdrop {
         airdrop_request_amount: tokens,
-        client_public_key: *id,
+        client_pubkey: *id,
     };
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx).unwrap();
