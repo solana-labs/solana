@@ -23,7 +23,7 @@ use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
-use solana::transaction::{LastId, Transaction};
+use solana::transaction::Transaction;
 use solana::wallet::request_airdrop;
 use std::collections::VecDeque;
 use std::fs::File;
@@ -104,59 +104,6 @@ fn sample_tx_count(
             };
             maxes.write().unwrap().push((v.contact_info.tpu, stats));
             break;
-        }
-    }
-}
-
-fn generate_txs(
-    shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
-    id: &KeyPair,
-    keypairs: &[KeyPair],
-    last_id: &Hash,
-    threads: usize,
-    reclaim: bool,
-) {
-    let tx_count = keypairs.len();
-    println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
-    let signing_start = Instant::now();
-
-    let transactions: Vec<_> = keypairs
-        .par_iter()
-        .map(|keypair| {
-            if !reclaim {
-                Transaction::new(&id, keypair.pubkey(), 1, *last_id)
-            } else {
-                Transaction::new(keypair, id.pubkey(), 1, *last_id)
-            }
-        })
-        .collect();
-
-    let duration = signing_start.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = (tx_count) as f64 / ns as f64;
-    let nsps = ns as f64 / (tx_count) as f64;
-    println!(
-        "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time",
-        bsps * 1_000_000_f64,
-        nsps / 1_000_f64,
-        duration_as_ms(&duration),
-    );
-    metrics::submit(
-        influxdb::Point::new("bench-tps")
-            .add_tag("op", influxdb::Value::String("generate_txs".to_string()))
-            .add_field(
-                "duration",
-                influxdb::Value::Integer(duration_as_ms(&duration) as i64),
-            )
-            .to_owned(),
-    );
-
-    let sz = transactions.len() / threads;
-    let chunks: Vec<_> = transactions.chunks(sz).collect();
-    {
-        let mut shared_txs_wl = shared_txs.write().unwrap();
-        for chunk in chunks {
-            shared_txs_wl.push_back(chunk.to_vec());
         }
     }
 }
@@ -405,7 +352,7 @@ fn main() {
     let mut rnd = GenKeys::new(seed);
 
     println!("Get tokens...");
-    const RESERVE_AMOUNT = 1000i64;
+    const RESERVE_AMOUNT: i64 = 1000i64;
     airdrop_tokens(&mut client, &leader, &id, RESERVE_AMOUNT * tx_count);
 
     println!("Get last ID...");
@@ -446,60 +393,15 @@ fn main() {
             Builder::new()
                 .name("solana-client-sender".to_string())
                 .spawn(move || {
-                    println!("Creating {} keypairs...", tx_count / 2);
                     let my_tx_count = tx_count / threads;
-                    let keys = rnd.gen_n_keypairs(my_tx_count);
                     let mut client = mk_client(&leader);
-                    let mut bal = 0;
-
-                    while bal == 0 {
-                        let last_id = client.get_last_id();
-                        let tx =
-                            Transaction::new(id, keys[0].pubkey(), RESERVE_AMOUNT * my_tx_count, last_id);
-                        client.transfer_signed(&tx).unwrap();
-                        let _ = client
-                            .poll_update(1000, &keys[0].pubkey())
-                            .expect("initial transfer");
-                        bal = client.get_balance(&keys[0].pubkey());
-                    }
-
-                    bench_versined::distribute(&mut client, &keys, RESERVE_AMOUNT);
-
-
-                    while !exit_signal.load(Ordering::Relaxed) {
-                        let transfer_start = Instant::now();
-                        println!(
-                            "Transferring 1 unit {} times... to {}",
-                            my_tx_count, leader.contact_info.tpu
-                        );
-
-                        let half = my_tx_count / 2;
-                        bench_versined::swap(&mut client, &keys[..half], &keys[half..]);
-                        bench_versined::swap(&mut client, &keys[half..], &keys[..half]);
-
-                        println!(
-                            "Tx send done. {} ms {} tps",
-                            duration_as_ms(&transfer_start.elapsed()),
-                            my_tx_count as f32 / duration_as_s(&transfer_start.elapsed()),
-                        );
-                        metrics::submit(
-                            influxdb::Point::new("bench-tps")
-                                .add_tag(
-                                    "op",
-                                    influxdb::Value::String("do_tx_transfers".to_string()),
-                                )
-                                .add_field(
-                                    "duration",
-                                    influxdb::Value::Integer(duration_as_ms(
-                                        &transfer_start.elapsed(),
-                                    )
-                                        as i64),
-                                )
-                                .add_field("count", influxdb::Value::Integer(my_tx_count as i64))
-                                .to_owned(),
-                        );
-                    }
-                    bench_versined::reclaim(&mut client, &keys, id.pubkey());
+                    bench_versioned::execute(
+                        &mut client,
+                        &id,
+                        my_tx_count,
+                        RESERVE_AMOUNT,
+                        exit_signal,
+                    );
                 })
                 .unwrap()
         })
@@ -508,36 +410,9 @@ fn main() {
     // generate and send transactions for the specified duration
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
-    let mut reclaim_tokens_back_to_source_account = false;
-    while now.elapsed() < time || reclaim_tokens_back_to_source_account {
+    while now.elapsed() < time {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
         metrics_submit_token_balance(balance);
-
-        // ping-pong between source and destination accounts for each loop iteration
-        // this seems to be faster than trying to determine the balance of individual
-        // accounts
-        generate_txs(
-            &shared_txs,
-            &id,
-            &keypairs,
-            &last_id,
-            threads,
-            reclaim_tokens_back_to_source_account,
-        );
-        reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
-
-        // In sustained mode overlap the transfers with generation
-        // this has higher average performance but lower peak performance
-        // in tested environments.
-        if !sustained {
-            while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
-                sleep(Duration::from_millis(100));
-            }
-        }
-        // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
-        // transactions sent by `generate_txs()` so instead send and confirm a single transaction
-        // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
     }
 
     // Stop the sampling threads so it will collect the stats

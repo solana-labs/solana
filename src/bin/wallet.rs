@@ -19,7 +19,6 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Duration;
 
 enum WalletCommand {
     Address,
