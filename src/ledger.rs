@@ -427,16 +427,16 @@ pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> Result<Vec
 }
 
 /// Creates the next entries for given transactions, outputs
-/// updates start_hash to id of last Entry, sets cur_hashes to 0
+/// updates start_hash to id of last Entry, sets num_hashes to 0
 pub fn next_entries_mut(
     start_hash: &mut Hash,
-    cur_hashes: &mut u64,
+    num_hashes: &mut u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
     // TODO: find a magic number that works better than |  ?
     //                                                  V
     if transactions.is_empty() || transactions.len() == 1 {
-        vec![Entry::new_mut(start_hash, cur_hashes, transactions, false)]
+        vec![Entry::new_mut(start_hash, num_hashes, transactions, false)]
     } else {
         let mut start = 0;
         let mut entries = Vec::new();
@@ -478,7 +478,7 @@ pub fn next_entries_mut(
             }
             entries.push(Entry::new_mut(
                 start_hash,
-                cur_hashes,
+                num_hashes,
                 transactions[start..chunk_end].to_vec(),
                 transactions.len() - chunk_end > 0,
             ));
@@ -492,11 +492,11 @@ pub fn next_entries_mut(
 /// Creates the next Entries for given transactions
 pub fn next_entries(
     start_hash: &Hash,
-    cur_hashes: u64,
+    num_hashes: u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
     let mut id = *start_hash;
-    let mut num_hashes = cur_hashes;
+    let mut num_hashes = num_hashes;
     next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
