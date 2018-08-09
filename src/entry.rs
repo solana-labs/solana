@@ -54,11 +54,11 @@ impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(
         start_hash: &Hash,
-        cur_hashes: u64,
+        num_hashes: u64,
         transactions: Vec<Transaction>,
         has_more: bool,
     ) -> Self {
-        let num_hashes = cur_hashes + if transactions.is_empty() { 0 } else { 1 };
+        let num_hashes = num_hashes + if transactions.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &transactions);
         let entry = Entry {
             num_hashes,
@@ -123,13 +123,13 @@ impl Entry {
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
     pub fn new_mut(
         start_hash: &mut Hash,
-        cur_hashes: &mut u64,
+        num_hashes: &mut u64,
         transactions: Vec<Transaction>,
         has_more: bool,
     ) -> Self {
-        let entry = Self::new(start_hash, *cur_hashes, transactions, has_more);
+        let entry = Self::new(start_hash, *num_hashes, transactions, has_more);
         *start_hash = entry.id;
-        *cur_hashes = 0;
+        *num_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
         entry
     }

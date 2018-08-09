@@ -856,11 +856,11 @@ mod tests {
     fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
-        let mut cur_hashes = 0;
+        let mut num_hashes = 0;
         for _ in 0..length {
             let keypair = KeyPair::new();
             let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash);
-            let entry = Entry::new_mut(&mut hash, &mut cur_hashes, vec![tx], false);
+            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx], false);
             entries.push(entry);
         }
         entries.into_iter()
