@@ -29,7 +29,7 @@ extern "C" {
         vecs: *const Elems,
         num: u32,          //number of vecs
         message_size: u32, //size of each element inside the elems field of the vec
-        public_key_offset: u32,
+        pubkey_offset: u32,
         signature_offset: u32,
         signed_message_offset: u32,
         signed_message_len_offset: u32,
@@ -50,8 +50,8 @@ fn verify_packet(packet: &Packet) -> u8 {
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;
     let sig_start = TX_OFFSET + SIG_OFFSET;
     let sig_end = sig_start + size_of::<Signature>();
-    let pub_key_start = TX_OFFSET + PUB_KEY_OFFSET;
-    let pub_key_end = pub_key_start + size_of::<PublicKey>();
+    let pubkey_start = TX_OFFSET + PUB_KEY_OFFSET;
+    let pubkey_end = pubkey_start + size_of::<PublicKey>();
 
     if packet.meta.size <= msg_start {
         return 0;
@@ -60,7 +60,7 @@ fn verify_packet(packet: &Packet) -> u8 {
     let msg_end = packet.meta.size;
     signature::verify(
         &signature::ED25519,
-        untrusted::Input::from(&packet.data[pub_key_start..pub_key_end]),
+        untrusted::Input::from(&packet.data[pubkey_start..pubkey_end]),
         untrusted::Input::from(&packet.data[msg_start..msg_end]),
         untrusted::Input::from(&packet.data[sig_start..sig_end]),
     ).is_ok() as u8

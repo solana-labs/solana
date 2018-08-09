@@ -23,7 +23,7 @@ pub const DRONE_PORT: u16 = 9900;
 pub enum DroneRequest {
     GetAirdrop {
         airdrop_request_amount: u64,
-        client_public_key: PublicKey,
+        client_pubkey: PublicKey,
     },
 }
 
@@ -111,16 +111,16 @@ impl Drone {
         let tx = match req {
             DroneRequest::GetAirdrop {
                 airdrop_request_amount,
-                client_public_key,
+                client_pubkey,
             } => {
                 info!(
                     "Requesting airdrop of {} to {:?}",
-                    airdrop_request_amount, client_public_key
+                    airdrop_request_amount, client_pubkey
                 );
                 request_amount = airdrop_request_amount;
                 Transaction::new(
                     &self.mint_keypair,
-                    client_public_key,
+                    client_pubkey,
                     airdrop_request_amount as i64,
                     last_id,
                 )
@@ -321,14 +321,14 @@ mod tests {
 
         let bob_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 50,
-            client_public_key: bob_pubkey,
+            client_pubkey: bob_pubkey,
         };
         let bob_sig = drone.send_airdrop(bob_req).unwrap();
         assert!(client.poll_for_signature(&bob_sig).is_ok());
 
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
-            client_public_key: carlos_pubkey,
+            client_pubkey: carlos_pubkey,
         };
         let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
         assert!(client.poll_for_signature(&carlos_sig).is_ok());
