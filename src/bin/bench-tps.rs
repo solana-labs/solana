@@ -8,6 +8,7 @@ extern crate solana;
 use clap::{App, Arg};
 use influx_db_client as influxdb;
 use rayon::prelude::*;
+use solana::bench_versioned;
 use solana::client::mk_client;
 use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::DRONE_PORT;
@@ -107,68 +108,6 @@ fn sample_tx_count(
     }
 }
 
-/// Send loopback payment of 0 tokens and confirm the network processed it
-fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut LastId, id: &KeyPair) {
-    let transfer_start = Instant::now();
-
-    let mut poll_count = 0;
-    loop {
-        if poll_count > 0 && poll_count % 8 == 0 {
-            println!(
-                "polling for barrier transaction confirmation, attempt {}",
-                poll_count
-            );
-        }
-
-        *last_id = barrier_client.get_last_id();
-        let sig = barrier_client
-            .transfer(0, &id, id.pubkey(), last_id)
-            .expect("Unable to send barrier transaction");
-
-        let confirmatiom = barrier_client.poll_for_signature(&sig);
-        let duration_ms = duration_as_ms(&transfer_start.elapsed());
-        if confirmatiom.is_ok() {
-            println!("barrier transaction confirmed in {}ms", duration_ms);
-
-            metrics::submit(
-                influxdb::Point::new("bench-tps")
-                    .add_tag(
-                        "op",
-                        influxdb::Value::String("send_barrier_transaction".to_string()),
-                    )
-                    .add_field("poll_count", influxdb::Value::Integer(poll_count))
-                    .add_field("duration", influxdb::Value::Integer(duration_ms as i64))
-                    .to_owned(),
-            );
-
-            // Sanity check that the client balance is still 1
-            let balance = barrier_client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
-            if balance != 1 {
-                panic!("Expected an account balance of 1 (balance: {}", balance);
-            }
-            break;
-        }
-
-        // Timeout after 3 minutes.  When running a CPU-only leader+validator+drone+bench-tps on a dev
-        // machine, some batches of transactions can take upwards of 1 minute...
-        if duration_ms > 1000 * 60 * 3 {
-            println!("Error: Couldn't confirm barrier transaction!");
-            exit(1);
-        }
-
-        let new_last_id = barrier_client.get_last_id();
-        if new_last_id == *last_id {
-            if poll_count > 0 && poll_count % 8 == 0 {
-                println!("last_id is not advancing, still at {:?}", *last_id);
-            }
-        } else {
-            *last_id = new_last_id;
-        }
-
-        poll_count += 1;
-    }
-}
-
 fn generate_txs(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
     id: &KeyPair,
@@ -218,54 +157,6 @@ fn generate_txs(
         let mut shared_txs_wl = shared_txs.write().unwrap();
         for chunk in chunks {
             shared_txs_wl.push_back(chunk.to_vec());
-        }
-    }
-}
-
-fn do_tx_transfers(
-    exit_signal: &Arc<AtomicBool>,
-    shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
-    leader: &NodeInfo,
-    shared_tx_thread_count: &Arc<AtomicIsize>,
-) {
-    let client = mk_client(&leader);
-    loop {
-        let txs;
-        {
-            let mut shared_txs_wl = shared_txs.write().unwrap();
-            txs = shared_txs_wl.pop_front();
-        }
-        if let Some(txs0) = txs {
-            shared_tx_thread_count.fetch_add(1, Ordering::Relaxed);
-            println!(
-                "Transferring 1 unit {} times... to {}",
-                txs0.len(),
-                leader.contact_info.tpu
-            );
-            let tx_len = txs0.len();
-            let transfer_start = Instant::now();
-            for tx in txs0 {
-                client.transfer_signed(&tx).unwrap();
-            }
-            shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
-            println!(
-                "Tx send done. {} ms {} tps",
-                duration_as_ms(&transfer_start.elapsed()),
-                tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
-            );
-            metrics::submit(
-                influxdb::Point::new("bench-tps")
-                    .add_tag("op", influxdb::Value::String("do_tx_transfers".to_string()))
-                    .add_field(
-                        "duration",
-                        influxdb::Value::Integer(duration_as_ms(&transfer_start.elapsed()) as i64),
-                    )
-                    .add_field("count", influxdb::Value::Integer(tx_len as i64))
-                    .to_owned(),
-            );
-        }
-        if exit_signal.load(Ordering::Relaxed) {
-            break;
         }
     }
 }
@@ -513,13 +404,8 @@ fn main() {
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
-    println!("Creating {} keypairs...", tx_count / 2);
-    let keypairs = rnd.gen_n_keypairs(tx_count / 2);
-    let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
-
     println!("Get tokens...");
     airdrop_tokens(&mut client, &leader, &id, tx_count);
-    airdrop_tokens(&mut barrier_client, &leader, &barrier_id, 1);
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();
@@ -555,18 +441,65 @@ fn main() {
     let s_threads: Vec<_> = (0..threads)
         .map(|_| {
             let exit_signal = exit_signal.clone();
-            let shared_txs = shared_txs.clone();
             let leader = leader.clone();
-            let shared_tx_active_thread_count = shared_tx_active_thread_count.clone();
             Builder::new()
                 .name("solana-client-sender".to_string())
                 .spawn(move || {
-                    do_tx_transfers(
-                        &exit_signal,
-                        &shared_txs,
-                        &leader,
-                        &shared_tx_active_thread_count,
-                    );
+                    println!("Creating {} keypairs...", tx_count / 2);
+                    let my_tx_count = tx_count / threads;
+                    let keys = rnd.gen_n_keypairs(my_tx_count);
+                    let mut client = mk_client(&leader);
+                    let mut bal = 0;
+
+                    let amount = 1000;
+                    while bal == 0 {
+                        let last_id = client.get_last_id();
+                        let tx =
+                            Transaction::new(id, keys[0].pubkey(), amount * my_tx_count, last_id);
+                        client.transfer_signed(&tx).unwrap();
+                        let _ = client
+                            .poll_update(1000, &keys[0].pubkey())
+                            .expect("initial transfer");
+                        bal = client.get_balance(&keys[0].pubkey());
+                    }
+
+                    bench_versined::distribute(&mut client, &keys, amount);
+
+                    let len = my_tx_count / 2;
+
+                    while !exit_signal.load(Ordering::Relaxed) {
+                        let transfer_start = Instant::now();
+                        println!(
+                            "Transferring 1 unit {} times... to {}",
+                            my_tx_count, leader.contact_info.tpu
+                        );
+
+                        bench_versined::swap(&mut client, &keys[..len], &keys[len..]);
+                        bench_versined::swap(&mut client, &keys[len..], &keys[..len]);
+
+                        println!(
+                            "Tx send done. {} ms {} tps",
+                            duration_as_ms(&transfer_start.elapsed()),
+                            my_tx_count as f32 / duration_as_s(&transfer_start.elapsed()),
+                        );
+                        metrics::submit(
+                            influxdb::Point::new("bench-tps")
+                                .add_tag(
+                                    "op",
+                                    influxdb::Value::String("do_tx_transfers".to_string()),
+                                )
+                                .add_field(
+                                    "duration",
+                                    influxdb::Value::Integer(duration_as_ms(
+                                        &transfer_start.elapsed(),
+                                    )
+                                        as i64),
+                                )
+                                .add_field("count", influxdb::Value::Integer(my_tx_count as i64))
+                                .to_owned(),
+                        );
+                    }
+                    bench_versined::reclaim(&mut client, &keys, id.pubkey());
                 })
                 .unwrap()
         })

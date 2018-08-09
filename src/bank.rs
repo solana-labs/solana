@@ -259,6 +259,8 @@ impl Bank {
                 } else {
                     bal.tokens -= contract.tokens;
                 }
+                // next transaction has to be on a greater height
+                bal.version = tx.last_id.height;
             };
         }
 
