@@ -72,11 +72,20 @@ fn main() -> () {
     }
 
     let leader_pubkey = keypair.pubkey();
-    let repl_clone = repl_data.clone();
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    let node = TestNode::new_with_bind_addr(repl_data, bind_addr);
+    let node = if let Some(_t) = matches.value_of("testnet") {
+        TestNode::new_with_external_ip(leader_pubkey, repl_data.contact_info.ncp.ip(), 0)
+    } else {
+        TestNode::new_with_external_ip(
+            leader_pubkey,
+            repl_data.contact_info.ncp.ip(),
+            repl_data.contact_info.ncp.port(),
+        )
+    };
+    let repl_clone = node.data.clone();
+
     let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DRONE_PORT);
     let testnet_addr = matches.value_of("testnet").map(|addr_str| {
         let addr: SocketAddr = addr_str.parse().unwrap();

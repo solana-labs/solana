@@ -20,6 +20,7 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
+use nat::udp_random_bind;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
 use rand::{thread_rng, RngCore};
@@ -30,7 +31,7 @@ use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io::Cursor;
-use std::net::{IpAddr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -1341,6 +1342,69 @@ impl TestNode {
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         TestNode {
             data,
+            sockets: Sockets {
+                gossip,
+                gossip_send,
+                requests,
+                replicate,
+                transaction,
+                respond,
+                broadcast,
+                repair,
+                retransmit,
+            },
+        }
+    }
+    pub fn new_with_external_ip(pubkey: Pubkey, ip: IpAddr, ncp_port: u16) -> TestNode {
+        fn bind() -> (u16, UdpSocket) {
+            match udp_random_bind(8100, 10000, 5) {
+                Ok(socket) => (socket.local_addr().unwrap().port(), socket),
+                Err(err) => {
+                    panic!("Failed to bind to {:?}", err);
+                }
+            }
+        };
+
+        fn bind_to(port: u16) -> UdpSocket {
+            let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+            match UdpSocket::bind(addr) {
+                Ok(socket) => socket,
+                Err(err) => {
+                    panic!("Failed to bind to {:?}: {:?}", addr, err);
+                }
+            }
+        };
+
+        let (gossip_port, gossip) = if ncp_port != 0 {
+            (ncp_port, bind_to(ncp_port))
+        } else {
+            bind()
+        };
+        let (replicate_port, replicate) = bind();
+        let (requests_port, requests) = bind();
+        let (transaction_port, transaction) = bind();
+        let (repair_port, repair) = bind();
+
+        // Responses are sent from the same Udp port as requests are received
+        // from, in hopes that a NAT sitting in the middle will route the
+        // response Udp packet correctly back to the requester.
+        let respond = requests.try_clone().unwrap();
+
+        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        let node_info = NodeInfo::new(
+            pubkey,
+            SocketAddr::new(ip, gossip_port),
+            SocketAddr::new(ip, replicate_port),
+            SocketAddr::new(ip, requests_port),
+            SocketAddr::new(ip, transaction_port),
+            SocketAddr::new(ip, repair_port),
+        );
+
+        TestNode {
+            data: node_info,
             sockets: Sockets {
                 gossip,
                 gossip_send,
