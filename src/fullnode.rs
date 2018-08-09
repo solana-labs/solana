@@ -4,13 +4,12 @@ use bank::Bank;
 use broadcaster;
 use crdt::{Crdt, NodeInfo, TestNode};
 use entry::Entry;
-use ledger::{read_ledger, Block};
+use ledger::read_ledger;
 use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
-use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -19,7 +18,7 @@ use std::time::Duration;
 use tpu::Tpu;
 use tvu::Tvu;
 use untrusted::Input;
-use window::{self, SharedWindow};
+use window;
 
 //use std::time::Duration;
 pub struct FullNode {
@@ -158,21 +157,6 @@ impl FullNode {
         )
     }
 
-    fn new_window(
-        ledger_tail: &[Entry],
-        entry_height: u64,
-        node_info: &NodeInfo,
-        blob_recycler: &BlobRecycler,
-    ) -> SharedWindow {
-        // convert to blobs
-        let mut blobs = VecDeque::new();
-        ledger_tail.to_blobs(&blob_recycler, &mut blobs);
-
-        // flatten deque to vec
-        let blobs: Vec<_> = blobs.into_iter().collect();
-        window::initialized_window(&node_info, blobs, entry_height)
-    }
-
     /// Create a server instance acting as a leader.
     ///
     /// ```text
@@ -219,7 +203,8 @@ impl FullNode {
         thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
-        let window = FullNode::new_window(ledger_tail, entry_height, &node.data, &blob_recycler);
+        let window =
+            window::new_window_from_entries(ledger_tail, entry_height, &node.data, &blob_recycler);
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
 
@@ -309,7 +294,8 @@ impl FullNode {
         thread_hdls.extend(rpu.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
-        let window = FullNode::new_window(ledger_tail, entry_height, &node.data, &blob_recycler);
+        let window =
+            window::new_window_from_entries(ledger_tail, entry_height, &node.data, &blob_recycler);
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
         crdt.write()
