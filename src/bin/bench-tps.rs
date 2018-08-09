@@ -7,29 +7,25 @@ extern crate solana;
 
 use clap::{App, Arg};
 use influx_db_client as influxdb;
-use rayon::prelude::*;
 use solana::bench_versioned;
 use solana::client::mk_client;
 use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
-use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
 use solana::nat::{udp_public_bind, udp_random_bind, UdpSocketPair};
 use solana::ncp::Ncp;
 use solana::service::Service;
-use solana::signature::{read_keypair, GenKeys, KeyPair, KeyPairUtil};
+use solana::signature::{read_keypair, KeyPair, KeyPairUtil};
 use solana::streamer::default_window;
 use solana::thin_client::ThinClient;
-use solana::timing::{duration_as_ms, duration_as_s};
-use solana::transaction::Transaction;
+use solana::timing::duration_as_s;
 use solana::wallet::request_airdrop;
-use std::collections::VecDeque;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::process::exit;
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Builder;
@@ -108,34 +104,26 @@ fn sample_tx_count(
     }
 }
 
-fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tx_count: i64) {
+fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &KeyPair, tokens: i64) {
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
-    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    let starting_balance = client.get_balance(&id.pubkey()).unwrap();
     metrics_submit_token_balance(starting_balance);
 
-    if starting_balance < tx_count {
-        let airdrop_amount = tx_count - starting_balance;
+    if starting_balance < tokens {
+        let airdrop_amount = tokens - starting_balance;
         println!(
             "Airdropping {:?} tokens from {}",
             airdrop_amount, drone_addr
         );
 
-        let previous_balance = starting_balance;
         request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
 
         // TODO: return airdrop Result from Drone instead of polling the
         //       network
-        let mut current_balance = previous_balance;
-        for _ in 0..20 {
-            sleep(Duration::from_millis(500));
-            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
-            if starting_balance != current_balance {
-                break;
-            }
-            println!(".");
-        }
+        let _ = client.poll_update(10000, &id.pubkey());
+        let current_balance = client.get_balance(&id.pubkey()).unwrap();
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!("Airdrop failed!");
@@ -211,8 +199,7 @@ fn main() {
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
     let mut addr = None;
-    let mut sustained = false;
-    let mut tx_count = 500_000;
+    let mut tx_count = 500_000i64;
 
     let matches = App::new("solana-bench-tps")
         .arg(
@@ -270,16 +257,11 @@ fn main() {
                 .help("address to advertise to the network"),
         )
         .arg(
-            Arg::with_name("sustained")
-                .long("sustained")
-                .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
-        )
-        .arg(
             Arg::with_name("tx_count")
                 .long("tx_count")
                 .value_name("NUMBER")
                 .takes_value(true)
-                .help("number of transactions to send in a single batch")
+                .help("number of transactions to send in a single batch"),
         )
         .get_matches();
 
@@ -311,10 +293,6 @@ fn main() {
 
     if let Some(s) = matches.value_of("tx_count") {
         tx_count = s.to_string().parse().expect("integer");
-    }
-
-    if matches.is_present("sustained") {
-        sustained = true;
     }
 
     let exit_signal = Arc::new(AtomicBool::new(false));
@@ -349,7 +327,6 @@ fn main() {
 
     let mut seed = [0u8; 32];
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
 
     println!("Get tokens...");
     const RESERVE_AMOUNT: i64 = 1000i64;
@@ -381,11 +358,6 @@ fn main() {
         })
         .collect();
 
-    let shared_txs: Arc<RwLock<VecDeque<Vec<Transaction>>>> =
-        Arc::new(RwLock::new(VecDeque::new()));
-
-    let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
-
     let s_threads: Vec<_> = (0..threads)
         .map(|_| {
             let exit_signal = exit_signal.clone();
@@ -393,12 +365,13 @@ fn main() {
             Builder::new()
                 .name("solana-client-sender".to_string())
                 .spawn(move || {
-                    let my_tx_count = tx_count / threads;
+                    let my_tx_count: usize = (tx_count as usize) / threads;
                     let mut client = mk_client(&leader);
                     bench_versioned::execute(
+                        &leader,
                         &mut client,
                         &id,
-                        my_tx_count,
+                        my_tx_count as usize,
                         RESERVE_AMOUNT,
                         exit_signal,
                     );
@@ -411,7 +384,8 @@ fn main() {
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     while now.elapsed() < time {
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+        let _ = client.poll_update(1000, &id.pubkey());
+        let balance = client.get_balance(&id.pubkey()).unwrap_or(-1);
         metrics_submit_token_balance(balance);
     }
 
@@ -433,7 +407,8 @@ fn main() {
         }
     }
 
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+    let _ = client.poll_update(1000, &id.pubkey());
+    let balance = client.get_balance(&id.pubkey()).unwrap_or(-1);
     metrics_submit_token_balance(balance);
 
     compute_and_report_stats(&maxes, sample_period, &now.elapsed());

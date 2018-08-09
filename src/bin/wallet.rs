@@ -12,7 +12,7 @@ use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
-use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey, Signature};
+use solana::signature::{read_keypair, KeyPair, KeyPairUtil, PublicKey};
 use solana::thin_client::ThinClient;
 use solana::wallet::request_airdrop;
 use std::error;
@@ -197,13 +197,14 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
-            let sig_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
+            let pubkey_vec = bs58::decode(confirm_matches.value_of("pubkey").unwrap())
                 .into_vec()
-                .expect("base58-encoded signature");
+                .expect("base58-encoded pubkey");
+            let version = confirm_matches.value_of("version").unwrap().parse()?;
 
-            if sig_vec.len() == std::mem::size_of::<Signature>() {
-                let sig = Signature::new(&sig_vec);
-                Ok(WalletCommand::Confirm(sig))
+            if pubkey_vec.len() == std::mem::size_of::<PublicKey>() {
+                let pubkey = PublicKey::new(&pubkey_vec);
+                Ok(WalletCommand::Confirm(pubkey, version))
             } else {
                 display_actions();
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
@@ -279,12 +280,18 @@ fn process_command(
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(key, version) => {
-            let cur = client.get_versioned_account(&key);
-            if cur.version < version {
-                client.poll_for_update(10000, &key);
+            let current_version = client
+                .get_versioned_account(&key)
+                .map(|v| v.version)
+                .unwrap_or(0);
+            if current_version < version {
+                let _ = client.poll_update(10000, &key);
             }
-            let cur = client.get_versioned_account(&key);
-            if cur.version < version {
+            let current_version = client
+                .get_versioned_account(&key)
+                .map(|v| v.version)
+                .unwrap_or(0);
+            if current_version < version {
                 println!("Not found");
             } else {
                 println!("Confirmed");

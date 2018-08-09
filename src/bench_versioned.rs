@@ -18,7 +18,7 @@ const UPDATE_MILLIS: u64 = 500;
 /// 4. and vice versa
 /// 5. since some of the transactions may get dropped, the `amount` of tokens should cover the
 ///    unbalanced drops between the halfs
-pub fn exececute(
+pub fn execute(
     leader: &NodeInfo,
     client: &mut ThinClient,
     source: &KeyPair,
