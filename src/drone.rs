@@ -290,7 +290,6 @@ mod tests {
             bank,
             0,
             &[],
-            Some(Duration::from_millis(30)),
             leader,
             exit.clone(),
             &ledger_path,
