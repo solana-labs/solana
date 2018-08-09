@@ -13,8 +13,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
-use std::thread::Builder;
-use std::thread::{self, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
 use window::{self, SharedWindow};
@@ -49,7 +48,7 @@ fn retransmit(
 /// * `crdt` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-pub fn retransmitter(
+fn retransmitter(
     sock: UdpSocket,
     crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
