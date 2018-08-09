@@ -88,7 +88,7 @@ impl FullNode {
                 keypair,
                 bank,
                 entry_height,
-                Some(ledger_tail),
+                &ledger_tail,
                 node,
                 &network_entry_point,
                 exit.clone(),
@@ -107,7 +107,7 @@ impl FullNode {
                 keypair,
                 bank,
                 entry_height,
-                Some(ledger_tail),
+                &ledger_tail,
                 //Some(Duration::from_millis(1000)),
                 None,
                 node,
@@ -158,23 +158,18 @@ impl FullNode {
     }
 
     fn new_window(
-        ledger_tail: Option<Vec<Entry>>,
+        ledger_tail: &[Entry],
         entry_height: u64,
         node_info: &NodeInfo,
         blob_recycler: &BlobRecycler,
     ) -> streamer::SharedWindow {
-        match ledger_tail {
-            Some(ledger_tail) => {
-                // convert to blobs
-                let mut blobs = VecDeque::new();
-                ledger_tail.to_blobs(&blob_recycler, &mut blobs);
+        // convert to blobs
+        let mut blobs = VecDeque::new();
+        ledger_tail.to_blobs(&blob_recycler, &mut blobs);
 
-                // flatten deque to vec
-                let blobs: Vec<_> = blobs.into_iter().collect();
-                streamer::initialized_window(&node_info, blobs, entry_height)
-            }
-            None => streamer::default_window(),
-        }
+        // flatten deque to vec
+        let blobs: Vec<_> = blobs.into_iter().collect();
+        streamer::initialized_window(&node_info, blobs, entry_height)
     }
 
     /// Create a server instance acting as a leader.
@@ -205,7 +200,7 @@ impl FullNode {
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
-        ledger_tail: Option<Vec<Entry>>,
+        ledger_tail: &[Entry],
         tick_duration: Option<Duration>,
         node: TestNode,
         exit: Arc<AtomicBool>,
@@ -295,7 +290,7 @@ impl FullNode {
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
-        ledger_tail: Option<Vec<Entry>>,
+        ledger_tail: &[Entry],
         node: TestNode,
         entry_point: &NodeInfo,
         exit: Arc<AtomicBool>,
@@ -388,7 +383,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(keypair, bank, 0, None, tn, &entry, exit, None, false);
+        let v = FullNode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false);
         v.exit();
         v.join().unwrap();
     }
@@ -402,7 +397,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                FullNode::new_validator(keypair, bank, 0, None, tn, &entry, exit, None, false)
+                FullNode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
