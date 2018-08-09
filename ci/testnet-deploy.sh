@@ -456,7 +456,7 @@ else
     USE_SNAP=1 ci/testnet-sanity.sh $publicUrl $fullnode_count
   )
   IFS=\  read -r _ snapVersion _ < <(snap info solana | grep "^installed:")
-  snapVersion=${snapVersion:/0+git./}
+  snapVersion=${snapVersion/0+git./}
 fi
 
 pids=("${client_stop_pids[@]}")
