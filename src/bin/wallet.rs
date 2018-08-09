@@ -19,7 +19,6 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::thread::sleep;
 use std::time::Duration;
 
 enum WalletCommand {
@@ -27,7 +26,7 @@ enum WalletCommand {
     Balance,
     AirDrop(i64),
     Pay(i64, PublicKey),
-    Confirm(Signature),
+    Confirm(PublicKey, u64),
 }
 
 #[derive(Debug, Clone)]
@@ -126,13 +125,22 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         )
         .subcommand(
             SubCommand::with_name("confirm")
-                .about("Confirm your payment by signature")
+                .about("Confirm your payment by checking the account version")
                 .arg(
-                    Arg::with_name("signature")
+                    Arg::with_name("pubkey")
                         .index(1)
-                        .value_name("SIGNATURE")
+                        .value_name("PUBKEY")
                         .required(true)
                         .help("The transaction signature to confirm"),
+                )
+                .arg(
+                    Arg::with_name("version")
+                        // .index(2)
+                        .long("version")
+                        .value_name("NUMBER")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Poll until account is greater then this version."),
                 ),
         )
         .subcommand(SubCommand::with_name("balance").about("Get your balance"))
@@ -258,25 +266,29 @@ fn process_command(
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
-            current_balance =
-                client.poll_update(previous_balance.verison, 10000, &config.id.pubkey())?;
+            let current_balance = client.poll_update(10000, &config.id.pubkey())?;
             println!("Your balance is: {:?}", current_balance);
-            if current_balance.tokens - previous_balance.tokens != tokens {
+            if current_balance.tokens - previous_balance != tokens {
                 Err("Airdrop failed!")?;
             }
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
-            let sig = client.transfer(tokens, &config.id, to, &last_id)?;
+            let sig = client.transfer(tokens, &config.id, to, last_id)?;
             println!("{}", sig);
         }
         // Confirm the last client transaction by signature
-        WalletCommand::Confirm(sig) => {
-            if client.check_signature(&sig) {
-                println!("Confirmed");
-            } else {
+        WalletCommand::Confirm(key, version) => {
+            let cur = client.get_versioned_account(&key);
+            if cur.version < version {
+                client.poll_for_update(10000, &key);
+            }
+            let cur = client.get_versioned_account(&key);
+            if cur.version < version {
                 println!("Not found");
+            } else {
+                println!("Confirmed");
             }
         }
     }

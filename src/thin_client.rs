@@ -193,7 +193,7 @@ impl ThinClient {
         self.last_id.clone().expect("some last_id")
     }
 
-    /// poll until the account version is equal or greater than the version for millies
+    /// poll until the account version is greater than the current version for millies
     pub fn poll_update(
         &mut self,
         millies: u64,
@@ -204,7 +204,7 @@ impl ThinClient {
         let version = self.balances.get(pubkey).map(|v| v.version).unwrap_or(1);
         loop {
             if let Ok(bal) = self.get_versioned_account(pubkey) {
-                if bal.version >= version {
+                if bal.version > version {
                     return Ok(bal);
                 }
             }

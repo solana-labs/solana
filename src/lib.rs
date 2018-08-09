@@ -11,6 +11,7 @@
 pub mod counter;
 pub mod bank;
 pub mod banking_stage;
+pub mod bench_versioned;
 pub mod blob_fetch_stage;
 pub mod budget;
 pub mod choose_gossip_peer_strategy;
