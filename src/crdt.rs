@@ -902,7 +902,7 @@ impl Crdt {
     ) {
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
-        // sig verify the whole update and slash anyone who sends a bad update
+        // sigverify the whole update and slash anyone who sends a bad update
         let mut insert_total = 0;
         for v in data {
             insert_total += self.insert(&v);

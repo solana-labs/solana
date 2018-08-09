@@ -191,13 +191,13 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
-            let sig_vec = bs58::decode(confirm_matches.value_of("signature").unwrap())
+            let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
                 .expect("base58-encoded signature");
 
-            if sig_vec.len() == std::mem::size_of::<Signature>() {
-                let sig = Signature::new(&sig_vec);
-                Ok(WalletCommand::Confirm(sig))
+            if signatures.len() == std::mem::size_of::<Signature>() {
+                let signature = Signature::new(&signatures);
+                Ok(WalletCommand::Confirm(signature))
             } else {
                 eprintln!("{}", confirm_matches.usage());
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
@@ -276,12 +276,12 @@ fn process_command(
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
-            let sig = client.transfer(tokens, &config.id, to, &last_id)?;
-            println!("{}", sig);
+            let signature = client.transfer(tokens, &config.id, to, &last_id)?;
+            println!("{}", signature);
         }
         // Confirm the last client transaction by signature
-        WalletCommand::Confirm(sig) => {
-            if client.check_signature(&sig) {
+        WalletCommand::Confirm(signature) => {
+            if client.check_signature(&signature) {
                 println!("Confirmed");
             } else {
                 println!("Not found");

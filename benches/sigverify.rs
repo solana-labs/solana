@@ -9,7 +9,7 @@ use solana::packet::{to_packets, PacketRecycler};
 use solana::sigverify;
 use solana::transaction::test_tx;
 
-fn bench_sig_verify(bencher: &mut Bencher) {
+fn bench_sigverify(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
@@ -23,8 +23,8 @@ fn bench_sig_verify(bencher: &mut Bencher) {
 }
 
 fn bench(criterion: &mut Criterion) {
-    criterion.bench_function("bench_sig_verify", |bencher| {
-        bench_sig_verify(bencher);
+    criterion.bench_function("bench_sigverify", |bencher| {
+        bench_sigverify(bencher);
     });
 }
 

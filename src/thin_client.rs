@@ -92,7 +92,7 @@ impl ThinClient {
         let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         self.transactions_socket
             .send_to(&data, &self.transactions_addr)?;
-        Ok(tx.sig)
+        Ok(tx.signature)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -227,9 +227,9 @@ impl ThinClient {
     }
 
     /// Poll the server to confirm a transaction.
-    pub fn poll_for_signature(&mut self, sig: &Signature) -> io::Result<()> {
+    pub fn poll_for_signature(&mut self, signature: &Signature) -> io::Result<()> {
         let now = Instant::now();
-        while !self.check_signature(sig) {
+        while !self.check_signature(signature) {
             if now.elapsed().as_secs() > 1 {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
@@ -241,9 +241,9 @@ impl ThinClient {
 
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
-    pub fn check_signature(&mut self, sig: &Signature) -> bool {
+    pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
-        let req = Request::GetSignature { signature: *sig };
+        let req = Request::GetSignature { signature: *signature };
         let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
         let now = Instant::now();
         let mut done = false;
@@ -342,10 +342,10 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        let sig = client
+        let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        client.poll_for_signature(&sig).unwrap();
+        client.poll_for_signature(&signature).unwrap();
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
         exit.store(true, Ordering::Relaxed);
@@ -405,8 +405,8 @@ mod tests {
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
-        let sig = client.transfer_signed(&tr2).unwrap();
-        client.poll_for_signature(&sig).unwrap();
+        let signature = client.transfer_signed(&tr2).unwrap();
+        client.poll_for_signature(&signature).unwrap();
 
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
@@ -452,12 +452,12 @@ mod tests {
             transactions_socket,
         );
         let last_id = client.get_last_id();
-        let sig = client
+        let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
         sleep(Duration::from_millis(100));
 
-        assert!(client.check_signature(&sig));
+        assert!(client.check_signature(&signature));
 
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();

@@ -122,11 +122,11 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
         }
 
         *last_id = barrier_client.get_last_id();
-        let sig = barrier_client
+        let signature = barrier_client
             .transfer(0, &id, id.pubkey(), last_id)
             .expect("Unable to send barrier transaction");
 
-        let confirmatiom = barrier_client.poll_for_signature(&sig);
+        let confirmatiom = barrier_client.poll_for_signature(&signature);
         let duration_ms = duration_as_ms(&transfer_start.elapsed());
         if confirmatiom.is_ok() {
             println!("barrier transaction confirmed in {}ms", duration_ms);

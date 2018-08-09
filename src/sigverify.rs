@@ -138,7 +138,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     let count = batch_size(batches);
 
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
-    // and CPU speed for 64-128 sig verifies around 10-20ms. 64 is a nice
+    // and CPU speed for 64-128 sigverifies around 10-20ms. 64 is a nice
     // power-of-two number around that accounting for the fact that the CPU
     // may be busy doing other things while being a real fullnode
     // TODO: dynamically adjust this crossover
@@ -174,8 +174,8 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     trace!("Starting verify num packets: {}", num);
     trace!("elem len: {}", elems.len() as u32);
     trace!("packet sizeof: {}", size_of::<Packet>() as u32);
-    trace!("pub key: {}", (TX_OFFSET + PUB_KEY_OFFSET) as u32);
-    trace!("sig offset: {}", (TX_OFFSET + SIG_OFFSET) as u32);
+    trace!("pubkey: {}", (TX_OFFSET + PUB_KEY_OFFSET) as u32);
+    trace!("signature offset: {}", (TX_OFFSET + SIG_OFFSET) as u32);
     trace!("sign data: {}", (TX_OFFSET + SIGNED_DATA_OFFSET) as u32);
     trace!("len offset: {}", PACKET_DATA_SIZE as u32);
     unsafe {
