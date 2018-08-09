@@ -45,7 +45,8 @@ understood. Avoid introducing new 3-letter terms, which can be confused with 3-l
 
 Some terms we currently use regularly in the codebase:
 
-* hash: n. A SHA-256 Hash
+* fullnode: n. A fully participating network node.
+* hash: n. A SHA-256 Hash.
 * keypair: n. A Ed25519 key-pair, containing a public and private key.
 * pubkey: n. The public key of a Ed25519 key-pair.
 * sigverify: v. To verify a Ed25519 digital signature.

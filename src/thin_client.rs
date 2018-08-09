@@ -319,7 +319,7 @@ mod tests {
     use bank::Bank;
     use budget::Budget;
     use crdt::TestNode;
-    use fullnode::FullNode;
+    use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use logger;
     use mint::Mint;
@@ -356,7 +356,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = tmp_ledger("thin_client", &alice);
 
-        let server = FullNode::new_leader(
+        let server = Fullnode::new_leader(
             leader_keypair,
             bank,
             0,
@@ -404,7 +404,7 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
 
-        let server = FullNode::new_leader(
+        let server = Fullnode::new_leader(
             leader_keypair,
             bank,
             0,
@@ -464,7 +464,7 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
-        let server = FullNode::new_leader(
+        let server = Fullnode::new_leader(
             leader_keypair,
             bank,
             0,

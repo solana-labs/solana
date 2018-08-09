@@ -159,7 +159,7 @@ mod tests {
     use bank::Bank;
     use crdt::{get_ip_addr, TestNode};
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
-    use fullnode::FullNode;
+    use fullnode::Fullnode;
     use logger;
     use mint::Mint;
     use service::Service;
@@ -285,7 +285,7 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");
 
-        let server = FullNode::new_leader(
+        let server = Fullnode::new_leader(
             leader_keypair,
             bank,
             0,

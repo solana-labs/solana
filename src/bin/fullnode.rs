@@ -9,7 +9,7 @@ use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::crdt::{NodeInfo, TestNode};
 use solana::drone::DRONE_PORT;
-use solana::fullnode::{Config, FullNode};
+use solana::fullnode::{Config, Fullnode};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
@@ -83,11 +83,11 @@ fn main() -> () {
         let testnet_addr: SocketAddr = testnet_address_string.parse().unwrap();
         drone_addr.set_ip(testnet_addr.ip());
 
-        FullNode::new(node, false, ledger_path, keypair, Some(testnet_addr))
+        Fullnode::new(node, false, ledger_path, keypair, Some(testnet_addr))
     } else {
         node.data.leader_id = node.data.id;
 
-        FullNode::new(node, true, ledger_path, keypair, None)
+        Fullnode::new(node, true, ledger_path, keypair, None)
     };
 
     let mut client = mk_client(&repl_clone);

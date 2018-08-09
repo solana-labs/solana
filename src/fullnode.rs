@@ -20,8 +20,7 @@ use tvu::Tvu;
 use untrusted::Input;
 use window;
 
-//use std::time::Duration;
-pub struct FullNode {
+pub struct Fullnode {
     exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -48,7 +47,7 @@ impl Config {
     }
 }
 
-impl FullNode {
+impl Fullnode {
     fn new_internal(
         mut node: TestNode,
         leader: bool,
@@ -56,7 +55,7 @@ impl FullNode {
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
-    ) -> FullNode {
+    ) -> Self {
         info!("creating bank...");
         let bank = Bank::new_default(leader);
 
@@ -84,7 +83,7 @@ impl FullNode {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
             let network_entry_point = NodeInfo::new_entry_point(testnet_addr);
-            let server = FullNode::new_validator(
+            let server = Self::new_validator(
                 keypair,
                 bank,
                 entry_height,
@@ -103,7 +102,7 @@ impl FullNode {
         } else {
             node.data.leader_id = node.data.id;
 
-            let server = FullNode::new_leader(
+            let server = Self::new_leader(
                 keypair,
                 bank,
                 entry_height,
@@ -129,8 +128,8 @@ impl FullNode {
         ledger: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
-    ) -> FullNode {
-        FullNode::new_internal(
+    ) -> Self {
+        Self::new_internal(
             node,
             leader,
             ledger,
@@ -146,8 +145,8 @@ impl FullNode {
         ledger_path: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
-    ) -> FullNode {
-        FullNode::new_internal(
+    ) -> Self {
+        Self::new_internal(
             node,
             leader,
             ledger_path,
@@ -240,7 +239,7 @@ impl FullNode {
         );
         thread_hdls.extend(broadcast_stage.thread_hdls());
 
-        FullNode { exit, thread_hdls }
+        Fullnode { exit, thread_hdls }
     }
 
     /// Create a server instance acting as a validator.
@@ -325,7 +324,7 @@ impl FullNode {
         );
         thread_hdls.extend(tvu.thread_hdls());
         thread_hdls.extend(ncp.thread_hdls());
-        FullNode { exit, thread_hdls }
+        Fullnode { exit, thread_hdls }
     }
 
     //used for notifying many nodes in parallel to exit
@@ -338,7 +337,7 @@ impl FullNode {
     }
 }
 
-impl Service for FullNode {
+impl Service for Fullnode {
     fn thread_hdls(self) -> Vec<JoinHandle<()>> {
         self.thread_hdls
     }
@@ -355,7 +354,7 @@ impl Service for FullNode {
 mod tests {
     use bank::Bank;
     use crdt::TestNode;
-    use fullnode::FullNode;
+    use fullnode::Fullnode;
     use mint::Mint;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -370,13 +369,13 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = FullNode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false);
+        let v = Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false);
         v.exit();
         v.join().unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
-        let vals: Vec<FullNode> = (0..2)
+        let vals: Vec<Fullnode> = (0..2)
             .map(|_| {
                 let keypair = Keypair::new();
                 let tn = TestNode::new_localhost_with_pubkey(keypair.pubkey());
@@ -384,7 +383,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                FullNode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false)
+                Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
