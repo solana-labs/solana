@@ -4,7 +4,7 @@
 //! `Payment`, the payment is executed.
 
 use chrono::prelude::*;
-use signature::PublicKey;
+use signature::Pubkey;
 
 /// The types of events a payment plan can process.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -12,18 +12,18 @@ pub enum Witness {
     /// The current time.
     Timestamp(DateTime<Utc>),
 
-    /// A siganture from PublicKey.
+    /// A siganture from Pubkey.
     Signature,
 }
 
-/// Some amount of tokens that should be sent to the `to` `PublicKey`.
+/// Some amount of tokens that should be sent to the `to` `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
     /// Amount to be paid.
     pub tokens: i64,
 
-    /// The `PublicKey` that `tokens` should be paid to.
-    pub to: PublicKey,
+    /// The `Pubkey` that `tokens` should be paid to.
+    pub to: Pubkey,
 }
 
 /// Interface to smart contracts.
@@ -36,5 +36,5 @@ pub trait PaymentPlan {
 
     /// Apply a witness to the payment plan to see if the plan can be reduced.
     /// If so, modify the plan in-place.
-    fn apply_witness(&mut self, witness: &Witness, from: &PublicKey);
+    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey);
 }

@@ -7,7 +7,7 @@
 use influx_db_client as influxdb;
 use metrics;
 use signature::Signature;
-use signature::{Keypair, PublicKey};
+use signature::{Keypair, Pubkey};
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
@@ -23,7 +23,7 @@ pub const DRONE_PORT: u16 = 9900;
 pub enum DroneRequest {
     GetAirdrop {
         airdrop_request_amount: u64,
-        client_pubkey: PublicKey,
+        client_pubkey: Pubkey,
     },
 }
 

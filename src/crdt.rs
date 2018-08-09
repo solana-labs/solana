@@ -2,7 +2,7 @@
 //! a gossip control plane.  The goal is to share small bits of off-chain information and detect and
 //! repair partitions.
 //!
-//! This CRDT only supports a very limited set of types.  A map of PublicKey -> Versioned Struct.
+//! This CRDT only supports a very limited set of types.  A map of Pubkey -> Versioned Struct.
 //! The last version is always picked during an update.
 //!
 //! The network is arranged in layers:
@@ -25,7 +25,7 @@ use pnet_datalink as datalink;
 use rand::{thread_rng, RngCore};
 use rayon::prelude::*;
 use result::{Error, Result};
-use signature::{Keypair, KeypairUtil, PublicKey};
+use signature::{Keypair, KeypairUtil, Pubkey};
 use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -126,18 +126,18 @@ pub struct LedgerState {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct NodeInfo {
-    pub id: PublicKey,
+    pub id: Pubkey,
     /// If any of the bits change, update increment this value
     pub version: u64,
     /// network addresses
     pub contact_info: ContactInfo,
     /// current leader identity
-    pub leader_id: PublicKey,
+    pub leader_id: Pubkey,
     /// information about the state of the ledger
     pub ledger_state: LedgerState,
 }
 
-fn make_debug_id(key: &PublicKey) -> u64 {
+fn make_debug_id(key: &Pubkey) -> u64 {
     let buf: &[u8] = &key.as_ref();
     let mut rdr = Cursor::new(&buf[..8]);
     rdr.read_u64::<LittleEndian>()
@@ -146,7 +146,7 @@ fn make_debug_id(key: &PublicKey) -> u64 {
 
 impl NodeInfo {
     pub fn new(
-        id: PublicKey,
+        id: Pubkey,
         ncp: SocketAddr,
         tvu: SocketAddr,
         rpu: SocketAddr,
@@ -164,7 +164,7 @@ impl NodeInfo {
                 tvu_window,
                 version: 0,
             },
-            leader_id: PublicKey::default(),
+            leader_id: Pubkey::default(),
             ledger_state: LedgerState {
                 last_id: Hash::default(),
             },
@@ -207,7 +207,7 @@ impl NodeInfo {
         nxt_addr.set_port(addr.port() + nxt);
         nxt_addr
     }
-    pub fn new_leader_with_pubkey(pubkey: PublicKey, bind_addr: &SocketAddr) -> Self {
+    pub fn new_leader_with_pubkey(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
         let transactions_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
@@ -229,7 +229,7 @@ impl NodeInfo {
     pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
         let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         NodeInfo::new(
-            PublicKey::default(),
+            Pubkey::default(),
             gossip_addr,
             daddr,
             daddr,
@@ -252,22 +252,22 @@ impl NodeInfo {
 /// No attempt to keep track of timeouts or dropped requests is made, or should be.
 pub struct Crdt {
     /// table of everyone in the network
-    pub table: HashMap<PublicKey, NodeInfo>,
+    pub table: HashMap<Pubkey, NodeInfo>,
     /// Value of my update index when entry in table was updated.
     /// Nodes will ask for updates since `update_index`, and this node
     /// should respond with all the identities that are greater then the
     /// request's `update_index` in this list
-    local: HashMap<PublicKey, u64>,
+    local: HashMap<Pubkey, u64>,
     /// The value of the remote update index that I have last seen
     /// This Node will ask external nodes for updates since the value in this list
-    pub remote: HashMap<PublicKey, u64>,
+    pub remote: HashMap<Pubkey, u64>,
     /// last time the public key had sent us a message
-    pub alive: HashMap<PublicKey, u64>,
+    pub alive: HashMap<Pubkey, u64>,
     pub update_index: u64,
-    pub me: PublicKey,
+    pub me: Pubkey,
     /// last time we heard from anyone getting a message fro this public key
     /// these are rumers and shouldn't be trusted directly
-    external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>>,
+    external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>>,
 }
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
@@ -279,7 +279,7 @@ enum Protocol {
     RequestUpdates(u64, NodeInfo),
     //TODO might need a since?
     /// from id, form's last update index, NodeInfo
-    ReceiveUpdates(PublicKey, u64, Vec<NodeInfo>, Vec<(PublicKey, u64)>),
+    ReceiveUpdates(Pubkey, u64, Vec<NodeInfo>, Vec<(Pubkey, u64)>),
     /// ask for a missing index
     /// (my replicated data to keep alive, missing window index)
     RequestWindowIndex(NodeInfo, u64),
@@ -334,14 +334,14 @@ impl Crdt {
         let leader_id = self.table[&self.me].leader_id;
 
         // leader_id can be 0s from network entry point
-        if leader_id == PublicKey::default() {
+        if leader_id == Pubkey::default() {
             return None;
         }
 
         self.table.get(&leader_id)
     }
 
-    pub fn set_leader(&mut self, key: PublicKey) -> () {
+    pub fn set_leader(&mut self, key: Pubkey) -> () {
         let mut me = self.my_data().clone();
         warn!(
             "{:x}: LEADER_UPDATE TO {:x} from {:x}",
@@ -354,11 +354,11 @@ impl Crdt {
         self.insert(&me);
     }
 
-    pub fn get_external_liveness_entry(&self, key: &PublicKey) -> Option<&HashMap<PublicKey, u64>> {
+    pub fn get_external_liveness_entry(&self, key: &Pubkey) -> Option<&HashMap<Pubkey, u64>> {
         self.external_liveness.get(key)
     }
 
-    pub fn insert_vote(&mut self, pubkey: &PublicKey, v: &Vote, last_id: Hash) {
+    pub fn insert_vote(&mut self, pubkey: &Pubkey, v: &Vote, last_id: Hash) {
         if self.table.get(pubkey).is_none() {
             warn!(
                 "{:x}: VOTE for unknown id: {:x}",
@@ -408,7 +408,7 @@ impl Crdt {
             self.insert(&data);
         }
     }
-    pub fn insert_votes(&mut self, votes: &[(PublicKey, Vote, Hash)]) {
+    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
         inc_new_counter_info!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
@@ -451,7 +451,7 @@ impl Crdt {
         }
     }
 
-    fn update_liveness(&mut self, id: PublicKey) {
+    fn update_liveness(&mut self, id: Pubkey) {
         //update the liveness table
         let now = timestamp();
         trace!(
@@ -477,7 +477,7 @@ impl Crdt {
         }
         let leader_id = self.leader_data().unwrap().id;
         let limit = GOSSIP_PURGE_MILLIS;
-        let dead_ids: Vec<PublicKey> = self
+        let dead_ids: Vec<Pubkey> = self
             .alive
             .iter()
             .filter_map(|(&k, v)| {
@@ -515,7 +515,7 @@ impl Crdt {
                     make_debug_id(id),
                 );
                 inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
-                self.set_leader(PublicKey::default());
+                self.set_leader(Pubkey::default());
             }
         }
     }
@@ -739,16 +739,16 @@ impl Crdt {
     }
 
     // TODO: fill in with real implmentation once staking is implemented
-    fn get_stake(_id: PublicKey) -> f64 {
+    fn get_stake(_id: Pubkey) -> f64 {
         1.0
     }
 
-    fn get_updates_since(&self, v: u64) -> (PublicKey, u64, Vec<NodeInfo>) {
+    fn get_updates_since(&self, v: u64) -> (Pubkey, u64, Vec<NodeInfo>) {
         //trace!("get updates since {}", v);
         let data = self
             .table
             .values()
-            .filter(|x| x.id != PublicKey::default() && self.local[&x.id] > v)
+            .filter(|x| x.id != Pubkey::default() && self.local[&x.id] > v)
             .cloned()
             .collect();
         let id = self.me;
@@ -855,16 +855,16 @@ impl Crdt {
         Ok(())
     }
     /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
-    fn top_leader(&self) -> Option<PublicKey> {
+    fn top_leader(&self) -> Option<Pubkey> {
         let mut table = HashMap::new();
-        let def = PublicKey::default();
+        let def = Pubkey::default();
         let cur = self.table.values().filter(|x| x.leader_id != def);
         for v in cur {
             let cnt = table.entry(&v.leader_id).or_insert(0);
             *cnt += 1;
             trace!("leader {:x} {}", make_debug_id(&v.leader_id), *cnt);
         }
-        let mut sorted: Vec<(&PublicKey, usize)> = table.into_iter().collect();
+        let mut sorted: Vec<(&Pubkey, usize)> = table.into_iter().collect();
         let my_id = self.debug_id();
         for x in &sorted {
             trace!(
@@ -895,10 +895,10 @@ impl Crdt {
     /// * `data` - the update data
     fn apply_updates(
         &mut self,
-        from: PublicKey,
+        from: Pubkey,
         update_index: u64,
         data: &[NodeInfo],
-        external_liveness: &[(PublicKey, u64)],
+        external_liveness: &[(Pubkey, u64)],
     ) {
         trace!("got updates {}", data.len());
         // TODO we need to punish/spam resist here
@@ -1272,7 +1272,7 @@ impl TestNode {
         let pubkey = Keypair::new().pubkey();
         Self::new_localhost_with_pubkey(pubkey)
     }
-    pub fn new_localhost_with_pubkey(pubkey: PublicKey) -> Self {
+    pub fn new_localhost_with_pubkey(pubkey: Pubkey) -> Self {
         let transaction = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -1381,7 +1381,7 @@ mod tests {
     use logger;
     use packet::BlobRecycler;
     use result::Error;
-    use signature::{Keypair, KeypairUtil, PublicKey};
+    use signature::{Keypair, KeypairUtil, Pubkey};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -1884,7 +1884,7 @@ mod tests {
         let len = crdt.table.len() as u64;
         crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
         assert_eq!(len as usize - 1, crdt.table.len());
-        assert_eq!(crdt.my_data().leader_id, PublicKey::default());
+        assert_eq!(crdt.my_data().leader_id, Pubkey::default());
         assert!(crdt.leader_data().is_none());
     }
 

@@ -2,7 +2,7 @@ use crdt::{CrdtError, NodeInfo};
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::Result;
-use signature::PublicKey;
+use signature::Pubkey;
 use std;
 use std::collections::HashMap;
 
@@ -61,21 +61,21 @@ impl<'a> ChooseGossipPeerStrategy for ChooseRandomPeerStrategy<'a> {
 pub struct ChooseWeightedPeerStrategy<'a> {
     // The map of last directly observed update_index for each active validator.
     // This is how we get observed(v) from the formula above.
-    remote: &'a HashMap<PublicKey, u64>,
+    remote: &'a HashMap<Pubkey, u64>,
     // The map of rumored update_index for each active validator. Using the formula above,
     // to find rumor_v(i), we would first look up "v" in the outer map, then look up
     // "i" in the inner map, i.e. look up external_liveness[v][i]
-    external_liveness: &'a HashMap<PublicKey, HashMap<PublicKey, u64>>,
+    external_liveness: &'a HashMap<Pubkey, HashMap<Pubkey, u64>>,
     // A function returning the size of the stake for a particular validator, corresponds
     // to stake(i) in the formula above.
-    get_stake: &'a Fn(PublicKey) -> f64,
+    get_stake: &'a Fn(Pubkey) -> f64,
 }
 
 impl<'a> ChooseWeightedPeerStrategy<'a> {
     pub fn new(
-        remote: &'a HashMap<PublicKey, u64>,
-        external_liveness: &'a HashMap<PublicKey, HashMap<PublicKey, u64>>,
-        get_stake: &'a Fn(PublicKey) -> f64,
+        remote: &'a HashMap<Pubkey, u64>,
+        external_liveness: &'a HashMap<Pubkey, HashMap<Pubkey, u64>>,
+        get_stake: &'a Fn(Pubkey) -> f64,
     ) -> Self {
         ChooseWeightedPeerStrategy {
             remote,
@@ -84,7 +84,7 @@ impl<'a> ChooseWeightedPeerStrategy<'a> {
         }
     }
 
-    fn calculate_weighted_remote_index(&self, peer_id: PublicKey) -> u32 {
+    fn calculate_weighted_remote_index(&self, peer_id: Pubkey) -> u32 {
         let mut last_seen_index = 0;
         // If the peer is not in our remote table, then we leave last_seen_index as zero.
         // Only happens when a peer appears in our crdt.table but not in our crdt.remote,
@@ -192,11 +192,11 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
 mod tests {
     use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
     use logger;
-    use signature::{Keypair, KeypairUtil, PublicKey};
+    use signature::{Keypair, KeypairUtil, Pubkey};
     use std;
     use std::collections::HashMap;
 
-    fn get_stake(_id: PublicKey) -> f64 {
+    fn get_stake(_id: Pubkey) -> f64 {
         1.0
     }
 
@@ -207,8 +207,8 @@ mod tests {
         // Initialize the filler keys
         let key1 = Keypair::new().pubkey();
 
-        let remote: HashMap<PublicKey, u64> = HashMap::new();
-        let external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
+        let remote: HashMap<Pubkey, u64> = HashMap::new();
+        let external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
         let weighted_strategy =
             ChooseWeightedPeerStrategy::new(&remote, &external_liveness, &get_stake);
@@ -227,13 +227,13 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
 
-        let remote: HashMap<PublicKey, u64> = HashMap::new();
-        let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
+        let remote: HashMap<Pubkey, u64> = HashMap::new();
+        let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
         // If only the liveness table contains the entry, should return the
         // weighted liveness entries
         let test_value: u32 = 5;
-        let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
+        let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
         rumors.insert(key2, test_value as u64);
         external_liveness.insert(key1, rumors);
 
@@ -252,12 +252,12 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
 
-        let remote: HashMap<PublicKey, u64> = HashMap::new();
-        let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
+        let remote: HashMap<Pubkey, u64> = HashMap::new();
+        let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
         // If the vote index is greater than u32::MAX, default to u32::MAX
         let test_value = (std::u32::MAX as u64) + 10;
-        let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
+        let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
         rumors.insert(key2, test_value);
         external_liveness.insert(key1, rumors);
 
@@ -275,12 +275,12 @@ mod tests {
         // Initialize the filler keys
         let key1 = Keypair::new().pubkey();
 
-        let mut remote: HashMap<PublicKey, u64> = HashMap::new();
-        let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
+        let mut remote: HashMap<Pubkey, u64> = HashMap::new();
+        let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
         // Test many validators' rumors in external_liveness
         let num_peers = 10;
-        let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
+        let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
 
         remote.insert(key1, 0);
 
@@ -305,13 +305,13 @@ mod tests {
         // Initialize the filler keys
         let key1 = Keypair::new().pubkey();
 
-        let mut remote: HashMap<PublicKey, u64> = HashMap::new();
-        let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
+        let mut remote: HashMap<Pubkey, u64> = HashMap::new();
+        let mut external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>> = HashMap::new();
 
         // Test many validators' rumors in external_liveness
         let num_peers = 10;
         let old_index = 20;
-        let mut rumors: HashMap<PublicKey, u64> = HashMap::new();
+        let mut rumors: HashMap<Pubkey, u64> = HashMap::new();
 
         remote.insert(key1, old_index);
 

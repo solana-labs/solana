@@ -5,22 +5,22 @@
 
 use chrono::prelude::*;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::PublicKey;
+use signature::Pubkey;
 use std::mem;
 
 /// A data type representing a `Witness` that the payment plan is waiting on.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Condition {
     /// Wait for a `Timestamp` `Witness` at or after the given `DateTime`.
-    Timestamp(DateTime<Utc>, PublicKey),
+    Timestamp(DateTime<Utc>, Pubkey),
 
-    /// Wait for a `Signature` `Witness` from `PublicKey`.
-    Signature(PublicKey),
+    /// Wait for a `Signature` `Witness` from `Pubkey`.
+    Signature(Pubkey),
 }
 
 impl Condition {
     /// Return true if the given Witness satisfies this Condition.
-    pub fn is_satisfied(&self, witness: &Witness, from: &PublicKey) -> bool {
+    pub fn is_satisfied(&self, witness: &Witness, from: &Pubkey) -> bool {
         match (self, witness) {
             (Condition::Signature(pubkey), Witness::Signature) => pubkey == from,
             (Condition::Timestamp(dt, pubkey), Witness::Timestamp(last_time)) => {
@@ -47,22 +47,22 @@ pub enum Budget {
 }
 
 impl Budget {
-    /// Create the simplest budget - one that pays `tokens` to PublicKey.
-    pub fn new_payment(tokens: i64, to: PublicKey) -> Self {
+    /// Create the simplest budget - one that pays `tokens` to Pubkey.
+    pub fn new_payment(tokens: i64, to: Pubkey) -> Self {
         Budget::Pay(Payment { tokens, to })
     }
 
     /// Create a budget that pays `tokens` to `to` after being witnessed by `from`.
-    pub fn new_authorized_payment(from: PublicKey, tokens: i64, to: PublicKey) -> Self {
+    pub fn new_authorized_payment(from: Pubkey, tokens: i64, to: Pubkey) -> Self {
         Budget::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     /// Create a budget that pays `tokens` to `to` after the given DateTime.
     pub fn new_future_payment(
         dt: DateTime<Utc>,
-        from: PublicKey,
+        from: Pubkey,
         tokens: i64,
-        to: PublicKey,
+        to: Pubkey,
     ) -> Self {
         Budget::After(Condition::Timestamp(dt, from), Payment { tokens, to })
     }
@@ -71,9 +71,9 @@ impl Budget {
     /// unless cancelled by `from`.
     pub fn new_cancelable_future_payment(
         dt: DateTime<Utc>,
-        from: PublicKey,
+        from: Pubkey,
         tokens: i64,
-        to: PublicKey,
+        to: Pubkey,
     ) -> Self {
         Budget::Or(
             (Condition::Timestamp(dt, from), Payment { tokens, to }),
@@ -101,7 +101,7 @@ impl PaymentPlan for Budget {
 
     /// Apply a witness to the budget to see if the budget can be reduced.
     /// If so, modify the budget in-place.
-    fn apply_witness(&mut self, witness: &Witness, from: &PublicKey) {
+    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
         let new_payment = match self {
             Budget::After(cond, payment) if cond.is_satisfied(witness, from) => Some(payment),
             Budget::Or((cond, payment), _) if cond.is_satisfied(witness, from) => Some(payment),
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_signature_satisfied() {
-        let from = PublicKey::default();
+        let from = Pubkey::default();
         assert!(Condition::Signature(from).is_satisfied(&Witness::Signature, &from));
     }
 
@@ -130,7 +130,7 @@ mod tests {
     fn test_timestamp_satisfied() {
         let dt1 = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
         let dt2 = Utc.ymd(2014, 11, 14).and_hms(10, 9, 8);
-        let from = PublicKey::default();
+        let from = Pubkey::default();
         assert!(Condition::Timestamp(dt1, from).is_satisfied(&Witness::Timestamp(dt1), &from));
         assert!(Condition::Timestamp(dt1, from).is_satisfied(&Witness::Timestamp(dt2), &from));
         assert!(!Condition::Timestamp(dt2, from).is_satisfied(&Witness::Timestamp(dt1), &from));
@@ -139,8 +139,8 @@ mod tests {
     #[test]
     fn test_verify() {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = PublicKey::default();
-        let to = PublicKey::default();
+        let from = Pubkey::default();
+        let to = Pubkey::default();
         assert!(Budget::new_payment(42, to).verify(42));
         assert!(Budget::new_authorized_payment(from, 42, to).verify(42));
         assert!(Budget::new_future_payment(dt, from, 42, to).verify(42));
@@ -149,8 +149,8 @@ mod tests {
 
     #[test]
     fn test_authorized_payment() {
-        let from = PublicKey::default();
-        let to = PublicKey::default();
+        let from = Pubkey::default();
+        let to = Pubkey::default();
 
         let mut budget = Budget::new_authorized_payment(from, 42, to);
         budget.apply_witness(&Witness::Signature, &from);
@@ -185,8 +185,8 @@ mod tests {
     #[test]
     fn test_cancelable_future_payment() {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = PublicKey::default();
-        let to = PublicKey::default();
+        let from = Pubkey::default();
+        let to = Pubkey::default();
 
         let mut budget = Budget::new_cancelable_future_payment(dt, from, 42, to);
         budget.apply_witness(&Witness::Timestamp(dt), &from);

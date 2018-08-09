@@ -44,14 +44,14 @@ pub fn init() {
 
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
-    use signature::{PublicKey, Signature};
+    use signature::{Pubkey, Signature};
     use untrusted;
 
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;
     let sig_start = TX_OFFSET + SIG_OFFSET;
     let sig_end = sig_start + size_of::<Signature>();
     let pubkey_start = TX_OFFSET + PUB_KEY_OFFSET;
-    let pubkey_end = pubkey_start + size_of::<PublicKey>();
+    let pubkey_end = pubkey_start + size_of::<Pubkey>();
 
     if packet.meta.size <= msg_start {
         return 0;

@@ -5,7 +5,7 @@ use budget::{Budget, Condition};
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::{Keypair, KeypairUtil, PublicKey, Signature};
+use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
 pub const SIG_OFFSET: usize = 8;
@@ -32,7 +32,7 @@ impl PaymentPlan for Plan {
         }
     }
 
-    fn apply_witness(&mut self, witness: &Witness, from: &PublicKey) {
+    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
         match self {
             Plan::Budget(budget) => budget.apply_witness(witness, from),
         }
@@ -68,21 +68,21 @@ pub enum Instruction {
     ApplyTimestamp(DateTime<Utc>),
 
     /// Tell the payment plan that the `NewContract` with `Signature` has been
-    /// signed by the containing transaction's `PublicKey`.
+    /// signed by the containing transaction's `Pubkey`.
     ApplySignature(Signature),
 
     /// Vote for a PoH that is equal to the lastid of this transaction
     NewVote(Vote),
 }
 
-/// An instruction signed by a client with `PublicKey`.
+/// An instruction signed by a client with `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `instruction`, `last_id` and `fee`, signed by `PublicKey`.
+    /// A digital signature of `instruction`, `last_id` and `fee`, signed by `Pubkey`.
     pub sig: Signature,
 
-    /// The `PublicKey` of the entity that signed the transaction data.
-    pub from: PublicKey,
+    /// The `Pubkey` of the entity that signed the transaction data.
+    pub from: Pubkey,
 
     /// The action the server should take.
     pub instruction: Instruction,
@@ -117,7 +117,7 @@ impl Transaction {
     /// Create and sign a new Transaction. Used for unit-testing.
     pub fn new_taxed(
         from_keypair: &Keypair,
-        to: PublicKey,
+        to: Pubkey,
         tokens: i64,
         fee: i64,
         last_id: Hash,
@@ -133,7 +133,7 @@ impl Transaction {
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &Keypair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+    pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
         Self::new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
@@ -156,7 +156,7 @@ impl Transaction {
     /// Create and sign a postdated Transaction. Used for unit-testing.
     pub fn new_on_date(
         from_keypair: &Keypair,
-        to: PublicKey,
+        to: Pubkey,
         dt: DateTime<Utc>,
         tokens: i64,
         last_id: Hash,
