@@ -13,7 +13,7 @@ use std::fmt;
 use std::fs::File;
 use untrusted::Input;
 
-pub type KeyPair = Ed25519KeyPair;
+pub type Keypair = Ed25519KeyPair;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct PublicKey(GenericArray<u8, U32>);
 
@@ -74,12 +74,12 @@ impl fmt::Display for Signature {
     }
 }
 
-pub trait KeyPairUtil {
+pub trait KeypairUtil {
     fn new() -> Self;
     fn pubkey(&self) -> PublicKey;
 }
 
-impl KeyPairUtil for Ed25519KeyPair {
+impl KeypairUtil for Ed25519KeyPair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
         let rng = rand::SystemRandom::new();
@@ -113,10 +113,10 @@ impl GenKeys {
         (0..n).map(|_| self.gen_seed()).collect()
     }
 
-    pub fn gen_n_keypairs(&mut self, n: i64) -> Vec<KeyPair> {
+    pub fn gen_n_keypairs(&mut self, n: i64) -> Vec<Keypair> {
         self.gen_n_seeds(n)
             .into_par_iter()
-            .map(|seed| KeyPair::from_seed_unchecked(Input::from(&seed)).unwrap())
+            .map(|seed| Keypair::from_seed_unchecked(Input::from(&seed)).unwrap())
             .collect()
     }
 }
@@ -127,7 +127,7 @@ pub fn read_pkcs8(path: &str) -> Result<Vec<u8>, Box<error::Error>> {
     Ok(pkcs8)
 }
 
-pub fn read_keypair(path: &str) -> Result<KeyPair, Box<error::Error>> {
+pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     let pkcs8 = read_pkcs8(path)?;
     let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8))?;
     Ok(keypair)

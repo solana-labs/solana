@@ -14,7 +14,7 @@ use ledger::Block;
 use log::Level;
 use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::{KeyPair, PublicKey, Signature};
+use signature::{Keypair, PublicKey, Signature};
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
@@ -519,7 +519,7 @@ impl Bank {
     pub fn transfer(
         &self,
         n: i64,
-        keypair: &KeyPair,
+        keypair: &Keypair,
         to: PublicKey,
         last_id: Hash,
     ) -> Result<Signature> {
@@ -534,7 +534,7 @@ impl Bank {
     pub fn transfer_on_date(
         &self,
         n: i64,
-        keypair: &KeyPair,
+        keypair: &Keypair,
         to: PublicKey,
         dt: DateTime<Utc>,
         last_id: Hash,
@@ -580,14 +580,14 @@ mod tests {
     use hash::hash;
     use ledger;
     use packet::BLOB_DATA_SIZE;
-    use signature::KeyPairUtil;
+    use signature::KeypairUtil;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
     use std::mem::size_of;
 
     #[test]
     fn test_two_payments_to_one_party() {
         let mint = Mint::new(10_000);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
         assert_eq!(bank.last_id(), mint.last_id());
 
@@ -604,7 +604,7 @@ mod tests {
     #[test]
     fn test_negative_tokens() {
         let mint = Mint::new(1);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
         assert_eq!(
             bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id()),
@@ -617,7 +617,7 @@ mod tests {
     fn test_account_not_found() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         assert_eq!(
             bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
             Err(BankError::AccountNotFound(keypair.pubkey()))
@@ -629,7 +629,7 @@ mod tests {
     fn test_insufficient_funds() {
         let mint = Mint::new(11_000);
         let bank = Bank::new(&mint);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
@@ -648,7 +648,7 @@ mod tests {
     fn test_transfer_to_newb() {
         let mint = Mint::new(10_000);
         let bank = Bank::new(&mint);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
@@ -658,7 +658,7 @@ mod tests {
     fn test_transfer_on_date() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
         bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
@@ -690,7 +690,7 @@ mod tests {
     fn test_cancel_transfer() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
         let sig = bank
             .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
@@ -795,7 +795,7 @@ mod tests {
     fn test_debits_before_credits() {
         let mint = Mint::new(2);
         let bank = Bank::new(&mint);
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tx1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let txs = vec![tx0, tx1];
@@ -810,7 +810,7 @@ mod tests {
     fn test_process_empty_entry_is_registered() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let entry = next_entry(&mint.last_id(), 1, vec![]);
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
 
@@ -838,7 +838,7 @@ mod tests {
         mint: &Mint,
         length: usize,
     ) -> impl Iterator<Item = Entry> {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let hash = mint.last_id();
         let mut txs = Vec::with_capacity(length);
         for i in 0..length {
@@ -858,7 +858,7 @@ mod tests {
         let mut hash = mint.last_id();
         let mut num_hashes = 0;
         for _ in 0..length {
-            let keypair = KeyPair::new();
+            let keypair = Keypair::new();
             let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash);
             let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx], false);
             entries.push(entry);

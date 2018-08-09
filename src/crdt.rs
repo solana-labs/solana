@@ -25,7 +25,7 @@ use pnet_datalink as datalink;
 use rand::{thread_rng, RngCore};
 use rayon::prelude::*;
 use result::{Error, Result};
-use signature::{KeyPair, KeyPairUtil, PublicKey};
+use signature::{Keypair, KeypairUtil, PublicKey};
 use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -176,7 +176,7 @@ impl NodeInfo {
         let addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         assert!(addr.ip().is_unspecified());
         Self::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             addr.clone(),
             addr.clone(),
             addr.clone(),
@@ -190,7 +190,7 @@ impl NodeInfo {
         let addr: SocketAddr = "224.0.1.255:1000".parse().unwrap();
         assert!(addr.ip().is_multicast());
         Self::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             addr.clone(),
             addr.clone(),
             addr.clone(),
@@ -223,7 +223,7 @@ impl NodeInfo {
         )
     }
     pub fn new_leader(bind_addr: &SocketAddr) -> Self {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         Self::new_leader_with_pubkey(keypair.pubkey(), bind_addr)
     }
     pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
@@ -1269,7 +1269,7 @@ pub struct TestNode {
 
 impl TestNode {
     pub fn new_localhost() -> Self {
-        let pubkey = KeyPair::new().pubkey();
+        let pubkey = Keypair::new().pubkey();
         Self::new_localhost_with_pubkey(pubkey)
     }
     pub fn new_localhost_with_pubkey(pubkey: PublicKey) -> Self {
@@ -1381,7 +1381,7 @@ mod tests {
     use logger;
     use packet::BlobRecycler;
     use result::Error;
-    use signature::{KeyPair, KeyPairUtil, PublicKey};
+    use signature::{Keypair, KeypairUtil, PublicKey};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -1403,7 +1403,7 @@ mod tests {
     #[test]
     fn test_bad_address() {
         let d1 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.0:1234".parse().unwrap(),
             "0.0.0.0:1235".parse().unwrap(),
             "0.0.0.0:1236".parse().unwrap(),
@@ -1415,7 +1415,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let d1_1 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.1:1234".parse().unwrap(),
             "0.0.0.0:1235".parse().unwrap(),
             "0.0.0.0:1236".parse().unwrap(),
@@ -1427,7 +1427,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadContactInfo))
         );
         let d2 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
@@ -1439,7 +1439,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let d2_1 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.1:1234".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
@@ -1467,7 +1467,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadNodeInfo))
         );
         let d6 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.0:1234".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
@@ -1479,7 +1479,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let d7 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
@@ -1491,7 +1491,7 @@ mod tests {
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let d8 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "0.0.0.1:1234".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
@@ -1504,7 +1504,7 @@ mod tests {
     #[test]
     fn insert_test() {
         let mut d = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1597,7 +1597,7 @@ mod tests {
     }
     #[test]
     fn replicated_data_new_leader_with_pubkey() {
-        let kp = KeyPair::new();
+        let kp = Keypair::new();
         let d1 = NodeInfo::new_leader_with_pubkey(
             kp.pubkey().clone(),
             &"127.0.0.1:1234".parse().unwrap(),
@@ -1615,7 +1615,7 @@ mod tests {
     #[test]
     fn update_test() {
         let d1 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1623,7 +1623,7 @@ mod tests {
             "127.0.0.1:1238".parse().unwrap(),
         );
         let d2 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1631,7 +1631,7 @@ mod tests {
             "127.0.0.1:1238".parse().unwrap(),
         );
         let d3 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1674,7 +1674,7 @@ mod tests {
     #[test]
     fn window_index_request() {
         let me = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1685,7 +1685,7 @@ mod tests {
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1696,7 +1696,7 @@ mod tests {
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1709,7 +1709,7 @@ mod tests {
         assert_eq!(rv.0, "127.0.0.2:1234".parse().unwrap());
 
         let nxt = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.3:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1735,7 +1735,7 @@ mod tests {
     #[test]
     fn gossip_request_bad_addr() {
         let me = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:127".parse().unwrap(),
             "127.0.0.1:127".parse().unwrap(),
             "127.0.0.1:127".parse().unwrap(),
@@ -1760,7 +1760,7 @@ mod tests {
     #[test]
     fn gossip_request() {
         let me = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1771,7 +1771,7 @@ mod tests {
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt1 = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1894,7 +1894,7 @@ mod tests {
         logger::setup();
         let window = default_window();
         let me = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
@@ -1917,7 +1917,7 @@ mod tests {
         assert!(rv.is_none());
 
         fn tmp_ledger(name: &str) -> String {
-            let keypair = KeyPair::new();
+            let keypair = Keypair::new();
 
             let path = format!("/tmp/farf/{}-{}", name, keypair.pubkey());
 
@@ -1998,7 +1998,7 @@ mod tests {
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
             let mut dum = NodeInfo::new_entry_point("127.0.0.1:1234".parse().unwrap());
-            dum.id = KeyPair::new().pubkey();
+            dum.id = Keypair::new().pubkey();
             dum.leader_id = leader1.id;
             crdt.insert(&dum);
         }
@@ -2061,7 +2061,7 @@ mod tests {
     fn test_default_leader() {
         logger::setup();
         let node_info = NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),

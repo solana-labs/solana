@@ -118,7 +118,7 @@ impl PaymentPlan for Budget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_signature_satisfied() {
@@ -160,8 +160,8 @@ mod tests {
     #[test]
     fn test_future_payment() {
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = KeyPair::new().pubkey();
-        let to = KeyPair::new().pubkey();
+        let from = Keypair::new().pubkey();
+        let to = Keypair::new().pubkey();
 
         let mut budget = Budget::new_future_payment(dt, from, 42, to);
         budget.apply_witness(&Witness::Timestamp(dt), &from);
@@ -173,8 +173,8 @@ mod tests {
         // Ensure timestamp will only be acknowledged if it came from the
         // whitelisted public key.
         let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
-        let from = KeyPair::new().pubkey();
-        let to = KeyPair::new().pubkey();
+        let from = Keypair::new().pubkey();
+        let to = Keypair::new().pubkey();
 
         let mut budget = Budget::new_future_payment(dt, from, 42, to);
         let orig_budget = budget.clone();

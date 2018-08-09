@@ -5,7 +5,7 @@ use budget::{Budget, Condition};
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::{KeyPair, KeyPairUtil, PublicKey, Signature};
+use signature::{Keypair, KeypairUtil, PublicKey, Signature};
 
 pub const SIGNED_DATA_OFFSET: usize = 112;
 pub const SIG_OFFSET: usize = 8;
@@ -97,7 +97,7 @@ pub struct Transaction {
 impl Transaction {
     /// Create a signed transaction from the given `Instruction`.
     fn new_from_instruction(
-        from_keypair: &KeyPair,
+        from_keypair: &Keypair,
         instruction: Instruction,
         last_id: Hash,
         fee: i64,
@@ -116,7 +116,7 @@ impl Transaction {
 
     /// Create and sign a new Transaction. Used for unit-testing.
     pub fn new_taxed(
-        from_keypair: &KeyPair,
+        from_keypair: &Keypair,
         to: PublicKey,
         tokens: i64,
         fee: i64,
@@ -133,29 +133,29 @@ impl Transaction {
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &KeyPair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
+    pub fn new(from_keypair: &Keypair, to: PublicKey, tokens: i64, last_id: Hash) -> Self {
         Self::new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
-    pub fn new_timestamp(from_keypair: &KeyPair, dt: DateTime<Utc>, last_id: Hash) -> Self {
+    pub fn new_timestamp(from_keypair: &Keypair, dt: DateTime<Utc>, last_id: Hash) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(from_keypair: &KeyPair, tx_sig: Signature, last_id: Hash) -> Self {
+    pub fn new_signature(from_keypair: &Keypair, tx_sig: Signature, last_id: Hash) -> Self {
         let instruction = Instruction::ApplySignature(tx_sig);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
-    pub fn new_vote(from_keypair: &KeyPair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+    pub fn new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         Transaction::new_from_instruction(&from_keypair, Instruction::NewVote(vote), last_id, fee)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
     pub fn new_on_date(
-        from_keypair: &KeyPair,
+        from_keypair: &Keypair,
         to: PublicKey,
         dt: DateTime<Utc>,
         tokens: i64,
@@ -184,7 +184,7 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign(&mut self, keypair: &KeyPair) {
+    pub fn sign(&mut self, keypair: &Keypair) {
         let sign_data = self.get_sign_data();
         self.sig = Signature::new(keypair.sign(&sign_data).as_ref());
     }
@@ -208,7 +208,7 @@ impl Transaction {
 }
 
 pub fn test_tx() -> Transaction {
-    let keypair1 = KeyPair::new();
+    let keypair1 = Keypair::new();
     let pubkey1 = keypair1.pubkey();
     let zero = Hash::default();
     Transaction::new(&keypair1, pubkey1, 42, zero)
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_claim() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let zero = Hash::default();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
         assert!(tx0.verify_plan());
@@ -242,8 +242,8 @@ mod tests {
     #[test]
     fn test_transfer() {
         let zero = Hash::default();
-        let keypair0 = KeyPair::new();
-        let keypair1 = KeyPair::new();
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
         let pubkey1 = keypair1.pubkey();
         let tx0 = Transaction::new(&keypair0, pubkey1, 42, zero);
         assert!(tx0.verify_plan());
@@ -252,8 +252,8 @@ mod tests {
     #[test]
     fn test_transfer_with_fee() {
         let zero = Hash::default();
-        let keypair0 = KeyPair::new();
-        let pubkey1 = KeyPair::new().pubkey();
+        let keypair0 = Keypair::new();
+        let pubkey1 = Keypair::new().pubkey();
         assert!(Transaction::new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
         assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
         assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn test_token_attack() {
         let zero = Hash::default();
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
         if let Instruction::NewContract(contract) = &mut tx.instruction {
@@ -297,9 +297,9 @@ mod tests {
 
     #[test]
     fn test_hijack_attack() {
-        let keypair0 = KeyPair::new();
-        let keypair1 = KeyPair::new();
-        let thief_keypair = KeyPair::new();
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let thief_keypair = Keypair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
@@ -323,8 +323,8 @@ mod tests {
 
     #[test]
     fn test_overspend_attack() {
-        let keypair0 = KeyPair::new();
-        let keypair1 = KeyPair::new();
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
         let zero = Hash::default();
         let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
         if let Instruction::NewContract(contract) = &mut tx.instruction {

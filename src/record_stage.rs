@@ -140,7 +140,7 @@ impl Service for RecordStage {
 mod tests {
     use super::*;
     use ledger::Block;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
     use std::thread::sleep;
 
@@ -185,8 +185,8 @@ mod tests {
         let (tx_sender, signal_receiver) = channel();
         let zero = Hash::default();
         let (_record_stage, entry_receiver) = RecordStage::new(signal_receiver, &zero);
-        let alice_keypair = KeyPair::new();
-        let bob_pubkey = KeyPair::new().pubkey();
+        let alice_keypair = Keypair::new();
+        let bob_pubkey = Keypair::new().pubkey();
         let tx0 = Transaction::new(&alice_keypair, bob_pubkey, 1, zero);
         let tx1 = Transaction::new(&alice_keypair, bob_pubkey, 2, zero);
         tx_sender

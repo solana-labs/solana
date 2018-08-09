@@ -599,8 +599,8 @@ mod test {
     use logger;
     use packet::{BlobRecycler, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
-    use signature::KeyPair;
-    use signature::KeyPairUtil;
+    use signature::Keypair;
+    use signature::KeypairUtil;
     //    use std::sync::{Arc, RwLock};
     use streamer::{index_blobs, WindowSlot};
 
@@ -728,7 +728,7 @@ mod test {
         }
 
         let d = crdt::NodeInfo::new(
-            KeyPair::new().pubkey(),
+            Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),

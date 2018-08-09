@@ -11,7 +11,7 @@ use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
-use signature::KeyPair;
+use signature::Keypair;
 use std::collections::VecDeque;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
@@ -69,7 +69,7 @@ impl WriteStage {
 
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,

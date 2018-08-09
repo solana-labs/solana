@@ -32,7 +32,7 @@ use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use service::Service;
-use signature::KeyPair;
+use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
@@ -52,7 +52,7 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,

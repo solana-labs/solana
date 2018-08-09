@@ -11,7 +11,7 @@ use metrics;
 use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use service::Service;
-use signature::KeyPair;
+use signature::Keypair;
 use std::collections::VecDeque;
 use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -35,7 +35,7 @@ enum VoteError {
 
 pub fn create_vote_tx_and_blob(
     last_id: &Hash,
-    keypair: &KeyPair,
+    keypair: &Keypair,
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
 ) -> Result<(Transaction, SharedBlob)> {
@@ -114,7 +114,7 @@ fn get_last_id_to_vote_on(
 
 pub fn send_leader_vote(
     debug_id: u64,
-    keypair: &KeyPair,
+    keypair: &Keypair,
     bank: &Arc<Bank>,
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
@@ -166,7 +166,7 @@ pub fn send_leader_vote(
 
 fn send_validator_vote(
     bank: &Arc<Bank>,
-    keypair: &Arc<KeyPair>,
+    keypair: &Arc<Keypair>,
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
     vote_blob_sender: &BlobSender,
@@ -182,7 +182,7 @@ fn send_validator_vote(
 
 impl VoteStage {
     pub fn new(
-        keypair: Arc<KeyPair>,
+        keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
@@ -203,7 +203,7 @@ impl VoteStage {
     }
 
     fn run(
-        keypair: &Arc<KeyPair>,
+        keypair: &Arc<Keypair>,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         blob_recycler: &BlobRecycler,
@@ -243,7 +243,7 @@ pub mod tests {
     use mint::Mint;
     use packet::BlobRecycler;
     use service::Service;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -252,7 +252,7 @@ pub mod tests {
     /// Ensure the VoteStage issues votes at the expected cadence
     #[test]
     fn test_vote_cadence() {
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
 
         let mint = Mint::new(1234);
         let bank = Arc::new(Bank::new(&mint));

@@ -104,7 +104,7 @@ mod tests {
     use ledger;
     use mint::Mint;
     use packet::BLOB_DATA_SIZE;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::io::Cursor;
     use transaction::Transaction;
 
@@ -115,7 +115,7 @@ mod tests {
 
         let writer = io::sink();
         let mut entry_writer = EntryWriter::new(&bank, writer);
-        let keypair = KeyPair::new();
+        let keypair = Keypair::new();
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
 
         // NOTE: if Entry grows to larger than a transaction, the code below falls over

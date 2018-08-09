@@ -13,7 +13,7 @@ use solana::fullnode::{Config, FullNode};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
-use solana::signature::{KeyPair, KeyPairUtil};
+use solana::signature::{Keypair, KeypairUtil};
 use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -53,7 +53,7 @@ fn main() -> () {
         .get_matches();
 
     let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-    let mut keypair = KeyPair::new();
+    let mut keypair = Keypair::new();
     let mut repl_data = NodeInfo::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
     if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();

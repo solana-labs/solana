@@ -192,7 +192,7 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
 mod tests {
     use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
     use logger;
-    use signature::{KeyPair, KeyPairUtil, PublicKey};
+    use signature::{Keypair, KeypairUtil, PublicKey};
     use std;
     use std::collections::HashMap;
 
@@ -205,7 +205,7 @@ mod tests {
         logger::setup();
 
         // Initialize the filler keys
-        let key1 = KeyPair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
 
         let remote: HashMap<PublicKey, u64> = HashMap::new();
         let external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
@@ -224,8 +224,8 @@ mod tests {
         logger::setup();
 
         // Initialize the filler keys
-        let key1 = KeyPair::new().pubkey();
-        let key2 = KeyPair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
 
         let remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
@@ -249,8 +249,8 @@ mod tests {
         logger::setup();
 
         // Initialize the filler keys
-        let key1 = KeyPair::new().pubkey();
-        let key2 = KeyPair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
 
         let remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
@@ -273,7 +273,7 @@ mod tests {
         logger::setup();
 
         // Initialize the filler keys
-        let key1 = KeyPair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
 
         let mut remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
@@ -285,7 +285,7 @@ mod tests {
         remote.insert(key1, 0);
 
         for i in 0..num_peers {
-            let pk = KeyPair::new().pubkey();
+            let pk = Keypair::new().pubkey();
             rumors.insert(pk, i);
         }
 
@@ -303,7 +303,7 @@ mod tests {
         logger::setup();
 
         // Initialize the filler keys
-        let key1 = KeyPair::new().pubkey();
+        let key1 = Keypair::new().pubkey();
 
         let mut remote: HashMap<PublicKey, u64> = HashMap::new();
         let mut external_liveness: HashMap<PublicKey, HashMap<PublicKey, u64>> = HashMap::new();
@@ -316,7 +316,7 @@ mod tests {
         remote.insert(key1, old_index);
 
         for _i in 0..num_peers {
-            let pk = KeyPair::new().pubkey();
+            let pk = Keypair::new().pubkey();
             rumors.insert(pk, old_index);
         }
 

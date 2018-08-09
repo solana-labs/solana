@@ -8,7 +8,7 @@ use ncp::Ncp;
 use packet::BlobRecycler;
 use rpu::Rpu;
 use service::Service;
-use signature::{KeyPair, KeyPairUtil};
+use signature::{Keypair, KeypairUtil};
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -37,13 +37,13 @@ pub struct Config {
 impl Config {
     pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
         let keypair =
-            KeyPair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
+            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
         let node_info = NodeInfo::new_leader_with_pubkey(pubkey, bind_addr);
         Config { node_info, pkcs8 }
     }
-    pub fn keypair(&self) -> KeyPair {
-        KeyPair::from_pkcs8(Input::from(&self.pkcs8))
+    pub fn keypair(&self) -> Keypair {
+        Keypair::from_pkcs8(Input::from(&self.pkcs8))
             .expect("from_pkcs8 in fullnode::Config keypair")
     }
 }
@@ -53,7 +53,7 @@ impl FullNode {
         mut node: TestNode,
         leader: bool,
         ledger_path: &str,
-        keypair: KeyPair,
+        keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
     ) -> FullNode {
@@ -127,7 +127,7 @@ impl FullNode {
         node: TestNode,
         leader: bool,
         ledger: &str,
-        keypair: KeyPair,
+        keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         FullNode::new_internal(
@@ -144,7 +144,7 @@ impl FullNode {
         node: TestNode,
         leader: bool,
         ledger_path: &str,
-        keypair: KeyPair,
+        keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> FullNode {
         FullNode::new_internal(
@@ -202,7 +202,7 @@ impl FullNode {
     ///              `---------------------`
     /// ```
     pub fn new_leader(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: Bank,
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
@@ -292,7 +292,7 @@ impl FullNode {
     ///               `-------------------------------`
     /// ```
     pub fn new_validator(
-        keypair: KeyPair,
+        keypair: Keypair,
         bank: Bank,
         entry_height: u64,
         ledger_tail: Option<Vec<Entry>>,
@@ -376,13 +376,13 @@ mod tests {
     use fullnode::FullNode;
     use mint::Mint;
     use service::Service;
-    use signature::{KeyPair, KeyPairUtil};
+    use signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
 
     #[test]
     fn validator_exit() {
-        let kp = KeyPair::new();
+        let kp = Keypair::new();
         let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
@@ -396,7 +396,7 @@ mod tests {
     fn validator_parallel_exit() {
         let vals: Vec<FullNode> = (0..2)
             .map(|_| {
-                let kp = KeyPair::new();
+                let kp = Keypair::new();
                 let tn = TestNode::new_localhost_with_pubkey(kp.pubkey());
                 let alice = Mint::new(10_000);
                 let bank = Bank::new(&alice);
