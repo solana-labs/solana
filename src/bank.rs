@@ -136,11 +136,11 @@ impl Bank {
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(signatures: &mut HashSet<Signature>, sig: &Signature) -> Result<()> {
-        if let Some(sig) = signatures.get(sig) {
-            return Err(BankError::DuplicateSignature(*sig));
+    fn reserve_signature(signatures: &mut HashSet<Signature>, signature: &Signature) -> Result<()> {
+        if let Some(signature) = signatures.get(signature) {
+            return Err(BankError::DuplicateSignature(*signature));
         }
-        signatures.insert(*sig);
+        signatures.insert(*signature);
         Ok(())
     }
 
@@ -233,7 +233,7 @@ impl Bank {
             }
             let bal = option.unwrap();
 
-            self.reserve_signature_with_last_id(&tx.sig, &tx.last_id)?;
+            self.reserve_signature_with_last_id(&tx.signature, &tx.last_id)?;
 
             if let Instruction::NewContract(contract) = &tx.instruction {
                 if contract.tokens < 0 {
@@ -241,7 +241,7 @@ impl Bank {
                 }
 
                 if *bal < contract.tokens {
-                    self.forget_signature_with_last_id(&tx.sig, &tx.last_id);
+                    self.forget_signature_with_last_id(&tx.signature, &tx.last_id);
                     return Err(BankError::InsufficientFunds(tx.from));
                 } else if *bal == contract.tokens {
                     purge = true;
@@ -271,14 +271,14 @@ impl Bank {
                         .pending
                         .write()
                         .expect("'pending' write lock in apply_credits");
-                    pending.insert(tx.sig, plan);
+                    pending.insert(tx.signature, plan);
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
                 let _ = self.apply_timestamp(tx.from, *dt);
             }
-            Instruction::ApplySignature(tx_sig) => {
-                let _ = self.apply_signature(tx.from, *tx_sig);
+            Instruction::ApplySignature(signature) => {
+                let _ = self.apply_signature(tx.from, *signature);
             }
             Instruction::NewVote(_vote) => {
                 trace!("GOT VOTE! last_id={:?}", &tx.last_id.as_ref()[..8]);
@@ -470,12 +470,12 @@ impl Bank {
 
     /// Process a Witness Signature. Any payment plans waiting on this signature
     /// will progress one step.
-    fn apply_signature(&self, from: Pubkey, tx_sig: Signature) -> Result<()> {
+    fn apply_signature(&self, from: Pubkey, signature: Signature) -> Result<()> {
         if let Occupied(mut e) = self
             .pending
             .write()
             .expect("write() in apply_signature")
-            .entry(tx_sig)
+            .entry(signature)
         {
             e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {
@@ -524,8 +524,8 @@ impl Bank {
         last_id: Hash,
     ) -> Result<Signature> {
         let tx = Transaction::new(keypair, to, n, last_id);
-        let sig = tx.sig;
-        self.process_transaction(&tx).map(|_| sig)
+        let signature = tx.signature;
+        self.process_transaction(&tx).map(|_| signature)
     }
 
     /// Create, sign, and process a postdated Transaction from `keypair`
@@ -540,8 +540,8 @@ impl Bank {
         last_id: Hash,
     ) -> Result<Signature> {
         let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
-        let sig = tx.sig;
-        self.process_transaction(&tx).map(|_| sig)
+        let signature = tx.signature;
+        self.process_transaction(&tx).map(|_| signature)
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
@@ -692,7 +692,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let pubkey = Keypair::new().pubkey();
         let dt = Utc::now();
-        let sig = bank
+        let signature = bank
             .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
             .unwrap();
 
@@ -707,14 +707,14 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
-        bank.apply_signature(mint.pubkey(), sig).unwrap();
+        bank.apply_signature(mint.pubkey(), signature).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
         assert_eq!(bank.get_balance(&pubkey), 0);
 
         // Assert cancel doesn't cause count to go backward.
         assert_eq!(bank.transaction_count(), 1);
 
-        bank.apply_signature(mint.pubkey(), sig).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
+        bank.apply_signature(mint.pubkey(), signature).unwrap(); // <-- Attack! Attempt to cancel completed transaction.
         assert_ne!(bank.get_balance(&mint.pubkey()), 2);
     }
 
@@ -722,14 +722,14 @@ mod tests {
     fn test_duplicate_transaction_signature() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
+        let signature = Signature::default();
         assert!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
                 .is_ok()
         );
         assert_eq!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::DuplicateSignature(sig))
+            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
+            Err(BankError::DuplicateSignature(signature))
         );
     }
 
@@ -737,12 +737,12 @@ mod tests {
     fn test_forget_signature() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+        let signature = Signature::default();
+        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
             .unwrap();
-        bank.forget_signature_with_last_id(&sig, &mint.last_id());
+        bank.forget_signature_with_last_id(&signature, &mint.last_id());
         assert!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
                 .is_ok()
         );
     }
@@ -751,24 +751,24 @@ mod tests {
     fn test_has_signature() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+        let signature = Signature::default();
+        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
             .expect("reserve signature");
-        assert!(bank.has_signature(&sig));
+        assert!(bank.has_signature(&signature));
     }
 
     #[test]
     fn test_reject_old_last_id() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
+        let signature = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             bank.register_entry_id(&last_id);
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
+            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
             Err(BankError::LastIdNotFound(mint.last_id()))
         );
     }

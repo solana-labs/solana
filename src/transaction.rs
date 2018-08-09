@@ -79,7 +79,7 @@ pub enum Instruction {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     /// A digital signature of `instruction`, `last_id` and `fee`, signed by `Pubkey`.
-    pub sig: Signature,
+    pub signature: Signature,
 
     /// The `Pubkey` of the entity that signed the transaction data.
     pub from: Pubkey,
@@ -104,7 +104,7 @@ impl Transaction {
     ) -> Self {
         let from = from_keypair.pubkey();
         let mut tx = Transaction {
-            sig: Signature::default(),
+            signature: Signature::default(),
             instruction,
             last_id,
             from,
@@ -144,8 +144,8 @@ impl Transaction {
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(from_keypair: &Keypair, tx_sig: Signature, last_id: Hash) -> Self {
-        let instruction = Instruction::ApplySignature(tx_sig);
+    pub fn new_signature(from_keypair: &Keypair, signature: Signature, last_id: Hash) -> Self {
+        let instruction = Instruction::ApplySignature(signature);
         Self::new_from_instruction(from_keypair, instruction, last_id, 0)
     }
 
@@ -186,13 +186,13 @@ impl Transaction {
     /// Sign this transaction.
     pub fn sign(&mut self, keypair: &Keypair) {
         let sign_data = self.get_sign_data();
-        self.sig = Signature::new(keypair.sign(&sign_data).as_ref());
+        self.signature = Signature::new(keypair.sign(&sign_data).as_ref());
     }
 
     /// Verify only the transaction signature.
-    pub fn verify_sig(&self) -> bool {
+    pub fn verify_signature(&self) -> bool {
         warn!("transaction signature verification called");
-        self.sig.verify(&self.from.as_ref(), &self.get_sign_data())
+        self.signature.verify(&self.from.as_ref(), &self.get_sign_data())
     }
 
     /// Verify only the payment plan.
@@ -271,7 +271,7 @@ mod tests {
             instruction,
             from: Default::default(),
             last_id: Default::default(),
-            sig: Default::default(),
+            signature: Default::default(),
             fee: 0,
         };
         let buf = serialize(&claim0).unwrap();
@@ -292,7 +292,7 @@ mod tests {
             }
         }
         assert!(tx.verify_plan());
-        assert!(!tx.verify_sig());
+        assert!(!tx.verify_signature());
     }
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
             }
         }
         assert!(tx.verify_plan());
-        assert!(!tx.verify_sig());
+        assert!(!tx.verify_signature());
     }
     #[test]
     fn test_layout() {
@@ -317,7 +317,7 @@ mod tests {
         let sign_data = tx.get_sign_data();
         let tx_bytes = serialize(&tx).unwrap();
         assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
-        assert_matches!(memfind(&tx_bytes, &tx.sig.as_ref()), Some(SIG_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
         assert_matches!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
     }
 

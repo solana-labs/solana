@@ -48,11 +48,11 @@ impl Signature {
     pub fn new(signature_slice: &[u8]) -> Self {
         Signature(GenericArray::clone_from_slice(&signature_slice))
     }
-    pub fn verify(&self, pubkey_bytes: &[u8], msg_bytes: &[u8]) -> bool {
+    pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
         let pubkey = Input::from(pubkey_bytes);
-        let msg = Input::from(msg_bytes);
-        let sig = Input::from(self.0.as_slice());
-        signature::verify(&signature::ED25519, pubkey, msg, sig).is_ok()
+        let message = Input::from(message_bytes);
+        let signature = Input::from(self.0.as_slice());
+        signature::verify(&signature::ED25519, pubkey, message, signature).is_ok()
     }
 }
 
