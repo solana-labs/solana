@@ -156,7 +156,7 @@ $ sudo snap install solana --edge --devmode
 Once installed the usual Solana programs will be available as `solona.*` instead
 of `solana-*`.  For example, `solana.fullnode` instead of `solana-fullnode`.
 
-Update to the latest version at any time with
+Update to the latest version at any time with:
 ```bash
 $ snap info solana
 $ sudo snap refresh solana --devmode
@@ -292,7 +292,7 @@ to see the debug and info sections for streamer and server respectively. General
 we are using debug for infrequent debug messages, trace for potentially frequent messages and
 info for performance-related logging.
 
-Attaching to a running process with gdb
+Attaching to a running process with gdb:
 
 ```
 $ sudo gdb
