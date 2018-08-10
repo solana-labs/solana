@@ -87,6 +87,10 @@ pub struct Bank {
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
     transaction_count: AtomicUsize,
+
+    /// This bool allows us to submit metrics that are specific for leaders or validators
+    /// It is set to `true` by fullnode before creating the bank.
+    pub is_leader: bool,
 }
 
 impl Default for Bank {
@@ -97,11 +101,18 @@ impl Default for Bank {
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
             transaction_count: AtomicUsize::new(0),
+            is_leader: true,
         }
     }
 }
 
 impl Bank {
+    /// Create a default Bank
+    pub fn new_default(is_leader: bool) -> Self {
+        let mut bank = Bank::default();
+        bank.is_leader = is_leader;
+        bank
+    }
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let bank = Self::default();
@@ -224,7 +235,10 @@ impl Bank {
         {
             let option = bals.get_mut(&tx.from);
             if option.is_none() {
-                if let Instruction::NewVote(_) = &tx.instruction {
+                // TODO: this is gnarly because the counters are static atomics
+                if !self.is_leader {
+                    inc_new_counter_info!("bank-appy_debits-account_not_found-validator", 1);
+                } else if let Instruction::NewVote(_) = &tx.instruction {
                     inc_new_counter_info!("bank-appy_debits-vote_account_not_found", 1);
                 } else {
                     inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
@@ -958,6 +972,15 @@ mod tests {
         let (ledger, _pubkey) = create_sample_ledger_with_next_entries(num_txs);
         let bank = Bank::default();
         assert!(bank.process_ledger(ledger).is_ok());
+    }
+    #[test]
+    fn test_new_default() {
+        let def_bank = Bank::default();
+        assert!(def_bank.is_leader);
+        let leader_bank = Bank::new_default(true);
+        assert!(leader_bank.is_leader);
+        let validator_bank = Bank::new_default(false);
+        assert!(!validator_bank.is_leader);
     }
 
 }
