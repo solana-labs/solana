@@ -44,4 +44,16 @@ else
   )
 fi
 
+sudo snap set solana mode=validator leader-address=$(dig +short $NET_URL)
+
+(
+  set +e
+  panic=$(timeout 10s tail -f /var/snap/solana/current/validator/current | grep -C100 panic)
+
+  if [[ -n $panic ]]; then
+      echo Panic observed: "$panic"
+      exit 1
+  fi
+)
+
 exit 0
