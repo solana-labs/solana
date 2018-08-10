@@ -43,8 +43,9 @@ impl WriteStage {
         let votes = entries_to_votes(&entries);
         crdt.write().unwrap().insert_votes(&votes);
 
+        ledger_writer.write_entries(entries.clone())?;
+
         for entry in entries.clone() {
-            ledger_writer.write_entry(&entry)?;
             if !entry.has_more {
                 bank.register_entry_id(&entry.id);
             }
