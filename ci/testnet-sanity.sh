@@ -44,6 +44,7 @@ else
   )
 fi
 
+echo "--- $NET_URL: validator sanity"
 sudo snap set solana mode=validator leader-address=$(dig +short $NET_URL)
 
 (
