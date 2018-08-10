@@ -121,7 +121,7 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
     if index_len % SIZEOF_U64 != 0 {
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "expected back-to-back entries",
+            format!("index is not a multiple of {} bytes long", SIZEOF_U64),
         ))?;
     }
     let mut index = BufReader::with_capacity((WINDOW_SIZE * SIZEOF_U64) as usize, index);
@@ -133,6 +133,7 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
     let mut index_offset = 0;
     let mut data_read = 0;
     let mut last_len = 0;
+    let mut i = 0;
 
     while index_offset < index_len {
         let data_offset = u64_at(&mut index, index_offset)?;
@@ -140,8 +141,10 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
         if last_data_offset + last_len != data_offset {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("expected back-to-back entries... entry[{}] has a gap of {} bytes to the previous entry",
-                        index_offset/SIZEOF_U64, data_offset as i64 - (last_data_offset as i64 + last_len as i64))
+                format!(
+                    "at entry[{}], a gap or an overlap last_offset {} offset {} last_len {}",
+                    i, last_data_offset, data_offset, last_len
+                ),
             ))?;
         }
 
@@ -163,6 +166,7 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
         last_data_offset = data_offset;
         data_read += last_len;
         index_offset += SIZEOF_U64;
+        i += 1;
     }
     let data = data.into_inner();
     if data_read != data.metadata()?.len() {
