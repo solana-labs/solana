@@ -44,22 +44,23 @@ else
   )
 fi
 
-echo "--- $NET_URL: validator sanity"
-(
-  export USE_SNAP=1
-  ./multinode-demo/setup.sh -t validator
-  set -e pipefail
-  timeout 10s ./multinode-demo/validator.sh "$NET_URL" 2>&1 | tee log
-)
-
-(
-  set +e
-  panic=$(timeout 10s tail -f /var/snap/solana/current/validator/current | grep -C100 panic)
-
-  if [[ -n $panic ]]; then
-      echo Panic observed: "$panic"
-      exit 1
-  fi
-)
+# TODO: sanity test with validator
+# echo "--- $NET_URL: validator sanity"
+# (
+#   export USE_SNAP=1
+#   ./multinode-demo/setup.sh -t validator
+#   set -e pipefail
+#   timeout 10s ./multinode-demo/validator.sh "$NET_URL" 2>&1 | tee log
+# )
+#
+# (
+#   set +e
+#   panic=$(timeout 10s tail -f /var/snap/solana/current/validator/current | grep -C100 panic)
+#
+#   if [[ -n $panic ]]; then
+#       echo Panic observed: "$panic"
+#       exit 1
+#   fi
+# )
 
 exit 0
