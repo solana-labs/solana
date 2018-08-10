@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
 use std::thread;
 use std::time::{Duration, Instant};
+use sys_info::hostname;
 use timing;
 
 #[derive(Debug)]
@@ -218,6 +219,12 @@ pub fn set_panic_hook(program: &'static str) {
                             Some(location) => location.to_string(),
                             None => "?".to_string(),
                         }),
+                    )
+                    .add_field(
+                        "host",
+                        influxdb::Value::String(
+                            hostname().unwrap_or_else(|_| "?".to_string())
+                        ),
                     )
                     .to_owned(),
             );

@@ -72,6 +72,7 @@ extern crate serde_derive;
 extern crate pnet_datalink;
 extern crate serde_json;
 extern crate sha2;
+extern crate sys_info;
 extern crate untrusted;
 
 #[cfg(test)]

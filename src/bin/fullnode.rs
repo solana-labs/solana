@@ -18,7 +18,6 @@ use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
-//use std::time::Duration;
 
 fn main() -> () {
     logger::setup();
