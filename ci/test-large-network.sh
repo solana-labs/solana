@@ -22,22 +22,22 @@ if [[ $(ulimit -n) -lt 65000 ]]; then
 fi
 
 if [[ $(sysctl -n net.core.rmem_default) -lt 1610612736 ]]; then
-  echo 'Error: rmem_default too small, run "sudo sysctl -w net.core.rmem_default 1610612736" to continue'
+  echo 'Error: rmem_default too small, run "sudo sysctl -w net.core.rmem_default=1610612736" to continue'
   exit 1
 fi
 
 if [[ $(sysctl -n net.core.rmem_max) -lt 1610612736 ]]; then
-  echo 'Error: rmem_max too small, run "sudo sysctl -w net.core.rmem_max 1610612736" to continue'
+  echo 'Error: rmem_max too small, run "sudo sysctl -w net.core.rmem_max=1610612736" to continue'
   exit 1
 fi
 
 if [[ $(sysctl -n net.core.wmem_default) -lt 1610612736 ]]; then
-  echo 'Error: rmem_default too small, run "sudo sysctl -w net.core.wmem_default 1610612736" to continue'
+  echo 'Error: rmem_default too small, run "sudo sysctl -w net.core.wmem_default=1610612736" to continue'
   exit 1
 fi
 
 if [[ $(sysctl -n net.core.wmem_max) -lt 1610612736 ]]; then
-  echo 'Error: rmem_max too small, run "sudo sysctl -w net.core.wmem_max 1610612736" to continue'
+  echo 'Error: rmem_max too small, run "sudo sysctl -w net.core.wmem_max=1610612736" to continue'
   exit 1
 fi
 
