@@ -719,58 +719,29 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_transaction_signature() {
-        let mint = Mint::new(1);
+    fn test_invalid_account_version() {
+        let mint = Mint::new(11_000);
         let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        assert!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
-                .is_ok()
-        );
-        assert_eq!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::DuplicateSignature(sig))
-        );
-    }
-
-    #[test]
-    fn test_forget_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
+        let pubkey = KeyPair::new().pubkey();
+        let last_id = mint.last_id();
+        bank.transfer(1_000, &mint.keypair(), pubkey, last_id)
             .unwrap();
-        bank.forget_signature_with_last_id(&sig, &mint.last_id());
-        assert!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id())
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn test_has_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        bank.reserve_signature_with_last_id(&sig, &mint.last_id())
-            .expect("reserve signature");
-        assert!(bank.has_signature(&sig));
-    }
-
-    #[test]
-    fn test_reject_old_last_id() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let sig = Signature::default();
-        for i in 0..MAX_ENTRY_IDS {
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_entry_hash(&last_id);
-        }
-        // Assert we're no longer able to use the oldest entry ID.
+        assert_eq!(bank.transaction_count(), 1);
         assert_eq!(
-            bank.reserve_signature_with_last_id(&sig, &mint.last_id()),
-            Err(BankError::LastIdNotFound(mint.last_id()))
+            bank.transfer(10_00, &mint.keypair(), pubkey, last_id),
+            Err(BankError::InvalidAccountVersion(last_id.height))
         );
+        assert_eq!(bank.transaction_count(), 1);
+
+        let mint_pubkey = mint.keypair().pubkey();
+        assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
+        assert_eq!(bank.get_balance(&pubkey), 1_000);
+        //make sure new last_id works
+        bank.transfer(10_000, &mint.keypair(), pubkey, bank.last_id())
+            .unwrap();
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.get_balance(&mint_pubkey), 0);
+        assert_eq!(bank.get_balance(&pubkey), 11_000);
     }
 
     #[test]
@@ -781,7 +752,7 @@ mod tests {
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 bank.register_entry_hash(&last_id);
-                last_id
+                bank.last_id()
             })
             .collect();
         assert_eq!(bank.count_valid_ids(&[]).len(), 0);
@@ -811,13 +782,14 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let keypair = KeyPair::new();
-        let entry = next_entry(&mint.last_id(), 1, vec![]);
-        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
+        let last_id = mint.last_id();
+        let entry = next_entry(&last_id.hash, 1, vec![]);
+        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, last_id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound(entry.id))
+            Err(BankError::LastIdNotFound(last_id))
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
@@ -836,12 +808,12 @@ mod tests {
 
     fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
-        let mut hash = mint.last_id();
+        let mut last_id = mint.last_id();
         let mut cur_hashes = 0;
         for _ in 0..length {
             let keypair = KeyPair::new();
-            let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash);
-            let entry = Entry::new_mut(&mut hash, &mut cur_hashes, vec![tx], false);
+            let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, last_id);
+            let entry = Entry::new_mut(&mut last_id.hash, &mut cur_hashes, vec![tx], false);
             entries.push(entry);
         }
         entries.into_iter()

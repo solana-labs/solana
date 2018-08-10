@@ -658,7 +658,8 @@ fn retry_get_balance(
 ) -> Option<i64> {
     const LAST: usize = 20;
     for run in 0..(LAST + 1) {
-        let out = client.poll_get_balance(bob_pubkey);
+        let _ = client.poll_update(1000, bob_pubkey);
+        let out = client.get_balance(bob_pubkey);
         if expected.is_none() || run == LAST {
             return out.ok().clone();
         }

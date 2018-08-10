@@ -226,6 +226,65 @@ impl ThinClient {
         );
         Err(io::Error::new(io::ErrorKind::Other, "poll_update timeout"))
     }
+    /// Polls for a last id that is after the account's last version
+    pub fn get_new_last_id_for_account(
+        &self,
+        millis: u64,
+        account: PublicKey,
+    ) -> io::Result<LastId> {
+        let now = Instant::now();
+        loop {
+            let elapsed = timing::duration_as_ms(&now.elapsed());
+            if elapsed > millis {
+                break;
+            }
+            let last_id = self.get_last_id();
+            let get_versioned_account = self.get_versioned_account(&account);
+            if get_versioned_account.is_err() {
+                sleep(Duration::from_millis(100));
+                continue;
+            }
+            let versioned_account = get_versioned_account.unwrap();
+            if last_id.height <= versioned_account.version {
+                sleep(Duration::from_millis(100));
+                continue;
+            }
+            return Ok(LastId);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "get_last_id_for_account timeout",
+        ))
+    }
+
+    /// retrys a transaction. Useful for writing unit-tests.
+    pub fn retry_transfer(
+        &self,
+        millis: u64,
+        n: i64,
+        keypair: &KeyPair,
+        to: PublicKey,
+    ) -> io::Result<Signature> {
+        let now = Instant::now();
+        let last_id = self.get_new_last_id_for_account(millis, &keypair.pubkey())?;
+        let sig = self.transfer(n, &keypair, to, last_id)?;
+        loop {
+            let elapsed = timing::duration_as_ms(&now.elapsed());
+            if elapsed > millis {
+                break;
+            }
+            if let Ok(va) = self.get_versioned_account(&keypair.pubkey()) {
+                if va.version >= last_id.height {
+                    return Ok(sig);
+                }
+            }
+            sleep(Duration::from_millis(100));
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "retry_transfer timeout",
+        ))
+    }
 }
 
 impl Drop for ThinClient {
