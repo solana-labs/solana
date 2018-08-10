@@ -235,7 +235,7 @@ impl Bank {
         {
             let option = bals.get_mut(&tx.from);
             if option.is_none() {
-                // TODO(anatoly): this is gnarly because the counters are static atomics
+                // TODO: this is gnarly because the counters are static atomics
                 if !self.is_leader {
                     inc_new_counter_info!("bank-appy_debits-account_not_found-validator", 1);
                 } else {
