@@ -51,15 +51,13 @@ rsync_leader_url=$(rsync_url "$leader")
 )
 
 iteration=0
+set -x
 while true; do
-  (
-    set -x
     $solana_bench_tps \
       -n "$count" \
       -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json \
       -k "$SOLANA_CONFIG_CLIENT_DIR"/client.json \
       "$@"
-  )
   [[ -n $loop ]] || exit 0
   iteration=$((iteration + 1))
   echo ------------------------------------------------------------------------
