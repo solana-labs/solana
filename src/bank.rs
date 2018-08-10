@@ -238,12 +238,10 @@ impl Bank {
                 // TODO: this is gnarly because the counters are static atomics
                 if !self.is_leader {
                     inc_new_counter_info!("bank-appy_debits-account_not_found-validator", 1);
+                } else if let Instruction::NewVote(_) = &tx.instruction {
+                    inc_new_counter_info!("bank-appy_debits-vote_account_not_found", 1);
                 } else {
-                    if let Instruction::NewVote(_) = &tx.instruction {
-                        inc_new_counter_info!("bank-appy_debits-vote_account_not_found", 1);
-                    } else {
-                        inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
-                    }
+                    inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }
