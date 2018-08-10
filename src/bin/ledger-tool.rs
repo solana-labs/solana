@@ -56,24 +56,20 @@ fn main() {
 
     match matches.subcommand() {
         ("print", _) => {
-            let mut i = 0;
-            for entry in entries {
+            for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
                 }
-                i += 1;
                 let entry = entry.unwrap();
                 println!("{:?}", entry);
             }
         }
         ("json", _) => {
-            let mut i = 0;
             stdout().write_all(b"{\"ledger\":[\n").expect("open array");
-            for entry in entries {
+            for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
                 }
-                i += 1;
                 let entry = entry.unwrap();
                 serde_json::to_writer(stdout(), &entry).expect("serialize");
                 stdout().write_all(b",\n").expect("newline");
@@ -84,10 +80,10 @@ fn main() {
             let bank = Bank::default();
             if head != <usize>::max_value() {
                 let entries = entries.map(|entry| entry.unwrap()).take(head);
-                bank.process_ledger(entries).expect("process_ledger").0;
+                bank.process_ledger(entries).expect("process_ledger");
             } else {
                 let entries = entries.map(|entry| entry.unwrap());
-                bank.process_ledger(entries).expect("process_ledger").0;
+                bank.process_ledger(entries).expect("process_ledger");
             }
         }
         ("verify-internal", _) => {

@@ -469,13 +469,13 @@ pub fn next_entries_mut(
     if transactions.is_empty() || transactions.len() == 1 {
         vec![Entry::new_mut(start_hash, num_hashes, transactions, false)]
     } else {
-        let mut start = 0;
+        let mut chunk_start = 0;
         let mut entries = Vec::new();
 
-        while start < transactions.len() {
+        while chunk_start < transactions.len() {
             let mut chunk_end = transactions.len();
             let mut upper = chunk_end;
-            let mut lower = start;
+            let mut lower = chunk_start;
             let mut next = chunk_end; // be optimistic that all will fit
 
             // binary search for how many transactions will fit in an Entry (i.e. a BLOB)
@@ -488,7 +488,7 @@ pub fn next_entries_mut(
                     next,
                     transactions.len()
                 );
-                if Entry::will_fit(transactions[start..chunk_end].to_vec()) {
+                if Entry::will_fit(transactions[chunk_start..chunk_end].to_vec()) {
                     next = (upper + chunk_end) / 2;
                     lower = chunk_end;
                     debug!(
@@ -510,10 +510,10 @@ pub fn next_entries_mut(
             entries.push(Entry::new_mut(
                 start_hash,
                 num_hashes,
-                transactions[start..chunk_end].to_vec(),
+                transactions[chunk_start..chunk_end].to_vec(),
                 transactions.len() - chunk_end > 0,
             ));
-            start = chunk_end;
+            chunk_start = chunk_end;
         }
 
         entries
