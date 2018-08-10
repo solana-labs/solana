@@ -58,7 +58,7 @@ impl FullNode {
         sigverify_disabled: bool,
     ) -> FullNode {
         info!("creating bank...");
-        let bank = Bank::default();
+        let bank = Bank::new_default(leader);
 
         let entries = read_ledger(ledger_path).expect("opening ledger");
 
