@@ -10,11 +10,12 @@ if [[ $(uname -m) != x86_64 ]]; then
   exit 1
 fi
 
+mkdir -p target/perf-libs
+cd target/perf-libs
+
 (
   set -x
-  curl -o solana-perf.tgz \
-    https://solana-perf.s3.amazonaws.com/master/x86_64-unknown-linux-gnu/solana-perf.tgz
-  tar zxvf solana-perf.tgz
+  curl https://solana-perf.s3.amazonaws.com/master/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
 )
 
 if [[ -r /usr/local/cuda/version.txt && -r cuda-version.txt ]]; then
