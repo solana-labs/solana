@@ -43,7 +43,7 @@ if [[ -d $SNAP ]]; then
   leader=$leader_address
 else
   if [[ -z $1 ]]; then
-    leader=${1:-~/.solana}    # Default to ~/.solana for data
+    leader=${1:-${here}/..}    # Default to local tree for data
     leader_address=${2:-127.0.0.1}  # Default to local leader
   elif [[ -z $2 ]]; then
     leader=$1
