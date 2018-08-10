@@ -45,7 +45,12 @@ else
 fi
 
 echo "--- $NET_URL: validator sanity"
-sudo snap set solana mode=validator leader-address=$(dig +short $NET_URL)
+(
+  export USE_SNAP=1
+  ./multinode-demo/setup.sh -t validator
+  set -e pipefail
+  timeout 10s ./multinode-demo/validator.sh "$NET_URL" 2>&1 | tee log
+)
 
 (
   set +e
