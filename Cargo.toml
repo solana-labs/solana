@@ -53,6 +53,10 @@ path = "src/bin/keygen.rs"
 name = "solana-wallet"
 path = "src/bin/wallet.rs"
 
+[[bin]]
+name = "solana-json-rpc"
+path = "src/bin/json-rpc.rs"
+
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
@@ -75,6 +79,8 @@ futures = "0.1.21"
 generic-array = { version = "0.11.1", default-features = false, features = ["serde"] }
 getopts = "0.2"
 influx_db_client = "0.3.4"
+jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc" }
+jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc" }
 itertools = "0.7.8"
 libc = "0.2.1"
 log = "0.4.2"

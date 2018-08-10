@@ -41,6 +41,7 @@ pub mod request_processor;
 pub mod request_stage;
 pub mod result;
 pub mod retransmit_stage;
+pub mod rpc;
 pub mod rpu;
 pub mod service;
 pub mod signature;
@@ -63,6 +64,9 @@ extern crate byteorder;
 extern crate chrono;
 extern crate generic_array;
 extern crate itertools;
+#[macro_use]
+extern crate jsonrpc_macros;
+extern crate jsonrpc_http_server;
 extern crate libc;
 #[macro_use]
 extern crate log;
