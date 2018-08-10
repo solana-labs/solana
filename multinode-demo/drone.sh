@@ -21,7 +21,7 @@ if [[ -d "$SNAP" ]]; then
   fi
   leader="$leader_address"
 else
-  leader=${1:-${here}/..}  # Default to local solana repo
+  leader=${1:-~/.solana}  # Default to ~/.solana for data
 fi
 
 [[ -f "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json ]] || {

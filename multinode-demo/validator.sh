@@ -43,7 +43,7 @@ if [[ -d $SNAP ]]; then
   leader=$leader_address
 else
   if [[ -z $1 ]]; then
-    leader=${1:-${here}/..}    # Default to local solana repo
+    leader=${1:-~/.solana}    # Default to ~/.solana for data
     leader_address=${2:-127.0.0.1}  # Default to local leader
   elif [[ -z $2 ]]; then
     leader=$1
@@ -94,8 +94,7 @@ rsync_leader_url=$(rsync_url "$leader")
 tune_networking
 
 set -ex
-$rsync --append --verbose --partial --progress --recursive \
-  "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
+$rsync -vPr "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 [[ -d $SOLANA_LEADER_CONFIG_DIR/ledger ]] || {
   echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
