@@ -79,9 +79,9 @@ use std::sync::Arc;
 //     println!("{} tps", tps);
 // }
 
-fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
+fn check_txs(_batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
     let mut total = 0;
-    for _ in 0..batches {
+    loop {
         let signal = receiver.recv().unwrap();
         if let Signal::Transactions(transactions) = signal {
             total += transactions.len();
