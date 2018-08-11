@@ -15,6 +15,7 @@ use log::Level;
 use mint::Mint;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{Keypair, Pubkey, Signature};
+use std;
 use std::collections::hash_map::Entry::Occupied;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::result;
@@ -91,6 +92,9 @@ pub struct Bank {
     /// This bool allows us to submit metrics that are specific for leaders or validators
     /// It is set to `true` by fullnode before creating the bank.
     pub is_leader: bool,
+
+    // The latest finality time for the network
+    finality_time: AtomicUsize,
 }
 
 impl Default for Bank {
@@ -102,6 +106,7 @@ impl Default for Bank {
             last_ids_sigs: RwLock::new(HashMap::new()),
             transaction_count: AtomicUsize::new(0),
             is_leader: true,
+            finality_time: AtomicUsize::new(std::usize::MAX),
         }
     }
 }
@@ -582,6 +587,14 @@ impl Bank {
         }
         false
     }
+
+    pub fn finality(&self) -> usize {
+        self.finality_time.load(Ordering::Relaxed)
+    }
+
+    pub fn set_finality(&self, finality: usize) {
+        self.finality_time.store(finality, Ordering::Relaxed);
+    }
 }
 
 #[cfg(test)]
@@ -595,6 +608,7 @@ mod tests {
     use ledger;
     use packet::BLOB_DATA_SIZE;
     use signature::KeypairUtil;
+    use std;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
     use std::mem::size_of;
 
@@ -981,6 +995,13 @@ mod tests {
         assert!(leader_bank.is_leader);
         let validator_bank = Bank::new_default(false);
         assert!(!validator_bank.is_leader);
+    }
+    #[test]
+    fn test_finality() {
+        let def_bank = Bank::default();
+        assert_eq!(def_bank.finality(), std::usize::MAX);
+        def_bank.set_finality(90);
+        assert_eq!(def_bank.finality(), 90);
     }
 
 }

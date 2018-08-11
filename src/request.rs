@@ -10,6 +10,7 @@ pub enum Request {
     GetLastId,
     GetTransactionCount,
     GetSignature { signature: Signature },
+    GetFinality,
 }
 
 impl Request {
@@ -25,4 +26,5 @@ pub enum Response {
     LastId { id: Hash },
     TransactionCount { transaction_count: u64 },
     SignatureStatus { signature_status: bool },
+    Finality { time: usize },
 }

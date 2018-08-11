@@ -29,6 +29,7 @@ pub struct ThinClient {
     transaction_count: u64,
     balances: HashMap<Pubkey, i64>,
     signature_status: bool,
+    finality: Option<usize>,
 }
 
 impl ThinClient {
@@ -50,6 +51,7 @@ impl ThinClient {
             transaction_count: 0,
             balances: HashMap::new(),
             signature_status: false,
+            finality: None,
         }
     }
 
@@ -82,6 +84,10 @@ impl ThinClient {
                 } else {
                     trace!("Response signature not found");
                 }
+            }
+            Response::Finality { time } => {
+                trace!("Response finality {:?}", time);
+                self.finality = Some(time);
             }
         }
     }
@@ -141,6 +147,33 @@ impl ThinClient {
             .get(pubkey)
             .cloned()
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
+    }
+
+    /// Request the finality from the leader node
+    pub fn get_finality(&mut self) -> usize {
+        trace!("get_finality");
+        let req = Request::GetFinality;
+        let data = serialize(&req).expect("serialize GetFinality in pub fn get_finality");
+        let mut done = false;
+        while !done {
+            debug!("get_finality send_to {}", &self.requests_addr);
+            self.requests_socket
+                .send_to(&data, &self.requests_addr)
+                .expect("buffer error in pub fn get_finality");
+
+            match self.recv_response() {
+                Ok(resp) => {
+                    if let Response::Finality { .. } = resp {
+                        done = true;
+                    }
+                    self.process_response(&resp);
+                }
+                Err(e) => {
+                    debug!("thin_client get_finality error: {}", e);
+                }
+            }
+        }
+        self.finality.expect("some finality")
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
