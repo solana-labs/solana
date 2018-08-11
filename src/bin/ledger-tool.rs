@@ -117,15 +117,14 @@ fn main() {
             }
             let entries = entries.map(|e| e.unwrap());
 
-            for (i, entry) in entries.enumerate() {
+            let head = head - 2;
+            for (i, entry) in entries.skip(2).enumerate() {
                 if i >= head {
                     break;
                 }
-                if i >= 2 {
-                    if let Err(e) = bank.process_entry(entry) {
-                        eprintln!("verify failed at entry[{}], err: {:?}", i, e);
-                        exit(1);
-                    }
+                if let Err(e) = bank.process_entry(entry) {
+                    eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
+                    exit(1);
                 }
             }
         }
