@@ -1,5 +1,6 @@
 //! The `metrics` module enables sending measurements to an InfluxDB instance
 
+use hostname;
 use influx_db_client as influxdb;
 use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -201,6 +202,12 @@ pub fn set_panic_hook(program: &'static str) {
                         "thread",
                         influxdb::Value::String(
                             thread::current().name().unwrap_or("?").to_string(),
+                        ),
+                    )
+                    .add_tag(
+                        "host",
+                        influxdb::Value::String(
+                            hostname::get_hostname().unwrap_or("?".to_string()),
                         ),
                     )
                     // The 'one' field exists to give Kapacitor Alerts a numerical value

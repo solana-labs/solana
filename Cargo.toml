@@ -74,6 +74,7 @@ env_logger = "0.5.12"
 futures = "0.1.21"
 generic-array = { version = "0.11.1", default-features = false, features = ["serde"] }
 getopts = "0.2"
+hostname = "0.1"
 influx_db_client = "0.3.4"
 itertools = "0.7.8"
 libc = "0.2.1"

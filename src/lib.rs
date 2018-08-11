@@ -60,6 +60,7 @@ extern crate bs58;
 extern crate byteorder;
 extern crate chrono;
 extern crate generic_array;
+extern crate hostname;
 extern crate itertools;
 extern crate libc;
 #[macro_use]
