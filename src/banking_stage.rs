@@ -6,12 +6,11 @@ use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use log::Level;
-use packet::{PacketRecycler, Packets, SharedPackets};
+use packet::{PacketRecycler, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::{Error, Result};
 use service::Service;
-use std::net::SocketAddr;
 use std::result;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -21,6 +20,8 @@ use std::time::Duration;
 use std::time::Instant;
 use timing;
 use transaction::Transaction;
+
+const MAX_COALESCED_TXS: usize = 512;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -81,19 +82,6 @@ impl BankingStage {
         (BankingStage { thread_hdl }, signal_receiver)
     }
 
-    /// Convert the transactions from a blob of binary data to a vector of transactions and
-    /// an unused `SocketAddr` that could be used to send a response.
-    fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
-        p.packets
-            .par_iter()
-            .map(|x| {
-                deserialize(&x.data[0..x.meta.size])
-                    .map(|req| (req, x.meta.addr()))
-                    .ok()
-            })
-            .collect()
-    }
-
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
@@ -103,11 +91,9 @@ impl BankingStage {
         packet_recycler: &PacketRecycler,
     ) -> Result<()> {
         // Coalesce upto 512 transactions before sending it to the next stage
-        let max_coalesced_txs = 512;
         let max_recv_tries = 10;
         let recv_start = Instant::now();
         let mms = recv_multiple_packets(verified_receiver, 20, max_recv_tries)?;
-        let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
             "@{:?} process start stalled for: {:?}ms batches: {}",
@@ -116,46 +102,38 @@ impl BankingStage {
             mms.len(),
         );
         let bank_starting_tx_count = bank.transaction_count();
-        let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
-        let mut txs: Vec<Transaction> = Vec::new();
-        let mut num_sent = 0;
-        for (msgs, vers) in mms {
-            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
-            reqs_len += transactions.len();
-            let transactions = transactions
-                .into_iter()
-                .zip(vers)
-                .filter_map(|(tx, ver)| match tx {
-                    None => None,
-                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
-                })
-                .collect();
-
+        let count = mms.iter().map(|x| x.1.len()).sum();
+        let txs: Vec<Transaction> = mms
+            .iter()
+            .flat_map(|(data, vers)| {
+                let p = data.read().unwrap();
+                let res: Vec<_> = p
+                    .packets
+                    .par_iter()
+                    .enumerate()
+                    .filter_map(|(i, x)| {
+                        if 0 == vers[i] {
+                            None
+                        } else {
+                            deserialize(&x.data[0..x.meta.size]).ok()
+                        }
+                    })
+                    .collect(); //TODO: so many allocs
+                res
+            })
+            .collect(); //TODO: so many allocs
+        for txs in txs.chunks(MAX_COALESCED_TXS) {
             debug!("process_transactions");
+            let transactions: Vec<_> = txs.to_vec(); //TODO: so many allocs
             let results = bank.process_transactions(transactions);
-            let mut transactions: Vec<Transaction> =
-                results.into_iter().filter_map(|x| x.ok()).collect();
-            txs.append(&mut transactions);
-            if txs.len() >= max_coalesced_txs {
-                signal_sender.send(Signal::Transactions(txs.clone()))?;
-                txs.clear();
-                num_sent += 1;
-            }
             debug!("done process_transactions");
-
-            packet_recycler.recycle(msgs);
+            let output = results.into_iter().filter_map(|x| x.ok()).collect(); //TODO: so many allocs
+            signal_sender.send(Signal::Transactions(output))?;
         }
+        mms.into_iter()
+            .for_each(|(msgs, _)| packet_recycler.recycle(msgs));
 
-        // Send now, if there are pending transactions, or if there was
-        // no transactions sent to the next stage yet.
-        if !txs.is_empty() || num_sent == 0 {
-            signal_sender.send(Signal::Transactions(txs))?;
-        }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(
@@ -163,8 +141,8 @@ impl BankingStage {
             timing::timestamp(),
             mms_len,
             total_time_ms,
-            reqs_len,
-            (reqs_len as f32) / (total_time_s)
+            count,
+            (count as f32) / (total_time_s)
         );
         inc_new_counter_info!("banking_stage-process_packets", count);
         inc_new_counter_info!(
