@@ -6,12 +6,12 @@ use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use log::Level;
-use packet::{PacketRecycler, SharedPackets};
+use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::{Error, Result};
 use service::Service;
-use std::result;
+use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
@@ -21,35 +21,10 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
-const MAX_COALESCED_TXS: usize = 512;
-
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     /// Handle to the stage's thread.
     thread_hdl: JoinHandle<()>,
-}
-
-fn recv_multiple_packets(
-    verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-    wait_ms: u64,
-    max_tries: usize,
-) -> result::Result<Vec<(SharedPackets, Vec<u8>)>, RecvTimeoutError> {
-    let timer = Duration::new(1, 0);
-    let mut mms = verified_receiver.recv_timeout(timer)?;
-    let mut recv_tries = 1;
-
-    // Try receiving more packets from verified_receiver. Let's coalesce any packets
-    // that are received within "wait_ms" ms of each other.
-    while let Ok(mut nq) = verified_receiver.recv_timeout(Duration::from_millis(wait_ms)) {
-        recv_tries += 1;
-        mms.append(&mut nq);
-
-        if recv_tries >= max_tries {
-            inc_new_counter_info!("banking_stage-max_packets_coalesced", 1);
-            break;
-        }
-    }
-    Ok(mms)
 }
 
 impl BankingStage {
@@ -82,6 +57,19 @@ impl BankingStage {
         (BankingStage { thread_hdl }, signal_receiver)
     }
 
+    /// Convert the transactions from a blob of binary data to a vector of transactions and
+    /// an unused `SocketAddr` that could be used to send a response.
+    fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
+        p.packets
+            .par_iter()
+            .map(|x| {
+                deserialize(&x.data[0..x.meta.size])
+                    .map(|req| (req, x.meta.addr()))
+                    .ok()
+            })
+            .collect()
+    }
+
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
@@ -90,10 +78,10 @@ impl BankingStage {
         signal_sender: &Sender<Signal>,
         packet_recycler: &PacketRecycler,
     ) -> Result<()> {
-        // Coalesce upto 512 transactions before sending it to the next stage
-        let max_recv_tries = 10;
+        let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
-        let mms = recv_multiple_packets(verified_receiver, 20, max_recv_tries)?;
+        let mms = verified_receiver.recv_timeout(timer)?;
+        let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
             "@{:?} process start stalled for: {:?}ms batches: {}",
@@ -102,41 +90,32 @@ impl BankingStage {
             mms.len(),
         );
         let bank_starting_tx_count = bank.transaction_count();
-        let proc_start = Instant::now();
         let count = mms.iter().map(|x| x.1.len()).sum();
-        let txs: Vec<Transaction> = mms
-            .iter()
-            .flat_map(|(data, vers)| {
-                let p = data.read().unwrap();
-                let res: Vec<_> = p
-                    .packets
-                    .par_iter()
-                    .enumerate()
-                    .filter_map(|(i, x)| {
-                        if 0 == vers[i] {
-                            None
-                        } else {
-                            //seems like we should only deserialize verified data
-                            deserialize(&x.data[0..x.meta.size]).ok()
-                        }
-                    })
-                    .collect(); //TODO: so many allocs
-                res
-            })
-            .collect(); //TODO: so many allocs
-        for txs in txs.chunks(MAX_COALESCED_TXS) {
+        let proc_start = Instant::now();
+        for (msgs, vers) in mms {
+            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
+            reqs_len += transactions.len();
+            let transactions = transactions
+                .into_iter()
+                .zip(vers)
+                .filter_map(|(tx, ver)| match tx {
+                    None => None,
+                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
+                        Some(tx)
+                    } else {
+                        None
+                    },
+                })
+                .collect();
+
             debug!("process_transactions");
-            let transactions: Vec<_> = txs.to_vec(); //TODO: so many allocs
-
             let results = bank.process_transactions(transactions);
+            let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
+            signal_sender.send(Signal::Transactions(transactions))?;
             debug!("done process_transactions");
-            //once processed, results cannot be merged, output must be sent even if its smaller than a blob
-            let output = results.into_iter().filter_map(|x| x.ok()).collect(); //TODO: so many allocs
-            signal_sender.send(Signal::Transactions(output))?;
-        }
-        mms.into_iter()
-            .for_each(|(msgs, _)| packet_recycler.recycle(msgs));
 
+            packet_recycler.recycle(msgs);
+        }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(
@@ -144,8 +123,8 @@ impl BankingStage {
             timing::timestamp(),
             mms_len,
             total_time_ms,
-            count,
-            (count as f32) / (total_time_s)
+            reqs_len,
+            (reqs_len as f32) / (total_time_s)
         );
         inc_new_counter_info!("banking_stage-process_packets", count);
         inc_new_counter_info!(
@@ -166,42 +145,6 @@ impl Service for BankingStage {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use banking_stage::recv_multiple_packets;
-    use packet::SharedPackets;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::{channel, RecvTimeoutError};
-    use std::sync::Arc;
-    use std::thread;
-    use std::thread::sleep;
-    use std::time::Duration;
-
-    #[test]
-    pub fn recv_multiple_packets_test() {
-        let (sender, receiver) = channel();
-        let exit = Arc::new(AtomicBool::new(false));
-
-        assert_eq!(
-            recv_multiple_packets(&receiver, 20, 10).unwrap_err(),
-            RecvTimeoutError::Timeout
-        );
-
-        {
-            let exit = exit.clone();
-            thread::spawn(move || {
-                while !exit.load(Ordering::Relaxed) {
-                    let testdata: Vec<(SharedPackets, Vec<u8>)> = Vec::new();
-                    sender.send(testdata).expect("Failed to send message");
-                    sleep(Duration::from_millis(10));
-                }
-            });
-        }
-
-        assert_eq!(recv_multiple_packets(&receiver, 20, 10).is_ok(), true);
-        exit.store(true, Ordering::Relaxed);
-    }
-}
 // TODO: When banking is pulled out of RequestStage, add this test back in.
 
 //use bank::Bank;
@@ -219,7 +162,7 @@ mod test {
 //mod tests {
 //    use bank::Bank;
 //    use mint::Mint;
-//    use signature::{Keypair, KeypairUtil};
+//    use signature::{KeyPair, KeyPairUtil};
 //    use transaction::Transaction;
 //
 //    #[test]
@@ -234,7 +177,7 @@ mod test {
 //        let banking_stage = EventProcessor::new(bank, &mint.last_id(), None);
 //
 //        // Process a batch that includes a transaction that receives two tokens.
-//        let alice = Keypair::new();
+//        let alice = KeyPair::new();
 //        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 //        let transactions = vec![tx];
 //        let entry0 = banking_stage.process_transactions(transactions).unwrap();
