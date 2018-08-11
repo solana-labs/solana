@@ -22,10 +22,10 @@ impl RequestProcessor {
         rsp_addr: SocketAddr,
     ) -> Option<(Response, SocketAddr)> {
         match msg {
-            Request::GetBalance { key } => {
-                let val = self.bank.get_balance(&key);
-                let rsp = (Response::Balance { key, val }, rsp_addr);
-                info!("Response::Balance {:?}", rsp);
+            Request::GetAccount { key } => {
+                let account = self.bank.get_account(&key);
+                let rsp = (Response::Account { key, account }, rsp_addr);
+                info!("Response::Account {:?}", rsp);
                 Some(rsp)
             }
             Request::GetLastId => {

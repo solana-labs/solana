@@ -65,11 +65,20 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
+/// An Account with user_data that is stored on chain
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Account {
+    /// tokens in the account
+    pub tokens: i64,
+    /// user data
+    /// A transaction can write to its user_data
+    pub user_data: Vec<u8>,
+}
 
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    balances: RwLock<HashMap<Pubkey, i64>>,
+    balances: RwLock<HashMap<Pubkey, Account>>,
 
     /// A map of smart contract transaction signatures to what remains of its payment
     /// plan. Each transaction that targets the plan should cause it to be reduced.
@@ -137,8 +146,11 @@ impl Bank {
     }
 
     /// Commit funds to the `payment.to` party.
-    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<Pubkey, i64>) {
-        *balances.entry(payment.to).or_insert(0) += payment.tokens;
+    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<Pubkey, Account>) {
+        balances
+            .entry(payment.to)
+            .or_insert(Account::default())
+            .tokens += payment.tokens;
     }
 
     /// Return the last entry ID registered.
@@ -235,7 +247,7 @@ impl Bank {
 
     /// Deduct tokens from the 'from' address the account has sufficient
     /// funds and isn't a duplicate.
-    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<Pubkey, i64>) -> Result<()> {
+    fn apply_debits(&self, tx: &Transaction, bals: &mut HashMap<Pubkey, Account>) -> Result<()> {
         let mut purge = false;
         {
             let option = bals.get_mut(&tx.from);
@@ -259,13 +271,13 @@ impl Bank {
                     return Err(BankError::NegativeTokens);
                 }
 
-                if *bal < contract.tokens {
+                if bal.tokens < contract.tokens {
                     self.forget_signature_with_last_id(&tx.signature, &tx.last_id);
                     return Err(BankError::InsufficientFunds(tx.from));
-                } else if *bal == contract.tokens {
+                } else if bal.tokens == contract.tokens {
                     purge = true;
                 } else {
-                    *bal -= contract.tokens;
+                    bal.tokens -= contract.tokens;
                 }
             };
         }
@@ -279,7 +291,7 @@ impl Bank {
 
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, i64>) {
+    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, Account>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let plan = contract.plan.clone();
@@ -305,6 +317,20 @@ impl Bank {
             }
         }
     }
+    fn save_data(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, Account>) {
+        //TODO This is a temporary implementation until the full rules on memory management for
+        //smart contracts are implemented. See github issue #953
+        if let Some(ref user_data) = tx.user_data {
+            let mut data = &mut balances
+                .entry(tx.from)
+                .or_insert(Account::default())
+                .user_data;
+            if data.len() != user_data.len() {
+                data.resize(user_data.len(), 0);
+            }
+            data.copy_from_slice(&user_data);
+        }
+    }
 
     /// Process a Transaction. If it contains a payment plan that requires a witness
     /// to progress, the payment plan will be stored in the bank.
@@ -312,6 +338,7 @@ impl Bank {
         let bals = &mut self.balances.write().unwrap();
         self.apply_debits(tx, bals)?;
         self.apply_credits(tx, bals);
+        self.save_data(tx, bals);
         self.transaction_count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
@@ -564,11 +591,15 @@ impl Bank {
     }
 
     pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
+        self.get_account(pubkey).map(|a| a.tokens).unwrap_or(0)
+    }
+
+    pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
         let bals = self
             .balances
             .read()
             .expect("'balances' read lock in get_balance");
-        bals.get(pubkey).cloned().unwrap_or(0)
+        bals.get(pubkey).cloned()
     }
 
     pub fn transaction_count(&self) -> usize {
@@ -680,6 +711,21 @@ mod tests {
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
+    }
+
+    #[test]
+    fn test_user_data() {
+        let mint = Mint::new(10_000);
+        let bank = Bank::new(&mint);
+        let pubkey = mint.keypair().pubkey();
+
+        let mut tx = Transaction::new(&mint.keypair(), pubkey, 0, bank.last_id());
+        tx.user_data = Some(vec![1, 2, 3]);
+        let rv = bank.process_transaction(&tx);
+        assert!(rv.is_ok());
+        let account = bank.get_account(&pubkey);
+        assert!(account.is_some());
+        assert_eq!(account.unwrap().user_data, vec![1, 2, 3]);
     }
 
     #[test]

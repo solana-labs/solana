@@ -92,6 +92,10 @@ pub struct Transaction {
 
     /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
+    /// Optional user data to be stored in the account
+    /// TODO: This will be a required field for all contract operations including a simple spend.
+    /// `instruction` will be serialized into `user_data` once Budget is its own generic contract.
+    pub user_data: Option<Vec<u8>>,
 }
 
 impl Transaction {
@@ -109,6 +113,7 @@ impl Transaction {
             last_id,
             from,
             fee,
+            user_data: None,
         };
         tx.sign(from_keypair);
         tx
@@ -179,6 +184,9 @@ impl Transaction {
 
         let fee_data = serialize(&(&self.fee)).expect("serialize last_id");
         data.extend_from_slice(&fee_data);
+
+        let user_data = serialize(&(&self.user_data)).expect("serialize user_data");
+        data.extend_from_slice(&user_data);
 
         data
     }
@@ -274,6 +282,7 @@ mod tests {
             last_id: Default::default(),
             signature: Default::default(),
             fee: 0,
+            user_data: None,
         };
         let buf = serialize(&claim0).unwrap();
         let claim1: Transaction = deserialize(&buf).unwrap();
@@ -320,6 +329,24 @@ mod tests {
         assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
         assert_matches!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
         assert_matches!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
+    }
+    #[test]
+    fn test_user_data_layout() {
+        let mut tx = test_tx();
+        tx.user_data = Some(vec![1, 2, 3]);
+        let sign_data = tx.get_sign_data();
+        let tx_bytes = serialize(&tx).unwrap();
+        assert!(tx_bytes.len() < 256);
+        assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
+        assert_matches!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
+        let tx2 = deserialize(&tx_bytes).unwrap();
+        assert_eq!(tx, tx2);
+        assert_eq!(tx2.user_data, Some(vec![1, 2, 3]));
+
+        tx.user_data = Some(vec![1, 2, 4]);
+        let sign_data2 = tx.get_sign_data();
+        assert_ne!(sign_data, sign_data2);
     }
 
     #[test]
