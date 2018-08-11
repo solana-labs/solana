@@ -363,7 +363,7 @@ impl Bank {
         res
     }
 
-    fn process_entry(&self, entry: Entry) -> Result<()> {
+    pub fn process_entry(&self, entry: Entry) -> Result<()> {
         if !entry.transactions.is_empty() {
             for result in self.process_transactions(entry.transactions) {
                 result?;

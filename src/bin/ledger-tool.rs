@@ -93,13 +93,40 @@ fn main() {
             stdout().write_all(b"\n]}\n").expect("close array");
         }
         ("verify", _) => {
+            if head < 2 {
+                eprintln!("verify requires at least 2 entries to run");
+                exit(1);
+            }
             let bank = Bank::default();
-            if head != <usize>::max_value() {
-                let entries = entries.map(|entry| entry.unwrap()).take(head);
-                bank.process_ledger(entries).expect("process_ledger");
-            } else {
-                let entries = entries.map(|entry| entry.unwrap());
-                bank.process_ledger(entries).expect("process_ledger");
+
+            {
+                let genesis = match read_ledger(ledger_path, true) {
+                    Ok(entries) => entries,
+                    Err(err) => {
+                        eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
+                        exit(1);
+                    }
+                };
+
+                let genesis = genesis.take(2).map(|e| e.unwrap());
+
+                if let Err(e) = bank.process_ledger(genesis) {
+                    eprintln!("verify failed at genesis err: {:?}", e);
+                    exit(1);
+                }
+            }
+            let entries = entries.map(|e| e.unwrap());
+
+            for (i, entry) in entries.enumerate() {
+                if i >= head {
+                    break;
+                }
+                if i >= 2 {
+                    if let Err(e) = bank.process_entry(entry) {
+                        eprintln!("verify failed at entry[{}], err: {:?}", i, e);
+                        exit(1);
+                    }
+                }
             }
         }
         ("", _) => {
