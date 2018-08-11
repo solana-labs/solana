@@ -236,6 +236,7 @@ impl Service for VoteStage {
 pub mod tests {
     use super::*;
     use bank::Bank;
+    use bincode::deserialize;
     use crdt::{Crdt, NodeInfo, TestNode};
     use entry::next_entry;
     use hash::{hash, Hash};
@@ -390,6 +391,11 @@ pub mod tests {
 
         // leader should vote now
         assert!(vote_blob.is_ok());
+
+        // vote should be valid
+        let blob = vote_blob.unwrap().pop_front().unwrap();
+        let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
+        assert!(bank.process_transaction(&tx).is_ok());
     }
 
     #[test]
