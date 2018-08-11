@@ -88,7 +88,7 @@ fn genesis(name: &str, num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
 
     let path = tmp_ledger_path(name);
-    let mut writer = LedgerWriter::new(&path, true).unwrap();
+    let mut writer = LedgerWriter::open(&path, true).unwrap();
 
     writer.write_entries(mint.create_entries()).unwrap();
 
@@ -141,7 +141,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // and force him to respond to repair from the ledger window
     {
         let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize * 2);
-        let mut writer = LedgerWriter::new(&leader_ledger_path, false).unwrap();
+        let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
 
         writer.write_entries(entries).unwrap();
     }

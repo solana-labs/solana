@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<error::Error>> {
     let pkcs8: Vec<u8> = serde_json::from_str(&buffer)?;
     let mint = Mint::new_with_pkcs8(tokens, pkcs8);
 
-    let mut ledger_writer = LedgerWriter::new(&ledger_path, true)?;
+    let mut ledger_writer = LedgerWriter::open(&ledger_path, true)?;
     ledger_writer.write_entries(mint.create_entries())?;
 
     Ok(())

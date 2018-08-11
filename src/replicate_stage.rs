@@ -98,7 +98,7 @@ impl ReplicateStage {
             exit,
         );
 
-        let mut ledger_writer = ledger_path.map(|p| LedgerWriter::new(p, false).unwrap());
+        let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())

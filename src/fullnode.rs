@@ -60,7 +60,7 @@ impl FullNode {
         info!("creating bank...");
         let bank = Bank::new_default(leader);
 
-        let entries = read_ledger(ledger_path).expect("opening ledger");
+        let entries = read_ledger(ledger_path, true).expect("opening ledger");
 
         let entries = entries.map(|e| e.expect("failed to parse entry"));
 
