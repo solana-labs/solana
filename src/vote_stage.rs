@@ -38,7 +38,7 @@ pub fn create_vote_tx_and_blob(
     keypair: &Keypair,
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
-) -> Result<(Transaction, SharedBlob)> {
+) -> Result<SharedBlob> {
     let shared_blob = blob_recycler.allocate();
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
@@ -55,7 +55,7 @@ pub fn create_vote_tx_and_blob(
         blob.meta.set_addr(&addr);
         blob.meta.size = len;
     }
-    Ok((tx, shared_blob))
+    Ok(shared_blob)
 }
 
 fn get_last_id_to_vote_on(
@@ -139,10 +139,8 @@ pub fn send_leader_vote(
             last_vote,
             last_valid_validator_timestamp,
         ) {
-            if let Ok((tx, shared_blob)) =
-                create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
+            if let Ok(shared_blob) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
             {
-                bank.process_transaction(&tx)?;
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
                 let finality_ms = now - super_majority_timestamp;
 
@@ -172,7 +170,7 @@ fn send_validator_vote(
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok((_, shared_blob)) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
+    if let Ok(shared_blob) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
