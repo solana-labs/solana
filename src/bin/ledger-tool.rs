@@ -28,7 +28,7 @@ fn main() {
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
-    let entries = match read_ledger(ledger_path) {
+    let entries = match read_ledger(ledger_path, true) {
         Ok(entries) => entries,
         Err(err) => {
             println!("Failed to open ledger at {}: {}", ledger_path, err);

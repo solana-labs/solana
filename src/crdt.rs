@@ -1211,7 +1211,7 @@ impl Crdt {
     ) -> JoinHandle<()> {
         let debug_id = obj.read().unwrap().debug_id();
 
-        let mut ledger_window = ledger_path.map(|p| LedgerWindow::new(p).unwrap());
+        let mut ledger_window = ledger_path.map(|p| LedgerWindow::open(p).unwrap());
 
         Builder::new()
             .name("solana-listen".to_string())
@@ -1914,7 +1914,7 @@ mod tests {
 
             let path = format!("/tmp/farf/{}-{}", name, keypair.pubkey());
 
-            let mut writer = LedgerWriter::new(&path, true).unwrap();
+            let mut writer = LedgerWriter::open(&path, true).unwrap();
             let zero = Hash::default();
             let one = hash(&zero.as_ref());
             writer
@@ -1924,7 +1924,7 @@ mod tests {
         }
 
         let ledger_path = tmp_ledger("run_window_request");
-        let mut ledger_window = LedgerWindow::new(&ledger_path).unwrap();
+        let mut ledger_window = LedgerWindow::open(&ledger_path).unwrap();
 
         let rv = Crdt::run_window_request(
             &window,

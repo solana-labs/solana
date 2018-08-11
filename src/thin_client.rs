@@ -302,7 +302,7 @@ mod tests {
 
         let path = format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey());
 
-        let mut writer = LedgerWriter::new(&path, true).unwrap();
+        let mut writer = LedgerWriter::open(&path, true).unwrap();
         writer.write_entries(mint.create_entries()).unwrap();
 
         path
