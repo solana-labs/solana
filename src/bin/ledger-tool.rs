@@ -31,16 +31,25 @@ fn main() {
                 .takes_value(true)
                 .help("at most the first NUM entries in ledger\n  (only applies to verify, print, json commands)"),
         )
+        .arg(
+            Arg::with_name("precheck")
+                .short("p")
+                .long("precheck")
+                .help("use ledger_verify() to check internal ledger consistency before proceeding"),
+        )
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
-        .subcommand(
-            SubCommand::with_name("verify-internal")
-                .about("Verify the ledger's internal structure"),
-        )
         .get_matches();
 
     let ledger_path = matches.value_of("ledger").unwrap();
+
+    if matches.is_present("precheck") {
+        if let Err(e) = verify_ledger(&ledger_path) {
+            eprintln!("ledger precheck failed, error: {:?} ", e);
+            exit(1);
+        }
+    }
     let entries = match read_ledger(ledger_path, true) {
         Ok(entries) => entries,
         Err(err) => {
@@ -56,6 +65,13 @@ fn main() {
 
     match matches.subcommand() {
         ("print", _) => {
+            let entries = match read_ledger(ledger_path, true) {
+                Ok(entries) => entries,
+                Err(err) => {
+                    eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
+                    exit(1);
+                }
+            };
             for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
@@ -86,15 +102,6 @@ fn main() {
                 bank.process_ledger(entries).expect("process_ledger");
             }
         }
-        ("verify-internal", _) => {
-            if let Err(e) = verify_ledger(&ledger_path, false) {
-                eprintln!("Error {:?} ", e);
-                exit(1);
-            } else {
-                println!("Ledger is valid");
-            }
-        }
-
         ("", _) => {
             eprintln!("{}", matches.usage());
             exit(1);
