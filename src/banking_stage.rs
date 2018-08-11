@@ -116,6 +116,7 @@ impl BankingStage {
                         if 0 == vers[i] {
                             None
                         } else {
+                            //seems like we should only deserialize verified data
                             deserialize(&x.data[0..x.meta.size]).ok()
                         }
                     })
@@ -126,8 +127,10 @@ impl BankingStage {
         for txs in txs.chunks(MAX_COALESCED_TXS) {
             debug!("process_transactions");
             let transactions: Vec<_> = txs.to_vec(); //TODO: so many allocs
+
             let results = bank.process_transactions(transactions);
             debug!("done process_transactions");
+            //once processed, results cannot be merged, output must be sent even if its smaller than a blob
             let output = results.into_iter().filter_map(|x| x.ok()).collect(); //TODO: so many allocs
             signal_sender.send(Signal::Transactions(output))?;
         }
