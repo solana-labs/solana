@@ -79,9 +79,9 @@ use std::sync::Arc;
 //     println!("{} tps", tps);
 // }
 
-fn check_txs(batches: usize, receiver: &Receiver<Signal>, ref_tx_count: usize) {
+fn check_txs(receiver: &Receiver<Signal>, ref_tx_count: usize) {
     let mut total = 0;
-    for _ in 0..batches {
+    loop {
         let signal = receiver.recv().unwrap();
         if let Signal::Transactions(transactions) = signal {
             total += transactions.len();
@@ -150,7 +150,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
 
-        check_txs(verified_setup_len, &signal_receiver, num_src_accounts);
+        check_txs(&signal_receiver, num_src_accounts);
 
         let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
             .into_iter()
@@ -165,7 +165,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
 
-        check_txs(verified_len, &signal_receiver, tx);
+        check_txs(&signal_receiver, tx);
     });
 }
 
@@ -208,7 +208,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
 
-        check_txs(verified_len, &signal_receiver, tx);
+        check_txs(&signal_receiver, tx);
     });
 }
 
