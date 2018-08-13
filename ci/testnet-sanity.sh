@@ -32,22 +32,18 @@ echo "--- $NET_URL: wallet sanity"
 )
 
 echo "--- $NET_URL: node count"
-if [[ $NET_URL = testnet.solana.com ]]; then
-  echo "TODO: Remove this block when a release > 0.7.0 is deployed"
+if [[ -n "$USE_SNAP" ]]; then
+  # TODO: Merge client.sh functionality into solana-bench-tps proper and
+  #       remove this USE_SNAP case
+  cmd=$solana_bench_tps
 else
-  if [[ -n "$USE_SNAP" ]]; then
-    # TODO: Merge client.sh functionality into solana-bench-tps proper and
-    #       remove this USE_SNAP case
-    cmd=$solana_bench_tps
-  else
-    cmd=multinode-demo/client.sh
-  fi
-
-  (
-    set -x
-    $cmd $NET_URL $EXPECTED_NODE_COUNT -c
-  )
+  cmd=multinode-demo/client.sh
 fi
+
+(
+  set -x
+  $cmd $NET_URL $EXPECTED_NODE_COUNT -c
+)
 
 echo "--- $NET_URL: validator sanity"
 if [[ -z $NO_VALIDATOR_SANITY ]]; then
