@@ -331,9 +331,11 @@ mod tests {
     use transaction::{Instruction, Plan};
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
+        use std::env;
+        let out_dir = env::var("OUT_DIR").unwrap();
         let keypair = Keypair::new();
 
-        let path = format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey());
+        let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
 
         let mut writer = LedgerWriter::open(&path, true).unwrap();
         writer.write_entries(mint.create_entries()).unwrap();

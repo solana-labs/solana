@@ -1910,9 +1910,11 @@ mod tests {
         assert!(rv.is_none());
 
         fn tmp_ledger(name: &str) -> String {
+            use std::env;
+            let out_dir = env::var("OUT_DIR").unwrap();
             let keypair = Keypair::new();
 
-            let path = format!("/tmp/farf/{}-{}", name, keypair.pubkey());
+            let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
 
             let mut writer = LedgerWriter::open(&path, true).unwrap();
             let zero = Hash::default();
