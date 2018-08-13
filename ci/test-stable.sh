@@ -13,7 +13,6 @@ _() {
 _ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose
-_ cargo bench --verbose
 
 echo --- ci/localnet-sanity.sh
 (
