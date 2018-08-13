@@ -3,7 +3,7 @@
 use bs58;
 use client::mk_client;
 use crdt::NodeInfo;
-use jsonrpc_http_server::jsonrpc_core::*;
+use jsonrpc_core::*;
 use signature::{read_keypair, KeypairUtil, Pubkey, Signature};
 use std::mem;
 
@@ -132,7 +132,7 @@ mod tests {
     use crdt::{get_ip_addr, TestNode};
     use drone::{Drone, DroneRequest};
     use fullnode::FullNode;
-    use jsonrpc_http_server::jsonrpc_core::Response;
+    use jsonrpc_core::Response;
     use ledger::LedgerWriter;
     use mint::Mint;
     use service::Service;
