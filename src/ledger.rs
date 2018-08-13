@@ -549,9 +549,11 @@ mod tests {
     use transaction::{Transaction, Vote};
 
     fn tmp_ledger_path(name: &str) -> String {
+        use std::env;
+        let out_dir = env::var("OUT_DIR").unwrap();
         let keypair = Keypair::new();
 
-        format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
+        format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey())
     }
 
     #[test]
