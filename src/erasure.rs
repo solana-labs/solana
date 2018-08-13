@@ -10,6 +10,8 @@ pub const NUM_DATA: usize = 16; // number of data blobs
 pub const NUM_CODING: usize = 4; // number of coding blobs, also the maximum number that can go missing
 pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING; // total number of blobs in an erasure set, includes data and coding blobs
 
+pub const JERASURE_ALIGN: usize = 4; // data size has to be a multiple of 4 bytes
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErasureError {
     NotEnoughBlocksToDecode,
@@ -245,6 +247,12 @@ pub fn generate_coding(
             }
         }
 
+        // round up to the nearest jerasure alignment
+        if max_data_size % JERASURE_ALIGN != 0 {
+            max_data_size -= max_data_size % JERASURE_ALIGN;
+            max_data_size += JERASURE_ALIGN;
+        }
+
         trace!("{:x} max_data_size: {}", debug_id, max_data_size);
 
         let mut data_blobs = Vec::with_capacity(NUM_DATA);
@@ -262,8 +270,9 @@ pub fn generate_coding(
             }
         }
 
-        // getting ready to do erasure coding, means that we're potentially going back in time,
-        //  tell our caller we've inserted coding blocks starting at coding_index_start
+        // getting ready to do erasure coding, means that we're potentially
+        // going back in time, tell our caller we've inserted coding blocks
+        // starting at coding_index_start
         *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
 
         let mut coding_blobs = Vec::with_capacity(NUM_CODING);
@@ -711,7 +720,7 @@ mod test {
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             // generate a random length, multiple of 4 between 8 and 32
-            let data_len = thread_rng().gen_range(2, 8) * 4;
+            let data_len = (thread_rng().gen_range(2, 8) * 4) + 1;
             eprintln!("data_len of {} is {}", i, data_len);
             w.set_size(data_len);
 
