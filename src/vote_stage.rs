@@ -152,6 +152,8 @@ pub fn send_leader_vote(
                 );
                 inc_new_counter_info!("vote_stage-leader_sent_vote", 1);
 
+                bank.set_finality((now - *last_valid_validator_timestamp) as usize);
+
                 metrics::submit(
                     influxdb::Point::new(&"leader-finality")
                         .add_field("duration_ms", influxdb::Value::Integer(finality_ms as i64))

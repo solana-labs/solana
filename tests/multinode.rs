@@ -695,12 +695,13 @@ fn test_multi_node_dynamic_network() {
                 info!("{} nodes are lagging behind leader", num_nodes_behind);
             }
             info!(
-                "SUCCESS[{}] {} out of {} distance: {} max_distance: {}",
+                "SUCCESS[{}] {} out of {} distance: {} max_distance: {}  finality: {}",
                 i,
                 success,
                 validators.len(),
                 total_distance,
-                max_distance
+                max_distance,
+                get_finality(&leader_data)
             );
             if success == validators.len() && total_distance == 0 {
                 consecutive_success += 1;
@@ -819,4 +820,10 @@ fn retry_send_tx_and_retry_get_balance(
         sleep(Duration::from_millis(20));
     }
     None
+}
+
+fn get_finality(leader: &NodeInfo) -> usize {
+    let mut client = mk_client(leader);
+    trace!("getting leader finality");
+    client.get_finality()
 }

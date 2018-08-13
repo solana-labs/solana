@@ -46,6 +46,12 @@ impl RequestProcessor {
                 info!("Response::Signature {:?}", rsp);
                 Some(rsp)
             }
+            Request::GetFinality => {
+                let time = self.bank.finality();
+                let rsp = (Response::Finality { time }, rsp_addr);
+                info!("Response::Finality {:?}", rsp);
+                Some(rsp)
+            }
         }
     }
 
