@@ -38,7 +38,7 @@ if [[ -d $SNAP ]]; then
   leader_address=$(snapctl get leader-address)
   if [[ -z $leader_address ]]; then
     # Assume public testnet by default
-    leader_address=35.230.65.68  # testnet.solana.com
+    leader_address=35.227.93.37  # testnet.solana.com
   fi
   leader=$leader_address
 else
