@@ -37,6 +37,9 @@ build_rpc_trait! {
         #[rpc(meta, name = "solana_getBalance")]
         fn get_balance(&self, Self::Metadata, String) -> Result<i64>;
 
+        #[rpc(meta, name = "solana_getLastId")]
+        fn get_last_id(&self, Self::Metadata) -> Result<String>;
+
         #[rpc(meta, name = "solana_getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
@@ -91,6 +94,11 @@ impl RpcSol for RpcSolImpl {
                 }),
             }
         }
+    }
+    fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
+        let mut client = mk_client(&meta.leader.unwrap());
+        let last_id = client.get_last_id();
+        Ok(bs58::encode(last_id).into_string())
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         let mut client = mk_client(&meta.leader.unwrap());
