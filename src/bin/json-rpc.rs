@@ -13,10 +13,12 @@ use jsonrpc_http_server::*;
 use solana::crdt::NodeInfo;
 use solana::fullnode::Config;
 use solana::rpc::*;
+use std::error;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::result::Result;
 
-fn main() {
+fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("json-rpc")
         .version(crate_version!())
         .arg(
@@ -68,10 +70,10 @@ fn main() {
             &rpc_addr
                 .parse()
                 .expect("Unable to parse RPC server address"),
-        )
-        .expect("Unable to start RPC server");
+        )?;
 
     server.wait();
+    Ok(())
 }
 
 fn read_leader(path: &str) -> Config {

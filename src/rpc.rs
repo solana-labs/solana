@@ -84,7 +84,11 @@ impl RpcSol for RpcSolImpl {
             let balance = client.poll_get_balance(&pubkey);
             match balance {
                 Ok(balance) => Ok(balance),
-                Err(_) => Err(Error::new(ErrorCode::ServerError(-32001))),
+                Err(_) => Err(Error {
+                    code: ErrorCode::ServerError(-32001),
+                    message: "Server error: no node found".to_string(),
+                    data: None,
+                }),
             }
         }
     }
@@ -111,4 +115,156 @@ impl RpcSol for RpcSolImpl {
             Ok(bs58::encode(signature).into_string())
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bank::Bank;
+    use crdt::{get_ip_addr, TestNode};
+    use drone::{Drone, DroneRequest};
+    use fullnode::FullNode;
+    use jsonrpc_http_server::jsonrpc_core::Response;
+    use ledger::LedgerWriter;
+    use mint::Mint;
+    use service::Service;
+    use signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
+    use std::net::SocketAddr;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    fn tmp_ledger(name: &str, mint: &Mint) -> String {
+        let keypair = Keypair::new();
+
+        let path = format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey());
+
+        let mut writer = LedgerWriter::open(&path, true).unwrap();
+        writer.write_entries(mint.create_entries()).unwrap();
+
+        path
+    }
+
+    #[test]
+    fn test_rpc_request() {
+        let leader_keypair = Keypair::new();
+        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_data = leader.data.clone();
+
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = Keypair::new().pubkey();
+        let exit = Arc::new(AtomicBool::new(false));
+        let ledger_path = tmp_ledger("rpc_request", &alice);
+
+        let server = FullNode::new_leader(
+            leader_keypair,
+            bank,
+            0,
+            None,
+            Some(Duration::from_millis(30)),
+            leader,
+            exit.clone(),
+            &ledger_path,
+            false,
+        );
+        sleep(Duration::from_millis(900));
+
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        format!("0.0.0.0:{}", RPC_PORT);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"solana_getBalance","params":["{}"]}}"#,
+            bob_pubkey
+        );
+        let meta = Meta {
+            leader: Some(leader_data.clone()),
+            keypair_location: None,
+        };
+
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = r#"{"jsonrpc":"2.0","result":0,"id":1}"#;
+        let expected: Response =
+            serde_json::from_str(expected).expect("expected response deserialization");
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
+        addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
+        let mut drone = Drone::new(
+            alice.keypair(),
+            addr,
+            leader_data.contact_info.tpu,
+            leader_data.contact_info.rpu,
+            None,
+            Some(150_000),
+        );
+
+        let bob_req = DroneRequest::GetAirdrop {
+            airdrop_request_amount: 50,
+            client_pubkey: bob_pubkey,
+        };
+        drone.send_airdrop(bob_req).unwrap();
+
+        let res1 = io.handle_request_sync(&req, meta);
+        let expected1 = r#"{"jsonrpc":"2.0","result":50,"id":1}"#;
+        let expected1: Response =
+            serde_json::from_str(expected1).expect("expected response deserialization");
+
+        let result1: Response = serde_json::from_str(&res1.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected1, result1);
+
+        exit.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+        remove_dir_all(ledger_path).unwrap();
+    }
+    #[test]
+    fn test_rpc_request_bad_parameter_type() {
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"solana_getBalance","params":[1234567890]}"#;
+        let meta = Meta {
+            leader: None,
+            keypair_location: None,
+        };
+
+        let res = io.handle_request_sync(req, meta);
+        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params: invalid type: integer `1234567890`, expected a string."},"id":1}"#;
+        let expected: Response =
+            serde_json::from_str(expected).expect("expected response deserialization");
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+    #[test]
+    fn test_rpc_request_bad_pubkey() {
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"solana_getBalance","params":["a1b2c3d4e5"]}"#;
+        let meta = Meta {
+            leader: None,
+            keypair_location: None,
+        };
+
+        let res = io.handle_request_sync(req, meta);
+        let expected =
+            r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
+        let expected: Response =
+            serde_json::from_str(expected).expect("expected response deserialization");
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
 }
