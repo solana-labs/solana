@@ -17,8 +17,13 @@ if [[ -z $EXPECTED_NODE_COUNT ]]; then
 fi
 
 echo "--- $NET_URL: verify ledger"
-# Note: here we assume this script is actually running on the leader node...
-sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
+if [[ -d /var/snap/solana/current/config/ledger ]]; then
+  # Note: here we assume this script is actually running on the leader node...
+  sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
+else
+  echo "^^^ +++"
+  echo "Ledger verify skipped"
+fi
 
 echo "--- $NET_URL: wallet sanity"
 (
@@ -45,21 +50,21 @@ else
 fi
 
 echo "--- $NET_URL: validator sanity"
-(
-  export USE_SNAP=1
-  ./multinode-demo/setup.sh -t validator
-  set -e pipefail
-  timeout 10s ./multinode-demo/validator.sh "$NET_URL" 2>&1 | tee log
-)
-
-(
-  set +e
-  panic=$(timeout 10s tail -f /var/snap/solana/current/validator/current | grep -C100 panic)
-
-  if [[ -n $panic ]]; then
-      echo Panic observed: "$panic"
-      exit 1
+if [[ -z $NO_VALIDATOR_SANITY ]]; then
+  (
+    ./multinode-demo/setup.sh -t validator
+    set -e pipefail
+    timeout 10s ./multinode-demo/validator.sh "$NET_URL" 2>&1 | tee validator.log
+  )
+  wc -l validator.log
+  if grep -C100 panic validator.log; then
+    echo "^^^ +++ Panic observed"
+    exit 1
+  else
+    echo "Validator log looks ok"
   fi
-)
+else
+  echo "^^^ +++ Validator sanity disabled (NO_VALIDATOR_SANITY defined)"
+fi
 
 exit 0
