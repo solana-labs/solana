@@ -33,7 +33,7 @@ enum VoteError {
     NoValidLastIdsToVoteOn,
 }
 
-pub fn create_vote_tx_and_blob(
+pub fn create_new_signed_vote_blob(
     last_id: &Hash,
     keypair: &Keypair,
     crdt: &Arc<RwLock<Crdt>>,
@@ -139,7 +139,8 @@ pub fn send_leader_vote(
             last_vote,
             last_valid_validator_timestamp,
         ) {
-            if let Ok(shared_blob) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler)
+            if let Ok(shared_blob) =
+                create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler)
             {
                 vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
                 let finality_ms = now - super_majority_timestamp;
@@ -170,7 +171,7 @@ fn send_validator_vote(
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok(shared_blob) = create_vote_tx_and_blob(&last_id, keypair, crdt, blob_recycler) {
+    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
