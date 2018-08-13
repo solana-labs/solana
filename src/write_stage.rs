@@ -23,6 +23,9 @@ use streamer::{responder, BlobReceiver, BlobSender};
 use vote_stage::send_leader_vote;
 use voting::entries_to_votes;
 
+#[cfg(feature = "cuda")]
+use nvtx::{nv_range_start, nv_range_end};
+
 pub struct WriteStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -39,6 +42,9 @@ impl WriteStage {
         entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
+
+        #[cfg(feature = "cuda")]
+        let nv_range_id = nv_range_start("write_stage".to_string());
 
         let votes = entries_to_votes(&entries);
         crdt.write().unwrap().insert_votes(&votes);
@@ -65,6 +71,10 @@ impl WriteStage {
             trace!("broadcasting {}", blobs.len());
             blob_sender.send(blobs)?;
         }
+
+        #[cfg(feature = "cuda")]
+        nv_range_end(nv_range_id);
+
         Ok(())
     }
 

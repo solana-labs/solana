@@ -14,6 +14,9 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use transaction::Transaction;
 
+#[cfg(feature = "cuda")]
+use nvtx::{nv_range_start, nv_range_end};
+
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
     Tick,
@@ -88,8 +91,15 @@ impl RecordStage {
         } else {
             vec![]
         };
+
+        #[cfg(feature = "cuda")]
+        let nv_range_id = nv_range_start("record_stage_process".to_string());
+
         let entries = recorder.record(txs);
         sender.send(entries).or(Err(()))?;
+
+        #[cfg(feature = "cuda")]
+        nv_range_end(nv_range_id);
         Ok(())
     }
 

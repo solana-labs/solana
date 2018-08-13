@@ -22,6 +22,9 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
+#[cfg(feature = "cuda")]
+use nvtx::{nv_range_start, nv_range_end};
+
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     /// Handle to the stage's thread.
@@ -107,6 +110,9 @@ impl BankingStage {
         let max_recv_tries = 10;
         let recv_start = Instant::now();
         let mms = recv_multiple_packets(verified_receiver, 20, max_recv_tries)?;
+
+        #[cfg(feature = "cuda")]
+        let nv_range_id = nv_range_start("banking_stage".to_string());
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
@@ -166,6 +172,10 @@ impl BankingStage {
             reqs_len,
             (reqs_len as f32) / (total_time_s)
         );
+
+        #[cfg(feature = "cuda")]
+        nv_range_end(nv_range_id);
+
         inc_new_counter_info!("banking_stage-process_packets", count);
         inc_new_counter_info!(
             "banking_stage-process_transactions",

@@ -11,6 +11,9 @@ use std::mem::size_of;
 use std::sync::atomic::AtomicUsize;
 use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
 
+#[cfg(feature = "cuda")]
+use nvtx::{nv_range_start, nv_range_end};
+
 pub const TX_OFFSET: usize = 0;
 
 #[cfg(feature = "cuda")]
@@ -135,6 +138,7 @@ pub fn init() {
 #[cfg(feature = "cuda")]
 pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     use packet::PACKET_DATA_SIZE;
+    let verify_start_id = nv_range_start("cuda_verify".to_string());
     let count = batch_size(batches);
 
     // micro-benchmarks show GPU time for smallest batch around 15-20ms
@@ -205,6 +209,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
         }
     }
     inc_new_counter_info!("ed25519_verify", count);
+    nv_range_end(verify_start_id);
     rvs
 }
 

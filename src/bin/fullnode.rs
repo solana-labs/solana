@@ -18,6 +18,8 @@ use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() -> () {
     logger::setup();
@@ -114,5 +116,7 @@ fn main() -> () {
         assert!(balance_ok, "0 balance, airdrop failed?");
     }
 
-    fullnode.join().expect("join");
+    sleep(Duration::new(360, 0));
+    fullnode.close();
+    //fullnode.join().expect("join");
 }

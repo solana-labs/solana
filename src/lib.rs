@@ -30,6 +30,7 @@ pub mod metrics;
 pub mod mint;
 pub mod nat;
 pub mod ncp;
+pub mod nvtx;
 pub mod packet;
 pub mod payment_plan;
 pub mod record_stage;
