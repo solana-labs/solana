@@ -108,6 +108,14 @@ fn repair_window(
     }
     *last = consumed;
     *times += 1;
+
+    // Experiment with capping repair request duration.
+    // Once nodes are too far behind they can spend many
+    // seconds without asking for repair
+    if *times > 128 {
+        *times = 65;
+    }
+
     //if times flips from all 1s 7 -> 8, 15 -> 16, we retry otherwise return Ok
     if *times & (*times - 1) != 0 {
         trace!("repair_window counter {} {} {}", *times, consumed, received);
