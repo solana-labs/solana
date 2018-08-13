@@ -4,11 +4,12 @@
 #[macro_use]
 extern crate clap;
 extern crate dirs;
+extern crate jsonrpc_core;
 extern crate jsonrpc_http_server;
 extern crate solana;
 
 use clap::{App, Arg};
-use jsonrpc_http_server::jsonrpc_core::*;
+use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use solana::crdt::NodeInfo;
 use solana::fullnode::Config;
