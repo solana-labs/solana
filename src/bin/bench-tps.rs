@@ -469,21 +469,15 @@ fn main() {
     }
 
     let addr = if let Some(s) = matches.value_of("addr") {
-        match s.to_string().parse() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!("failed to parse {} as IP address error: {:?}", s, e);
-                exit(1);
-            }
-        }
+        s.to_string().parse().unwrap_or_else(|e| {
+            eprintln!("failed to parse {} as IP address error: {:?}", s, e);
+            exit(1);
+        })
     } else {
-        match get_public_ip_addr() {
-            Ok(addr) => addr,
-            Err(e) => {
-                eprintln!("failed to get public IP, try --addr? error: {:?}", e);
-                exit(1);
-            }
-        }
+        get_public_ip_addr().unwrap_or_else(|e| {
+            eprintln!("failed to get public IP, try --addr? error: {:?}", e);
+            exit(1);
+        })
     };
 
     if let Some(s) = matches.value_of("tx_count") {
