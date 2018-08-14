@@ -63,15 +63,15 @@ impl Default for Packet {
     }
 }
 
-pub trait Recycle {
-    // Recycle trait is an object that can re-initialize important parts
+pub trait Reset {
+    // Reset trait is an object that can re-initialize important parts
     //  of itself, similar to Default, but not necessarily a full clear
     //  also, we do it in-place.
-    fn reset(&mut self) -> ();
+    fn reset(&mut self);
 }
 
-impl Recycle for Packet {
-    fn reset(&mut self) -> () {
+impl Reset for Packet {
+    fn reset(&mut self) {
         self.meta = Meta::default();
     }
 }
@@ -126,8 +126,8 @@ impl Default for Packets {
     }
 }
 
-impl Recycle for Packets {
-    fn reset(&mut self) -> () {
+impl Reset for Packets {
+    fn reset(&mut self) {
         for i in 0..self.packets.len() {
             self.packets[i].reset();
         }
@@ -161,8 +161,8 @@ impl Default for Blob {
     }
 }
 
-impl Recycle for Blob {
-    fn reset(&mut self) -> () {
+impl Reset for Blob {
+    fn reset(&mut self) {
         self.meta = Meta::default();
         self.data[..BLOB_HEADER_SIZE].copy_from_slice(&[0u8; BLOB_HEADER_SIZE]);
     }
@@ -194,7 +194,7 @@ impl<T: Default> Clone for Recycler<T> {
     }
 }
 
-impl<T: Default + Recycle> Recycler<T> {
+impl<T: Default + Reset> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
 
@@ -513,7 +513,7 @@ mod tests {
         assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
 
-    impl Recycle for u8 {
+    impl Reset for u8 {
         fn reset(&mut self) {
             *self = Default::default();
         }
