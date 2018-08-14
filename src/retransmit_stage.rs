@@ -2,8 +2,6 @@
 
 use counter::Counter;
 use crdt::Crdt;
-#[cfg(feature = "erasure")]
-use erasure;
 use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};

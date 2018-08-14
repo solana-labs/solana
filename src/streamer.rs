@@ -1,7 +1,5 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
-#[cfg(feature = "erasure")]
-use erasure;
 use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlobs, SharedPackets};
 use result::{Error, Result};
 use std::net::UdpSocket;
