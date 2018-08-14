@@ -69,7 +69,7 @@ fn broadcast(
                         x.read().unwrap().get_index().unwrap(),
                         pos
                     );
-                    recycler.recycle(x);
+                    recycler.recycle(x, "broadcast-data");
                 }
                 if let Some(x) = mem::replace(&mut win[pos].coding, None) {
                     trace!(
@@ -78,7 +78,7 @@ fn broadcast(
                         x.read().unwrap().get_index().unwrap(),
                         pos
                     );
-                    recycler.recycle(x);
+                    recycler.recycle(x, "broadcast-coding");
                 }
 
                 trace!("{:x} null {}", debug_id, pos);

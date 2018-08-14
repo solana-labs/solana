@@ -178,6 +178,7 @@ pub enum BlobError {
 }
 
 pub struct Recycler<T> {
+    #[cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
     gc: Arc<Mutex<Vec<(Arc<RwLock<T>>, &'static str)>>>,
 }
 
@@ -622,13 +623,7 @@ mod tests {
         let rv = Blob::recv_from(&r, &reader).unwrap();
         trace!("recv_from");
         assert_eq!(rv.len(), 1);
-<<<<<<< HEAD
         assert_eq!(rv[0].write().unwrap().meta.size, 1024);
-=======
-        let rp = rv.pop_front().unwrap();
-        assert_eq!(rp.write().unwrap().meta.size, 1024);
-        r.recycle(rp, "blob_send_recv");
->>>>>>> trace recycle() calls
     }
 
     #[cfg(all(feature = "ipv6", test))]

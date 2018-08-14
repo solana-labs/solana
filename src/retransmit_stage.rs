@@ -33,7 +33,7 @@ fn retransmit(
         }
     }
     for b in dq {
-        recycler.recycle(b);
+        recycler.recycle(b, "retransmit");
     }
     Ok(())
 }

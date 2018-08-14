@@ -59,7 +59,7 @@ fn find_next_missing(
                 if blob_idx == pix {
                     mem::replace(&mut window[i].data, Some(blob));
                 } else {
-                    recycler.recycle(blob);
+                    recycler.recycle(blob, "find_next_missing");
                 }
             }
             if window[i].data.is_none() {
@@ -299,7 +299,7 @@ fn process_blob(
     ) -> bool {
         if let Some(old) = mem::replace(window_slot, Some(blob)) {
             let is_dup = old.read().unwrap().get_index().unwrap() == pix;
-            recycler.recycle(old);
+            recycler.recycle(old, "insert_blob_is_dup");
             trace!(
                 "{:x}: occupied {} window slot {:}, is_dup: {}",
                 debug_id,
@@ -458,7 +458,7 @@ fn recv_window(
         pixs.push(pix);
 
         if !blob_idx_in_window(debug_id, pix, *consumed, received) {
-            recycler.recycle(b);
+            recycler.recycle(b, "recv_window");
             continue;
         }
 
