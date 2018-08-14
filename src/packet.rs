@@ -493,7 +493,7 @@ impl Blob {
 #[cfg(test)]
 mod tests {
     use packet::{
-        to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycle, Recycler,
+        to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycler, Reset,
         BLOB_HEADER_SIZE, NUM_PACKETS,
     };
     use request::Request;
