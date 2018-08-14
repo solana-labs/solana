@@ -26,7 +26,7 @@ pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - BLOB_HEADER_SIZE;
 pub const PACKET_DATA_SIZE: usize = 256;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -493,7 +493,8 @@ impl Blob {
 #[cfg(test)]
 mod tests {
     use packet::{
-        to_packets, Blob, BlobRecycler, Packet, PacketRecycler, Packets, Recycler, NUM_PACKETS,
+        to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycle, Recycler,
+        BLOB_HEADER_SIZE, NUM_PACKETS,
     };
     use request::Request;
     use std::collections::VecDeque;
@@ -510,6 +511,12 @@ mod tests {
         assert_eq!(r.gc.lock().unwrap().len(), 1);
         let _ = r.allocate();
         assert_eq!(r.gc.lock().unwrap().len(), 0);
+    }
+
+    impl Recycle for u8 {
+        fn reset(&mut self) {
+            *self = Default::default();
+        }
     }
 
     #[test]
@@ -649,6 +656,9 @@ mod tests {
         b.data_mut()[0] = 1;
         assert_eq!(b.data()[0], 1);
         assert_eq!(b.get_index().unwrap(), <u64>::max_value());
+        b.reset();
+        assert!(b.data[..BLOB_HEADER_SIZE].starts_with(&[0u8; BLOB_HEADER_SIZE]));
+        assert_eq!(b.meta, Meta::default());
     }
 
 }
