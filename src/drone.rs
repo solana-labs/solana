@@ -261,7 +261,7 @@ mod tests {
 
     fn tmp_ledger_path(name: &str) -> String {
         use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap();
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
         let keypair = Keypair::new();
 
         format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey())
