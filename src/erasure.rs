@@ -254,7 +254,7 @@ pub fn generate_coding(
         }
 
         // round up to the nearest jerasure alignment
-        align!(max_data_size, JERASURE_ALIGN);
+        max_data_size = align!(max_data_size, JERASURE_ALIGN);
 
         trace!("{:x} max_data_size: {}", debug_id, max_data_size);
 
