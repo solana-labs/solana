@@ -16,7 +16,7 @@ use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
-use solana::nat::{udp_random_bind, UdpSocketPair};
+use solana::nat::{get_public_ip_addr, udp_random_bind};
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
@@ -373,7 +373,6 @@ fn main() {
     let mut threads = 4usize;
     let mut num_nodes = 1usize;
     let mut time_sec = 90;
-    let mut addr = None;
     let mut sustained = false;
     let mut tx_count = 500_000;
 
@@ -429,7 +428,7 @@ fn main() {
             Arg::with_name("addr")
                 .short("a")
                 .long("addr")
-                .value_name("PATH")
+                .value_name("IPADDR")
                 .takes_value(true)
                 .help("address to advertise to the network"),
         )
@@ -469,9 +468,23 @@ fn main() {
         time_sec = s.to_string().parse().expect("integer");
     }
 
-    if let Some(s) = matches.value_of("addr") {
-        addr = Some(s.to_string());
-    }
+    let addr = if let Some(s) = matches.value_of("addr") {
+        match s.to_string().parse() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("failed to parse {} as IP address error: {:?}", s, e);
+                exit(1);
+            }
+        }
+    } else {
+        match get_public_ip_addr() {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("failed to get public IP, try --addr? error: {:?}", e);
+                exit(1);
+            }
+        }
+    };
 
     if let Some(s) = matches.value_of("tx_count") {
         tx_count = s.to_string().parse().expect("integer");
@@ -638,32 +651,17 @@ fn main() {
     }
 }
 
-fn spy_node(addr: Option<String>) -> (NodeInfo, UdpSocket) {
-    let gossip_socket_pair;
+fn spy_node(addr: IpAddr) -> (NodeInfo, UdpSocket) {
     let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
-    let gossip_addr = SocketAddr::new(
-        addr.unwrap().parse().unwrap(),
-        gossip_socket.local_addr().unwrap().port(),
-    );
-    gossip_socket_pair = UdpSocketPair {
-        addr: gossip_addr,
-        receiver: gossip_socket.try_clone().unwrap(),
-        sender: gossip_socket,
-    };
+
+    let gossip_addr = SocketAddr::new(addr, gossip_socket.local_addr().unwrap().port());
+
     let pubkey = Keypair::new().pubkey();
     let daddr = "0.0.0.0:0".parse().unwrap();
-    assert!(!gossip_socket_pair.addr.ip().is_unspecified());
-    assert!(!gossip_socket_pair.addr.ip().is_multicast());
-    let node = NodeInfo::new(
-        pubkey,
-        //gossip.local_addr().unwrap(),
-        gossip_socket_pair.addr,
-        daddr,
-        daddr,
-        daddr,
-        daddr,
-    );
-    (node, gossip_socket_pair.receiver)
+    assert!(!gossip_addr.ip().is_unspecified());
+    assert!(!gossip_addr.ip().is_multicast());
+    let node = NodeInfo::new(pubkey, gossip_addr, daddr, daddr, daddr, daddr);
+    (node, gossip_socket)
 }
 
 fn converge(
@@ -671,7 +669,7 @@ fn converge(
     exit_signal: &Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
-    addr: Option<String>,
+    addr: IpAddr,
 ) -> Vec<NodeInfo> {
     //lets spy on the network
     let (spy, spy_gossip) = spy_node(addr);
