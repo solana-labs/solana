@@ -76,7 +76,7 @@ pub struct CallData {
     /// method to call in the contract
     pub method: u8,
     /// usedata in bytes
-    pub user_data: Vec<u8>,
+    pub userdata: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -159,7 +159,7 @@ The first 127 methods are reserved for the system interface, which implements al
 /// spend the funds from the call to the first recipient's
 pub fn system_0_realloc(call: &Call, pages: &mut Vec<Page>) {
     if call.contract == DEFAULT_CONTRACT {
-        let size: u64 = deserialize(&call.user_data).unwrap();
+        let size: u64 = deserialize(&call.userdata).unwrap();
         pages[0].memory.resize(size as usize, 0u8);
     }
 }
@@ -167,7 +167,7 @@ pub fn system_0_realloc(call: &Call, pages: &mut Vec<Page>) {
 /// assign
 /// assign the page to a contract
 pub fn system_1_assign(call: &Call, pages: &mut Vec<Page>) {
-    let contract = deserialize(&call.user_data).unwrap();
+    let contract = deserialize(&call.userdata).unwrap();
     if call.contract == DEFAULT_CONTRACT {
         pages[0].contract = contract;
         //zero out the memory in pages[0].memory
@@ -189,7 +189,7 @@ This ensures that when memory is assigned to the contract the initial state of a
 /// move_funds
 /// spend the funds from the call to the first recipient's
 pub fn default_contract_128_move_funds(call: &Call, pages: &mut Vec<Page>) {
-    let amount: u64 = deserialize(&call.user_data).unwrap();
+    let amount: u64 = deserialize(&call.userdata).unwrap();
     if pages[0].balance >= amount  {
         pages[0].balance -= amount;
         pages[1].balance += amount;

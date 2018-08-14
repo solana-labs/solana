@@ -99,12 +99,13 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    /// Create a signed transaction from the given `Instruction`.
-    fn new_from_instruction(
+    /// Create a signed transaction with userdata and an instruction
+    fn new_with_userdata_and_instruction(
         from_keypair: &Keypair,
         instruction: Instruction,
         last_id: Hash,
         fee: i64,
+        userdata: Option<Vec<u8>>,
     ) -> Self {
         let from = from_keypair.pubkey();
         let mut tx = Transaction {
@@ -113,10 +114,19 @@ impl Transaction {
             last_id,
             from,
             fee,
-            userdata: None,
+            userdata,
         };
         tx.sign(from_keypair);
         tx
+    }
+    /// Create a signed transaction from the given `Instruction`.
+    fn new_from_instruction(
+        from_keypair: &Keypair,
+        instruction: Instruction,
+        last_id: Hash,
+        fee: i64,
+    ) -> Self {
+        Self::new_with_userdata_and_instruction(from_keypair, instruction, last_id, fee, None)
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
