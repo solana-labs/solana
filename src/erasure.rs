@@ -12,6 +12,12 @@ pub const ERASURE_SET_SIZE: usize = NUM_DATA + NUM_CODING; // total number of bl
 
 pub const JERASURE_ALIGN: usize = 4; // data size has to be a multiple of 4 bytes
 
+macro_rules! align {
+    ($x:expr, $align:expr) => {
+        $x + ($align - 1) & !($align - 1)
+    };
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErasureError {
     NotEnoughBlocksToDecode,
@@ -248,10 +254,7 @@ pub fn generate_coding(
         }
 
         // round up to the nearest jerasure alignment
-        if max_data_size % JERASURE_ALIGN != 0 {
-            max_data_size -= max_data_size % JERASURE_ALIGN;
-            max_data_size += JERASURE_ALIGN;
-        }
+        align!(max_data_size, JERASURE_ALIGN);
 
         trace!("{:x} max_data_size: {}", debug_id, max_data_size);
 
