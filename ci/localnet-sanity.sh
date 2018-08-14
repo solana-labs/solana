@@ -55,21 +55,31 @@ trap shutdown EXIT INT
 
 set -e
 
+flag_error() {
+  echo Failed
+  echo "^^^ +++"
+  exit 1
+}
+
 echo "--- Wallet sanity"
 (
   set -x
   multinode-demo/test/wallet-sanity.sh
-)
+) || flag_error
 
 echo "--- Node count"
 (
   set -x
   ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
-)
+) || flag_error
+
+killBackgroundCommands
 
 echo "--- Ledger verification"
-killBackgroundCommands
-$solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/ledger verify
+(
+  set -x
+  $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/ledger verify
+) || flag_error
 
 echo +++
 echo Ok
