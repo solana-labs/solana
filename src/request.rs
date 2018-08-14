@@ -23,18 +23,6 @@ impl Request {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Response {
-    LastId {
-        id: Hash,
-    },
-    TransactionCount {
-        transaction_count: u64,
-    },
-    SignatureStatus {
-        signature_status: bool,
-    },
-    Finality {
-        time: usize,
-    },
     Account {
         key: Pubkey,
         account: Option<Account>,
@@ -47,5 +35,8 @@ pub enum Response {
     },
     SignatureStatus {
         signature_status: bool,
+    },
+    Finality {
+        time: usize,
     },
 }
