@@ -63,6 +63,19 @@ impl Default for Packet {
     }
 }
 
+pub trait Recycle {
+    // Recycle trait is an object that can re-initialize important parts
+    //  of itself, similar to Default, but not necessarily a full clear
+    //  also, we do it in-place.
+    fn reset(&mut self) -> ();
+}
+
+impl Recycle for Packet {
+    fn reset(&mut self) -> () {
+        self.meta = Meta::default();
+    }
+}
+
 impl Meta {
     pub fn addr(&self) -> SocketAddr {
         if !self.v6 {
@@ -113,6 +126,14 @@ impl Default for Packets {
     }
 }
 
+impl Recycle for Packets {
+    fn reset(&mut self) -> () {
+        for i in 0..self.packets.len() {
+            self.packets[i].reset();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Blob {
     pub data: [u8; BLOB_SIZE],
@@ -137,6 +158,13 @@ impl Default for Blob {
             data: [0u8; BLOB_SIZE],
             meta: Meta::default(),
         }
+    }
+}
+
+impl Recycle for Blob {
+    fn reset(&mut self) -> () {
+        self.meta = Meta::default();
+        self.data[..BLOB_HEADER_SIZE].copy_from_slice(&[0u8; BLOB_HEADER_SIZE]);
     }
 }
 
@@ -166,25 +194,35 @@ impl<T: Default> Clone for Recycler<T> {
     }
 }
 
-impl<T: Default> Recycler<T> {
+impl<T: Default + Recycle> Recycler<T> {
     pub fn allocate(&self) -> Arc<RwLock<T>> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
-        let x = gc
-            .pop()
-            .unwrap_or_else(|| Arc::new(RwLock::new(Default::default())));
 
-        // Only return the item if this recycler is the last reference to it.
-        // Remove this check once `T` holds a Weak reference back to this
-        // recycler and implements `Drop`. At the time of this writing, Weak can't
-        // be passed across threads ('alloc' is a nightly-only API), and so our
-        // reference-counted recyclables are awkwardly being recycled by hand,
-        // which allows this race condition to exist.
-        if Arc::strong_count(&x) > 1 {
-            warn!("Recycled item still in use. Booting it.");
-            drop(gc);
-            self.allocate()
-        } else {
-            x
+        loop {
+            if let Some(x) = gc.pop() {
+                // Only return the item if this recycler is the last reference to it.
+                // Remove this check once `T` holds a Weak reference back to this
+                // recycler and implements `Drop`. At the time of this writing, Weak can't
+                // be passed across threads ('alloc' is a nightly-only API), and so our
+                // reference-counted recyclables are awkwardly being recycled by hand,
+                // which allows this race condition to exist.
+                if Arc::strong_count(&x) >= 1 {
+                    // Commenting out this message, is annoying for known use case of
+                    //   validator hanging onto a blob in the window, but also sending it over
+                    //   to retransmmit_request
+                    //
+                    // warn!("Recycled item still in use. Booting it.");
+                    continue;
+                }
+
+                {
+                    let mut w = x.write().unwrap();
+                    w.reset();
+                }
+                return x;
+            } else {
+                return Arc::new(RwLock::new(Default::default()));
+            }
         }
     }
     pub fn recycle(&self, x: Arc<RwLock<T>>) {
