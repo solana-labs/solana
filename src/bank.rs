@@ -1,4 +1,4 @@
-//! The `bank` module tracks client balances and the progress of smart
+//! The `bank` module tracks client accounts and the progress of smart
 //! contracts. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
@@ -65,20 +65,20 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
-/// An Account with user_data that is stored on chain
+/// An Account with userdata that is stored on chain
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Account {
     /// tokens in the account
     pub tokens: i64,
     /// user data
-    /// A transaction can write to its user_data
-    pub user_data: Vec<u8>,
+    /// A transaction can write to its userdata
+    pub userdata: Vec<u8>,
 }
 
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    balances: RwLock<HashMap<Pubkey, Account>>,
+    accounts: RwLock<HashMap<Pubkey, Account>>,
 
     /// A map of smart contract transaction signatures to what remains of its payment
     /// plan. Each transaction that targets the plan should cause it to be reduced.
@@ -109,7 +109,7 @@ pub struct Bank {
 impl Default for Bank {
     fn default() -> Self {
         Bank {
-            balances: RwLock::new(HashMap::new()),
+            accounts: RwLock::new(HashMap::new()),
             pending: RwLock::new(HashMap::new()),
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
@@ -130,7 +130,7 @@ impl Bank {
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let bank = Self::default();
-        bank.apply_payment(deposit, &mut bank.balances.write().unwrap());
+        bank.apply_payment(deposit, &mut bank.accounts.write().unwrap());
         bank
     }
 
@@ -146,8 +146,8 @@ impl Bank {
     }
 
     /// Commit funds to the `payment.to` party.
-    fn apply_payment(&self, payment: &Payment, balances: &mut HashMap<Pubkey, Account>) {
-        balances
+    fn apply_payment(&self, payment: &Payment, accounts: &mut HashMap<Pubkey, Account>) {
+        accounts
             .entry(payment.to)
             .or_insert(Account::default())
             .tokens += payment.tokens;
@@ -291,12 +291,12 @@ impl Bank {
 
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, Account>) {
+    fn apply_credits(&self, tx: &Transaction, accounts: &mut HashMap<Pubkey, Account>) {
         match &tx.instruction {
             Instruction::NewContract(contract) => {
                 let plan = contract.plan.clone();
                 if let Some(payment) = plan.final_payment() {
-                    self.apply_payment(&payment, balances);
+                    self.apply_payment(&payment, accounts);
                 } else {
                     let mut pending = self
                         .pending
@@ -317,25 +317,25 @@ impl Bank {
             }
         }
     }
-    fn save_data(&self, tx: &Transaction, balances: &mut HashMap<Pubkey, Account>) {
+    fn save_data(&self, tx: &Transaction, accounts: &mut HashMap<Pubkey, Account>) {
         //TODO This is a temporary implementation until the full rules on memory management for
         //smart contracts are implemented. See github issue #953
-        if let Some(ref user_data) = tx.user_data {
-            let mut data = &mut balances
+        if let Some(ref userdata) = tx.userdata {
+            let mut data = &mut accounts
                 .entry(tx.from)
                 .or_insert(Account::default())
-                .user_data;
-            if data.len() != user_data.len() {
-                data.resize(user_data.len(), 0);
+                .userdata;
+            if data.len() != userdata.len() {
+                data.resize(userdata.len(), 0);
             }
-            data.copy_from_slice(&user_data);
+            data.copy_from_slice(&userdata);
         }
     }
 
     /// Process a Transaction. If it contains a payment plan that requires a witness
     /// to progress, the payment plan will be stored in the bank.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
-        let bals = &mut self.balances.write().unwrap();
+        let bals = &mut self.accounts.write().unwrap();
         self.apply_debits(tx, bals)?;
         self.apply_credits(tx, bals);
         self.save_data(tx, bals);
@@ -346,7 +346,7 @@ impl Bank {
     /// Process a batch of transactions.
     #[must_use]
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
-        let bals = &mut self.balances.write().unwrap();
+        let bals = &mut self.accounts.write().unwrap();
         debug!("processing Transactions {}", txs.len());
         let txs_len = txs.len();
         let now = Instant::now();
@@ -494,7 +494,7 @@ impl Bank {
                 None
             }.expect("invalid ledger, needs to start with a contract");
 
-            self.apply_payment(&deposit, &mut self.balances.write().unwrap());
+            self.apply_payment(&deposit, &mut self.accounts.write().unwrap());
         }
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
@@ -525,7 +525,7 @@ impl Bank {
         {
             e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment, &mut self.accounts.write().unwrap());
                 e.remove_entry();
             }
         };
@@ -548,7 +548,7 @@ impl Bank {
         for (key, plan) in pending.iter_mut() {
             plan.apply_witness(&Witness::Timestamp(dt), &from);
             if let Some(payment) = plan.final_payment() {
-                self.apply_payment(&payment, &mut self.balances.write().unwrap());
+                self.apply_payment(&payment, &mut self.accounts.write().unwrap());
                 completed.push(key.clone());
             }
         }
@@ -596,9 +596,9 @@ impl Bank {
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
         let bals = self
-            .balances
+            .accounts
             .read()
-            .expect("'balances' read lock in get_balance");
+            .expect("'accounts' read lock in get_balance");
         bals.get(pubkey).cloned()
     }
 
@@ -714,18 +714,18 @@ mod tests {
     }
 
     #[test]
-    fn test_user_data() {
+    fn test_userdata() {
         let mint = Mint::new(10_000);
         let bank = Bank::new(&mint);
         let pubkey = mint.keypair().pubkey();
 
         let mut tx = Transaction::new(&mint.keypair(), pubkey, 0, bank.last_id());
-        tx.user_data = Some(vec![1, 2, 3]);
+        tx.userdata = Some(vec![1, 2, 3]);
         let rv = bank.process_transaction(&tx);
         assert!(rv.is_ok());
         let account = bank.get_account(&pubkey);
         assert!(account.is_some());
-        assert_eq!(account.unwrap().user_data, vec![1, 2, 3]);
+        assert_eq!(account.unwrap().userdata, vec![1, 2, 3]);
     }
 
     #[test]
