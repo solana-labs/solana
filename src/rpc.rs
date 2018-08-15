@@ -94,9 +94,10 @@ impl RpcSol for RpcSolImpl {
     type Metadata = Meta;
 
     fn confirm_transaction(&self, meta: Self::Metadata, id: String) -> Result<bool> {
-        let signature_vec = bs58::decode(id)
-            .into_vec()
-            .expect("base58-encoded public key");
+        let signature_vec = match bs58::decode(id).into_vec() {
+            Ok(signature_vec) => signature_vec,
+            Err(_) => return Err(Error::invalid_request()),
+        };
 
         if signature_vec.len() != mem::size_of::<Signature>() {
             Err(Error::invalid_request())
@@ -120,9 +121,10 @@ impl RpcSol for RpcSolImpl {
         }
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<(String, i64)> {
-        let pubkey_vec = bs58::decode(id)
-            .into_vec()
-            .expect("base58-encoded public key");
+        let pubkey_vec = match bs58::decode(id).into_vec() {
+            Ok(pubkey_vec) => pubkey_vec,
+            Err(_) => return Err(Error::invalid_request()),
+        };
 
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             Err(Error::invalid_request())
