@@ -8,6 +8,7 @@ use service::Service;
 use signature::{Pubkey, Signature};
 use std::mem;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 
@@ -18,7 +19,7 @@ pub struct JsonRpcService {
 }
 
 impl JsonRpcService {
-    pub fn new(bank: Arc<Bank>, rpc_addr: SocketAddr) -> Self {
+    pub fn new(bank: Arc<Bank>, rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
         let request_processor = JsonRpcRequestProcessor::new(bank);
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -36,7 +37,12 @@ impl JsonRpcService {
                         ]))
                         .start_http(&rpc_addr)
                         .unwrap();
-                server.wait();
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        server.close();
+                        break;
+                    }
+                }
                 ()
             })
             .unwrap();
@@ -195,9 +201,7 @@ mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor: request_processor,
-        };
+        let meta = Meta { request_processor };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,

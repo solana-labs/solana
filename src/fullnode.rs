@@ -55,7 +55,6 @@ impl Fullnode {
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
-        json_rpc_enabled: bool,
     ) -> Self {
         info!("creating bank...");
         let bank = Bank::new_default(leader);
@@ -94,7 +93,6 @@ impl Fullnode {
                 exit.clone(),
                 Some(ledger_path),
                 sigverify_disabled,
-                json_rpc_enabled,
             );
             info!(
                 "validator ready... local request address: {} (advertising {}) connected to: {}",
@@ -113,7 +111,6 @@ impl Fullnode {
                 exit.clone(),
                 ledger_path,
                 sigverify_disabled,
-                json_rpc_enabled,
             );
             info!(
                 "leader ready... local request address: {} (advertising {})",
@@ -129,7 +126,6 @@ impl Fullnode {
         ledger: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
-        json_rpc_enabled: bool,
     ) -> Self {
         Self::new_internal(
             node,
@@ -138,7 +134,6 @@ impl Fullnode {
             keypair,
             network_entry_for_validator,
             false,
-            json_rpc_enabled,
         )
     }
 
@@ -148,7 +143,6 @@ impl Fullnode {
         ledger_path: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
-        json_rpc_enabled: bool,
     ) -> Self {
         Self::new_internal(
             node,
@@ -157,7 +151,6 @@ impl Fullnode {
             keypair,
             network_entry_for_validator,
             true,
-            json_rpc_enabled,
         )
     }
 
@@ -185,7 +178,6 @@ impl Fullnode {
     ///              |                     |    `------------`
     ///              `---------------------`
     /// ```
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new_leader(
         keypair: Keypair,
         bank: Bank,
@@ -195,7 +187,6 @@ impl Fullnode {
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
-        json_rpc_enabled: bool,
     ) -> Self {
         let tick_duration = None;
         // TODO: To light up PoH, uncomment the following line:
@@ -211,12 +202,10 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
-        if json_rpc_enabled {
-            let mut rpc_addr = node.data.contact_info.ncp;
-            rpc_addr.set_port(RPC_PORT);
-            let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr);
-            thread_hdls.extend(rpc_service.thread_hdls());
-        }
+        let mut rpc_addr = node.data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+        let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr, exit.clone());
+        thread_hdls.extend(rpc_service.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
         let window =
@@ -288,7 +277,6 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new_validator(
         keypair: Keypair,
         bank: Bank,
@@ -299,7 +287,6 @@ impl Fullnode {
         exit: Arc<AtomicBool>,
         ledger_path: Option<&str>,
         _sigverify_disabled: bool,
-        json_rpc_enabled: bool,
     ) -> Self {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
@@ -311,12 +298,10 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
-        if json_rpc_enabled {
-            let mut rpc_addr = node.data.contact_info.ncp;
-            rpc_addr.set_port(RPC_PORT);
-            let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr);
-            thread_hdls.extend(rpc_service.thread_hdls());
-        }
+        let mut rpc_addr = node.data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+        let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr, exit.clone());
+        thread_hdls.extend(rpc_service.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
         let window =
@@ -395,8 +380,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v =
-            Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false, false);
+        let v = Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false);
         v.exit();
         v.join().unwrap();
     }
@@ -410,7 +394,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false, false)
+                Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
