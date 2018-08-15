@@ -53,10 +53,6 @@ path = "src/bin/keygen.rs"
 name = "solana-wallet"
 path = "src/bin/wallet.rs"
 
-[[bin]]
-name = "solana-json-rpc"
-path = "src/bin/json-rpc.rs"
-
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 

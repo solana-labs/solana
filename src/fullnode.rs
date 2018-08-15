@@ -7,6 +7,7 @@ use entry::Entry;
 use ledger::read_ledger;
 use ncp::Ncp;
 use packet::BlobRecycler;
+use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
@@ -190,7 +191,7 @@ impl Fullnode {
         let tick_duration = None;
         // TODO: To light up PoH, uncomment the following line:
         //let tick_duration = Some(Duration::from_millis(1000));
-
+        // let node_info = node.data.clone();
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
@@ -200,6 +201,11 @@ impl Fullnode {
             exit.clone(),
         );
         thread_hdls.extend(rpu.thread_hdls());
+
+        let mut rpc_addr = node.data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+        let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr);
+        thread_hdls.extend(rpc_service.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
         let window =
@@ -291,6 +297,11 @@ impl Fullnode {
             exit.clone(),
         );
         thread_hdls.extend(rpu.thread_hdls());
+
+        let mut rpc_addr = node.data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+        let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr);
+        thread_hdls.extend(rpc_service.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
         let window =
