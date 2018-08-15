@@ -4,7 +4,6 @@ use bank::Bank;
 use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
-use request::{Request as JsonRpcRequest, Response};
 use service::Service;
 use signature::{Pubkey, Signature};
 use std::mem;
@@ -19,32 +18,28 @@ pub struct JsonRpcService {
 }
 
 impl JsonRpcService {
-    pub fn new(
-        bank: Arc<Bank>,
-        rpc_addr: SocketAddr,
-    ) -> Self {
-            let request_processor = JsonRpcRequestProcessor::new(bank);
-            let thread_hdl = Builder::new()
-                .name("solana-jsonrpc".to_string())
-                .spawn(move || {
-                    let mut io = MetaIoHandler::default();
-                    let rpc = RpcSolImpl;
-                    io.extend_with(rpc.to_delegate());
+    pub fn new(bank: Arc<Bank>, rpc_addr: SocketAddr) -> Self {
+        let request_processor = JsonRpcRequestProcessor::new(bank);
+        let thread_hdl = Builder::new()
+            .name("solana-jsonrpc".to_string())
+            .spawn(move || {
+                let mut io = MetaIoHandler::default();
+                let rpc = RpcSolImpl;
+                io.extend_with(rpc.to_delegate());
 
-                    let server = ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
-                            request_processor: request_processor.clone(),
-                        })
-                        .threads(4)
+                let server =
+                    ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
+                        request_processor: request_processor.clone(),
+                    }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
                         ]))
-                        .start_http(
-                            &rpc_addr,
-                        ).unwrap();
-                    server.wait();
-                    ()
-                })
-                .unwrap();
+                        .start_http(&rpc_addr)
+                        .unwrap();
+                server.wait();
+                ()
+            })
+            .unwrap();
         JsonRpcService { thread_hdl }
     }
 }
@@ -84,7 +79,7 @@ build_rpc_trait! {
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
-        // #[rpc(meta, name = "solana_sendTransaction")]
+        // #[rpc(meta, name = "sendTransaction")]
         // fn send_transaction(&self, Self::Metadata, String, i64) -> Result<String>;
     }
 }
@@ -103,21 +98,7 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let signature = Signature::new(&signature_vec);
-        let req = JsonRpcRequest::GetSignature { signature };
-        let resp = meta.request_processor.process_request(req);
-        match resp {
-            Some(Response::SignatureStatus { signature_status }) => Ok(signature_status),
-            Some(_) => Err(Error{
-                code: ErrorCode::ServerError(-32002),
-                message: "Server error: bad response".to_string(),
-                data: None,
-            }),
-            None => Err(Error {
-                code: ErrorCode::ServerError(-32001),
-                message: "Server error: no node found".to_string(),
-                data: None,
-            }),
-        }
+        meta.request_processor.get_signature_status(signature)
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<(String, i64)> {
         let pubkey_vec = match bs58::decode(id).into_vec() {
@@ -129,72 +110,16 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        let req = JsonRpcRequest::GetBalance { key: pubkey };
-        let resp = meta.request_processor.process_request(req);
-        match resp {
-            Some(Response::Balance { key, val }) => Ok((bs58::encode(key).into_string(), val)),
-            Some(_) => Err(Error{
-                code: ErrorCode::ServerError(-32002),
-                message: "Server error: bad response".to_string(),
-                data: None,
-            }),
-            None => Err(Error {
-                code: ErrorCode::ServerError(-32001),
-                message: "Server error: no node found".to_string(),
-                data: None,
-            }),
-        }
+        meta.request_processor.get_balance(pubkey)
     }
     fn get_finality(&self, meta: Self::Metadata) -> Result<usize> {
-        let req = JsonRpcRequest::GetFinality;
-        let resp = meta.request_processor.process_request(req);
-        match resp {
-            Some(Response::Finality { time }) => Ok(time),
-            Some(_) => Err(Error{
-                code: ErrorCode::ServerError(-32002),
-                message: "Server error: bad response".to_string(),
-                data: None,
-            }),
-            None => Err(Error {
-                code: ErrorCode::ServerError(-32001),
-                message: "Server error: no node found".to_string(),
-                data: None,
-            }),
-        }
+        meta.request_processor.get_finality()
     }
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
-        let req = JsonRpcRequest::GetLastId;
-        let resp = meta.request_processor.process_request(req);
-        match resp {
-            Some(Response::LastId { id }) => Ok(bs58::encode(id).into_string()),
-            Some(_) => Err(Error{
-                code: ErrorCode::ServerError(-32002),
-                message: "Server error: bad response".to_string(),
-                data: None,
-            }),
-            None => Err(Error {
-                code: ErrorCode::ServerError(-32001),
-                message: "Server error: no node found".to_string(),
-                data: None,
-            }),
-        }
+        meta.request_processor.get_last_id()
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
-        let req = JsonRpcRequest::GetTransactionCount;
-        let resp = meta.request_processor.process_request(req);
-        match resp {
-            Some(Response::TransactionCount { transaction_count }) => Ok(transaction_count),
-            Some(_) => Err(Error{
-                code: ErrorCode::ServerError(-32002),
-                message: "Server error: bad response".to_string(),
-                data: None,
-            }),
-            None => Err(Error {
-                code: ErrorCode::ServerError(-32001),
-                message: "Server error: no node found".to_string(),
-                data: None,
-            }),
-        }
+        meta.request_processor.get_transaction_count()
     }
     // fn send_transaction(&self, meta: Self::Metadata, to: String, tokens: i64) -> Result<String> {
     //     let client_keypair = read_keypair(&meta.keypair_location.unwrap()).unwrap();
@@ -225,43 +150,23 @@ impl JsonRpcRequestProcessor {
         JsonRpcRequestProcessor { bank }
     }
 
-    /// Process Request items sent via JSON-RPC.
-    fn process_request(
-        &self,
-        msg: JsonRpcRequest,
-    ) -> Option<Response> {
-        match msg {
-            JsonRpcRequest::GetBalance { key } => {
-                let val = self.bank.get_balance(&key);
-                let rsp = Response::Balance { key, val };
-                info!("Response::Balance {:?}", rsp);
-                Some(rsp)
-            }
-            JsonRpcRequest::GetLastId => {
-                let id = self.bank.last_id();
-                let rsp = Response::LastId { id };
-                info!("Response::LastId {:?}", rsp);
-                Some(rsp)
-            }
-            JsonRpcRequest::GetTransactionCount => {
-                let transaction_count = self.bank.transaction_count() as u64;
-                let rsp = Response::TransactionCount { transaction_count };
-                info!("Response::TransactionCount {:?}", rsp);
-                Some(rsp)
-            }
-            JsonRpcRequest::GetSignature { signature } => {
-                let signature_status = self.bank.has_signature(&signature);
-                let rsp = Response::SignatureStatus { signature_status };
-                info!("Response::Signature {:?}", rsp);
-                Some(rsp)
-            }
-            JsonRpcRequest::GetFinality => {
-                let time = self.bank.finality();
-                let rsp = Response::Finality { time };
-                info!("Response::Finality {:?}", rsp);
-                Some(rsp)
-            }
-        }
+    /// Process JSON-RPC request items sent via JSON-RPC.
+    fn get_balance(&self, pubkey: Pubkey) -> Result<(String, i64)> {
+        let val = self.bank.get_balance(&pubkey);
+        Ok((bs58::encode(pubkey).into_string(), val))
+    }
+    fn get_finality(&self) -> Result<usize> {
+        Ok(self.bank.finality())
+    }
+    fn get_last_id(&self) -> Result<String> {
+        let id = self.bank.last_id();
+        Ok(bs58::encode(id).into_string())
+    }
+    fn get_signature_status(&self, signature: Signature) -> Result<bool> {
+        Ok(self.bank.has_signature(&signature))
+    }
+    fn get_transaction_count(&self) -> Result<u64> {
+        Ok(self.bank.transaction_count() as u64)
     }
 }
 
@@ -295,11 +200,14 @@ mod tests {
         };
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"solana_getBalance","params":["{}"]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
             bob_pubkey
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":["{}", 20],"id":1}}"#, bob_pubkey);
+        let expected = format!(
+            r#"{{"jsonrpc":"2.0","result":["{}", 20],"id":1}}"#,
+            bob_pubkey
+        );
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
 
@@ -307,9 +215,7 @@ mod tests {
             .expect("actual response deserialization");
         assert_eq!(expected, result);
 
-        let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"solana_getTransactionCount"}}"#
-        );
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
         let expected: Response =
@@ -327,7 +233,7 @@ mod tests {
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"solana_getBalance","params":[1234567890]}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":[1234567890]}"#;
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
         };
@@ -350,7 +256,7 @@ mod tests {
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"solana_confirmTransaction","params":["a1b2c3d4e5"]}"#;
+            r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["a1b2c3d4e5"]}"#;
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
         };
