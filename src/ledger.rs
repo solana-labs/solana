@@ -691,7 +691,7 @@ mod tests {
         transactions.extend(large_transactions);
 
         let entries0 = next_entries(&id, 0, transactions.clone());
-        assert!(entries0.len() > 2);
+        assert!(entries0.len() >= 2);
         assert!(entries0[0].has_more);
         assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
