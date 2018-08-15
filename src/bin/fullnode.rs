@@ -83,11 +83,11 @@ fn main() -> () {
         let testnet_addr: SocketAddr = testnet_address_string.parse().unwrap();
         drone_addr.set_ip(testnet_addr.ip());
 
-        Fullnode::new(node, false, ledger_path, keypair, Some(testnet_addr))
+        Fullnode::new(node, false, ledger_path, keypair, Some(testnet_addr), true)
     } else {
         node.data.leader_id = node.data.id;
 
-        Fullnode::new(node, true, ledger_path, keypair, None)
+        Fullnode::new(node, true, ledger_path, keypair, None, true)
     };
 
     let mut client = mk_client(&repl_clone);
