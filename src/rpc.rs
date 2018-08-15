@@ -69,19 +69,19 @@ build_rpc_trait! {
     pub trait RpcSol {
         type Metadata;
 
-        #[rpc(meta, name = "solana_confirmTransaction")]
+        #[rpc(meta, name = "confirmTransaction")]
         fn confirm_transaction(&self, Self::Metadata, String) -> Result<bool>;
 
-        #[rpc(meta, name = "solana_getBalance")]
+        #[rpc(meta, name = "getBalance")]
         fn get_balance(&self, Self::Metadata, String) -> Result<(String, i64)>;
 
-        #[rpc(meta, name = "solana_getFinality")]
+        #[rpc(meta, name = "getFinality")]
         fn get_finality(&self, Self::Metadata) -> Result<usize>;
 
-        #[rpc(meta, name = "solana_getLastId")]
+        #[rpc(meta, name = "getLastId")]
         fn get_last_id(&self, Self::Metadata) -> Result<String>;
 
-        #[rpc(meta, name = "solana_getTransactionCount")]
+        #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
         // #[rpc(meta, name = "solana_sendTransaction")]
