@@ -18,13 +18,13 @@ fi
 garbage_address=vS3ngn1TfQmpsW1Z4NkLuqNAQFF3dYQw8UZ6TCx9bmq
 
 check_balance_output() {
-  declare expected_output="$1"
-  exec 42>&1
-  output=$($wallet balance | tee >(cat - >&42))
-  if [[ ! "$output" =~ $expected_output ]]; then
-    echo "Balance is incorrect.  Expected: $expected_output"
-    exit 1
-  fi
+   declare expected_output="$1"
+   exec 42>&1
+   output=$($wallet balance | tee >(cat - >&42))
+   if [[ ! "$output" =~ $expected_output ]]; then
+     echo "Balance is incorrect.  Expected: $expected_output"
+     exit 1
+   fi
 }
 
 pay_and_confirm() {
@@ -35,7 +35,7 @@ pay_and_confirm() {
 
 $wallet reset
 $wallet address
-check_balance_output "Your balance is: 0"
+check_balance_output "No account found"
 $wallet airdrop --tokens 60
 check_balance_output "Your balance is: 60"
 $wallet airdrop --tokens 40

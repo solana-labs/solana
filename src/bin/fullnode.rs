@@ -91,7 +91,7 @@ fn main() -> () {
     };
 
     let mut client = mk_client(&repl_clone);
-    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap();
+    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
     eprintln!("balance is {}", previous_balance);
 
     if previous_balance == 0 {
