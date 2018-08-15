@@ -713,7 +713,8 @@ mod test {
         let mut window = vec![
             WindowSlot {
                 data: None,
-                coding: None
+                coding: None,
+                leader_unknown: false,
             };
             WINDOW_SIZE
         ];

@@ -524,7 +524,7 @@ fn test_multi_node_dynamic_network() {
         Ok(val) => val
             .parse()
             .expect(&format!("env var {} is not parse-able as usize", key)),
-        Err(_) => 100,
+        Err(_) => 170,
     };
 
     let purge_key = "SOLANA_DYNAMIC_NODES_PURGE_LAG";
