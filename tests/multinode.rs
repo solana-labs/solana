@@ -635,7 +635,7 @@ fn test_multi_node_dynamic_network() {
     let mut consecutive_success = 0;
     let mut failures = 0;
     let mut max_distance_increase = 0i64;
-    for i in 0..num_nodes {
+    for i in 0..std::cmp::max(20, num_nodes) {
         //verify leader can do transfer
         let expected = ((i + 3) * 500) as i64;
         let leader_balance = retry_send_tx_and_retry_get_balance(
