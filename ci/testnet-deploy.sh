@@ -276,10 +276,12 @@ client_start() {
       tmux new -s solana -d \" \
           set -x; \
           sudo rm /tmp/solana.log; \
-          /snap/bin/solana.bench-tps $SOLANA_NET_ENTRYPOINT $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee /tmp/solana.log; \
-          echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
-            | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netBasename clientexit=1'; \
-          echo Error: bench-tps should never exit | tee -a /tmp/solana.log; \
+          while : ; do \
+              /snap/bin/solana.bench-tps $SOLANA_NET_ENTRYPOINT $fullnode_count --loop -s 600 --sustained -t \$threadCount 2>&1 | tee -a /tmp/solana.log; \
+              echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
+                | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netBasename clientexit=1'; \
+              echo Error: bench-tps should never exit | tee -a /tmp/solana.log; \
+          done \
           bash \
         \"; \
       sleep 2; \
