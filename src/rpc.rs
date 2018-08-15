@@ -100,24 +100,23 @@ impl RpcSol for RpcSolImpl {
         };
 
         if signature_vec.len() != mem::size_of::<Signature>() {
-            Err(Error::invalid_request())
-        } else {
-            let signature = Signature::new(&signature_vec);
-            let req = JsonRpcRequest::GetSignature { signature };
-            let resp = meta.request_processor.process_request(req);
-            match resp {
-                Some(Response::SignatureStatus { signature_status }) => Ok(signature_status),
-                Some(_) => Err(Error{
-                    code: ErrorCode::ServerError(-32002),
-                    message: "Server error: bad response".to_string(),
-                    data: None,
-                }),
-                None => Err(Error {
-                    code: ErrorCode::ServerError(-32001),
-                    message: "Server error: no node found".to_string(),
-                    data: None,
-                }),
-            }
+            return Err(Error::invalid_request());
+        }
+        let signature = Signature::new(&signature_vec);
+        let req = JsonRpcRequest::GetSignature { signature };
+        let resp = meta.request_processor.process_request(req);
+        match resp {
+            Some(Response::SignatureStatus { signature_status }) => Ok(signature_status),
+            Some(_) => Err(Error{
+                code: ErrorCode::ServerError(-32002),
+                message: "Server error: bad response".to_string(),
+                data: None,
+            }),
+            None => Err(Error {
+                code: ErrorCode::ServerError(-32001),
+                message: "Server error: no node found".to_string(),
+                data: None,
+            }),
         }
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<(String, i64)> {
@@ -127,24 +126,23 @@ impl RpcSol for RpcSolImpl {
         };
 
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            Err(Error::invalid_request())
-        } else {
-            let pubkey = Pubkey::new(&pubkey_vec);
-            let req = JsonRpcRequest::GetBalance { key: pubkey };
-            let resp = meta.request_processor.process_request(req);
-            match resp {
-                Some(Response::Balance { key, val }) => Ok((bs58::encode(key).into_string(), val)),
-                Some(_) => Err(Error{
-                    code: ErrorCode::ServerError(-32002),
-                    message: "Server error: bad response".to_string(),
-                    data: None,
-                }),
-                None => Err(Error {
-                    code: ErrorCode::ServerError(-32001),
-                    message: "Server error: no node found".to_string(),
-                    data: None,
-                }),
-            }
+            return Err(Error::invalid_request());
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+        let req = JsonRpcRequest::GetBalance { key: pubkey };
+        let resp = meta.request_processor.process_request(req);
+        match resp {
+            Some(Response::Balance { key, val }) => Ok((bs58::encode(key).into_string(), val)),
+            Some(_) => Err(Error{
+                code: ErrorCode::ServerError(-32002),
+                message: "Server error: bad response".to_string(),
+                data: None,
+            }),
+            None => Err(Error {
+                code: ErrorCode::ServerError(-32001),
+                message: "Server error: no node found".to_string(),
+                data: None,
+            }),
         }
     }
     fn get_finality(&self, meta: Self::Metadata) -> Result<usize> {
