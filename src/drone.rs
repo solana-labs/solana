@@ -294,6 +294,7 @@ mod tests {
             exit.clone(),
             &ledger_path,
             false,
+            false,
         );
         //TODO: this seems unstable
         sleep(Duration::from_millis(900));
