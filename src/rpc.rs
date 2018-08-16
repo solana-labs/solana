@@ -1,4 +1,4 @@
-//! The `rpc` module implements the Solana rpc interface.
+//! The `rpc` module implements the Solana RPC interface.
 
 use bank::Bank;
 use bs58;

@@ -191,7 +191,7 @@ impl Fullnode {
         let tick_duration = None;
         // TODO: To light up PoH, uncomment the following line:
         //let tick_duration = Some(Duration::from_millis(1000));
-        // let node_info = node.data.clone();
+
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
