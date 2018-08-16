@@ -17,9 +17,8 @@ use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil, Pubkey};
 use solana::thin_client::ThinClient;
-use solana::timing::duration_as_s;
+use solana::timing::{duration_as_ms, duration_as_s};
 use solana::window::{default_window, WINDOW_SIZE};
-use std::cmp::max;
 use std::env;
 use std::fs::{copy, create_dir_all, remove_dir_all};
 use std::net::UdpSocket;
@@ -524,15 +523,7 @@ fn test_multi_node_dynamic_network() {
         Ok(val) => val
             .parse()
             .expect(&format!("env var {} is not parse-able as usize", key)),
-        Err(_) => 170,
-    };
-
-    let purge_key = "SOLANA_DYNAMIC_NODES_PURGE_LAG";
-    let purge_lag: usize = match env::var(purge_key) {
-        Ok(val) => val
-            .parse()
-            .expect(&format!("env var {} is not parse-able as usize", purge_key)),
-        Err(_) => std::usize::MAX,
+        Err(_) => 200,
     };
 
     let leader_keypair = Keypair::new();
@@ -631,94 +622,78 @@ fn test_multi_node_dynamic_network() {
 
     let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
-    let now = Instant::now();
+    let mut client = mk_client(&leader_data);
+    let mut last_finality = client.get_finality();
+    info!("Last finality {}", last_finality);
+    let start = Instant::now();
     let mut consecutive_success = 0;
-    let mut failures = 0;
-    let mut max_distance_increase = 0i64;
+    let mut expected_balance = leader_balance;
     for i in 0..std::cmp::max(20, num_nodes) {
-        //verify leader can do transfer
-        let expected = ((i + 3) * 500) as i64;
-        let leader_balance = retry_send_tx_and_retry_get_balance(
-            &leader_data,
-            &alice_arc.read().unwrap(),
-            &bob_pubkey,
-            Some(expected),
-        ).unwrap();
-        if leader_balance != expected {
-            info!(
-                "leader dropped transaction {} {:?} {:?}",
-                i, leader_balance, expected
-            );
+        trace!("getting leader last_id");
+        let last_id = client.get_last_id();
+        trace!("executing leader transfer");
+        let sig = client
+            .transfer(
+                500,
+                &alice_arc.read().unwrap().keypair(),
+                bob_pubkey,
+                &last_id,
+            )
+            .unwrap();
+
+        expected_balance += 500;
+
+        assert!(client.poll_for_signature(&sig).is_ok());
+
+        let now = Instant::now();
+        let mut finality = client.get_finality();
+
+        // Need this to make sure the finality is updated
+        // (i.e. the node is not returning stale value)
+        while last_finality == finality {
+            finality = client.get_finality();
         }
-        //verify all validators have the same balance
-        {
-            let mut success = 0usize;
-            let mut max_distance = 0i64;
-            let mut total_distance = 0i64;
+
+        while duration_as_ms(&now.elapsed()) < finality as u64 {
+            sleep(Duration::from_millis(100));
+            finality = client.get_finality()
+        }
+
+        last_finality = finality;
+
+        let balance = retry_get_balance(&mut client, &bob_pubkey, Some(expected_balance));
+        assert_eq!(balance, Some(expected_balance));
+        consecutive_success += 1;
+
+        info!(
+            "SUCCESS[{}] balance: {}, finality: {} ms",
+            i, expected_balance, last_finality,
+        );
+
+        if consecutive_success == 10 {
+            info!("Took {} s to converge", duration_as_s(&start.elapsed()),);
+            info!("Verifying signature of the last transaction in the validators");
+
             let mut num_nodes_behind = 0i64;
             validators.retain(|server| {
-                let mut retain_me = true;
                 let mut client = mk_client(&server.0);
-                trace!("{:x} {} get_balance start", server.0.debug_id(), i);
-                let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-                trace!(
-                    "{:x} {} get_balance: {:?} leader_balance: {}",
-                    server.0.debug_id(),
-                    i,
-                    getbal,
-                    leader_balance
-                );
-                let bal = getbal.unwrap_or(0);
-                let distance = (leader_balance - bal) / 500;
-                max_distance = max(distance, max_distance);
-                total_distance += distance;
-                if distance > max_distance_increase {
-                    info!("Node {:x} is behind by {}", server.0.debug_id(), distance);
-                    max_distance_increase = distance;
-                    if max_distance_increase as u64 > purge_lag as u64 {
-                        server.1.exit();
-                        info!("Node {:x} is exiting", server.0.debug_id());
-                        retain_me = false;
-                    }
-                }
-                if distance > 0 {
-                    num_nodes_behind += 1;
-                }
-                if let Some(bal) = getbal {
-                    if bal == leader_balance {
-                        success += 1;
-                    }
-                }
-                retain_me
+                trace!("{:x} polling for signature", server.0.debug_id());
+                num_nodes_behind += match client.poll_for_signature(&sig) {
+                    Ok(_) => 0,
+                    Err(_) => 1,
+                };
+                true
             });
-            if num_nodes_behind != 0 {
-                info!("{} nodes are lagging behind leader", num_nodes_behind);
-            }
+
             info!(
-                "SUCCESS[{}] {} out of {} distance: {} max_distance: {}  finality: {}",
-                i,
-                success,
+                "Validators lagging: {}/{}",
+                num_nodes_behind,
                 validators.len(),
-                total_distance,
-                max_distance,
-                get_finality(&leader_data)
             );
-            if success == validators.len() && total_distance == 0 {
-                consecutive_success += 1;
-            } else {
-                consecutive_success = 0;
-                failures += 1;
-            }
-            if consecutive_success == 10 {
-                break;
-            }
+            break;
         }
     }
-    info!(
-        "Took {} s to converge total failures: {}",
-        duration_as_s(&now.elapsed()),
-        failures
-    );
+
     assert_eq!(consecutive_success, 10);
     for (_, node) in &validators {
         node.exit();
@@ -820,10 +795,4 @@ fn retry_send_tx_and_retry_get_balance(
         sleep(Duration::from_millis(20));
     }
     None
-}
-
-fn get_finality(leader: &NodeInfo) -> usize {
-    let mut client = mk_client(leader);
-    trace!("getting leader finality");
-    client.get_finality()
 }
