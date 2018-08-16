@@ -98,6 +98,9 @@ untrusted = "0.6.2"
 [dev-dependencies]
 criterion = "0.2"
 
+[profile.release]
+debug = true
+
 [[bench]]
 name = "bank"
 harness = false
