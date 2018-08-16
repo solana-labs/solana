@@ -3,7 +3,6 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use bank::Account;
 use bincode::{deserialize, serialize};
 use hash::Hash;
 use request::{Request, Response};
@@ -28,7 +27,7 @@ pub struct ThinClient {
     transactions_socket: UdpSocket,
     last_id: Option<Hash>,
     transaction_count: u64,
-    balances: HashMap<Pubkey, Account>,
+    balances: HashMap<Pubkey, i64>,
     signature_status: bool,
     finality: Option<usize>,
 }
@@ -66,15 +65,9 @@ impl ThinClient {
 
     pub fn process_response(&mut self, resp: &Response) {
         match *resp {
-            Response::Account {
-                key,
-                account: Some(ref account),
-            } => {
-                trace!("Response account {:?} {:?}", key, account);
-                self.balances.insert(key, account.clone());
-            }
-            Response::Account { key, account: None } => {
-                debug!("Response account {}: None ", key);
+            Response::Balance { key, val } => {
+                trace!("Response balance {:?} {:?}", key, val);
+                self.balances.insert(key, val);
             }
             Response::LastId { id } => {
                 trace!("Response last_id {:?}", id);
@@ -136,8 +129,8 @@ impl ThinClient {
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
         trace!("get_balance");
-        let req = Request::GetAccount { key: *pubkey };
-        let data = serialize(&req).expect("serialize GetAccount in pub fn get_balance");
+        let req = Request::GetBalance { key: *pubkey };
+        let data = serialize(&req).expect("serialize GetBalance in pub fn get_balance");
         self.requests_socket
             .send_to(&data, &self.requests_addr)
             .expect("buffer error in pub fn get_balance");
@@ -145,14 +138,14 @@ impl ThinClient {
         while !done {
             let resp = self.recv_response()?;
             trace!("recv_response {:?}", resp);
-            if let Response::Account { key, .. } = &resp {
+            if let Response::Balance { key, .. } = &resp {
                 done = key == pubkey;
             }
             self.process_response(&resp);
         }
         self.balances
             .get(pubkey)
-            .map(|a| a.tokens)
+            .cloned()
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 

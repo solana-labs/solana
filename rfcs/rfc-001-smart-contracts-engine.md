@@ -4,7 +4,7 @@ The goal of this RFC is to define a set of constraints for APIs and runtime such
 
 ## Version
 
-version 0.2 
+version 0.1 
 
 ## Toolchain Stack
 
@@ -37,175 +37,154 @@ version 0.2
 
 In Figure 1 an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
+## Bytecode
+
+Our bytecode is based on Berkley Packet Filter. The requirements for BPF overlap almost exactly with the requirements we have:
+
+1. Deterministic amount of time to execute the code
+2. Bytecode that is portable between machine instruction sets
+3. Verified memory accesses
+4. Fast to load the object, verify the bytecode and JIT to local machine instruction set
+
+For 1, that means that loops are unrolled, and for any jumps back we can guard them with a check against the number of instruction that have been executed at this point.  If the limit is reached, the program yields its execution.  This involves saving the stack and current instruction index.
+
+For 2, the BPF bytecode already easily maps to x86–64, arm64 and other instruction sets. 
+
+For 3, every load and store that is relative can be checked to be within the expected memory that is passed into the ELF.  Dynamic load and stores can do a runtime check against available memory, these will be slow and should be avoided.
+
+For 4, Fully linked PIC ELF with just a single RX segment. Effectively we are linking a shared object with `-fpic -target bpf` and with a linker script to collect everything into a single RX segment. Writable globals are not supported.
+
+### Address Checks
+
+The interface to the module takes a `&mut Vec<Vec<u8>>` in rust, or a `int sz, void* data[sz], int szs[sz]` in `C`.  Given the module's bytecode, for each method, we need to analyze the bounds on load and stores into each buffer the module uses.  This check needs to be done `on chain`, and after those bounds are computed we can verify that the user supplied array of buffers will not cause a memory fault.  For load and stores that we cannot analyze, we can replace with a `safe_load` and `safe_store` instruction that will check the table for access.
+
+## Loader
+The loader is our first smart contract. The job of this contract is to load the actual program with its own instance data.  The loader will verify the bytecode and that the object implements the expected entry points.
+
+Since there is only one RX segment, the context for the contract instance is passed into each entry point as well as the event data for that entry point.
+
+A client will create a transaction to create a new loader instance:
+
+`Solana_NewLoader(Loader Instance PubKey, proof of key ownership, space I need for my elf)`
+
+A client will then do a bunch of transactions to load its elf into the loader instance they created:
+
+`Loader_UploadElf(Loader Instance PubKey, proof of key ownership, pos start, pos end, data)`
+
+At this point the client can create a new instance of the module with its own instance address:
+
+`Loader_NewInstance(Loader Instance PubKey, proof of key ownership, Instance PubKey, proof of key ownership)`
+
+Once the instance has been created, the client may need to upload more user data to solana to configure this instance:
+
+`Instance_UploadModuleData(Instance PubKey, proof of key ownership, pos start, pos end, data)`
+
+Now clients can `start` the instance:
+
+`Instance_Start(Instance PubKey, proof of key ownership)`
+
 ## Runtime
 
-The goal with the runtime is to have a general purpose execution environment that is highly parallelizeable and doesn't require dynamic resource management. The goal is to execute as many contracts as possible in parallel, and have them pass or fail without a destructive state change.
+Our goal with the runtime is to have a general purpose execution environment that is highly parallelizable and doesn't require dynamic resource management. We want to execute as many contracts as we can in parallel, and have them pass or fail without a destructive state change.
+
+### State and Entry Point
+
+State is addressed by an account which is at the moment simply the PubKey.  Our goal is to eliminate dynamic memory allocation in the smart contract itself, so the contract is a function that takes a mapping of [(PubKey,State)] and returns [(PubKey, State')].  The output of keys is a subset of the input.  Three basic kinds of state exist:
+
+* Instance State
+* Participant State
+* Caller State
+
+There isn't any difference in how each is implemented, but conceptually Participant State is memory that is allocated for each participant in the contract.  Instance State is memory that is allocated for the contract itself, and Caller State is memory that the transactions caller has allocated.
 
 
-### State
+### Call
 
-State is addressed by an account which is at the moment simply the Pubkey.  Our goal is to eliminate memory allocation from within the smart contract itself.  Thus the client of the contract provides all the state that is necessary for the contract to execute in the transaction itself.  The runtime interacts with the contract through a state transition function, which takes a mapping of [(Pubkey,State)] and returns [(Pubkey, State')].  The State is an opeque type to the runtime, a `Vec<u8>`, the contents of which the contract has full control over.
-
-### Call Structure
 ```
-/// Call definition
-/// Signed portion
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct CallData {
-    /// Each Pubkey in this vector is mapped to a corresponding `Page` that is loaded for contract execution
-    /// In a simple pay transaction `key[0]` is the token owner's key and `key[1]` is the recipient's key.
-    pub keys: Vec<Pubkey>,
-
-    /// The Pubkeys that are required to have a proof.  The proofs are a `Vec<Signature> which encoded along side this data structure
-    /// Each Signature signs the `required_proofs` vector as well as the `keys` vectors.  The transaction is valid if and only if all
-    /// the required signatures are present and the public key vector is unchanged between signatures.
-    pub required_proofs: Vec<u8>,
-
-    /// PoH data
-    /// last PoH hash observed by the sender
-    pub last_id: Hash,
-
-    /// Program
-    /// The address of the program we want to call.  ContractId is just a Pubkey that is the address of the loaded code that will execute this Call.
-    pub contract_id: ContractId,
-    /// OS scheduling fee
-    pub fee: i64,
-    /// struct version to prevent duplicate spends
-    /// Calls with a version <= Page.version are rejected
-    pub version: u64,
-    /// method to call in the contract
-    pub method: u8,
-    /// usedata in bytes
-    pub userdata: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Call {
-    /// Signatures and Keys
-    /// (signature, key index)
-    /// This vector contains a tuple of signatures, and the key index the signature is for
-    /// proofs[0] is always key[0]
-    pub proofs: Vec<Signature>,
-    pub data: CallData,
-}
+void call(
+    const struct instance_data *data,
+    const uint8_t kind[],  //instance|participant|caller|read|write
+    const uint8_t *keys[],
+    uint8_t *data[],
+    int num,
+    uint8_t dirty[],        //dirty memory bits
+    uint8_t *userdata,      //current transaction data
+);
 ```
 
-At it's core, this is just a set of Pubkeys and Signatures with a bit of metadata.  The contract Pubkey routes this transaction into that contracts entry point.  `version` is used for dropping retransmitted requests.
+To call this operation, the transaction that is destined to the contract instance specifies what keyed state it should present to the `call` function.  To allocate the state memory or a call context, the client has to first call a function on the contract with the designed address that will own the state.
 
-Contracts should be able to read any state that is part of runtime, but only write to state that the contract allocated.
+At its core, this is a system call that requires cryptographic proof of ownership of memory regions instead of an OS that checks page tables for access rights.
+
+* `Instance_AllocateContext(Instance PubKey, My PubKey, Proof of key ownership)`
+
+Any transaction can then call `call` on the contract with a set of keys.  It's up to the contract itself to manage ownership:
+
+* `Instance_Call(Instance PubKey, [Context PubKeys], proofs of ownership, userdata...)`
+
+Contracts should be able to read any state that is part of solana, but only write to state that the contract allocated.
+
+#### Caller State
+
+Caller `state` is memory allocated for the `call` that belongs to the public key that is issuing the `call`.  This is the caller's context.
+
+#### Instance State
+
+Instance `state` is memory that belongs to this contract instance.  We may also need module-wide `state` as well.
+
+#### Participant State
+
+Participant `state` is any other memory.  In some cases it may make sense to have these allocated as part of the call by the caller.
+
+### Reduce
+
+Some operations on the contract will require iteration over all the keys.  To make this parallelizable the iteration is broken up into reduce calls which are combined.
+
+```
+void reduce_m(
+    const struct instance_data *data,
+    const uint8_t *keys[],
+    const uint8_t *data[],
+    int num,
+    uint8_t *reduce_data,
+);
+
+void reduce_r(
+    const struct instance_data *data,
+    const uint8_t *reduce_data[],
+    int num,
+    uint8_t *reduce_data,
+);
+```
 
 ### Execution
 
-Calls batched and processed in a pipeline
+Transactions are batched and processed in parallel at each stage.
+```
++-----------+    +--------------+      +-----------+    +---------------+
+| sigverify |-+->| debit commit |---+->| execution |-+->| memory commit |
++-----------+ |  +--------------+   |  +-----------+ |  +---------------+
+              |                     |                |
+              |  +---------------+  |                |  +--------------+
+              |->| memory verify |->+                +->| debit undo   |
+                 +---------------+                   |  +--------------+
+                                                     |
+                                                     |  +---------------+
+                                                     +->| credit commit |
+                                                        +---------------+
+
 
 ```
-+-----------+    +-------------+    +--------------+    +--------------------+    
-| sigverify |--->| lock memory |--->| validate fee |--->| allocate new pages |--->
-+-----------+    +-------------+    +--------------+    +--------------------+    
-                                
-    +------------+    +---------+    +--------------+    +-=------------+   
---->| load pages |--->| execute |--->|unlock memory |--->| commit pages |   
-    +------------+    +---------+    +--------------+    +--------------+   
+The `debit verify` stage is very similar to `memory verify`.  Proof of key ownership is used to check if the callers key has some state allocated with the contract, then the memory is loaded and executed.  After execution stage, the dirty pages are written back by the contract.  Because know all the memory accesses during execution, we can batch transactions that do not interfere with each other.  We can also apply the `debit undo` and `credit commit` stages of the transaction.  `debit undo` is run in case of an exception during contract execution, only transfers may be reversed, fees are commited to solana.
 
-```
+### GPU execution
 
-At the `execute` stage, the loaded pages have no data dependencies, so all the contracts can be executed in parallel. 
-## Memory Management
-```
-pub struct Page {
-    /// key that indexes this page
-    /// prove ownership of this key to spend from this Page
-    owner: Pubkey,
-    /// contract that owns this page
-    /// contract can write to the data that is in `memory` vector
-    contract: Pubkey,
-    /// balance that belongs to owner
-    balance: u64,
-    /// version of the structure, public for testing
-    version: u64,
-    /// hash of the page data
-    memhash: Hash,
-    /// The following could be in a separate structure
-    memory: Vec<u8>,
-}
-```
-
-The guarantee that runtime enforces:
-    1. The contract code is the only code that will modify the contents of `memory`
-    2. Total balances on all the pages is equal before and after exectuion of a call
-    3. Balances of each of the pages not owned by the contract must be equal to or greater after the call than before the call.
-
-## Entry Point
-Exectuion of the contract involves maping the contract's public key to an entry point which takes a pointer to the transaction, and an array of loaded pages.
-```
-// Find the method
-match (tx.contract, tx.method) {
-    // system interface
-    // everyone has the same reallocate
-    (_, 0) => system_0_realloc(&tx, &mut call_pages),
-    (_, 1) => system_1_assign(&tx, &mut call_pages),
-    // contract methods
-    (DEFAULT_CONTRACT, 128) => default_contract_128_move_funds(&tx, &mut call_pages),
-    (contract, method) => //... 
-```
-
-The first 127 methods are reserved for the system interface, which implements allocation and assignment of memory.  The rest, including the contract for moving funds are implemented by the contract itself.
-
-## System Interface
-```
-/// SYSTEM interface, same for very contract, methods 0 to 127
-/// method 0
-/// reallocate
-/// spend the funds from the call to the first recipient's
-pub fn system_0_realloc(call: &Call, pages: &mut Vec<Page>) {
-    if call.contract == DEFAULT_CONTRACT {
-        let size: u64 = deserialize(&call.userdata).unwrap();
-        pages[0].memory.resize(size as usize, 0u8);
-    }
-}
-/// method 1
-/// assign
-/// assign the page to a contract
-pub fn system_1_assign(call: &Call, pages: &mut Vec<Page>) {
-    let contract = deserialize(&call.userdata).unwrap();
-    if call.contract == DEFAULT_CONTRACT {
-        pages[0].contract = contract;
-        //zero out the memory in pages[0].memory
-        //Contracts need to own the state of that data otherwise a use could fabricate the state and
-        //manipulate the contract
-        pages[0].memory.clear();
-    }
-} 
-```
-The first method resizes the memory that is assosciated with the callers page.  The second system call assignes the page to the contract.  Both methods check if the current contract is 0, otherwise the method does nothing and the caller spent their fees.
-
-This ensures that when memory is assigned to the contract the initial state of all the bytes is 0, and the contract itself is the only thing that can modify that state.
-
-## Simplest contract
-```
-/// DEFAULT_CONTRACT interface
-/// All contracts start with 128
-/// method 128
-/// move_funds
-/// spend the funds from the call to the first recipient's
-pub fn default_contract_128_move_funds(call: &Call, pages: &mut Vec<Page>) {
-    let amount: u64 = deserialize(&call.userdata).unwrap();
-    if pages[0].balance >= amount  {
-        pages[0].balance -= amount;
-        pages[1].balance += amount;
-    }
-}
-``` 
-
-This simply moves the amount from page[0], which is the callers page, to page[1], which is the recipient's page.
+A single contract can read and write to separate key pairs without interference.  These separate calls to the same contract can execute on the same GPU thread over different memory using different SIMD lanes.
 
 ## Notes
 
 1. There is no dynamic memory allocation.
-2. Persistent Memory is allocated to a Key with ownership
+2. Persistant Memory is allocated to a Key with ownership
 3. Contracts can `call` to update key owned state
-4. `call` is just a *syscall* that does a cryptographic check of memory ownership
-5. Kernel guarantees that when memory is assigned to the contract its state is 0
-6. Kernel guarantees that contract is the only thing that can modify memory that its assigned to
-7. Kernel guarantees that the contract can only spend tokens that are in pages that are assigned to it
-8. Kernel guarantees the balances belonging to pages are balanced before and after the call
+4. Contracts can `reduce` over the memory to aggregate state
+5. `call` is just a *syscall* that does a cryptographic check of memory owndershp
