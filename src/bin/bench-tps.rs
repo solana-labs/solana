@@ -275,7 +275,9 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
-    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    let starting_balance_err = client.poll_get_balance(&id.pubkey());
+    println!("starting_balance {:?}", starting_balance_err);
+    let starting_balance = starting_balance_err.expect("starting balance to be valid");
     metrics_submit_token_balance(starting_balance);
 
     if starting_balance < tx_count {
@@ -293,7 +295,9 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         let mut current_balance = previous_balance;
         for _ in 0..20 {
             sleep(Duration::from_millis(500));
-            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+            let current_balance_err = client.poll_get_balance(&id.pubkey());
+            println!("current balance {:?}", current_balance_err);
+            current_balance = current_balance_err.expect("current balance to be valid");
             if starting_balance != current_balance {
                 break;
             }
