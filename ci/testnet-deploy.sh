@@ -271,7 +271,6 @@ client_start() {
       snap info solana; \
       sudo snap get solana; \
       threadCount=\$(nproc); \
-      if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux kill-session -t solana; \
       tmux new -s solana -d \" \
           set -x; \
