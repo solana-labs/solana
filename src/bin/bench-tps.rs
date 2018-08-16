@@ -297,7 +297,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
             sleep(Duration::from_millis(500));
             let current_balance_err = client.poll_get_balance(&id.pubkey());
             println!("current balance {:?}", current_balance_err);
-            let current_balance = current_balance_err.expect("current balance to be valid");
+            current_balance = current_balance_err.expect("current balance to be valid");
             if starting_balance != current_balance {
                 break;
             }
