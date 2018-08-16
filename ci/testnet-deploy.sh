@@ -281,7 +281,7 @@ client_start() {
               echo 'https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}' \
                 | xargs curl --max-time 5 -XPOST --data-binary 'testnet-deploy,name=$netBasename clientexit=1'; \
               echo Error: bench-tps should never exit | tee -a /tmp/solana.log; \
-          done \
+          done; \
           bash \
         \"; \
       sleep 2; \
