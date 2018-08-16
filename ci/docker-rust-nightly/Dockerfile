@@ -1,6 +1,6 @@
 FROM rustlang/rust:nightly
 
-RUN cargo install --force clippy cargo-cov && \
+RUN rustup component add clippy-preview --toolchain=nightly && \
     echo deb http://ftp.debian.org/debian stretch-backports main >> /etc/apt/sources.list && \
     apt update && \
     apt install -y \
