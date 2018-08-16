@@ -22,4 +22,4 @@ echo --- ci/localnet-sanity.sh
   USE_INSTALL=1 ci/localnet-sanity.sh
 )
 
-_ ci/audit.sh
+_ ci/audit.sh || true
