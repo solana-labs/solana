@@ -42,7 +42,6 @@ use window::{SharedWindow, WindowIndex};
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
-const GOSSIP_PURGE_MILLIS: u64 = 15000;
 
 /// minimum membership table size before we start purging dead nodes
 const MIN_TABLE_SIZE: usize = 2;
@@ -255,8 +254,6 @@ pub struct Crdt {
     /// The value of the remote update index that I have last seen
     /// This Node will ask external nodes for updates since the value in this list
     pub remote: HashMap<Pubkey, u64>,
-    /// last time the public key had sent us a message
-    pub alive: HashMap<Pubkey, u64>,
     pub update_index: u64,
     pub me: Pubkey,
     /// last time we heard from anyone getting a message fro this public key
@@ -309,7 +306,6 @@ impl Crdt {
             table: HashMap::new(),
             local: HashMap::new(),
             remote: HashMap::new(),
-            alive: HashMap::new(),
             external_liveness: HashMap::new(),
             me: me.id,
             update_index: 1,
@@ -352,66 +348,6 @@ impl Crdt {
         self.external_liveness.get(key)
     }
 
-    pub fn insert_vote(&mut self, pubkey: &Pubkey, v: &Vote, last_id: Hash) {
-        if self.table.get(pubkey).is_none() {
-            warn!(
-                "{:x}: VOTE for unknown id: {:x}",
-                self.debug_id(),
-                make_debug_id(pubkey)
-            );
-            return;
-        }
-        if v.contact_info_version > self.table[pubkey].contact_info.version {
-            warn!(
-                "{:x}: VOTE for new address version from: {:x} ours: {} vote: {:?}",
-                self.debug_id(),
-                make_debug_id(pubkey),
-                self.table[pubkey].contact_info.version,
-                v,
-            );
-            return;
-        }
-        if *pubkey == self.my_data().leader_id {
-            info!(
-                "{:x}: LEADER_VOTED! {:x}",
-                self.debug_id(),
-                make_debug_id(&pubkey)
-            );
-            inc_new_counter_info!("crdt-insert_vote-leader_voted", 1);
-        }
-
-        if v.version <= self.table[pubkey].version {
-            debug!(
-                "{:x}: VOTE for old version: {:x}",
-                self.debug_id(),
-                make_debug_id(&pubkey)
-            );
-            self.update_liveness(*pubkey);
-            return;
-        } else {
-            let mut data = self.table[pubkey].clone();
-            data.version = v.version;
-            data.ledger_state.last_id = last_id;
-
-            debug!(
-                "{:x}: INSERTING VOTE! for {:x}",
-                self.debug_id(),
-                data.debug_id()
-            );
-            self.update_liveness(data.id);
-            self.insert(&data);
-        }
-    }
-    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
-        inc_new_counter_info!("crdt-vote-count", votes.len());
-        if !votes.is_empty() {
-            info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
-        }
-        for v in votes {
-            self.insert_vote(&v.0, &v.1, v.2);
-        }
-    }
-
     pub fn insert(&mut self, v: &NodeInfo) -> usize {
         // TODO check that last_verified types are always increasing
         //update the peer table
@@ -431,7 +367,6 @@ impl Crdt {
             self.update_index += 1;
             let _ = self.table.insert(v.id, v.clone());
             let _ = self.local.insert(v.id, self.update_index);
-            self.update_liveness(v.id);
             1
         } else {
             trace!(
@@ -445,22 +380,11 @@ impl Crdt {
         }
     }
 
-    fn update_liveness(&mut self, id: Pubkey) {
-        //update the liveness table
-        let now = timestamp();
-        trace!(
-            "{:x} updating liveness {:x} to {}",
-            self.debug_id(),
-            make_debug_id(&id),
-            now
-        );
-        *self.alive.entry(id).or_insert(now) = now;
-    }
     /// purge old validators
     /// TODO: we need a robust membership protocol
     /// http://asc.di.fct.unl.pt/~jleitao/pdf/dsn07-leitao.pdf
     /// challenging part is that we are on a permissionless network
-    pub fn purge(&mut self, now: u64) {
+    pub fn purge_node(&mut self, id: &Pubkey) {
         if self.table.len() <= MIN_TABLE_SIZE {
             trace!("purge: skipped: table too small: {}", self.table.len());
             return;
@@ -469,84 +393,25 @@ impl Crdt {
             trace!("purge: skipped: no leader_data");
             return;
         }
+
         let leader_id = self.leader_data().unwrap().id;
-        let limit = GOSSIP_PURGE_MILLIS;
-        let dead_ids: Vec<Pubkey> = self
-            .alive
-            .iter()
-            .filter_map(|(&k, v)| {
-                if k != self.me && (now - v) > limit {
-                    Some(k)
-                } else {
-                    trace!(
-                        "{:x} purge skipped {:x} {} {}",
-                        self.debug_id(),
-                        make_debug_id(&k),
-                        now - v,
-                        limit
-                    );
-                    None
-                }
-            })
-            .collect();
-
-        inc_new_counter_info!("crdt-purge-count", dead_ids.len());
-
-        for id in &dead_ids {
-            self.alive.remove(id);
-            self.table.remove(id);
-            self.remote.remove(id);
-            self.local.remove(id);
-            self.external_liveness.remove(id);
-            info!("{:x}: PURGE {:x}", self.debug_id(), make_debug_id(id));
-            for map in self.external_liveness.values_mut() {
-                map.remove(id);
-            }
-            if *id == leader_id {
-                info!(
-                    "{:x}: PURGE LEADER {:x}",
-                    self.debug_id(),
-                    make_debug_id(id),
-                );
-                inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
-                self.set_leader(Pubkey::default());
-            }
+        self.table.remove(id);
+        self.remote.remove(id);
+        self.local.remove(id);
+        self.external_liveness.remove(id);
+        info!("{:x}: PURGE {:x}", self.debug_id(), make_debug_id(id));
+        for map in self.external_liveness.values_mut() {
+            map.remove(id);
         }
-    }
-
-    /// compute broadcast table
-    /// # Remarks
-    pub fn compute_broadcast_table(&self) -> Vec<NodeInfo> {
-        let live: Vec<_> = self.alive.iter().collect();
-        //thread_rng().shuffle(&mut live);
-        let me = &self.table[&self.me];
-        let cloned_table: Vec<NodeInfo> = live
-            .iter()
-            .map(|x| &self.table[x.0])
-            .filter(|v| {
-                if me.id == v.id {
-                    //filter myself
-                    false
-                } else if !(Self::is_valid_address(v.contact_info.tvu)) {
-                    trace!(
-                        "{:x}:broadcast skip not listening {:x}",
-                        me.debug_id(),
-                        v.debug_id()
-                    );
-                    false
-                } else {
-                    trace!(
-                        "{:x}:broadcast node {:x} {}",
-                        me.debug_id(),
-                        v.debug_id(),
-                        v.contact_info.tvu
-                    );
-                    true
-                }
-            })
-            .cloned()
-            .collect();
-        cloned_table
+        if *id == leader_id {
+            info!(
+                "{:x}: PURGE LEADER {:x}",
+                self.debug_id(),
+                make_debug_id(id),
+            );
+            inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
+            self.set_leader(Pubkey::default());
+        }
     }
 
     /// broadcast messages from the leader to layer 1 nodes
@@ -946,7 +811,6 @@ impl Crdt {
                 if exit.load(Ordering::Relaxed) {
                     return;
                 }
-                obj.write().unwrap().purge(timestamp());
                 //TODO: possibly tune this parameter
                 //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
                 obj.write().unwrap().update_leader();
@@ -1090,7 +954,6 @@ impl Crdt {
                 {
                     let mut me = obj.write().unwrap();
                     me.insert(&from_rd);
-                    me.update_liveness(from_rd.id);
                 }
                 if len < 1 {
                     let me = obj.read().unwrap();
@@ -1365,17 +1228,14 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{
-        parse_port_or_addr, Crdt, CrdtError, NodeInfo, Protocol, GOSSIP_PURGE_MILLIS,
-        GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
-    };
+    use crdt::{parse_port_or_addr, Crdt, CrdtError, NodeInfo};
     use entry::Entry;
     use hash::{hash, Hash};
     use ledger::{LedgerWindow, LedgerWriter};
     use logger;
     use packet::BlobRecycler;
     use result::Error;
-    use signature::{Keypair, KeypairUtil, Pubkey};
+    use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -1508,17 +1368,14 @@ mod tests {
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
-        assert!(!crdt.alive.contains_key(&d.id));
 
         d.version = 2;
         crdt.insert(&d);
-        let liveness = crdt.alive[&d.id];
         assert_eq!(crdt.table[&d.id].version, 2);
 
         d.version = 1;
         crdt.insert(&d);
         assert_eq!(crdt.table[&d.id].version, 2);
-        assert_eq!(liveness, crdt.alive[&d.id]);
 
         // Ensure liveness will be updated for version 3
         sleep(Duration::from_millis(1));
@@ -1526,7 +1383,6 @@ mod tests {
         d.version = 3;
         crdt.insert(&d);
         assert_eq!(crdt.table[&d.id].version, 3);
-        assert!(liveness < crdt.alive[&d.id]);
     }
     #[test]
     fn test_new_vote() {
@@ -1553,36 +1409,6 @@ mod tests {
         };
         let expected = (v, crdt.table[&leader.id].contact_info.tpu);
         assert_eq!(crdt.new_vote(Hash::default()).unwrap(), expected);
-    }
-
-    #[test]
-    fn test_insert_vote() {
-        let d = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone()).unwrap();
-        assert_eq!(crdt.table[&d.id].version, 0);
-        let vote_same_version = Vote {
-            version: d.version,
-            contact_info_version: 0,
-        };
-        crdt.insert_vote(&d.id, &vote_same_version, Hash::default());
-        assert_eq!(crdt.table[&d.id].version, 0);
-
-        let vote_new_version_new_addrs = Vote {
-            version: d.version + 1,
-            contact_info_version: 1,
-        };
-        crdt.insert_vote(&d.id, &vote_new_version_new_addrs, Hash::default());
-        //should be dropped since the address is newer then we know
-        assert_eq!(crdt.table[&d.id].version, 0);
-
-        let vote_new_version_old_addrs = Vote {
-            version: d.version + 1,
-            contact_info_version: 0,
-        };
-        crdt.insert_vote(&d.id, &vote_new_version_old_addrs, Hash::default());
-        //should be accepted, since the update is for the same address field as the one we know
-        assert_eq!(crdt.table[&d.id].version, 1);
     }
     fn sorted(ls: &Vec<NodeInfo>) -> Vec<NodeInfo> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();
@@ -1816,72 +1642,6 @@ mod tests {
         assert!(one && two);
     }
 
-    #[test]
-    fn purge_test() {
-        logger::setup();
-        let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        let nxt = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
-        assert_ne!(me.id, nxt.id);
-        crdt.set_leader(me.id);
-        crdt.insert(&nxt);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-        let now = crdt.alive[&nxt.id];
-        crdt.purge(now);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        crdt.purge(now + GOSSIP_PURGE_MILLIS);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        let nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
-        assert_ne!(me.id, nxt2.id);
-        assert_ne!(nxt.id, nxt2.id);
-        crdt.insert(&nxt2);
-        while now == crdt.alive[&nxt2.id] {
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
-            crdt.insert(&nxt2);
-        }
-        let len = crdt.table.len() as u64;
-        assert!((MIN_TABLE_SIZE as u64) < len);
-        crdt.purge(now + GOSSIP_PURGE_MILLIS);
-        assert_eq!(len as usize, crdt.table.len());
-        trace!("purging");
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        assert_eq!(len as usize - 1, crdt.table.len());
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-    }
-    #[test]
-    fn purge_leader_test() {
-        logger::setup();
-        let me = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        let nxt = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
-        assert_ne!(me.id, nxt.id);
-        crdt.insert(&nxt);
-        crdt.set_leader(nxt.id);
-        let now = crdt.alive[&nxt.id];
-        let mut nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
-        crdt.insert(&nxt2);
-        while now == crdt.alive[&nxt2.id] {
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
-            nxt2.version = nxt2.version + 1;
-            crdt.insert(&nxt2);
-        }
-        let len = crdt.table.len() as u64;
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        assert_eq!(len as usize - 1, crdt.table.len());
-        assert_eq!(crdt.my_data().leader_id, Pubkey::default());
-        assert!(crdt.leader_data().is_none());
-    }
-
     /// test window requests respond with the right blob, and do not overrun
     #[test]
     fn run_window_request() {
@@ -2004,43 +1764,6 @@ mod tests {
         crdt.insert(&leader1);
         crdt.update_leader();
         assert_eq!(crdt.my_data().leader_id, leader1.id);
-    }
-
-    /// Validates the node that sent Protocol::ReceiveUpdates gets its
-    /// liveness updated, but not if the node sends Protocol::ReceiveUpdates
-    /// to itself.
-    #[test]
-    fn protocol_requestupdate_alive() {
-        logger::setup();
-        let window = default_window();
-        let recycler = BlobRecycler::default();
-
-        let node = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        let node_with_same_addr = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
-        assert_ne!(node.id, node_with_same_addr.id);
-        let node_with_diff_addr = NodeInfo::new_leader(&"127.0.0.1:4321".parse().unwrap());
-
-        let crdt = Crdt::new(node.clone()).expect("Crdt::new");
-        assert_eq!(crdt.alive.len(), 0);
-
-        let obj = Arc::new(RwLock::new(crdt));
-
-        let request = Protocol::RequestUpdates(1, node.clone());
-        assert!(Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler).is_none());
-
-        let request = Protocol::RequestUpdates(1, node_with_same_addr.clone());
-        assert!(Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler).is_none());
-
-        let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
-        Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler);
-
-        let me = obj.write().unwrap();
-
-        // |node| and |node_with_same_addr| should not be in me.alive, but
-        // |node_with_diff_addr| should now be.
-        assert!(!me.alive.contains_key(&node.id));
-        assert!(!me.alive.contains_key(&node_with_same_addr.id));
-        assert!(me.alive[&node_with_diff_addr.id] > 0);
     }
 
     #[test]

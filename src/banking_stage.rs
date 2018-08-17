@@ -3,8 +3,10 @@
 //! can do its processing in parallel with signature verification on the GPU.
 
 use bank::Bank;
+use bank::BankError;
 use bincode::deserialize;
 use counter::Counter;
+use crdt::Crdt;
 use log::Level;
 use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
@@ -14,12 +16,13 @@ use service::Service;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::Transaction;
+use transaction::{Instruction, Transaction};
+use voting_nodes::VotingNodes;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -35,6 +38,8 @@ impl BankingStage {
         bank: Arc<Bank>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: PacketRecycler,
+        crdt: Arc<RwLock<Crdt>>,
+        voting_nodes: Arc<RwLock<VotingNodes>>,
     ) -> (Self, Receiver<Signal>) {
         let (signal_sender, signal_receiver) = channel();
         let thread_hdl = Builder::new()
@@ -45,6 +50,8 @@ impl BankingStage {
                     &verified_receiver,
                     &signal_sender,
                     &packet_recycler,
+                    &crdt,
+                    &voting_nodes,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -77,6 +84,8 @@ impl BankingStage {
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         signal_sender: &Sender<Signal>,
         packet_recycler: &PacketRecycler,
+        crdt: &Arc<RwLock<Crdt>>,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
@@ -110,7 +119,23 @@ impl BankingStage {
 
             debug!("process_transactions");
             let results = bank.process_transactions(transactions);
-            let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
+            let transactions = results
+                .into_iter()
+                .filter_map(|x| match x {
+                    Err(BankError::AccountNotFound(tx_box)) => {
+                        let tx = *tx_box;
+                        if let Instruction::NewVote(ref vote) = tx.instruction {
+                            error!("Banking Stage:: Vote failed");
+                            let mut voting_node = voting_nodes.write().unwrap();
+                            voting_node.insert_vote(&crdt, &tx.from, &vote, tx.last_id);
+                        }
+                        None
+                    }
+                    Ok(tx) => Some(tx),
+                    Err(_) => None,
+                })
+                .collect();
+
             signal_sender.send(Signal::Transactions(transactions))?;
             debug!("done process_transactions");
 

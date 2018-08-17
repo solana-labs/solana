@@ -18,6 +18,7 @@ use std::thread::{JoinHandle, Result};
 use tpu::Tpu;
 use tvu::Tvu;
 use untrusted::Input;
+use voting_nodes::VotingNodes;
 use window;
 
 pub struct Fullnode {
@@ -211,6 +212,7 @@ impl Fullnode {
             window::new_window_from_entries(ledger_tail, entry_height, &node.data, &blob_recycler);
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
+        let voting_nodes = Arc::new(RwLock::new(VotingNodes::new(crdt.clone(), exit.clone())));
 
         let (tpu, blob_receiver) = Tpu::new(
             keypair,
@@ -222,6 +224,7 @@ impl Fullnode {
             exit.clone(),
             ledger_path,
             sigverify_disabled,
+            &voting_nodes,
         );
         thread_hdls.extend(tpu.thread_hdls());
         let ncp = Ncp::new(
@@ -241,6 +244,7 @@ impl Fullnode {
             entry_height,
             blob_recycler.clone(),
             blob_receiver,
+            voting_nodes,
         );
         thread_hdls.extend(broadcast_stage.thread_hdls());
 
@@ -309,6 +313,7 @@ impl Fullnode {
         crdt.write()
             .expect("'crdt' write lock before insert() in pub fn replicate")
             .insert(&entry_point);
+        let voting_nodes = Arc::new(RwLock::new(VotingNodes::new(crdt.clone(), exit.clone())));
 
         let ncp = Ncp::new(
             &crdt,
@@ -330,6 +335,7 @@ impl Fullnode {
             node.sockets.retransmit,
             ledger_path,
             exit.clone(),
+            voting_nodes,
         );
         thread_hdls.extend(tvu.thread_hdls());
         thread_hdls.extend(ncp.thread_hdls());

@@ -38,7 +38,7 @@ pub const VERIFY_BLOCK_SIZE: usize = 16;
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound(Pubkey),
+    AccountNotFound(Box<Transaction>),
 
     /// The requested debit from `Pubkey` has the potential to draw the balance
     /// below zero. This can occur when a debit and credit are processed in parallel.
@@ -262,7 +262,7 @@ impl Bank {
                 } else {
                     inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
                 }
-                return Err(BankError::AccountNotFound(tx.from));
+                return Err(BankError::AccountNotFound(Box::new(tx.clone())));
             }
             let bal = option.unwrap();
 
@@ -682,9 +682,11 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
+        let tx = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
+        let signature = tx.signature;
         assert_eq!(
-            bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
-            Err(BankError::AccountNotFound(keypair.pubkey()))
+            bank.process_transaction(&tx).map(|_| signature),
+            Err(BankError::AccountNotFound(Box::new(tx)))
         );
         assert_eq!(bank.transaction_count(), 0);
     }

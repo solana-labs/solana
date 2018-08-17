@@ -22,6 +22,7 @@ use std::time::Duration;
 use streamer::{responder, BlobReceiver, BlobSender};
 use vote_stage::send_leader_vote;
 use voting::entries_to_votes;
+use voting_nodes::VotingNodes;
 
 pub struct WriteStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -37,11 +38,12 @@ impl WriteStage {
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
         entry_receiver: &Receiver<Vec<Entry>>,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
 
         let votes = entries_to_votes(&entries);
-        crdt.write().unwrap().insert_votes(&votes);
+        voting_nodes.write().unwrap().insert_votes(crdt, &votes);
 
         ledger_writer.write_entries(entries.clone())?;
 
@@ -76,6 +78,7 @@ impl WriteStage {
         blob_recycler: BlobRecycler,
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
+        voting_nodes: Arc<RwLock<VotingNodes>>,
     ) -> (Self, BlobReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -102,6 +105,7 @@ impl WriteStage {
                         &blob_sender,
                         &blob_recycler,
                         &entry_receiver,
+                        &voting_nodes,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,

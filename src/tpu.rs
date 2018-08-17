@@ -40,6 +40,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
+use voting_nodes::VotingNodes;
 use write_stage::WriteStage;
 
 pub struct Tpu {
@@ -61,6 +62,7 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
     ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
 
@@ -70,8 +72,13 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, signal_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, packet_recycler.clone());
+        let (banking_stage, signal_receiver) = BankingStage::new(
+            bank.clone(),
+            verified_receiver,
+            packet_recycler.clone(),
+            crdt.clone(),
+            voting_nodes.clone(),
+        );
 
         let (record_stage, entry_receiver) = match tick_duration {
             Some(tick_duration) => {
@@ -87,6 +94,7 @@ impl Tpu {
             blob_recycler.clone(),
             ledger_path,
             entry_receiver,
+            voting_nodes.clone(),
         );
 
         let tpu = Tpu {

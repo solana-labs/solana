@@ -43,7 +43,11 @@ pub fn create_new_signed_vote_blob(
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
-        debug!("voting on {:?}", &last_id.as_ref()[..8]);
+        debug!(
+            "{:x} voting on {:?}",
+            wcrdt.debug_id(),
+            &last_id.as_ref()[..8]
+        );
         wcrdt.new_vote(*last_id)
     }?;
     let tx = Transaction::new_vote(&keypair, vote, *last_id, 0);
@@ -246,10 +250,11 @@ pub mod tests {
     use packet::BlobRecycler;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use transaction::{Transaction, Vote};
+    use voting_nodes::VotingNodes;
 
     /// Ensure the VoteStage issues votes at the expected cadence
     #[test]
@@ -301,14 +306,17 @@ pub mod tests {
         // Create a leader
         let leader_data = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
-        let mut leader_crdt = Crdt::new(leader_data).unwrap();
+        let leader_crdt = Crdt::new(leader_data).unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let leader = Arc::new(RwLock::new(leader_crdt));
+        let mut voting_nodes = VotingNodes::new(leader.clone(), exit.clone());
 
         // give the leader some tokens
         let give_leader_tokens_tx =
             Transaction::new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
         bank.process_transaction(&give_leader_tokens_tx).unwrap();
 
-        leader_crdt.set_leader(leader_pubkey);
+        leader.write().unwrap().set_leader(leader_pubkey);
 
         // Insert 7 agreeing validators / 3 disagreeing
         // and votes for new last_id
@@ -325,12 +333,11 @@ pub mod tests {
                 validator.ledger_state.last_id = entry.id;
             }
 
-            leader_crdt.insert(&validator);
+            leader.write().unwrap().insert(&validator);
             trace!("validator id: {:?}", validator.id);
 
-            leader_crdt.insert_vote(&validator.id, &vote, entry.id);
+            voting_nodes.insert_vote(&leader, &validator.id, &vote, entry.id);
         }
-        let leader = Arc::new(RwLock::new(leader_crdt));
         let blob_recycler = BlobRecycler::default();
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
@@ -368,10 +375,7 @@ pub mod tests {
             leader.write().unwrap().insert(&validator);
             trace!("validator id: {:?}", validator.id);
 
-            leader
-                .write()
-                .unwrap()
-                .insert_vote(&validator.id, &vote, entry.id);
+            voting_nodes.insert_vote(&leader, &validator.id, &vote, entry.id);
         }
 
         last_vote = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
@@ -397,6 +401,7 @@ pub mod tests {
         let blob = vote_blob.unwrap().pop_front().unwrap();
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
+        exit.store(true, Ordering::Relaxed);
     }
 
     #[test]
