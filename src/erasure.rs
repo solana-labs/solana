@@ -508,6 +508,12 @@ pub fn recover(
         if let Some(b) = window[j].coding.clone() {
             if size.is_none() {
                 size = Some(b.read().unwrap().meta.size - BLOB_HEADER_SIZE);
+                trace!(
+                    "{:x} recover size {} from {}",
+                    debug_id,
+                    size.unwrap(),
+                    i as u64 + block_start_idx
+                );
             }
             blobs.push(b);
         } else {
@@ -518,12 +524,13 @@ pub fn recover(
             erasures.push(((i - coding_start) + NUM_DATA) as i32);
         }
     }
+
     // now that we have size (from coding), zero out data blob tails
+    let size = size.unwrap();
     for i in block_start..block_end {
         let j = i % window.len();
 
         if let Some(b) = &window[j].data {
-            let size = size.unwrap();
             let mut b_wl = b.write().unwrap();
             for i in b_wl.meta.size..size {
                 b_wl.data[i] = 0;
@@ -537,7 +544,7 @@ pub fn recover(
         "erasures[]: {:x} {:?} data_size: {}",
         debug_id,
         erasures,
-        size.unwrap(),
+        size,
     );
     //lock everything for write
     for b in &blobs {
@@ -550,10 +557,10 @@ pub fn recover(
         for (i, l) in locks.iter_mut().enumerate() {
             if i < NUM_DATA {
                 trace!("{:x} pushing data: {}", debug_id, i);
-                data_ptrs.push(&mut l.data[..size.unwrap()]);
+                data_ptrs.push(&mut l.data[..size]);
             } else {
                 trace!("{:x} pushing coding: {}", debug_id, i);
-                coding_ptrs.push(&mut l.data_mut()[..size.unwrap()]);
+                coding_ptrs.push(&mut l.data_mut()[..size]);
             }
         }
         trace!(
@@ -580,7 +587,7 @@ pub fn recover(
             data_size = locks[n].get_data_size().unwrap();
             data_size -= BLOB_HEADER_SIZE as u64;
         } else {
-            data_size = size.unwrap() as u64;
+            data_size = size as u64;
             idx -= NUM_CODING as u64;
             locks[n].set_index(idx).unwrap();
         }
@@ -596,6 +603,12 @@ pub fn recover(
             locks[n].data()[0]
         );
         if data_size > BLOB_DATA_SIZE as u64 {
+            trace!(
+                "{:x} corrupt blob[{}] data_size: {}",
+                debug_id,
+                idx,
+                data_size
+            );
             corrupt = true;
         }
     }
