@@ -9,10 +9,12 @@ extern crate solana;
 
 use clap::{App, Arg, SubCommand};
 use solana::client::mk_client;
-use solana::crdt::NodeInfo;
+use solana::crdt::{Crdt, NodeInfo, TestNode};
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
+use solana::ncp::Ncp;
+use solana::service::Service;
 use solana::signature::{read_keypair, Keypair, KeypairUtil, Pubkey, Signature};
 use solana::thin_client::ThinClient;
 use solana::wallet::request_airdrop;
@@ -20,8 +22,10 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 enum WalletCommand {
     Address,
@@ -35,6 +39,7 @@ enum WalletCommand {
 enum WalletError {
     CommandNotRecognized(String),
     BadParameter(String),
+    NoNode(String),
 }
 
 impl fmt::Display for WalletError {
@@ -162,6 +167,35 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             err, id_path
         )))
     })?;
+
+    // Set up gossip functionality
+    let exit = Arc::new(AtomicBool::new(false));
+    let testnode = TestNode::new_localhost();
+    let extra_data = testnode.data.clone();
+    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
+    let window = Arc::new(RwLock::new(vec![]));
+    let ncp = Ncp::new(
+        &crdt.clone(),
+        window,
+        None,
+        testnode.sockets.gossip,
+        testnode.sockets.gossip_send,
+        exit.clone(),
+    ).unwrap();
+    let leader_entry_point = NodeInfo::new_entry_point(leader.contact_info.ncp);
+    crdt.write().unwrap().insert(&leader_entry_point);
+
+    let now = Instant::now();
+    // Block until leader's correct contact info is received
+    while crdt.read().unwrap().leader_data().is_none() {
+        if now.elapsed() > Duration::new(10, 0) {
+            Err(WalletError::NoNode("No leader detected".to_string()))?;
+        }
+    }
+
+    exit.store(true, Ordering::Relaxed);
+    ncp.join().unwrap();
+    let leader = crdt.read().unwrap().leader_data().unwrap().clone();
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
