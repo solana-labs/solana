@@ -45,9 +45,6 @@ pub struct Entry {
     ///  2. this Entry can be left out of the bank's entry_id cache for
     ///       purposes of duplicate rejection
     pub has_more: bool,
-
-    /// Erasure requires that Entry be a multiple of 4 bytes in size
-    pad: [u8; 3],
 }
 
 impl Entry {
@@ -65,7 +62,6 @@ impl Entry {
             id,
             transactions,
             has_more,
-            pad: [0, 0, 0],
         };
 
         let size = serialized_size(&entry).unwrap();
@@ -116,7 +112,6 @@ impl Entry {
             id: Hash::default(),
             transactions,
             has_more: false,
-            pad: [0, 0, 0],
         }).unwrap() <= BLOB_DATA_SIZE as u64
     }
 
@@ -142,7 +137,6 @@ impl Entry {
             id: *id,
             transactions: vec![],
             has_more: false,
-            pad: [0, 0, 0],
         }
     }
 
@@ -209,7 +203,6 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
         id: next_hash(start_hash, num_hashes, &transactions),
         transactions,
         has_more: false,
-        pad: [0, 0, 0],
     }
 }
 
