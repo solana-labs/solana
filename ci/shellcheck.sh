@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 
 set -x
 find . -name "*.sh" \
+    -not -regex ".*/ci/semver_bash/.*" \
     -not -regex ".*/.cargo/.*" \
     -not -regex ".*/node_modules/.*" \
     -not -regex ".*/target/.*" \
