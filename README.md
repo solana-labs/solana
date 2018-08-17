@@ -327,6 +327,11 @@ Run the benchmarks:
 $ cargo +nightly bench --features="unstable"
 ```
 
+Release Process
+---
+The release process for this project is described [here](rfcs/rfc-005-branches-tags-and-channels.md).
+
+
 Code coverage
 ---
 
