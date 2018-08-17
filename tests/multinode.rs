@@ -677,11 +677,9 @@ fn test_multi_node_dynamic_network() {
             let mut num_nodes_behind = 0i64;
             validators.retain(|server| {
                 let mut client = mk_client(&server.0);
-                trace!("{:x} polling for signature", server.0.debug_id());
-                num_nodes_behind += match client.poll_for_signature(&sig) {
-                    Ok(_) => 0,
-                    Err(_) => 1,
-                };
+                trace!("{:x} checking signature", server.0.debug_id());
+                num_nodes_behind += if client.check_signature(&sig) { 0 } else { 1 };
+                server.1.exit();
                 true
             });
 
