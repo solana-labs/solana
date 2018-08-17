@@ -84,7 +84,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
     let mut data_arg = Vec::with_capacity(data.len());
     for block in data {
         if block_len != block.len() as i32 {
-            trace!(
+            error!(
                 "data block size incorrect {} expected {}",
                 block.len(),
                 block_len
@@ -96,7 +96,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
     let mut coding_arg = Vec::with_capacity(coding.len());
     for mut block in coding {
         if block_len != block.len() as i32 {
-            trace!(
+            error!(
                 "coding block size incorrect {} expected {}",
                 block.len(),
                 block_len
@@ -587,11 +587,9 @@ pub fn recover(
             data_size = locks[n].get_data_size().unwrap() as usize;
             data_size -= BLOB_HEADER_SIZE;
             if data_size > BLOB_DATA_SIZE {
-                trace!(
+                error!(
                     "{:x} corrupt data blob[{}] data_size: {}",
-                    debug_id,
-                    idx,
-                    data_size
+                    debug_id, idx, data_size
                 );
                 corrupt = true;
             }
@@ -601,11 +599,9 @@ pub fn recover(
             locks[n].set_index(idx).unwrap();
 
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
-                trace!(
+                error!(
                     "{:x} corrupt coding blob[{}] data_size: {}",
-                    debug_id,
-                    idx,
-                    data_size
+                    debug_id, idx, data_size
                 );
                 corrupt = true;
             }

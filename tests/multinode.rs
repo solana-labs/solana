@@ -643,7 +643,8 @@ fn test_multi_node_dynamic_network() {
 
         expected_balance += 500;
 
-        assert!(client.poll_for_signature(&sig).is_ok());
+        let e = client.poll_for_signature(&sig);
+        assert!(e.is_ok(), "err: {:?}", e);
 
         let now = Instant::now();
         let mut finality = client.get_finality();
