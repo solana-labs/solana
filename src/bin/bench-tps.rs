@@ -275,7 +275,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
-    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+    let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(starting_balance);
 
     if starting_balance < tx_count {
