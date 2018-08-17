@@ -165,6 +165,9 @@ impl Reset for Blob {
     fn reset(&mut self) {
         self.meta = Meta::default();
         self.data[..BLOB_HEADER_SIZE].copy_from_slice(&[0u8; BLOB_HEADER_SIZE]);
+        for i in 0..BLOB_SIZE {
+            self.data[i] = 0;
+        }
     }
 }
 
