@@ -622,7 +622,7 @@ mod test {
     use crdt;
     use erasure;
     use logger;
-    use packet::{BlobRecycler, BLOB_HEADER_SIZE, BLOB_SIZE};
+    use packet::{BlobRecycler, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
     use signature::Keypair;
     use signature::KeypairUtil;
@@ -737,7 +737,12 @@ mod test {
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             // generate a random length, multiple of 4 between 8 and 32
-            let data_len = (thread_rng().gen_range(2, 8) * 4) + 1;
+            let data_len = if i == 3 {
+                BLOB_DATA_SIZE
+            } else {
+                (thread_rng().gen_range(2, 8) * 4) + 1
+            };
+
             eprintln!("data_len of {} is {}", i, data_len);
             w.set_size(data_len);
 
@@ -786,34 +791,34 @@ mod test {
         }
     }
 
+    fn pollute_recycler(blob_recycler: &BlobRecycler) {
+        let mut blobs = Vec::with_capacity(WINDOW_SIZE * 2);
+        for _ in 0..WINDOW_SIZE * 10 {
+            let blob = blob_recycler.allocate();
+            {
+                let mut b_l = blob.write().unwrap();
+
+                for i in 0..BLOB_SIZE {
+                    b_l.data[i] = thread_rng().gen();
+                }
+                // some of the blobs should previously been used for coding
+                if thread_rng().gen_bool(erasure::NUM_CODING as f64 / erasure::NUM_DATA as f64) {
+                    b_l.set_coding().unwrap();
+                }
+            }
+            blobs.push(blob);
+        }
+        for blob in blobs {
+            blob_recycler.recycle(blob);
+        }
+    }
+
     #[test]
     pub fn test_window_recover_basic() {
         logger::setup();
         let blob_recycler = BlobRecycler::default();
 
-        {
-            let mut blobs = Vec::with_capacity(WINDOW_SIZE * 2);
-            for _ in 0..WINDOW_SIZE * 10 {
-                let blob = blob_recycler.allocate();
-
-                {
-                    let mut b_l = blob.write().unwrap();
-
-                    for i in 0..BLOB_SIZE {
-                        b_l.data[i] = thread_rng().gen();
-                    }
-                    // some of the blobs should previously been used for coding
-                    if thread_rng().gen_bool(erasure::NUM_CODING as f64 / erasure::NUM_DATA as f64)
-                    {
-                        b_l.set_coding().unwrap();
-                    }
-                }
-                blobs.push(blob);
-            }
-            for blob in blobs {
-                blob_recycler.recycle(blob);
-            }
-        }
+        pollute_recycler(&blob_recycler);
 
         // Generate a window
         let offset = 0;
