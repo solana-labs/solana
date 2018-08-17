@@ -80,7 +80,7 @@ else
     fi
 
     # Locate perf libs downloaded by |./fetch-perf-libs.sh|
-    LD_LIBRARY_PATH=$(cd "$here" && dirname "$PWD"):$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=$(cd "$here" && dirname "$PWD"/target/perf-libs):$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH
   fi
 fi
