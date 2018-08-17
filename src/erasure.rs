@@ -584,16 +584,35 @@ pub fn recover(
 
         let mut data_size;
         if n < NUM_DATA {
-            data_size = locks[n].get_data_size().unwrap();
-            data_size -= BLOB_HEADER_SIZE as u64;
+            data_size = locks[n].get_data_size().unwrap() as usize;
+            data_size -= BLOB_HEADER_SIZE;
+            if data_size > BLOB_DATA_SIZE {
+                trace!(
+                    "{:x} corrupt data blob[{}] data_size: {}",
+                    debug_id,
+                    idx,
+                    data_size
+                );
+                corrupt = true;
+            }
         } else {
-            data_size = size as u64;
+            data_size = size;
             idx -= NUM_CODING as u64;
             locks[n].set_index(idx).unwrap();
+
+            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+                trace!(
+                    "{:x} corrupt coding blob[{}] data_size: {}",
+                    debug_id,
+                    idx,
+                    data_size
+                );
+                corrupt = true;
+            }
         }
 
         locks[n].meta = meta.clone().unwrap();
-        locks[n].set_size(data_size as usize);
+        locks[n].set_size(data_size);
         trace!(
             "{:x} erasures[{}] ({}) size: {:x} data[0]: {}",
             debug_id,
@@ -602,15 +621,6 @@ pub fn recover(
             data_size,
             locks[n].data()[0]
         );
-        if data_size > BLOB_DATA_SIZE as u64 {
-            trace!(
-                "{:x} corrupt blob[{}] data_size: {}",
-                debug_id,
-                idx,
-                data_size
-            );
-            corrupt = true;
-        }
     }
     assert!(!corrupt, " {:x} ", debug_id);
 
