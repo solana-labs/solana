@@ -8,15 +8,18 @@ extern crate tokio_codec;
 
 use bincode::deserialize;
 use clap::{App, Arg};
-use solana::crdt::NodeInfo;
+use solana::crdt::{Crdt, NodeInfo, TestNode};
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::logger;
 use solana::metrics::set_panic_hook;
+use solana::ncp::Ncp;
+use solana::service::Service;
 use solana::signature::read_keypair;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
@@ -85,6 +88,30 @@ fn main() {
     } else {
         request_cap = None;
     }
+
+    // Set up gossip functionality
+    let exit = Arc::new(AtomicBool::new(false));
+    let testnode = TestNode::new_localhost();
+    let extra_data = testnode.data.clone();
+    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
+    let window = Arc::new(RwLock::new(vec![]));
+    let ncp = Ncp::new(
+        &crdt.clone(),
+        window,
+        None,
+        testnode.sockets.gossip,
+        testnode.sockets.gossip_send,
+        exit.clone(),
+    ).unwrap();
+    let leader_entry_point = NodeInfo::new_entry_point(leader.contact_info.ncp);
+    crdt.write().unwrap().insert(&leader_entry_point);
+
+    // Block until leader's correct contact info is received
+    while crdt.read().unwrap().leader_data().is_none() {}
+
+    exit.store(true, Ordering::Relaxed);
+    ncp.join().unwrap();
+    let leader = crdt.read().unwrap().leader_data().unwrap().clone();
 
     let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
 
