@@ -12,7 +12,7 @@ fi
 export RUST_BACKTRACE=1
 
 ./fetch-perf-libs.sh
-export LD_LIBRARY_PATH+=:$PWD
+export LD_LIBRARY_PATH=$PWD/target/perf-libs:$LD_LIBRARY_PATH
 
 export RUST_LOG=multinode=info
 

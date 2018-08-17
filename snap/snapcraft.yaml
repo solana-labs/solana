@@ -108,8 +108,8 @@ parts:
       rm -rf $SNAPCRAFT_PART_INSTALL/bin/*
       mv $SNAPCRAFT_PART_INSTALL/solana-fullnode $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode-cuda
       mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/
-      cp -f libJerasure.so $SNAPCRAFT_PART_INSTALL/usr/lib/libJerasure.so.2
-      cp -f libgf_complete.so $SNAPCRAFT_PART_INSTALL/usr/lib/libgf_complete.so.1
+      cp -f target/perf-libs/libJerasure.so $SNAPCRAFT_PART_INSTALL/usr/lib/libJerasure.so.2
+      cp -f target/perf-libs/libgf_complete.so $SNAPCRAFT_PART_INSTALL/usr/lib/libgf_complete.so.1
 
       # Build/install all other programs
       cargo install --root $SNAPCRAFT_PART_INSTALL --bins
