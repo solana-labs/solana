@@ -70,7 +70,10 @@ fi
 SNAP_INSTALL_CMD="sudo snap remove solana; $SNAP_INSTALL_CMD"
 
 EARLYOOM_INSTALL_CMD="\
-  wget -O install-earlyoom.sh https://raw.githubusercontent.com/solana-labs/solana/master/ci/install-earlyoom.sh; \
+  wget --retry-connrefused --waitretry=1 \
+    --read-timeout=20 --timeout=15 --tries=5 \
+    -O install-earlyoom.sh \
+    https://raw.githubusercontent.com/solana-labs/solana/master/ci/install-earlyoom.sh; \
   bash install-earlyoom.sh \
 "
 SNAP_INSTALL_CMD="$EARLYOOM_INSTALL_CMD; $SNAP_INSTALL_CMD"
