@@ -7,16 +7,19 @@ if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
   DRYRUN="echo"
 fi
 
-# BUILDKITE_TAG is the normal environment variable set by Buildkite.  However
-# when this script is run from a triggered pipeline, TRIGGERED_BUILDKITE_TAG is
-# used instead of BUILDKITE_TAG (due to Buildkite limitations that prevents
-# BUILDKITE_TAG from propagating through to triggered pipelines)
-if [[ -n "$BUILDKITE_TAG" || -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
+eval "$(ci/channel-info.sh)"
+
+if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
   SNAP_CHANNEL=stable
-elif [[ $BUILDKITE_BRANCH = master ]]; then
+elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
   SNAP_CHANNEL=edge
-else
+elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
   SNAP_CHANNEL=beta
+fi
+
+if [[ -z $SNAP_CHANNEL ]]; then
+  echo Unable to determine channel to publish into, exiting.
+  exit 0
 fi
 
 if [[ -z $DRYRUN ]]; then
