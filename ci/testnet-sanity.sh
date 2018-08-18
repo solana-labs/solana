@@ -22,10 +22,12 @@ if [[ -z $NO_LEDGER_VERIFY ]]; then
     # Note: here we assume this script is actually running on the leader node...
     sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
   else
-    echo "^^^ +++ Ledger verify skipped"
+    echo "^^^ +++"
+    echo "Ledger verify skipped"
   fi
 else
-  echo "^^^ +++ Ledger verify skipped (NO_LEDGER_VERIFY defined)"
+  echo "^^^ +++"
+  echo "Ledger verify skipped (NO_LEDGER_VERIFY defined)"
 fi
 
 echo "--- $NET_URL: wallet sanity"
@@ -57,13 +59,15 @@ if [[ -z $NO_VALIDATOR_SANITY ]]; then
   )
   wc -l validator.log
   if grep -C100 panic validator.log; then
-    echo "^^^ +++ Panic observed"
+    echo "^^^ +++"
+    echo "Panic observed"
     exit 1
   else
     echo "Validator log looks ok"
   fi
 else
-  echo "^^^ +++ Validator sanity disabled (NO_VALIDATOR_SANITY defined)"
+  echo "^^^ +++"
+  echo "Validator sanity disabled (NO_VALIDATOR_SANITY defined)"
 fi
 
 exit 0
