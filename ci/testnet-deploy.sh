@@ -47,7 +47,7 @@ if [[ -z $SOLANA_NET_NAME ]]; then
 fi
 
 : ${SOLANA_NET_NAME:?$SOLANA_NET_ENTRYPOINT}
-netBasename=${SOLANA_NET_NAME/-*/}
+netBasename=${SOLANA_NET_NAME/-testnet-solana-com/}
 if [[ $netBasename != testnet ]]; then
   netBasename="testnet-$netBasename"
 fi
