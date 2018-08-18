@@ -12,6 +12,8 @@ fi
 # used instead of BUILDKITE_TAG (due to Buildkite limitations that prevents
 # BUILDKITE_TAG from propagating through to triggered pipelines)
 if [[ -z "$BUILDKITE_TAG" && -z "$TRIGGERED_BUILDKITE_TAG" ]]; then
+  SNAP_CHANNEL=stable
+elif [[ $BUILDKITE_BRANCH = master ]]; then
   SNAP_CHANNEL=edge
 else
   SNAP_CHANNEL=beta
