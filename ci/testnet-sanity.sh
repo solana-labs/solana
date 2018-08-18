@@ -17,12 +17,15 @@ if [[ -z $EXPECTED_NODE_COUNT ]]; then
 fi
 
 echo "--- $NET_URL: verify ledger"
-if [[ -d /var/snap/solana/current/config/ledger ]]; then
-  # Note: here we assume this script is actually running on the leader node...
-  sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
+if [[ -z $NO_LEDGER_VERIFY ]]; then
+  if [[ -d /var/snap/solana/current/config/ledger ]]; then
+    # Note: here we assume this script is actually running on the leader node...
+    sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger verify
+  else
+    echo "^^^ +++ Ledger verify skipped"
+  fi
 else
-  echo "^^^ +++"
-  echo "Ledger verify skipped"
+  echo "^^^ +++ Ledger verify skipped (NO_LEDGER_VERIFY defined)"
 fi
 
 echo "--- $NET_URL: wallet sanity"
