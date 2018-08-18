@@ -45,11 +45,11 @@ if [[ ! -x /usr/bin/multilog ]]; then
   exit 1
 fi
 
-echo --- build
+echo --- build: $SNAP_CHANNEL channel
 snapcraft
 
 source ci/upload_ci_artifact.sh
 upload_ci_artifact solana_*.snap
 
-echo --- publish
+echo --- publish: $SNAP_CHANNEL channel
 $DRYRUN snapcraft push solana_*.snap --release $SNAP_CHANNEL
