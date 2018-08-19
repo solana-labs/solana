@@ -1,9 +1,6 @@
 //! The `nat` module assists with NAT traversal
 
-extern crate futures;
-extern crate rand;
 extern crate reqwest;
-extern crate tokio_core;
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
