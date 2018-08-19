@@ -1,9 +1,8 @@
-FROM rustlang/rust:nightly
+FROM solanalabs/rust
 
-RUN rustup component add clippy-preview --toolchain=nightly && \
-    echo deb http://ftp.debian.org/debian stretch-backports main >> /etc/apt/sources.list && \
-    apt update && \
-    apt install -y \
-      llvm-6.0 \
-      && \
-    rm -rf /var/lib/apt/lists/*
+RUN set -x && \
+    rustup install nightly && \
+    rustup default nightly && \
+    rustup component add clippy-preview --toolchain=nightly && \
+    rustc --version && \
+    cargo --version
