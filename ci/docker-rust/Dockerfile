@@ -1,6 +1,6 @@
 FROM rust:1.28
 
-RUN set -x &&
+RUN set -x && \
     apt update && \
     apt-get install apt-transport-https && \
     echo deb https://apt.buildkite.com/buildkite-agent stable main > /etc/apt/sources.list.d/buildkite-agent.list && \
