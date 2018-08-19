@@ -68,7 +68,6 @@ extern crate jsonrpc_core;
 #[macro_use]
 extern crate jsonrpc_macros;
 extern crate jsonrpc_http_server;
-extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate rayon;

@@ -3,8 +3,6 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-extern crate libc;
-
 use chrono::prelude::*;
 use counter::Counter;
 use entry::Entry;
