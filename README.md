@@ -130,7 +130,7 @@ Now that your singlenode or multinode testnet is up and running, in a separate s
 the JSON configuration file here, not the genesis ledger.
 
 ```bash
-$ ./multinode-demo/client.sh testnet.solana.com 1 #The number of nodes to discover on the network.
+$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 3
 ```
 
 What just happened? The client demo spins up several threads to send 500,000 transactions
@@ -142,16 +142,13 @@ demo completes after it has convinced itself the testnet won't process any addit
 transactions. You should see several TPS measurements printed to the screen. In the
 multinode variation, you'll see TPS measurements for each validator node as well.
 
-You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
-
-Network Discovery
+Public Testnet
 --------------
-
+In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`. 
 ```bash
-$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 3
+$ ./multinode-demo/client.sh testnet.solana.com 1 #The minumum number of nodes to discover on the network
 ```
-
-In this example the client connects to a local testnet.  The `ubuntu@10.0.1.51:~/solana` URL for the testnet is used to rsync the entry point.  `3` Is the minimum number of nodes the client will wait to discover once it connects.  This requires the client to have UDP ports 8000-10000 open.
+You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
 
 
 Linux Snap
