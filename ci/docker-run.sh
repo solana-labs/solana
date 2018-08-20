@@ -1,14 +1,22 @@
 #!/bin/bash -e
 
 usage() {
-  echo "Usage: $0 [docker image name] [command]"
+  echo "Usage: $0 [--nopull] [docker image name] [command]"
   echo
   echo Runs command in the specified docker image with
-  echo a CI-appropriate environment
+  echo a CI-appropriate environment.
+  echo
+  echo "--nopull   Skip the dockerhub image update"
   echo
 }
 
 cd "$(dirname "$0")/.."
+
+NOPULL=false
+if [[ $1 = --nopull ]]; then
+  NOPULL=true
+  shift
+fi
 
 IMAGE="$1"
 if [[ -z "$IMAGE" ]]; then
@@ -16,7 +24,7 @@ if [[ -z "$IMAGE" ]]; then
   exit 1
 fi
 
-docker pull "$IMAGE"
+$NOPULL || docker pull "$IMAGE"
 shift
 
 ARGS=(
