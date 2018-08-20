@@ -391,6 +391,11 @@ impl Bank {
         }
         if err_count > 0 {
             info!("{} errors of {} txs", err_count, err_count + tx_count);
+            if !self.is_leader {
+                inc_new_counter_info!("bank-proccess_transactions_err-validator", err_count);
+            } else {
+                inc_new_counter_info!("bank-proccess_transactions_err-leader", err_count);
+            }
         }
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
