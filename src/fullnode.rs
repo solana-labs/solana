@@ -11,7 +11,7 @@ use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{JoinHandle, Result};
@@ -202,8 +202,7 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
-        let mut rpc_addr = node.data.contact_info.ncp;
-        rpc_addr.set_port(RPC_PORT);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr, exit.clone());
         thread_hdls.extend(rpc_service.thread_hdls());
 
