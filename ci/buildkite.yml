@@ -24,8 +24,8 @@ steps:
     timeout_in_minutes: 20
     agents:
       - "queue=cuda"
-  - command: "ci/test-large-network.sh"
-    name: "large-network [public]"
+  - command: "ci/test-large-network.sh || true"
+    name: "large-network [public] [ignored]"
     env:
       CARGO_TARGET_CACHE_NAME: "stable"
     timeout_in_minutes: 20
