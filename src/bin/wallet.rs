@@ -9,23 +9,19 @@ extern crate solana;
 
 use clap::{App, Arg, SubCommand};
 use solana::client::mk_client;
-use solana::crdt::{Crdt, NodeInfo, TestNode};
+use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
-use solana::ncp::Ncp;
-use solana::service::Service;
 use solana::signature::{read_keypair, Keypair, KeypairUtil, Pubkey, Signature};
-use solana::thin_client::ThinClient;
+use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::wallet::request_airdrop;
 use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 enum WalletCommand {
     Address,
@@ -39,7 +35,6 @@ enum WalletCommand {
 enum WalletError {
     CommandNotRecognized(String),
     BadParameter(String),
-    NoNode(String),
 }
 
 impl fmt::Display for WalletError {
@@ -97,12 +92,18 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .takes_value(true)
                 .help("/path/to/id.json"),
         )
+        .arg(
+            Arg::with_name("timeout")
+                .long("timeout")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .help("Max SECONDS to wait to get necessary gossip from the network"),
+        )
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
                 .arg(
                     Arg::with_name("tokens")
-                        // .index(1)
                         .long("tokens")
                         .value_name("NUMBER")
                         .takes_value(true)
@@ -115,16 +116,14 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .about("Send a payment")
                 .arg(
                     Arg::with_name("tokens")
-                        // .index(2)
                         .long("tokens")
                         .value_name("NUMBER")
                         .takes_value(true)
                         .required(true)
-                        .help("the number of tokens to send"),
+                        .help("The number of tokens to send"),
                 )
                 .arg(
                     Arg::with_name("to")
-                        // .index(1)
                         .long("to")
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -153,6 +152,12 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         leader = NodeInfo::new_leader(&server_addr);
     };
+    let timeout: Option<u64>;
+    if let Some(secs) = matches.value_of("timeout") {
+        timeout = Some(secs.to_string().parse().expect("integer"));
+    } else {
+        timeout = None;
+    }
 
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
@@ -168,34 +173,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         )))
     })?;
 
-    // Set up gossip functionality
-    let exit = Arc::new(AtomicBool::new(false));
-    let testnode = TestNode::new_localhost();
-    let extra_data = testnode.data.clone();
-    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
-    let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(
-        &crdt.clone(),
-        window,
-        None,
-        testnode.sockets.gossip,
-        testnode.sockets.gossip_send,
-        exit.clone(),
-    ).unwrap();
-    let leader_entry_point = NodeInfo::new_entry_point(leader.contact_info.ncp);
-    crdt.write().unwrap().insert(&leader_entry_point);
-
-    let now = Instant::now();
-    // Block until leader's correct contact info is received
-    while crdt.read().unwrap().leader_data().is_none() {
-        if now.elapsed() > Duration::new(10, 0) {
-            Err(WalletError::NoNode("No leader detected".to_string()))?;
-        }
-    }
-
-    exit.store(true, Ordering::Relaxed);
-    ncp.join().unwrap();
-    let leader = crdt.read().unwrap().leader_data().unwrap().clone();
+    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);

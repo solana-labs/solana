@@ -8,24 +8,23 @@ extern crate tokio_codec;
 
 use bincode::deserialize;
 use clap::{App, Arg};
-use solana::crdt::{Crdt, NodeInfo, TestNode};
+use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::logger;
 use solana::metrics::set_panic_hook;
-use solana::ncp::Ncp;
-use solana::service::Service;
 use solana::signature::read_keypair;
+use solana::thin_client::poll_gossip_for_leader;
+use std::error;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
-fn main() {
+fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
     set_panic_hook("drone");
     let matches = App::new("drone")
@@ -48,20 +47,25 @@ fn main() {
                 .help("/path/to/mint.json"),
         )
         .arg(
-            Arg::with_name("time")
-                .short("t")
-                .long("time")
+            Arg::with_name("slice")
+                .long("slice")
                 .value_name("SECONDS")
                 .takes_value(true)
-                .help("time slice over which to limit requests to drone"),
+                .help("Time slice over which to limit requests to drone"),
         )
         .arg(
             Arg::with_name("cap")
-                .short("c")
                 .long("cap")
                 .value_name("NUMBER")
                 .takes_value(true)
-                .help("request limit for time slice"),
+                .help("Request limit for time slice"),
+        )
+        .arg(
+            Arg::with_name("timeout")
+                .long("timeout")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .help("Max SECONDS to wait to get necessary gossip from the network"),
         )
         .get_matches();
 
@@ -77,8 +81,8 @@ fn main() {
         read_keypair(matches.value_of("keypair").expect("keypair")).expect("client keypair");
 
     let time_slice: Option<u64>;
-    if let Some(t) = matches.value_of("time") {
-        time_slice = Some(t.to_string().parse().expect("integer"));
+    if let Some(secs) = matches.value_of("slice") {
+        time_slice = Some(secs.to_string().parse().expect("integer"));
     } else {
         time_slice = None;
     }
@@ -88,30 +92,14 @@ fn main() {
     } else {
         request_cap = None;
     }
+    let timeout: Option<u64>;
+    if let Some(secs) = matches.value_of("timeout") {
+        timeout = Some(secs.to_string().parse().expect("integer"));
+    } else {
+        timeout = None;
+    }
 
-    // Set up gossip functionality
-    let exit = Arc::new(AtomicBool::new(false));
-    let testnode = TestNode::new_localhost();
-    let extra_data = testnode.data.clone();
-    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
-    let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(
-        &crdt.clone(),
-        window,
-        None,
-        testnode.sockets.gossip,
-        testnode.sockets.gossip_send,
-        exit.clone(),
-    ).unwrap();
-    let leader_entry_point = NodeInfo::new_entry_point(leader.contact_info.ncp);
-    crdt.write().unwrap().insert(&leader_entry_point);
-
-    // Block until leader's correct contact info is received
-    while crdt.read().unwrap().leader_data().is_none() {}
-
-    exit.store(true, Ordering::Relaxed);
-    ncp.join().unwrap();
-    let leader = crdt.read().unwrap().leader_data().unwrap().clone();
+    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
 
     let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
 
@@ -168,6 +156,7 @@ fn main() {
             tokio::spawn(processor)
         });
     tokio::run(done);
+    Ok(())
 }
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));

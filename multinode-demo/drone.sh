@@ -40,6 +40,7 @@ $rsync -vPz "$rsync_leader_url"/config/leader.json "$SOLANA_CONFIG_DIR"/
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_drone \
   -l "$SOLANA_CONFIG_DIR"/leader.json -k "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json \
+  --timeout 120 \
   > >($drone_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
