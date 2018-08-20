@@ -689,7 +689,6 @@ fn converge(
             .unwrap()
             .table
             .values()
-            .into_iter()
             .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
