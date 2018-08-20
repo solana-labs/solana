@@ -74,7 +74,7 @@ build_rpc_trait! {
         fn confirm_transaction(&self, Self::Metadata, String) -> Result<bool>;
 
         #[rpc(meta, name = "getBalance")]
-        fn get_balance(&self, Self::Metadata, String) -> Result<(String, i64)>;
+        fn get_balance(&self, Self::Metadata, String) -> Result<i64>;
 
         #[rpc(meta, name = "getFinality")]
         fn get_finality(&self, Self::Metadata) -> Result<usize>;
@@ -95,23 +95,19 @@ impl RpcSol for RpcSolImpl {
     type Metadata = Meta;
 
     fn confirm_transaction(&self, meta: Self::Metadata, id: String) -> Result<bool> {
-        let signature_vec = match bs58::decode(id).into_vec() {
-            Ok(signature_vec) => signature_vec,
-            Err(_) => return Err(Error::invalid_request()),
-        };
-
+        let signature_vec = bs58::decode(id)
+            .into_vec()
+            .map_err(|_| Error::invalid_request())?;
         if signature_vec.len() != mem::size_of::<Signature>() {
             return Err(Error::invalid_request());
         }
         let signature = Signature::new(&signature_vec);
         meta.request_processor.get_signature_status(signature)
     }
-    fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<(String, i64)> {
-        let pubkey_vec = match bs58::decode(id).into_vec() {
-            Ok(pubkey_vec) => pubkey_vec,
-            Err(_) => return Err(Error::invalid_request()),
-        };
-
+    fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64> {
+        let pubkey_vec = bs58::decode(id)
+            .into_vec()
+            .map_err(|_| Error::invalid_request())?;
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             return Err(Error::invalid_request());
         }
@@ -157,9 +153,9 @@ impl JsonRpcRequestProcessor {
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
-    fn get_balance(&self, pubkey: Pubkey) -> Result<(String, i64)> {
+    fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
         let val = self.bank.get_balance(&pubkey);
-        Ok((bs58::encode(pubkey).into_string(), val))
+        Ok(val)
     }
     fn get_finality(&self) -> Result<usize> {
         Ok(self.bank.finality())
@@ -208,10 +204,7 @@ mod tests {
             bob_pubkey
         );
         let res = io.handle_request_sync(&req, meta.clone());
-        let expected = format!(
-            r#"{{"jsonrpc":"2.0","result":["{}", 20],"id":1}}"#,
-            bob_pubkey
-        );
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":20,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
 
