@@ -41,5 +41,15 @@ if [[ $(sysctl -n net.core.wmem_max) -lt 1610612736 ]]; then
   exit 1
 fi
 
+if [[ $(sysctl -n vm.swappiness) -gt 10 ]]; then
+  echo 'Error: swappiness is too high, run "sudo sysctl -w vm.swappiness=10" to continue'
+  exit 1
+fi
+
+if [[ -z $(swapon --noheadings --show=SIZE) ]]; then
+  echo 'Error: Add swap space to the machine to continue'
+  exit 1
+fi
+
 set -x
 exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored
