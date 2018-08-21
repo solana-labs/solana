@@ -21,11 +21,8 @@ if [[ -z $NO_LEDGER_VERIFY ]]; then
   if [[ -d /var/snap/solana/current/config/ledger ]]; then
     # Note: here we assume this script is actually running on the leader node...
     (
-      set -x
-      LEDGER=/tmp/ledger-${BUILDKITE_BUILD_ID:-$$}
-      cp -r /var/snap/solana/current/config/ledger "$LEDGER"
-      solana.ledger-tool --ledger "$LEDGER" verify
-      rm -rf "$LEDGER"
+      sudo cp -r /var/snap/solana/current/config/ledger /var/snap/solana/current/config/ledger-verify
+      sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger-verify verify
     )
   else
     echo "^^^ +++"
