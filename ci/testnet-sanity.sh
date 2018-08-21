@@ -20,10 +20,13 @@ echo "--- $NET_URL: verify ledger"
 if [[ -z $NO_LEDGER_VERIFY ]]; then
   if [[ -d /var/snap/solana/current/config/ledger ]]; then
     # Note: here we assume this script is actually running on the leader node...
-    LEDGER=/tmp/ledger-${BUILDKITE_BUILD_ID:-$$}
-    cp -r /var/snap/solana/current/config/ledger "$LEDGER"
-    solana.ledger-tool --ledger "$LEDGER" verify
-    rm -rf "$LEDGER"
+    (
+      set -x
+      LEDGER=/tmp/ledger-${BUILDKITE_BUILD_ID:-$$}
+      cp -r /var/snap/solana/current/config/ledger "$LEDGER"
+      solana.ledger-tool --ledger "$LEDGER" verify
+      rm -rf "$LEDGER"
+    )
   else
     echo "^^^ +++"
     echo "Ledger verify skipped"
