@@ -8,7 +8,6 @@ use service::Service;
 use signature::{Pubkey, Signature};
 use std::mem;
 use std::net::SocketAddr;
-use std::panic;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
@@ -29,10 +28,6 @@ impl JsonRpcService {
                 let rpc = RpcSolImpl;
                 io.extend_with(rpc.to_delegate());
 
-                panic::set_hook(Box::new(move |_| {
-                    warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
-                }));
-
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
                         request_processor: request_processor.clone(),
@@ -40,12 +35,14 @@ impl JsonRpcService {
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
                         ]))
-                        .start_http(&rpc_addr)
-                        .unwrap();
-                let _ = panic::take_hook();
+                        .start_http(&rpc_addr);
+                if server.is_err() {
+                    warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
+                    return;
+                }
                 loop {
                     if exit.load(Ordering::Relaxed) {
-                        server.close();
+                        server.unwrap().close();
                         break;
                     }
                 }
