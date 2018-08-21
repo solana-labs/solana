@@ -11,6 +11,7 @@ use std;
 use std::any::Any;
 use window;
 
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Debug)]
 pub enum Error {
     IO(std::io::Error),

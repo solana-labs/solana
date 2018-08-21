@@ -35,10 +35,13 @@ pub const MAX_ENTRY_IDS: usize = 1024 * 16;
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
+#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Debug, PartialEq, Eq)]
 pub enum BankError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound(Box<Transaction>),
+    /// `Instruction` that was sent in the transaction, and 'Hash' is the last_id
+    /// in the transaction
+    AccountNotFound(Pubkey, Instruction, Hash),
 
     /// The requested debit from `Pubkey` has the potential to draw the balance
     /// below zero. This can occur when a debit and credit are processed in parallel.
@@ -262,7 +265,11 @@ impl Bank {
                 } else {
                     inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
                 }
-                return Err(BankError::AccountNotFound(Box::new(tx.clone())));
+                return Err(BankError::AccountNotFound(
+                    tx.from,
+                    tx.instruction.clone(),
+                    tx.last_id,
+                ));
             }
             let bal = option.unwrap();
 
@@ -637,16 +644,19 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
+    use budget::Budget;
     use entry::next_entry;
     use entry::Entry;
     use entry_writer::{self, EntryWriter};
     use hash::hash;
     use ledger;
     use packet::BLOB_DATA_SIZE;
+    use payment_plan::Payment;
     use signature::KeypairUtil;
     use std;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
     use std::mem::size_of;
+    use transaction::Contract;
 
     #[test]
     fn test_two_payments_to_one_party() {
@@ -682,11 +692,23 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
-        let tx = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
-        let signature = tx.signature;
+        let tokens = 1;
+
+        let payment = Payment {
+            tokens,
+            to: mint.pubkey(),
+        };
+        let budget = Budget::Pay(payment);
+        let plan = Plan::Budget(budget);
+        let instruction = Instruction::NewContract(Contract { plan, tokens });
+
         assert_eq!(
-            bank.process_transaction(&tx).map(|_| signature),
-            Err(BankError::AccountNotFound(Box::new(tx)))
+            bank.transfer(tokens, &keypair, mint.pubkey(), mint.last_id()),
+            Err(BankError::AccountNotFound(
+                keypair.pubkey(),
+                instruction,
+                mint.last_id()
+            ))
         );
         assert_eq!(bank.transaction_count(), 0);
     }

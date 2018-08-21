@@ -122,12 +122,11 @@ impl BankingStage {
             let transactions = results
                 .into_iter()
                 .filter_map(|x| match x {
-                    Err(BankError::AccountNotFound(tx_box)) => {
-                        let tx = *tx_box;
-                        if let Instruction::NewVote(ref vote) = tx.instruction {
+                    Err(BankError::AccountNotFound(tx_from, instruction, last_id)) => {
+                        if let Instruction::NewVote(ref vote) = instruction {
                             error!("Banking Stage:: Vote failed");
                             let mut voting_node = voting_nodes.write().unwrap();
-                            voting_node.insert_vote(&crdt, &tx.from, &vote, tx.last_id);
+                            voting_node.insert_vote(&crdt, &tx_from, &vote, last_id);
                         }
                         None
                     }

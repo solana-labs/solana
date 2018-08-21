@@ -43,7 +43,7 @@ impl VotingNodes {
                 if exit.load(Ordering::Relaxed) {
                     return;
                 }
-                VotingNodes::purge(crdt.clone(), nodes_arc.clone(), timestamp());
+                VotingNodes::purge(&crdt, &nodes_arc, timestamp());
                 sleep(Duration::from_millis(VOTING_NODES_PURGE_SLEEP_MILLIS));
             })
             .unwrap();
@@ -51,7 +51,7 @@ impl VotingNodes {
         me
     }
 
-    fn purge(crdt: Arc<RwLock<Crdt>>, nodes_arc: Arc<RwLock<HashMap<Pubkey, u64>>>, now: u64) {
+    fn purge(crdt: &Arc<RwLock<Crdt>>, nodes_arc: &Arc<RwLock<HashMap<Pubkey, u64>>>, now: u64) {
         nodes_arc.write().unwrap().retain(|key, last_update| {
             if (now - *last_update) > VOTING_NODES_PURGE_MILLIS {
                 crdt.write().unwrap().purge_node(key);
@@ -279,15 +279,15 @@ pub mod tests {
             rnodes[&nxt.id]
         };
 
-        VotingNodes::purge(crdt_arc.clone(), voting_nodes.nodes.clone(), now);
+        VotingNodes::purge(&crdt_arc, &voting_nodes.nodes, now);
         {
             let rcrdt = crdt_arc.read().unwrap();
             assert_eq!(rcrdt.table.len(), 2);
         }
 
         VotingNodes::purge(
-            crdt_arc.clone(),
-            voting_nodes.nodes.clone(),
+            &crdt_arc,
+            &voting_nodes.nodes,
             now + VOTING_NODES_PURGE_MILLIS,
         );
         {
@@ -296,8 +296,8 @@ pub mod tests {
         }
 
         VotingNodes::purge(
-            crdt_arc.clone(),
-            voting_nodes.nodes.clone(),
+            &crdt_arc,
+            &voting_nodes.nodes,
             now + VOTING_NODES_PURGE_MILLIS + 1,
         );
         {
@@ -330,8 +330,8 @@ pub mod tests {
         };
 
         VotingNodes::purge(
-            crdt_arc.clone(),
-            voting_nodes.nodes.clone(),
+            &crdt_arc,
+            &voting_nodes.nodes,
             now + VOTING_NODES_PURGE_MILLIS,
         );
         {
@@ -340,8 +340,8 @@ pub mod tests {
         }
         trace!("purging");
         VotingNodes::purge(
-            crdt_arc.clone(),
-            voting_nodes.nodes.clone(),
+            &crdt_arc,
+            &voting_nodes.nodes,
             now + VOTING_NODES_PURGE_MILLIS + 1,
         );
         {
