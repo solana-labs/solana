@@ -137,7 +137,7 @@ mod tests {
             Error::from(RecvTimeoutError::Timeout),
             Error::RecvTimeoutError(_)
         );
-        assert_matches!(send_error(), Err(Error::SendError));
+        assert_eq!(send_error(), Err(Error::SendError));
         assert_matches!(join_error(), Err(Error::JoinError(_)));
         let ioe = io::Error::new(io::ErrorKind::NotFound, "hi");
         assert_matches!(Error::from(ioe), Error::IO(_));

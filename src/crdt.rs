@@ -1404,7 +1404,7 @@ mod tests {
             "0.0.0.0:1237".parse().unwrap(),
             "0.0.0.0:1238".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d1).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
@@ -1416,7 +1416,7 @@ mod tests {
             "0.0.0.0:1237".parse().unwrap(),
             "0.0.0.0:1238".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d1_1).err(),
             Some(Error::CrdtError(CrdtError::BadContactInfo))
         );
@@ -1428,7 +1428,7 @@ mod tests {
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d2).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
@@ -1440,23 +1440,23 @@ mod tests {
             "0.0.0.1:0".parse().unwrap(),
             "0.0.0.1:0".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d2_1).err(),
             Some(Error::CrdtError(CrdtError::BadContactInfo))
         );
         let d3 = NodeInfo::new_unspecified();
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d3).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let d4 = NodeInfo::new_multicast();
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d4).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
         let mut d5 = NodeInfo::new_multicast();
         d5.version = 1;
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d5).err(),
             Some(Error::CrdtError(CrdtError::BadNodeInfo))
         );
@@ -1468,7 +1468,7 @@ mod tests {
             "0.0.0.0:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d6).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
@@ -1480,7 +1480,7 @@ mod tests {
             "0.0.0.0:0".parse().unwrap(),
             "0.0.0.0:0".parse().unwrap(),
         );
-        assert_matches!(
+        assert_eq!(
             Crdt::new(d7).err(),
             Some(Error::CrdtError(CrdtError::BadGossipAddress))
         );
@@ -1536,12 +1536,12 @@ mod tests {
         assert_eq!(crdt.table[&d.id].version, 0);
         let leader = NodeInfo::new_leader(&"127.0.0.2:1235".parse().unwrap());
         assert_ne!(d.id, leader.id);
-        assert_matches!(
+        assert_eq!(
             crdt.new_vote(Hash::default()).err(),
             Some(Error::CrdtError(CrdtError::NoLeader))
         );
         crdt.insert(&leader);
-        assert_matches!(
+        assert_eq!(
             crdt.new_vote(Hash::default()).err(),
             Some(Error::CrdtError(CrdtError::NoLeader))
         );
@@ -1677,7 +1677,7 @@ mod tests {
         );
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let rv = crdt.window_index_request(0);
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        assert_eq!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt = NodeInfo::new(
             Keypair::new().pubkey(),
             "127.0.0.1:1234".parse().unwrap(),
@@ -1688,7 +1688,7 @@ mod tests {
         );
         crdt.insert(&nxt);
         let rv = crdt.window_index_request(0);
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        assert_eq!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt = NodeInfo::new(
             Keypair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),
@@ -1742,12 +1742,12 @@ mod tests {
         // Filter out unspecified addresses
         crdt.insert(&nxt1); //<--- attack!
         let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        assert_eq!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt2 = NodeInfo::new_multicast();
         // Filter out multicast addresses
         crdt.insert(&nxt2); //<--- attack!
         let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        assert_eq!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
     }
 
     /// test that gossip requests are eventually generated for all nodes
@@ -1763,7 +1763,7 @@ mod tests {
         );
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        assert_eq!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
         let nxt1 = NodeInfo::new(
             Keypair::new().pubkey(),
             "127.0.0.2:1234".parse().unwrap(),

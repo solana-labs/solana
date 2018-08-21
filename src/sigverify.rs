@@ -222,8 +222,8 @@ mod tests {
         let tx = test_tx();
         let tx_bytes = serialize(&tx).unwrap();
         let packet = serialize(&tx).unwrap();
-        assert_matches!(memfind(&packet, &tx_bytes), Some(sigverify::TX_OFFSET));
-        assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
+        assert_eq!(memfind(&packet, &tx_bytes), Some(sigverify::TX_OFFSET));
+        assert_eq!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
     }
 
     fn make_packet_from_transaction(tx: Transaction) -> Packet {
