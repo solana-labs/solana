@@ -33,3 +33,12 @@ variable `RAYON_NUM_THREADS=<xx>`
 ## How can I test a change on the testnet?
 
 Currently, a merged PR is the only way to test a change on the testnet.
+
+## Adjusting the number of clients or validators on the testnet
+
+1. Go to the [GCP Instance Group](https://console.cloud.google.com/compute/instanceGroups/list?project=principal-lane-200702) tab
+2. Find the client or validator instance group you'd like to adjust
+3. Edit it (pencil icon), change the "Number of instances", then click "Save" button
+4. Refresh until the change to number of instances has been executed
+5. Click the "New Build" button on the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/)
+   buildkite job to initiate a redeploy of the network with the updated instance count.
