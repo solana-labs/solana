@@ -94,25 +94,17 @@ tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
 
-[dev-dependencies]
-criterion = "0.2"
-
 [[bench]]
 name = "bank"
-harness = false
 
 [[bench]]
 name = "banking_stage"
-harness = false
 
 [[bench]]
 name = "ledger"
-harness = false
 
 [[bench]]
 name = "signature"
-harness = false
 
 [[bench]]
 name = "sigverify"
-harness = false
