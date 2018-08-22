@@ -50,7 +50,7 @@ impl Config {
 
 impl Fullnode {
     fn new_internal(
-        mut node: TestNode,
+        node: TestNode,
         leader: bool,
         ledger_path: &str,
         keypair: Keypair,
@@ -73,13 +73,39 @@ impl Fullnode {
         info!("creating networking stack...");
 
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
-        let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         info!(
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.data.contact_info.ncp
         );
-        let requests_addr = node.data.contact_info.rpu;
         let exit = Arc::new(AtomicBool::new(false));
+        Self::new_with_bank(
+            leader,
+            keypair,
+            bank,
+            entry_height,
+            &ledger_tail,
+            node,
+            exit,
+            ledger_path,
+            network_entry_for_validator,
+            sigverify_disabled,
+        )
+    }
+
+    fn new_with_bank(
+        leader: bool,
+        keypair: Keypair,
+        bank: Bank,
+        entry_height: u64,
+        ledger_tail: &[Entry],
+        mut node: TestNode,
+        exit: Arc<AtomicBool>,
+        ledger_path: &str,
+        network_entry_for_validator: Option<SocketAddr>,
+        sigverify_disabled: bool,
+    ) -> Self {
+        let local_requests_addr = node.sockets.requests.local_addr().unwrap();
+        let requests_addr = node.data.contact_info.rpu;
         if !leader {
             let testnet_addr = network_entry_for_validator.expect("validator requires entry");
 
