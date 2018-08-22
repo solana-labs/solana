@@ -9,6 +9,6 @@ PATH="$HOME"/.cargo/bin:"$PATH"
 ./fetch-perf-libs.sh
 
 # Run setup
-USE_INSTALL=1 ./multinode-demo/setup.sh -p
+USE_INSTALL=1 ./multinode-demo/setup.sh
 USE_INSTALL=1 ./multinode-demo/drone.sh >drone.log 2>&1 &
 USE_INSTALL=1 SOLANA_CUDA=1 ./multinode-demo/leader.sh >leader.log 2>&1 &

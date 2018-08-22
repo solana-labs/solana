@@ -5,6 +5,8 @@ prefix=
 num_nodes=
 out_file=
 image_name="ubuntu-16-04-cuda-9-2-new"
+ip_address_offset=5
+zone="us-west1-b"
 
 shift
 
@@ -22,6 +24,8 @@ Manage a GCE multinode network
  create|delete    - Create or delete the network
  -p prefix        - A common prefix for node names, to avoid collision
  -n num_nodes     - Number of nodes
+ -P               - Use IP addresses on GCE internal/private network
+ -z               - GCP Zone for the nodes (default $zone)
  -o out_file      - Used for create option. Outputs an array of IP addresses
                     of new nodes to the file
  -i image_name    - Existing image on GCE (default $image_name)
@@ -30,13 +34,16 @@ EOF
   exit $exitcode
 }
 
-while getopts "h?p:i:n:o:" opt; do
+while getopts "h?p:Pi:n:z:o:" opt; do
   case $opt in
   h | \?)
     usage
     ;;
   p)
     prefix=$OPTARG
+    ;;
+  P)
+    ip_address_offset=4
     ;;
   i)
     image_name=$OPTARG
@@ -46,6 +53,9 @@ while getopts "h?p:i:n:o:" opt; do
     ;;
   n)
     num_nodes=$OPTARG
+    ;;
+  z)
+    zone=$OPTARG
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -69,8 +79,8 @@ done
 if [[ $command == "create" ]]; then
   [[ -n $out_file ]] || usage "Need an outfile to store IP Addresses"
 
-  ip_addr_list=$(gcloud beta compute instances create "${nodes[@]}" --zone=us-west1-b --tags=testnet \
-    --image="$image_name" | awk '/RUNNING/ {print $5}')
+  ip_addr_list=$(gcloud beta compute instances create "${nodes[@]}" --zone="$zone" --tags=testnet \
+    --image="$image_name" | awk -v offset="$ip_address_offset" '/RUNNING/ {print $offset}')
 
   echo "ip_addr_array=($ip_addr_list)" >"$out_file"
 elif [[ $command == "delete" ]]; then
