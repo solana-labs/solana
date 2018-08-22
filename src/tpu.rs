@@ -73,13 +73,8 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, signal_receiver) = BankingStage::new(
-            bank.clone(),
-            verified_receiver,
-            packet_recycler.clone(),
-            crdt.clone(),
-            voting_nodes.clone(),
-        );
+        let (banking_stage, signal_receiver) =
+            BankingStage::new(bank.clone(), verified_receiver, packet_recycler.clone());
 
         let (record_stage, entry_receiver) = match tick_duration {
             Some(tick_duration) => {
