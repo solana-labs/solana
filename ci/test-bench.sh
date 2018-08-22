@@ -10,4 +10,4 @@ _() {
   "$@"
 }
 
-_ cargo bench --features=unstable --verbose
+_ cargo bench --features=unstable --verbose --no-run
