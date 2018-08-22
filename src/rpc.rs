@@ -1,16 +1,19 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use bank::Bank;
+use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use service::Service;
 use signature::{Pubkey, Signature};
 use std::mem;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
+use transaction::Transaction;
+use wallet::request_airdrop;
 
 pub const RPC_PORT: u16 = 8899;
 
@@ -19,7 +22,12 @@ pub struct JsonRpcService {
 }
 
 impl JsonRpcService {
-    pub fn new(bank: Arc<Bank>, rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(
+        bank: Arc<Bank>,
+        transactions_addr: SocketAddr,
+        rpc_addr: SocketAddr,
+        exit: Arc<AtomicBool>,
+    ) -> Self {
         let request_processor = JsonRpcRequestProcessor::new(bank);
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -31,6 +39,7 @@ impl JsonRpcService {
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
                         request_processor: request_processor.clone(),
+                        transactions_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -66,6 +75,7 @@ impl Service for JsonRpcService {
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
+    pub transactions_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -88,8 +98,8 @@ build_rpc_trait! {
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
-        // #[rpc(meta, name = "sendTransaction")]
-        // fn send_transaction(&self, Self::Metadata, String, i64) -> Result<String>;
+        #[rpc(meta, name = "sendTransaction")]
+        fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
     }
 }
 
@@ -126,24 +136,14 @@ impl RpcSol for RpcSolImpl {
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
     }
-    // fn send_transaction(&self, meta: Self::Metadata, to: String, tokens: i64) -> Result<String> {
-    //     let client_keypair = read_keypair(&meta.keypair_location.unwrap()).unwrap();
-    //     let mut client = mk_client(&meta.leader.unwrap());
-    //     let last_id = client.get_last_id();
-    //     let to_pubkey_vec = bs58::decode(to)
-    //         .into_vec()
-    //         .expect("base58-encoded public key");
-    //
-    //     if to_pubkey_vec.len() != mem::size_of::<Pubkey>() {
-    //         Err(Error::invalid_request())
-    //     } else {
-    //         let to_pubkey = Pubkey::new(&to_pubkey_vec);
-    //         let signature = client
-    //             .transfer(tokens, &client_keypair, to_pubkey, &last_id)
-    //             .unwrap();
-    //         Ok(bs58::encode(signature).into_string())
-    //     }
-    // }
+    fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
+        let tx: Transaction = deserialize(&data).map_err(|_| Error::invalid_request())?;
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        transactions_socket
+            .send_to(&data, &meta.transactions_addr)
+            .map_err(|_| Error::internal_error())?;
+        Ok(bs58::encode(tx.signature).into_string())
+    }
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
@@ -196,11 +196,12 @@ mod tests {
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
+        let transactions_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta { request_processor };
+        let meta = Meta { request_processor, transactions_addr };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -236,6 +237,7 @@ mod tests {
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":[1234567890]}"#;
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);
@@ -259,6 +261,7 @@ mod tests {
             r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["a1b2c3d4e5"]}"#;
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);
