@@ -1,0 +1,22 @@
+{
+  "presets": [
+    [ "env", { "modules": false } ],
+    "stage-0",
+    "flow"
+  ],
+
+  "env": {
+    "test": {
+      "presets": [
+        "env"
+      ]
+    }
+  },
+
+  "plugins": [
+    ["module-resolver", {
+      "root": ["./src"]
+    }],
+    "transform-runtime"
+  ]
+}
