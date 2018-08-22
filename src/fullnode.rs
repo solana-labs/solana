@@ -49,7 +49,7 @@ impl Config {
 }
 
 impl Fullnode {
-    fn new_internal(
+    pub fn new(
         node: TestNode,
         ledger_path: &str,
         keypair: Keypair,
@@ -152,30 +152,6 @@ impl Fullnode {
                 )
             }
         }
-    }
-
-    pub fn new(
-        node: TestNode,
-        ledger: &str,
-        keypair: Keypair,
-        network_entry_for_validator: Option<SocketAddr>,
-    ) -> Self {
-        Self::new_internal(node, ledger, keypair, network_entry_for_validator, false)
-    }
-
-    pub fn new_without_sigverify(
-        node: TestNode,
-        ledger_path: &str,
-        keypair: Keypair,
-        network_entry_for_validator: Option<SocketAddr>,
-    ) -> Self {
-        Self::new_internal(
-            node,
-            ledger_path,
-            keypair,
-            network_entry_for_validator,
-            true,
-        )
     }
 
     /// Create a server instance acting as a leader.

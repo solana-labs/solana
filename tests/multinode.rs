@@ -145,7 +145,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         writer.write_entries(entries).unwrap();
     }
 
-    let leader = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None);
+    let leader = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -162,6 +162,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         &zero_ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
+        false,
     );
 
     // contains the leader and new node
@@ -217,7 +218,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     );
     ledger_paths.push(zero_ledger_path.clone());
 
-    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None);
+    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -239,6 +240,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             &ledger_path,
             keypair,
             Some(leader_data.contact_info.ncp),
+            false,
         );
         nodes.push(val);
     }
@@ -273,6 +275,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         &zero_ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
+        false,
     );
     nodes.push(val);
     //contains the leader and new node
@@ -332,7 +335,7 @@ fn test_multi_node_basic() {
 
     let (alice, leader_ledger_path) = genesis("multi_node_basic", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
-    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None);
+    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -350,6 +353,7 @@ fn test_multi_node_basic() {
             &ledger_path,
             keypair,
             Some(leader_data.contact_info.ncp),
+            false,
         );
         nodes.push(val);
     }
@@ -392,7 +396,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     ledger_paths.push(leader_ledger_path.clone());
 
     let leader_data = leader.data.clone();
-    let leader_fullnode = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None);
+    let leader_fullnode = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
     assert_eq!(leader_balance, 500);
@@ -410,6 +414,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         &ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
+        false,
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -428,7 +433,7 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
     let leader_keypair = Keypair::new();
     let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.data.clone();
-    let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None);
+    let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None, false);
     (leader_data, leader_fullnode)
 }
 
@@ -478,6 +483,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         &stale_ledger_path,
         keypair,
         Some(leader_data.contact_info.ncp),
+        false,
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -532,7 +538,7 @@ fn test_multi_node_dynamic_network() {
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.data.clone();
 
-    let server = Fullnode::new_without_sigverify(leader, &leader_ledger_path, leader_keypair, None);
+    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, true);
 
     // Send leader some tokens to vote
     let leader_balance = send_tx_and_retry_get_balance(
@@ -600,11 +606,12 @@ fn test_multi_node_dynamic_network() {
                     let validator = TestNode::new_localhost_with_pubkey(keypair.pubkey());
                     let rd = validator.data.clone();
                     info!("starting {} {:x}", keypair.pubkey(), rd.debug_id());
-                    let val = Fullnode::new_without_sigverify(
+                    let val = Fullnode::new(
                         validator,
                         &ledger_path,
                         keypair,
                         Some(leader_data.contact_info.ncp),
+                        true,
                     );
                     (rd, val)
                 })
