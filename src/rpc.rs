@@ -25,13 +25,13 @@ pub struct JsonRpcService {
 
 impl JsonRpcService {
     pub fn new(
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         transactions_addr: SocketAddr,
         drone_addr: SocketAddr,
         rpc_addr: SocketAddr,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let request_processor = JsonRpcRequestProcessor::new(bank);
+        let request_processor = JsonRpcRequestProcessor::new(bank.clone());
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {

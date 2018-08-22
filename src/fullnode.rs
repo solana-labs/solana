@@ -207,7 +207,7 @@ impl Fullnode {
         drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(
-            bank.clone(),
+            &bank,
             node.data.contact_info.tpu,
             drone_addr,
             rpc_addr,
@@ -310,7 +310,7 @@ impl Fullnode {
         drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(
-            bank.clone(),
+            &bank,
             node.data.contact_info.tpu,
             drone_addr,
             rpc_addr,
