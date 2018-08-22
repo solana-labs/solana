@@ -1,0 +1,30 @@
+# IDE & OS specific
+.DS_Store
+.idea
+
+# Logs
+logs
+*.log
+
+# Dependencies
+node_modules
+
+# Coverage
+coverage
+
+# Types
+flow-typed/*
+
+# Sources, tests and builder files
+builder
+src
+test
+internals
+.flowconfig
+.babelrc
+.eslintignore
+.eslintrc
+.travis.yml
+jest.json
+renovate.json
+rollup.config.js

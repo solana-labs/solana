@@ -1,0 +1,64 @@
+{
+  "name": "@solana/web3.js",
+  "version": "0.0.1",
+  "description": "Solana Javascript API",
+  "keywords": [
+    "api",
+    "blockchain"
+  ],
+  "license": "MIT",
+  "author": "Solana Labs, Inc",
+  "homepage": "https://solana.com/",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/solana-labs/solana-web3.js.git"
+  },
+  "bugs": {
+    "url": "http://github.com/solana-labs/solana-web3.js.git/issues"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "clean": "rimraf ./coverage ./lib",
+    "dev": "cross-env NODE_ENV=development rollup -c -o lib/index.js",
+    "build": "cross-env NODE_ENV=production rollup -c -o lib/index.js",
+    "test": "cross-env NODE_ENV=test jest",
+    "test:watch": "cross-env NODE_ENV=test jest --watch",
+    "test:cover": "cross-env NODE_ENV=test jest --coverage",
+    "coveralls": "npm run test:cover && cat ./coverage/lcov.info | coveralls",
+    "flow": "flow",
+    "flow-typed": "npm run clean && flow-typed install --overwrite || true",
+    "lint": "eslint src",
+    "prepublish": "npm run clean && npm run test && npm run flow && npm run lint && npm run build"
+  },
+  "dependencies": {
+    "babel-runtime": "^6.26.0"
+  },
+  "devDependencies": {
+    "babel-core": "6.26.0",
+    "babel-eslint": "8.2.3",
+    "babel-plugin-module-resolver": "3.1.1",
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-preset-env": "1.6.1",
+    "babel-preset-flow": "6.23.0",
+    "babel-preset-stage-0": "6.24.1",
+    "coveralls": "3.0.0",
+    "cross-env": "5.1.4",
+    "enzyme": "3.3.0",
+    "eslint": "4.19.1",
+    "eslint-config-airbnb": "16.1.0",
+    "eslint-plugin-import": "2.11.0",
+    "eslint-plugin-jsx-a11y": "^6.1.1",
+    "eslint-plugin-react": "^7.11.1",
+    "flow-bin": "0.70.0",
+    "flow-typed": "2.4.0",
+    "fs-file-tree": "1.0.6",
+    "jest": "22.4.3",
+    "rimraf": "2.6.2",
+    "rollup": "0.58.1",
+    "rollup-plugin-babel": "3.0.3",
+    "rollup-plugin-commonjs": "9.1.0",
+    "rollup-plugin-node-resolve": "3.3.0",
+    "rollup-plugin-replace": "2.0.0",
+    "rollup-plugin-uglify": "3.0.0"
+  }
+}
