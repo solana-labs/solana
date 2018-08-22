@@ -16,6 +16,9 @@
   "bugs": {
     "url": "http://github.com/solana-labs/solana-web3.js.git/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "lib/index.js",
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
