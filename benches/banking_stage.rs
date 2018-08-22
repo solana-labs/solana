@@ -96,7 +96,6 @@ fn check_txs(receiver: &Receiver<Signal>, ref_tx_count: usize) {
 }
 
 #[bench]
-#[ignore]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint_total = 1_000_000_000_000;
@@ -170,7 +169,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 }
 
 #[bench]
-#[ignore]
 fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint = Mint::new(1_000_000_000_000);
