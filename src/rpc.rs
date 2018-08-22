@@ -11,7 +11,9 @@ use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::{self, Builder, JoinHandle};
+use std::thread::{self, sleep, Builder, JoinHandle};
+use std::time::Duration;
+use std::time::Instant;
 use transaction::Transaction;
 use wallet::request_airdrop;
 
@@ -150,9 +152,25 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        request_airdrop(&meta.drone_addr, &pubkey, tokens)
+        let previous_balance = meta
+            .request_processor
+            .get_balance(pubkey)
             .map_err(|_| Error::internal_error())?;
-        Ok(true)
+        request_airdrop(&meta.drone_addr, &pubkey, tokens).map_err(|_| Error::internal_error())?;
+        let now = Instant::now();
+        let mut balance;
+        loop {
+            balance = meta
+                .request_processor
+                .get_balance(pubkey)
+                .map_err(|_| Error::internal_error())?;
+            if balance > previous_balance {
+                return Ok(true);
+            } else if now.elapsed().as_secs() > 5 {
+                return Err(Error::internal_error());
+            }
+            sleep(Duration::from_millis(100));
+        }
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
         let tx: Transaction = deserialize(&data).map_err(|_| Error::invalid_request())?;
