@@ -3,6 +3,7 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use crdt::{Crdt, NodeInfo, TestNode};
+use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -202,10 +203,13 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
+        let mut drone_addr = node.data.contact_info.tpu;
+        drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(
             bank.clone(),
             node.data.contact_info.tpu,
+            drone_addr,
             rpc_addr,
             exit.clone(),
         );
@@ -302,10 +306,13 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
+        let mut drone_addr = entry_point.contact_info.ncp;
+        drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(
             bank.clone(),
             node.data.contact_info.tpu,
+            drone_addr,
             rpc_addr,
             exit.clone(),
         );
