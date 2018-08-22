@@ -2,7 +2,7 @@
 
 cd "$(dirname "$0")/.."
 
-ci/version-check.sh stable
+ci/version-check.sh nightly
 export RUST_BACKTRACE=1
 
 _() {
@@ -10,4 +10,4 @@ _() {
   "$@"
 }
 
-_ cargo bench --verbose
+_ cargo bench --features=unstable --verbose

@@ -1,10 +1,9 @@
+#![feature(test)]
 extern crate bincode;
-#[macro_use]
-extern crate criterion;
 extern crate rayon;
 extern crate solana;
+extern crate test;
 
-use criterion::{Bencher, Criterion};
 use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::banking_stage::BankingStage;
@@ -16,6 +15,7 @@ use solana::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
+use test::Bencher;
 
 // use self::test::Bencher;
 // use bank::{Bank, MAX_ENTRY_IDS};
@@ -95,6 +95,7 @@ fn check_txs(receiver: &Receiver<Signal>, ref_tx_count: usize) {
     assert_eq!(total, ref_tx_count);
 }
 
+#[bench]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint_total = 1_000_000_000_000;
@@ -145,7 +146,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 })
                 .collect();
 
-        let verified_setup_len = verified_setup.len();
         verified_sender.send(verified_setup).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
@@ -160,7 +160,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             })
             .collect();
 
-        let verified_len = verified.len();
         verified_sender.send(verified).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
@@ -169,6 +168,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     });
 }
 
+#[bench]
 fn bench_banking_stage_single_from(bencher: &mut Bencher) {
     let tx = 10_000_usize;
     let mint = Mint::new(1_000_000_000_000);
@@ -203,7 +203,6 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
                 (x, iter::repeat(1).take(len).collect())
             })
             .collect();
-        let verified_len = verified.len();
         verified_sender.send(verified).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();
@@ -211,19 +210,3 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         check_txs(&signal_receiver, tx);
     });
 }
-
-fn bench(criterion: &mut Criterion) {
-    criterion.bench_function("bench_banking_stage_multi_accounts", |bencher| {
-        bench_banking_stage_multi_accounts(bencher);
-    });
-    criterion.bench_function("bench_process_stage_single_from", |bencher| {
-        bench_banking_stage_single_from(bencher);
-    });
-}
-
-criterion_group!(
-    name = benches;
-    config = Criterion::default().sample_size(2);
-    targets = bench
-);
-criterion_main!(benches);

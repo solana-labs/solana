@@ -4,11 +4,11 @@ steps:
     env:
       CARGO_TARGET_CACHE_NAME: "stable"
     timeout_in_minutes: 30
-  - command: "ci/docker-run.sh solanalabs/rust ci/test-bench.sh"
-    name: "bench [public]"
-    env:
-      CARGO_TARGET_CACHE_NAME: "stable"
-    timeout_in_minutes: 30
+    #  - command: "ci/docker-run.sh solanalabs/rust-nightly ci/test-bench.sh"
+    #    name: "bench [public]"
+    #    env:
+    #      CARGO_TARGET_CACHE_NAME: "nightly"
+    #    timeout_in_minutes: 30
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
     timeout_in_minutes: 20
