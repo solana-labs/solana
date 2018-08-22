@@ -10,3 +10,13 @@ after_success: npm run coveralls
 branches:
   only:
     - master
+
+deploy:
+  provider: pages
+  skip-cleanup: true
+  github-token: $GITHUB_TOKEN
+  keep-history: true
+  local-dir: doc
+  on:
+    branch: master
+    node_js: "lts/*"
