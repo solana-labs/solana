@@ -144,7 +144,7 @@ multinode variation, you'll see TPS measurements for each validator node as well
 
 Public Testnet
 --------------
-In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`. 
+In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 ```bash
 $ ./multinode-demo/client.sh testnet.solana.com 1 #The minumum number of nodes to discover on the network
 ```
@@ -263,9 +263,9 @@ If your rustc version is lower than 1.26.1, please update it:
 $ rustup update
 ```
 
-On Linux systems you may need to install libssl-dev and pkg-config.  On Ubuntu:
+On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, etc.  On Ubuntu:
 ```bash
-$ sudo apt-get install libssl-dev pkg-config
+$ sudo apt-get install libssl-dev pkg-config zlib1g-dev
 ```
 
 Download the source code:
