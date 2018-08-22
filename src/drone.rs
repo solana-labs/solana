@@ -285,14 +285,15 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");
 
-        let server = Fullnode::new_leader(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
             &[],
             leader,
+            None,
             exit.clone(),
-            &ledger_path,
+            Some(&ledger_path),
             false,
         );
         //TODO: this seems unstable

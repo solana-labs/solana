@@ -400,14 +400,15 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = tmp_ledger("thin_client", &alice);
 
-        let server = Fullnode::new_leader(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
             &[],
             leader,
+            None,
             exit.clone(),
-            &ledger_path,
+            Some(&ledger_path),
             false,
         );
         sleep(Duration::from_millis(900));
@@ -447,14 +448,15 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
 
-        let server = Fullnode::new_leader(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
             &[],
             leader,
+            None,
             exit.clone(),
-            &ledger_path,
+            Some(&ledger_path),
             false,
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -506,14 +508,15 @@ mod tests {
         let leader_data = leader.data.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
-        let server = Fullnode::new_leader(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
             &[],
             leader,
+            None,
             exit.clone(),
-            &ledger_path,
+            Some(&ledger_path),
             false,
         );
         sleep(Duration::from_millis(300));

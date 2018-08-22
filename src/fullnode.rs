@@ -77,70 +77,79 @@ impl Fullnode {
             local_gossip_addr, node.data.contact_info.ncp
         );
         let exit = Arc::new(AtomicBool::new(false));
-        Self::new_with_bank(
+        let local_requests_addr = node.sockets.requests.local_addr().unwrap();
+        let requests_addr = node.data.contact_info.rpu;
+        let leader_info = leader_addr.map(|x| NodeInfo::new_entry_point(x));
+        let server = Self::new_with_bank(
             keypair,
             bank,
             entry_height,
             &ledger_tail,
             node,
+            leader_info,
             exit,
-            ledger_path,
+            Some(ledger_path),
             sigverify_disabled,
-            leader_addr,
-        )
+        );
+
+        match leader_addr {
+            Some(leader_addr) => {
+                info!(
+                "validator ready... local request address: {} (advertising {}) connected to: {}",
+                local_requests_addr, requests_addr, leader_addr
+            );
+            }
+            None => {
+                info!(
+                    "leader ready... local request address: {} (advertising {})",
+                    local_requests_addr, requests_addr
+                );
+            }
+        }
+
+        server
     }
 
-    fn new_with_bank(
+    pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
         ledger_tail: &[Entry],
         mut node: TestNode,
+        leader_info: Option<NodeInfo>,
         exit: Arc<AtomicBool>,
-        ledger_path: &str,
+        ledger_path: Option<&str>,
         sigverify_disabled: bool,
-        leader_addr: Option<SocketAddr>,
     ) -> Self {
-        let local_requests_addr = node.sockets.requests.local_addr().unwrap();
-        let requests_addr = node.data.contact_info.rpu;
-        match leader_addr {
-            Some(leader_addr) => {
-                let network_entry_point = NodeInfo::new_entry_point(leader_addr);
-                let server = Self::new_validator(
+        match leader_info {
+            Some(leader_info) => {
+                // Start in validator mode.
+                Self::new_validator(
                     keypair,
                     bank,
                     entry_height,
                     &ledger_tail,
                     node,
-                    &network_entry_point,
-                    exit.clone(),
-                    Some(ledger_path),
-                    sigverify_disabled,
-                );
-                info!(
-                "validator ready... local request address: {} (advertising {}) connected to: {}",
-                local_requests_addr, requests_addr, leader_addr
-            );
-                server
-            }
-            None => {
-                node.data.leader_id = node.data.id;
-
-                let server = Self::new_leader(
-                    keypair,
-                    bank,
-                    entry_height,
-                    &ledger_tail,
-                    node,
+                    &leader_info,
                     exit.clone(),
                     ledger_path,
                     sigverify_disabled,
-                );
-                info!(
-                    "leader ready... local request address: {} (advertising {})",
-                    local_requests_addr, requests_addr
-                );
-                server
+                )
+            }
+            None => {
+                // Start in leader mode.
+                node.data.leader_id = node.data.id;
+
+                Self::new_leader(
+                    keypair,
+                    bank,
+                    entry_height,
+                    &ledger_tail,
+                    node,
+                    exit.clone(),
+                    ledger_path.expect("ledger path"),
+                    sigverify_disabled,
+                )
             }
         }
     }
@@ -193,7 +202,7 @@ impl Fullnode {
     ///              |                     |    `------------`
     ///              `---------------------`
     /// ```
-    pub fn new_leader(
+    fn new_leader(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -299,7 +308,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
-    pub fn new_validator(
+    fn new_validator(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -409,7 +418,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false);
+        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(entry), exit, None, false);
         v.exit();
         v.join().unwrap();
     }
@@ -423,7 +432,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                Fullnode::new_validator(keypair, bank, 0, &[], tn, &entry, exit, None, false)
+                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(entry), exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
