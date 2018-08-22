@@ -51,14 +51,13 @@ impl Config {
 impl Fullnode {
     fn new_internal(
         node: TestNode,
-        leader: bool,
         ledger_path: &str,
         keypair: Keypair,
-        network_entry_for_validator: Option<SocketAddr>,
+        leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
     ) -> Self {
         info!("creating bank...");
-        let bank = Bank::new_default(leader);
+        let bank = Bank::new_default(leader_addr.is_some());
 
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
 
@@ -79,7 +78,6 @@ impl Fullnode {
         );
         let exit = Arc::new(AtomicBool::new(false));
         Self::new_with_bank(
-            leader,
             keypair,
             bank,
             entry_height,
@@ -87,13 +85,12 @@ impl Fullnode {
             node,
             exit,
             ledger_path,
-            network_entry_for_validator,
             sigverify_disabled,
+            leader_addr,
         )
     }
 
     fn new_with_bank(
-        leader: bool,
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -101,79 +98,70 @@ impl Fullnode {
         mut node: TestNode,
         exit: Arc<AtomicBool>,
         ledger_path: &str,
-        network_entry_for_validator: Option<SocketAddr>,
         sigverify_disabled: bool,
+        leader_addr: Option<SocketAddr>,
     ) -> Self {
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         let requests_addr = node.data.contact_info.rpu;
-        if !leader {
-            let testnet_addr = network_entry_for_validator.expect("validator requires entry");
-
-            let network_entry_point = NodeInfo::new_entry_point(testnet_addr);
-            let server = Self::new_validator(
-                keypair,
-                bank,
-                entry_height,
-                &ledger_tail,
-                node,
-                &network_entry_point,
-                exit.clone(),
-                Some(ledger_path),
-                sigverify_disabled,
-            );
-            info!(
+        match leader_addr {
+            Some(leader_addr) => {
+                let network_entry_point = NodeInfo::new_entry_point(leader_addr);
+                let server = Self::new_validator(
+                    keypair,
+                    bank,
+                    entry_height,
+                    &ledger_tail,
+                    node,
+                    &network_entry_point,
+                    exit.clone(),
+                    Some(ledger_path),
+                    sigverify_disabled,
+                );
+                info!(
                 "validator ready... local request address: {} (advertising {}) connected to: {}",
-                local_requests_addr, requests_addr, testnet_addr
+                local_requests_addr, requests_addr, leader_addr
             );
-            server
-        } else {
-            node.data.leader_id = node.data.id;
+                server
+            }
+            None => {
+                node.data.leader_id = node.data.id;
 
-            let server = Self::new_leader(
-                keypair,
-                bank,
-                entry_height,
-                &ledger_tail,
-                node,
-                exit.clone(),
-                ledger_path,
-                sigverify_disabled,
-            );
-            info!(
-                "leader ready... local request address: {} (advertising {})",
-                local_requests_addr, requests_addr
-            );
-            server
+                let server = Self::new_leader(
+                    keypair,
+                    bank,
+                    entry_height,
+                    &ledger_tail,
+                    node,
+                    exit.clone(),
+                    ledger_path,
+                    sigverify_disabled,
+                );
+                info!(
+                    "leader ready... local request address: {} (advertising {})",
+                    local_requests_addr, requests_addr
+                );
+                server
+            }
         }
     }
 
     pub fn new(
         node: TestNode,
-        leader: bool,
         ledger: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> Self {
-        Self::new_internal(
-            node,
-            leader,
-            ledger,
-            keypair,
-            network_entry_for_validator,
-            false,
-        )
+        Self::new_internal(node, ledger, keypair, network_entry_for_validator, false)
     }
 
     pub fn new_without_sigverify(
         node: TestNode,
-        leader: bool,
         ledger_path: &str,
         keypair: Keypair,
         network_entry_for_validator: Option<SocketAddr>,
     ) -> Self {
         Self::new_internal(
             node,
-            leader,
             ledger_path,
             keypair,
             network_entry_for_validator,
