@@ -35,12 +35,6 @@ with open(sys.argv[1]) as fh:
             stages_data[counter]['last_ts'] = x['now']
             stages_data[counter]['last_count'] = x['counts']
 
-def sum(data):
-    total = 0
-    for x in data:
-        total += x
-    return total
-
 for stage in stages_data.keys():
     stages_data[stage]['data'].sort()
     #mean_index = stages_data[stage]['count'] / 2
