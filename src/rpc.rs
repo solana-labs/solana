@@ -25,6 +25,7 @@ impl JsonRpcService {
     pub fn new(
         bank: Arc<Bank>,
         transactions_addr: SocketAddr,
+        drone_addr: SocketAddr,
         rpc_addr: SocketAddr,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -40,6 +41,7 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
                         request_processor: request_processor.clone(),
                         transactions_addr,
+                        drone_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -76,6 +78,7 @@ impl Service for JsonRpcService {
 pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
     pub transactions_addr: SocketAddr,
+    pub drone_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -97,6 +100,9 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
+
+        #[rpc(meta, name= "requestAirdrop")]
+        fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<bool>;
 
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
@@ -135,6 +141,18 @@ impl RpcSol for RpcSolImpl {
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
+    }
+    fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<bool> {
+        let pubkey_vec = bs58::decode(id)
+            .into_vec()
+            .map_err(|_| Error::invalid_request())?;
+        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+            return Err(Error::invalid_request());
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+        request_airdrop(&meta.drone_addr, &pubkey, tokens)
+            .map_err(|_| Error::internal_error())?;
+        Ok(true)
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
         let tx: Transaction = deserialize(&data).map_err(|_| Error::invalid_request())?;
@@ -182,6 +200,7 @@ mod tests {
     use jsonrpc_core::Response;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::Arc;
     use transaction::Transaction;
 
@@ -197,11 +216,16 @@ mod tests {
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
         let transactions_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let meta = Meta { request_processor, transactions_addr };
+        let meta = Meta {
+            request_processor,
+            transactions_addr,
+            drone_addr,
+        };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -238,6 +262,7 @@ mod tests {
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);
@@ -262,6 +287,7 @@ mod tests {
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
         };
 
         let res = io.handle_request_sync(req, meta);
