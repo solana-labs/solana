@@ -166,7 +166,8 @@ fn add_block_to_retransmit_queue(
         leader_id
     );
     if p.get_id()
-        .expect("get_id in fn add_block_to_retransmit_queue") == leader_id
+        .expect("get_id in fn add_block_to_retransmit_queue")
+        == leader_id
     {
         //TODO
         //need to copy the retransmitted blob

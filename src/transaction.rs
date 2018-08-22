@@ -336,9 +336,9 @@ mod tests {
         let tx = test_tx();
         let sign_data = tx.get_sign_data();
         let tx_bytes = serialize(&tx).unwrap();
-        assert_matches!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
-        assert_matches!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
-        assert_matches!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
+        assert_eq!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
+        assert_eq!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
+        assert_eq!(memfind(&tx_bytes, &tx.from.as_ref()), Some(PUB_KEY_OFFSET));
     }
     #[test]
     fn test_userdata_layout() {
