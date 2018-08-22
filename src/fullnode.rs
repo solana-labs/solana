@@ -121,12 +121,13 @@ impl Fullnode {
         ledger_path: Option<&str>,
         sigverify_disabled: bool,
     ) -> Self {
+        let bank = Arc::new(bank);
         let thread_hdls = match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
                 Self::create_validator_threads(
                     keypair,
-                    bank,
+                    &bank,
                     entry_height,
                     &ledger_tail,
                     node,
@@ -142,7 +143,7 @@ impl Fullnode {
 
                 Self::create_leader_threads(
                     keypair,
-                    bank,
+                    &bank,
                     entry_height,
                     &ledger_tail,
                     node,
@@ -182,7 +183,7 @@ impl Fullnode {
     /// ```
     fn create_leader_threads(
         keypair: Keypair,
-        bank: Bank,
+        bank: &Arc<Bank>,
         entry_height: u64,
         ledger_tail: &[Entry],
         node: TestNode,
@@ -194,7 +195,6 @@ impl Fullnode {
         // TODO: To light up PoH, uncomment the following line:
         //let tick_duration = Some(Duration::from_millis(1000));
 
-        let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
             &bank,
@@ -288,7 +288,7 @@ impl Fullnode {
     /// ```
     fn create_validator_threads(
         keypair: Keypair,
-        bank: Bank,
+        bank: &Arc<Bank>,
         entry_height: u64,
         ledger_tail: &[Entry],
         node: TestNode,
@@ -297,7 +297,6 @@ impl Fullnode {
         ledger_path: Option<&str>,
         _sigverify_disabled: bool,
     ) -> Vec<JoinHandle<()>> {
-        let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
             &bank,
