@@ -121,10 +121,10 @@ impl Fullnode {
         ledger_path: Option<&str>,
         sigverify_disabled: bool,
     ) -> Self {
-        match leader_info {
+        let thread_hdls = match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
-                Self::new_validator(
+                Self::create_validator_threads(
                     keypair,
                     bank,
                     entry_height,
@@ -140,7 +140,7 @@ impl Fullnode {
                 // Start in leader mode.
                 node.data.leader_id = node.data.id;
 
-                Self::new_leader(
+                Self::create_leader_threads(
                     keypair,
                     bank,
                     entry_height,
@@ -151,7 +151,9 @@ impl Fullnode {
                     sigverify_disabled,
                 )
             }
-        }
+        };
+
+        Fullnode { exit, thread_hdls }
     }
 
     /// Create a server instance acting as a leader.
@@ -178,7 +180,7 @@ impl Fullnode {
     ///              |                     |    `------------`
     ///              `---------------------`
     /// ```
-    fn new_leader(
+    fn create_leader_threads(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -187,7 +189,7 @@ impl Fullnode {
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
-    ) -> Self {
+    ) -> Vec<JoinHandle<()>> {
         let tick_duration = None;
         // TODO: To light up PoH, uncomment the following line:
         //let tick_duration = Some(Duration::from_millis(1000));
@@ -252,7 +254,7 @@ impl Fullnode {
         );
         thread_hdls.extend(broadcast_stage.thread_hdls());
 
-        Fullnode { exit, thread_hdls }
+        thread_hdls
     }
 
     /// Create a server instance acting as a validator.
@@ -284,7 +286,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
-    fn new_validator(
+    fn create_validator_threads(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -294,7 +296,7 @@ impl Fullnode {
         exit: Arc<AtomicBool>,
         ledger_path: Option<&str>,
         _sigverify_disabled: bool,
-    ) -> Self {
+    ) -> Vec<JoinHandle<()>> {
         let bank = Arc::new(bank);
         let mut thread_hdls = vec![];
         let rpu = Rpu::new(
@@ -349,7 +351,7 @@ impl Fullnode {
         );
         thread_hdls.extend(tvu.thread_hdls());
         thread_hdls.extend(ncp.thread_hdls());
-        Fullnode { exit, thread_hdls }
+        thread_hdls
     }
 
     //used for notifying many nodes in parallel to exit
