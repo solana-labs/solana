@@ -7,7 +7,7 @@ This is the Solana Javascript API built on the Solana JSON RPC API (**TODO: add
 link**).
 
 
-[API Documentation](TODO!)
+[Latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
 
 
 # Features

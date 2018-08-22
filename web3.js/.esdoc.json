@@ -1,0 +1,43 @@
+{
+  "source": "src",
+  "destination": "doc",
+  "plugins": [
+    {
+      "name": "esdoc-standard-plugin",
+      "option": {
+        "lint": {"enable": true},
+        "undocumentIdentifier": {"enable": true},
+        "unexportedIdentifier": {"enable": false},
+        "coverage": {"enable": true},
+        "accessor": {"access": ["public", "protected"], "autoPrivate": true},
+        "undocumentIdentifier": {"enable": true},
+        "unexportedIdentifier": {"enable": false},
+        "typeInference": {"enable": true},
+        "brand": {
+          "title": "Solana Javascript API",
+          "repository": "https://github.com/solana-labs/solana-web3.js",
+          "site": "https://solana.com"
+        }
+      }
+    },
+    {
+      "name": "esdoc-importpath-plugin",
+      "option": {
+        "stripPackageName": true,
+        "replaces": [
+          {"from": ".*", "to": "@solana/web3"}
+        ]
+      }
+    },
+    {
+      "name": "esdoc-flow-type-plugin",
+      "option": {"enable": true}
+    },
+    {
+      "name": "esdoc-ecmascript-proposal-plugin",
+      "option": {
+        "all": true
+      }
+    }
+  ]
+}

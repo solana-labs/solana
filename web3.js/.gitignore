@@ -19,4 +19,5 @@ flow-typed/npm/*
 # Release
 lib
 
-
+# Generated docs
+doc
