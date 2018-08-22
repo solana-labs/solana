@@ -314,7 +314,7 @@ fn compute_and_report_stats(
 ) {
     // Compute/report stats
     let mut max_of_maxes = 0.0;
-    let mut total_txs = 0;
+    let mut max_tx_count = 0;
     let mut nodes_with_zero_tps = 0;
     let mut total_maxes = 0.0;
     println!(" Node address        |       Max TPS | Total Transactions");
@@ -342,7 +342,9 @@ fn compute_and_report_stats(
         if stats.tps > max_of_maxes {
             max_of_maxes = stats.tps;
         }
-        total_txs += stats.tx;
+        if stats.tx > max_tx_count {
+            max_tx_count = stats.tx;
+        }
     }
 
     if total_maxes > 0.0 {
@@ -355,15 +357,15 @@ fn compute_and_report_stats(
     }
 
     println!(
-        "\nHighest TPS: {:.2} sampling period {}s total transactions: {} clients: {}",
+        "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {}",
         max_of_maxes,
         sample_period,
-        total_txs,
+        max_tx_count,
         maxes.read().unwrap().len()
     );
     println!(
         "\tAverage TPS: {}",
-        total_txs as f32 / duration_as_s(tx_send_elapsed)
+        max_tx_count as f32 / duration_as_s(tx_send_elapsed)
     );
 }
 
