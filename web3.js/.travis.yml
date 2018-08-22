@@ -7,16 +7,33 @@ before_script: npm run lint
 script: npm run test
 after_success: npm run coveralls
 
-branches:
-  only:
-    - master
+before_deploy:
+  - cp -r doc solana_web3_api-$TRAVIS_BRANCH
+  - tar zcf solana_web3_api-$TRAVIS_BRANCH.tgz solana_web3_api-$TRAVIS_BRANCH
+  - cp lib/index.js solana_web3.min.js
 
 deploy:
-  provider: pages
-  skip-cleanup: true
-  github-token: $GITHUB_TOKEN
-  keep-history: true
-  local-dir: doc
-  on:
-    branch: master
-    node_js: "lts/*"
+  - provider: pages
+    skip-cleanup: true
+    github-token: $GITHUB_TOKEN
+    local-dir: doc
+    on:
+      branch: master
+      node_js: "lts/*"
+  - provider: releases
+    skip-cleanup: true
+    file:
+      - solana_web3.min.js
+      - solana_web3_api-$TRAVIS_BRANCH.tgz
+    api_key: $GITHUB_TOKEN
+    on:
+      tags: true
+      node_js: "lts/*"
+  - provider: npm
+    skip-cleanup: true
+    email: $NPM_EMAIL_ADDRESS
+    api_key: $NPM_AUTH_TOKEN
+    on:
+      tags: true
+      node_js: "lts/*"
+

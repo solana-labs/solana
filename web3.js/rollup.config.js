@@ -11,7 +11,7 @@ const config = {
   external: ['react', 'react-dom'],
   output: {
     format: 'umd',
-    name: 'npmPackageES6Boilerplate',
+    name: 'solana_web3',
   },
 
   plugins: [
