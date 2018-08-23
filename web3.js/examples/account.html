@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create a new account</title>
+</head>
+<body>
+  <b>Account Public Key:</b>
+  <div id="accountPublicKey">?</div>
+  <script src="../lib/index.iife.js"></script>
+  <script>
+    // Create a new account
+    const account = new solanaWeb3.Account();
+
+    // Display the account's public key
+    const accountPublicKey = document.getElementById('accountPublicKey');
+    accountPublicKey.innerHTML = account.publicKey;
+  </script>
+  <p>
+  <i>This demo is also available on <a href="https://jsfiddle.net/mvines/sz4pco6y/">JSFiddle</a></i>
+</body>
+</html>

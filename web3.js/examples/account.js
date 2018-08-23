@@ -1,11 +1,5 @@
 /*
-
- Creating a new account
-
- Usage:
- $ npm run dev
- $ node ./account.js
-
+ Create a new account
 */
 
 //eslint-disable-next-line import/no-commonjs
