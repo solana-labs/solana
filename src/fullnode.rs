@@ -79,14 +79,14 @@ impl Fullnode {
         let exit = Arc::new(AtomicBool::new(false));
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         let requests_addr = node.data.contact_info.rpu;
-        let leader_info = leader_addr.map(|x| NodeInfo::new_entry_point(x));
+        let leader_info = leader_addr.map(NodeInfo::new_entry_point);
         let server = Self::new_with_bank(
             keypair,
             bank,
             entry_height,
             &ledger_tail,
             node,
-            leader_info,
+            leader_info.as_ref(),
             exit,
             Some(ledger_path),
             sigverify_disabled,
@@ -166,7 +166,7 @@ impl Fullnode {
         entry_height: u64,
         ledger_tail: &[Entry],
         mut node: TestNode,
-        leader_info: Option<NodeInfo>,
+        leader_info: Option<&NodeInfo>,
         exit: Arc<AtomicBool>,
         ledger_path: Option<&str>,
         sigverify_disabled: bool,
@@ -207,7 +207,7 @@ impl Fullnode {
         thread_hdls.extend(ncp.thread_hdls());
 
         match leader_info {
-            Some(ref leader_info) => {
+            Some(leader_info) => {
                 // Start in validator mode.
                 crdt.write().unwrap().insert(leader_info);
                 let tvu = Tvu::new(
@@ -301,7 +301,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.data.clone();
-        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(entry), exit, None, false);
+        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false);
         v.exit();
         v.join().unwrap();
     }
@@ -315,7 +315,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.data.clone();
-                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(entry), exit, None, false)
+                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
