@@ -3,8 +3,8 @@ import {Account} from '../src/account';
 
 test('generate new account', () => {
   const account = new Account();
-  const len = account.publicKey.length;
-  expect(len === 43 || len === 44);
+  expect(account.publicKey.length).toBeGreaterThanOrEqual(43);
+  expect(account.publicKey.length).toBeLessThanOrEqual(44);
   expect(account.secretKey).toHaveLength(64);
 });
 
