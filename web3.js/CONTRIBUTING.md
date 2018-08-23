@@ -1,4 +1,6 @@
 
+## Test framework
+https://jestjs.io/
 
 ## API Documentation
 ESDoc is used to document the public API.  See

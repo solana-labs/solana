@@ -1,17 +1,16 @@
-import nodeResolve from 'rollup-plugin-node-resolve';
 import babel       from 'rollup-plugin-babel';
-import replace     from 'rollup-plugin-replace';
 import commonjs    from 'rollup-plugin-commonjs';
+import nodeResolve from 'rollup-plugin-node-resolve';
+import replace     from 'rollup-plugin-replace';
 import uglify      from 'rollup-plugin-uglify';
 
 const env = process.env.NODE_ENV;
 
 const config = {
   input: 'src/index.js',
-  external: ['react', 'react-dom'],
   output: {
     format: 'umd',
-    name: 'solana_web3',
+    name: 'solanaWeb3',
   },
 
   plugins: [
