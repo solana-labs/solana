@@ -3,6 +3,11 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import type {KeyPair} from 'tweetnacl';
 
+/**
+ * @typedef {string} PublicKey
+ */
+export type PublicKey = string;
+
 export class Account {
   _keypair: KeyPair;
 
@@ -14,7 +19,7 @@ export class Account {
     }
   }
 
-  get publicKey(): string {
+  get publicKey(): PublicKey {
     return bs58.encode(this._keypair.publicKey);
   }
 
