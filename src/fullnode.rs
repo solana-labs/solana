@@ -176,10 +176,10 @@ impl Fullnode {
         }
 
         let bank = Arc::new(bank);
-        let thread_hdls = match leader_info {
+        let mut thread_hdls = vec![];
+        match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
-                let mut thread_hdls = vec![];
                 let rpu = Rpu::new(
                     &bank,
                     node.sockets.requests,
@@ -228,7 +228,6 @@ impl Fullnode {
                 );
                 thread_hdls.extend(tvu.thread_hdls());
                 thread_hdls.extend(ncp.thread_hdls());
-                thread_hdls
             }
             None => {
                 // Start in leader mode.
@@ -237,7 +236,6 @@ impl Fullnode {
                 // TODO: To light up PoH, uncomment the following line:
                 //let tick_duration = Some(Duration::from_millis(1000));
 
-                let mut thread_hdls = vec![];
                 let rpu = Rpu::new(
                     &bank,
                     node.sockets.requests,
@@ -291,10 +289,8 @@ impl Fullnode {
                     blob_receiver,
                 );
                 thread_hdls.extend(broadcast_stage.thread_hdls());
-
-                thread_hdls
             }
-        };
+        }
 
         Fullnode { exit, thread_hdls }
     }
