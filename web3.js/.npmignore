@@ -17,13 +17,15 @@ flow-typed/*
 
 # Sources, tests and builder files
 builder
+deploy
 src
 test
 internals
 .flowconfig
 .babelrc
 .eslintignore
-.eslintrc
+.esdoc.json
+.eslintrc.js
 .travis.yml
 jest.json
 renovate.json
