@@ -14,6 +14,7 @@ function generateConfig(configType) {
     input: 'src/index.js',
     plugins: [
       nodeResolve(),
+      json(),
       babel({
         exclude: '**/node_modules/**',
         runtimeHelpers: true,
@@ -47,7 +48,6 @@ function generateConfig(configType) {
         name: 'solanaWeb3',
       },
     ];
-    config.plugins.unshift(json());
     config.plugins.push(builtins());
     config.plugins.push(globals());
     break;

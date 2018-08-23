@@ -49,8 +49,8 @@
     "babel-preset-stage-0": "6.24.1",
     "babel-runtime": "^6.26.0",
     "bs58": "^4.0.1",
-    "cross-env": "5.1.4",
     "codecov": "^3.0.4",
+    "cross-env": "5.1.4",
     "enzyme": "3.3.0",
     "esdoc": "^1.1.0",
     "esdoc-ecmascript-proposal-plugin": "^1.0.0",
@@ -65,7 +65,10 @@
     "flow-bin": "0.70.0",
     "flow-typed": "2.4.0",
     "fs-file-tree": "1.0.6",
+    "jayson": "^2.0.6",
     "jest": "22.4.3",
+    "joi": "^13.6.0",
+    "node-fetch": "^2.2.0",
     "rimraf": "2.6.2",
     "rollup": "0.58.1",
     "rollup-plugin-babel": "3.0.3",
@@ -76,6 +79,7 @@
     "rollup-plugin-node-resolve": "3.3.0",
     "rollup-plugin-replace": "2.0.0",
     "rollup-plugin-uglify": "3.0.0",
+    "superstruct": "^0.5.4",
     "tweetnacl": "^1.0.0",
     "watch": "^1.0.2"
   }

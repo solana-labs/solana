@@ -7,6 +7,7 @@ declare module "tweetnacl" {
   declare module.exports: {
     sign: {
       keyPair(): KeyPair;
+      detached(text: Buffer, secretKey: Buffer): Buffer;
     };
   };
 }
