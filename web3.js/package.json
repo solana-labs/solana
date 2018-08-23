@@ -24,7 +24,6 @@
   "browser": "lib/index.iife.js",
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
-    "postinstall": "flow-typed install jest@22",
     "dev": "cross-env NODE_ENV=development rollup -c",
     "build": "cross-env NODE_ENV=production rollup -c",
     "doc": "esdoc",
@@ -33,9 +32,11 @@
     "test:watch": "cross-env NODE_ENV=test jest --watch",
     "test:cover": "cross-env NODE_ENV=test jest --coverage",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
-    "flow": "flow",
-    "flow-typed": "npm run clean && flow-typed install --overwrite || true",
+    "flow": "flow-typed install jest@22 && flow",
+    "flow:watch": "watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "lint": "eslint src test examples",
+    "lint:fix": "npm run lint --fix",
+    "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "prepublish": "npm run clean && npm run test && npm run flow && npm run lint && npm run doc && npm run build"
   },
   "dependencies": {},
