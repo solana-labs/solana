@@ -54,6 +54,6 @@ See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/ex
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
 and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js).
 
-Each Github release features a tarball containing the API documentation release
-and a minified version of the module suitable for direct use in a browser
-environment (&lt;script&gt; tag)
+Each Github release features a tarball containing API documentation and a
+minified version of the module suitable for direct use in a browser environment
+(&lt;script&gt; tag)
