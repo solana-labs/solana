@@ -186,8 +186,16 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
+        let mut drone_addr = node.data.contact_info.tpu;
+        drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
-        let rpc_service = JsonRpcService::new(bank.clone(), rpc_addr, exit.clone());
+        let rpc_service = JsonRpcService::new(
+            &bank,
+            node.data.contact_info.tpu,
+            drone_addr,
+            rpc_addr,
+            exit.clone(),
+        );
         thread_hdls.extend(rpc_service.thread_hdls());
 
         let blob_recycler = BlobRecycler::default();
