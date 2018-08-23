@@ -19,7 +19,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "lib/index.umd.js",
+  "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
   "browser": "lib/index.iife.js",
   "scripts": {
