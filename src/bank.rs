@@ -249,18 +249,17 @@ impl Bank {
         &self,
         tx: &Transaction,
         accounts: &mut HashMap<Pubkey, Account>,
+        vote_no_account_err: &mut usize,
+        no_account_err: &mut usize,
     ) -> Result<()> {
         let mut purge = false;
         {
             let option = accounts.get_mut(&tx.from);
             if option.is_none() {
-                // TODO: this is gnarly because the counters are static atomics
-                if !self.is_leader {
-                    inc_new_counter_info!("bank-appy_debits-account_not_found-validator", 1);
-                } else if let Instruction::NewVote(_) = &tx.instruction {
-                    inc_new_counter_info!("bank-appy_debits-vote_account_not_found", 1);
+                if let Instruction::NewVote(_) = &tx.instruction {
+                    *vote_no_account_err += 1;
                 } else {
-                    inc_new_counter_info!("bank-appy_debits-generic_account_not_found", 1);
+                    *no_account_err += 1;
                 }
                 return Err(BankError::AccountNotFound(tx.from));
             }
@@ -336,7 +335,9 @@ impl Bank {
     /// to progress, the payment plan will be stored in the bank.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let accounts = &mut self.accounts.write().unwrap();
-        self.apply_debits(tx, accounts)?;
+        let mut vote_no_account_err = 0;
+        let mut no_account_err = 0;
+        self.apply_debits(tx, accounts, &mut vote_no_account_err, &mut no_account_err)?;
         self.apply_credits(tx, accounts);
         self.save_data(tx, accounts);
         self.transaction_count.fetch_add(1, Ordering::Relaxed);
@@ -349,10 +350,15 @@ impl Bank {
         let accounts = &mut self.accounts.write().unwrap();
         debug!("processing Transactions {}", txs.len());
         let txs_len = txs.len();
+        let mut vote_no_account_err = 0;
+        let mut no_account_err = 0;
         let now = Instant::now();
         let results: Vec<_> = txs
             .into_iter()
-            .map(|tx| self.apply_debits(&tx, accounts).map(|_| tx))
+            .map(|tx| {
+                self.apply_debits(&tx, accounts, &mut vote_no_account_err, &mut no_account_err)
+                    .map(|_| tx)
+            })
             .collect(); // Calling collect() here forces all debits to complete before moving on.
 
         let debits = now.elapsed();
@@ -390,9 +396,18 @@ impl Bank {
         if err_count > 0 {
             info!("{} errors of {} txs", err_count, err_count + tx_count);
             if !self.is_leader {
-                inc_new_counter_info!("bank-proccess_transactions_err-validator", err_count);
+                inc_new_counter_info!("bank-process_transactions_err-validator", err_count);
+                inc_new_counter_info!(
+                    "bank-appy_debits-account_not_found-validator",
+                    no_account_err
+                );
             } else {
-                inc_new_counter_info!("bank-proccess_transactions_err-leader", err_count);
+                inc_new_counter_info!("bank-process_transactions_err-leader", err_count);
+                inc_new_counter_info!("bank-appy_debits-generic_account_not_found", no_account_err);
+                inc_new_counter_info!(
+                    "bank-appy_debits-vote_account_not_found",
+                    vote_no_account_err
+                );
             }
         }
         self.transaction_count
