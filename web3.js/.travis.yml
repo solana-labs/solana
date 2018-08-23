@@ -10,6 +10,7 @@ script:
   - for example in examples/*.js; do node $example; done
 after_success:
   - npm run coveralls
+  - npm run codecov
 
 before_deploy:
   - rm -rf deploy
