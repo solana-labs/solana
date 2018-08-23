@@ -16,9 +16,9 @@ export type TransactionSignature = string;
 /**
  * @typedef {string} TransactionId
  */
-export type TransactionId= string;
+export type TransactionId = string;
 
-type RpcRequest = (methodName: string, args: Array<string>) => any;
+type RpcRequest = (methodName: string, args: Array<string|number>) => any;
 
 function createRpcRequest(url): RpcRequest {
   const server = jayson(
@@ -87,6 +87,12 @@ const GetFinalityRpcResult = struct({
   id: 'string',
   error: 'any?',
   result: 'number?',
+});
+const RequestAirdropRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: 'boolean?',
 });
 
 function sleep(duration = 0) {
@@ -158,9 +164,14 @@ export class Connection {
     return Number(res.result);
   }
 
-  async requestAirdrop(account: Account, amount: number): Promise<void> {
-    console.log(`TODO: airdrop ${amount} to ${account.publicKey}`);
-    await sleep(500); // TODO
+  async requestAirdrop(to: PublicKey, amount: number): Promise<void> {
+    const unsafeRes = await this._rpcRequest('requestAirdrop', [to, amount]);
+    const res = RequestAirdropRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    assert(res.result);
   }
 
   async sendTokens(from: Account, to: PublicKey, amount: number): Promise<TransactionSignature> {

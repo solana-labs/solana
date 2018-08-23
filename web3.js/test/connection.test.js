@@ -42,4 +42,17 @@ test.skip('get finality', async () => {
   expect(finality).toBeGreaterThanOrEqual(0);
 });
 
+test.skip('request airdrop', async () => {
+  const account = new Account();
+  const connection = new Connection(url);
+
+  await Promise.all([
+    connection.requestAirdrop(account.publicKey, 40),
+    connection.requestAirdrop(account.publicKey, 2),
+  ]);
+
+  const balance = await connection.getBalance(account.publicKey);
+  expect(balance).toBe(42);
+});
+
 
