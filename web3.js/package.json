@@ -67,7 +67,6 @@
     "fs-file-tree": "1.0.6",
     "jayson": "^2.0.6",
     "jest": "22.4.3",
-    "joi": "^13.6.0",
     "node-fetch": "^2.2.0",
     "rimraf": "2.6.2",
     "rollup": "0.58.1",
