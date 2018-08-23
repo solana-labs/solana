@@ -247,7 +247,7 @@ impl Packets {
             trace!("receiving on {}", socket.local_addr().unwrap());
             match socket.recv_from(&mut p.data) {
                 Err(_) if i > 0 => {
-                    inc_new_counter_info!("packets-recv_count", 1);
+                    inc_new_counter_info!("packets-recv_count", i);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
                 }
