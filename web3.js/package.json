@@ -31,13 +31,16 @@
     "test": "cross-env NODE_ENV=test jest",
     "test:watch": "cross-env NODE_ENV=test jest --watch",
     "test:cover": "cross-env NODE_ENV=test jest --coverage",
+    "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
     "coveralls": "npm run test:cover && cat ./coverage/lcov.info | coveralls",
     "flow": "flow",
     "flow-typed": "npm run clean && flow-typed install --overwrite || true",
     "lint": "eslint src examples",
     "prepublish": "npm run clean && npm run test && npm run flow && npm run lint && npm run doc && npm run build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "codecov": "^3.0.4"
+  },
   "devDependencies": {
     "babel-core": "6.26.0",
     "babel-eslint": "8.2.3",
