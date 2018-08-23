@@ -1,5 +1,10 @@
 
-## Test framework
+## Static Analysis
+eslint and flow-type are used.
+
+Helpful link: https://www.saltycrane.com/flow-type-cheat-sheet/latest/
+
+## Testing Framework
 https://jestjs.io/
 
 ## API Documentation
