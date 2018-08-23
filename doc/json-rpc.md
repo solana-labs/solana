@@ -9,7 +9,7 @@ RPC Endpoint
 ---
 
 **Default port:** 8899  
-eg. http://localhost:8899, 192.168.1.88:8899
+eg. http://localhost:8899, http://192.168.1.88:8899
 
 Methods
 ---
@@ -44,6 +44,14 @@ The response output will be a JSON object with the following fields:
 
 Requests can be sent in batches by sending an array of JSON-RPC request objects as the data for a single POST.
 
+Definitions
+---
+
+* Hash: A SHA-256 hash of a chunk of data.
+* Pubkey: The public key of a Ed25519 key-pair.
+* Signature: An Ed25519 signature of a chunk of data.
+* Transaction: A Solana instruction signed by a client key-pair.
+
 JSON RPC API Reference
 ---
 
@@ -51,10 +59,10 @@ JSON RPC API Reference
 Returns a transaction receipt
 
 ##### Parameters:
-* `string` - SIGNATURE of transaction to confirm, as base-58 encoded string
+* `string` - Signature of Transaction to confirm, as base-58 encoded string
 
 ##### Results:
-* `boolean` - transaction status, true if transaction is confirmed
+* `boolean` - Transaction status, true if Transaction is confirmed
 
 ##### Example:
 ```bash
@@ -68,13 +76,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 ---
 
 ### getBalance
-Returns the balance of the account of provided pubkey
+Returns the balance of the account of provided Pubkey
 
 ##### Parameters:
-* `string` - PUBKEY of account to query, as base-58 encoded string
+* `string` - Pubkey of account to query, as base-58 encoded string
 
 ##### Results:
-* `integer` - quantity, as a signed 64-bit integer i64
+* `integer` - quantity, as a signed 64-bit integer
 
 ##### Example:
 ```bash
@@ -88,13 +96,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 ---
 
 ### getLastId
-Returns the last entry id from the ledger
+Returns the last entry ID from the ledger
 
 ##### Parameters:
 None
 
 ##### Results:
-* `string` - HASH of last ID, as base-58 encoded string
+* `string` - the ID of last entry, a Hash as base-58 encoded string
 
 ##### Example:
 ```bash
@@ -108,13 +116,13 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 ---
 
 ### getTransactionCount
-Returns the current transaction count from the ledger
+Returns the current Transaction count from the ledger
 
 ##### Parameters:
 None
 
 ##### Results:
-* `integer` - count, as unsigned 64-bit integer u64
+* `integer` - count, as unsigned 64-bit integer
 
 ##### Example:
 ```bash
@@ -131,10 +139,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 Creates new transaction
 
 ##### Parameters:
-* `array` - array of octets [u8] containing a fully-signed TRANSACTION
+* `array` - array of octets containing a fully-signed Transaction
 
 ##### Results:
-* `string` - transaction SIGNATURE, as base-58 encoded string
+* `string` - Transaction Signature, as base-58 encoded string
 
 ##### Example:
 ```bash
