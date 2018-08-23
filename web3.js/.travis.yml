@@ -8,9 +8,11 @@ script: npm run test
 after_success: npm run coveralls
 
 before_deploy:
-  - cp -r doc solanaWeb3Api-$TRAVIS_BRANCH
-  - tar zcf solanaWeb3Api.tgz solanaWeb3Api-$TRAVIS_BRANCH
-  - cp lib/index.iife.js solanaWeb3.min.js
+  - rm -rf deploy
+  - mkdir -p deploy
+  - cp -r doc deploy/solanaWeb3Api-$TRAVIS_BRANCH
+  - cp lib/index.iife.js deploy/solanaWeb3.min.js
+  - ( cd deploy; tar zcf solanaWeb3Api.tgz solanaWeb3Api-$TRAVIS_BRANCH )
 
 deploy:
   - provider: pages
@@ -23,8 +25,8 @@ deploy:
   - provider: releases
     skip-cleanup: true
     file:
-      - solanaWeb3.min.js
-      - solanaWeb3Api.tgz
+      - deploy/solanaWeb3.min.js
+      - deploy/solanaWeb3Api.tgz
     api_key: $GITHUB_TOKEN
     on:
       tags: true
