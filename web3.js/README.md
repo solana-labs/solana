@@ -10,22 +10,47 @@ link**).
 [Latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
 
 
-## Getting started
+## Installation
 
+### Yarn
+```
+$ yarn add @solana/web3.js
+```
+
+### npm
 ```
 $ npm install --save @solana/web3.js
 ```
 
+### Browser bundle
+```html
+<script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.0.3/solanaWeb3.min.js"></script>
+```
+
+## Usage
+
+### Javascript
+```js
+const solanaWeb3 = require('@solana/web3.js');
+console.log(solanaWeb3);
+```
+
+### ES6
+```js
+import solanaWeb3 from '@solana/web3.js';
+console.log(solanaWeb3);
+```
+
+### Browser bundle
+```js
+// `solanaWeb3` is provided in the global namespace by the `solanaWeb3.min.js` script bundle.
+console.log(solanaWeb3);
+```
+
 ## Examples
-
-See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples)
-for simple examples of using the API from node.
-
-Browser-based examples are also available:
-* Account creation - https://jsfiddle.net/mvines/sz4pco6y/
+See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory
 
 ## Releases
-
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
 and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js).
 
