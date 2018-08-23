@@ -36,7 +36,9 @@
     "prepublish": "npm run clean && npm run test && npm run flow && npm run lint && npm run doc && npm run build"
   },
   "dependencies": {
-    "babel-runtime": "^6.26.0"
+    "babel-runtime": "^6.26.0",
+    "bs58": "^4.0.1",
+    "tweetnacl": "^1.0.0"
   },
   "devDependencies": {
     "babel-core": "6.26.0",
