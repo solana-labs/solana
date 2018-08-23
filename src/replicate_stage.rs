@@ -20,6 +20,7 @@ use std::time::Duration;
 use streamer::{responder, BlobReceiver};
 use vote_stage::VoteStage;
 use voting::entries_to_votes;
+use voting_nodes::VotingNodes;
 
 pub struct ReplicateStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -30,6 +31,7 @@ impl ReplicateStage {
     fn replicate_requests(
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
         blob_recycler: &BlobRecycler,
         window_receiver: &BlobReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
@@ -50,8 +52,7 @@ impl ReplicateStage {
 
         {
             let votes = entries_to_votes(&entries);
-            let mut wcrdt = crdt.write().unwrap();
-            wcrdt.insert_votes(&votes);
+            voting_nodes.write().unwrap().insert_votes(crdt, &votes);
         }
 
         inc_new_counter_info!(
@@ -79,6 +80,7 @@ impl ReplicateStage {
         window_receiver: BlobReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
+        voting_nodes: Arc<RwLock<VotingNodes>>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -106,6 +108,7 @@ impl ReplicateStage {
                 if let Err(e) = Self::replicate_requests(
                     &bank,
                     &crdt,
+                    &voting_nodes,
                     &blob_recycler,
                     &window_receiver,
                     ledger_writer.as_mut(),

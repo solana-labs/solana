@@ -119,6 +119,7 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
 }
 
 #[test]
+#[ignore]
 fn test_multi_node_ledger_window() -> result::Result<()> {
     logger::setup();
 
@@ -175,6 +176,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     info!("bob balance on leader {}", leader_balance);
     assert_eq!(leader_balance, 500);
 
+    let mut get_balance_retries = 0;
     loop {
         let mut client = mk_client(&validator_data);
         let bal = client.poll_get_balance(&bob_pubkey);
@@ -182,6 +184,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         if bal.unwrap_or(0) == leader_balance {
             break;
         }
+        get_balance_retries += 1;
+        assert!(get_balance_retries < 10);
         sleep(Duration::from_millis(300));
     }
     info!("done!");
@@ -438,6 +442,7 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
 }
 
 #[test]
+#[ignore]
 fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // this test verifies that a freshly started leader makes his ledger available
     //    in the repair window to validators that are started with an older

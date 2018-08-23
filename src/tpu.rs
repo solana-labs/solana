@@ -40,6 +40,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
+use voting_nodes::VotingNodes;
 use write_stage::WriteStage;
 
 pub struct Tpu {
@@ -51,6 +52,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Keypair,
         bank: &Arc<Bank>,
@@ -61,6 +63,7 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
     ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
 
@@ -87,6 +90,7 @@ impl Tpu {
             blob_recycler.clone(),
             ledger_path,
             entry_receiver,
+            voting_nodes.clone(),
         );
 
         let tpu = Tpu {

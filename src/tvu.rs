@@ -48,6 +48,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
+use voting_nodes::VotingNodes;
 use window::SharedWindow;
 
 pub struct Tvu {
@@ -80,6 +81,7 @@ impl Tvu {
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
+        voting_nodes: Arc<RwLock<VotingNodes>>,
     ) -> Self {
         let blob_recycler = BlobRecycler::default();
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
@@ -107,6 +109,7 @@ impl Tvu {
             blob_window_receiver,
             ledger_path,
             exit,
+            voting_nodes,
         );
 
         Tvu {
@@ -162,6 +165,7 @@ pub mod tests {
     use streamer;
     use transaction::Transaction;
     use tvu::Tvu;
+    use voting_nodes::VotingNodes;
     use window::{self, SharedWindow};
 
     fn new_ncp(
@@ -233,6 +237,7 @@ pub mod tests {
         crdt1.set_leader(leader.data.id);
         let cref1 = Arc::new(RwLock::new(crdt1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
+        let voting_nodes = Arc::new(RwLock::new(VotingNodes::new(cref1.clone(), exit.clone())));
 
         let tvu = Tvu::new(
             target1_keypair,
@@ -245,6 +250,7 @@ pub mod tests {
             target1.sockets.retransmit,
             None,
             exit.clone(),
+            voting_nodes,
         );
 
         let mut alice_ref_balance = starting_balance;

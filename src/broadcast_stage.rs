@@ -16,6 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
+use voting_nodes::VotingNodes;
 use window::{self, SharedWindow, WindowIndex, WINDOW_SIZE};
 
 fn broadcast(
@@ -132,6 +133,7 @@ impl BroadcastStage {
         entry_height: u64,
         recycler: &BlobRecycler,
         receiver: &BlobReceiver,
+        voting_nodes: &Arc<RwLock<VotingNodes>>,
     ) {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -140,7 +142,7 @@ impl BroadcastStage {
         let mut receive_index = entry_height;
         let me = crdt.read().unwrap().my_data().clone();
         loop {
-            let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
+            let broadcast_table = voting_nodes.read().unwrap().compute_broadcast_table(crdt);
             if let Err(e) = broadcast(
                 &me,
                 &broadcast_table,
@@ -180,11 +182,20 @@ impl BroadcastStage {
         entry_height: u64,
         recycler: BlobRecycler,
         receiver: BlobReceiver,
+        voting_nodes: Arc<RwLock<VotingNodes>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
+                Self::run(
+                    &sock,
+                    &crdt,
+                    &window,
+                    entry_height,
+                    &recycler,
+                    &receiver,
+                    &voting_nodes,
+                );
             })
             .unwrap();
 
