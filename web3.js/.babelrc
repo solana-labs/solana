@@ -8,7 +8,9 @@
   "env": {
     "test": {
       "presets": [
-        "env"
+        "env",
+        "stage-0",
+        "flow"
       ]
     }
   },

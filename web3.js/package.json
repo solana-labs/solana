@@ -24,6 +24,7 @@
   "browser": "lib/index.iife.js",
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
+    "postinstall": "flow-typed install jest@22",
     "dev": "cross-env NODE_ENV=development rollup -c",
     "build": "cross-env NODE_ENV=production rollup -c",
     "doc": "esdoc",

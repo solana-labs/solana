@@ -1,3 +1,4 @@
+// @flow
 import {Account} from '../src/account';
 
 test('generate new account', () => {
