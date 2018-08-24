@@ -54,6 +54,7 @@ function createRpcRequest(url): RpcRequest {
   };
 }
 
+
 /**
  * Expected JSON RPC response for the "getBalance" message
  */
@@ -237,9 +238,9 @@ export class Connection {
       // TODO: This is not the correct transaction payload
       `Transaction ${from.publicKey} ${to} ${amount}`
     );
+
     const signedTransaction = nacl.sign.detached(transaction, from.secretKey);
-    console.log(typeof signedTransaction);
-    console.log([...signedTransaction]);
+
     const unsafeRes = await this._rpcRequest('sendTransaction', [[...signedTransaction]]);
     const res = SendTokensRpcResult(unsafeRes);
     if (res.error) {
