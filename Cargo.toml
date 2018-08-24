@@ -72,7 +72,7 @@ chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
 env_logger = "0.5.12"
-generic-array = { version = "0.11.1", default-features = false, features = ["serde"] }
+generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 influx_db_client = "0.3.4"
 jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "4486300" }
