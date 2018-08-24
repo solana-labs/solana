@@ -14,6 +14,14 @@ if (process.env.DOITLIVE) {
   jest.mock('node-fetch');
 }
 
+const errorMessage = 'Invalid request';
+const errorResponse = {
+  error: {
+    message: errorMessage,
+  },
+  result: undefined,
+};
+
 test('get balance', async () => {
   const account = new Account();
   const connection = new Connection(url);
@@ -34,11 +42,27 @@ test('get balance', async () => {
   expect(balance).toBeGreaterThanOrEqual(0);
 });
 
-test('throws on bad transaction confirmation', () => {
+test('get balance - error', () => {
+  const connection = new Connection(url);
+
+  const invalidPublicKey = 'not a public key';
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [invalidPublicKey],
+    },
+    errorResponse,
+  ]);
+
+  expect(connection.getBalance(invalidPublicKey))
+  .rejects.toThrow(errorMessage);
+});
+
+test('confirm transaction - error', () => {
   const connection = new Connection(url);
 
   const badTransactionSignature = 'bad transaction signature';
-  const errorMessage = 'Invalid request';
 
   mockRpc.push([
     url,
@@ -46,12 +70,7 @@ test('throws on bad transaction confirmation', () => {
       method: 'confirmTransaction',
       params: [badTransactionSignature],
     },
-    {
-      error: {
-        message: errorMessage,
-      },
-      result: undefined,
-    }
+    errorResponse,
   ]
   );
 
@@ -164,7 +183,24 @@ test('request airdrop', async () => {
   expect(balance).toBe(42);
 });
 
-test('throws on bad transaction', () => {
+test('request airdrop - error', () => {
+  const invalidPublicKey = 'not a public key';
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [invalidPublicKey, 1],
+    },
+    errorResponse
+  ]);
+
+  expect(connection.requestAirdrop(invalidPublicKey, 1))
+  .rejects.toThrow(errorMessage);
+});
+
+test('send transaction - error', () => {
   const secretKey = Buffer.from([
     153, 218, 149, 89, 225, 94, 145, 62, 233, 171, 46, 83, 227,
     223, 173, 87, 93, 163, 59, 73, 190, 17, 37, 187, 146, 46, 51,
@@ -175,7 +211,6 @@ test('throws on bad transaction', () => {
   const account = new Account(secretKey);
   const connection = new Connection(url);
 
-  const errorMessage = 'Invalid request';
   mockRpc.push([
     url,
     {
@@ -188,12 +223,7 @@ test('throws on bad transaction', () => {
         134, 216, 209, 8, 211, 209, 44, 1
       ]],
     },
-    {
-      error: {
-        message: errorMessage,
-      },
-      result: undefined,
-    }
+    errorResponse,
   ]);
 
 
