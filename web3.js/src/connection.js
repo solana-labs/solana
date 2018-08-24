@@ -18,7 +18,7 @@ export type TransactionSignature = string;
  */
 export type TransactionId = string;
 
-type RpcRequest = (methodName: string, args: Array<string|number>) => any;
+type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 function createRpcRequest(url): RpcRequest {
   const server = jayson(
@@ -94,12 +94,12 @@ const RequestAirdropRpcResult = struct({
   error: 'any?',
   result: 'boolean?',
 });
-
-function sleep(duration = 0) {
-  return new Promise((accept) => {
-    setTimeout(accept, duration);
-  });
-}
+const SendTokensRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: 'string?',
+});
 
 export class Connection {
   _rpcRequest: RpcRequest;
@@ -182,11 +182,17 @@ export class Connection {
       // TODO: This is not the correct transaction payload
       `Transaction ${from.publicKey} ${to} ${amount}`
     );
-    const signature = nacl.sign.detached(transaction, from.secretKey);
-
-    console.log('Created signature of length', signature.length);
-    await sleep(500); // TODO: transmit transaction + signature
-    throw new Error(`Unable to send ${amount} tokens to ${to}`);
+    const signedTransaction = nacl.sign.detached(transaction, from.secretKey);
+    console.log(typeof signedTransaction);
+    console.log([...signedTransaction]);
+    const unsafeRes = await this._rpcRequest('sendTransaction', [[...signedTransaction]]);
+    const res = SendTokensRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    assert(res.result);
+    return res.result;
   }
 }
 
