@@ -1355,9 +1355,14 @@ impl TestNode {
             },
         }
     }
-    pub fn new_with_external_ip(pubkey: Pubkey, ip: IpAddr, ncp_port: u16) -> TestNode {
-        fn bind() -> (u16, UdpSocket) {
-            match udp_random_bind(8100, 10000, 5) {
+    pub fn new_with_external_ip(
+        pubkey: Pubkey,
+        ip: IpAddr,
+        port_range: (u16, u16),
+        ncp_port: u16,
+    ) -> TestNode {
+        fn bind(port_range: (u16, u16)) -> (u16, UdpSocket) {
+            match udp_random_bind(port_range.0, port_range.1, 5) {
                 Ok(socket) => (socket.local_addr().unwrap().port(), socket),
                 Err(err) => {
                     panic!("Failed to bind to {:?}", err);
@@ -1378,12 +1383,12 @@ impl TestNode {
         let (gossip_port, gossip) = if ncp_port != 0 {
             (ncp_port, bind_to(ncp_port))
         } else {
-            bind()
+            bind(port_range)
         };
-        let (replicate_port, replicate) = bind();
-        let (requests_port, requests) = bind();
-        let (transaction_port, transaction) = bind();
-        let (repair_port, repair) = bind();
+        let (replicate_port, replicate) = bind(port_range);
+        let (requests_port, requests) = bind(port_range);
+        let (transaction_port, transaction) = bind(port_range);
+        let (repair_port, repair) = bind(port_range);
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
@@ -1430,7 +1435,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use crdt::{
-        parse_port_or_addr, Crdt, CrdtError, NodeInfo, Protocol, GOSSIP_PURGE_MILLIS,
+        parse_port_or_addr, Crdt, CrdtError, NodeInfo, Protocol, TestNode, GOSSIP_PURGE_MILLIS,
         GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
     use entry::Entry;
@@ -1441,6 +1446,7 @@ mod tests {
     use result::Error;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::fs::remove_dir_all;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -2132,5 +2138,85 @@ mod tests {
         let network_entry_point = NodeInfo::new_entry_point("127.0.0.1:1239".parse().unwrap());
         crdt.insert(&network_entry_point);
         assert!(crdt.leader_data().is_none());
+    }
+
+    #[test]
+    fn new_with_external_ip_test_random() {
+        let sockaddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080);
+        let node =
+            TestNode::new_with_external_ip(Keypair::new().pubkey(), sockaddr.ip(), (8100, 8200), 0);
+
+        assert_eq!(
+            node.sockets.gossip.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.replicate.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.requests.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.transaction.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.repair.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+
+        assert!(node.sockets.gossip.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.gossip.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.requests.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.repair.local_addr().unwrap().port() <= 8200);
+    }
+
+    #[test]
+    fn new_with_external_ip_test_gossip() {
+        let sockaddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080);
+        let node = TestNode::new_with_external_ip(
+            Keypair::new().pubkey(),
+            sockaddr.ip(),
+            (8100, 8200),
+            8050,
+        );
+        assert_eq!(
+            node.sockets.gossip.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.replicate.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.requests.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.transaction.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+        assert_eq!(
+            node.sockets.repair.local_addr().unwrap().ip(),
+            sockaddr.ip()
+        );
+
+        assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.requests.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() <= 8200);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= 8100);
+        assert!(node.sockets.repair.local_addr().unwrap().port() <= 8200);
     }
 }

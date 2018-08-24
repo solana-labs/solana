@@ -75,12 +75,19 @@ fn main() -> () {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
+    let port_range = (8100, 10000);
     let node = if let Some(_t) = matches.value_of("testnet") {
-        TestNode::new_with_external_ip(leader_pubkey, repl_data.contact_info.ncp.ip(), 0)
+        TestNode::new_with_external_ip(
+            leader_pubkey,
+            repl_data.contact_info.ncp.ip(),
+            port_range,
+            0,
+        )
     } else {
         TestNode::new_with_external_ip(
             leader_pubkey,
             repl_data.contact_info.ncp.ip(),
+            port_range,
             repl_data.contact_info.ncp.port(),
         )
     };
