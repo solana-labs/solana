@@ -64,6 +64,25 @@ function generateConfig(configType) {
         format: 'es',
       },
     ];
+
+    // Quash 'Unresolved dependencies' complaints for modules listed in the
+    // package.json "dependencies" section.  Unfortunately this list is manually
+    // maintained.
+    config.external = [
+      'assert',
+      'babel-runtime/core-js/promise',
+      'babel-runtime/helpers/asyncToGenerator',
+      'babel-runtime/helpers/classCallCheck',
+      'babel-runtime/helpers/createClass',
+      'babel-runtime/helpers/toConsumableArray',
+      'babel-runtime/helpers/typeof',
+      'babel-runtime/regenerator',
+      'bs58',
+      'jayson/lib/client/browser',
+      'node-fetch',
+      'superstruct',
+      'tweetnacl',
+    ];
     break;
   default:
     throw new Error(`Unknown configType: ${configType}`);
