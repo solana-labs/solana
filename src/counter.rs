@@ -74,11 +74,12 @@ impl Counter {
         if times % lograte == 0 && times > 0 {
             let lastlog = self.lastlog.load(Ordering::Relaxed);
             info!(
-                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}}}",
+                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
                 self.name,
-                counts,
+                counts + events,
                 times,
                 timing::timestamp(),
+                events,
             );
             metrics::submit(
                 influxdb::Point::new(&format!("counter-{}", self.name))

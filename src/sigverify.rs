@@ -98,7 +98,7 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .collect()
         })
         .collect();
-    inc_new_counter_info!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
 
@@ -117,7 +117,7 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .collect()
         })
         .collect();
-    inc_new_counter_info!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify_disabled", count);
     rv
 }
 
@@ -204,7 +204,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
             num += 1;
         }
     }
-    inc_new_counter_info!("ed25519_verify", count);
+    inc_new_counter_info!("ed25519_verify_gpu", count);
     rvs
 }
 
