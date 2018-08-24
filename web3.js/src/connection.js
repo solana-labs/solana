@@ -54,6 +54,9 @@ function createRpcRequest(url): RpcRequest {
   };
 }
 
+/**
+ * Expected JSON RPC response for the "getBalance" message
+ */
 const GetBalanceRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
@@ -61,6 +64,9 @@ const GetBalanceRpcResult = struct({
   result: 'number?',
 });
 
+/**
+ * Expected JSON RPC response for the "confirmTransaction" message
+ */
 const ConfirmTransactionRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
@@ -68,6 +74,9 @@ const ConfirmTransactionRpcResult = struct({
   result: 'boolean?',
 });
 
+/**
+ * Expected JSON RPC response for the "getTransactionCount" message
+ */
 const GetTransactionCountRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
@@ -75,6 +84,9 @@ const GetTransactionCountRpcResult = struct({
   result: 'number?',
 });
 
+/**
+ * Expected JSON RPC response for the "getLastId" message
+ */
 const GetLastId = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
@@ -82,18 +94,29 @@ const GetLastId = struct({
   result: 'string?',
 });
 
+/**
+ * Expected JSON RPC response for the "getFinality" message
+ */
 const GetFinalityRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
   result: 'number?',
 });
+
+/**
+ * Expected JSON RPC response for the "requestAirdrop" message
+ */
 const RequestAirdropRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
   result: 'boolean?',
 });
+
+/**
+ * Expected JSON RPC response for the "sendTransaction" message
+ */
 const SendTokensRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
@@ -101,9 +124,17 @@ const SendTokensRpcResult = struct({
   result: 'string?',
 });
 
+/**
+ * A connection to a fullnode JSON RPC endpoint
+ */
 export class Connection {
   _rpcRequest: RpcRequest;
 
+  /**
+   * Establish a JSON RPC connection
+   *
+   * @param endpoint URL to the fullnode JSON RPC endpoint
+   */
   constructor(endpoint: string) {
     if (typeof endpoint !== 'string') {
       throw new Error('Connection endpoint not specified');
@@ -111,7 +142,10 @@ export class Connection {
     this._rpcRequest = createRpcRequest(endpoint);
   }
 
-  async getBalance(publicKey: string): Promise<number> {
+  /**
+   * Fetch the balance for the specified public key
+   */
+  async getBalance(publicKey: PublicKey): Promise<number> {
     const unsafeRes = await this._rpcRequest(
       'getBalance',
       [publicKey]
@@ -124,6 +158,9 @@ export class Connection {
     return res.result;
   }
 
+  /**
+   * Confirm the transaction identified by the specified signature
+   */
   async confirmTransaction(signature: TransactionSignature): Promise<boolean> {
     const unsafeRes = await this._rpcRequest(
       'confirmTransaction',
@@ -137,6 +174,9 @@ export class Connection {
     return res.result;
   }
 
+  /**
+   * Fetch the current transaction count of the network
+   */
   async getTransactionCount(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getTransactionCount', []);
     const res = GetTransactionCountRpcResult(unsafeRes);
@@ -147,6 +187,9 @@ export class Connection {
     return Number(res.result);
   }
 
+  /**
+   * Fetch the identifier to the latest transaction on the network
+   */
   async getLastId(): Promise<TransactionId> {
     const unsafeRes = await this._rpcRequest('getLastId', []);
     const res = GetLastId(unsafeRes);
@@ -157,6 +200,9 @@ export class Connection {
     return res.result;
   }
 
+  /**
+   * Return the current network finality time in millliseconds
+   */
   async getFinality(): Promise<number> {
     const unsafeRes = await this._rpcRequest('getFinality', []);
     const res = GetFinalityRpcResult(unsafeRes);
@@ -167,6 +213,9 @@ export class Connection {
     return Number(res.result);
   }
 
+  /**
+   * Request an allocation of tokens to the specified account
+   */
   async requestAirdrop(to: PublicKey, amount: number): Promise<void> {
     const unsafeRes = await this._rpcRequest('requestAirdrop', [to, amount]);
     const res = RequestAirdropRpcResult(unsafeRes);
@@ -177,6 +226,12 @@ export class Connection {
     assert(res.result);
   }
 
+  /**
+   * Send tokens to another account
+   *
+   * @todo THIS METHOD IS NOT FULLY IMPLEMENTED YET
+   * @ignore
+   */
   async sendTokens(from: Account, to: PublicKey, amount: number): Promise<TransactionSignature> {
     const transaction = Buffer.from(
       // TODO: This is not the correct transaction payload
