@@ -13,7 +13,6 @@ function generateConfig(configType) {
   const config = {
     input: 'src/index.js',
     plugins: [
-      nodeResolve(),
       json(),
       babel({
         exclude: '**/node_modules/**',
@@ -50,6 +49,9 @@ function generateConfig(configType) {
     ];
     config.plugins.push(builtins());
     config.plugins.push(globals());
+    config.plugins.push(nodeResolve({
+      browser: true,
+    }));
     break;
   case 'node':
     config.output = [
