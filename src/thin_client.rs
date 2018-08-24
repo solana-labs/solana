@@ -189,14 +189,14 @@ impl ThinClient {
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
-    /// this method will hang.
+    /// this method will try again 5 times.
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
         let req = Request::GetTransactionCount;
         let data =
             serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
-        let mut done = false;
-        while !done {
+        let mut tries_left = 5;
+        while tries_left > 0 {
             self.requests_socket
                 .send_to(&data, &self.requests_addr)
                 .expect("buffer error in pub fn transaction_count");
@@ -204,9 +204,11 @@ impl ThinClient {
             if let Ok(resp) = self.recv_response() {
                 debug!("transaction_count recv_response: {:?}", resp);
                 if let Response::TransactionCount { .. } = resp {
-                    done = true;
+                    tries_left = 0;
                 }
                 self.process_response(&resp);
+            } else {
+                tries_left -= 1;
             }
         }
         self.transaction_count
@@ -543,5 +545,19 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         server.join().unwrap();
         remove_dir_all(ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_transaction_count() {
+        // set a bogus address, see that we don't hang
+        logger::setup();
+        let addr = "0.0.0.0:1234".parse().unwrap();
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::from_millis(250)))
+            .unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(addr, requests_socket, addr, transactions_socket);
+        assert_eq!(client.transaction_count(), 0);
     }
 }
