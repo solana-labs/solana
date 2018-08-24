@@ -14,7 +14,7 @@ test.skip('get balance', async () => {
   expect(balance).toBeGreaterThanOrEqual(0);
 });
 
-test.skip('throws on bad transaction', () => {
+test.skip('throws on bad transaction confirmation', () => {
   const connection = new Connection(url);
 
   expect(connection.confirmTransaction('bad transaction signature'))
@@ -53,6 +53,14 @@ test.skip('request airdrop', async () => {
 
   const balance = await connection.getBalance(account.publicKey);
   expect(balance).toBe(42);
+});
+
+test.skip('throws on bad transaction', () => {
+  const account = new Account();
+  const connection = new Connection(url);
+
+  expect(connection.sendTokens(account, account.publicKey, 123))
+  .rejects.toThrow('Invalid request');
 });
 
 
