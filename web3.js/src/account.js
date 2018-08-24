@@ -11,7 +11,7 @@ import type {KeyPair} from 'tweetnacl';
 export type PublicKey = string;
 
 /**
- * Represents an account key pair (public and secret keys).
+ * An account key pair (public and secret keys).
  */
 export class Account {
   _keypair: KeyPair;
