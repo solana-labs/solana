@@ -21,7 +21,6 @@
   },
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
-  "browser": "lib/index.iife.js",
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
     "dev": "cross-env NODE_ENV=development rollup -c",
