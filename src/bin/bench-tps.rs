@@ -291,7 +291,12 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
             id.pubkey(),
         );
 
-        request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
+        if let Err(e) = request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64) {
+            panic!(
+                "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
+                e, drone_addr, airdrop_amount
+            );
+        }
 
         // TODO: return airdrop Result from Drone instead of polling the
         //       network

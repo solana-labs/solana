@@ -1,7 +1,6 @@
 use bincode::{deserialize, serialize};
 use drone::DroneRequest;
 use signature::{Pubkey, Signature};
-use std::error;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind, Write};
 use std::mem::size_of;
@@ -11,7 +10,7 @@ pub fn request_airdrop(
     drone_addr: &SocketAddr,
     id: &Pubkey,
     tokens: u64,
-) -> Result<Signature, Box<error::Error>> {
+) -> Result<Signature, Error> {
     // TODO: make this async tokio client
     let mut stream = TcpStream::connect(drone_addr)?;
     let req = DroneRequest::GetAirdrop {
@@ -19,7 +18,7 @@ pub fn request_airdrop(
         client_pubkey: *id,
     };
     let tx = serialize(&req).expect("serialize drone request");
-    stream.write_all(&tx).unwrap();
+    stream.write_all(&tx)?;
     let mut buffer = [0; size_of::<Signature>()];
     stream
         .read_exact(&mut buffer)
