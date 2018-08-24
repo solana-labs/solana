@@ -105,6 +105,9 @@ export class Connection {
   _rpcRequest: RpcRequest;
 
   constructor(endpoint: string) {
+    if (typeof endpoint !== 'string') {
+      throw new Error('Connection endpoint not specified');
+    }
     this._rpcRequest = createRpcRequest(endpoint);
   }
 
