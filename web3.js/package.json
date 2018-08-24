@@ -28,6 +28,7 @@
     "doc": "esdoc; node -p '\"\\nDocumentation coverage: \" + require(\"./doc/coverage.json\").coverage'",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "test": "cross-env NODE_ENV=test jest",
+    "test:live": "cross-env NODE_ENV=test DOITLIVE=1 jest",
     "test:watch": "cross-env NODE_ENV=test jest --watch",
     "test:cover": "cross-env NODE_ENV=test jest --coverage",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
