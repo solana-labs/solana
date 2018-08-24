@@ -16,6 +16,8 @@ type RpcResponse = {
 
 export const mockRpc: Array<[string, RpcRequest, RpcResponse]> = [];
 
+// Suppress lint: 'JestMockFn' is not defined
+// eslint-disable-next-line no-undef
 const mock: JestMockFn<any, any> = jest.fn(
   (fetchUrl, fetchOptions) => {
     expect(mockRpc.length).toBeGreaterThanOrEqual(1);
