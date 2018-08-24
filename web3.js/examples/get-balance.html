@@ -4,8 +4,10 @@
   <title>Create a new account</title>
 </head>
 <body>
-  <b>Account Public Key:</b>
+  <b>Account</b>
   <div id="accountPublicKey">?</div>
+  has a balance of
+  <div id="accountBalance">?</div>
 
   <script src="../lib/index.iife.js"></script>
   <!--
@@ -19,8 +21,20 @@
     // Display the account's public key
     const accountPublicKey = document.getElementById('accountPublicKey');
     accountPublicKey.innerHTML = account.publicKey;
+
+    // Fetch account balance
+    let url;
+    url = 'http://localhost:8899';
+    //url = 'http://master.testnet.solana.com:8899';
+    const connection = new solanaWeb3.Connection(url);
+
+    connection.getBalance(account.publicKey)
+    .then((balance) => {
+      const accountBalance = document.getElementById('accountBalance');
+      accountBalance.innerHTML = balance;
+      console.log(`${account.publicKey} has a balance of ${balance}`);
+    });
+
   </script>
-  <p>
-  <i>This demo is also available on <a href="https://jsfiddle.net/mvines/sz4pco6y/">JSFiddle</a></i>
 </body>
 </html>
