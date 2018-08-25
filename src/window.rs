@@ -96,6 +96,7 @@ fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u6
 fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     //exponential backoff
     if *last != consumed {
+        //start with a 50% chance of asking for repairs
         *times = 1;
     }
     *last = consumed;
@@ -104,8 +105,9 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     // Experiment with capping repair request duration.
     // Once nodes are too far behind they can spend many
     // seconds without asking for repair
-    if *times > 64 {
-        *times = 32;
+    if *times > 128 {
+        // 50% chance that a request will fire between 64 - 128 tries
+        *times = 64;
     }
 
     //if we get lucky, make the request, which should exponentially get less likely
@@ -1054,18 +1056,19 @@ mod test {
     pub fn test_repair_backoff() {
         let mut last = 0;
         let mut times = 0;
-        let total: usize = (0..64)
+        let total: usize = (0..127)
             .map(|x| {
-                repair_backoff(&mut last, &mut times, 1) as usize
+                let rv = repair_backoff(&mut last, &mut times, 1) as usize;
                 assert_eq!(times, x + 2);
+                rv
             })
             .sum();
-        assert_eq!(times, 64);
+        assert_eq!(times, 128);
         assert_eq!(last, 1);
-        assert!(total > 1);
-        assert!(total < 64);
+        assert!(total > 0);
+        assert!(total < 127);
         repair_backoff(&mut last, &mut times, 1);
-        assert_eq!(times, 32);
+        assert_eq!(times, 64);
         repair_backoff(&mut last, &mut times, 2);
         assert_eq!(times, 2);
         assert_eq!(last, 2);
