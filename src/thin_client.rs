@@ -242,35 +242,46 @@ impl ThinClient {
         self.last_id.expect("some last_id")
     }
 
-    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
-        let mut balance_result;
-        let mut balance_value = -1;
-        let now = Instant::now();
-        loop {
-            balance_result = self.get_balance(pubkey);
-            if balance_result.is_ok() {
-                balance_value = *balance_result.as_ref().unwrap();
-            }
-            if balance_value > 0 || now.elapsed().as_secs() > 1 {
-                break;
-            }
-            sleep(Duration::from_millis(100));
-        }
+    pub fn submit_poll_balance_metrics(elapsed: u64) {
         metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("get_balance".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
+                .add_field("duration_ms", influxdb::Value::Integer(elapsed as i64))
                 .to_owned(),
         );
-        if balance_value >= 0 {
-            Ok(balance_value)
-        } else {
-            assert!(balance_result.is_err());
-            balance_result
+    }
+
+    pub fn poll_balance_with_timeout(
+        &mut self,
+        pubkey: &Pubkey,
+        polling_frequeny_ms: u64,
+        timeout_ms: u64,
+    ) -> io::Result<i64> {
+        let now = Instant::now();
+        loop {
+            let balance = match self.get_balance(&pubkey) {
+                Ok(bal) => bal,
+                Err(e) => {
+                    sleep(Duration::from_millis(polling_frequeny_ms));
+                    if timing::duration_as_ms(&now.elapsed()) > timeout_ms {
+                        ThinClient::submit_poll_balance_metrics(timing::duration_as_ms(
+                            &now.elapsed(),
+                        ));
+                        return Err(e);
+                    }
+                    -1
+                }
+            };
+
+            if balance >= 0 {
+                ThinClient::submit_poll_balance_metrics(timing::duration_as_ms(&now.elapsed()));
+                return Ok(balance);
+            }
         }
+    }
+
+    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
+        self.poll_balance_with_timeout(pubkey, 100, 1000)
     }
 
     /// Poll the server to confirm a transaction.

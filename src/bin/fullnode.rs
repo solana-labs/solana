@@ -102,7 +102,9 @@ fn main() -> () {
     let fullnode = Fullnode::new(node, ledger_path, keypair, testnet_addr, false);
 
     let mut client = mk_client(&repl_clone);
-    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
+    let previous_balance = client
+        .poll_balance_with_timeout(&leader_pubkey, 100, 1000)
+        .unwrap_or(0);
     eprintln!("balance is {}", previous_balance);
 
     if previous_balance == 0 {
@@ -114,14 +116,9 @@ fn main() -> () {
             )
         });
 
-        // Try multiple times to confirm a non-zero balance.  |poll_get_balance| currently times
-        // out after 1 second, and sometimes this is not enough time while the network is
-        // booting
-        let balance_ok = (0..30).any(|i| {
-            let balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
-            eprintln!("new balance is {} (attempt #{})", balance, i);
-            balance > 0
-        });
+        let balance_ok = client
+            .poll_balance_with_timeout(&leader_pubkey, 100, 30000)
+            .unwrap() > 0;
         assert!(balance_ok, "0 balance, airdrop failed?");
     }
 
