@@ -1,8 +1,10 @@
 // @flow
 
+import fetch from 'node-fetch';
+
 type RpcRequest = {
   method: string;
-  params: Array<any>;
+  params?: Array<any>;
 };
 
 type RpcResponseError = {
@@ -20,6 +22,13 @@ export const mockRpc: Array<[string, RpcRequest, RpcResponse]> = [];
 // eslint-disable-next-line no-undef
 const mock: JestMockFn<any, any> = jest.fn(
   (fetchUrl, fetchOptions) => {
+    // Define DOITLIVE in the environment to test against the real full node
+    // identified by `url` instead of using the mock
+    if (process.env.DOITLIVE) {
+      console.log(`Note: node-fetch mock is disabled, testing live against ${fetchUrl}`);
+      return fetch(fetchUrl, fetchOptions);
+    }
+
     expect(mockRpc.length).toBeGreaterThanOrEqual(1);
     const [mockUrl, mockRequest, mockResponse] = mockRpc.shift();
 
@@ -38,7 +47,6 @@ const mock: JestMockFn<any, any> = jest.fn(
       {
         jsonrpc: '2.0',
         method: 'invalid',
-        params: ['invalid', 'params'],
       },
       mockRequest
     ));
