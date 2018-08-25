@@ -340,7 +340,7 @@ pub fn to_blobs<T: Serialize>(
 }
 
 const BLOB_INDEX_END: usize = size_of::<u64>();
-const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<usize>() + size_of::<Pubkey>();
+const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<Pubkey>();
 const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
 const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
 

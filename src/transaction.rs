@@ -6,10 +6,11 @@ use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
+use std::mem::size_of;
 
-pub const SIGNED_DATA_OFFSET: usize = 96;
+pub const SIGNED_DATA_OFFSET: usize = PUB_KEY_OFFSET + size_of::<Pubkey>();
 pub const SIG_OFFSET: usize = 0;
-pub const PUB_KEY_OFFSET: usize = 64;
+pub const PUB_KEY_OFFSET: usize = size_of::<Signature>();
 
 /// The type of payment plan. Each item must implement the PaymentPlan trait.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
