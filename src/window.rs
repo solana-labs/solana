@@ -126,7 +126,7 @@ fn repair_window(
 ) -> Result<()> {
     //exponential backoff
     if !repair_backoff(last, times, consumed) {
-        return Ok(())
+        return Ok(());
     }
 
     let highest_lost = calculate_highest_lost_blob_index(
@@ -166,7 +166,8 @@ fn add_block_to_retransmit_queue(
     recycler: &BlobRecycler,
     retransmit_queue: &mut VecDeque<SharedBlob>,
 ) {
-    let p = b.read()
+    let p = b
+        .read()
         .expect("'b' read lock in fn add_block_to_retransmit_queue");
     //TODO this check isn't safe against adverserial packets
     //we need to maintain a sequence window
@@ -191,7 +192,8 @@ fn add_block_to_retransmit_queue(
         //is dropped via a weakref to the recycler
         let nv = recycler.allocate();
         {
-            let mut mnv = nv.write()
+            let mut mnv = nv
+                .write()
                 .expect("recycler write lock in fn add_block_to_retransmit_queue");
             let sz = p.meta.size;
             mnv.meta.size = sz;
@@ -285,7 +287,8 @@ fn process_blob(
     let w = (pix % WINDOW_SIZE) as usize;
 
     let is_coding = {
-        let blob_r = blob.read()
+        let blob_r = blob
+            .read()
             .expect("blob read lock for flogs streamer::window");
         blob_r.is_coding()
     };
@@ -420,7 +423,8 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let maybe_leader: Option<NodeInfo> = crdt.read()
+    let maybe_leader: Option<NodeInfo> = crdt
+        .read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
         .cloned();
