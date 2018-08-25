@@ -7,9 +7,9 @@ use hash::Hash;
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 
-pub const SIGNED_DATA_OFFSET: usize = 112;
-pub const SIG_OFFSET: usize = 8;
-pub const PUB_KEY_OFFSET: usize = 80;
+pub const SIGNED_DATA_OFFSET: usize = 96;
+pub const SIG_OFFSET: usize = 0;
+pub const PUB_KEY_OFFSET: usize = 64;
 
 /// The type of payment plan. Each item must implement the PaymentPlan trait.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
