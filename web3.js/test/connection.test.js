@@ -5,14 +5,7 @@ import {Account} from '../src/account';
 import {mockRpc} from './__mocks__/node-fetch';
 
 const url = 'http://master.testnet.solana.com:8899';
-
-// Define DOITLIVE in the environment to test against the real full node
-// identified by `url` instead of using the mock
-if (process.env.DOITLIVE) {
-  console.log(`Note: node-fetch mock is disabled, testing live against ${url}`);
-} else {
-  jest.mock('node-fetch');
-}
+//const url = 'http://localhost:8899';
 
 const errorMessage = 'Invalid request';
 const errorResponse = {
@@ -21,6 +14,7 @@ const errorResponse = {
   },
   result: undefined,
 };
+
 
 test('get balance', async () => {
   const account = new Account();
@@ -109,7 +103,7 @@ test('get last Id', async () => {
     },
     {
       error: null,
-      result: '1111111111111111111111111111111111111111111111',
+      result: '2BjEqiiT43J6XskiHdz7aoocjPeWkCPiKD72SiFQsrA2',
     }
   ]
   );
@@ -200,35 +194,125 @@ test('request airdrop - error', () => {
   .rejects.toThrow(errorMessage);
 });
 
-test('send transaction - error', () => {
-  const secretKey = Buffer.from([
-    153, 218, 149, 89, 225, 94, 145, 62, 233, 171, 46, 83, 227,
-    223, 173, 87, 93, 163, 59, 73, 190, 17, 37, 187, 146, 46, 51,
-    73, 79, 73, 136, 40, 27, 47, 73, 9, 110, 62, 93, 189, 15, 207,
-    169, 192, 192, 205, 146, 217, 171, 59, 33, 84, 75, 52, 213, 221,
-    74, 101, 217, 139, 135, 139, 153, 34
-  ]);
-  const account = new Account(secretKey);
+test('transaction', async () => {
+  const accountFrom = new Account();
+  const accountTo = new Account();
   const connection = new Connection(url);
 
   mockRpc.push([
     url,
     {
-      method: 'sendTransaction',
-      params: [[
-        78, 52, 48, 146, 162, 213, 83, 169, 128, 10, 82, 26, 145, 238,
-        1, 130, 16, 44, 249, 99, 121, 55, 217, 72, 77, 41, 73, 227, 5,
-        15, 125, 212, 186, 157, 182, 100, 232, 232, 39, 84, 5, 121, 172,
-        137, 177, 248, 188, 224, 196, 102, 204, 43, 128, 243, 170, 157,
-        134, 216, 209, 8, 211, 209, 44, 1
-      ]],
+      method: 'requestAirdrop',
+      params: [accountFrom.publicKey, 12],
     },
-    errorResponse,
+    {
+      error: null,
+      result: true,
+    }
   ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [accountFrom.publicKey],
+    },
+    {
+      error: null,
+      result: 12,
+    }
+  ]);
+  await connection.requestAirdrop(accountFrom.publicKey, 12);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
 
+  mockRpc.push([
+    url,
+    {
+      method: 'requestAirdrop',
+      params: [accountTo.publicKey, 21],
+    },
+    {
+      error: null,
+      result: true,
+    }
+  ]);
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [accountTo.publicKey],
+    },
+    {
+      error: null,
+      result: 21,
+    }
+  ]);
+  await connection.requestAirdrop(accountTo.publicKey, 21);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 
-  expect(connection.sendTokens(account, account.publicKey, 123))
-  .rejects.toThrow(errorMessage);
+  mockRpc.push([
+    url,
+    {
+      method: 'getLastId',
+      params: [],
+    },
+    {
+      error: null,
+      result: '2BjEqiiT43J6XskiHdz7aoocjPeWkCPiKD72SiFQsrA2',
+    }
+  ]
+  );
+  mockRpc.push([
+    url,
+    {
+      method: 'sendTransaction',
+    },
+    {
+      error: null,
+      result: '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    }
+  ]
+  );
+  const signature = await connection.sendTokens(accountFrom, accountTo.publicKey, 10);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'confirmTransaction',
+      params: [
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk'
+      ],
+    },
+    {
+      error: null,
+      result: true,
+    }
+  ]
+  );
+  expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [accountFrom.publicKey],
+    },
+    {
+      error: null,
+      result: 2,
+    }
+  ]);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(2);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getBalance',
+      params: [accountTo.publicKey],
+    },
+    {
+      error: null,
+      result: 31,
+    }
+  ]);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
 });
-
-
