@@ -8,6 +8,7 @@ use erasure;
 use ledger::Block;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob, SharedBlobs, BLOB_SIZE};
+use rand::{thread_rng, RngCore};
 use result::{Error, Result};
 use signature::Pubkey;
 use std::cmp;
@@ -92,6 +93,25 @@ fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u6
     cmp::min(consumed + WINDOW_SIZE - 1, highest_lost)
 }
 
+fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
+    //exponential backoff
+    if *last != consumed {
+        *times = 1;
+    }
+    *last = consumed;
+    *times += 1;
+
+    // Experiment with capping repair request duration.
+    // Once nodes are too far behind they can spend many
+    // seconds without asking for repair
+    if *times > 64 {
+        *times = 32;
+    }
+
+    //if we get lucky, make the request, which should exponentially get less likely
+    thread_rng().next_u64() % (*times as u64) == 0
+}
+
 fn repair_window(
     debug_id: u64,
     window: &SharedWindow,
@@ -103,23 +123,8 @@ fn repair_window(
     received: u64,
 ) -> Result<()> {
     //exponential backoff
-    if *last != consumed {
-        *times = 0;
-    }
-    *last = consumed;
-    *times += 1;
-
-    // Experiment with capping repair request duration.
-    // Once nodes are too far behind they can spend many
-    // seconds without asking for repair
-    if *times > 128 {
-        *times = 65;
-    }
-
-    //if times flips from all 1s 7 -> 8, 15 -> 16, we retry otherwise return Ok
-    if *times & (*times - 1) != 0 {
-        trace!("repair_window counter {} {} {}", *times, consumed, received);
-        return Ok(());
+    if !repair_backoff(last, times, consumed) {
+        return Ok(())
     }
 
     let highest_lost = calculate_highest_lost_blob_index(
@@ -159,8 +164,7 @@ fn add_block_to_retransmit_queue(
     recycler: &BlobRecycler,
     retransmit_queue: &mut VecDeque<SharedBlob>,
 ) {
-    let p = b
-        .read()
+    let p = b.read()
         .expect("'b' read lock in fn add_block_to_retransmit_queue");
     //TODO this check isn't safe against adverserial packets
     //we need to maintain a sequence window
@@ -185,8 +189,7 @@ fn add_block_to_retransmit_queue(
         //is dropped via a weakref to the recycler
         let nv = recycler.allocate();
         {
-            let mut mnv = nv
-                .write()
+            let mut mnv = nv.write()
                 .expect("recycler write lock in fn add_block_to_retransmit_queue");
             let sz = p.meta.size;
             mnv.meta.size = sz;
@@ -280,8 +283,7 @@ fn process_blob(
     let w = (pix % WINDOW_SIZE) as usize;
 
     let is_coding = {
-        let blob_r = blob
-            .read()
+        let blob_r = blob.read()
             .expect("blob read lock for flogs streamer::window");
         blob_r.is_coding()
     };
@@ -416,8 +418,7 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let maybe_leader: Option<NodeInfo> = crdt
-        .read()
+    let maybe_leader: Option<NodeInfo> = crdt.read()
         .expect("'crdt' read lock in fn recv_window")
         .leader_data()
         .cloned();
@@ -697,7 +698,8 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, receiver, responder, BlobReceiver, PacketReceiver};
     use window::{
-        blob_idx_in_window, calculate_highest_lost_blob_index, default_window, window, WINDOW_SIZE,
+        blob_idx_in_window, calculate_highest_lost_blob_index, default_window, repair_backoff,
+        window, WINDOW_SIZE,
     };
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
@@ -1047,5 +1049,25 @@ mod test {
 
         assert_eq!(wrap_blob_idx_in_window(0, 91, 90, 100), (true, 100));
         assert_eq!(wrap_blob_idx_in_window(0, 101, 90, 100), (true, 101));
+    }
+    #[test]
+    pub fn test_repair_backoff() {
+        let mut last = 0;
+        let mut times = 0;
+        let total: usize = (0..64)
+            .map(|x| {
+                repair_backoff(&mut last, &mut times, 1) as usize
+                assert_eq!(times, x + 2);
+            })
+            .sum();
+        assert_eq!(times, 64);
+        assert_eq!(last, 1);
+        assert!(total > 1);
+        assert!(total < 64);
+        repair_backoff(&mut last, &mut times, 1);
+        assert_eq!(times, 32);
+        repair_backoff(&mut last, &mut times, 2);
+        assert_eq!(times, 2);
+        assert_eq!(last, 2);
     }
 }
