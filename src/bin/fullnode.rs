@@ -118,7 +118,7 @@ fn main() -> () {
         // out after 1 second, and sometimes this is not enough time while the network is
         // booting
         let balance_ok = (0..30).any(|i| {
-            let balance = client.poll_get_balance(&leader_pubkey).unwrap();
+            let balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
             eprintln!("new balance is {} (attempt #{})", balance, i);
             balance > 0
         });
