@@ -8,7 +8,7 @@ extern crate tokio_codec;
 
 use bincode::deserialize;
 use clap::{App, Arg};
-use solana::crdt::{Crdt, NodeInfo};
+use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::logger;
