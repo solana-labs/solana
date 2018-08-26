@@ -124,13 +124,7 @@ pub fn send_leader_vote(
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
-        let ids: Vec<_> = crdt
-            .read()
-            .unwrap()
-            .table
-            .values()
-            .map(|x| x.ledger_state.last_id)
-            .collect();
+        let ids: Vec<_> = crdt.read().unwrap().valid_last_ids();
         if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
             debug_id,
             &ids,
