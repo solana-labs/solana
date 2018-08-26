@@ -20,6 +20,7 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
+use nat::get_public_ip_addr;
 use nat::udp_random_bind;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
@@ -199,6 +200,21 @@ impl NodeInfo {
             addr.clone(),
             addr.clone(),
         )
+    }
+    pub fn new_ncp_only() -> (Self, UdpSocket, UdpSocket) {
+        let keypair = Keypair::new();
+        let ip_addr = get_public_ip_addr().expect("autodetect ip address");
+        let addr = SocketAddr::new(ip_addr, 0);
+        let gossip = UdpSocket::bind(addr).unwrap();
+        let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
+        let gossip_send = UdpSocket::bind(daddr).unwrap();
+        let gossip_addr = gossip.local_addr().unwrap();
+        assert!(
+            Crdt::is_valid_address(gossip_addr),
+            "NodeInfo::new_ncp_only ip autodetect failed"
+        );
+        let node = NodeInfo::new(keypair.pubkey(), gossip_addr, daddr, daddr, daddr, daddr);
+        (node, gossip, gossip_send)
     }
 
     pub fn debug_id(&self) -> u64 {

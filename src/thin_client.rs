@@ -5,7 +5,7 @@
 
 use bank::Account;
 use bincode::{deserialize, serialize};
-use crdt::{Crdt, CrdtError, NodeInfo, TestNode};
+use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
 use ncp::Ncp;
 use request::{Request, Response};
@@ -341,16 +341,15 @@ impl Drop for ThinClient {
 
 pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let testnode = TestNode::new_localhost();
-    let extra_data = testnode.data.clone();
-    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
+    let (node, gossip, gossip_send) = NodeInfo::new_ncp_only();
+    let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
     let ncp = Ncp::new(
         &crdt.clone(),
         window,
         None,
-        testnode.sockets.gossip,
-        testnode.sockets.gossip_send,
+        gossip,
+        gossip_send,
         exit.clone(),
     ).unwrap();
     let leader_entry_point = NodeInfo::new_entry_point(leader_ncp);
