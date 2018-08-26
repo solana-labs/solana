@@ -8,7 +8,7 @@ use erasure;
 use ledger::Block;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob, SharedBlobs, BLOB_SIZE};
-use rand::{thread_rng, RngCore};
+use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use signature::Pubkey;
 use std::cmp;
@@ -111,7 +111,7 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     }
 
     //if we get lucky, make the request, which should exponentially get less likely
-    thread_rng().next_u64() % (*times as u64) == 0
+    thread_rng().gen_range(0, *times as u64) == 0
 }
 
 fn repair_window(
