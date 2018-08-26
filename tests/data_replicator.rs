@@ -173,7 +173,7 @@ pub fn crdt_retransmit() -> result::Result<()> {
         .into_par_iter()
         .map(|s| {
             let mut b = Blob::default();
-            s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+            s.set_read_timeout(Some(Duration::new(2, 0))).unwrap();
             let res = s.recv_from(&mut b.data);
             res.is_err() //true if failed to receive the retransmit packet
         })
