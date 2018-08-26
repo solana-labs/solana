@@ -1248,7 +1248,7 @@ impl Crdt {
     /// ip must be specified and not mulitcast
     /// loopback ip is only allowed in tests
     pub fn is_valid_address(addr: SocketAddr) -> bool {
-        Self::is_valid_address_internal(addr, cfg!(test) || cfg!(feature="test"))
+        Self::is_valid_address_internal(addr, cfg!(test) || cfg!(feature = "test"))
     }
 }
 
