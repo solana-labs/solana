@@ -751,6 +751,18 @@ impl Crdt {
         (id, ups, data)
     }
 
+    pub fn last_ids(&self) -> Vec<Hash> {
+        self.table
+            .values()
+            .filter(|r| {
+                r.id != Pubkey::default()
+                    && (Self::is_valid_address(r.contact_info.tpu)
+                        || Self::is_valid_address(r.contact_info.tvu))
+            })
+            .map(|x| x.ledger_state.last_id)
+            .collect()
+    }
+
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         let valid: Vec<_> = self
             .table
