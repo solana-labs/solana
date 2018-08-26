@@ -12,7 +12,7 @@ _() {
 
 _ cargo fmt -- --check
 _ cargo build --verbose
-_ cargo test --verbose
+_ cargo test --features=test --verbose
 
 echo --- ci/localnet-sanity.sh
 (

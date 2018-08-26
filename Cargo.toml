@@ -61,6 +61,7 @@ unstable = []
 ipv6 = []
 cuda = []
 erasure = []
+test = []
 
 [dependencies]
 atty = "0.2"
