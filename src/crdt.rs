@@ -20,7 +20,6 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
-use nat::get_public_ip_addr;
 use nat::udp_random_bind;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use pnet_datalink as datalink;
