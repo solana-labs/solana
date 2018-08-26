@@ -141,7 +141,7 @@ impl Drone {
                     )
                     .to_owned(),
             );
-            client.transfer_signed(&tx)
+            client.retry_transfer_signed(&tx, 10)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
         }
