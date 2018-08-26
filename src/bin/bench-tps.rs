@@ -16,7 +16,7 @@ use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
-use solana::nat::{get_public_ip_addr, udp_random_bind};
+use solana::nat::get_public_ip_addr;
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
@@ -27,7 +27,7 @@ use solana::wallet::request_airdrop;
 use solana::window::default_window;
 use std::collections::VecDeque;
 use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -650,19 +650,6 @@ fn main() {
     }
 }
 
-fn spy_node(addr: IpAddr) -> (NodeInfo, UdpSocket) {
-    let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
-
-    let gossip_addr = SocketAddr::new(addr, gossip_socket.local_addr().unwrap().port());
-
-    let pubkey = Keypair::new().pubkey();
-    let daddr = "0.0.0.0:0".parse().unwrap();
-    assert!(!gossip_addr.ip().is_unspecified());
-    assert!(!gossip_addr.ip().is_multicast());
-    let node = NodeInfo::new(pubkey, gossip_addr, daddr, daddr, daddr, daddr);
-    (node, gossip_socket)
-}
-
 fn converge(
     leader: &NodeInfo,
     exit_signal: &Arc<AtomicBool>,
@@ -671,18 +658,17 @@ fn converge(
     addr: IpAddr,
 ) -> Vec<NodeInfo> {
     //lets spy on the network
-    let (spy, spy_gossip) = spy_node(addr);
-    let mut spy_crdt = Crdt::new(spy).expect("Crdt::new");
+    let (node, gossip_socket, gossip_send_socket) = Crdt::spy_node(addr);
+    let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let window = default_window();
-    let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
     let ncp = Ncp::new(
         &spy_ref,
         window.clone(),
         None,
-        spy_gossip,
+        gossip_socket,
         gossip_send_socket,
         exit_signal.clone(),
     ).expect("DataReplicator::new");

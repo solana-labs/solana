@@ -1250,17 +1250,28 @@ impl Crdt {
             })
             .unwrap()
     }
-    fn is_valid_address_internal(addr: SocketAddr, cfg_test: bool) -> bool {
-        (addr.port() != 0)
-            && !(addr.ip().is_unspecified()
-                || addr.ip().is_multicast()
-                || (addr.ip().is_loopback() && !cfg_test))
+
+    fn is_valid_ip_internal(addr: IpAddr, cfg_test: bool) -> bool {
+        !(addr.is_unspecified() || addr.is_multicast() || (addr.is_loopback() && !cfg_test))
+    }
+    pub fn is_valid_ip(addr: IpAddr) -> bool {
+        Self::is_valid_ip_internal(addr, cfg!(test) || cfg!(feature = "test"))
     }
     /// port must not be 0
     /// ip must be specified and not mulitcast
     /// loopback ip is only allowed in tests
     pub fn is_valid_address(addr: SocketAddr) -> bool {
-        Self::is_valid_address_internal(addr, cfg!(test) || cfg!(feature = "test"))
+        (addr.port() != 0) && Self::is_valid_ip(addr.ip())
+    }
+
+    pub fn spy_node(addr: IpAddr) -> (NodeInfo, UdpSocket, UdpSocket) {
+        let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
+        let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
+        let gossip_addr = SocketAddr::new(addr, gossip_socket.local_addr().unwrap().port());
+        let pubkey = Keypair::new().pubkey();
+        let daddr = "0.0.0.0:0".parse().unwrap();
+        let node = NodeInfo::new(pubkey, gossip_addr, daddr, daddr, daddr, daddr);
+        (node, gossip_socket, gossip_send_socket)
     }
 }
 
@@ -2171,7 +2182,7 @@ mod tests {
         assert!(!Crdt::is_valid_address(bad_address_multicast));
         let loopback = "127.0.0.1:1234".parse().unwrap();
         assert!(Crdt::is_valid_address(loopback));
-        assert!(!Crdt::is_valid_address_internal(loopback, false));
+        assert!(!Crdt::is_valid_ip_internal(loopback.ip(), false));
     }
 
     #[test]

@@ -13,11 +13,13 @@ use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::fullnode::Config;
 use solana::logger;
 use solana::metrics::set_panic_hook;
+use solana::nat::get_public_ip_addr;
 use solana::signature::read_keypair;
 use solana::thin_client::poll_gossip_for_leader;
 use std::error;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
@@ -67,7 +69,27 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .help("Max SECONDS to wait to get necessary gossip from the network"),
         )
+        .arg(
+            Arg::with_name("addr")
+                .short("a")
+                .long("addr")
+                .value_name("IPADDR")
+                .takes_value(true)
+                .help("address to advertise to the network"),
+        )
         .get_matches();
+
+    let addr = if let Some(s) = matches.value_of("addr") {
+        s.to_string().parse().unwrap_or_else(|e| {
+            eprintln!("failed to parse {} as IP address error: {:?}", s, e);
+            exit(1);
+        })
+    } else {
+        get_public_ip_addr().unwrap_or_else(|e| {
+            eprintln!("failed to get public IP, try --addr? error: {:?}", e);
+            exit(1);
+        })
+    };
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
@@ -99,7 +121,7 @@ fn main() -> Result<(), Box<error::Error>> {
         timeout = None;
     }
 
-    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
+    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout, addr)?;
 
     let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
 
@@ -158,6 +180,7 @@ fn main() -> Result<(), Box<error::Error>> {
     tokio::run(done);
     Ok(())
 }
+
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
