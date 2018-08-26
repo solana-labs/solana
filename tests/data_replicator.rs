@@ -193,6 +193,7 @@ pub fn crdt_retransmit() -> result::Result<()> {
 #[ignore]
 fn test_external_liveness_table() {
     logger::setup();
+    assert!(cfg!(feature = "test"));
     let c1_c4_exit = Arc::new(AtomicBool::new(false));
     let c2_c3_exit = Arc::new(AtomicBool::new(false));
 

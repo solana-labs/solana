@@ -19,7 +19,7 @@ _() {
   "$@"
 }
 
-_ cargo test --features=cuda,erasure
+_ cargo test --features=cuda,erasure,test
 
 echo --- ci/localnet-sanity.sh
 (

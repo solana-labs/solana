@@ -11,7 +11,7 @@ _() {
 }
 
 _ cargo build --verbose --features unstable
-_ cargo test --verbose --features unstable
+_ cargo test --verbose --features=unstable,test
 _ cargo clippy -- --deny=warnings
 
 exit 0
