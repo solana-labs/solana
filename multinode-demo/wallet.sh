@@ -39,7 +39,8 @@ if [[ ! -r $client_id_path ]]; then
   echo "Generating client identity: $client_id_path"
   $solana_keygen -o "$client_id_path"
 fi
+IP=$(ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
-  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" --timeout 10 "$@"
+  -a $IP -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" --timeout 10 "$@"

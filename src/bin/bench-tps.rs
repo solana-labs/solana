@@ -484,6 +484,10 @@ fn main() {
             exit(1);
         })
     };
+    assert!(
+        Crdt::is_valid_ip(addr),
+        "Invalid network address for gossip."
+    );
 
     if let Some(s) = matches.value_of("tx_count") {
         tx_count = s.to_string().parse().expect("integer");

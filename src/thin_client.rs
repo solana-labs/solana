@@ -5,7 +5,7 @@
 
 use bank::Account;
 use bincode::{deserialize, serialize};
-use crdt::{Crdt, CrdtError, NodeInfo, TestNode};
+use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
 use ncp::Ncp;
 use request::{Request, Response};
@@ -13,6 +13,7 @@ use result::{Error, Result};
 use signature::{Keypair, Pubkey, Signature};
 use std::collections::HashMap;
 use std::io;
+use std::net::IpAddr;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -339,18 +340,21 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
+pub fn poll_gossip_for_leader(
+    leader_ncp: SocketAddr,
+    timeout: Option<u64>,
+    addr: IpAddr,
+) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let testnode = TestNode::new_localhost();
-    let extra_data = testnode.data.clone();
-    let crdt = Arc::new(RwLock::new(Crdt::new(extra_data).expect("Crdt::new")));
+    let (node, gossip_socket, gossip_send_socket) = Crdt::spy_node(addr);
+    let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
     let ncp = Ncp::new(
         &crdt.clone(),
         window,
         None,
-        testnode.sockets.gossip,
-        testnode.sockets.gossip_send,
+        gossip_socket,
+        gossip_send_socket,
         exit.clone(),
     ).unwrap();
     let leader_entry_point = NodeInfo::new_entry_point(leader_ncp);
