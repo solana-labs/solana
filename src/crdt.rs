@@ -1910,12 +1910,13 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
-        let nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
+        let mut nxt2 = NodeInfo::new_leader(&"127.0.0.2:1234".parse().unwrap());
         assert_ne!(me.id, nxt2.id);
         assert_ne!(nxt.id, nxt2.id);
         crdt.insert(&nxt2);
         while now == crdt.alive[&nxt2.id] {
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
+            nxt2.version += 1;
             crdt.insert(&nxt2);
         }
         let len = crdt.table.len() as u64;
