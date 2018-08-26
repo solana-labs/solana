@@ -1238,9 +1238,8 @@ impl Crdt {
             })
             .unwrap()
     }
-
     pub fn is_valid_address(addr: SocketAddr) -> bool {
-        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast())
+        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast()) && !(addr.ip().is_localhost() || !cfg!("test"))
     }
 }
 
