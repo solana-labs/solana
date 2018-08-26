@@ -291,13 +291,17 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
 
         // TODO: return airdrop Result from Drone instead of polling the
         //       network
-        let current_balance = client
-            .poll_balance_with_timeout(
-                &id.pubkey(),
-                &Duration::from_millis(500),
-                &Duration::from_secs(20),
-            )
-            .expect("Airdrop failed in get_balance()!");
+        let mut current_balance = starting_balance;
+        for _ in 0..20 {
+            sleep(Duration::from_millis(500));
+            current_balance = client
+                .poll_get_balance(&id.pubkey())
+                .unwrap_or(starting_balance);
+            if starting_balance != current_balance {
+                break;
+            }
+            println!(".");
+        }
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!("Airdrop failed!");
