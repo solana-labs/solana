@@ -180,6 +180,7 @@ fn main() -> Result<(), Box<error::Error>> {
     tokio::run(done);
     Ok(())
 }
+
 fn read_leader(path: &str) -> Config {
     let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
     serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
