@@ -277,7 +277,6 @@ fn process_command(
                 }
                 Err(error) => {
                     println!("An error occurred: {:?}", error);
-                    Err(error)?;
                 }
             }
         }
