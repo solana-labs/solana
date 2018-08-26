@@ -143,7 +143,9 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
             );
 
             // Sanity check that the client balance is still 1
-            let balance = barrier_client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+            let balance = barrier_client
+                .poll_get_balance(&id.pubkey())
+                .expect("Failed to get balance");
             if balance != 1 {
                 panic!("Expected an account balance of 1 (balance: {}", balance);
             }
@@ -285,15 +287,16 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
             airdrop_amount, drone_addr
         );
 
-        let previous_balance = starting_balance;
         request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
 
         // TODO: return airdrop Result from Drone instead of polling the
         //       network
-        let mut current_balance = previous_balance;
+        let mut current_balance = starting_balance;
         for _ in 0..20 {
             sleep(Duration::from_millis(500));
-            current_balance = client.poll_get_balance(&id.pubkey()).unwrap();
+            current_balance = client
+                .poll_get_balance(&id.pubkey())
+                .unwrap_or(starting_balance);
             if starting_balance != current_balance {
                 break;
             }

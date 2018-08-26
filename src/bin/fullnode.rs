@@ -18,6 +18,7 @@ use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::time::Duration;
 
 fn main() -> () {
     logger::setup();
@@ -114,14 +115,13 @@ fn main() -> () {
             )
         });
 
-        // Try multiple times to confirm a non-zero balance.  |poll_get_balance| currently times
-        // out after 1 second, and sometimes this is not enough time while the network is
-        // booting
-        let balance_ok = (0..30).any(|i| {
-            let balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
-            eprintln!("new balance is {} (attempt #{})", balance, i);
-            balance > 0
-        });
+        let balance_ok = client
+            .poll_balance_with_timeout(
+                &leader_pubkey,
+                &Duration::from_millis(100),
+                &Duration::from_secs(30),
+            )
+            .unwrap() > 0;
         assert!(balance_ok, "0 balance, airdrop failed?");
     }
 
