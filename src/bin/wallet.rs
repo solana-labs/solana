@@ -166,10 +166,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
             exit(1)
         })
     };
-    assert!(
-        Crdt::is_valid_ip(addr),
-        "Invalid network address for gossip."
-    );
 
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
