@@ -20,6 +20,7 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::time::Duration;
 
 enum WalletCommand {
     Address,
@@ -243,7 +244,7 @@ fn process_command(
         }
         WalletCommand::Balance => {
             println!("Balance requested...");
-            let balance = client.poll_balance_with_timeout(&config.id.pubkey(), 100, 1000);
+            let balance = client.poll_get_balance(&config.id.pubkey());
             match balance {
                 Ok(balance) => {
                     println!("Your balance is: {:?}", balance);
@@ -264,15 +265,17 @@ fn process_command(
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, config.drone_addr
             );
-            let previous_balance = client
-                .poll_balance_with_timeout(&config.id.pubkey(), 100, 1000)
-                .unwrap_or(0);
+            let previous_balance = client.poll_get_balance(&config.id.pubkey()).unwrap_or(0);
             request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
             let current_balance = client
-                .poll_balance_with_timeout(&config.id.pubkey(), 500, 20000)
+                .poll_balance_with_timeout(
+                    &config.id.pubkey(),
+                    &Duration::from_millis(500),
+                    &Duration::from_secs(20),
+                )
                 .unwrap_or(previous_balance);
             println!("Your balance is: {:?}", current_balance);
             if current_balance - previous_balance != tokens {

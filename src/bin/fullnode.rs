@@ -18,6 +18,7 @@ use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::time::Duration;
 
 fn main() -> () {
     logger::setup();
@@ -102,9 +103,7 @@ fn main() -> () {
     let fullnode = Fullnode::new(node, ledger_path, keypair, testnet_addr, false);
 
     let mut client = mk_client(&repl_clone);
-    let previous_balance = client
-        .poll_balance_with_timeout(&leader_pubkey, 100, 1000)
-        .unwrap_or(0);
+    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
     eprintln!("balance is {}", previous_balance);
 
     if previous_balance == 0 {
@@ -117,7 +116,11 @@ fn main() -> () {
         });
 
         let balance_ok = client
-            .poll_balance_with_timeout(&leader_pubkey, 100, 30000)
+            .poll_balance_with_timeout(
+                &leader_pubkey,
+                &Duration::from_millis(100),
+                &Duration::from_secs(30),
+            )
             .unwrap() > 0;
         assert!(balance_ok, "0 balance, airdrop failed?");
     }

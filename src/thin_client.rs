@@ -242,11 +242,14 @@ impl ThinClient {
         self.last_id.expect("some last_id")
     }
 
-    pub fn submit_poll_balance_metrics(elapsed: u64) {
+    pub fn submit_poll_balance_metrics(elapsed: &Duration) {
         metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("get_balance".to_string()))
-                .add_field("duration_ms", influxdb::Value::Integer(elapsed as i64))
+                .add_field(
+                    "duration_ms",
+                    influxdb::Value::Integer(timing::duration_as_ms(elapsed) as i64),
+                )
                 .to_owned(),
         );
     }
@@ -254,19 +257,17 @@ impl ThinClient {
     pub fn poll_balance_with_timeout(
         &mut self,
         pubkey: &Pubkey,
-        polling_frequeny_ms: u64,
-        timeout_ms: u64,
+        polling_frequency: &Duration,
+        timeout: &Duration,
     ) -> io::Result<i64> {
         let now = Instant::now();
         loop {
             let balance = match self.get_balance(&pubkey) {
                 Ok(bal) => bal,
                 Err(e) => {
-                    sleep(Duration::from_millis(polling_frequeny_ms));
-                    if timing::duration_as_ms(&now.elapsed()) > timeout_ms {
-                        ThinClient::submit_poll_balance_metrics(timing::duration_as_ms(
-                            &now.elapsed(),
-                        ));
+                    sleep(*polling_frequency);
+                    if now.elapsed() > *timeout {
+                        ThinClient::submit_poll_balance_metrics(&now.elapsed());
                         return Err(e);
                     }
                     -1
@@ -274,14 +275,14 @@ impl ThinClient {
             };
 
             if balance >= 0 {
-                ThinClient::submit_poll_balance_metrics(timing::duration_as_ms(&now.elapsed()));
+                ThinClient::submit_poll_balance_metrics(&now.elapsed());
                 return Ok(balance);
             }
         }
     }
 
     pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
-        self.poll_balance_with_timeout(pubkey, 100, 1000)
+        self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
     }
 
     /// Poll the server to confirm a transaction.
