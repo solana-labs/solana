@@ -1238,8 +1238,14 @@ impl Crdt {
             })
             .unwrap()
     }
+    fn is_valid_address_internal(addr: SocketAddr, cfg_test: bool) -> bool {
+        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast() || (addr.ip().is_loopback() && !cfg_test))
+    }
+    /// port must not be 0
+    /// ip must be specified and not mulitcast
+    /// loopback ip is only allowed in tests
     pub fn is_valid_address(addr: SocketAddr) -> bool {
-        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast()) && !(addr.ip().is_localhost() || !cfg!("test"))
+        Self::is_valid_address_internal(addr, cfg!(test))
     }
 }
 
@@ -2044,12 +2050,16 @@ mod tests {
 
     #[test]
     fn test_is_valid_address() {
+        assert!(cfg!(test));
         let bad_address_port = "127.0.0.1:0".parse().unwrap();
         assert!(!Crdt::is_valid_address(bad_address_port));
         let bad_address_unspecified = "0.0.0.0:1234".parse().unwrap();
         assert!(!Crdt::is_valid_address(bad_address_unspecified));
         let bad_address_multicast = "224.254.0.0:1234".parse().unwrap();
         assert!(!Crdt::is_valid_address(bad_address_multicast));
+        let loopback = "127.0.0.1:1234".parse().unwrap();
+        assert!(Crdt::is_valid_address(loopback));
+        assert!(!Crdt::is_valid_address_internal(loopback, false));
     }
 
     #[test]
