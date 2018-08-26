@@ -1239,7 +1239,10 @@ impl Crdt {
             .unwrap()
     }
     fn is_valid_address_internal(addr: SocketAddr, cfg_test: bool) -> bool {
-        (addr.port() != 0) && !(addr.ip().is_unspecified() || addr.ip().is_multicast() || (addr.ip().is_loopback() && !cfg_test))
+        (addr.port() != 0)
+            && !(addr.ip().is_unspecified()
+                || addr.ip().is_multicast()
+                || (addr.ip().is_loopback() && !cfg_test))
     }
     /// port must not be 0
     /// ip must be specified and not mulitcast
