@@ -114,6 +114,27 @@ impl ThinClient {
         Ok(tx.signature)
     }
 
+    /// Retry a sending a signed Transaction to the server for processing.
+    pub fn retry_transfer_signed(
+        &mut self,
+        tx: &Transaction,
+        tries: usize,
+    ) -> io::Result<Signature> {
+        let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
+        for x in 0..tries {
+            self.transactions_socket
+                .send_to(&data, &self.transactions_addr)?;
+            if self.poll_for_signature(&tx.signature).is_ok() {
+                return Ok(tx.signature);
+            }
+            info!("{} tries failed transfer to {}", x, self.transactions_addr);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "retry_transfer_signed failed",
+        ))
+    }
+
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
