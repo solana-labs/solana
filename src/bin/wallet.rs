@@ -20,6 +20,7 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::thread::sleep;
 use std::time::Duration;
 
 enum WalletCommand {
@@ -270,13 +271,18 @@ fn process_command(
 
             // TODO: return airdrop Result from Drone instead of polling the
             //       network
-            let current_balance = client
-                .poll_balance_with_timeout(
-                    &config.id.pubkey(),
-                    &Duration::from_millis(500),
-                    &Duration::from_secs(20),
-                )
-                .unwrap_or(previous_balance);
+            let mut current_balance = previous_balance;
+            for _ in 0..20 {
+                sleep(Duration::from_millis(500));
+                current_balance = client
+                    .poll_get_balance(&config.id.pubkey())
+                    .unwrap_or(previous_balance);
+
+                if previous_balance != current_balance {
+                    break;
+                }
+                println!(".");
+            }
             println!("Your balance is: {:?}", current_balance);
             if current_balance - previous_balance != tokens {
                 Err("Airdrop failed!")?;
