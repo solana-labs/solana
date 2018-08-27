@@ -6,9 +6,9 @@
 
 cd "$(dirname "$0")"/..
 source ci/upload_ci_artifact.sh
-source multinode-demo/common.sh
+source scripts/configure-metrics.sh
 
-./multinode-demo/setup.sh
+multinode-demo/setup.sh
 
 backgroundCommands="drone leader validator validator-x"
 pids=()
@@ -16,7 +16,7 @@ pids=()
 for cmd in $backgroundCommands; do
   echo "--- Start $cmd"
   rm -f log-"$cmd".txt
-  ./multinode-demo/"$cmd".sh > log-"$cmd".txt 2>&1 &
+  multinode-demo/"$cmd".sh > log-"$cmd".txt 2>&1 &
   declare pid=$!
   pids+=("$pid")
   echo "pid: $pid"
@@ -67,11 +67,11 @@ flag_error() {
 #   set -x
 #   multinode-demo/test/wallet-sanity.sh
 # ) || flag_error
-# 
+#
 # echo "--- Node count"
 # (
 #   set -x
-#   ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
+#   multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
 # ) || flag_error
 
 killBackgroundCommands
@@ -79,6 +79,7 @@ killBackgroundCommands
 echo "--- Ledger verification"
 (
   set -x
+  source multinode-demo/common.sh
   $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/ledger verify
 ) || flag_error
 

@@ -4,7 +4,7 @@
 #
 
 cd "$(dirname "$0")/.."
-source multinode-demo/common.sh
+source scripts/metrics-write-datapoint.sh
 
 NET_URL=$1
 if [[ -z $NET_URL ]]; then
@@ -45,7 +45,7 @@ echo "--- $NET_URL: node count"
 if [[ -n "$USE_SNAP" ]]; then
   # TODO: Merge client.sh functionality into solana-bench-tps proper and
   #       remove this USE_SNAP case
-  cmd=$solana_bench_tps
+  cmd=solana.bench-tps
 else
   cmd=multinode-demo/client.sh
 fi
