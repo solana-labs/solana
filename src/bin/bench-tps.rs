@@ -284,7 +284,9 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         let airdrop_amount = tx_count - starting_balance;
         println!(
             "Airdropping {:?} tokens from {} for {}",
-            airdrop_amount, drone_addr, id.pubkey(),
+            airdrop_amount,
+            drone_addr,
+            id.pubkey(),
         );
 
         request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
@@ -304,7 +306,12 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         }
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
-            println!("Airdrop failed! {} {} {}", id.pubkey(), current_balance, starting_balance);
+            println!(
+                "Airdrop failed! {} {} {}",
+                id.pubkey(),
+                current_balance,
+                starting_balance
+            );
             exit(1);
         }
     }
@@ -681,9 +688,7 @@ fn converge(
     let mut v: Vec<NodeInfo> = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
-        if spy_ref
-            .read()
-            .unwrap().leader_data().is_none() {
+        if spy_ref.read().unwrap().leader_data().is_none() {
             continue;
         }
 
@@ -710,7 +715,7 @@ fn converge(
     }
     threads.extend(ncp.thread_hdls().into_iter());
     let leader = spy_ref.read().unwrap().leader_data().cloned();
-    (v,leader)
+    (v, leader)
 }
 
 fn read_leader(path: &str) -> Config {
