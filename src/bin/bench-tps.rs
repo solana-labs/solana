@@ -516,7 +516,8 @@ fn main() {
         exit(1);
     }
     if leader.is_none() {
-       println!("no leader");
+        println!("no leader");
+        exit(1);
     }
 
     if matches.is_present("converge_only") {
