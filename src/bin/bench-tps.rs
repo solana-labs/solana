@@ -144,7 +144,11 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
 
             // Sanity check that the client balance is still 1
             let balance = barrier_client
-                .poll_get_balance(&id.pubkey())
+                .poll_balance_with_timeout(
+                    &id.pubkey(),
+                    &Duration::from_millis(100),
+                    &Duration::from_secs(10),
+                )
                 .expect("Failed to get balance");
             if balance != 1 {
                 panic!("Expected an account balance of 1 (balance: {}", balance);
