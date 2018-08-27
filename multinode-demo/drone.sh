@@ -10,6 +10,9 @@ here=$(dirname "$0")
 source "$here"/common.sh
 SOLANA_CONFIG_DIR="$SOLANA_CONFIG_DIR"-drone
 
+# shellcheck source=scripts/oom-score-adj.sh
+source "$here"/../scripts/oom-score-adj.sh
+
 if [[ -d "$SNAP" ]]; then
   # Exit if mode is not yet configured
   # (typically the case after the Snap is first installed)

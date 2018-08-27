@@ -6,7 +6,7 @@
 # with GCP and has sufficient permission.
 #
 here=$(dirname "$0")
-metrics_write_datapoint="$here"/../multinode-demo/metrics_write_datapoint.sh
+metrics_write_datapoint="$here"/../scripts/metrics-write-datapoint.sh
 
 # TODO: Switch over to rolling updates
 ROLLING_UPDATE=false

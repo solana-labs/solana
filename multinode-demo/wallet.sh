@@ -9,6 +9,9 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
+# shellcheck source=scripts/oom-score-adj.sh
+source "$here"/../scripts/oom-score-adj.sh
+
 # if $1 isn't host:path, something.com, or a valid local path
 if [[ ${1%:} != "$1" || "$1" =~ [^.]\.[^.] || -d $1 ]]; then
   leader=$1 # interpret

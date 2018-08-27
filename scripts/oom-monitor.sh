@@ -4,8 +4,8 @@
 #
 
 here=$(dirname "$0")
-# shellcheck source=multinode-demo/common.sh
-source "$here"/common.sh
+# shellcheck source=scripts/oom-score-adj.sh
+source "$here"/oom-score-adj.sh
 
 if [[ $(uname) != Linux ]]; then
   exit 0
@@ -24,7 +24,7 @@ oom_score_adj "self" -500
 
 while read -r victim; do
   echo "Out of memory event detected, $victim killed"
-  "$here"/metrics_write_datapoint.sh "oom-killer,victim=$victim killed=1"
+  "$here"/metrics-write-datapoint.sh "oom-killer,victim=$victim killed=1"
 done < <( \
   tail --follow=name --retry -n0 $syslog \
   | sed --unbuffered -n 's/^.* Out of memory: Kill process [1-9][0-9]* (\([^)]*\)) .*/\1/p' \

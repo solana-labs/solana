@@ -50,7 +50,7 @@ apps:
       - home
   bench-tps:
     # TODO: Merge client.sh functionality into solana-bench-tps proper
-    command: client.sh
+    command: multinode-demo/client.sh
     #command: solana-bench-tps
     plugs:
       - network
@@ -58,32 +58,32 @@ apps:
       - home
   wallet:
     # TODO: Merge wallet.sh functionality into solana-wallet proper
-    command: wallet.sh
+    command: multinode-demo/wallet.sh
     #command: solana-wallet
     plugs:
       - network
       - home
   daemon-validator:
     daemon: simple
-    command: validator.sh
+    command: multinode-demo/validator.sh
     plugs:
       - network
       - network-bind
   daemon-leader:
     daemon: simple
-    command: leader.sh
+    command: multinode-demo/leader.sh
     plugs:
       - network
       - network-bind
   daemon-drone:
     daemon: simple
-    command: drone.sh
+    command: multinode-demo/drone.sh
     plugs:
       - network
       - network-bind
   daemon-oom-monitor:
     daemon: simple
-    command: oom_monitor.sh
+    command: scripts/oom-monitor.sh
     plugs:
       - network
 
@@ -92,6 +92,8 @@ parts:
     plugin: nil
     prime:
       - bin
+      - multinode-demo
+      - scripts
       - usr/lib
     override-build: |
       # Install CUDA 9.2 runtime
@@ -114,9 +116,13 @@ parts:
       # Build/install all other programs
       cargo install --root $SNAPCRAFT_PART_INSTALL --bins
 
-      # Install multinode scripts
-      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-      cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/bin/
+      # Install multinode-demo/
+      mkdir -p $SNAPCRAFT_PART_INSTALL/multinode-demo/
+      cp -av multinode-demo/* $SNAPCRAFT_PART_INSTALL/multinode-demo/
+
+      # Install scripts/
+      mkdir -p $SNAPCRAFT_PART_INSTALL/scripts/
+      cp -av scripts/* $SNAPCRAFT_PART_INSTALL/scripts/
 
       # TODO: build curl,rsync/multilog from source instead of sneaking it in from the host
       # system...
