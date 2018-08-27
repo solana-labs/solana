@@ -19,6 +19,7 @@ Methods
 * [getBalance](#getbalance)
 * [getLastId](#getlastid)
 * [getTransactionCount](#gettransactioncount)
+* [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
 
 Request Formatting
@@ -131,6 +132,27 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":268,"id":1}
+```
+
+---
+
+### requestAirdrop
+Requests an airdrop of tokens to a Pubkey
+
+##### Parameters:
+* `string` - Pubkey of account to receive tokens, as base-58 encoded string
+* `integer` - token quantity, as a signed 64-bit integer
+
+##### Results:
+* `string` - Transaction Signature of airdrop, as base-58 encoded string
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"requestAirdrop", "params":["83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri", 50]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW","id":1}
 ```
 
 ---
