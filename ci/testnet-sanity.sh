@@ -22,12 +22,9 @@ if [[ -z $NO_LEDGER_VERIFY ]]; then
     # Note: here we assume this script is actually running on the leader node...
     (
       set -x
-      set +e
-      sudo cp -r /var/snap/solana/current/config/ledger /var/snap/solana/current/config/ledger-verify-$$ &&
-          sudo solana.ledger-tool --ledger /var/snap/solana/current/config/ledger-verify-$$ verify
-      ret=$?
-      sudo rm -rf /var/snap/solana/current/config/ledger-verify-$$
-      [[ $ret == 0 ]] || exit "$ret"
+      cp -r /var/snap/solana/current/config/ledger /var/tmp/ledger-verify-$$
+      solana.ledger-tool --ledger /var/tmp/ledger-verify-$$
+      rm -rf /var/snap/solana/current/config/ledger-verify-$$ verify
     )
   else
     echo "^^^ +++"
