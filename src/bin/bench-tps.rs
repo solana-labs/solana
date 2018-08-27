@@ -283,8 +283,8 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
     if starting_balance < tx_count {
         let airdrop_amount = tx_count - starting_balance;
         println!(
-            "Airdropping {:?} tokens from {}",
-            airdrop_amount, drone_addr
+            "Airdropping {:?} tokens from {} for {}",
+            airdrop_amount, drone_addr, id.pubkey(),
         );
 
         request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64).unwrap();
@@ -304,7 +304,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         }
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
-            println!("Airdrop failed!");
+            println!("Airdrop failed! {} {} {}", id.pubkey(), current_balance, starting_balance);
             exit(1);
         }
     }
@@ -495,7 +495,7 @@ fn main() {
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let validators = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
+    let (validators, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
 
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
@@ -515,11 +515,16 @@ fn main() {
         );
         exit(1);
     }
+    if leader.is_none() {
+       println!("no leader");
+    }
 
     if matches.is_present("converge_only") {
         return;
     }
+    let leader = leader.unwrap();
 
+    println!("leader is at {} {}", leader.contact_info.rpu, leader.id);
     let mut client = mk_client(&leader);
     let mut barrier_client = mk_client(&leader);
 
@@ -656,7 +661,7 @@ fn converge(
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
     addr: IpAddr,
-) -> Vec<NodeInfo> {
+) -> (Vec<NodeInfo>, Option<NodeInfo>) {
     //lets spy on the network
     let (node, gossip_socket, gossip_send_socket) = Crdt::spy_node(addr);
     let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
@@ -675,6 +680,12 @@ fn converge(
     let mut v: Vec<NodeInfo> = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
+        if spy_ref
+            .read()
+            .unwrap().leader_data().is_none() {
+            continue;
+        }
+
         v = spy_ref
             .read()
             .unwrap()
@@ -683,6 +694,7 @@ fn converge(
             .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
             .cloned()
             .collect();
+
         if v.len() >= num_nodes {
             println!("CONVERGED!");
             break;
@@ -696,7 +708,8 @@ fn converge(
         sleep(Duration::new(1, 0));
     }
     threads.extend(ncp.thread_hdls().into_iter());
-    v
+    let leader = spy_ref.read().unwrap().leader_data().cloned();
+    (v,leader)
 }
 
 fn read_leader(path: &str) -> Config {
