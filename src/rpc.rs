@@ -104,7 +104,7 @@ build_rpc_trait! {
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
         #[rpc(meta, name= "requestAirdrop")]
-        fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<bool>;
+        fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
 
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
@@ -144,7 +144,7 @@ impl RpcSol for RpcSolImpl {
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
     }
-    fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<bool> {
+    fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         let pubkey_vec = bs58::decode(id)
             .into_vec()
             .map_err(|_| Error::invalid_request())?;
@@ -152,20 +152,18 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        let previous_balance = meta
-            .request_processor
-            .get_balance(pubkey)
+        let signature = request_airdrop(&meta.drone_addr, &pubkey, tokens)
             .map_err(|_| Error::internal_error())?;
-        request_airdrop(&meta.drone_addr, &pubkey, tokens).map_err(|_| Error::internal_error())?;
         let now = Instant::now();
-        let mut balance;
+        let mut signature_status;
         loop {
-            balance = meta
+            signature_status = meta
                 .request_processor
-                .get_balance(pubkey)
+                .get_signature_status(signature)
                 .map_err(|_| Error::internal_error())?;
-            if balance > previous_balance {
-                return Ok(true);
+
+            if signature_status {
+                return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
                 return Err(Error::internal_error());
             }
