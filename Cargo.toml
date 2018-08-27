@@ -68,6 +68,7 @@ atty = "0.2"
 bincode = "1.0.0"
 bs58 = "0.2.0"
 byteorder = "1.2.1"
+bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
