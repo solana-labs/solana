@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# Starts an instance of solana-drone
+#
 # usage: $0 <rsync network path to solana repo on leader machine>
 #
 

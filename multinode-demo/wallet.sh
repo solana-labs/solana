@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# Runs solana-wallet against the specified network
+#
 # usage: $0 <rsync network path to solana repo on leader machine>"
 #
 
