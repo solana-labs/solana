@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# Starts a leader node
+#
 
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh

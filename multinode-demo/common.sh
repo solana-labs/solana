@@ -1,7 +1,11 @@
 # |source| this file
 #
-# Disable complaints about unused variables in this file:
+# Common utilities shared by other scripts in this directory
+#
+# The following directive disable complaints about unused variables in this
+# file:
 # shellcheck disable=2034
+#
 
 rsync=rsync
 leader_logger="cat"

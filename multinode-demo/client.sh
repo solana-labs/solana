@@ -2,6 +2,8 @@
 #
 USAGE=" usage: $0 [leader_url] [num_nodes] [--loop] [extra args]
 
+ Run bench-tps against the specified network
+
  leader_url       URL to the leader (defaults to ..)
  num_nodes        Minimum number of nodes to look for while converging
  --loop           Add this flag to cause the program to loop infinitely
