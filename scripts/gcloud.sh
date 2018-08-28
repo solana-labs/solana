@@ -33,7 +33,7 @@ gcloud_FindInstances() {
       continue
     fi
     if [[ $options = show ]]; then
-      printf "%-20s | zone=%-10s publicIp=%-16s privateIp=%s" "$name" "$zone" "$publicIp" "$privateIp"
+      printf "%-30s | %-16s publicIp=%-16s privateIp=%s\n" "$name" "$zone" "$publicIp" "$privateIp"
     fi
 
     instances+=("$name:$zone:$publicIp:$privateIp")
@@ -93,7 +93,11 @@ gcloud_CreateInstances() {
   declare imageName="$4"
 
   declare nodes
-  read -ra nodes <<<$(seq -f "${namePrefix}%g" 1 "$numNodes")
+  if [[ $numNodes = 1 ]]; then
+    nodes=("$namePrefix")
+  else
+    read -ra nodes <<<$(seq -f "${namePrefix}%g" 1 "$numNodes")
+  fi
 
   (
     set -x
@@ -110,10 +114,20 @@ gcloud_CreateInstances() {
 # Deletes all the instances listed in the `instances` array
 #
 gcloud_DeleteInstances() {
+  if [[ ${#instances[0]} -eq 0 ]]; then
+    echo No instances to delete
+    return
+  fi
   declare names=("${instances[@]/:*/}")
+
+  # Assume all instances are in the same zone
+  # TODO: One day this assumption will be invalid
+  declare zone
+  IFS=: read -r _ zone _ < <(echo "${instances[0]}")
+
   (
     set -x
-    gcloud beta compute instances delete "${names[@]}"
+    gcloud beta compute instances delete --zone "$zone" "${names[@]}"
   )
 }
 
@@ -137,13 +151,20 @@ gcloud_FigureRemoteUsername() {
   fi
 
   declare instanceInfo="$1"
-  declare name zone
-  IFS=: read -r name zone _ < <(echo "$instanceInfo")
+  declare name zone publicIp
+  IFS=: read -r name zone publicIp _ < <(echo "$instanceInfo")
 
   echo "Detecting remote username using $zone in $zone:"
+
+
   # Figure the gcp ssh username
   (
     set -x
+
+    # Try to ping the machine first.  There can be a delay between when the
+    # instance is reported as RUNNING and when it's reachable over the network
+    timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
+
     gcloud compute ssh "$name" --zone "$zone" -- "echo whoami \$(whoami)" | tee whoami
   )
 
@@ -152,7 +173,7 @@ gcloud_FigureRemoteUsername() {
     exit 1
   }
   gcloud_username="${BASH_REMATCH[1]}"
-  echo "Remote username: $gcloud_username--"
+  echo "Remote username: $gcloud_username"
 }
 
 #
@@ -163,13 +184,12 @@ gcloud_FigureRemoteUsername() {
 # use plain |ssh| instead.
 #
 # username    - gcp ssh username as computed by gcloud_FigureRemoteUsername
-# publicKey   - public key to install on all the instances
-# privateKey  - matching private key, used to verify ssh access
+# privateKey  - private key to install on all the instances
 #
 gcloud_PrepInstancesForSsh() {
   declare username="$1"
-  declare publicKey="$2"
-  declare privateKey="$3"
+  declare privateKey="$2"
+  declare publicKey="$privateKey".pub
   [[ -r $publicKey ]] || {
     echo "Unable to read public key: $publicKey"
     exit 1
@@ -186,12 +206,28 @@ gcloud_PrepInstancesForSsh() {
     (
       set -x
 
-      # TODO: stomping on the authorized_keys isn't great, maybe do something
-      #       clever with |ssh-copy-id| one day
-      gcloud compute scp --zone "$zone" "$publicKey" "$name":.ssh/authorized_keys
+      # Try to ping the machine first.  There can be a delay between when the
+      # instance is reported as RUNNING and when it's reachable over the network
+      timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
 
-      # Confirm normal ssh now works
-      ssh -i "$privateKey" "$username@$publicIp" uptime
+      gcloud compute ssh --zone "$zone" "$name" -- "
+        set -x;
+        rm -rf .ssh;
+        mkdir -p .ssh;
+        echo \"$(cat "$publicKey")\" > .ssh/authorized_keys;
+        echo \"
+          Host *
+          BatchMode yes
+          IdentityFile ~/.ssh/id_testnet
+          StrictHostKeyChecking no
+        \" > .ssh/config;
+      "
+      #gcloud compute scp --zone "$zone" "$publicKey" "$name":.ssh/authorized_keys
+      scp \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -i "$privateKey" \
+        "$privateKey" "$username@$publicIp:.ssh/id_testnet"
     )
   done
 }
