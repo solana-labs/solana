@@ -25,6 +25,8 @@ gcloud_FindInstances() {
   declare filter="$1"
   declare options="$2"
   instances=()
+
+  declare name zone publicIp privateIp status
   while read -r name zone publicIp privateIp status; do
     if [[ $status != RUNNING ]]; then
       echo "Warning: $name is not RUNNING, ignoring it."
