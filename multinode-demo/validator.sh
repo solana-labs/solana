@@ -6,6 +6,9 @@ here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
 source "$here"/common.sh
 
+# shellcheck source=scripts/oom-score-adj.sh
+source "$here"/../scripts/oom-score-adj.sh
+
 usage() {
   if [[ -n $1 ]]; then
     echo "$*"
