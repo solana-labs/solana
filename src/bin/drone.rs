@@ -102,11 +102,9 @@ fn main() -> Result<(), Box<error::Error>> {
         timeout = None;
     }
 
-    eprintln!("hioisdlflkj");
-    let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
-    let socket = TcpListener::bind(&drone_addr).unwrap();
-
     let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
+
+    let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
@@ -124,6 +122,7 @@ fn main() -> Result<(), Box<error::Error>> {
         drone1.lock().unwrap().clear_request_count();
     });
 
+    let socket = TcpListener::bind(&drone_addr).unwrap();
     println!("Drone started. Listening on: {}", drone_addr);
     let done = socket
         .incoming()
