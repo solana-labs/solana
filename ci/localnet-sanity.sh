@@ -62,17 +62,17 @@ flag_error() {
 }
 
 # TODO: CI networking isn't working with gossip.  we cant self discover the right interface/ip for the clients/wallets
-# echo "--- Wallet sanity"
-# (
-#   set -x
-#   multinode-demo/test/wallet-sanity.sh
-# ) || flag_error
-#
-# echo "--- Node count"
-# (
-#   set -x
-#   multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
-# ) || flag_error
+echo "--- Wallet sanity"
+(
+  set -x
+  multinode-demo/test/wallet-sanity.sh
+) || flag_error
+
+echo "--- Node count"
+(
+  set -x
+  ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
+) || flag_error
 
 killBackgroundCommands
 
@@ -80,7 +80,9 @@ echo "--- Ledger verification"
 (
   set -x
   source multinode-demo/common.sh
-  $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/ledger verify
+  cp -R "$SOLANA_CONFIG_DIR"/ledger /tmp/ledger-$$
+  $solana_ledger_tool --ledger /tmp/ledger-$$ verify
+  rm -rf /tmp/ledger-$$
 ) || flag_error
 
 echo +++
