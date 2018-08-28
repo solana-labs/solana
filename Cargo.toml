@@ -75,9 +75,9 @@ env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 influx_db_client = "0.3.4"
-jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "4486300" }
-jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc", rev = "4486300" }
-jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc", rev = "4486300" }
+jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
+jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
+jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
 itertools = "0.7.8"
 log = "0.4.2"
 matches = "0.1.6"
