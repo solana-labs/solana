@@ -47,4 +47,4 @@ fi
 
 # shellcheck disable=SC2086 # $solana_wallet should not be quoted
 exec $solana_wallet \
-  -a 127.0.0.1 -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" --timeout 10 "$@"
+  -l "$SOLANA_CONFIG_CLIENT_DIR"/leader.json -k "$client_id_path" --timeout 10 "$@"

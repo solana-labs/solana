@@ -84,7 +84,7 @@ impl ReplicateStage {
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(
             "replicate_stage",
-            send,
+            Arc::new(send),
             blob_recycler.clone(),
             vote_blob_receiver,
         );

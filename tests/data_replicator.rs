@@ -4,7 +4,7 @@ extern crate rayon;
 extern crate solana;
 
 use rayon::iter::*;
-use solana::crdt::{Crdt, TestNode};
+use solana::crdt::{Crdt, Node};
 use solana::logger;
 use solana::ncp::Ncp;
 use solana::packet::Blob;
@@ -17,18 +17,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
-    let tn = TestNode::new_localhost();
+    let tn = Node::new_localhost();
     let crdt = Crdt::new(tn.data.clone()).expect("Crdt::new");
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
-    let d = Ncp::new(
-        &c.clone(),
-        w,
-        None,
-        tn.sockets.gossip,
-        tn.sockets.gossip_send,
-        exit,
-    ).unwrap();
+    let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit).unwrap();
     (c, d, tn.sockets.replicate)
 }
 

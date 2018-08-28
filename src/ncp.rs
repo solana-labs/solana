@@ -22,27 +22,27 @@ impl Ncp {
         crdt: &Arc<RwLock<Crdt>>,
         window: SharedWindow,
         ledger_path: Option<&str>,
-        gossip_listen_socket: UdpSocket,
-        gossip_send_socket: UdpSocket,
+        gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Result<Ncp> {
         let blob_recycler = BlobRecycler::default();
         let (request_sender, request_receiver) = channel();
+        let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
             &crdt.read().unwrap().me.as_ref()[..4],
-            gossip_listen_socket.local_addr().unwrap()
+            gossip_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::blob_receiver(
+            gossip_socket.clone(),
             exit.clone(),
             blob_recycler.clone(),
-            gossip_listen_socket,
             request_sender,
         )?;
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder(
             "ncp",
-            gossip_send_socket,
+            gossip_socket,
             blob_recycler.clone(),
             response_receiver,
         );
@@ -81,7 +81,7 @@ impl Service for Ncp {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{Crdt, TestNode};
+    use crdt::{Crdt, Node};
     use ncp::Ncp;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, RwLock};
@@ -91,18 +91,11 @@ mod tests {
     // test that stage will exit when flag is set
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
-        let tn = TestNode::new_localhost();
+        let tn = Node::new_localhost();
         let crdt = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
-        let d = Ncp::new(
-            &c,
-            w,
-            None,
-            tn.sockets.gossip,
-            tn.sockets.gossip_send,
-            exit.clone(),
-        ).unwrap();
+        let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone()).unwrap();
         d.close().expect("thread join");
     }
 }

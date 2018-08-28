@@ -232,7 +232,7 @@ pub mod tests {
     use super::*;
     use bank::Bank;
     use bincode::deserialize;
-    use crdt::{Crdt, NodeInfo, TestNode};
+    use crdt::{Crdt, Node, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
     use logger;
@@ -253,7 +253,7 @@ pub mod tests {
         let mint = Mint::new(1234);
         let bank = Arc::new(Bank::new(&mint));
 
-        let node = TestNode::new_localhost();
+        let node = Node::new_localhost();
         let mut crdt = Crdt::new(node.data.clone()).expect("Crdt::new");
         crdt.set_leader(node.data.id);
         let blob_recycler = BlobRecycler::default();

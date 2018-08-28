@@ -93,6 +93,8 @@ fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u6
     cmp::min(consumed + WINDOW_SIZE - 1, highest_lost)
 }
 
+pub const MAX_REPAIR_BACKOFF: usize = 128;
+
 fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     //exponential backoff
     if *last != consumed {
@@ -105,9 +107,9 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     // Experiment with capping repair request duration.
     // Once nodes are too far behind they can spend many
     // seconds without asking for repair
-    if *times > 128 {
+    if *times > MAX_REPAIR_BACKOFF {
         // 50% chance that a request will fire between 64 - 128 tries
-        *times = 64;
+        *times = MAX_REPAIR_BACKOFF / 2;
     }
 
     //if we get lucky, make the request, which should exponentially get less likely
@@ -126,6 +128,7 @@ fn repair_window(
 ) -> Result<()> {
     //exponential backoff
     if !repair_backoff(last, times, consumed) {
+        trace!("{:x} !repair_backoff() times = {}", debug_id, times);
         return Ok(());
     }
 
@@ -691,7 +694,7 @@ pub fn window(
 
 #[cfg(test)]
 mod test {
-    use crdt::{Crdt, TestNode};
+    use crdt::{Crdt, Node};
     use logger;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
     use std::collections::VecDeque;
@@ -737,12 +740,17 @@ mod test {
         let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
+        let t_receiver = receiver(
+            Arc::new(read),
+            exit.clone(),
+            pack_recycler.clone(),
+            s_reader,
+        );
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(
                 "streamer_send_test",
-                send,
+                Arc::new(send),
                 resp_recycler.clone(),
                 r_responder,
             );
@@ -790,7 +798,7 @@ mod test {
     #[test]
     pub fn window_send_test() {
         logger::setup();
-        let tn = TestNode::new_localhost();
+        let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let mut crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
@@ -800,9 +808,9 @@ mod test {
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(
+            Arc::new(tn.sockets.gossip),
             exit.clone(),
             resp_recycler.clone(),
-            tn.sockets.gossip,
             s_reader,
         ).unwrap();
         let (s_window, r_window) = channel();
@@ -821,7 +829,7 @@ mod test {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(
                 "window_send_test",
-                tn.sockets.replicate,
+                Arc::new(tn.sockets.replicate),
                 resp_recycler.clone(),
                 r_responder,
             );
@@ -860,7 +868,7 @@ mod test {
     #[test]
     pub fn window_send_no_leader_test() {
         logger::setup();
-        let tn = TestNode::new_localhost();
+        let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
@@ -869,9 +877,9 @@ mod test {
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(
+            Arc::new(tn.sockets.gossip),
             exit.clone(),
             resp_recycler.clone(),
-            tn.sockets.gossip,
             s_reader,
         ).unwrap();
         let (s_window, _r_window) = channel();
@@ -890,7 +898,7 @@ mod test {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(
                 "window_send_test",
-                tn.sockets.replicate,
+                Arc::new(tn.sockets.replicate),
                 resp_recycler.clone(),
                 r_responder,
             );
@@ -922,7 +930,7 @@ mod test {
     #[test]
     pub fn window_send_late_leader_test() {
         logger::setup();
-        let tn = TestNode::new_localhost();
+        let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
@@ -931,9 +939,9 @@ mod test {
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(
+            Arc::new(tn.sockets.gossip),
             exit.clone(),
             resp_recycler.clone(),
-            tn.sockets.gossip,
             s_reader,
         ).unwrap();
         let (s_window, _r_window) = channel();
@@ -952,7 +960,7 @@ mod test {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(
                 "window_send_test",
-                tn.sockets.replicate,
+                Arc::new(tn.sockets.replicate),
                 resp_recycler.clone(),
                 r_responder,
             );

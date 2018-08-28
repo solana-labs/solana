@@ -13,7 +13,6 @@ use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::logger;
-use solana::nat::get_public_ip_addr;
 use solana::signature::{read_keypair, Keypair, KeypairUtil, Pubkey, Signature};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::wallet::request_airdrop;
@@ -21,7 +20,6 @@ use std::error;
 use std::fmt;
 use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::process::exit;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -95,14 +93,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
                 .help("/path/to/id.json"),
         )
         .arg(
-            Arg::with_name("addr")
-                .short("a")
-                .long("addr")
-                .value_name("IPADDR")
-                .takes_value(true)
-                .help("address to advertise to the network"),
-        )
-        .arg(
             Arg::with_name("timeout")
                 .long("timeout")
                 .value_name("SECONDS")
@@ -155,18 +145,6 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .get_matches();
 
-    let addr = if let Some(s) = matches.value_of("addr") {
-        s.to_string().parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse {} as IP address error: {:?}", s, e);
-            exit(1)
-        })
-    } else {
-        get_public_ip_addr().unwrap_or_else(|e| {
-            eprintln!("failed to get public IP, try --addr? error: {:?}", e);
-            exit(1)
-        })
-    };
-
     let leader: NodeInfo;
     if let Some(l) = matches.value_of("leader") {
         leader = read_leader(l)?.node_info;
@@ -195,7 +173,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         )))
     })?;
 
-    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout, addr)?;
+    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);

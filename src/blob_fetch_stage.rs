@@ -16,31 +16,27 @@ pub struct BlobFetchStage {
 
 impl BlobFetchStage {
     pub fn new(
-        socket: UdpSocket,
+        socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
-        blob_recycler: &BlobRecycler,
+        recycler: &BlobRecycler,
     ) -> (Self, BlobReceiver) {
-        Self::new_multi_socket(vec![socket], exit, blob_recycler)
+        Self::new_multi_socket(vec![socket], exit, recycler)
     }
     pub fn new_multi_socket(
-        sockets: Vec<UdpSocket>,
+        sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        blob_recycler: &BlobRecycler,
+        recycler: &BlobRecycler,
     ) -> (Self, BlobReceiver) {
-        let (blob_sender, blob_receiver) = channel();
+        let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| {
-                streamer::blob_receiver(
-                    exit.clone(),
-                    blob_recycler.clone(),
-                    socket,
-                    blob_sender.clone(),
-                ).expect("blob receiver init")
+                streamer::blob_receiver(socket, exit.clone(), recycler.clone(), sender.clone())
+                    .expect("blob receiver init")
             })
             .collect();
 
-        (BlobFetchStage { exit, thread_hdls }, blob_receiver)
+        (BlobFetchStage { exit, thread_hdls }, receiver)
     }
 
     pub fn close(&self) {

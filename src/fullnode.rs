@@ -2,7 +2,7 @@
 
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
-use crdt::{Crdt, NodeInfo, TestNode};
+use crdt::{Crdt, Node, NodeInfo};
 use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
@@ -50,7 +50,7 @@ impl Config {
 
 impl Fullnode {
     pub fn new(
-        node: TestNode,
+        node: Node,
         ledger_path: &str,
         keypair: Keypair,
         leader_addr: Option<SocketAddr>,
@@ -165,7 +165,7 @@ impl Fullnode {
         bank: Bank,
         entry_height: u64,
         ledger_tail: &[Entry],
-        mut node: TestNode,
+        mut node: Node,
         leader_info: Option<&NodeInfo>,
         exit: Arc<AtomicBool>,
         ledger_path: Option<&str>,
@@ -209,7 +209,6 @@ impl Fullnode {
             window.clone(),
             ledger_path,
             node.sockets.gossip,
-            node.sockets.gossip_send,
             exit.clone(),
         ).expect("Ncp::new");
         thread_hdls.extend(ncp.thread_hdls());
@@ -293,7 +292,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use crdt::TestNode;
+    use crdt::Node;
     use fullnode::Fullnode;
     use mint::Mint;
     use service::Service;
@@ -304,7 +303,7 @@ mod tests {
     #[test]
     fn validator_exit() {
         let keypair = Keypair::new();
-        let tn = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+        let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
@@ -318,7 +317,7 @@ mod tests {
         let vals: Vec<Fullnode> = (0..2)
             .map(|_| {
                 let keypair = Keypair::new();
-                let tn = TestNode::new_localhost_with_pubkey(keypair.pubkey());
+                let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
                 let alice = Mint::new(10_000);
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));

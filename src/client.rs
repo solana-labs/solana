@@ -1,11 +1,11 @@
-use crdt::NodeInfo;
-use nat::udp_random_bind;
+use crdt::{NodeInfo, GOSSIP_PORT_RANGE};
+use nat::bind_in_range;
 use std::time::Duration;
 use thin_client::ThinClient;
 
 pub fn mk_client(r: &NodeInfo) -> ThinClient {
-    let requests_socket = udp_random_bind(8000, 10000, 5).unwrap();
-    let transactions_socket = udp_random_bind(8000, 10000, 5).unwrap();
+    let requests_socket = bind_in_range(GOSSIP_PORT_RANGE).unwrap();
+    let transactions_socket = bind_in_range(GOSSIP_PORT_RANGE).unwrap();
 
     requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))

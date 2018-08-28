@@ -47,7 +47,7 @@ fn retransmit(
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 fn retransmitter(
-    sock: UdpSocket,
+    sock: Arc<UdpSocket>,
     crdt: Arc<RwLock<Crdt>>,
     recycler: BlobRecycler,
     r: BlobReceiver,
@@ -81,7 +81,7 @@ impl RetransmitStage {
         crdt: &Arc<RwLock<Crdt>>,
         window: SharedWindow,
         entry_height: u64,
-        retransmit_socket: UdpSocket,
+        retransmit_socket: Arc<UdpSocket>,
         blob_recycler: &BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {

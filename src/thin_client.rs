@@ -13,7 +13,6 @@ use result::{Error, Result};
 use signature::{Keypair, Pubkey, Signature};
 use std::collections::HashMap;
 use std::io;
-use std::net::IpAddr;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
@@ -361,23 +360,13 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(
-    leader_ncp: SocketAddr,
-    timeout: Option<u64>,
-    addr: IpAddr,
-) -> Result<NodeInfo> {
+pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (node, gossip_socket, gossip_send_socket) = Crdt::spy_node(addr);
+    trace!("polling {:?} for leader", leader_ncp);
+    let (node, gossip_socket) = Crdt::spy_node();
     let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(
-        &crdt.clone(),
-        window,
-        None,
-        gossip_socket,
-        gossip_send_socket,
-        exit.clone(),
-    ).unwrap();
+    let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone()).unwrap();
     let leader_entry_point = NodeInfo::new_entry_point(leader_ncp);
     crdt.write().unwrap().insert(&leader_entry_point);
 
@@ -401,7 +390,7 @@ mod tests {
     use super::*;
     use bank::Bank;
     use budget::Budget;
-    use crdt::TestNode;
+    use crdt::Node;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use logger;
@@ -430,7 +419,7 @@ mod tests {
     fn test_thin_client() {
         logger::setup();
         let leader_keypair = Keypair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.data.clone();
 
         let alice = Mint::new(10_000);
@@ -479,7 +468,7 @@ mod tests {
     fn test_bad_sig() {
         logger::setup();
         let leader_keypair = Keypair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
@@ -539,7 +528,7 @@ mod tests {
     fn test_client_check_signature() {
         logger::setup();
         let leader_keypair = Keypair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();

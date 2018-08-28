@@ -71,7 +71,7 @@ echo "--- Wallet sanity"
 echo "--- Node count"
 (
   set -x
-  ./multinode-demo/client.sh "$PWD" 3 -c --addr 127.0.0.1
+  ./multinode-demo/client.sh "$PWD" 3 -c
 ) || flag_error
 
 killBackgroundCommands
