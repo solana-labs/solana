@@ -1,11 +1,15 @@
 #!/bin/bash
 
+here=$(dirname "$0")
+# shellcheck source=scripts/gcloud.sh
+source "$here"/../scripts/gcloud.sh
+
 command=$1
 prefix=
 num_nodes=
 out_file=
 image_name="ubuntu-16-04-cuda-9-2-new"
-ip_address_offset=5
+internalNetwork=false
 zone="us-west1-b"
 
 shift
@@ -43,7 +47,7 @@ while getopts "h?p:Pi:n:z:o:" opt; do
     prefix=$OPTARG
     ;;
   P)
-    ip_address_offset=4
+    internalNetwork=true
     ;;
   i)
     image_name=$OPTARG
@@ -69,22 +73,37 @@ set -e
 
 [[ -n $prefix ]] || usage "Need a prefix for GCE instance names"
 
-[[ -n $num_nodes ]] || usage "Need number of nodes"
-
-nodes=()
-for i in $(seq 1 "$num_nodes"); do
-  nodes+=("$prefix$i")
-done
 
 if [[ $command == "create" ]]; then
+  [[ -n $num_nodes ]] || usage "Need number of nodes"
   [[ -n $out_file ]] || usage "Need an outfile to store IP Addresses"
 
-  ip_addr_list=$(gcloud beta compute instances create "${nodes[@]}" --zone="$zone" --tags=testnet \
-    --image="$image_name" | awk -v offset="$ip_address_offset" '/RUNNING/ {print $offset}')
+  gcloud_CreateInstances "$prefix" "$num_nodes" "$zone" "$image_name"
+  gcloud_FindInstances "name~^$prefix"
 
-  echo "ip_addr_array=($ip_addr_list)" >"$out_file"
+  echo "ip_addr_array=()" > "$out_file"
+  recordPublicIp() {
+    declare name="$1"
+    declare publicIp="$3"
+    declare privateIp="$4"
+
+    if $internalNetwork; then
+      echo "ip_addr_array+=($privateIp) # $name" >> "$out_file"
+    else
+      echo "ip_addr_array+=($publicIp)  # $name" >> "$out_file"
+    fi
+  }
+  gcloud_ForEachInstance recordPublicIp
+
+  echo "Instance ip addresses recorded in $out_file"
 elif [[ $command == "delete" ]]; then
-  gcloud beta compute instances delete "${nodes[@]}"
+  gcloud_FindInstances "name~^$prefix"
+
+  if [[ ${#instances[@]} -eq 0 ]]; then
+    echo "No instances found matching '^$prefix'"
+    exit 0
+  fi
+  gcloud_DeleteInstances
 else
   usage "Unknown command: $command"
 fi
