@@ -5,8 +5,12 @@
 # This script must be run by a user/machine that has successfully authenticated
 # with GCP and has sufficient permission.
 #
+
 here=$(dirname "$0")
 metrics_write_datapoint="$here"/../scripts/metrics-write-datapoint.sh
+
+# shellcheck source=scripts/gcloud.sh
+source "$here"/../scripts/gcloud.sh
 
 # TODO: Switch over to rolling updates
 ROLLING_UPDATE=false
@@ -134,7 +138,7 @@ vm_foreach() {
   declare count=1
   for info in "${vmlist[@]}"; do
     declare vmClass vmName vmZone vmPublicIp
-    IFS=: read -r vmClass vmName vmZone vmPublicIp < <(echo "$info")
+    IFS=: read -r vmClass vmName vmZone vmPublicIp _ < <(echo "$info")
 
     eval "$cmd" "$vmName" "$vmZone" "$vmPublicIp" "$vmClass" "$count" "$@"
     count=$((count + 1))
@@ -179,16 +183,9 @@ vm_foreach_in_class() {
 findVms() {
   declare class="$1"
   declare filter="$2"
-  gcloud compute instances list --filter="$filter"
-  while read -r vmName vmZone vmPublicIp status; do
-    if [[ $status != RUNNING ]]; then
-      echo "Warning: $vmName is not RUNNING, ignoring it."
-      continue
-    fi
-    vmlist+=("$class:$vmName:$vmZone:$vmPublicIp")
-  done < <(gcloud compute instances list \
-             --filter="$filter" \
-             --format 'value(name,zone,networkInterfaces[0].accessConfigs[0].natIP,status)')
+
+  gcloud_FindInstances "$filter"
+  vmlist+=("${instances[@]/#/$class:}")
 }
 
 wait_for_pids() {
