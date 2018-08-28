@@ -184,7 +184,7 @@ findVms() {
   declare class="$1"
   declare filter="$2"
 
-  gcloud_FindInstances "$filter"
+  gcloud_FindInstances "$filter" show
   vmlist+=("${instances[@]/#/$class:}")
 }
 
@@ -216,7 +216,7 @@ delete_unreachable_validators() {
       # Validators are managed by a Compute Engine Instance Group, so deleting
       # one will just cause a new one to be spawned.
       echo "Warning: $vmName is unreachable, deleting it"
-      gcloud compute instances delete "$vmName" --zone "$vmZone"
+      gcloud_DeleteInstances "$vmName"
     fi
     echo "validator checked in ${SECONDS} seconds"
   ) >> "log-$vmName.txt" 2>&1 &

@@ -14,6 +14,8 @@
 #   "name:zone:public IP:private IP"
 #
 # filter   - The instances to filter on
+# options  - If set to the string "show", the list of instances will be echoed
+#            to stdout
 #
 # examples:
 #   $ gcloud_FindInstances "name=exact-machine-name"
@@ -21,14 +23,18 @@
 #
 gcloud_FindInstances() {
   declare filter="$1"
-  #gcloud compute instances list --filter="$filter"
+  declare options="$2"
   instances=()
   while read -r name zone publicIp privateIp status; do
     if [[ $status != RUNNING ]]; then
       echo "Warning: $name is not RUNNING, ignoring it."
       continue
     fi
-  instances+=("$name:$zone:$publicIp:$privateIp")
+    if [[ $options = show ]]; then
+      printf "%-20s | zone=%-10s publicIp=%-16s privateIp=%s" "$name" "$zone" "$publicIp" "$privateIp"
+    fi
+
+    instances+=("$name:$zone:$publicIp:$privateIp")
   done < <(gcloud compute instances list \
              --filter="$filter" \
              --format 'value(name,zone,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status)')
