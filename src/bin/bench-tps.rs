@@ -16,7 +16,6 @@ use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
-use solana::nat::get_public_ip_addr;
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
@@ -441,14 +440,6 @@ fn main() {
                 .help("exit immediately after converging"),
         )
         .arg(
-            Arg::with_name("addr")
-                .short("a")
-                .long("addr")
-                .value_name("IPADDR")
-                .takes_value(true)
-                .help("address to advertise to the network"),
-        )
-        .arg(
             Arg::with_name("sustained")
                 .long("sustained")
                 .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
@@ -484,18 +475,6 @@ fn main() {
         time_sec = s.to_string().parse().expect("integer");
     }
 
-    let addr = if let Some(s) = matches.value_of("addr") {
-        s.to_string().parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse {} as IP address error: {:?}", s, e);
-            exit(1);
-        })
-    } else {
-        get_public_ip_addr().unwrap_or_else(|e| {
-            eprintln!("failed to get public IP, try --addr? error: {:?}", e);
-            exit(1);
-        })
-    };
-
     if let Some(s) = matches.value_of("tx_count") {
         tx_count = s.to_string().parse().expect("integer");
     }
@@ -506,7 +485,7 @@ fn main() {
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let (validators, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads, addr);
+    let (validators, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads);
 
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
@@ -672,10 +651,9 @@ fn converge(
     exit_signal: &Arc<AtomicBool>,
     num_nodes: usize,
     threads: &mut Vec<JoinHandle<()>>,
-    addr: IpAddr,
 ) -> (Vec<NodeInfo>, Option<NodeInfo>) {
     //lets spy on the network
-    let (node, gossip_socket, gossip_send_socket) = Crdt::spy_node(addr);
+    let (node, gossip_socket) = Crdt::spy_node();
     let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
@@ -686,7 +664,6 @@ fn converge(
         window.clone(),
         None,
         gossip_socket,
-        gossip_send_socket,
         exit_signal.clone(),
     ).expect("DataReplicator::new");
     let mut v: Vec<NodeInfo> = vec![];

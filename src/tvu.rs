@@ -83,7 +83,7 @@ impl Tvu {
     ) -> Self {
         let blob_recycler = BlobRecycler::default();
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
-            vec![replicate_socket, repair_socket],
+            vec![Arc::new(replicate_socket), Arc::new(repair_socket)],
             exit.clone(),
             &blob_recycler,
         );
@@ -94,7 +94,7 @@ impl Tvu {
             &crdt,
             window,
             entry_height,
-            retransmit_socket,
+            Arc::new(retransmit_socket),
             &blob_recycler,
             blob_fetch_receiver,
         );
@@ -143,7 +143,7 @@ impl Service for Tvu {
 pub mod tests {
     use bank::Bank;
     use bincode::serialize;
-    use crdt::{Crdt, TestNode};
+    use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
@@ -166,12 +166,11 @@ pub mod tests {
 
     fn new_ncp(
         crdt: Arc<RwLock<Crdt>>,
-        listen: UdpSocket,
+        gossip: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Result<(Ncp, SharedWindow)> {
         let window = window::default_window();
-        let send_sock = UdpSocket::bind("0.0.0.0:0").expect("bind 0");
-        let ncp = Ncp::new(&crdt, window.clone(), None, listen, send_sock, exit)?;
+        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit)?;
         Ok((ncp, window))
     }
 
@@ -179,10 +178,10 @@ pub mod tests {
     #[test]
     fn test_replicate() {
         logger::setup();
-        let leader = TestNode::new_localhost();
+        let leader = Node::new_localhost();
         let target1_keypair = Keypair::new();
-        let target1 = TestNode::new_localhost_with_pubkey(target1_keypair.pubkey());
-        let target2 = TestNode::new_localhost();
+        let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());
+        let target2 = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
         //start crdt_leader
@@ -207,9 +206,9 @@ pub mod tests {
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = streamer::blob_receiver(
+            Arc::new(target2.sockets.replicate),
             exit.clone(),
             recv_recycler.clone(),
-            target2.sockets.replicate,
             s_reader,
         ).unwrap();
 
@@ -217,7 +216,7 @@ pub mod tests {
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
             "test_replicate",
-            leader.sockets.requests,
+            Arc::new(leader.sockets.requests),
             resp_recycler.clone(),
             r_responder,
         );

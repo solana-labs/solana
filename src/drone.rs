@@ -157,11 +157,12 @@ impl Drop for Drone {
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use crdt::{get_ip_addr, TestNode};
+    use crdt::Node;
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
     use logger;
     use mint::Mint;
+    use nat::get_ip_addr;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -275,7 +276,7 @@ mod tests {
 
         logger::setup();
         let leader_keypair = Keypair::new();
-        let leader = TestNode::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
         let bank = Bank::new(&alice);

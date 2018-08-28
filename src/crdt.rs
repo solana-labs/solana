@@ -20,10 +20,9 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
-use nat::udp_random_bind;
+use nat::bind_in_range;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
-use pnet_datalink as datalink;
-use rand::{thread_rng, RngCore};
+use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::{Keypair, KeypairUtil, Pubkey};
@@ -41,6 +40,7 @@ use timing::{duration_as_ms, timestamp};
 use transaction::Vote;
 use window::{SharedWindow, WindowIndex};
 
+pub const GOSSIP_PORT_RANGE: (u16, u16) = (8000, 10_000);
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
 const GOSSIP_PURGE_MILLIS: u64 = 15000;
@@ -55,47 +55,6 @@ pub enum CrdtError {
     BadContactInfo,
     BadNodeInfo,
     BadGossipAddress,
-}
-
-pub fn parse_port_or_addr(optstr: Option<String>) -> SocketAddr {
-    let daddr: SocketAddr = "0.0.0.0:8000".parse().expect("default socket address");
-    if let Some(addrstr) = optstr {
-        if let Ok(port) = addrstr.parse() {
-            let mut addr = daddr;
-            addr.set_port(port);
-            addr
-        } else if let Ok(addr) = addrstr.parse() {
-            addr
-        } else {
-            daddr
-        }
-    } else {
-        daddr
-    }
-}
-
-pub fn get_ip_addr() -> Option<IpAddr> {
-    for iface in datalink::interfaces() {
-        for p in iface.ips {
-            if !p.ip().is_loopback() && !p.ip().is_multicast() {
-                match p.ip() {
-                    IpAddr::V4(addr) => {
-                        if !addr.is_link_local() {
-                            return Some(p.ip());
-                        }
-                    }
-                    IpAddr::V6(_addr) => {
-                        // Select an ipv6 address if the config is selected
-                        #[cfg(feature = "ipv6")]
-                        {
-                            return Some(p.ip());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 /// Structure to be replicated by the network
@@ -529,9 +488,10 @@ impl Crdt {
                     false
                 } else if !(Self::is_valid_address(v.contact_info.tvu)) {
                     trace!(
-                        "{:x}:broadcast skip not listening {:x}",
+                        "{:x}:broadcast skip not listening {:x} {}",
                         me.debug_id(),
-                        v.debug_id()
+                        v.debug_id(),
+                        v.contact_info.tvu,
                     );
                     false
                 } else {
@@ -552,6 +512,7 @@ impl Crdt {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    ///  TODO: move me out of crdt
     pub fn broadcast(
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
@@ -670,6 +631,7 @@ impl Crdt {
     /// retransmit messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    /// TODO: move me out of Crdt
     pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
         let (me, table): (NodeInfo, Vec<NodeInfo>) = {
             // copy to avoid locking during IO
@@ -685,12 +647,17 @@ impl Crdt {
             .iter()
             .filter(|v| {
                 if me.id == v.id {
+                    trace!("skip retransmit to self {:?}", v.id);
                     false
                 } else if me.leader_id == v.id {
                     trace!("skip retransmit to leader {:?}", v.id);
                     false
                 } else if !(Self::is_valid_address(v.contact_info.tvu)) {
-                    trace!("skip nodes that are not listening {:?}", v.id);
+                    trace!(
+                        "skip nodes that are not listening {:?} {}",
+                        v.id,
+                        v.contact_info.tvu
+                    );
                     false
                 } else {
                     true
@@ -702,10 +669,11 @@ impl Crdt {
             .par_iter()
             .map(|v| {
                 debug!(
-                    "{:x}: retransmit blob {} to {:x}",
+                    "{:x}: retransmit blob {} to {:x} {}",
                     me.debug_id(),
                     rblob.get_index().unwrap(),
                     v.debug_id(),
+                    v.contact_info.tvu,
                 );
                 //TODO profile this, may need multiple sockets for par_iter
                 assert!(rblob.meta.size <= BLOB_SIZE);
@@ -726,10 +694,6 @@ impl Crdt {
     pub fn convergence(&self) -> u64 {
         let max = self.remote.values().len() as u64 + 1;
         self.remote.values().fold(max, |a, b| std::cmp::min(a, *b))
-    }
-
-    fn random() -> u64 {
-        thread_rng().next_u64()
     }
 
     // TODO: fill in with real implmentation once staking is implemented
@@ -771,7 +735,7 @@ impl Crdt {
         if valid.is_empty() {
             Err(CrdtError::NoPeers)?;
         }
-        let n = (Self::random() as usize) % valid.len();
+        let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].contact_info.ncp;
         let req = Protocol::RequestWindowIndex(self.table[&self.me].clone(), ix);
         let out = serialize(&req)?;
@@ -814,8 +778,9 @@ impl Crdt {
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.table[&self.me].clone());
         trace!(
-            "created gossip request from {:x} to {:x} {}",
+            "created gossip request from {:x} {:?} to {:x} {}",
             self.debug_id(),
+            self.table[&self.me].clone(),
             v.debug_id(),
             v.contact_info.ncp
         );
@@ -1060,9 +1025,14 @@ impl Crdt {
         blob: &Blob,
     ) -> Option<SharedBlob> {
         match deserialize(&blob.data[..blob.meta.size]) {
-            Ok(request) => {
-                Crdt::handle_protocol(request, obj, window, ledger_window, blob_recycler)
-            }
+            Ok(request) => Crdt::handle_protocol(
+                blob.meta.addr(),
+                request,
+                obj,
+                window,
+                ledger_window,
+                blob_recycler,
+            ),
             Err(_) => {
                 warn!("deserialize crdt packet failed");
                 None
@@ -1071,6 +1041,7 @@ impl Crdt {
     }
 
     fn handle_protocol(
+        from_addr: SocketAddr,
         request: Protocol,
         obj: &Arc<RwLock<Self>>,
         window: &SharedWindow,
@@ -1080,10 +1051,14 @@ impl Crdt {
         match request {
             // TODO sigverify these
             Protocol::RequestUpdates(v, from_rd) => {
-                let addr = from_rd.contact_info.ncp;
-                trace!("RequestUpdates {} from {}", v, addr);
+                trace!(
+                    "RequestUpdates {} from {}, professing to be {}",
+                    v,
+                    from_addr,
+                    from_rd.contact_info.ncp
+                );
                 let me = obj.read().unwrap();
-                if addr == me.table[&me.me].contact_info.ncp {
+                if from_rd.contact_info.ncp == me.table[&me.me].contact_info.ncp {
                     warn!(
                         "RequestUpdates ignored, I'm talking to myself: me={:x} remoteme={:x}",
                         me.debug_id(),
@@ -1113,13 +1088,13 @@ impl Crdt {
                         v
                     );
                     None
-                } else if let Ok(r) = to_blob(rsp, addr, &blob_recycler) {
+                } else if let Ok(r) = to_blob(rsp, from_addr, &blob_recycler) {
                     trace!(
                         "sending updates me {:x} len {} to {:x} {}",
                         obj.read().unwrap().debug_id(),
                         len,
                         from_rd.debug_id(),
-                        addr,
+                        from_addr,
                     );
                     Some(r)
                 } else {
@@ -1254,7 +1229,7 @@ impl Crdt {
     fn is_valid_ip_internal(addr: IpAddr, cfg_test: bool) -> bool {
         !(addr.is_unspecified() || addr.is_multicast() || (addr.is_loopback() && !cfg_test))
     }
-    pub fn is_valid_ip(addr: IpAddr) -> bool {
+    fn is_valid_ip(addr: IpAddr) -> bool {
         Self::is_valid_ip_internal(addr, cfg!(test) || cfg!(feature = "test"))
     }
     /// port must not be 0
@@ -1264,20 +1239,17 @@ impl Crdt {
         (addr.port() != 0) && Self::is_valid_ip(addr.ip())
     }
 
-    pub fn spy_node(addr: IpAddr) -> (NodeInfo, UdpSocket, UdpSocket) {
-        let gossip_socket = udp_random_bind(8000, 10000, 5).unwrap();
-        let gossip_send_socket = udp_random_bind(8000, 10000, 5).unwrap();
-        let gossip_addr = SocketAddr::new(addr, gossip_socket.local_addr().unwrap().port());
+    pub fn spy_node() -> (NodeInfo, UdpSocket) {
+        let gossip_socket = bind_in_range(GOSSIP_PORT_RANGE).unwrap();
         let pubkey = Keypair::new().pubkey();
         let daddr = "0.0.0.0:0".parse().unwrap();
-        let node = NodeInfo::new(pubkey, gossip_addr, daddr, daddr, daddr, daddr);
-        (node, gossip_socket, gossip_send_socket)
+        let node = NodeInfo::new(pubkey, daddr, daddr, daddr, daddr, daddr);
+        (node, gossip_socket)
     }
 }
 
 pub struct Sockets {
     pub gossip: UdpSocket,
-    pub gossip_send: UdpSocket,
     pub requests: UdpSocket,
     pub replicate: UdpSocket,
     pub transaction: UdpSocket,
@@ -1287,12 +1259,12 @@ pub struct Sockets {
     pub retransmit: UdpSocket,
 }
 
-pub struct TestNode {
+pub struct Node {
     pub data: NodeInfo,
     pub sockets: Sockets,
 }
 
-impl TestNode {
+impl Node {
     pub fn new_localhost() -> Self {
         let pubkey = Keypair::new().pubkey();
         Self::new_localhost_with_pubkey(pubkey)
@@ -1304,7 +1276,6 @@ impl TestNode {
         let requests = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
 
-        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1316,11 +1287,10 @@ impl TestNode {
             transaction.local_addr().unwrap(),
             repair.local_addr().unwrap(),
         );
-        TestNode {
+        Node {
             data,
             sockets: Sockets {
                 gossip,
-                gossip_send,
                 requests,
                 replicate,
                 transaction,
@@ -1331,21 +1301,21 @@ impl TestNode {
             },
         }
     }
-    pub fn new_with_bind_addr(data: NodeInfo, bind_addr: SocketAddr) -> TestNode {
-        let mut local_gossip_addr = bind_addr;
-        local_gossip_addr.set_port(data.contact_info.ncp.port());
+    pub fn new_with_bind_addr(data: NodeInfo, bind_addr: SocketAddr) -> Node {
+        let mut gossip_addr = bind_addr;
+        gossip_addr.set_port(data.contact_info.ncp.port());
 
-        let mut local_replicate_addr = bind_addr;
-        local_replicate_addr.set_port(data.contact_info.tvu.port());
+        let mut replicate_addr = bind_addr;
+        replicate_addr.set_port(data.contact_info.tvu.port());
 
-        let mut local_requests_addr = bind_addr;
-        local_requests_addr.set_port(data.contact_info.rpu.port());
+        let mut requests_addr = bind_addr;
+        requests_addr.set_port(data.contact_info.rpu.port());
 
-        let mut local_transactions_addr = bind_addr;
-        local_transactions_addr.set_port(data.contact_info.tpu.port());
+        let mut transactions_addr = bind_addr;
+        transactions_addr.set_port(data.contact_info.tpu.port());
 
-        let mut local_repair_addr = bind_addr;
-        local_repair_addr.set_port(data.contact_info.tvu_window.port());
+        let mut repair_addr = bind_addr;
+        repair_addr.set_port(data.contact_info.tvu_window.port());
 
         fn bind(addr: SocketAddr) -> UdpSocket {
             match UdpSocket::bind(addr) {
@@ -1356,25 +1326,23 @@ impl TestNode {
             }
         };
 
-        let transaction = bind(local_transactions_addr);
-        let gossip = bind(local_gossip_addr);
-        let replicate = bind(local_replicate_addr);
-        let repair = bind(local_repair_addr);
-        let requests = bind(local_requests_addr);
+        let transaction = bind(transactions_addr);
+        let gossip = bind(gossip_addr);
+        let replicate = bind(replicate_addr);
+        let repair = bind(repair_addr);
+        let requests = bind(requests_addr);
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
         // response Udp packet correctly back to the requester.
         let respond = requests.try_clone().unwrap();
 
-        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
-        TestNode {
+        Node {
             data,
             sockets: Sockets {
                 gossip,
-                gossip_send,
                 requests,
                 replicate,
                 transaction,
@@ -1390,9 +1358,9 @@ impl TestNode {
         ip: IpAddr,
         port_range: (u16, u16),
         ncp_port: u16,
-    ) -> TestNode {
+    ) -> Node {
         fn bind(port_range: (u16, u16)) -> (u16, UdpSocket) {
-            match udp_random_bind(port_range.0, port_range.1, 5) {
+            match bind_in_range(port_range) {
                 Ok(socket) => (socket.local_addr().unwrap().port(), socket),
                 Err(err) => {
                     panic!("Failed to bind to {:?}", err);
@@ -1425,7 +1393,6 @@ impl TestNode {
         // response Udp packet correctly back to the requester.
         let respond = requests.try_clone().unwrap();
 
-        let gossip_send = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
 
@@ -1438,11 +1405,10 @@ impl TestNode {
             SocketAddr::new(ip, repair_port),
         );
 
-        TestNode {
+        Node {
             data: node_info,
             sockets: Sockets {
                 gossip,
-                gossip_send,
                 requests,
                 replicate,
                 transaction,
@@ -1465,8 +1431,8 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use crdt::{
-        parse_port_or_addr, Crdt, CrdtError, NodeInfo, Protocol, TestNode, GOSSIP_PURGE_MILLIS,
-        GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
+        Crdt, CrdtError, Node, NodeInfo, Protocol, GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS,
+        MIN_TABLE_SIZE,
     };
     use entry::Entry;
     use hash::{hash, Hash};
@@ -1485,15 +1451,6 @@ mod tests {
     use transaction::Vote;
     use window::default_window;
 
-    #[test]
-    fn test_parse_port_or_addr() {
-        let p1 = parse_port_or_addr(Some("9000".to_string()));
-        assert_eq!(p1.port(), 9000);
-        let p2 = parse_port_or_addr(Some("127.0.0.1:7000".to_string()));
-        assert_eq!(p2.port(), 7000);
-        let p3 = parse_port_or_addr(None);
-        assert_eq!(p3.port(), 8000);
-    }
     #[test]
     fn test_bad_address() {
         let d1 = NodeInfo::new(
@@ -2154,13 +2111,38 @@ mod tests {
         let obj = Arc::new(RwLock::new(crdt));
 
         let request = Protocol::RequestUpdates(1, node.clone());
-        assert!(Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler).is_none());
+        assert!(
+            Crdt::handle_protocol(
+                node.contact_info.ncp,
+                request,
+                &obj,
+                &window,
+                &mut None,
+                &recycler
+            ).is_none()
+        );
 
         let request = Protocol::RequestUpdates(1, node_with_same_addr.clone());
-        assert!(Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler).is_none());
+        assert!(
+            Crdt::handle_protocol(
+                node.contact_info.ncp,
+                request,
+                &obj,
+                &window,
+                &mut None,
+                &recycler
+            ).is_none()
+        );
 
         let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
-        Crdt::handle_protocol(request, &obj, &window, &mut None, &recycler);
+        Crdt::handle_protocol(
+            node.contact_info.ncp,
+            request,
+            &obj,
+            &window,
+            &mut None,
+            &recycler,
+        );
 
         let me = obj.write().unwrap();
 
@@ -2206,7 +2188,7 @@ mod tests {
     fn new_with_external_ip_test_random() {
         let sockaddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080);
         let node =
-            TestNode::new_with_external_ip(Keypair::new().pubkey(), sockaddr.ip(), (8100, 8200), 0);
+            Node::new_with_external_ip(Keypair::new().pubkey(), sockaddr.ip(), (8100, 8200), 0);
 
         assert_eq!(
             node.sockets.gossip.local_addr().unwrap().ip(),
@@ -2244,12 +2226,8 @@ mod tests {
     #[test]
     fn new_with_external_ip_test_gossip() {
         let sockaddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080);
-        let node = TestNode::new_with_external_ip(
-            Keypair::new().pubkey(),
-            sockaddr.ip(),
-            (8100, 8200),
-            8050,
-        );
+        let node =
+            Node::new_with_external_ip(Keypair::new().pubkey(), sockaddr.ip(), (8100, 8200), 8050);
         assert_eq!(
             node.sockets.gossip.local_addr().unwrap().ip(),
             sockaddr.ip()

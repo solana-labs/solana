@@ -44,7 +44,7 @@ fn recv_loop(
 }
 
 pub fn receiver(
-    sock: UdpSocket,
+    sock: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
     recycler: PacketRecycler,
     packet_sender: PacketSender,
@@ -90,7 +90,7 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
 
 pub fn responder(
     name: &'static str,
-    sock: UdpSocket,
+    sock: Arc<UdpSocket>,
     recycler: BlobRecycler,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -120,9 +120,9 @@ fn recv_blobs(recycler: &BlobRecycler, sock: &UdpSocket, s: &BlobSender) -> Resu
 }
 
 pub fn blob_receiver(
+    sock: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
     recycler: BlobRecycler,
-    sock: UdpSocket,
     s: BlobSender,
 ) -> Result<JoinHandle<()>> {
     //DOCUMENTED SIDE-EFFECT
@@ -184,12 +184,17 @@ mod test {
         let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(read, exit.clone(), pack_recycler.clone(), s_reader);
+        let t_receiver = receiver(
+            Arc::new(read),
+            exit.clone(),
+            pack_recycler.clone(),
+            s_reader,
+        );
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder(
                 "streamer_send_test",
-                send,
+                Arc::new(send),
                 resp_recycler.clone(),
                 r_responder,
             );

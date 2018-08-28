@@ -5,9 +5,9 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
-use solana::crdt::{get_ip_addr, parse_port_or_addr};
+use solana::crdt::GOSSIP_PORT_RANGE;
 use solana::fullnode::Config;
-use solana::nat::get_public_ip_addr;
+use solana::nat::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
 use solana::signature::read_pkcs8;
 use std::io;
 use std::net::SocketAddr;
@@ -48,13 +48,7 @@ fn main() {
         .get_matches();
 
     let bind_addr: SocketAddr = {
-        let mut bind_addr = parse_port_or_addr({
-            if let Some(b) = matches.value_of("bind") {
-                Some(b.to_string())
-            } else {
-                None
-            }
-        });
+        let mut bind_addr = parse_port_or_addr(matches.value_of("bind"), GOSSIP_PORT_RANGE.0);
         if matches.is_present("local") {
             let ip = get_ip_addr().unwrap();
             bind_addr.set_ip(ip);

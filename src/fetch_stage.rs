@@ -16,31 +16,26 @@ pub struct FetchStage {
 
 impl FetchStage {
     pub fn new(
-        socket: UdpSocket,
+        socket: Arc<UdpSocket>,
         exit: Arc<AtomicBool>,
-        packet_recycler: &PacketRecycler,
+        recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
-        Self::new_multi_socket(vec![socket], exit, packet_recycler)
+        Self::new_multi_socket(vec![socket], exit, recycler)
     }
     pub fn new_multi_socket(
-        sockets: Vec<UdpSocket>,
+        sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        packet_recycler: &PacketRecycler,
+        recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
-        let (packet_sender, packet_receiver) = channel();
+        let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| {
-                streamer::receiver(
-                    socket,
-                    exit.clone(),
-                    packet_recycler.clone(),
-                    packet_sender.clone(),
-                )
+                streamer::receiver(socket, exit.clone(), recycler.clone(), sender.clone())
             })
             .collect();
 
-        (FetchStage { exit, thread_hdls }, packet_receiver)
+        (FetchStage { exit, thread_hdls }, receiver)
     }
 
     pub fn close(&self) {

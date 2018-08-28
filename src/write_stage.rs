@@ -81,7 +81,7 @@ impl WriteStage {
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(
             "write_stage_vote_sender",
-            send,
+            Arc::new(send),
             blob_recycler.clone(),
             vote_blob_receiver,
         );

@@ -7,7 +7,7 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
-use solana::crdt::{NodeInfo, TestNode};
+use solana::crdt::{Node, NodeInfo};
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode};
 use solana::logger;
@@ -78,14 +78,14 @@ fn main() -> () {
 
     let port_range = (8100, 10000);
     let node = if let Some(_t) = matches.value_of("testnet") {
-        TestNode::new_with_external_ip(
+        Node::new_with_external_ip(
             leader_pubkey,
             repl_data.contact_info.ncp.ip(),
             port_range,
             0,
         )
     } else {
-        TestNode::new_with_external_ip(
+        Node::new_with_external_ip(
             leader_pubkey,
             repl_data.contact_info.ncp.ip(),
             port_range,
