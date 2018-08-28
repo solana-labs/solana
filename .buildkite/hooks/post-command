@@ -41,5 +41,5 @@ else
 
   point="job_stats,$point_tags $point_fields"
 
-  multinode-demo/metrics_write_datapoint.sh "$point" || true
+  scripts/metrics-write-datapoint.sh "$point" || true
 fi
