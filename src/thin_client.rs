@@ -284,18 +284,18 @@ impl ThinClient {
         let now = Instant::now();
         loop {
             let balance = match self.get_balance(&pubkey) {
-                Ok(bal) => Some(bal),
+                Ok(bal) => bal,
                 Err(e) => {
                     sleep(*polling_frequency);
                     if now.elapsed() > *timeout {
                         ThinClient::submit_poll_balance_metrics(&now.elapsed());
                         return Err(e);
                     }
-                    None
+                    0
                 }
             };
 
-            if let Some(balance) = balance {
+            if let balance != 0 {
                 ThinClient::submit_poll_balance_metrics(&now.elapsed());
                 return Ok(balance);
             }
