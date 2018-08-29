@@ -34,9 +34,14 @@ ARGS=(
 )
 
 if [[ -n $CI ]]; then
+  # Share the real ~/.cargo between docker containers in CI for speed
   ARGS+=(--volume "$HOME:/home")
-  ARGS+=(--env "CARGO_HOME=/home/.cargo")
+else
+  # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
+  # ~/.cargo
+  ARGS+=(--volume "$PWD:/home")
 fi
+ARGS+=(--env "CARGO_HOME=/home/.cargo")
 
 # kcov tries to set the personality of the binary which docker
 # doesn't allow by default.
