@@ -64,8 +64,10 @@ impl Tpu {
     ) -> (Self, BlobReceiver) {
         let packet_recycler = PacketRecycler::default();
 
-        let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_socket, exit, &packet_recycler);
+        let (fetch_stage, packet_receiver) = {
+            let t2 = transactions_socket.try_clone().expect("clone udp socket");
+            FetchStage::new_multi_socket(vec![transactions_socket, t2], exit, &packet_recycler);
+        }
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
