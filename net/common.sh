@@ -11,7 +11,7 @@ netConfigDir="$(dirname "${BASH_SOURCE[0]}")"/config
 netLogDir="$(dirname "${BASH_SOURCE[0]}")"/log
 mkdir -p "$netConfigDir" "$netLogDir"
 
-configFile="$netConfigDir/config.sh"
+configFile="$netConfigDir/config"
 
 clientIpList=()
 leaderIp=
