@@ -77,7 +77,7 @@ EARLYOOM_INSTALL_CMD="\
   wget --retry-connrefused --waitretry=1 \
     --read-timeout=20 --timeout=15 --tries=5 \
     -O install-earlyoom.sh \
-    https://raw.githubusercontent.com/solana-labs/solana/master/ci/install-earlyoom.sh; \
+    https://raw.githubusercontent.com/solana-labs/solana/master/scripts/install-earlyoom.sh; \
   bash install-earlyoom.sh \
 "
 SNAP_INSTALL_CMD="$EARLYOOM_INSTALL_CMD; $SNAP_INSTALL_CMD"

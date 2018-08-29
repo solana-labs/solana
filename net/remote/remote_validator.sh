@@ -10,6 +10,9 @@ PATH="$HOME"/.cargo/bin:"$PATH"
 
 rsync -vPrz "$1":~/.cargo/bin/solana* ~/.cargo/bin/
 
+./script/install-earlyoom.sh
+./scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
+
 export USE_INSTALL=1
 ./multinode-demo/setup.sh
 ./multinode-demo/validator.sh "$1":~/solana "$1" >validator.log 2>&1 &

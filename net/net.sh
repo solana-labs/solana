@@ -165,9 +165,7 @@ stop_node() {
     set -x
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
-      pkill -9 solana-;
-      pkill -9 validator;
-      pkill -9 leader;
+      pkill -9 solana- remote_ oom-monitor
     "
   ) || true
 }
