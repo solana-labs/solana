@@ -41,9 +41,9 @@ done
 loadConfigFile
 
 build() {
+  declare MAYBE_DOCKER=
   if [[ $(uname) != Linux ]]; then
-    echo "Unable to build, this isn't a Linux system"
-    exit 1
+    MAYBE_DOCKER="ci/docker-run.sh solanalabs/rust"
   fi
   SECONDS=0
   (
@@ -51,9 +51,9 @@ build() {
     echo "****************"
     echo "Build started at $(date)"
 
-    # Build and install locally
-    PATH="$HOME"/.cargo/bin:"$PATH"
-    cargo install --force
+    set -x
+    rm -rf farf
+    $MAYBE_DOCKER cargo install --root farf
   )
   echo "Build took $SECONDS seconds"
 }
@@ -90,7 +90,7 @@ startLeader() {
 
   (
     set -x
-    rsync -vPrz -e "ssh ${sshOptions[*]}" ~/.cargo/bin/solana* "$ipAddress":~/.cargo/bin/
+    rsync -vPrz -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress":~/.cargo/bin/
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote_leader.sh"
   ) >> "$logFile"
