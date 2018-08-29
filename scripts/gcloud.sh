@@ -75,7 +75,7 @@ gcloud_ForEachInstance() {
 }
 
 #
-# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName]
+# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName] [machineType] [accelerator]
 #
 # Creates one more identical instances.
 #
@@ -83,6 +83,9 @@ gcloud_ForEachInstance() {
 # numNodes     - number of instances to create
 # zone         - zone to create the instances in
 # imageName    - Disk image for the instances
+# machineType  - GCE machine type
+# accelerator  - Optional accelerator to attach to the instance(s), see
+#                eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
 #
 # Tip: use gcloud_FindInstances to locate the instances once this function
 #      returns
@@ -91,6 +94,8 @@ gcloud_CreateInstances() {
   declare numNodes="$2"
   declare zone="$3"
   declare imageName="$4"
+  declare machineType="$5"
+  declare optionalAccelerator="$6"
 
   declare nodes
   if [[ $numNodes = 1 ]]; then
@@ -99,12 +104,20 @@ gcloud_CreateInstances() {
     read -ra nodes <<<$(seq -f "${namePrefix}%g" 1 "$numNodes")
   fi
 
+  declare -a args
+  args=(
+    "--zone=$zone"
+    "--tags=testnet"
+    "--image=$imageName"
+    "--machine-type=$machineType"
+  )
+  if [[ -n $optionalAccelerator ]]; then
+    args+=("--accelerator=$optionalAccelerator")
+  fi
+
   (
     set -x
-    gcloud beta compute instances create "${nodes[@]}" \
-      --zone="$zone" \
-      --tags=testnet \
-      --image="$imageName"
+    gcloud beta compute instances create "${nodes[@]}" "${args[@]}" \
   )
 }
 

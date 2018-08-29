@@ -7,8 +7,14 @@ source "$here"/../scripts/gcloud.sh
 source "$here"/common.sh
 
 prefix=testnet-dev-$(whoami | sed -e s/[^a-z0-9].*//)
-validatorNodeCount=
-clientNodeCount=
+validatorNodeCount=5
+clientNodeCount=1
+leaderMachineType=n1-standard-1
+leaderAccelerator= # "count=4,type=nvidia-tesla-k80"
+validatorMachineType=$leaderMachineType
+validatorAccelerator=
+clientMachineType=$leaderMachineType
+clientAccelerator=
 
 imageName="ubuntu-16-04-cuda-9-2-new"
 internalNetwork=false
@@ -34,9 +40,9 @@ Manage a GCE-based testnet
                     (default: $prefix)
 
  create-specific options:
- -n number        - Number of validator nodes
- -c number        - Number of client nodes
- -P               - Use GCE internal/private network
+ -n number        - Number of validator nodes (default: $validatorNodeCount)
+ -c number        - Number of client nodes (default: $clientNodeCount)
+ -P               - Use GCE internal/private network (default: $internalNetwork)
  -z               - GCP Zone for the nodes (default: $zone)
  -i imageName     - Existing image on GCE (default: $imageName)
 
@@ -156,11 +162,21 @@ delete)
 create)
   [[ -n $validatorNodeCount ]] || usage "Need number of nodes"
 
-  gcloud_CreateInstances "$prefix-leader" 1 "$zone" "$imageName"
-  gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" "$zone" "$imageName"
+  echo "Network composition:"
+  echo "Leader = $leaderMachineType (GPU=${leaderAccelerator:-none})"
+  echo "Validators = $validatorNodeCount x $validatorMachineType (GPU=${validatorAccelerator:-none})"
+  echo "Client(s) = $clientNodeCount x $clientMachineType (GPU=${clientAccelerator:-none})"
+  echo ==================================================================
+  echo
+  gcloud_CreateInstances "$prefix-leader" 1 \
+    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator"
+  gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" \
+    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator"
   if [[ -n $clientNodeCount ]]; then
-    gcloud_CreateInstances "$prefix-client" "$clientNodeCount" "$zone" "$imageName"
+    gcloud_CreateInstances "$prefix-client" "$clientNodeCount" \
+      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator"
   fi
+
   writeConfigFile
   ;;
 
