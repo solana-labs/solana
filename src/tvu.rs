@@ -81,9 +81,10 @@ impl Tvu {
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        let repair_socket = Arc::new(repair_socket);
         let blob_recycler = BlobRecycler::default();
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
-            vec![Arc::new(replicate_socket), Arc::new(repair_socket)],
+            vec![Arc::new(replicate_socket), repair_socket.clone()],
             exit.clone(),
             &blob_recycler,
         );
@@ -95,6 +96,7 @@ impl Tvu {
             window,
             entry_height,
             Arc::new(retransmit_socket),
+            repair_socket,
             &blob_recycler,
             blob_fetch_receiver,
         );

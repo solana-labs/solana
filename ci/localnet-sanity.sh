@@ -61,7 +61,6 @@ flag_error() {
   exit 1
 }
 
-# TODO: CI networking isn't working with gossip.  we cant self discover the right interface/ip for the clients/wallets
 echo "--- Wallet sanity"
 (
   set -x

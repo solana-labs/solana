@@ -82,6 +82,7 @@ impl RetransmitStage {
         window: SharedWindow,
         entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
+        repair_socket: Arc<UdpSocket>,
         blob_recycler: &BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {
@@ -102,6 +103,7 @@ impl RetransmitStage {
             fetch_stage_receiver,
             blob_sender,
             retransmit_sender,
+            repair_socket,
         );
         let thread_hdls = vec![t_retransmit, t_window];
 

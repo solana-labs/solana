@@ -75,7 +75,7 @@ fn gossip_ring() -> result::Result<()> {
             let x = (n + 1) % listen.len();
             let mut xv = listen[x].0.write().unwrap();
             let yv = listen[y].0.read().unwrap();
-            let mut d = yv.table[&yv.me].clone();
+            let mut d = yv.table[&yv.id].clone();
             d.version = 0;
             xv.insert(&d);
         }
@@ -95,10 +95,10 @@ fn gossip_star() {
             let y = (n + 1) % listen.len();
             let mut xv = listen[x].0.write().unwrap();
             let yv = listen[y].0.read().unwrap();
-            let mut yd = yv.table[&yv.me].clone();
+            let mut yd = yv.table[&yv.id].clone();
             yd.version = 0;
             xv.insert(&yd);
-            trace!("star leader {:?}", &xv.me.as_ref()[..4]);
+            trace!("star leader {:?}", &xv.id.as_ref()[..4]);
         }
     });
 }
@@ -111,7 +111,7 @@ fn gossip_rstar() {
         let num = listen.len();
         let xd = {
             let xv = listen[0].0.read().unwrap();
-            xv.table[&xv.me].clone()
+            xv.table[&xv.id].clone()
         };
         trace!("rstar leader {:?}", &xd.id.as_ref()[..4]);
         for n in 0..(num - 1) {
@@ -121,7 +121,7 @@ fn gossip_rstar() {
             trace!(
                 "rstar insert {:?} into {:?}",
                 &xd.id.as_ref()[..4],
-                &yv.me.as_ref()[..4]
+                &yv.id.as_ref()[..4]
             );
         }
     });
@@ -202,9 +202,9 @@ fn test_external_liveness_table() {
     let c1_data = c1.read().unwrap().my_data().clone();
     c1.write().unwrap().set_leader(c1_data.id);
 
-    let c2_id = c2.read().unwrap().me;
-    let c3_id = c3.read().unwrap().me;
-    let c4_id = c4.read().unwrap().me;
+    let c2_id = c2.read().unwrap().id;
+    let c3_id = c3.read().unwrap().id;
+    let c4_id = c4.read().unwrap().id;
 
     // Insert the remote data about c4
     let c2_index_for_c4 = 10;
@@ -236,7 +236,7 @@ fn test_external_liveness_table() {
     // Validate c1's external liveness table, then release lock rc1
     {
         let rc1 = c1.read().unwrap();
-        let el = rc1.get_external_liveness_entry(&c4.read().unwrap().me);
+        let el = rc1.get_external_liveness_entry(&c4.read().unwrap().id);
 
         // Make sure liveness table entry for c4 exists on node c1
         assert!(el.is_some());

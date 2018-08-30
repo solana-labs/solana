@@ -42,4 +42,4 @@ if [[ $(sysctl -n net.core.wmem_max) -lt 1610612736 ]]; then
 fi
 
 set -x
-exec cargo test --release --features=erasure,test test_multi_node_dynamic_network -- --ignored
+exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored
