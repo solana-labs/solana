@@ -1058,23 +1058,29 @@ mod test {
     }
     #[test]
     pub fn test_repair_backoff() {
-        let mut last = 0;
-        let mut times = 0;
-        let total: usize = (0..127)
-            .map(|x| {
-                let rv = repair_backoff(&mut last, &mut times, 1) as usize;
-                assert_eq!(times, x + 2);
-                rv
+        let res: usize = (0..100)
+            .map(|_| {
+                let mut last = 0;
+                let mut times = 0;
+                let total: usize = (0..127)
+                    .map(|x| {
+                        let rv = repair_backoff(&mut last, &mut times, 1) as usize;
+                        assert_eq!(times, x + 2);
+                        rv
+                    })
+                    .sum();
+                assert_eq!(times, 128);
+                assert_eq!(last, 1);
+                repair_backoff(&mut last, &mut times, 1);
+                assert_eq!(times, 64);
+                repair_backoff(&mut last, &mut times, 2);
+                assert_eq!(times, 2);
+                assert_eq!(last, 2);
+                total
             })
             .sum();
-        assert_eq!(times, 128);
-        assert_eq!(last, 1);
-        assert!(total > 0);
-        assert!(total < 127);
-        repair_backoff(&mut last, &mut times, 1);
-        assert_eq!(times, 64);
-        repair_backoff(&mut last, &mut times, 2);
-        assert_eq!(times, 2);
-        assert_eq!(last, 2);
+        let ave = res / 100;
+        assert!(ave >= 3);
+        assert!(ave <= 5);
     }
 }
