@@ -770,7 +770,6 @@ mod test {
             "127.0.0.1:1235".parse().unwrap(),
             "127.0.0.1:1236".parse().unwrap(),
             "127.0.0.1:1237".parse().unwrap(),
-            "127.0.0.1:1238".parse().unwrap(),
         );
         assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
