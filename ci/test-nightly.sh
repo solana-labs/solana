@@ -11,7 +11,7 @@ _() {
 }
 
 _ cargo build --verbose --features unstable
-_ cargo test --verbose --features=unstable,test
+_ cargo test --verbose --features=unstable
 _ cargo clippy -- --deny=warnings
 
 exit 0
@@ -28,4 +28,3 @@ if [[ -z "$CODECOV_TOKEN" ]]; then
 else
   bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
 fi
-

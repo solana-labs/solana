@@ -101,14 +101,18 @@ impl Meta {
                 self.addr[1] = u16::from(ip[1]);
                 self.addr[2] = u16::from(ip[2]);
                 self.addr[3] = u16::from(ip[3]);
-                self.port = a.port();
+                self.addr[4] = 0;
+                self.addr[5] = 0;
+                self.addr[6] = 0;
+                self.addr[7] = 0;
+                self.v6 = false;
             }
             SocketAddr::V6(v6) => {
                 self.addr = v6.ip().segments();
-                self.port = a.port();
                 self.v6 = true;
             }
         }
+        self.port = a.port();
     }
 }
 

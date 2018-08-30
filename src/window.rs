@@ -7,7 +7,7 @@ use entry::Entry;
 use erasure;
 use ledger::Block;
 use log::Level;
-use packet::{BlobRecycler, SharedBlob, SharedBlobs, BLOB_SIZE};
+use packet::{BlobRecycler, SharedBlob, SharedBlobs};
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use signature::Pubkey;
@@ -34,11 +34,6 @@ pub struct WindowSlot {
 
 pub type SharedWindow = Arc<RwLock<Vec<WindowSlot>>>;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum WindowError {
-    GenericError,
-}
-
 #[derive(Debug)]
 pub struct WindowIndex {
     pub data: u64,
@@ -51,9 +46,9 @@ fn find_next_missing(
     recycler: &BlobRecycler,
     consumed: u64,
     received: u64,
-) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
+) -> Option<Vec<(SocketAddr, Vec<u8>)>> {
     if received <= consumed {
-        Err(WindowError::GenericError)?;
+        return None;
     }
     let mut window = window.write().unwrap();
     let reqs: Vec<_> = (consumed..received)
@@ -77,7 +72,7 @@ fn find_next_missing(
             None
         })
         .collect();
-    Ok(reqs)
+    Some(reqs)
 }
 
 fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u64) -> u64 {
@@ -125,11 +120,11 @@ fn repair_window(
     times: &mut usize,
     consumed: u64,
     received: u64,
-) -> Result<()> {
+) -> Option<Vec<(SocketAddr, Vec<u8>)>> {
     //exponential backoff
     if !repair_backoff(last, times, consumed) {
         trace!("{:x} !repair_backoff() times = {}", debug_id, times);
-        return Ok(());
+        return None;
     }
 
     let highest_lost = calculate_highest_lost_blob_index(
@@ -137,30 +132,26 @@ fn repair_window(
         consumed,
         received,
     );
-    let reqs = find_next_missing(window, crdt, recycler, consumed, highest_lost)?;
-    trace!("{:x}: repair_window missing: {}", debug_id, reqs.len());
-    if !reqs.is_empty() {
+    if let Some(reqs) = find_next_missing(window, crdt, recycler, consumed, highest_lost) {
         inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
-        info!(
-            "{:x}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
-            debug_id,
-            *times,
-            consumed,
-            highest_lost,
-            reqs.len()
-        );
+        if log_enabled!(Level::Trace) {
+            trace!(
+                "{:x}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
+                debug_id,
+                *times,
+                consumed,
+                highest_lost,
+                reqs.len()
+            );
+
+            for (to, _) in reqs.clone() {
+                trace!("{:x}: repair_window request to {}", debug_id, to);
+            }
+        }
+        Some(reqs)
+    } else {
+        None
     }
-    let sock = UdpSocket::bind("0.0.0.0:0")?;
-    for (to, req) in reqs {
-        //todo cache socket
-        debug!(
-            "{:x}: repair_window request {} {} {}",
-            debug_id, consumed, highest_lost, to
-        );
-        assert!(req.len() <= BLOB_SIZE);
-        sock.send_to(&req, to)?;
-    }
-    Ok(())
 }
 
 fn add_block_to_retransmit_queue(
@@ -248,7 +239,7 @@ fn retransmit_all_leader_blocks(
         warn!("{:x}: no leader to retransmit from", debug_id);
     }
     if !retransmit_queue.is_empty() {
-        debug!(
+        trace!(
             "{:x}: RECV_WINDOW {} {}: retransmit {}",
             debug_id,
             consumed,
@@ -437,7 +428,7 @@ fn recv_window(
     }
     let now = Instant::now();
     inc_new_counter_info!("streamer-recv_window-recv", dq.len(), 100);
-    debug!(
+    trace!(
         "{:x}: RECV_WINDOW {} {}: got packets {}",
         debug_id,
         *consumed,
@@ -462,7 +453,7 @@ fn recv_window(
     let mut consume_queue = VecDeque::new();
     while let Some(b) = dq.pop_front() {
         let (pix, meta_size) = {
-            let p = b.write().expect("'b' write lock in fn recv_window");
+            let p = b.write().unwrap();
             (p.get_index()?, p.meta.size)
         };
         pixs.push(pix);
@@ -488,29 +479,17 @@ fn recv_window(
     }
     if log_enabled!(Level::Trace) {
         trace!("{}", print_window(debug_id, window, *consumed));
-    }
-    info!(
-        "{:x}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
-        debug_id,
-        *consumed,
-        *received,
-        consume_queue.len(),
-        pixs,
-        duration_as_ms(&now.elapsed())
-    );
-    if !consume_queue.is_empty() {
-        debug!(
-            "{:x}: RECV_WINDOW {} {}: forwarding consume_queue {}",
+        trace!(
+            "{:x}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
             debug_id,
             *consumed,
             *received,
             consume_queue.len(),
+            pixs,
+            duration_as_ms(&now.elapsed())
         );
-        trace!(
-            "{:x}: sending consume_queue.len: {}",
-            debug_id,
-            consume_queue.len()
-        );
+    }
+    if !consume_queue.is_empty() {
         inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
         s.send(consume_queue)?;
     }
@@ -651,6 +630,7 @@ pub fn window(
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
+    repair_socket: Arc<UdpSocket>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
@@ -684,9 +664,16 @@ pub fn window(
                         }
                     }
                 }
-                let _ = repair_window(
+                if let Some(reqs) = repair_window(
                     debug_id, &window, &crdt, &recycler, &mut last, &mut times, consumed, received,
-                );
+                ) {
+                    for (to, req) in reqs {
+                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                            info!("{:x} repair req send_to({}) error {:?}", debug_id, to, e);
+                            0
+                        });
+                    }
+                }
             }
         })
         .unwrap()
@@ -824,6 +811,7 @@ mod test {
             r_reader,
             s_window,
             s_retransmit,
+            Arc::new(tn.sockets.repair),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -893,6 +881,7 @@ mod test {
             r_reader,
             s_window,
             s_retransmit,
+            Arc::new(tn.sockets.repair),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -955,6 +944,7 @@ mod test {
             r_reader,
             s_window,
             s_retransmit,
+            Arc::new(tn.sockets.repair),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();

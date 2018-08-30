@@ -113,7 +113,6 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
 
 #[test]
 fn test_multi_node_ledger_window() -> result::Result<()> {
-    assert!(cfg!(feature = "test"));
     logger::setup();
 
     let leader_keypair = Keypair::new();

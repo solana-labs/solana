@@ -30,7 +30,7 @@ impl Ncp {
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
-            &crdt.read().unwrap().me.as_ref()[..4],
+            &crdt.read().unwrap().id.as_ref()[..4],
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::blob_receiver(

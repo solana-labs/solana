@@ -28,9 +28,8 @@ pub fn get_public_ip_addr() -> Result<IpAddr, String> {
 }
 
 pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr {
-    let daddr: SocketAddr = format!("0.0.0.0:{}", default_port)
-        .parse()
-        .expect("default socket address");
+    let daddr = SocketAddr::from(([0, 0, 0, 0], default_port));
+
     if let Some(addrstr) = optstr {
         if let Ok(port) = addrstr.parse() {
             let mut addr = daddr;
