@@ -347,9 +347,9 @@ impl Crdt {
 
     pub fn insert(&mut self, v: &NodeInfo) -> usize {
         // TODO check that last_verified types are always increasing
-        //update the peer table
+        // update the peer table
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
-            //somehow we signed a message for our own identity with a higher version that
+            //somehow we signed a message for our own identity with a higher version than
             // we have stored ourselves
             trace!(
                 "{:x}: insert v.id: {:x} version: {}",
@@ -1054,13 +1054,14 @@ impl Crdt {
                     from.contact_info.ncp = from_addr;
                 }
 
-                let (from, ups, data, liveness) = {
+                let (from_id, ups, data, liveness) = {
                     let me = me.read().unwrap();
 
                     // only lock for these two calls, dont lock during IO `sock.send_to` or `sock.recv_from`
-                    let (from, ups, data) = me.get_updates_since(version);
+                    let (from_id, ups, data) = me.get_updates_since(version);
+
                     (
-                        from,
+                        from_id,
                         ups,
                         data,
                         me.remote.iter().map(|(k, v)| (*k, *v)).collect(),
@@ -1087,7 +1088,7 @@ impl Crdt {
                     );
                     None
                 } else {
-                    let rsp = Protocol::ReceiveUpdates(from, ups, data, liveness);
+                    let rsp = Protocol::ReceiveUpdates(from_id, ups, data, liveness);
 
                     if let Ok(r) = to_blob(rsp, from.contact_info.ncp, &blob_recycler) {
                         trace!(
@@ -1105,14 +1106,6 @@ impl Crdt {
                 }
             }
             Protocol::ReceiveUpdates(from, update_index, data, external_liveness) => {
-                // the remote side may not know his public IP:PORT, but if so
-                //  how did he come to have any gossip to share?
-                //  this could happen if the root node binds to 0:0...
-                if from.contact_info.ncp.ip().is_unspecified() {
-                    inc_new_counter_info!("crdt-window-receive-updates-unspec-ncp", 1);
-                    from.contact_info.ncp = from_addr;
-                }
-
                 let now = Instant::now();
                 trace!(
                     "ReceivedUpdates from={:x} update_index={} len={}",
