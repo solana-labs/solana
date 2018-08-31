@@ -336,7 +336,7 @@ fullnode_start() {
       default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
       metrics-config=$SOLANA_METRICS_CONFIG \
       setup-args=$SOLANA_SETUP_ARGS \
-      leader-address=$publicIp \
+      leader-address=$publicIp:8001 \
     "
     if [[ $class = leader ]]; then
       nodeConfig="mode=leader+drone $commonNodeConfig"
