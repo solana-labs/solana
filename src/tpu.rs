@@ -65,9 +65,11 @@ impl Tpu {
         let packet_recycler = PacketRecycler::default();
 
         let (fetch_stage, packet_receiver) = {
-            let t2 = transactions_socket.try_clone().expect("clone udp socket");
-            FetchStage::new_multi_socket(vec![transactions_socket, t2], exit, &packet_recycler);
-        }
+            let t2 = transactions_socket
+                .try_clone()
+                .expect("clone tpu transaction_socket");
+            FetchStage::new_multi_socket(vec![transactions_socket, t2], exit, &packet_recycler)
+        };
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
