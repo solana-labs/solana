@@ -34,10 +34,10 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = Node::new_localhost();
     let daddr = "0.0.0.0:0".parse().unwrap();
-    let me = spy.data.id.clone();
-    spy.data.contact_info.tvu = daddr;
-    spy.data.contact_info.rpu = daddr;
-    let mut spy_crdt = Crdt::new(spy.data).expect("Crdt::new");
+    let me = spy.info.id.clone();
+    spy.info.contact_info.tvu = daddr;
+    spy.info.contact_info.rpu = daddr;
+    let mut spy_crdt = Crdt::new(spy.info).expect("Crdt::new");
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
@@ -55,7 +55,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
+            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
             .cloned()
             .collect();
         if num >= num_nodes as u64 && v.len() >= num_nodes {
@@ -118,7 +118,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let leader_keypair = Keypair::new();
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
@@ -149,7 +149,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // balances
     let keypair = Keypair::new();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let validator_data = validator.data.clone();
+    let validator_data = validator.info.clone();
     let validator = Fullnode::new(
         validator,
         &zero_ledger_path,
@@ -198,7 +198,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let leader_keypair = Keypair::new();
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
@@ -322,7 +322,7 @@ fn test_multi_node_basic() {
     let leader_keypair = Keypair::new();
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
@@ -388,7 +388,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
 
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
     let leader_fullnode = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(500)).unwrap();
@@ -399,7 +399,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
 
     let keypair = Keypair::new();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let validator_data = validator.data.clone();
+    let validator_data = validator.info.clone();
     let ledger_path = tmp_copy_ledger(&leader_ledger_path, "boot_validator_from_file");
     ledger_paths.push(ledger_path.clone());
     let val_fullnode = Fullnode::new(
@@ -425,7 +425,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
 fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
     let leader_keypair = Keypair::new();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
     let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None, false);
     (leader_data, leader_fullnode)
 }
@@ -472,7 +472,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // start validator from old ledger
     let keypair = Keypair::new();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let validator_data = validator.data.clone();
+    let validator_data = validator.info.clone();
 
     let val_fullnode = Fullnode::new(
         validator,
@@ -535,7 +535,7 @@ fn test_multi_node_dynamic_network() {
     ledger_paths.push(leader_ledger_path.clone());
 
     let alice_arc = Arc::new(RwLock::new(alice));
-    let leader_data = leader.data.clone();
+    let leader_data = leader.info.clone();
 
     let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, true);
 
@@ -603,7 +603,7 @@ fn test_multi_node_dynamic_network() {
                 .name("validator-launch-thread".to_string())
                 .spawn(move || {
                     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-                    let rd = validator.data.clone();
+                    let rd = validator.info.clone();
                     info!("starting {} {:x}", keypair.pubkey(), rd.debug_id());
                     let val = Fullnode::new(
                         validator,
@@ -712,8 +712,8 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    assert!(Crdt::is_valid_address(leader.contact_info.rpu));
-    assert!(Crdt::is_valid_address(leader.contact_info.tpu));
+    assert!(Crdt::is_valid_address(&leader.contact_info.rpu));
+    assert!(Crdt::is_valid_address(&leader.contact_info.tpu));
     ThinClient::new(
         leader.contact_info.rpu,
         requests_socket,

@@ -18,7 +18,7 @@ use std::time::Duration;
 
 fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
     let tn = Node::new_localhost();
-    let crdt = Crdt::new(tn.data.clone()).expect("Crdt::new");
+    let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
     let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit).unwrap();

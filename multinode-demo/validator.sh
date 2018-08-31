@@ -14,9 +14,12 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [-x] [rsync network path to solana repo on leader machine] [network ip address of leader]"
-  echo ""
-  echo "       -x: runs a new, dynamically-configured validator"
+  echo "usage: $0 [-x] [rsync network path to leader] [network entry point]"
+  echo
+  echo " Start a validator on the specified network"
+  echo
+  echo "   -x: runs a new, dynamically-configured validator"
+  echo
   exit 1
 }
 
@@ -35,34 +38,8 @@ if [[ -n $3 ]]; then
   usage
 fi
 
-if [[ -d $SNAP ]]; then
-  # Exit if mode is not yet configured
-  # (typically the case after the Snap is first installed)
-  [[ -n $(snapctl get mode) ]] || exit 0
-
-  # Select leader from the Snap configuration
-  leader_address=$(snapctl get leader-address)
-  if [[ -z $leader_address ]]; then
-    # Assume public testnet by default
-    leader_address=35.227.93.37  # testnet.solana.com
-  fi
-  leader=$leader_address
-else
-  if [[ -z $1 ]]; then
-    leader=${1:-${here}/..}    # Default to local tree for data
-    leader_address=${2:-127.0.0.1}  # Default to local leader
-  elif [[ -z $2 ]]; then
-    leader=$1
-    leader_address=$(dig +short "${leader%:*}" | head -n1)
-    if [[ -z $leader_address ]]; then
-      usage "Error: unable to resolve IP address for $leader"
-    fi
-  else
-    leader=$1
-    leader_address=$2
-  fi
-fi
-leader_port=8001
+read -r leader leader_address shift < <(find_leader "${@:1:2}")
+shift "$shift"
 
 if [[ -n $SOLANA_CUDA ]]; then
   program=$solana_fullnode_cuda
@@ -109,7 +86,7 @@ $rsync -vPr "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$validator_json_path" \
-  --testnet "$leader_address:$leader_port" \
+  --network "$leader_address" \
   --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger \
   > >($validator_logger) 2>&1 &
 pid=$!

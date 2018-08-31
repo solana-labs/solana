@@ -12,21 +12,19 @@ use rayon::prelude::*;
 use solana::client::mk_client;
 use solana::crdt::{Crdt, NodeInfo};
 use solana::drone::DRONE_PORT;
-use solana::fullnode::Config;
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
-use solana::thin_client::ThinClient;
+use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use solana::wallet::request_airdrop;
 use solana::window::default_window;
 use std::collections::VecDeque;
-use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -282,6 +280,7 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(starting_balance);
+    println!("starting balance {}", starting_balance);
 
     if starting_balance < tx_count {
         let airdrop_amount = tx_count - starting_balance;
@@ -299,13 +298,14 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
         let mut current_balance = starting_balance;
         for _ in 0..20 {
             sleep(Duration::from_millis(500));
-            current_balance = client
-                .poll_get_balance(&id.pubkey())
-                .unwrap_or(starting_balance);
+            current_balance = client.poll_get_balance(&id.pubkey()).unwrap_or_else(|e| {
+                println!("airdrop error {}", e);
+                starting_balance
+            });
             if starting_balance != current_balance {
                 break;
             }
-            println!(".");
+            println!("current balance {}...", current_balance);
         }
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
@@ -394,12 +394,13 @@ fn main() {
     let matches = App::new("solana-bench-tps")
         .version(crate_version!())
         .arg(
-            Arg::with_name("leader")
-                .short("l")
-                .long("leader")
-                .value_name("PATH")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
+                .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("/path/to/leader.json"),
+                .required(true)
+                .help("rendezvous with the network at this gossip entry point"),
         )
         .arg(
             Arg::with_name("keypair")
@@ -411,32 +412,33 @@ fn main() {
                 .help("/path/to/id.json"),
         )
         .arg(
-            Arg::with_name("num_nodes")
-                .short("n")
-                .long("nodes")
-                .value_name("NUMBER")
+            Arg::with_name("num-nodes")
+                .short("N")
+                .long("num-nodes")
+                .value_name("NUM")
                 .takes_value(true)
-                .help("number of nodes to converge to"),
+                .help("wait for NUM nodes to converge"),
         )
         .arg(
             Arg::with_name("threads")
                 .short("t")
                 .long("threads")
-                .value_name("NUMBER")
+                .value_name("NUM")
                 .takes_value(true)
                 .help("number of threads"),
         )
         .arg(
             Arg::with_name("seconds")
                 .short("s")
-                .long("sec")
-                .value_name("NUMBER")
+                .long("seconds")
+                .value_name("NUM")
                 .takes_value(true)
                 .help("send transactions for this many seconds"),
         )
         .arg(
-            Arg::with_name("converge_only")
+            Arg::with_name("converge-only")
                 .short("c")
+                .long("converge-only")
                 .help("exit immediately after converging"),
         )
         .arg(
@@ -453,13 +455,14 @@ fn main() {
         )
         .get_matches();
 
-    let leader: NodeInfo;
-    if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l).node_info;
-    } else {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = NodeInfo::new_leader(&server_addr);
-    };
+    let network = matches
+        .value_of("network")
+        .unwrap()
+        .parse()
+        .unwrap_or_else(|e| {
+            eprintln!("failed to parse network: {}", e);
+            exit(1)
+        });
 
     let id = read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
 
@@ -482,6 +485,8 @@ fn main() {
     if matches.is_present("sustained") {
         sustained = true;
     }
+
+    let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
@@ -510,9 +515,10 @@ fn main() {
         exit(1);
     }
 
-    if matches.is_present("converge_only") {
+    if matches.is_present("converge-only") {
         return;
     }
+
     let leader = leader.unwrap();
 
     println!("leader is at {} {}", leader.contact_info.rpu, leader.id);
@@ -678,7 +684,7 @@ fn converge(
             .unwrap()
             .table
             .values()
-            .filter(|x| Crdt::is_valid_address(x.contact_info.rpu))
+            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
             .cloned()
             .collect();
 
@@ -697,9 +703,4 @@ fn converge(
     threads.extend(ncp.thread_hdls().into_iter());
     let leader = spy_ref.read().unwrap().leader_data().cloned();
     (v, leader)
-}
-
-fn read_leader(path: &str) -> Config {
-    let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
-    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }

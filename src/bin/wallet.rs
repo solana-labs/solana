@@ -5,6 +5,7 @@ extern crate bs58;
 extern crate clap;
 extern crate dirs;
 extern crate serde_json;
+#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg, SubCommand};
@@ -63,9 +64,9 @@ struct WalletConfig {
 
 impl Default for WalletConfig {
     fn default() -> WalletConfig {
-        let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        let default_addr = socketaddr!(0, 8000);
         WalletConfig {
-            leader: NodeInfo::new_leader(&default_addr),
+            leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
             drone_addr: default_addr,
             command: WalletCommand::Balance,
@@ -150,7 +151,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         leader = read_leader(l)?.node_info;
     } else {
         let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = NodeInfo::new_leader(&server_addr);
+        leader = NodeInfo::new_with_socketaddr(&server_addr);
     };
     let timeout: Option<u64>;
     if let Some(secs) = matches.value_of("timeout") {

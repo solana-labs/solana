@@ -159,3 +159,46 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   # Default to rsync:// URL
   echo "rsync://$url"
 }
+
+# called from drone, validator, client
+find_leader() {
+  declare leader leader_address
+  declare shift=0
+
+  if [[ -d $SNAP ]]; then
+    # Exit if mode is not yet configured
+    # (typically the case after the Snap is first installed)
+    [[ -n $(snapctl get mode) ]] || exit 0
+
+    # Select leader from the Snap configuration
+    leader_address=$(snapctl get leader-address)
+    if [[ -z $leader_address ]]; then
+      # Assume public testnet by default
+      leader_address=35.227.93.37:8001  # testnet.solana.com
+    fi
+    leader=$leader_address
+  else
+    if [[ -z $1 ]]; then
+      leader=${here}/..        # Default to local tree for rsync
+      leader_address=127.0.0.1:8001 # Default to local leader
+    elif [[ -z $2 ]]; then
+      leader=$1
+
+      declare leader_ip
+      leader_ip=$(dig +short "${leader%:*}" | head -n1)
+
+      if [[ -z $leader_ip ]]; then
+          usage "Error: unable to resolve IP address for $leader"
+      fi
+
+      leader_address=${leader_ip}:8001
+      shift=1
+    else
+      leader=$1
+      leader_address=$2
+      shift=2
+    fi
+  fi
+
+  echo "$leader" "$leader_address" "$shift"
+}
