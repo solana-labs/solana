@@ -171,12 +171,12 @@ find_leader() {
     [[ -n $(snapctl get mode) ]] || exit 0
 
     # Select leader from the Snap configuration
-    leader_address=$(snapctl get leader-address)
-    if [[ -z $leader_address ]]; then
+    leader_ip=$(snapctl get leader-ip)
+    if [[ -z $leader_ip ]]; then
       # Assume public testnet by default
-      leader_address=35.227.93.37:8001  # testnet.solana.com
+      leader_ip=35.227.93.37  # testnet.solana.com
     fi
-    leader=$leader_address
+    $leader_address=$leader_ip:8001
   else
     if [[ -z $1 ]]; then
       leader=${here}/..        # Default to local tree for rsync
@@ -191,7 +191,7 @@ find_leader() {
           usage "Error: unable to resolve IP address for $leader"
       fi
 
-      leader_address=${leader_ip}:8001
+      leader_address=$leader_ip:8001
       shift=1
     else
       leader=$1
