@@ -254,8 +254,8 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&mint));
 
         let node = Node::new_localhost();
-        let mut crdt = Crdt::new(node.data.clone()).expect("Crdt::new");
-        crdt.set_leader(node.data.id);
+        let mut crdt = Crdt::new(node.info.clone()).expect("Crdt::new");
+        crdt.set_leader(node.info.id);
         let blob_recycler = BlobRecycler::default();
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
@@ -293,7 +293,7 @@ pub mod tests {
         bank.register_entry_id(&entry.id);
 
         // Create a leader
-        let leader_data = NodeInfo::new_leader(&"127.0.0.1:1234".parse().unwrap());
+        let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
         let mut leader_crdt = Crdt::new(leader_data).unwrap();
 
@@ -308,7 +308,7 @@ pub mod tests {
         // and votes for new last_id
         for i in 0..10 {
             let mut validator =
-                NodeInfo::new_leader(&format!("127.0.0.1:234{}", i).parse().unwrap());
+                NodeInfo::new_with_socketaddr(&format!("127.0.0.1:234{}", i).parse().unwrap());
 
             let vote = Vote {
                 version: validator.version + 1,
@@ -350,7 +350,7 @@ pub mod tests {
         // add two more nodes and see that it succeeds
         for i in 0..2 {
             let mut validator =
-                NodeInfo::new_leader(&format!("127.0.0.1:234{}", i).parse().unwrap());
+                NodeInfo::new_with_socketaddr(&format!("127.0.0.1:234{}", i).parse().unwrap());
 
             let vote = Vote {
                 version: validator.version + 1,

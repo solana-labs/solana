@@ -70,7 +70,7 @@ echo "--- Wallet sanity"
 echo "--- Node count"
 (
   set -x
-  ./multinode-demo/client.sh "$PWD" 3 -c
+  ./multinode-demo/client.sh localhost --num-nodes 3 --converge-only
 ) || flag_error
 
 killBackgroundCommands

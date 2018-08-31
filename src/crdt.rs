@@ -12,7 +12,6 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
@@ -48,6 +47,7 @@ const GOSSIP_PURGE_MILLIS: u64 = 15000;
 /// minimum membership table size before we start purging dead nodes
 const MIN_TABLE_SIZE: usize = 2;
 
+#[macro_export]
 macro_rules! socketaddr {
     ($ip:expr, $port:expr) => {
         SocketAddr::from((Ipv4Addr::from($ip), $port))
@@ -57,6 +57,7 @@ macro_rules! socketaddr {
         a
     }};
 }
+#[macro_export]
 macro_rules! socketaddr_any {
     () => {
         socketaddr!(0, 0)
@@ -164,7 +165,7 @@ impl NodeInfo {
         nxt_addr.set_port(addr.port() + nxt);
         nxt_addr
     }
-    pub fn new_leader_with_pubkey(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
+    pub fn new_with_pubkey_socketaddr(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
         let transactions_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
@@ -177,13 +178,14 @@ impl NodeInfo {
             transactions_addr,
         )
     }
-    pub fn new_leader(bind_addr: &SocketAddr) -> Self {
+    pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
         let keypair = Keypair::new();
-        Self::new_leader_with_pubkey(keypair.pubkey(), bind_addr)
+        Self::new_with_pubkey_socketaddr(keypair.pubkey(), bind_addr)
     }
-    pub fn new_entry_point(gossip_addr: SocketAddr) -> Self {
+    //
+    pub fn new_entry_point(gossip_addr: &SocketAddr) -> Self {
         let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
-        NodeInfo::new(Pubkey::default(), gossip_addr, daddr, daddr, daddr)
+        NodeInfo::new(Pubkey::default(), *gossip_addr, daddr, daddr, daddr)
     }
 }
 
@@ -460,7 +462,7 @@ impl Crdt {
                 if me.id == v.id {
                     //filter myself
                     false
-                } else if !(Self::is_valid_address(v.contact_info.tvu)) {
+                } else if !(Self::is_valid_address(&v.contact_info.tvu)) {
                     trace!(
                         "{:x}:broadcast skip not listening {:x} {}",
                         me.debug_id(),
@@ -624,7 +626,7 @@ impl Crdt {
                 } else if me.leader_id == v.id {
                     trace!("skip retransmit to leader {:?}", v.id);
                     false
-                } else if !(Self::is_valid_address(v.contact_info.tvu)) {
+                } else if !(Self::is_valid_address(&v.contact_info.tvu)) {
                     trace!(
                         "skip nodes that are not listening {:?} {}",
                         v.id,
@@ -691,8 +693,8 @@ impl Crdt {
             .values()
             .filter(|r| {
                 r.id != Pubkey::default()
-                    && (Self::is_valid_address(r.contact_info.tpu)
-                        || Self::is_valid_address(r.contact_info.tvu))
+                    && (Self::is_valid_address(&r.contact_info.tpu)
+                        || Self::is_valid_address(&r.contact_info.tvu))
             })
             .map(|x| x.ledger_state.last_id)
             .collect()
@@ -704,7 +706,7 @@ impl Crdt {
         let valid: Vec<_> = self
             .table
             .values()
-            .filter(|r| r.id != self.id && Self::is_valid_address(r.contact_info.tvu))
+            .filter(|r| r.id != self.id && Self::is_valid_address(&r.contact_info.tvu))
             .collect();
         if valid.is_empty() {
             Err(CrdtError::NoPeers)?;
@@ -1002,7 +1004,7 @@ impl Crdt {
         match deserialize(&blob.data[..blob.meta.size]) {
             Ok(request) => Crdt::handle_protocol(
                 obj,
-                blob.meta.addr(),
+                &blob.meta.addr(),
                 request,
                 window,
                 ledger_window,
@@ -1017,7 +1019,7 @@ impl Crdt {
 
     fn handle_protocol(
         me: &Arc<RwLock<Self>>,
-        from_addr: SocketAddr,
+        from_addr: &SocketAddr,
         request: Protocol,
         window: &SharedWindow,
         ledger_window: &mut Option<&mut LedgerWindow>,
@@ -1051,7 +1053,7 @@ impl Crdt {
                 //  an unspecified address in our table
                 if from.contact_info.ncp.ip().is_unspecified() {
                     inc_new_counter_info!("crdt-window-request-updates-unspec-ncp", 1);
-                    from.contact_info.ncp = from_addr;
+                    from.contact_info.ncp = *from_addr;
                 }
 
                 let (from_id, ups, data, liveness) = {
@@ -1247,7 +1249,7 @@ impl Crdt {
     /// port must not be 0
     /// ip must be specified and not mulitcast
     /// loopback ip is only allowed in tests
-    pub fn is_valid_address(addr: SocketAddr) -> bool {
+    pub fn is_valid_address(addr: &SocketAddr) -> bool {
         (addr.port() != 0) && Self::is_valid_ip(addr.ip())
     }
 
@@ -1273,7 +1275,7 @@ pub struct Sockets {
 }
 
 pub struct Node {
-    pub data: NodeInfo,
+    pub info: NodeInfo,
     pub sockets: Sockets,
 }
 
@@ -1292,7 +1294,7 @@ impl Node {
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let data = NodeInfo::new(
+        let info = NodeInfo::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
@@ -1300,7 +1302,7 @@ impl Node {
             transaction.local_addr().unwrap(),
         );
         Node {
-            data,
+            info,
             sockets: Sockets {
                 gossip,
                 requests,
@@ -1313,17 +1315,12 @@ impl Node {
             },
         }
     }
-    pub fn new_with_external_ip(
-        pubkey: Pubkey,
-        ip: IpAddr,
-        port_range: (u16, u16),
-        ncp_port: u16,
-    ) -> Node {
-        fn bind(port_range: (u16, u16)) -> (u16, UdpSocket) {
-            match bind_in_range(port_range) {
+    pub fn new_with_external_ip(pubkey: Pubkey, ncp: &SocketAddr) -> Node {
+        fn bind() -> (u16, UdpSocket) {
+            match bind_in_range(SOLANA_PORT_RANGE) {
                 Ok(socket) => (socket.local_addr().unwrap().port(), socket),
                 Err(err) => {
-                    panic!("Failed to bind to {:?}", err);
+                    panic!("Failed to bind err: {}", err);
                 }
             }
         };
@@ -1333,39 +1330,40 @@ impl Node {
             match UdpSocket::bind(addr) {
                 Ok(socket) => socket,
                 Err(err) => {
-                    panic!("Failed to bind to {:?}: {:?}", addr, err);
+                    panic!("Failed to bind to {:?}, err: {}", addr, err);
                 }
             }
         };
 
-        let (gossip_port, gossip) = if ncp_port != 0 {
-            (ncp_port, bind_to(ncp_port))
+        let (gossip_port, gossip) = if ncp.port() != 0 {
+            (ncp.port(), bind_to(ncp.port()))
         } else {
-            bind(port_range)
+            bind()
         };
-        let (replicate_port, replicate) = bind(port_range);
-        let (requests_port, requests) = bind(port_range);
-        let (transaction_port, transaction) = bind(port_range);
 
-        let (_, repair) = bind(port_range);
-        let (_, broadcast) = bind(port_range);
-        let (_, retransmit) = bind(port_range);
+        let (replicate_port, replicate) = bind();
+        let (requests_port, requests) = bind();
+        let (transaction_port, transaction) = bind();
+
+        let (_, repair) = bind();
+        let (_, broadcast) = bind();
+        let (_, retransmit) = bind();
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
         // response Udp packet correctly back to the requester.
         let respond = requests.try_clone().unwrap();
 
-        let node_info = NodeInfo::new(
+        let info = NodeInfo::new(
             pubkey,
-            SocketAddr::new(ip, gossip_port),
-            SocketAddr::new(ip, replicate_port),
-            SocketAddr::new(ip, requests_port),
-            SocketAddr::new(ip, transaction_port),
+            SocketAddr::new(ncp.ip(), gossip_port),
+            SocketAddr::new(ncp.ip(), replicate_port),
+            SocketAddr::new(ncp.ip(), requests_port),
+            SocketAddr::new(ncp.ip(), transaction_port),
         );
 
         Node {
-            data: node_info,
+            info,
             sockets: Sockets {
                 gossip,
                 requests,
@@ -1391,7 +1389,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use crdt::{
         Crdt, CrdtError, Node, NodeInfo, Protocol, GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS,
-        MIN_TABLE_SIZE,
+        MIN_TABLE_SIZE, SOLANA_PORT_RANGE,
     };
     use entry::Entry;
     use hash::{hash, Hash};
@@ -1444,11 +1442,11 @@ mod tests {
     }
     #[test]
     fn test_new_vote() {
-        let d = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
-        let leader = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1235"));
+        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1235"));
         assert_ne!(d.id, leader.id);
         assert_matches!(
             crdt.new_vote(Hash::default()).err(),
@@ -1471,7 +1469,7 @@ mod tests {
 
     #[test]
     fn test_insert_vote() {
-        let d = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
@@ -1504,9 +1502,9 @@ mod tests {
         copy
     }
     #[test]
-    fn replicated_data_new_leader_with_pubkey() {
+    fn replicated_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
-        let d1 = NodeInfo::new_leader_with_pubkey(
+        let d1 = NodeInfo::new_with_pubkey_socketaddr(
             keypair.pubkey().clone(),
             &socketaddr!("127.0.0.1:1234"),
         );
@@ -1567,7 +1565,7 @@ mod tests {
             sorted(&crdt2.table.values().map(|x| x.clone()).collect()),
             sorted(&crdt.table.values().map(|x| x.clone()).collect())
         );
-        let d4 = NodeInfo::new_entry_point(socketaddr!("127.0.0.4:1234"));
+        let d4 = NodeInfo::new_entry_point(&socketaddr!("127.0.0.4:1234"));
         crdt.insert(&d4);
         let (_key, _ix, ups) = crdt.get_updates_since(0);
         assert_eq!(sorted(&ups), sorted(&vec![d2.clone(), d1, d3]));
@@ -1671,7 +1669,7 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt1.contact_info.ncp);
 
-        let nxt2 = NodeInfo::new_entry_point(socketaddr!("127.0.0.3:1234"));
+        let nxt2 = NodeInfo::new_entry_point(&socketaddr!("127.0.0.3:1234"));
         crdt.insert(&nxt2);
         // check that the service works
         // and that it eventually produces a request for both nodes
@@ -1712,9 +1710,9 @@ mod tests {
     #[test]
     fn purge_test() {
         logger::setup();
-        let me = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        let nxt = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1234"));
+        let nxt = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt.id);
         crdt.set_leader(me.id);
         crdt.insert(&nxt);
@@ -1733,7 +1731,7 @@ mod tests {
         let rv = crdt.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
-        let mut nxt2 = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1234"));
+        let mut nxt2 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt2.id);
         assert_ne!(nxt.id, nxt2.id);
         crdt.insert(&nxt2);
@@ -1755,14 +1753,14 @@ mod tests {
     #[test]
     fn purge_leader_test() {
         logger::setup();
-        let me = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        let nxt = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1234"));
+        let nxt = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt.id);
         crdt.insert(&nxt);
         crdt.set_leader(nxt.id);
         let now = crdt.alive[&nxt.id];
-        let mut nxt2 = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1234"));
+        let mut nxt2 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         crdt.insert(&nxt2);
         while now == crdt.alive[&nxt2.id] {
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
@@ -1865,10 +1863,10 @@ mod tests {
     fn run_window_request_with_backoff() {
         let window = default_window();
 
-        let mut me = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let mut me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         me.leader_id = me.id;
 
-        let mock_peer = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let mock_peer = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
         let recycler = BlobRecycler::default();
 
@@ -1916,16 +1914,16 @@ mod tests {
     #[test]
     fn test_update_leader() {
         logger::setup();
-        let me = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
-        let leader0 = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
-        let leader1 = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        let leader0 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        let leader1 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         assert_eq!(crdt.top_leader(), None);
         crdt.set_leader(leader0.id);
         assert_eq!(crdt.top_leader().unwrap(), leader0.id);
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
-            let mut dum = NodeInfo::new_entry_point(socketaddr!("127.0.0.1:1234"));
+            let mut dum = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1234"));
             dum.id = Keypair::new().pubkey();
             dum.leader_id = leader1.id;
             crdt.insert(&dum);
@@ -1941,12 +1939,12 @@ mod tests {
     #[test]
     fn test_valid_last_ids() {
         logger::setup();
-        let mut leader0 = NodeInfo::new_leader(&socketaddr!("127.0.0.2:1234"));
+        let mut leader0 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         leader0.ledger_state.last_id = hash(b"0");
         let mut leader1 = NodeInfo::new_multicast();
         leader1.ledger_state.last_id = hash(b"1");
         let mut leader2 =
-            NodeInfo::new_leader_with_pubkey(Pubkey::default(), &socketaddr!("127.0.0.2:1234"));
+            NodeInfo::new_with_pubkey_socketaddr(Pubkey::default(), &socketaddr!("127.0.0.2:1234"));
         leader2.ledger_state.last_id = hash(b"2");
         // test that only valid tvu or tpu are retured as nodes
         let mut leader3 = NodeInfo::new(
@@ -1973,10 +1971,10 @@ mod tests {
         let window = default_window();
         let recycler = BlobRecycler::default();
 
-        let node = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
-        let node_with_same_addr = NodeInfo::new_leader(&socketaddr!("127.0.0.1:1234"));
+        let node = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        let node_with_same_addr = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         assert_ne!(node.id, node_with_same_addr.id);
-        let node_with_diff_addr = NodeInfo::new_leader(&socketaddr!("127.0.0.1:4321"));
+        let node_with_diff_addr = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:4321"));
 
         let crdt = Crdt::new(node.clone()).expect("Crdt::new");
         assert_eq!(crdt.alive.len(), 0);
@@ -1987,7 +1985,7 @@ mod tests {
         assert!(
             Crdt::handle_protocol(
                 &obj,
-                node.contact_info.ncp,
+                &node.contact_info.ncp,
                 request,
                 &window,
                 &mut None,
@@ -1999,7 +1997,7 @@ mod tests {
         assert!(
             Crdt::handle_protocol(
                 &obj,
-                node.contact_info.ncp,
+                &node.contact_info.ncp,
                 request,
                 &window,
                 &mut None,
@@ -2010,7 +2008,7 @@ mod tests {
         let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
         Crdt::handle_protocol(
             &obj,
-            node.contact_info.ncp,
+            &node.contact_info.ncp,
             request,
             &window,
             &mut None,
@@ -2031,13 +2029,13 @@ mod tests {
     fn test_is_valid_address() {
         assert!(cfg!(test));
         let bad_address_port = socketaddr!("127.0.0.1:0");
-        assert!(!Crdt::is_valid_address(bad_address_port));
+        assert!(!Crdt::is_valid_address(&bad_address_port));
         let bad_address_unspecified = socketaddr!(0, 1234);
-        assert!(!Crdt::is_valid_address(bad_address_unspecified));
+        assert!(!Crdt::is_valid_address(&bad_address_unspecified));
         let bad_address_multicast = socketaddr!([224, 254, 0, 0], 1234);
-        assert!(!Crdt::is_valid_address(bad_address_multicast));
+        assert!(!Crdt::is_valid_address(&bad_address_multicast));
         let loopback = socketaddr!("127.0.0.1:1234");
-        assert!(Crdt::is_valid_address(loopback));
+        assert!(Crdt::is_valid_address(&loopback));
         //        assert!(!Crdt::is_valid_ip_internal(loopback.ip(), false));
     }
 
@@ -2052,37 +2050,37 @@ mod tests {
             socketaddr!("127.0.0.1:1237"),
         );
         let mut crdt = Crdt::new(node_info).unwrap();
-        let network_entry_point = NodeInfo::new_entry_point(socketaddr!("127.0.0.1:1239"));
+        let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
         crdt.insert(&network_entry_point);
         assert!(crdt.leader_data().is_none());
     }
 
     #[test]
     fn new_with_external_ip_test_random() {
-        let ip = IpAddr::V4(Ipv4Addr::from(0));
-        let node = Node::new_with_external_ip(Keypair::new().pubkey(), ip, (8100, 8200), 0);
+        let ip = Ipv4Addr::from(0);
+        let node = Node::new_with_external_ip(Keypair::new().pubkey(), &socketaddr!(ip, 0));
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.transaction.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
-        assert!(node.sockets.gossip.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.gossip.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < 8200);
+        assert!(node.sockets.gossip.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.gossip.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.requests.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.repair.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
     }
 
     #[test]
     fn new_with_external_ip_test_gossip() {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
-        let node = Node::new_with_external_ip(Keypair::new().pubkey(), ip, (8100, 8200), 8050);
+        let node = Node::new_with_external_ip(Keypair::new().pubkey(), &socketaddr!(0, 8050));
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
@@ -2090,13 +2088,13 @@ mod tests {
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < 8200);
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= 8100);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < 8200);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.requests.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
+        assert!(node.sockets.repair.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
     }
 }

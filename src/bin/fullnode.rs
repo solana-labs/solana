@@ -1,23 +1,27 @@
 #[macro_use]
 extern crate clap;
 extern crate getopts;
+#[macro_use]
 extern crate log;
 extern crate serde_json;
+#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
-use solana::crdt::{Node, NodeInfo};
+use solana::crdt::Node;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil};
+use solana::thin_client::poll_gossip_for_leader;
 use solana::wallet::request_airdrop;
 use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::thread::sleep;
 use std::time::Duration;
 
 fn main() -> () {
@@ -34,12 +38,12 @@ fn main() -> () {
                 .help("run with the identity found in FILE"),
         )
         .arg(
-            Arg::with_name("testnet")
-                .short("t")
-                .long("testnet")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("connect to the network at this gossip entry point"),
+                .help("connect/rendezvous with the network at this gossip entry point"),
         )
         .arg(
             Arg::with_name("ledger")
@@ -52,16 +56,12 @@ fn main() -> () {
         )
         .get_matches();
 
-    let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-    let mut keypair = Keypair::new();
-    let mut repl_data = NodeInfo::new_leader_with_pubkey(keypair.pubkey(), &bind_addr);
-    if let Some(i) = matches.value_of("identity") {
+    let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
-                keypair = data.keypair();
-                repl_data = data.node_info;
+                (data.keypair(), data.node_info.contact_info.ncp)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -70,60 +70,62 @@ fn main() -> () {
             eprintln!("failed to read {}", path);
             exit(1);
         }
-    }
-
-    let leader_pubkey = keypair.pubkey();
+    } else {
+        (Keypair::new(), socketaddr!(0, 8000))
+    };
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    let port_range = (8100, 10000);
-    let node = if let Some(_t) = matches.value_of("testnet") {
-        Node::new_with_external_ip(
-            leader_pubkey,
-            repl_data.contact_info.ncp.ip(),
-            port_range,
-            0,
-        )
-    } else {
-        Node::new_with_external_ip(
-            leader_pubkey,
-            repl_data.contact_info.ncp.ip(),
-            port_range,
-            repl_data.contact_info.ncp.port(),
-        )
+    // socketaddr that is initial pointer into the network's gossip (ncp)
+    let network = matches
+        .value_of("network")
+        .map(|network| network.parse().expect("failed to parse network address"));
+
+    let node = Node::new_with_external_ip(keypair.pubkey(), &ncp);
+
+    // save off some stuff for airdrop
+    let node_info = node.info.clone();
+    let pubkey = keypair.pubkey();
+
+    let fullnode = Fullnode::new(node, ledger_path, keypair, network, false);
+
+    // airdrop stuff, probably goes away at some point
+    let leader = match network {
+        Some(network) => {
+            poll_gossip_for_leader(network, None).expect("can't find leader on network")
+        }
+        None => node_info,
     };
-    let repl_clone = node.data.clone();
 
-    let mut drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), DRONE_PORT);
-    let testnet_addr = matches.value_of("testnet").map(|addr_str| {
-        let addr: SocketAddr = addr_str.parse().unwrap();
-        drone_addr.set_ip(addr.ip());
-        addr
-    });
-    let fullnode = Fullnode::new(node, ledger_path, keypair, testnet_addr, false);
+    let mut client = mk_client(&leader);
 
-    let mut client = mk_client(&repl_clone);
-    let previous_balance = client.poll_get_balance(&leader_pubkey).unwrap_or(0);
-    eprintln!("balance is {}", previous_balance);
+    // TODO: maybe have the drone put itself in gossip somewhere instead of hardcoding?
+    let drone_addr = match network {
+        Some(network) => SocketAddr::new(network.ip(), DRONE_PORT),
+        None => SocketAddr::new(ncp.ip(), DRONE_PORT),
+    };
 
-    if previous_balance == 0 {
-        eprintln!("requesting airdrop from {}", drone_addr);
-        request_airdrop(&drone_addr, &leader_pubkey, 50).unwrap_or_else(|_| {
-            panic!(
-                "Airdrop failed, is the drone address correct {:?} drone running?",
+    loop {
+        let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
+        info!("balance is {}", balance);
+
+        if balance >= 50 {
+            info!("good to go!");
+            break;
+        }
+
+        info!("requesting airdrop from {}", drone_addr);
+        loop {
+            if request_airdrop(&drone_addr, &pubkey, 50).is_ok() {
+                break;
+            }
+            info!(
+                "airdrop request, is the drone address correct {:?}, drone running?",
                 drone_addr
-            )
-        });
-
-        let balance_ok = client
-            .poll_balance_with_timeout(
-                &leader_pubkey,
-                &Duration::from_millis(100),
-                &Duration::from_secs(30),
-            )
-            .unwrap() > 0;
-        assert!(balance_ok, "0 balance, airdrop failed?");
+            );
+            sleep(Duration::from_secs(2));
+        }
     }
 
-    fullnode.join().expect("join");
+    fullnode.join().expect("to never happen");
 }

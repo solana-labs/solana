@@ -64,8 +64,8 @@ impl ThinClient {
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
         trace!("start recv_from");
-        self.requests_socket.recv_from(&mut buf)?;
-        trace!("end recv_from");
+        let (len, from) = self.requests_socket.recv_from(&mut buf)?;
+        trace!("end recv_from got {} {}", len, from);
         deserialize(&buf).or_else(|_| Err(io::Error::new(io::ErrorKind::Other, "deserialize")))
     }
 
@@ -161,7 +161,7 @@ impl ThinClient {
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
-        trace!("get_balance");
+        trace!("get_balance sending request to {}", self.requests_addr);
         let req = Request::GetAccount { key: *pubkey };
         let data = serialize(&req).expect("serialize GetAccount in pub fn get_balance");
         self.requests_socket
@@ -367,7 +367,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
     let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone()).unwrap();
-    let leader_entry_point = NodeInfo::new_entry_point(leader_ncp);
+    let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
     crdt.write().unwrap().insert(&leader_entry_point);
 
     sleep(Duration::from_millis(100));
@@ -420,7 +420,7 @@ mod tests {
         logger::setup();
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_data = leader.data.clone();
+        let leader_data = leader.info.clone();
 
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
@@ -473,7 +473,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let leader_data = leader.data.clone();
+        let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
 
         let server = Fullnode::new_with_bank(
@@ -533,7 +533,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let leader_data = leader.data.clone();
+        let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
         let server = Fullnode::new_with_bank(

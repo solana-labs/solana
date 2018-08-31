@@ -39,7 +39,7 @@ impl Config {
         let keypair =
             Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
-        let node_info = NodeInfo::new_leader_with_pubkey(pubkey, bind_addr);
+        let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
         Config { node_info, pkcs8 }
     }
     pub fn keypair(&self) -> Keypair {
@@ -74,12 +74,12 @@ impl Fullnode {
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
         info!(
             "starting... local gossip address: {} (advertising {})",
-            local_gossip_addr, node.data.contact_info.ncp
+            local_gossip_addr, node.info.contact_info.ncp
         );
         let exit = Arc::new(AtomicBool::new(false));
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
-        let requests_addr = node.data.contact_info.rpu;
-        let leader_info = leader_addr.map(NodeInfo::new_entry_point);
+        let requests_addr = node.info.contact_info.rpu;
+        let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
         let server = Self::new_with_bank(
             keypair,
             bank,
@@ -172,7 +172,7 @@ impl Fullnode {
         sigverify_disabled: bool,
     ) -> Self {
         if leader_info.is_none() {
-            node.data.leader_id = node.data.id;
+            node.info.leader_id = node.info.id;
         }
 
         let bank = Arc::new(bank);
@@ -186,12 +186,13 @@ impl Fullnode {
         );
         thread_hdls.extend(rpu.thread_hdls());
 
-        let mut drone_addr = node.data.contact_info.tpu;
+        // TODO: this code assumes this node is the leader
+        let mut drone_addr = node.info.contact_info.tpu;
         drone_addr.set_port(DRONE_PORT);
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), RPC_PORT);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), RPC_PORT);
         let rpc_service = JsonRpcService::new(
             &bank,
-            node.data.contact_info.tpu,
+            node.info.contact_info.tpu,
             drone_addr,
             rpc_addr,
             exit.clone(),
@@ -200,9 +201,9 @@ impl Fullnode {
 
         let blob_recycler = BlobRecycler::default();
         let window =
-            window::new_window_from_entries(ledger_tail, entry_height, &node.data, &blob_recycler);
+            window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.data).expect("Crdt::new")));
+        let crdt = Arc::new(RwLock::new(Crdt::new(node.info).expect("Crdt::new")));
 
         let ncp = Ncp::new(
             &crdt,
@@ -216,6 +217,7 @@ impl Fullnode {
         match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
+                // TODO: let Crdt get that data from the network?
                 crdt.write().unwrap().insert(leader_info);
                 let tvu = Tvu::new(
                     keypair,
@@ -307,7 +309,7 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let exit = Arc::new(AtomicBool::new(false));
-        let entry = tn.data.clone();
+        let entry = tn.info.clone();
         let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false);
         v.exit();
         v.join().unwrap();
@@ -321,7 +323,7 @@ mod tests {
                 let alice = Mint::new(10_000);
                 let bank = Bank::new(&alice);
                 let exit = Arc::new(AtomicBool::new(false));
-                let entry = tn.data.clone();
+                let entry = tn.info.clone();
                 Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false)
             })
             .collect();

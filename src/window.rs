@@ -787,7 +787,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
+        let mut crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
         crdt_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(crdt_me));
@@ -831,7 +831,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
                 msgs.push_back(b);
             }
@@ -858,7 +858,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
+        let crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
         let subs = Arc::new(RwLock::new(crdt_me));
 
@@ -901,7 +901,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
                 msgs.push_back(b);
             }
@@ -921,7 +921,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let crdt_me = Crdt::new(tn.data.clone()).expect("Crdt::new");
+        let crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
         let me_id = crdt_me.my_data().id;
         let subs = Arc::new(RwLock::new(crdt_me));
 
@@ -964,7 +964,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
                 msgs.push_back(b);
             }
@@ -984,7 +984,7 @@ mod test {
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.data.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
                 msgs1.push_back(b);
             }

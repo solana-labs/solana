@@ -10,22 +10,29 @@ extern crate tokio_codec;
 use bincode::{deserialize, serialize};
 use bytes::Bytes;
 use clap::{App, Arg};
-use solana::crdt::NodeInfo;
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
-use solana::fullnode::Config;
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
 use solana::thin_client::poll_gossip_for_leader;
 use std::error;
-use std::fs::File;
-use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
+use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
+
+macro_rules! socketaddr {
+    ($ip:expr, $port:expr) => {
+        SocketAddr::from((Ipv4Addr::from($ip), $port))
+    };
+    ($str:expr) => {{
+        let a: SocketAddr = $str.parse().unwrap();
+        a
+    }};
+}
 
 fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
@@ -33,12 +40,13 @@ fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("drone")
         .version(crate_version!())
         .arg(
-            Arg::with_name("leader")
-                .short("l")
-                .long("leader")
-                .value_name("PATH")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
+                .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("/path/to/leader.json"),
+                .required(true)
+                .help("rendezvous with the network at this gossip entry point"),
         )
         .arg(
             Arg::with_name("keypair")
@@ -47,7 +55,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
-                .help("/path/to/mint.json"),
+                .help("File to read the client's keypair from"),
         )
         .arg(
             Arg::with_name("slice")
@@ -72,39 +80,40 @@ fn main() -> Result<(), Box<error::Error>> {
         )
         .get_matches();
 
-    let leader: NodeInfo;
-    if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l).node_info;
-    } else {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = NodeInfo::new_leader(&server_addr);
-    };
+    let network = matches
+        .value_of("network")
+        .unwrap()
+        .parse()
+        .unwrap_or_else(|e| {
+            eprintln!("failed to parse network: {}", e);
+            exit(1)
+        });
 
     let mint_keypair =
-        read_keypair(matches.value_of("keypair").expect("keypair")).expect("client keypair");
+        read_keypair(matches.value_of("keypair").unwrap()).expect("failed to read client keypair");
 
     let time_slice: Option<u64>;
     if let Some(secs) = matches.value_of("slice") {
-        time_slice = Some(secs.to_string().parse().expect("integer"));
+        time_slice = Some(secs.to_string().parse().expect("failed to parse slice"));
     } else {
         time_slice = None;
     }
     let request_cap: Option<u64>;
     if let Some(c) = matches.value_of("cap") {
-        request_cap = Some(c.to_string().parse().expect("integer"));
+        request_cap = Some(c.to_string().parse().expect("failed to parse cap"));
     } else {
         request_cap = None;
     }
     let timeout: Option<u64>;
     if let Some(secs) = matches.value_of("timeout") {
-        timeout = Some(secs.to_string().parse().expect("integer"));
+        timeout = Some(secs.to_string().parse().expect("failed to parse timeout"));
     } else {
         timeout = None;
     }
 
-    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
+    let leader = poll_gossip_for_leader(network, timeout)?;
 
-    let drone_addr: SocketAddr = format!("0.0.0.0:{}", DRONE_PORT).parse().unwrap();
+    let drone_addr = socketaddr!(0, DRONE_PORT);
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
@@ -171,9 +180,4 @@ fn main() -> Result<(), Box<error::Error>> {
         });
     tokio::run(done);
     Ok(())
-}
-
-fn read_leader(path: &str) -> Config {
-    let file = File::open(path).unwrap_or_else(|_| panic!("file not found: {}", path));
-    serde_json::from_reader(file).unwrap_or_else(|_| panic!("failed to parse {}", path))
 }

@@ -283,7 +283,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let leader_data = leader.data.clone();
+        let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");
 
         let server = Fullnode::new_with_bank(
