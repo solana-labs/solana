@@ -115,11 +115,16 @@ tune_networking() {
       set -x +e
       # test the existence of the sysctls before trying to set them
       # go ahead and return true and don't exit if these calls fail
+      # 64mb should be 500ms worth of data 
       sysctl net.core.rmem_max 2>/dev/null 1>/dev/null &&
           sudo sysctl -w net.core.rmem_max=67108864 1>/dev/null 2>/dev/null
 
       sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
-          sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
+          sudo sysctl -w net.core.rmem_default=67108864 1>/dev/null 2>/dev/null
+
+      # 350,000 packets should be about 500ms worth of packets
+      sysctl net.core.netdev_max_backlog 2>/dev/null 1>/dev/null &&
+         sudo sysctl -w net.core.netdev_max_backlog=350000 1>/dev/null 2>/dev/null
     ) || true
   fi
 
