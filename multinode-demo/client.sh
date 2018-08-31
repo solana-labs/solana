@@ -20,9 +20,9 @@ usage() {
 
 # this is a little hacky
 if [[ ${1:0:2} != "--" ]]; then
-    read -r _ leader_address shift < <(find_leader "${@:1:1}")
+  read -r _ leader_address shift < <(find_leader "${@:1:1}")
 else
-    read -r _ leader_address shift < <(find_leader)
+  read -r _ leader_address shift < <(find_leader)
 fi
 shift "$shift"
 
