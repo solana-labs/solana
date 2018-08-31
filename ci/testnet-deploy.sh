@@ -335,7 +335,8 @@ fullnode_start() {
       rust-log=$RUST_LOG \
       default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
       metrics-config=$SOLANA_METRICS_CONFIG \
-      setup-args=$SOLANA_SETUP_ARGS \
+      setup-args=$SOLANA_SETUP_ARGS
+      leader-address=$publicIp \
     "
     if [[ $class = leader ]]; then
       nodeConfig="mode=leader+drone $commonNodeConfig"
@@ -343,7 +344,7 @@ fullnode_start() {
         nodeConfig="$nodeConfig enable-cuda=1"
       fi
     else
-      nodeConfig="mode=validator leader-address=$publicIp $commonNodeConfig"
+      nodeConfig="mode=validator $commonNodeConfig"
     fi
 
     vm_exec "$vmName" "$vmZone" "$vmPublicIp" "Starting $class $count:" \
