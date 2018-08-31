@@ -16,6 +16,7 @@ use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
 use solana::thin_client::poll_gossip_for_leader;
 use std::error;
+use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
