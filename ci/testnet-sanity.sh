@@ -52,7 +52,7 @@ fi
 
 (
   set -x
-  $cmd $NET_URL $EXPECTED_NODE_COUNT -c
+  $cmd --count "$EXPECTED_NODE_COUNT" --converge-only
 )
 
 echo "--- $NET_URL: validator sanity"
