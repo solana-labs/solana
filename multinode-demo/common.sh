@@ -176,7 +176,7 @@ find_leader() {
       # Assume public testnet by default
       leader_ip=35.227.93.37  # testnet.solana.com
     fi
-    $leader_address=$leader_ip:8001
+    leader_address=$leader_ip:8001
   else
     if [[ -z $1 ]]; then
       leader=${here}/..        # Default to local tree for rsync
