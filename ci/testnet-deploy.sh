@@ -335,7 +335,7 @@ fullnode_start() {
       rust-log=$RUST_LOG \
       default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
       metrics-config=$SOLANA_METRICS_CONFIG \
-      setup-args=$SOLANA_SETUP_ARGS
+      setup-args=$SOLANA_SETUP_ARGS \
       leader-address=$publicIp \
     "
     if [[ $class = leader ]]; then
