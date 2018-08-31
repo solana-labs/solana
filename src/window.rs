@@ -1058,7 +1058,8 @@ mod test {
     }
     #[test]
     pub fn test_repair_backoff() {
-        let res: usize = (0..100)
+        let num_tests = 100;
+        let res: usize = (0..num_tests)
             .map(|_| {
                 let mut last = 0;
                 let mut times = 0;
@@ -1079,8 +1080,8 @@ mod test {
                 total
             })
             .sum();
-        let ave = res / 100;
-        assert!(ave >= 3);
-        assert!(ave <= 5);
+        let avg = res / num_tests;
+        assert!(avg >= 3);
+        assert!(avg <= 5);
     }
 }
