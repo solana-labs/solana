@@ -176,6 +176,7 @@ find_leader() {
       # Assume public testnet by default
       leader_ip=35.227.93.37  # testnet.solana.com
     fi
+    leader=$leader_ip
     leader_address=$leader_ip:8001
   else
     if [[ -z $1 ]]; then
