@@ -13,17 +13,31 @@ _() {
 _ cargo build --verbose --features unstable
 _ cargo test --verbose --features=unstable
 
-exit 0
+maybe_cargo_install() {
+  for cmd in "$@"; do
+    set +e
+    cargo "$cmd" --help > /dev/null 2>&1
+    declare exitcode=$?
+    set -e
+    if [[ $exitcode -eq 101 ]]; then
+      _ cargo install cargo-"$cmd"
+    fi
+  done
+}
 
-# Coverage disabled (see issue #433)
-_ cargo cov test
-_ cargo cov report
+maybe_cargo_install cov
 
-echo --- Coverage report:
-ls -l target/cov/report/index.html
+_ cargo cov clean
+_ cargo cov test --lib
 
-if [[ -z "$CODECOV_TOKEN" ]]; then
-  echo CODECOV_TOKEN undefined
-else
-  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
-fi
+# TODO: Fix `cargo cov report` in Docker.
+#_ cargo cov report
+#
+#echo --- Coverage report:
+#ls -l target/cov/report/index.html
+#
+#if [[ -z "$CODECOV_TOKEN" ]]; then
+#  echo CODECOV_TOKEN undefined
+#else
+#  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
+#fi

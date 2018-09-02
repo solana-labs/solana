@@ -12,7 +12,7 @@ steps:
   - command: "ci/shellcheck.sh"
     name: "shellcheck [public]"
     timeout_in_minutes: 20
-  - command: "ci/docker-run.sh solanalabs/rust-nightly:2018-09-28 ci/test-nightly.sh || true"
+  - command: "ci/docker-run.sh solanalabs/rust-nightly:2018-09-28 ci/test-nightly.sh"
     name: "nightly [public]"
     env:
       CARGO_TARGET_CACHE_NAME: "nightly"
