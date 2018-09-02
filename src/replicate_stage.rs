@@ -3,7 +3,7 @@
 use bank::Bank;
 use counter::Counter;
 use crdt::Crdt;
-use ledger::{reconstruct_entries_from_blobs, LedgerWriter};
+use ledger::{reconstruct_entries_from_blobs, Block, LedgerWriter};
 use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
@@ -19,7 +19,6 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{responder, BlobReceiver};
 use vote_stage::VoteStage;
-use voting::entries_to_votes;
 
 pub struct ReplicateStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -49,9 +48,8 @@ impl ReplicateStage {
         }
 
         {
-            let votes = entries_to_votes(&entries);
             let mut wcrdt = crdt.write().unwrap();
-            wcrdt.insert_votes(&votes);
+            wcrdt.insert_votes(&entries.votes());
         }
 
         inc_new_counter_info!(

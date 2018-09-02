@@ -225,6 +225,14 @@ impl Transaction {
             true
         }
     }
+
+    pub fn vote(&self) -> Option<(Pubkey, Vote, Hash)> {
+        if let Instruction::NewVote(ref vote) = self.instruction {
+            Some((self.from, vote.clone(), self.last_id))
+        } else {
+            None
+        }
+    }
 }
 
 pub fn test_tx() -> Transaction {

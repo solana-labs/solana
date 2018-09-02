@@ -21,7 +21,6 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::{responder, BlobReceiver, BlobSender};
 use vote_stage::send_leader_vote;
-use voting::entries_to_votes;
 
 pub struct WriteStage {
     thread_hdls: Vec<JoinHandle<()>>,
@@ -40,7 +39,7 @@ impl WriteStage {
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
 
-        let votes = entries_to_votes(&entries);
+        let votes = &entries.votes();
         crdt.write().unwrap().insert_votes(&votes);
 
         ledger_writer.write_entries(entries.clone())?;
