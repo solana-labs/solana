@@ -9,13 +9,14 @@ use log::Level::Trace;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
+use signature::Pubkey;
 use std::collections::VecDeque;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
-use transaction::Transaction;
+use transaction::{Transaction, Vote};
 use window::WINDOW_SIZE;
 
 //
@@ -413,6 +414,7 @@ pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>);
+    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl Block for [Entry] {
@@ -437,6 +439,12 @@ impl Block for [Entry] {
             let blob = entry.to_blob(blob_recycler, None, None, None);
             q.push_back(blob);
         }
+    }
+
+    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
+        self.iter()
+            .flat_map(|entry| entry.transactions.iter().filter_map(Transaction::vote))
+            .collect()
     }
 }
 
