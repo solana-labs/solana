@@ -412,7 +412,7 @@ pub fn read_ledger(
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut Vec<SharedBlob>);
+    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -433,11 +433,10 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut Vec<SharedBlob>) {
-        for entry in self {
-            let blob = entry.to_blob(blob_recycler, None, None, None);
-            q.push(blob);
-        }
+    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob> {
+        self.iter()
+            .map(|entry| entry.to_blob(blob_recycler, None, None, None))
+            .collect()
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
@@ -634,8 +633,7 @@ mod tests {
         let entries = make_test_entries();
 
         let blob_recycler = BlobRecycler::default();
-        let mut blob_q = Vec::new();
-        entries.to_blobs(&blob_recycler, &mut blob_q);
+        let blob_q = entries.to_blobs(&blob_recycler);
 
         assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
     }
