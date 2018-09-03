@@ -44,7 +44,7 @@ impl WriteStage {
 
         ledger_writer.write_entries(entries.clone())?;
 
-        for entry in entries.clone() {
+        for entry in &entries {
             if !entry.has_more {
                 bank.register_entry_id(&entry.id);
             }
