@@ -12,7 +12,6 @@ use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
-use std::collections::VecDeque;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -55,7 +54,7 @@ impl WriteStage {
         //on a valid last id
 
         trace!("New blobs? {}", entries.len());
-        let mut blobs = VecDeque::new();
+        let mut blobs = Vec::new();
         entries.to_blobs(blob_recycler, &mut blobs);
 
         if !blobs.is_empty() {

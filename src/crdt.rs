@@ -27,7 +27,6 @@ use result::{Error, Result};
 use signature::{Keypair, KeypairUtil, Pubkey};
 use std;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -796,9 +795,7 @@ impl Crdt {
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
         let blob = to_blob(req, remote_gossip_addr, blob_recycler)?;
-        let mut q: VecDeque<SharedBlob> = VecDeque::new();
-        q.push_back(blob);
-        blob_sender.send(q)?;
+        blob_sender.send(vec![blob])?;
         Ok(())
     }
     /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
@@ -1188,8 +1185,8 @@ impl Crdt {
         while let Ok(mut more) = requests_receiver.try_recv() {
             reqs.append(&mut more);
         }
-        let mut resps = VecDeque::new();
-        while let Some(req) = reqs.pop_front() {
+        let mut resps = Vec::new();
+        for req in reqs {
             if let Some(resp) = Self::handle_blob(
                 obj,
                 window,
@@ -1197,7 +1194,7 @@ impl Crdt {
                 blob_recycler,
                 &req.read().unwrap(),
             ) {
-                resps.push_back(resp);
+                resps.push(resp);
             }
             blob_recycler.recycle(req);
         }

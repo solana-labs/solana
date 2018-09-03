@@ -10,7 +10,6 @@ use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::Pubkey;
-use std::collections::VecDeque;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
@@ -413,7 +412,7 @@ pub fn read_ledger(
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>);
+    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut Vec<SharedBlob>);
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -434,10 +433,10 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut VecDeque<SharedBlob>) {
+    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler, q: &mut Vec<SharedBlob>) {
         for entry in self {
             let blob = entry.to_blob(blob_recycler, None, None, None);
-            q.push_back(blob);
+            q.push(blob);
         }
     }
 
@@ -448,7 +447,7 @@ impl Block for [Entry] {
     }
 }
 
-pub fn reconstruct_entries_from_blobs(blobs: VecDeque<SharedBlob>) -> Result<Vec<Entry>> {
+pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
 
     for blob in blobs {
@@ -635,7 +634,7 @@ mod tests {
         let entries = make_test_entries();
 
         let blob_recycler = BlobRecycler::default();
-        let mut blob_q = VecDeque::new();
+        let mut blob_q = Vec::new();
         entries.to_blobs(&blob_recycler, &mut blob_q);
 
         assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);

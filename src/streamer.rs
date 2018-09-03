@@ -64,8 +64,8 @@ pub fn receiver(
 
 fn recv_send(sock: &UdpSocket, recycler: &BlobRecycler, r: &BlobReceiver) -> Result<()> {
     let timer = Duration::new(1, 0);
-    let mut msgs = r.recv_timeout(timer)?;
-    Blob::send_to(recycler, sock, &mut msgs)?;
+    let msgs = r.recv_timeout(timer)?;
+    Blob::send_to(recycler, sock, msgs)?;
     Ok(())
 }
 
@@ -144,7 +144,6 @@ pub fn blob_receiver(
 #[cfg(test)]
 mod test {
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
-    use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -198,7 +197,7 @@ mod test {
                 resp_recycler.clone(),
                 r_responder,
             );
-            let mut msgs = VecDeque::new();
+            let mut msgs = Vec::new();
             for i in 0..10 {
                 let b = resp_recycler.allocate();
                 {
@@ -207,7 +206,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
             t_responder
