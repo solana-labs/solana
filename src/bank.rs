@@ -453,13 +453,11 @@ impl Bank {
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<u64> {
-        let mut entry_count = 0;
+    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<()> {
         for entry in entries {
-            entry_count += 1;
             self.process_entry(entry)?;
         }
-        Ok(entry_count)
+        Ok(())
     }
 
     /// Append entry blocks to the ledger, verifying them along the way.
