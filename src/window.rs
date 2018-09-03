@@ -613,11 +613,7 @@ pub fn new_window_from_entries(
     blob_recycler: &BlobRecycler,
 ) -> SharedWindow {
     // convert to blobs
-    let mut blobs = Vec::new();
-    ledger_tail.to_blobs(&blob_recycler, &mut blobs);
-
-    // flatten deque to vec
-    let blobs: Vec<_> = blobs.into_iter().collect();
+    let blobs = ledger_tail.to_blobs(&blob_recycler);
     initialized_window(&node_info, blobs, entry_height)
 }
 

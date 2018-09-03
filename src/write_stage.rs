@@ -54,8 +54,7 @@ impl WriteStage {
         //on a valid last id
 
         trace!("New blobs? {}", entries.len());
-        let mut blobs = Vec::new();
-        entries.to_blobs(blob_recycler, &mut blobs);
+        let blobs = entries.to_blobs(blob_recycler);
 
         if !blobs.is_empty() {
             inc_new_counter_info!("write_stage-recv_vote", votes.len());
