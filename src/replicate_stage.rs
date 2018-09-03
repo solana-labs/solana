@@ -43,7 +43,7 @@ impl ReplicateStage {
 
         let res = bank.process_entries(entries.clone());
 
-        while let Some(blob) = blobs.pop_front() {
+        for blob in blobs {
             blob_recycler.recycle(blob);
         }
 

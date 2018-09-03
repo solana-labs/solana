@@ -12,7 +12,6 @@ use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use service::Service;
 use signature::Keypair;
-use std::collections::VecDeque;
 use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -136,7 +135,7 @@ pub fn send_leader_vote(
             if let Ok(shared_blob) =
                 create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler)
             {
-                vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
+                vote_blob_sender.send(vec![shared_blob])?;
                 let finality_ms = now - super_majority_timestamp;
 
                 *last_valid_validator_timestamp = super_majority_timestamp;
@@ -170,7 +169,7 @@ fn send_validator_vote(
     if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
-        vote_blob_sender.send(VecDeque::from(vec![shared_blob]))?;
+        vote_blob_sender.send(vec![shared_blob])?;
     }
     Ok(())
 }
@@ -388,7 +387,7 @@ pub mod tests {
         assert!(vote_blob.is_ok());
 
         // vote should be valid
-        let blob = vote_blob.unwrap().pop_front().unwrap();
+        let blob = &vote_blob.unwrap()[0];
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
     }

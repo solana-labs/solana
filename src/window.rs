@@ -12,7 +12,6 @@ use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use signature::Pubkey;
 use std::cmp;
-use std::collections::VecDeque;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicUsize;
@@ -158,7 +157,7 @@ fn add_block_to_retransmit_queue(
     b: &SharedBlob,
     leader_id: Pubkey,
     recycler: &BlobRecycler,
-    retransmit_queue: &mut VecDeque<SharedBlob>,
+    retransmit_queue: &mut Vec<SharedBlob>,
 ) {
     let p = b
         .read()
@@ -193,7 +192,7 @@ fn add_block_to_retransmit_queue(
             mnv.meta.size = sz;
             mnv.data[..sz].copy_from_slice(&p.data[..sz]);
         }
-        retransmit_queue.push_back(nv);
+        retransmit_queue.push(nv);
     }
 }
 
@@ -208,7 +207,7 @@ fn retransmit_all_leader_blocks(
     window: &SharedWindow,
     pending_retransmits: &mut bool,
 ) -> Result<()> {
-    let mut retransmit_queue: VecDeque<SharedBlob> = VecDeque::new();
+    let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
     if let Some(leader) = maybe_leader {
         let leader_id = leader.id;
         for b in dq {
@@ -364,7 +363,7 @@ fn process_blob(
             // window[k].data is None, end of received
             break;
         }
-        consume_queue.push_back(window[k].data.clone().expect("clone in fn recv_window"));
+        consume_queue.push(window[k].data.clone().expect("clone in fn recv_window"));
         *consumed += 1;
     }
 }
@@ -450,8 +449,8 @@ fn recv_window(
 
     let mut pixs = Vec::new();
     //send a contiguous set of blocks
-    let mut consume_queue = VecDeque::new();
-    while let Some(b) = dq.pop_front() {
+    let mut consume_queue = Vec::new();
+    for b in dq {
         let (pix, meta_size) = {
             let p = b.write().unwrap();
             (p.get_index()?, p.meta.size)
@@ -614,7 +613,7 @@ pub fn new_window_from_entries(
     blob_recycler: &BlobRecycler,
 ) -> SharedWindow {
     // convert to blobs
-    let mut blobs = VecDeque::new();
+    let mut blobs = Vec::new();
     ledger_tail.to_blobs(&blob_recycler, &mut blobs);
 
     // flatten deque to vec
@@ -684,7 +683,6 @@ mod test {
     use crdt::{Crdt, Node};
     use logger;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
-    use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -741,7 +739,7 @@ mod test {
                 resp_recycler.clone(),
                 r_responder,
             );
-            let mut msgs = VecDeque::new();
+            let mut msgs = Vec::new();
             for i in 0..10 {
                 let b = resp_recycler.allocate();
                 {
@@ -750,7 +748,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
             t_responder
@@ -821,7 +819,7 @@ mod test {
                 resp_recycler.clone(),
                 r_responder,
             );
-            let mut msgs = VecDeque::new();
+            let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
@@ -833,7 +831,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
             t_responder
@@ -891,7 +889,7 @@ mod test {
                 resp_recycler.clone(),
                 r_responder,
             );
-            let mut msgs = VecDeque::new();
+            let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
@@ -903,7 +901,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
             t_responder
@@ -954,7 +952,7 @@ mod test {
                 resp_recycler.clone(),
                 r_responder,
             );
-            let mut msgs = VecDeque::new();
+            let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
@@ -966,7 +964,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
 
@@ -974,7 +972,7 @@ mod test {
 
             subs.write().unwrap().set_leader(me_id);
 
-            let mut msgs1 = VecDeque::new();
+            let mut msgs1 = Vec::new();
             for v in 1..5 {
                 let i = 9 + v;
                 let b = resp_recycler.allocate();
@@ -986,7 +984,7 @@ mod test {
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
-                msgs1.push_back(b);
+                msgs1.push(b);
             }
             s_responder.send(msgs1).expect("send");
             t_responder

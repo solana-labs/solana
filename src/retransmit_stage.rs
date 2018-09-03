@@ -32,7 +32,7 @@ fn retransmit(
             Crdt::retransmit(&crdt, b, sock)?;
         }
     }
-    while let Some(b) = dq.pop_front() {
+    for b in dq {
         recycler.recycle(b);
     }
     Ok(())

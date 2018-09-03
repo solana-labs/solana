@@ -6,7 +6,6 @@ use log::Level;
 use result::{Error, Result};
 use serde::Serialize;
 use signature::Pubkey;
-use std::collections::VecDeque;
 use std::fmt;
 use std::io;
 use std::mem::size_of;
@@ -16,7 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
-pub type SharedBlobs = VecDeque<SharedBlob>;
+pub type SharedBlobs = Vec<SharedBlob>;
 pub type PacketRecycler = Recycler<Packets>;
 pub type BlobRecycler = Recycler<Blob>;
 
@@ -336,9 +335,9 @@ pub fn to_blobs<T: Serialize>(
     rsps: Vec<(T, SocketAddr)>,
     blob_recycler: &BlobRecycler,
 ) -> Result<SharedBlobs> {
-    let mut blobs = VecDeque::new();
+    let mut blobs = Vec::new();
     for (resp, rsp_addr) in rsps {
-        blobs.push_back(to_blob(resp, rsp_addr, blob_recycler)?);
+        blobs.push(to_blob(resp, rsp_addr, blob_recycler)?);
     }
     Ok(blobs)
 }
@@ -437,7 +436,7 @@ impl Blob {
         self.set_data_size(new_size as u64).unwrap();
     }
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<SharedBlobs> {
-        let mut v = VecDeque::new();
+        let mut v = Vec::new();
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
         //  * block on the socket until it's readable
@@ -471,12 +470,12 @@ impl Blob {
                     }
                 }
             }
-            v.push_back(r);
+            v.push(r);
         }
         Ok(v)
     }
-    pub fn send_to(re: &BlobRecycler, socket: &UdpSocket, v: &mut SharedBlobs) -> Result<()> {
-        while let Some(r) = v.pop_front() {
+    pub fn send_to(re: &BlobRecycler, socket: &UdpSocket, v: SharedBlobs) -> Result<()> {
+        for r in v {
             {
                 let p = r.read().expect("'r' read lock in pub fn send_to");
                 let a = p.meta.addr();
@@ -501,7 +500,6 @@ mod tests {
         BLOB_HEADER_SIZE, NUM_PACKETS,
     };
     use request::Request;
-    use std::collections::VecDeque;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -613,18 +611,13 @@ mod tests {
         let p = r.allocate();
         p.write().unwrap().meta.set_addr(&addr);
         p.write().unwrap().meta.size = 1024;
-        let mut v = VecDeque::new();
-        v.push_back(p);
-        assert_eq!(v.len(), 1);
-        Blob::send_to(&r, &sender, &mut v).unwrap();
+        let v = vec![p];
+        Blob::send_to(&r, &sender, v).unwrap();
         trace!("send_to");
-        assert_eq!(v.len(), 0);
-        let mut rv = Blob::recv_from(&r, &reader).unwrap();
+        let rv = Blob::recv_from(&r, &reader).unwrap();
         trace!("recv_from");
         assert_eq!(rv.len(), 1);
-        let rp = rv.pop_front().unwrap();
-        assert_eq!(rp.write().unwrap().meta.size, 1024);
-        r.recycle(rp);
+        assert_eq!(rv[0].write().unwrap().meta.size, 1024);
     }
 
     #[cfg(all(feature = "ipv6", test))]

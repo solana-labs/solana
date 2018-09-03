@@ -154,7 +154,6 @@ pub mod tests {
     use packet::BlobRecycler;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
-    use std::collections::VecDeque;
     use std::net::UdpSocket;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
@@ -248,7 +247,7 @@ pub mod tests {
         );
 
         let mut alice_ref_balance = starting_balance;
-        let mut msgs = VecDeque::new();
+        let mut msgs = Vec::new();
         let mut cur_hash = Hash::default();
         let mut blob_id = 0;
         let num_transfers = 10;
@@ -287,7 +286,7 @@ pub mod tests {
                     w.set_size(serialized_entry.len());
                     w.meta.set_addr(&replicate_addr);
                 }
-                msgs.push_back(b);
+                msgs.push(b);
             }
         }
 
