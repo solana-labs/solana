@@ -39,7 +39,7 @@ use timing::{duration_as_ms, timestamp};
 use transaction::Vote;
 use window::{SharedWindow, WindowIndex};
 
-pub const SOLANA_PORT_RANGE: (u16, u16) = (8000, 10_000);
+pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
 const GOSSIP_PURGE_MILLIS: u64 = 15000;
@@ -1254,7 +1254,7 @@ impl Crdt {
     }
 
     pub fn spy_node() -> (NodeInfo, UdpSocket) {
-        let gossip_socket = bind_in_range(SOLANA_PORT_RANGE).unwrap();
+        let gossip_socket = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
         let pubkey = Keypair::new().pubkey();
         let daddr = socketaddr_any!();
 
@@ -1317,7 +1317,7 @@ impl Node {
     }
     pub fn new_with_external_ip(pubkey: Pubkey, ncp: &SocketAddr) -> Node {
         fn bind() -> (u16, UdpSocket) {
-            match bind_in_range(SOLANA_PORT_RANGE) {
+            match bind_in_range(FULLNODE_PORT_RANGE) {
                 Ok(socket) => (socket.local_addr().unwrap().port(), socket),
                 Err(err) => {
                     panic!("Failed to bind err: {}", err);
@@ -1388,8 +1388,8 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use crdt::{
-        Crdt, CrdtError, Node, NodeInfo, Protocol, GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS,
-        MIN_TABLE_SIZE, SOLANA_PORT_RANGE,
+        Crdt, CrdtError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE, GOSSIP_PURGE_MILLIS,
+        GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
     use entry::Entry;
     use hash::{hash, Hash};
@@ -2065,16 +2065,16 @@ mod tests {
         assert_eq!(node.sockets.transaction.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
-        assert!(node.sockets.gossip.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.gossip.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.gossip.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.gossip.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
     }
 
     #[test]
@@ -2088,13 +2088,13 @@ mod tests {
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
-        assert!(node.sockets.repair.local_addr().unwrap().port() >= SOLANA_PORT_RANGE.0);
-        assert!(node.sockets.repair.local_addr().unwrap().port() < SOLANA_PORT_RANGE.1);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.transaction.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
     }
 }
