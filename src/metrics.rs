@@ -263,7 +263,7 @@ mod test {
             self.points_written
                 .fetch_add(points.len(), Ordering::SeqCst);
 
-            println!(
+            info!(
                 "Writing {} points ({} total)",
                 points.len(),
                 self.points_written.load(Ordering::SeqCst)
