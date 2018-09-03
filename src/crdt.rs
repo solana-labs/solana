@@ -13,7 +13,6 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use bincode::{deserialize, serialize};
-use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
@@ -28,7 +27,6 @@ use signature::{Keypair, KeypairUtil, Pubkey};
 use std;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -111,13 +109,6 @@ pub struct NodeInfo {
     pub ledger_state: LedgerState,
 }
 
-fn make_debug_id(key: &Pubkey) -> u64 {
-    let buf: &[u8] = &key.as_ref();
-    let mut rdr = Cursor::new(&buf[..8]);
-    rdr.read_u64::<LittleEndian>()
-        .expect("rdr.read_u64 in fn debug_id")
-}
-
 impl NodeInfo {
     pub fn new(
         id: Pubkey,
@@ -158,7 +149,7 @@ impl NodeInfo {
         Self::new(Keypair::new().pubkey(), addr, addr, addr, addr)
     }
     pub fn debug_id(&self) -> u64 {
-        make_debug_id(&self.id)
+        self.id.debug_id()
     }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
         let mut nxt_addr = *addr;
@@ -254,7 +245,7 @@ impl Crdt {
         Ok(me)
     }
     pub fn debug_id(&self) -> u64 {
-        make_debug_id(&self.id)
+        self.id.debug_id()
     }
     pub fn my_data(&self) -> &NodeInfo {
         &self.table[&self.id]
@@ -275,8 +266,8 @@ impl Crdt {
         warn!(
             "{:x}: LEADER_UPDATE TO {:x} from {:x}",
             me.debug_id(),
-            make_debug_id(&key),
-            make_debug_id(&me.leader_id),
+            key.debug_id(),
+            me.leader_id.debug_id()
         );
         me.leader_id = key;
         me.version += 1;
@@ -292,7 +283,7 @@ impl Crdt {
             warn!(
                 "{:x}: VOTE for unknown id: {:x}",
                 self.debug_id(),
-                make_debug_id(pubkey)
+                pubkey.debug_id()
             );
             return;
         }
@@ -300,7 +291,7 @@ impl Crdt {
             warn!(
                 "{:x}: VOTE for new address version from: {:x} ours: {} vote: {:?}",
                 self.debug_id(),
-                make_debug_id(pubkey),
+                pubkey.debug_id(),
                 self.table[pubkey].contact_info.version,
                 v,
             );
@@ -310,7 +301,7 @@ impl Crdt {
             info!(
                 "{:x}: LEADER_VOTED! {:x}",
                 self.debug_id(),
-                make_debug_id(&pubkey)
+                pubkey.debug_id()
             );
             inc_new_counter_info!("crdt-insert_vote-leader_voted", 1);
         }
@@ -319,7 +310,7 @@ impl Crdt {
             debug!(
                 "{:x}: VOTE for old version: {:x}",
                 self.debug_id(),
-                make_debug_id(&pubkey)
+                pubkey.debug_id()
             );
             self.update_liveness(*pubkey);
             return;
@@ -386,7 +377,7 @@ impl Crdt {
         trace!(
             "{:x} updating liveness {:x} to {}",
             self.debug_id(),
-            make_debug_id(&id),
+            id.debug_id(),
             now
         );
         *self.alive.entry(id).or_insert(now) = now;
@@ -416,7 +407,7 @@ impl Crdt {
                     trace!(
                         "{:x} purge skipped {:x} {} {}",
                         self.debug_id(),
-                        make_debug_id(&k),
+                        k.debug_id(),
                         now - v,
                         limit
                     );
@@ -433,16 +424,12 @@ impl Crdt {
             self.remote.remove(id);
             self.local.remove(id);
             self.external_liveness.remove(id);
-            info!("{:x}: PURGE {:x}", self.debug_id(), make_debug_id(id));
+            info!("{:x}: PURGE {:x}", self.debug_id(), id.debug_id());
             for map in self.external_liveness.values_mut() {
                 map.remove(id);
             }
             if *id == leader_id {
-                info!(
-                    "{:x}: PURGE LEADER {:x}",
-                    self.debug_id(),
-                    make_debug_id(id),
-                );
+                info!("{:x}: PURGE LEADER {:x}", self.debug_id(), id.debug_id(),);
                 inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
                 self.set_leader(Pubkey::default());
             }
@@ -809,7 +796,7 @@ impl Crdt {
         for v in cur {
             let cnt = table.entry(&v.leader_id).or_insert(0);
             *cnt += 1;
-            trace!("leader {:x} {}", make_debug_id(&v.leader_id), *cnt);
+            trace!("leader {:x} {}", v.leader_id.debug_id(), *cnt);
         }
         let mut sorted: Vec<(&Pubkey, usize)> = table.into_iter().collect();
         let my_id = self.debug_id();
@@ -817,7 +804,7 @@ impl Crdt {
             trace!(
                 "{:x}: sorted leaders {:x} votes: {}",
                 my_id,
-                make_debug_id(&x.0),
+                x.0.debug_id(),
                 x.1
             );
         }
@@ -1111,7 +1098,7 @@ impl Crdt {
                 let now = Instant::now();
                 trace!(
                     "ReceivedUpdates from={:x} update_index={} len={}",
-                    make_debug_id(&from),
+                    from.debug_id(),
                     update_index,
                     data.len()
                 );
