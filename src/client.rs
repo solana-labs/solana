@@ -1,11 +1,11 @@
-use crdt::{NodeInfo, SOLANA_PORT_RANGE};
+use crdt::{NodeInfo, FULLNODE_PORT_RANGE};
 use nat::bind_in_range;
 use std::time::Duration;
 use thin_client::ThinClient;
 
 pub fn mk_client(r: &NodeInfo) -> ThinClient {
-    let requests_socket = bind_in_range(SOLANA_PORT_RANGE).unwrap();
-    let transactions_socket = bind_in_range(SOLANA_PORT_RANGE).unwrap();
+    let requests_socket = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+    let transactions_socket = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
 
     requests_socket
         .set_read_timeout(Some(Duration::new(1, 0)))

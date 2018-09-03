@@ -5,7 +5,7 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
-use solana::crdt::SOLANA_PORT_RANGE;
+use solana::crdt::FULLNODE_PORT_RANGE;
 use solana::fullnode::Config;
 use solana::nat::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
 use solana::signature::read_pkcs8;
@@ -48,7 +48,7 @@ fn main() {
         .get_matches();
 
     let bind_addr: SocketAddr = {
-        let mut bind_addr = parse_port_or_addr(matches.value_of("bind"), SOLANA_PORT_RANGE.0);
+        let mut bind_addr = parse_port_or_addr(matches.value_of("bind"), FULLNODE_PORT_RANGE.0);
         if matches.is_present("local") {
             let ip = get_ip_addr().unwrap();
             bind_addr.set_ip(ip);
