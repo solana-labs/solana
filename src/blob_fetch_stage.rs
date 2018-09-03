@@ -32,7 +32,6 @@ impl BlobFetchStage {
             .into_iter()
             .map(|socket| {
                 streamer::blob_receiver(socket, exit.clone(), recycler.clone(), sender.clone())
-                    .expect("blob receiver init")
             })
             .collect();
 

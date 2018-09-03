@@ -211,7 +211,7 @@ impl Fullnode {
             ledger_path,
             node.sockets.gossip,
             exit.clone(),
-        ).expect("Ncp::new");
+        );
         thread_hdls.extend(ncp.thread_hdls());
 
         match leader_info {

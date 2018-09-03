@@ -124,12 +124,13 @@ pub fn blob_receiver(
     exit: Arc<AtomicBool>,
     recycler: BlobRecycler,
     s: BlobSender,
-) -> Result<JoinHandle<()>> {
+) -> JoinHandle<()> {
     //DOCUMENTED SIDE-EFFECT
     //1 second timeout on socket read
     let timer = Duration::new(1, 0);
-    sock.set_read_timeout(Some(timer))?;
-    let t = Builder::new()
+    sock.set_read_timeout(Some(timer))
+        .expect("set socket timeout");
+    Builder::new()
         .name("solana-blob_receiver".to_string())
         .spawn(move || loop {
             if exit.load(Ordering::Relaxed) {
@@ -137,8 +138,7 @@ pub fn blob_receiver(
             }
             let _ = recv_blobs(&recycler, &sock, &s);
         })
-        .unwrap();
-    Ok(t)
+        .unwrap()
 }
 
 #[cfg(test)]

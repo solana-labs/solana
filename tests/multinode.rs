@@ -42,7 +42,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = default_window();
-    let ncp = Ncp::new(&spy_ref, spy_window, None, spy.sockets.gossip, exit.clone()).unwrap();
+    let ncp = Ncp::new(&spy_ref, spy_window, None, spy.sockets.gossip, exit.clone());
     //wait for the network to converge
     let mut converged = false;
     let mut rv = vec![];
