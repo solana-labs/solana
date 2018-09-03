@@ -199,7 +199,7 @@ fn add_block_to_retransmit_queue(
 
 fn retransmit_all_leader_blocks(
     maybe_leader: Option<NodeInfo>,
-    dq: &mut SharedBlobs,
+    dq: &SharedBlobs,
     debug_id: u64,
     recycler: &BlobRecycler,
     consumed: u64,
@@ -438,7 +438,7 @@ fn recv_window(
 
     retransmit_all_leader_blocks(
         maybe_leader,
-        &mut dq,
+        &dq,
         debug_id,
         recycler,
         *consumed,
