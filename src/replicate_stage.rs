@@ -62,11 +62,7 @@ impl ReplicateStage {
             ledger_writer.write_entries(entries)?;
         }
 
-        if res.is_err() {
-            error!("process_entries {:?}", res);
-        }
-        let _ = res?;
-
+        res?;
         Ok(())
     }
     pub fn new(
