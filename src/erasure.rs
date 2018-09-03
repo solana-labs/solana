@@ -152,8 +152,8 @@ pub fn decode_blocks(
         }
         data_arg.push(x.as_mut_ptr());
     }
-    unsafe {
-        let ret = jerasure_matrix_decode(
+    let ret = unsafe {
+        jerasure_matrix_decode(
             data.len() as i32,
             coding.len() as i32,
             ERASURE_W,
@@ -163,15 +163,15 @@ pub fn decode_blocks(
             data_arg.as_ptr(),
             coding_arg.as_ptr(),
             data[0].len() as i32,
-        );
-        trace!("jerasure_matrix_decode ret: {}", ret);
-        for x in data[erasures[0] as usize][0..8].iter() {
-            trace!("{} ", x)
-        }
-        trace!("");
-        if ret < 0 {
-            return Err(ErasureError::DecodeError);
-        }
+        )
+    };
+    trace!("jerasure_matrix_decode ret: {}", ret);
+    for x in data[erasures[0] as usize][0..8].iter() {
+        trace!("{} ", x)
+    }
+    trace!("");
+    if ret < 0 {
+        return Err(ErasureError::DecodeError);
     }
     Ok(())
 }
