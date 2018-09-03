@@ -1,6 +1,7 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use bs58;
+use byteorder::{LittleEndian, ReadBytesExt};
 use generic_array::typenum::{U32, U64};
 use generic_array::GenericArray;
 use rand::{ChaChaRng, Rng, SeedableRng};
@@ -11,6 +12,7 @@ use serde_json;
 use std::error;
 use std::fmt;
 use std::fs::File;
+use std::io::Cursor;
 use untrusted::Input;
 
 pub type Keypair = Ed25519KeyPair;
@@ -20,6 +22,13 @@ pub struct Pubkey(GenericArray<u8, U32>);
 impl Pubkey {
     pub fn new(pubkey_vec: &[u8]) -> Self {
         Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
+    }
+
+    pub fn debug_id(&self) -> u64 {
+        let buf: &[u8] = &self.as_ref();
+        let mut rdr = Cursor::new(&buf[..8]);
+        rdr.read_u64::<LittleEndian>()
+            .expect("rdr.read_u64 in fn debug_id")
     }
 }
 
