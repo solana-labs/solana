@@ -799,7 +799,7 @@ mod test {
             exit.clone(),
             resp_recycler.clone(),
             s_reader,
-        ).unwrap();
+        );
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
@@ -869,7 +869,7 @@ mod test {
             exit.clone(),
             resp_recycler.clone(),
             s_reader,
-        ).unwrap();
+        );
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
@@ -932,7 +932,7 @@ mod test {
             exit.clone(),
             resp_recycler.clone(),
             s_reader,
-        ).unwrap();
+        );
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();

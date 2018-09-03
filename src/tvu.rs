@@ -152,7 +152,6 @@ pub mod tests {
     use mint::Mint;
     use ncp::Ncp;
     use packet::BlobRecycler;
-    use result::Result;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::collections::VecDeque;
@@ -170,10 +169,10 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<(Ncp, SharedWindow)> {
+    ) -> (Ncp, SharedWindow) {
         let window = window::default_window();
-        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit)?;
-        Ok((ncp, window))
+        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
+        (ncp, window)
     }
 
     /// Test that message sent from leader to target1 and replicated to target2
@@ -191,7 +190,7 @@ pub mod tests {
         crdt_l.set_leader(leader.info.id);
 
         let cref_l = Arc::new(RwLock::new(crdt_l));
-        let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone()).unwrap();
+        let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
 
         //start crdt2
         let mut crdt2 = Crdt::new(target2.info.clone()).expect("Crdt::new");
@@ -199,7 +198,7 @@ pub mod tests {
         crdt2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
         let cref2 = Arc::new(RwLock::new(crdt2));
-        let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone()).unwrap();
+        let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -212,7 +211,7 @@ pub mod tests {
             exit.clone(),
             recv_recycler.clone(),
             s_reader,
-        ).unwrap();
+        );
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
@@ -233,7 +232,7 @@ pub mod tests {
         crdt1.insert(&leader.info);
         crdt1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(crdt1));
-        let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone()).unwrap();
+        let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let tvu = Tvu::new(
             target1_keypair,

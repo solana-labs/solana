@@ -671,7 +671,7 @@ fn converge(
         None,
         gossip_socket,
         exit_signal.clone(),
-    ).expect("DataReplicator::new");
+    );
     let mut v: Vec<NodeInfo> = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {

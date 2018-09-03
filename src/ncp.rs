@@ -2,7 +2,6 @@
 
 use crdt::Crdt;
 use packet::BlobRecycler;
-use result::Result;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,7 +23,7 @@ impl Ncp {
         ledger_path: Option<&str>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> Result<Ncp> {
+    ) -> Self {
         let blob_recycler = BlobRecycler::default();
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
@@ -38,7 +37,7 @@ impl Ncp {
             exit.clone(),
             blob_recycler.clone(),
             request_sender,
-        )?;
+        );
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder(
             "ncp",
@@ -57,7 +56,7 @@ impl Ncp {
         );
         let t_gossip = Crdt::gossip(crdt.clone(), blob_recycler, response_sender, exit.clone());
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
-        Ok(Ncp { exit, thread_hdls })
+        Ncp { exit, thread_hdls }
     }
 
     pub fn close(self) -> thread::Result<()> {
@@ -95,7 +94,7 @@ mod tests {
         let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
-        let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone()).unwrap();
+        let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone());
         d.close().expect("thread join");
     }
 }
