@@ -295,7 +295,7 @@ impl ThinClient {
                 }
             };
 
-            if let balance != 0 {
+            if balance != 0 {
                 ThinClient::submit_poll_balance_metrics(&now.elapsed());
                 return Ok(balance);
             }
