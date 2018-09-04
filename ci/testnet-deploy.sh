@@ -264,10 +264,13 @@ client_start() {
   declare vmPublicIp=$3
   declare count=$4
 
+  nodeConfig="mode=client"
+
   vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
     "Starting client $count:" \
     "\
       set -x;
+      sudo snap set solana $nodeConfig; \
       snap info solana; \
       sudo snap get solana; \
       threadCount=\$(nproc); \
