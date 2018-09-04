@@ -4,7 +4,7 @@
 #
 
 cd "$(dirname "$0")/.."
-source scripts/metrics-write-datapoint.sh
+source scripts/configure-metrics.sh
 
 NET_URL=$1
 if [[ -z $NET_URL ]]; then
