@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import json
 import sys
@@ -49,10 +49,11 @@ for stage in stages_data.keys():
         mean = stages_data[stage]['data'][mean_index]
         average = float(sum(stages_data[stage]['data'])) / data_len
         eightieth = stages_data[stage]['data'][eightieth_index]
-    print("stage: {} max: {:,.2f} min: {:.2f} count: {} mean: {:,.2f} average: {:,.2f} 80\%: {:,.2f}".format(stage,
+    print("stage: {} max: {:,.2f} min: {:.2f} count: {} total: {} mean: {:,.2f} average: {:,.2f} 80%: {:,.2f}".format(stage,
                                                        stages_data[stage]['max_speed'],
                                                        stages_data[stage]['min_speed'],
                                                        stages_data[stage]['count'],
+                                                       stages_data[stage]['last_count'],
                                                        mean, average, eightieth))
     num = 5
     idx = -1
@@ -63,7 +64,7 @@ for stage in stages_data.keys():
             idx -= 1
             if stages_data[stage]['data'][idx] < average:
                 break
-    print("")
+        print("")
     print("    max_ts: {} min_ts: {}".format(stages_data[stage]['max_speed_ts'], stages_data[stage]['min_speed_ts']))
     print("\n")
 
