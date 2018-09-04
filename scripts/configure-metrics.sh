@@ -6,12 +6,18 @@
 # Example:
 #   export SOLANA_METRICS_CONFIG="host=<metrics host>,db=<database name>,u=<username>,p=<password>"
 #
-configure_metrics() {
+# The following directive disable complaints about unused variables in this
+# file:
+# shellcheck disable=2034
+#
+metricsWriteDatapoint="$(dirname "${BASH_SOURCE[0]}")"/metrics-write-datapoint.sh
+
+configureMetrics() {
   [[ -n $SOLANA_METRICS_CONFIG ]] || return 0
 
-  declare metrics_params
-  IFS=',' read -r -a metrics_params <<< "$SOLANA_METRICS_CONFIG"
-  for param in "${metrics_params[@]}"; do
+  declare metricsParams
+  IFS=',' read -r -a metricsParams <<< "$SOLANA_METRICS_CONFIG"
+  for param in "${metricsParams[@]}"; do
     IFS='=' read -r -a pair <<< "$param"
     if [[ ${#pair[@]} != 2 ]]; then
       echo Error: invalid metrics parameter: "$param" >&2
@@ -42,4 +48,4 @@ configure_metrics() {
     fi
   done
 }
-configure_metrics
+configureMetrics
