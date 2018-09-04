@@ -80,6 +80,7 @@ impl ThinClient {
             }
             Response::Account { key, account: None } => {
                 debug!("Response account {}: None ", key);
+                self.balances.remove(&key);
             }
             Response::LastId { id } => {
                 trace!("Response last_id {:?}", id);
@@ -283,22 +284,19 @@ impl ThinClient {
     ) -> io::Result<i64> {
         let now = Instant::now();
         loop {
-            let balance = match self.get_balance(&pubkey) {
-                Ok(bal) => bal,
+            match self.get_balance(&pubkey) {
+                Ok(bal) => {
+                    ThinClient::submit_poll_balance_metrics(&now.elapsed());
+                    return Ok(bal);
+                }
                 Err(e) => {
                     sleep(*polling_frequency);
                     if now.elapsed() > *timeout {
                         ThinClient::submit_poll_balance_metrics(&now.elapsed());
                         return Err(e);
                     }
-                    0
                 }
             };
-
-            if balance != 0 {
-                ThinClient::submit_poll_balance_metrics(&now.elapsed());
-                return Ok(balance);
-            }
         }
     }
 
@@ -585,5 +583,68 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(addr, requests_socket, addr, transactions_socket);
         assert_eq!(client.transaction_count(), 0);
+    }
+
+    #[test]
+    fn test_zero_balance_after_nonzero() {
+        logger::setup();
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob_keypair = Keypair::new();
+        let exit = Arc::new(AtomicBool::new(false));
+        let leader_data = leader.info.clone();
+        let ledger_path = tmp_ledger("zero_balance_check", &alice);
+
+        let server = Fullnode::new_with_bank(
+            leader_keypair,
+            bank,
+            0,
+            &[],
+            leader,
+            None,
+            exit.clone(),
+            Some(&ledger_path),
+            false,
+        );
+        sleep(Duration::from_millis(900));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        requests_socket
+            .set_read_timeout(Some(Duration::new(5, 0)))
+            .unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = ThinClient::new(
+            leader_data.contact_info.rpu,
+            requests_socket,
+            leader_data.contact_info.tpu,
+            transactions_socket,
+        );
+        let last_id = client.get_last_id();
+
+        // give bob 500 tokens
+        let signature = client
+            .transfer(500, &alice.keypair(), bob_keypair.pubkey(), &last_id)
+            .unwrap();
+        assert!(client.poll_for_signature(&signature).is_ok());
+
+        let balance = client.poll_get_balance(&bob_keypair.pubkey());
+        assert!(balance.is_ok());
+        assert_eq!(balance.unwrap(), 500);
+
+        // take them away
+        let signature = client
+            .transfer(500, &bob_keypair, alice.keypair().pubkey(), &last_id)
+            .unwrap();
+        assert!(client.poll_for_signature(&signature).is_ok());
+
+        // should get an error when bob's account is purged
+        let balance = client.poll_get_balance(&bob_keypair.pubkey());
+        assert!(balance.is_err());
+
+        exit.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 }
