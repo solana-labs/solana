@@ -112,12 +112,16 @@ gcloud_CreateInstances() {
     "--machine-type=$machineType"
   )
   if [[ -n $optionalAccelerator ]]; then
-    args+=("--accelerator=$optionalAccelerator")
+    args+=(
+      "--accelerator=$optionalAccelerator"
+      --maintenance-policy TERMINATE
+      --restart-on-failure
+    )
   fi
 
   (
     set -x
-    gcloud beta compute instances create "${nodes[@]}" "${args[@]}" \
+    gcloud beta compute instances create "${nodes[@]}" "${args[@]}"
   )
 }
 

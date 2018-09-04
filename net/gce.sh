@@ -9,11 +9,11 @@ source "$here"/common.sh
 prefix=testnet-dev-$(whoami | sed -e s/[^a-z0-9].*//)
 validatorNodeCount=5
 clientNodeCount=1
-leaderMachineType=n1-standard-1
-leaderAccelerator= # "count=4,type=nvidia-tesla-k80"
-validatorMachineType=$leaderMachineType
+leaderMachineType=n1-standard-16
+leaderAccelerator=
+validatorMachineType=n1-standard-4
 validatorAccelerator=
-clientMachineType=$leaderMachineType
+clientMachineType=n1-standard-16
 clientAccelerator=
 
 imageName="ubuntu-16-04-cuda-9-2-new"
@@ -36,8 +36,8 @@ Configure a GCE-based testnet
  delete - delete the testnet
 
  common options:
- -p prefix        - Optional common prefix for instance names to avoid collisions
-                    (default: $prefix)
+   -p prefix        - Optional common prefix for instance names to avoid collisions
+                      (default: $prefix)
 
  create-specific options:
    -n number        - Number of validator nodes (default: $validatorNodeCount)
@@ -45,6 +45,7 @@ Configure a GCE-based testnet
    -P               - Use GCE internal/private network (default: $internalNetwork)
    -z               - GCP Zone for the nodes (default: $zone)
    -i imageName     - Existing image on GCE (default: $imageName)
+   -g               - Enable GPU
 
  config-specific options:
    none
@@ -62,7 +63,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pi:n:c:z:" opt; do
+while getopts "h?p:Pi:n:c:z:g" opt; do
   case $opt in
   h | \?)
     usage
@@ -84,6 +85,9 @@ while getopts "h?p:Pi:n:c:z:" opt; do
     ;;
   z)
     zone=$OPTARG
+    ;;
+  g)
+    leaderAccelerator="count=4,type=nvidia-tesla-k80"
     ;;
   *)
     usage "Error: unhandled option: $opt"
