@@ -166,9 +166,6 @@ find_leader() {
   declare shift=0
 
   if [[ -d $SNAP ]]; then
-    # Exit if mode is not yet configured
-    # (typically the case after the Snap is first installed)
-    [[ -n $(snapctl get mode) ]] || exit 0
 
     # Select leader from the Snap configuration
     leader_ip=$(snapctl get leader-ip)

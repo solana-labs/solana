@@ -9,6 +9,12 @@ source "$here"/common.sh
 # shellcheck source=scripts/oom-score-adj.sh
 source "$here"/../scripts/oom-score-adj.sh
 
+if [[ -d "$SNAP" ]]; then
+  # Exit if mode is not yet configured
+  # (typically the case after the Snap is first installed)
+  [[ -n "$(snapctl get mode)" ]] || exit 0
+fi
+
 usage() {
   if [[ -n $1 ]]; then
     echo "$*"
