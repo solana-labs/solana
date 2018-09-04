@@ -128,7 +128,7 @@ Testnet Client Demo
 ---
 
 Now that your singlenode or multinode testnet is up and running let's send it some transactions! Note that we pass in
-the expected number of nodes in the network.  If running singlenode pass 1, if multinode pass the number
+the expected number of nodes in the network.  If running singlenode, pass 1; if multinode, pass the number
 of validators you started.
 
 In a separate shell start the client:
