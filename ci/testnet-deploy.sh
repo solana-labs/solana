@@ -266,6 +266,9 @@ client_start() {
 
   nodeConfig="mode=client"
 
+  # TODO: rework client snap stuff.
+  #  the code below disables "SNAP" behavior for the hand-invoked snap command
+  #  to fix: make the client a daemon like the rest
   vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
     "Starting client $count:" \
     "\
@@ -273,6 +276,8 @@ client_start() {
       sudo snap set solana $nodeConfig; \
       snap info solana; \
       sudo snap get solana; \
+      # begin hack \
+      unset SNAP; \
       threadCount=\$(nproc); \
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux kill-session -t solana; \
