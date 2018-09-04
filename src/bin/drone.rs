@@ -2,6 +2,8 @@ extern crate bincode;
 extern crate bytes;
 #[macro_use]
 extern crate clap;
+#[macro_use]
+extern crate log;
 extern crate serde_json;
 extern crate solana;
 extern crate tokio;
@@ -112,6 +114,7 @@ fn main() -> Result<(), Box<error::Error>> {
         timeout = None;
     }
 
+    info!("Drone waiting for network at {:?}...", network);
     let leader = poll_gossip_for_leader(network, timeout)?;
 
     let drone_addr = socketaddr!(0, DRONE_PORT);
