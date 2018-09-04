@@ -26,11 +26,14 @@ snap)
   sudo snap install solana.snap --devmode --dangerous
   rm solana.snap
 
-  sudo snap set solana "\
-      leader-ip=$leaderIp \
-      metrics-config=$SOLANA_METRICS_CONFIG \
-      rust-log=$RUST_LOG \
-    "
+  nodeConfig="\
+    leader-ip=$leaderIp \
+    metrics-config=$SOLANA_METRICS_CONFIG \
+    rust-log=$RUST_LOG \
+  "
+  # shellcheck disable=SC2086 # Don't want to double quote "$nodeConfig"
+  sudo snap set solana $nodeConfig
+
   solana_bench_tps=/snap/bin/solana.bench-tps
   ;;
 local)
