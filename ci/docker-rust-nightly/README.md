@@ -14,7 +14,7 @@ introduce breaking changes.
 To update the pinned version:
 1. Locally update the `ARG nightly=xyz` line in `ci/docker-rust-nightly/Dockerfile`
 1. Run `ci/docker-rust-nightly/build.sh` to rebuild the nightly image locally
-1. Run `ci/docker-run.sh --nopull solanalabs/rust-nightly ci/test-nightly.sh` to
+1. Run `SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly ci/test-nightly.sh` to
    confirm the new nightly image builds.  Fix any issues as needed
 1. Run `CI=true ci/docker-rust-nightly/build.sh` to push the new nightly image to dockerhub.com.
    **Note that all CI may be broken now until the next step is completed.**
