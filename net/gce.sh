@@ -182,12 +182,12 @@ create)
   echo ==================================================================
   echo
   gcloud_CreateInstances "$prefix-leader" 1 \
-    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator" "$here/remote/remote_startup.sh"
+    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator" "$here/remote/remote-startup.sh"
   gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" \
-    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator" "$here/remote/remote_startup.sh"
+    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator" "$here/remote/remote-startup.sh"
   if [[ -n $clientNodeCount ]]; then
     gcloud_CreateInstances "$prefix-client" "$clientNodeCount" \
-      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator" "$here/remote/remote_startup.sh"
+      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator" "$here/remote/remote-startup.sh"
   fi
 
   prepareInstancesAndWriteConfigFile
