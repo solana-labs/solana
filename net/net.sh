@@ -13,7 +13,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [start|stop]
+usage: $0 [start|stop|restart|sanity] [command-specific options]
 
 Operate a configured testnet
 
@@ -114,16 +114,11 @@ build() {
 
 common_start_setup() {
   declare ipAddress=$1
-  declare logFile="$2"
-
-  (
-    set -x
-    test -d "$SOLANA_ROOT"
-    ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
-    rsync -vPr -e "ssh ${sshOptions[*]}" \
-      "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
-      "$ipAddress":~/solana/
-  ) >> "$logFile" 2>&1
+  test -d "$SOLANA_ROOT"
+  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
+  rsync -vPrc -e "ssh ${sshOptions[*]}" \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
+    "$ipAddress":~/solana/
 }
 
 startLeader() {
@@ -131,18 +126,17 @@ startLeader() {
   declare logFile="$2"
   echo "--- Starting leader: $leaderIp"
 
-  common_start_setup "$ipAddress" "$logFile"
-
   # Deploy local binaries to leader.  Validators and clients later fetch the
   # binaries from the leader.
   (
     set -x
+    common_start_setup "$ipAddress" || exit 1
     case $deployMethod in
     snap)
-      rsync -vPr -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
       ;;
     local)
-      rsync -vPr -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
     *)
       usage "Internal error: invalid deployMethod: $deployMethod"
@@ -151,7 +145,11 @@ startLeader() {
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh $deployMethod leader $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
-  ) >> "$logFile" 2>&1
+  ) >> "$logFile" 2>&1 || {
+    cat "$logFile"
+    echo "^^^ +++"
+    exit 1
+  }
 }
 
 startValidator() {
@@ -160,8 +158,8 @@ startValidator() {
 
   echo "--- Starting validator: $leaderIp"
   (
-    common_start_setup "$ipAddress" /dev/stdout
     set -x
+    common_start_setup "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh $deployMethod validator $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
   ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
@@ -173,14 +171,18 @@ startValidator() {
 startClient() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "--- Starting client: $leaderIp"
-  common_start_setup "$ipAddress" "$logFile"
+  echo "--- Starting client: $ipAddress"
 
   (
     set -x
+    common_start_setup "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
-  ) >> "$logFile" 2>&1
+  ) >> "$logFile" 2>&1 || {
+    cat "$logFile"
+    echo "^^^ +++"
+    exit 1
+  }
 }
 
 sanity() {
@@ -191,7 +193,7 @@ sanity() {
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$leaderIp" \
       "./solana/net/remote/remote-sanity.sh $sanityExtraArgs"
-  )
+  ) || exit 1
 }
 
 start() {

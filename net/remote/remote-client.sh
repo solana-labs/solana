@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 cd "$(dirname "$0")"/../..
 
@@ -22,12 +22,13 @@ scripts/install-earlyoom.sh
 
 case $deployMethod in
 snap)
-  rsync -vPr "$leaderIp:~/solana/solana.snap" .
+  rsync -vPrc "$leaderIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
   rm solana.snap
 
   nodeConfig="\
     leader-ip=$leaderIp \
+    default-metrics-rate=1 \
     metrics-config=$SOLANA_METRICS_CONFIG \
     rust-log=$RUST_LOG \
   "
@@ -39,9 +40,10 @@ snap)
 local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
+  export SOLANA_DEFAULT_METRICS_RATE=1
   export RUST_LOG
 
-  rsync -vPr "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  rsync -vPrc "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   solana_bench_tps="multinode-demo/client.sh $leaderIp:~/solana"
   ;;
 *)
@@ -49,14 +51,16 @@ local)
   exit 1
 esac
 
-scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
+scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
 
 while true; do
   echo "=== Client start: $(date)" >> client.log
-  clientCommand="$solana_bench_tps --num-nodes $numNodes --loop -s 600 --sustained -t threadCount"
+  clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
   echo "$ $clientCommand" >> client.log
 
+  set +e
   $clientCommand >> client.log 2>&1
+  set -e
 
   $metricsWriteDatapoint "testnet-deploy,name=$netBasename clientexit=1"
   echo Error: bench-tps should never exit | tee -a client.log
