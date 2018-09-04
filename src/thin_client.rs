@@ -291,11 +291,11 @@ impl ThinClient {
                         ThinClient::submit_poll_balance_metrics(&now.elapsed());
                         return Err(e);
                     }
-                    -1
+                    0
                 }
             };
 
-            if balance >= 0 {
+            if balance != 0 {
                 ThinClient::submit_poll_balance_metrics(&now.elapsed());
                 return Ok(balance);
             }
