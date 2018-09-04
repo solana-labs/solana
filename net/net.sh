@@ -18,15 +18,20 @@ usage: $0 [start|stop]
 Operate a configured testnet
 
  start - Start the network
+ sanity - Sanity check the network
  stop  - Stop the network
 
  start-specific options:
-   -S snapFilename     - Deploy the specified Snap file
-   -s edge|beta|stable - Deploy the latest Snap on the specified Snap release channel
-   -a "setup args"     - Optional additional arguments for ./multinode-demo/setup.sh
+   -S snapFilename      - Deploy the specified Snap file
+   -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
+   -a "setup args"      - Optional additional arguments for ./multinode-demo/setup.sh
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
+
+ sanity-specific options:
+   -o noLedgerVerify    - Skip ledger verification
+   -o noValidatorSanity - Skip validatory sanity
 
  stop-specific options:
    none
@@ -39,13 +44,15 @@ snapChannel=
 snapFilename=
 nodeSetupArgs=
 deployMethod=local
+sanityExtraArgs=
 
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = start || $command = stop ]] || usage "Invalid command: $command"
+[[ $command = start || $command = sanity || $command = stop ]] ||
+  usage "Invalid command: $command"
 
-while getopts "h?S:s:a:" opt; do
+while getopts "h?S:s:a:o:" opt; do
   case $opt in
   h | \?)
     usage
@@ -68,6 +75,17 @@ while getopts "h?S:s:a:" opt; do
     ;;
   a)
     nodeSetupArgs="$OPTARG"
+    ;;
+  o)
+    case $OPTARG in
+    noLedgerVerify|noValidatorSanity)
+      sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
+      ;;
+    *)
+      echo "Error: unknown option: $OPTARG"
+      exit 1
+      ;;
+    esac
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -148,7 +166,7 @@ startValidator() {
     set -x
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote_node.sh $deployMethod validator $leaderIp \"$nodeSetupArgs\" \"$RUST_LOG\""
-   ) >> "$logFile"
+  ) >> "$logFile"
 }
 
 startClient() {
@@ -160,13 +178,24 @@ startClient() {
 
   declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
 
-  ssh "${sshOptions[@]}" -f "$ipAddress" \
-    "./solana/net/remote/remote_client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\"" >> "$logFile"
+  (
+    set -x
+    ssh "${sshOptions[@]}" -f "$ipAddress" \
+      "./solana/net/remote/remote_client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
+  ) >> "$logFile"
+}
+
+sanity() {
+  declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
+  (
+    set -x
+    # shellcheck disable=SC2029 # remote_client.sh are expanded on client side intentionally...
+    ssh "${sshOptions[@]}" "$leaderIp" \
+      "./solana/net/remote/remote_sanity.sh $deployMethod $leaderIp $expectedNodeCount $sanityExtraArgs"
+  )
 }
 
 start() {
-  [[ $command = "start" ]] || return
-
   case $deployMethod in
   snap)
     if [[ -n $snapChannel ]]; then
@@ -201,6 +230,8 @@ start() {
   done
   wait
   validatorDeployTime=$SECONDS
+
+  sanity
 
   SECONDS=0
   for ipAddress in "${clientIpList[@]}"; do
@@ -261,6 +292,18 @@ stop() {
   echo "Stopping nodes took $SECONDS seconds"
 }
 
-stop
-start
-
+case $command in
+start)
+  stop
+  start
+  ;;
+sanity)
+  sanity
+  ;;
+stop)
+  stop
+  ;;
+*)
+  echo "Internal error: Unknown command: $command"
+  exit 1
+esac
