@@ -28,11 +28,12 @@ scripts/install-earlyoom.sh
 case $deployMethod in
 snap)
   SECONDS=0
-  rsync -vPr "$leaderIp:~/solana/solana.snap" .
+  rsync -vPrc "$leaderIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
   commonNodeConfig="\
     leader-ip=$leaderIp \
+    default-metrics-rate=1 \
     metrics-config=$SOLANA_METRICS_CONFIG \
     rust-log=$RUST_LOG \
     setup-args=$setupArgs \
@@ -65,6 +66,7 @@ local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   export RUST_LOG
+  export SOLANA_DEFAULT_METRICS_RATE=1
   if [[ -e /dev/nvidia0 ]]; then
     export SOLANA_CUDA=1
   fi
@@ -80,7 +82,7 @@ local)
     ./multinode-demo/leader.sh > leader.log 2>&1 &
     ;;
   validator)
-    rsync -vPr "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+    rsync -vPrc "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
 
     # shellcheck disable=SC2086 # Don't want to double quote "$setupArgs"
     ./multinode-demo/setup.sh -t validator -p $setupArgs

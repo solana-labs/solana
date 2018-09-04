@@ -100,10 +100,13 @@ fi
 echo "--- $leaderIp: validator sanity"
 if $validatorSanity; then
   (
+    set -ex -o pipefail
     ./multinode-demo/setup.sh -t validator
-    set -e pipefail
-    timeout 10s ./multinode-demo/validator.sh "$leaderIp" 2>&1 | tee validator.log
-  )
+    timeout 10s ./multinode-demo/validator.sh "$leaderIp" "$leaderIp:8001" 2>&1 | tee validator.log
+  ) || {
+    exitcode=$?
+    [[ $exitcode -eq 124 ]] || exit $exitcode
+  }
   wc -l validator.log
   if grep -C100 panic validator.log; then
     echo "^^^ +++"
