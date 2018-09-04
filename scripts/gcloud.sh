@@ -75,17 +75,18 @@ gcloud_ForEachInstance() {
 }
 
 #
-# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName] [machineType] [accelerator]
+# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName] [machineType] [accelerator] [startupScript]
 #
 # Creates one more identical instances.
 #
-# namePrefix   - unique string to prefix all the instance names with
-# numNodes     - number of instances to create
-# zone         - zone to create the instances in
-# imageName    - Disk image for the instances
-# machineType  - GCE machine type
-# accelerator  - Optional accelerator to attach to the instance(s), see
-#                eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
+# namePrefix    - unique string to prefix all the instance names with
+# numNodes      - number of instances to create
+# zone          - zone to create the instances in
+# imageName     - Disk image for the instances
+# machineType   - GCE machine type
+# accelerator   - Optional accelerator to attach to the instance(s), see
+#                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
+# startupScript - Optional startup script to execute when the instance boots
 #
 # Tip: use gcloud_FindInstances to locate the instances once this function
 #      returns
@@ -96,6 +97,7 @@ gcloud_CreateInstances() {
   declare imageName="$4"
   declare machineType="$5"
   declare optionalAccelerator="$6"
+  declare optionalStartupScript="$7"
 
   declare nodes
   if [[ $numNodes = 1 ]]; then
@@ -116,6 +118,12 @@ gcloud_CreateInstances() {
       "--accelerator=$optionalAccelerator"
       --maintenance-policy TERMINATE
       --restart-on-failure
+    )
+  fi
+
+  if [[ -n $optionalStartupScript ]]; then
+    args+=(
+      --metadata-from-file "startup-script=$optionalStartupScript"
     )
   fi
 

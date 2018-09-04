@@ -120,6 +120,7 @@ common_start_setup() {
   (
     set -x
     test -d "$SOLANA_ROOT"
+    ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
     rsync -vPrz -e "ssh ${sshOptions[*]}" \
       "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
       "$ipAddress":~/solana/

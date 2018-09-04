@@ -123,21 +123,6 @@ prepareInstancesAndWriteConfigFile() {
     fi
   }
 
-  prepareInstance() {
-    declare name="$1"
-    declare publicIp="$3"
-
-    # TODO: Make the following a requirement of $imageName
-    #       instead of a manual install
-    ssh "${sshOptions[@]}" "$publicIp" "
-      set -ex;
-      sudo systemctl disable apt-daily.service # disable run when system boot
-      sudo systemctl disable apt-daily.timer   # disable timer run
-      sudo apt-get --assume-yes install rsync libssl-dev;
-      mkdir -p ~/solana ~/.cargo/bin;
-    "
-  }
-
   gcloud_FindInstances "name=$prefix-leader" show
   [[ ${#instances[@]} -eq 1 ]] || {
     echo "Unable to start leader"
@@ -152,7 +137,6 @@ prepareInstancesAndWriteConfigFile() {
 
   echo "leaderIp=()" >> "$configFile"
   gcloud_ForEachInstance recordInstanceIp leaderIp
-  gcloud_ForEachInstance prepareInstance
 
   gcloud_FindInstances "name~^$prefix-validator" show
   [[ ${#instances[@]} -gt 0 ]] || {
@@ -162,14 +146,12 @@ prepareInstancesAndWriteConfigFile() {
   echo "validatorIpList=()" >> "$configFile"
   gcloud_PrepInstancesForSsh "$gcloud_username" "$sshPrivateKey"
   gcloud_ForEachInstance recordInstanceIp validatorIpList
-  gcloud_ForEachInstance prepareInstance
 
   echo "clientIpList=()" >> "$configFile"
   gcloud_FindInstances "name~^$prefix-client" show
   if [[ ${#instances[@]} -gt 0 ]]; then
     gcloud_PrepInstancesForSsh "$gcloud_username" "$sshPrivateKey"
     gcloud_ForEachInstance recordInstanceIp clientIpList
-    gcloud_ForEachInstance prepareInstance
   fi
 
   echo "Wrote $configFile"
@@ -196,12 +178,12 @@ create)
   echo ==================================================================
   echo
   gcloud_CreateInstances "$prefix-leader" 1 \
-    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator"
+    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator" "$here/remote/remote_startup.sh"
   gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" \
-    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator"
+    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator" "$here/remote/remote_startup.sh"
   if [[ -n $clientNodeCount ]]; then
     gcloud_CreateInstances "$prefix-client" "$clientNodeCount" \
-      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator"
+      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator" "$here/remote/remote_startup.sh"
   fi
 
   prepareInstancesAndWriteConfigFile
