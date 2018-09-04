@@ -7,7 +7,6 @@ use solana::ledger::{next_entries, reconstruct_entries_from_blobs, Block};
 use solana::packet::BlobRecycler;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::transaction::Transaction;
-use std::collections::VecDeque;
 use test::Bencher;
 
 #[bench]
@@ -21,8 +20,7 @@ fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
 
     let blob_recycler = BlobRecycler::default();
     bencher.iter(|| {
-        let mut blob_q = VecDeque::new();
-        entries.to_blobs(&blob_recycler, &mut blob_q);
-        assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
+        let blobs = entries.to_blobs(&blob_recycler);
+        assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap(), entries);
     });
 }
