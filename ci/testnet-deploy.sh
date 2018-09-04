@@ -264,11 +264,14 @@ client_start() {
   declare vmPublicIp=$3
   declare count=$4
 
-  nodeConfig="mode=client"
+  nodeConfig="\
+      rust-log=$RUST_LOG \
+      default-metrics-rate=$SOLANA_DEFAULT_METRICS_RATE \
+      metrics-config=$SOLANA_METRICS_CONFIG \
+      setup-args=$SOLANA_SETUP_ARGS \
+      leader-ip=$publicIp \
+    "
 
-  # TODO: rework client snap stuff.
-  #  the code below disables "SNAP" behavior for the hand-invoked snap command
-  #  to fix: make the client a daemon like the rest
   vm_exec "$vmName" "$vmZone" "$vmPublicIp" \
     "Starting client $count:" \
     "\
@@ -276,8 +279,6 @@ client_start() {
       sudo snap set solana $nodeConfig; \
       snap info solana; \
       sudo snap get solana; \
-      # begin hack \
-      unset SNAP; \
       threadCount=\$(nproc); \
       if [[ \$threadCount -gt 4 ]]; then threadCount=4; fi; \
       tmux kill-session -t solana; \
