@@ -666,13 +666,18 @@ mod tests {
         );
         let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
 
-        let tx_small_size = serialized_size(&tx_small).unwrap();
-        let tx_large_size = serialized_size(&tx_large).unwrap();
+        let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
+        let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
+        let entry_size = serialized_size(&Entry {
+            num_hashes: 0,
+            id: Hash::default(),
+            transactions: vec![],
+            has_more: false,
+        }).unwrap() as usize;
         assert!(tx_small_size < tx_large_size);
-        assert!(tx_large_size < PACKET_DATA_SIZE as u64);
+        assert!(tx_large_size < PACKET_DATA_SIZE);
 
-        // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / PACKET_DATA_SIZE) - 1;
+        let threshold = (BLOB_DATA_SIZE - entry_size) / tx_small_size;
 
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];
@@ -690,8 +695,8 @@ mod tests {
 
         // verify the split with small transactions followed by large
         // transactions
-        let mut transactions = vec![tx_small.clone(); BLOB_DATA_SIZE / (tx_small_size as usize)];
-        let large_transactions = vec![tx_large.clone(); BLOB_DATA_SIZE / (tx_large_size as usize)];
+        let mut transactions = vec![tx_small.clone(); BLOB_DATA_SIZE / tx_small_size];
+        let large_transactions = vec![tx_large.clone(); BLOB_DATA_SIZE / tx_large_size];
 
         transactions.extend(large_transactions);
 
