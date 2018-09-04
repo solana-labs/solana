@@ -150,7 +150,7 @@ startLeader() {
     esac
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote_node.sh $deployMethod leader $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod leader $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
   ) >> "$logFile" 2>&1
 }
 
@@ -163,7 +163,7 @@ startValidator() {
     common_start_setup "$ipAddress" /dev/stdout
     set -x
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote_node.sh $deployMethod validator $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod validator $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
   ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
   declare pid=$!
   ln -sfT "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
@@ -179,7 +179,7 @@ startClient() {
   (
     set -x
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote_client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1
 }
 
@@ -188,9 +188,9 @@ sanity() {
   echo "--- Sanity"
   (
     set -x
-    # shellcheck disable=SC2029 # remote_client.sh args are expanded on client side intentionally
+    # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$leaderIp" \
-      "./solana/net/remote/remote_sanity.sh $sanityExtraArgs"
+      "./solana/net/remote/remote-sanity.sh $sanityExtraArgs"
   )
 }
 
@@ -293,7 +293,7 @@ stop_node() {
         sudo snap set solana mode=;
         sudo snap remove solana;
       fi;
-      for pattern in solana- remote_ oom-monitor; do pkill -9 \$pattern; done;
+      for pattern in solana- remote- oom-monitor; do pkill -9 \$pattern; done;
     "
   ) || true
 }
