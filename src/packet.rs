@@ -178,7 +178,8 @@ pub enum BlobError {
 }
 
 pub struct Recycler<T> {
-    gc: Arc<Mutex<Vec<Arc<RwLock<T>>>>>,
+    #[cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
+    gc: Arc<Mutex<Vec<(Arc<RwLock<T>>, &'static str)>>>,
 }
 
 impl<T: Default> Default for Recycler<T> {
@@ -202,7 +203,7 @@ impl<T: Default + Reset> Recycler<T> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
 
         loop {
-            if let Some(x) = gc.pop() {
+            if let Some((x, who)) = gc.pop() {
                 // Only return the item if this recycler is the last reference to it.
                 // Remove this check once `T` holds a Weak reference back to this
                 // recycler and implements `Drop`. At the time of this writing, Weak can't
@@ -215,6 +216,11 @@ impl<T: Default + Reset> Recycler<T> {
                     //   to retransmmit_request
                     //
                     // warn!("Recycled item still in use. Booting it.");
+                    trace!(
+                        "Recycled item from \"{}\" still in use. {} Booting it.",
+                        who,
+                        Arc::strong_count(&x)
+                    );
                     continue;
                 }
 
@@ -228,9 +234,9 @@ impl<T: Default + Reset> Recycler<T> {
             }
         }
     }
-    pub fn recycle(&self, x: Arc<RwLock<T>>) {
+    pub fn recycle(&self, x: Arc<RwLock<T>>, who: &'static str) {
         let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
-        gc.push(x);
+        gc.push((x, who));
     }
 }
 
@@ -487,7 +493,7 @@ impl Blob {
                     Err(e)?;
                 }
             }
-            re.recycle(r);
+            re.recycle(r, "send_to");
         }
         Ok(())
     }
@@ -509,7 +515,7 @@ mod tests {
     pub fn packet_recycler_test() {
         let r = PacketRecycler::default();
         let p = r.allocate();
-        r.recycle(p);
+        r.recycle(p, "recycler_test");
         assert_eq!(r.gc.lock().unwrap().len(), 1);
         let _ = r.allocate();
         assert_eq!(r.gc.lock().unwrap().len(), 0);
@@ -527,7 +533,7 @@ mod tests {
         // that is still referenced outside the recycler.
         let r = Recycler::<u8>::default();
         let x0 = r.allocate();
-        r.recycle(x0.clone());
+        r.recycle(x0.clone(), "leaked_recyclable:1");
         assert_eq!(Arc::strong_count(&x0), 2);
         assert_eq!(r.gc.lock().unwrap().len(), 1);
 
@@ -542,8 +548,8 @@ mod tests {
         let r = Recycler::<u8>::default();
         let x0 = r.allocate();
         let x1 = r.allocate();
-        r.recycle(x0); // <-- allocate() of this will require locking the recycler's stack.
-        r.recycle(x1.clone()); // <-- allocate() of this will cause it to be dropped and recurse.
+        r.recycle(x0, "leaked_recyclable_recursion:1"); // <-- allocate() of this will require locking the recycler's stack.
+        r.recycle(x1.clone(), "leaked_recyclable_recursion:2"); // <-- allocate() of this will cause it to be dropped and recurse.
         assert_eq!(Arc::strong_count(&x1), 2);
         assert_eq!(r.gc.lock().unwrap().len(), 2);
 
@@ -555,7 +561,7 @@ mod tests {
     pub fn blob_recycler_test() {
         let r = BlobRecycler::default();
         let p = r.allocate();
-        r.recycle(p);
+        r.recycle(p, "blob_recycler_test");
         assert_eq!(r.gc.lock().unwrap().len(), 1);
         let _ = r.allocate();
         assert_eq!(r.gc.lock().unwrap().len(), 0);
@@ -580,7 +586,7 @@ mod tests {
             assert_eq!(m.meta.addr(), saddr);
         }
 
-        r.recycle(p);
+        r.recycle(p, "packet_send_recv");
     }
 
     #[test]
@@ -636,7 +642,7 @@ mod tests {
         let mut rv = Blob::recv_from(&r, &reader).unwrap();
         let rp = rv.pop_front().unwrap();
         assert_eq!(rp.write().unwrap().meta.size, 1024);
-        r.recycle(rp);
+        r.recycle(rp, "blob_ip6_send_recv");
     }
 
     #[test]

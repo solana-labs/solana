@@ -380,7 +380,7 @@ fn is_missing(
                 blob_idx,
             );
             // recycle it
-            recycler.recycle(blob);
+            recycler.recycle(blob, "is_missing");
             true
         }
     } else {
@@ -814,7 +814,7 @@ mod test {
             blobs.push(blob);
         }
         for blob in blobs {
-            blob_recycler.recycle(blob);
+            blob_recycler.recycle(blob, "pollute_recycler");
         }
     }
 
@@ -910,7 +910,10 @@ mod test {
         let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
 
-        blob_recycler.recycle(window[erase_offset].coding.clone().unwrap());
+        blob_recycler.recycle(
+            window[erase_offset].coding.clone().unwrap(),
+            "window_recover_basic",
+        );
         window[erase_offset].coding = None;
 
         print_window(&window);

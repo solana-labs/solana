@@ -114,7 +114,7 @@ impl BankingStage {
             signal_sender.send(Signal::Transactions(transactions))?;
             debug!("done process_transactions");
 
-            packet_recycler.recycle(msgs);
+            packet_recycler.recycle(msgs, "process_transactions");
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());

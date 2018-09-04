@@ -49,7 +49,7 @@ fn sink(
         let timer = Duration::new(1, 0);
         if let Ok(msgs) = r.recv_timeout(timer) {
             rvs.fetch_add(msgs.read().unwrap().packets.len(), Ordering::Relaxed);
-            recycler.recycle(msgs);
+            recycler.recycle(msgs, "sink");
         }
     })
 }

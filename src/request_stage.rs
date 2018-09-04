@@ -64,7 +64,7 @@ impl RequestStage {
                 //don't wake up the other side if there is nothing
                 blob_sender.send(blobs)?;
             }
-            packet_recycler.recycle(msgs);
+            packet_recycler.recycle(msgs, "process_request_packets");
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
