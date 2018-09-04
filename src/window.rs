@@ -198,7 +198,7 @@ fn add_block_to_retransmit_queue(
 
 fn retransmit_all_leader_blocks(
     maybe_leader: Option<NodeInfo>,
-    dq: &SharedBlobs,
+    dq: &[SharedBlob],
     debug_id: u64,
     recycler: &BlobRecycler,
     consumed: u64,
