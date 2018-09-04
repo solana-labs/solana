@@ -92,7 +92,7 @@ Before you start a fullnode, make sure you know the IP address of the machine yo
 want to be the leader for the demo, and make sure that udp ports 8000-10000 are
 open on all the machines you want to test with.
 
-Now start the server in a seperate shell:
+Now start the server in a separate shell:
 
 ```bash
 $ ./multinode-demo/leader.sh
@@ -106,7 +106,7 @@ Multinode Testnet
 ---
 
 To run a multinode testnet, after starting a leader node, spin up some validator nodes in
-seperate shells:
+separate shells:
 
 ```bash
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
@@ -131,7 +131,7 @@ Now that your singlenode or multinode testnet is up and running let's send it so
 the expected number of nodes in the network.  If running singlenode pass 1, if multinode pass the number
 of validators you started.
 
-In a seperate shell start the client:
+In a separate shell start the client:
 
 ```bash
 $ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 1
