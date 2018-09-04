@@ -69,7 +69,7 @@ gcloud_ForEachInstance() {
     declare name zone publicIp privateIp
     IFS=: read -r name zone publicIp privateIp < <(echo "$info")
 
-    eval "$cmd" "$name" "$zone" "$publicIp" "privateIp" "$count" "$@"
+    eval "$cmd" "$name" "$zone" "$publicIp" "$privateIp" "$count" "$@"
     count=$((count + 1))
   done
 }
