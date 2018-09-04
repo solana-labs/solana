@@ -17,9 +17,10 @@ usage: $0 [start|stop]
 
 Operate a configured testnet
 
- start - Start the network
- sanity - Sanity check the network
- stop  - Stop the network
+ start    - Start the network
+ sanity   - Sanity check the network
+ stop     - Stop the network
+ restart  - Shortcut for stop then start
 
  start-specific options:
    -S snapFilename      - Deploy the specified Snap file
@@ -29,7 +30,7 @@ Operate a configured testnet
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
 
- sanity-specific options:
+ sanity/start-specific options:
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip validatory sanity
 
@@ -49,8 +50,6 @@ sanityExtraArgs=
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = start || $command = sanity || $command = stop ]] ||
-  usage "Invalid command: $command"
 
 while getopts "h?S:s:a:o:" opt; do
   case $opt in
@@ -58,7 +57,6 @@ while getopts "h?S:s:a:o:" opt; do
     usage
     ;;
   S)
-    [[ $command = start ]] || usage "-s is only valid with the 'start' command"
     snapFilename=$OPTARG
     [[ -f $snapFilename ]] || usage "Snap not readable: $snapFilename"
     deployMethod=snap
@@ -67,6 +65,7 @@ while getopts "h?S:s:a:o:" opt; do
     case $OPTARG in
     edge|beta|stable)
       snapChannel=$OPTARG
+      deployMethod=snap
       ;;
     *)
       usage "Invalid snap channel: $OPTARG"
@@ -94,6 +93,7 @@ while getopts "h?S:s:a:o:" opt; do
 done
 
 loadConfigFile
+expectedNodeCount=$((${#validatorIpList[@]} + 1))
 
 build() {
   declare MAYBE_DOCKER=
@@ -103,8 +103,7 @@ build() {
   SECONDS=0
   (
     cd "$SOLANA_ROOT"
-    echo "****************"
-    echo "Build started at $(date)"
+    echo "--- Build started at $(date)"
 
     set -x
     rm -rf farf
@@ -121,17 +120,16 @@ common_start_setup() {
     set -x
     test -d "$SOLANA_ROOT"
     ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
-    rsync -vPrz -e "ssh ${sshOptions[*]}" \
+    rsync -vPr -e "ssh ${sshOptions[*]}" \
       "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
       "$ipAddress":~/solana/
-  ) >> "$logFile"
+  ) >> "$logFile" 2>&1
 }
 
 startLeader() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "****************"
-  echo "Starting leader: $leaderIp"
+  echo "--- Starting leader: $leaderIp"
 
   common_start_setup "$ipAddress" "$logFile"
 
@@ -141,58 +139,58 @@ startLeader() {
     set -x
     case $deployMethod in
     snap)
-      rsync -vPrz -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
+      rsync -vPr -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
       ;;
     local)
-      rsync -vPrz -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
+      rsync -vPr -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
     *)
       usage "Internal error: invalid deployMethod: $deployMethod"
       ;;
     esac
 
-    ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote_node.sh $deployMethod leader $leaderIp \"$nodeSetupArgs\" \"$RUST_LOG\""
-  ) >> "$logFile"
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote_node.sh $deployMethod leader $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+  ) >> "$logFile" 2>&1
 }
 
 startValidator() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "*******************"
-  echo "Starting validator: $leaderIp"
-  common_start_setup "$ipAddress" "$logFile"
 
+  echo "--- Starting validator: $leaderIp"
   (
+    common_start_setup "$ipAddress" /dev/stdout
     set -x
-    ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote_node.sh $deployMethod validator $leaderIp \"$nodeSetupArgs\" \"$RUST_LOG\""
-  ) >> "$logFile"
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote_node.sh $deployMethod validator $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+  ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
+  declare pid=$!
+  ln -sfT "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  pids+=("$pid")
 }
 
 startClient() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "****************"
-  echo "Starting client: $leaderIp"
+  echo "--- Starting client: $leaderIp"
   common_start_setup "$ipAddress" "$logFile"
-
-  declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
 
   (
     set -x
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote_client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
-  ) >> "$logFile"
+  ) >> "$logFile" 2>&1
 }
 
 sanity() {
   declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
+  echo "--- Sanity"
   (
     set -x
-    # shellcheck disable=SC2029 # remote_client.sh are expanded on client side intentionally...
+    # shellcheck disable=SC2029 # remote_client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$leaderIp" \
-      "./solana/net/remote/remote_sanity.sh $deployMethod $leaderIp $expectedNodeCount $sanityExtraArgs"
+      "./solana/net/remote/remote_sanity.sh $sanityExtraArgs"
   )
 }
 
@@ -200,13 +198,25 @@ start() {
   case $deployMethod in
   snap)
     if [[ -n $snapChannel ]]; then
+      rm -f "$SOLANA_ROOT"/solana_*.snap
       if [[ $(uname) != Linux ]]; then
-        echo Error: snap channel deployment only supported in Linux
-        exit 1
+        (
+          set -x
+          SOLANA_DOCKER_RUN_NOSETUID=1 "$SOLANA_ROOT"/ci/docker-run.sh ubuntu:18.04 bash -c "
+            set -ex;
+            apt-get -qq update;
+            apt-get -qq -y install snapd;
+            snap download --channel=$snapChannel solana;
+          "
+        )
+      else
+        snap download --channel="$snapChannel" solana
       fi
-      usage "TODO: the snap download command below is probably wrong..."
-      snap download --"$snapChannel" solana
-      snapFilename=solana.snap
+      snapFilename="$(echo "$SOLANA_ROOT"/solana_*.snap)"
+      [[ -r $snapFilename ]] || {
+        echo "Error: Snap not readable: $snapFilename"
+        exit 1
+      }
     fi
     ;;
   local)
@@ -226,10 +236,21 @@ start() {
   leaderDeployTime=$SECONDS
 
   SECONDS=0
+  pids=()
   for ipAddress in "${validatorIpList[@]}"; do
-    startValidator "$ipAddress" "$netLogDir/validator-$ipAddress.log" &
+    startValidator "$ipAddress"
   done
-  wait
+
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    if ! $ok; then
+      cat "$netLogDir/validator-$pid.log"
+      echo ^^^ +++
+      exit 1
+    fi
+  done
+
   validatorDeployTime=$SECONDS
 
   sanity
@@ -239,7 +260,6 @@ start() {
     startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
   done
   clientDeployTime=$SECONDS
-  wait
 
   if [[ $deployMethod = "snap" ]]; then
     IFS=\  read -r _ networkVersion _ < <(
@@ -264,8 +284,7 @@ start() {
 
 stop_node() {
   local ipAddress=$1
-  echo "**************"
-  echo "Stopping node: $ipAddress"
+  echo "--- Stopping node: $ipAddress"
   (
     set -x
     ssh "${sshOptions[@]}" "$ipAddress" "
@@ -273,8 +292,8 @@ stop_node() {
       if snap list solana; then
         sudo snap set solana mode=;
         sudo snap remove solana;
-      fi; \
-      pkill -9 solana- remote_ oom-monitor;
+      fi;
+      for pattern in solana- remote_ oom-monitor; do pkill -9 \$pattern; done;
     "
   ) || true
 }
@@ -294,8 +313,11 @@ stop() {
 }
 
 case $command in
-start)
+restart)
   stop
+  start
+  ;;
+start)
   start
   ;;
 sanity)

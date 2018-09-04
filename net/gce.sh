@@ -169,6 +169,7 @@ delete)
     exit 0
   fi
   gcloud_DeleteInstances
+  rm -f "$configFile"
   ;;
 
 create)
