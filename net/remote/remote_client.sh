@@ -1,14 +1,15 @@
 #!/bin/bash -e
 
+cd "$(dirname "$0")"/../..
+
 deployMethod="$1"
-netEntrypoint="$2"
+leaderIp="$2"
 numNodes="$3"
 RUST_LOG="$4"
 [[ -n $deployMethod ]] || exit
-[[ -n $netEntrypoint ]] || exit
+[[ -n $leaderIp ]] || exit
 [[ -n $numNodes ]] || exit
 
-cd "$(dirname "$0")"/../..
 source net/common.sh
 loadConfigFile
 
@@ -17,14 +18,19 @@ if [[ $threadCount -gt 4 ]]; then
   threadCount=4
 fi
 
-./script/install-earlyoom.sh
+scripts/install-earlyoom.sh
 
 case $deployMethod in
 snap)
+  rsync -vPr "$leaderIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
   rm solana.snap
 
-  sudo snap set solana metrics-config="$SOLANA_METRICS_CONFIG" rust-log="$RUST_LOG"
+  sudo snap set solana "\
+      leader-ip=$leaderIp \
+      metrics-config=$SOLANA_METRICS_CONFIG \
+      rust-log=$RUST_LOG \
+    "
   solana_bench_tps=/snap/bin/solana.bench-tps
   ;;
 local)
@@ -32,20 +38,19 @@ local)
   export USE_INSTALL=1
   export RUST_LOG
 
-  rsync -vPrz "$netEntrypoint:~/.cargo/bin/solana*" ~/.cargo/bin/
-  solana_bench_tps=multinode-demo/client.sh
-  netEntrypoint="$:~/solana"
+  rsync -vPr "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  solana_bench_tps="multinode-demo/client.sh $leaderIp:~/solana"
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
   exit 1
 esac
 
-./scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
+scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
 
 while true; do
   echo "=== Client start: $(date)" >> client.log
-  clientCommand="$solana_bench_tps $netEntrypoint $numNodes --loop -s 600 --sustained -t threadCount"
+  clientCommand="$solana_bench_tps --num-nodes $numNodes --loop -s 600 --sustained -t threadCount"
   echo "$ $clientCommand" >> client.log
 
   $clientCommand >> client.log 2>&1

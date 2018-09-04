@@ -1,14 +1,25 @@
 #!/bin/bash -e
 
-deployMethod="$1"
-netEntrypoint="$2"
-numNodes="$3"
+cd "$(dirname "$0")"/../..
 
-[[ -n $deployMethod ]] || exit
-[[ -n $netEntrypoint ]] || exit
-[[ -n $numNodes ]] || exit
+deployMethod=
+leaderIp=
+numNodes=
+# shellcheck source=/dev/null # deployConfig is written by remote_sanity.sh
+source deployConfig
 
-shift 3
+[[ -n $deployMethod ]] || {
+  echo "deployMethod empty"
+  exit 1
+}
+[[ -n $leaderIp ]] || {
+  echo "leaderIp empty"
+  exit 1
+}
+[[ -n $numNodes ]] || {
+  echo "numNodes empty"
+  exit 1
+}
 
 ledgerVerify=true
 validatorSanity=true
@@ -29,26 +40,25 @@ while [[ $1 = "-o" ]]; do
   esac
 done
 
-
-cd "$(dirname "$0")"/../..
 source net/common.sh
 loadConfigFile
 
 case $deployMethod in
 snap)
+  PATH="/snap/bin:$PATH"
   export USE_SNAP=1
-  solana_bench_tps=/snap/bin/solana.bench-tps
-  solana_ledger_tool=/snap/bin/solana.ledger-tool
+
+  solana_bench_tps=solana.bench-tps
+  solana_ledger_tool=solana.ledger-tool
   ledger=/var/snap/solana/current/config/ledger
   ;;
 local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  solana_bench_tps=multinode-demo/client.sh
+  solana_bench_tps="multinode-demo/client.sh $leaderIp:~/solana"
   solana_ledger_tool=solana-ledger-tool
   ledger=config/ledger
-  netEntrypoint="$:~/solana"
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -56,19 +66,19 @@ local)
 esac
 
 
-echo "--- $netEntrypoint: wallet sanity"
+echo "--- $leaderIp: wallet sanity"
 (
   set -x
-  multinode-demo/test/wallet-sanity.sh "$netEntrypoint"
+  multinode-demo/test/wallet-sanity.sh "$leaderIp"
 )
 
-echo "--- $netEntrypoint: node count"
+echo "--- $leaderIp: node count"
 (
   set -x
-  $solana_bench_tps "$netEntrypoint" "$numNodes" -c
+  $solana_bench_tps --num-nodes "$numNodes" --converge-only
 )
 
-echo "--- $netEntrypoint: verify ledger"
+echo "--- $leaderIp: verify ledger"
 if $ledgerVerify; then
   if [[ -d $ledger ]]; then
     (
@@ -87,12 +97,12 @@ else
 fi
 
 
-echo "--- $netEntrypoint: validator sanity"
+echo "--- $leaderIp: validator sanity"
 if $validatorSanity; then
   (
     ./multinode-demo/setup.sh -t validator
     set -e pipefail
-    timeout 10s ./multinode-demo/validator.sh "$netEntrypoint" 2>&1 | tee validator.log
+    timeout 10s ./multinode-demo/validator.sh "$leaderIp" 2>&1 | tee validator.log
   )
   wc -l validator.log
   if grep -C100 panic validator.log; then
