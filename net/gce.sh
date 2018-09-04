@@ -123,6 +123,7 @@ prepareInstancesAndWriteConfigFile() {
     fi
   }
 
+  echo "Looking for leader instance..."
   gcloud_FindInstances "name=$prefix-leader" show
   [[ ${#instances[@]} -eq 1 ]] || {
     echo "Unable to start leader"
@@ -138,6 +139,7 @@ prepareInstancesAndWriteConfigFile() {
   echo "leaderIp=()" >> "$configFile"
   gcloud_ForEachInstance recordInstanceIp leaderIp
 
+  echo "Looking for validator instances..."
   gcloud_FindInstances "name~^$prefix-validator" show
   [[ ${#instances[@]} -gt 0 ]] || {
     echo "Unable to start validators"
@@ -148,6 +150,7 @@ prepareInstancesAndWriteConfigFile() {
   gcloud_ForEachInstance recordInstanceIp validatorIpList
 
   echo "clientIpList=()" >> "$configFile"
+  echo "Looking for client instances..."
   gcloud_FindInstances "name~^$prefix-client" show
   if [[ ${#instances[@]} -gt 0 ]]; then
     gcloud_PrepInstancesForSsh "$gcloud_username" "$sshPrivateKey"

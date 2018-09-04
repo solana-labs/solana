@@ -202,7 +202,7 @@ gcloud_FigureRemoteUsername() {
 }
 
 #
-# gcloud_PrepInstancesForSsh [username] [publicKey] [privateKey]
+# gcloud_PrepInstancesForSsh [username] [privateKey]
 #
 # Prepares all the instances in the `instances` array for ssh with the specified
 # keypair.  This eliminates the need to use the restrictive |gcloud compute ssh|,
@@ -215,6 +215,11 @@ gcloud_PrepInstancesForSsh() {
   declare username="$1"
   declare privateKey="$2"
   declare publicKey="$privateKey".pub
+  declare logDir=log/
+
+  mkdir -p $logDir
+  rm -rf $logDir/gcloud_PrepInstancesForSsh-*
+
   [[ -r $publicKey ]] || {
     echo "Unable to read public key: $publicKey"
     exit 1
@@ -225,9 +230,17 @@ gcloud_PrepInstancesForSsh() {
     exit 1
   }
 
+  [[ -d $logDir ]] || {
+    echo "logDir does not exist: $logDir"
+    exit 1
+  }
+
+  declare -a pids
   for instanceInfo in "${instances[@]}"; do
     declare name zone publicIp
     IFS=: read -r name zone publicIp _ < <(echo "$instanceInfo")
+
+    logFile="$logDir/gcloud_PrepInstancesForSsh-$name.log"
     (
       set -x
 
@@ -247,13 +260,26 @@ gcloud_PrepInstancesForSsh() {
           StrictHostKeyChecking no
         \" > .ssh/config;
       "
-      #gcloud compute scp --zone "$zone" "$publicKey" "$name":.ssh/authorized_keys
       scp \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -i "$privateKey" \
         "$privateKey" "$username@$publicIp:.ssh/id_testnet"
-    )
+    ) > "$logFile" 2>&1 &
+    declare pid=$!
+
+    ln -sfT "$logFile" "$logDir/gcloud_PrepInstancesForSsh-$pid.log"
+    pids+=("$pid")
+  done
+
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    if ! $ok; then
+      cat "$logDir/gcloud_PrepInstancesForSsh-$pid.log"
+      echo ^^^ +++
+      exit 1
+    fi
   done
 }
 
