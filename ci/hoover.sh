@@ -40,10 +40,10 @@ echo --- Remove unused docker networks
   docker network prune -f
 )
 
-echo "--- Delete /tmp files older than 1 day owned by $(whoami)"
+echo "--- Delete /tmp files older than 1 day owned by $(id -un)"
 (
   set -x
-  find /tmp -maxdepth 1 -user "$(whoami)" -mtime +1 -print0 | xargs -0 rm -rf
+  find /tmp -maxdepth 1 -user "$(id -un)" -mtime +1 -print0 | xargs -0 rm -rf
 )
 
 echo --- Deleting stale buildkite agent build directories

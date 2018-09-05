@@ -75,7 +75,8 @@ gcloud_ForEachInstance() {
 }
 
 #
-# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName] [machineType] [accelerator] [startupScript]
+# gcloud_CreateInstances [namePrefix] [numNodes] [zone] [imageName]
+#                        [machineType] [accelerator] [startupScript] [address]
 #
 # Creates one more identical instances.
 #
@@ -87,6 +88,9 @@ gcloud_ForEachInstance() {
 # accelerator   - Optional accelerator to attach to the instance(s), see
 #                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
 # startupScript - Optional startup script to execute when the instance boots
+# address       - Optional name of the GCE static IP address to attach to the
+#                 instance.  Requires that |numNodes| = 1 and that addressName
+#                 has been provisioned in the GCE region that is hosting |zone|
 #
 # Tip: use gcloud_FindInstances to locate the instances once this function
 #      returns
@@ -98,6 +102,7 @@ gcloud_CreateInstances() {
   declare machineType="$5"
   declare optionalAccelerator="$6"
   declare optionalStartupScript="$7"
+  declare optionalAddress="$8"
 
   declare nodes
   if [[ $numNodes = 1 ]]; then
@@ -124,6 +129,16 @@ gcloud_CreateInstances() {
   if [[ -n $optionalStartupScript ]]; then
     args+=(
       --metadata-from-file "startup-script=$optionalStartupScript"
+    )
+  fi
+
+  if [[ -n $optionalAddress ]]; then
+    [[ $numNodes = 1 ]] || {
+      echo "Error: address may not be supplied when provisioning multiple nodes: $optionalAddress"
+      exit 1
+    }
+    args+=(
+      "--address=$optionalAddress"
     )
   fi
 
