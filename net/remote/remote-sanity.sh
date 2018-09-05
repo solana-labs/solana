@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 #
 # This script is to be run on the leader node
 #
@@ -59,12 +59,16 @@ snap)
   solana_bench_tps=solana.bench-tps
   solana_ledger_tool=solana.ledger-tool
   ledger=/var/snap/solana/current/config/ledger
+
+  entrypointRsyncUrl="$entrypointIp"
   ;;
 local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana"
+  entrypointRsyncUrl="$entrypointIp:~/solana"
+
+  solana_bench_tps="multinode-demo/client.sh $entrypointRsyncUrl $entrypointIp:8001"
   solana_ledger_tool=solana-ledger-tool
   ledger=config/ledger
   ;;
@@ -77,7 +81,7 @@ esac
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  multinode-demo/test/wallet-sanity.sh "$entrypointIp"
+  multinode-demo/test/wallet-sanity.sh "$entrypointRsyncUrl"
 )
 
 echo "--- $entrypointIp: node count"
@@ -110,7 +114,7 @@ if $validatorSanity; then
   (
     set -ex -o pipefail
     ./multinode-demo/setup.sh -t validator
-    timeout 10s ./multinode-demo/validator.sh "$entrypointIp" "$entrypointIp:8001" 2>&1 | tee validator.log
+    timeout 10s ./multinode-demo/validator.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode

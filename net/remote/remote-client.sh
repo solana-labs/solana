@@ -45,7 +45,7 @@ local)
   export RUST_LOG
 
   rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
-  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana"
+  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana $entrypointIp:8001"
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"

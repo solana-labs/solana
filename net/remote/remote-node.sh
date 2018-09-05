@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 
 cd "$(dirname "$0")"/../..
 
@@ -91,7 +91,7 @@ local)
     rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
 
     ./multinode-demo/setup.sh -t validator $setupArgs
-    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp" >validator.log 2>&1 &
+    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" >validator.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
