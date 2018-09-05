@@ -6,7 +6,7 @@ source "$here"/../scripts/gcloud.sh
 # shellcheck source=net/common.sh
 source "$here"/common.sh
 
-prefix=testnet-dev-$(whoami | sed -e s/[^a-z0-9].*//)
+prefix=testnet-dev-$(id -un | sed -e s/[^a-z0-9].*//)
 validatorNodeCount=5
 clientNodeCount=1
 leaderMachineType=n1-standard-16
