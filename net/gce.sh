@@ -19,6 +19,7 @@ clientAccelerator=
 imageName="ubuntu-16-04-cuda-9-2-new"
 publicNetwork=false
 zone="us-west1-b"
+leaderAddress=
 
 usage() {
   exitcode=0
@@ -40,12 +41,13 @@ Configure a GCE-based testnet
                       (default: $prefix)
 
  create-specific options:
-   -n number        - Number of validator nodes (default: $validatorNodeCount)
-   -c number        - Number of client nodes (default: $clientNodeCount)
+   -n [number]      - Number of validator nodes (default: $validatorNodeCount)
+   -c [number]      - Number of client nodes (default: $clientNodeCount)
    -P               - Use public network IP addresses (default: $publicNetwork)
-   -z               - GCP Zone for the nodes (default: $zone)
-   -i imageName     - Existing image on GCE (default: $imageName)
+   -z [zone]        - GCP Zone for the nodes (default: $zone)
+   -i [imageName]   - Existing image on GCE (default: $imageName)
    -g               - Enable GPU
+   -a [address]     - Set the leader node's external IP address to this GCE address
 
  config-specific options:
    none
@@ -63,7 +65,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pi:n:c:z:g" opt; do
+while getopts "h?p:Pi:n:c:z:ga:" opt; do
   case $opt in
   h | \?)
     usage
@@ -88,6 +90,9 @@ while getopts "h?p:Pi:n:c:z:g" opt; do
     ;;
   g)
     leaderAccelerator="count=4,type=nvidia-tesla-k80"
+    ;;
+  a)
+    leaderAddress=$OPTARG
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -187,13 +192,17 @@ create)
   echo "Client(s) = $clientNodeCount x $clientMachineType (GPU=${clientAccelerator:-none})"
   echo ==================================================================
   echo
-  gcloud_CreateInstances "$prefix-leader" 1 \
-    "$zone" "$imageName" "$leaderMachineType" "$leaderAccelerator" "$here/remote/remote-startup.sh"
-  gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" \
-    "$zone" "$imageName" "$validatorMachineType" "$validatorAccelerator" "$here/remote/remote-startup.sh"
+  gcloud_CreateInstances "$prefix-leader" 1 "$zone" \
+    "$imageName" "$leaderMachineType" "$leaderAccelerator" \
+    "$here/remote/remote-startup.sh" "$leaderAddress" \
+
+  gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" "$zone" \
+    "$imageName" "$validatorMachineType" "$validatorAccelerator" \
+    "$here/remote/remote-startup.sh" ""
   if [[ -n $clientNodeCount ]]; then
-    gcloud_CreateInstances "$prefix-client" "$clientNodeCount" \
-      "$zone" "$imageName" "$clientMachineType" "$clientAccelerator" "$here/remote/remote-startup.sh"
+    gcloud_CreateInstances "$prefix-client" "$clientNodeCount" "$zone" \
+      "$imageName" "$clientMachineType" "$clientAccelerator" \
+      "$here/remote/remote-startup.sh" ""
   fi
 
   prepareInstancesAndWriteConfigFile
