@@ -23,8 +23,9 @@ Operate a configured testnet
  restart  - Shortcut for stop then start
 
  start-specific options:
-   -S snapFilename      - Deploy the specified Snap file
+   -S [snapFilename]    - Deploy the specified Snap file
    -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
+   -f [cargoFeatures]   - List of |cargo --feaures=| to activate
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
@@ -44,12 +45,13 @@ snapChannel=
 snapFilename=
 deployMethod=local
 sanityExtraArgs=
+cargoFeatures=
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:o:" opt; do
+while getopts "h?S:s:o:f:" opt; do
   case $opt in
   h | \?)
     usage
@@ -69,6 +71,9 @@ while getopts "h?S:s:o:" opt; do
       usage "Invalid snap channel: $OPTARG"
       ;;
     esac
+    ;;
+  f)
+    cargoFeatures=$OPTARG
     ;;
   o)
     case $OPTARG in
@@ -102,7 +107,7 @@ build() {
 
     set -x
     rm -rf farf
-    $MAYBE_DOCKER cargo install --root farf
+    $MAYBE_DOCKER cargo install --features="$cargoFeatures" --root farf
   )
   echo "Build took $SECONDS seconds"
 }
