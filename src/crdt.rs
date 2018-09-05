@@ -2072,7 +2072,7 @@ mod tests {
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
-        assert_eq!(node.sockets.transaction.local_addr().unwrap().ip(), ip);
+        assert_eq!(node.sockets.transaction[0].local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
         assert!(node.sockets.gossip.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
@@ -2081,8 +2081,8 @@ mod tests {
         assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.transaction[0].local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.transaction[0].local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
     }
@@ -2094,7 +2094,7 @@ mod tests {
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
-        assert_eq!(node.sockets.transaction.local_addr().unwrap().ip(), ip);
+        assert_eq!(node.sockets.transaction[0].local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
@@ -2102,8 +2102,8 @@ mod tests {
         assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.transaction.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        assert!(node.sockets.transaction[0].local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
+        assert!(node.sockets.transaction[0].local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
     }
