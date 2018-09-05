@@ -53,8 +53,11 @@ snap)
 
   if [[ $nodeType = leader ]]; then
     nodeConfig="mode=leader+drone $commonNodeConfig"
+    ln -sf -T /var/snap/solana/current/leader/current leader.log
+    ln -sf -T /var/snap/solana/current/drone/current drone.log
   else
     nodeConfig="mode=validator $commonNodeConfig"
+    ln -sf -T /var/snap/solana/current/validator/current validator.log
   fi
 
   logmarker="solana deploy $(date)/$RANDOM"
