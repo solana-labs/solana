@@ -241,6 +241,10 @@ gcloud_PrepInstancesForSsh() {
     IFS=: read -r name zone publicIp _ < <(echo "$instanceInfo")
 
     logFile="$logDir/gcloud_PrepInstancesForSsh-$name.log"
+
+    # TODO: This next subshell runs in series because for unknown reason running
+    # multiple |gcloud compute ssh| commands in parallel cause the macOS
+    # terminal to misbehave
     (
       set -x
 
@@ -260,12 +264,15 @@ gcloud_PrepInstancesForSsh() {
           StrictHostKeyChecking no
         \" > .ssh/config;
       "
+    ) >> "$logFile" 2>&1
+    (
+      set -x
       scp \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
         -i "$privateKey" \
         "$privateKey" "$username@$publicIp:.ssh/id_testnet"
-    ) > "$logFile" 2>&1 &
+    ) >> "$logFile" 2>&1 &
     declare pid=$!
 
     ln -sfT "$logFile" "$logDir/gcloud_PrepInstancesForSsh-$pid.log"
