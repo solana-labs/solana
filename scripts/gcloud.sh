@@ -254,9 +254,8 @@ gcloud_PrepInstancesForSsh() {
 
       gcloud compute ssh --zone "$zone" "$name" -- "
         set -x;
-        rm -rf .ssh;
         mkdir -p .ssh;
-        echo \"$(cat "$publicKey")\" > .ssh/authorized_keys;
+        echo \"$(cat "$publicKey")\" >> .ssh/authorized_keys;
         echo \"
           Host *
           BatchMode yes
