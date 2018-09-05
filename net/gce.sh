@@ -158,10 +158,10 @@ EOF
   echo "clientIpList=()" >> "$configFile"
   echo "Looking for client instances..."
   gcloud_FindInstances "name~^$prefix-client" show
-  if [[ ${#instances[@]} -gt 0 ]]; then
+  [[ ${#instances[@]} -eq 0 ]] || {
     gcloud_PrepInstancesForSsh "$gcloud_username" "$sshPrivateKey"
     gcloud_ForEachInstance recordInstanceIp clientIpList
-  fi
+  }
 
   echo "Wrote $configFile"
 }
