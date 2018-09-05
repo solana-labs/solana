@@ -26,7 +26,7 @@ use solana::window::default_window;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::process::exit;
-use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Builder;
@@ -231,6 +231,7 @@ fn do_tx_transfers(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
     leader: &NodeInfo,
     shared_tx_thread_count: &Arc<AtomicIsize>,
+    total_tx_sent_count: &Arc<AtomicUsize>,
 ) {
     let client = mk_client(&leader);
     loop {
@@ -252,6 +253,7 @@ fn do_tx_transfers(
                 client.transfer_signed(&tx).unwrap();
             }
             shared_tx_thread_count.fetch_add(-1, Ordering::Relaxed);
+            total_tx_sent_count.fetch_add(tx_len, Ordering::Relaxed);
             println!(
                 "Tx send done. {} ms {} tps",
                 duration_as_ms(&transfer_start.elapsed()),
@@ -329,6 +331,7 @@ fn compute_and_report_stats(
     maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
     sample_period: u64,
     tx_send_elapsed: &Duration,
+    total_tx_send_count: usize,
 ) {
     // Compute/report stats
     let mut max_of_maxes = 0.0;
@@ -375,11 +378,12 @@ fn compute_and_report_stats(
     }
 
     println!(
-        "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {}",
+        "\nHighest TPS: {:.2} sampling period {}s max transactions: {} clients: {} drop rate: {:.2}",
         max_of_maxes,
         sample_period,
         max_tx_count,
-        maxes.read().unwrap().len()
+        maxes.read().unwrap().len(),
+        (total_tx_send_count as u64 - max_tx_count) as f64 / total_tx_send_count as f64,
     );
     println!(
         "\tAverage TPS: {}",
@@ -572,6 +576,7 @@ fn main() {
         Arc::new(RwLock::new(VecDeque::new()));
 
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
+    let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
     let s_threads: Vec<_> = (0..threads)
         .map(|_| {
@@ -579,6 +584,7 @@ fn main() {
             let shared_txs = shared_txs.clone();
             let leader = leader.clone();
             let shared_tx_active_thread_count = shared_tx_active_thread_count.clone();
+            let total_tx_sent_count = total_tx_sent_count.clone();
             Builder::new()
                 .name("solana-client-sender".to_string())
                 .spawn(move || {
@@ -587,6 +593,7 @@ fn main() {
                         &shared_txs,
                         &leader,
                         &shared_tx_active_thread_count,
+                        &total_tx_sent_count,
                     );
                 })
                 .unwrap()
@@ -649,7 +656,12 @@ fn main() {
     let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
     metrics_submit_token_balance(balance);
 
-    compute_and_report_stats(&maxes, sample_period, &now.elapsed());
+    compute_and_report_stats(
+        &maxes,
+        sample_period,
+        &now.elapsed(),
+        total_tx_sent_count.load(Ordering::Relaxed),
+    );
 
     // join the crdt client threads
     for t in c_threads {
