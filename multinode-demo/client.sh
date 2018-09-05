@@ -18,9 +18,13 @@ usage() {
   exit 1
 }
 
-# this is a little hacky
+# This is a little hacky
 if [[ ${1:0:2} != "--" ]]; then
-  read -r _ leader_address shift < <(find_leader "${@:1:1}")
+  if [[ ${2:0:2} != "--" ]]; then
+    read -r _ leader_address shift < <(find_leader "${@:1:2}")
+  else
+    read -r _ leader_address shift < <(find_leader "${@:1:1}")
+  fi
 else
   read -r _ leader_address shift < <(find_leader)
 fi
