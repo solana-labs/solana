@@ -20,15 +20,19 @@ use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
 use nat::bind_in_range;
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::ReusePort;
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::{Keypair, KeypairUtil, Pubkey};
+use socket2::{Domain, SockAddr, Socket, Type};
 use std;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -1264,7 +1268,7 @@ pub struct Sockets {
     pub gossip: UdpSocket,
     pub requests: UdpSocket,
     pub replicate: UdpSocket,
-    pub transaction: UdpSocket,
+    pub transaction: Vec<Arc<UdpSocket>>,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
@@ -1304,7 +1308,7 @@ impl Node {
                 gossip,
                 requests,
                 replicate,
-                transaction,
+                transaction: vec![Arc::new(transaction)],
                 respond,
                 broadcast,
                 repair,
@@ -1323,9 +1327,12 @@ impl Node {
         };
 
         fn bind_to(port: u16) -> UdpSocket {
+            let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
+            let sock_fd = sock.as_raw_fd();
+            setsockopt(sock_fd, ReusePort, &true).unwrap();
             let addr = socketaddr!(0, port);
-            match UdpSocket::bind(addr) {
-                Ok(socket) => socket,
+            match sock.bind(&SockAddr::from(addr)) {
+                Ok(_) => sock.into_udp_socket(),
                 Err(err) => {
                     panic!("Failed to bind to {:?}, err: {}", addr, err);
                 }
@@ -1341,6 +1348,12 @@ impl Node {
         let (replicate_port, replicate) = bind();
         let (requests_port, requests) = bind();
         let (transaction_port, transaction) = bind();
+
+        let mut transaction_sockets = vec![Arc::new(transaction)];
+
+        for _ in 0..4 {
+            transaction_sockets.push(Arc::new(bind_to(transaction_port)));
+        }
 
         let (_, repair) = bind();
         let (_, broadcast) = bind();
@@ -1365,7 +1378,7 @@ impl Node {
                 gossip,
                 requests,
                 replicate,
-                transaction,
+                transaction: transaction_sockets,
                 respond,
                 broadcast,
                 repair,

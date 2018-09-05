@@ -16,11 +16,11 @@ pub struct FetchStage {
 
 impl FetchStage {
     pub fn new(
-        socket: Arc<UdpSocket>,
+        socket: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
         recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
-        Self::new_multi_socket(vec![socket], exit, recycler)
+        Self::new_multi_socket(socket, exit, recycler)
     }
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
