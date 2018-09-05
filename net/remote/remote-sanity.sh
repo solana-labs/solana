@@ -3,27 +3,32 @@
 cd "$(dirname "$0")"/../..
 
 deployMethod=
-leaderIp=
+entrypointIp=
 numNodes=
-# shellcheck source=/dev/null # deployConfig is written by remote_sanity.sh
+
+[[ -r deployConfig ]] || {
+  echo deployConfig missing
+  exit 1
+}
+# shellcheck source=/dev/null # deployConfig is written by remote-node.sh
 source deployConfig
 
 [[ -n $deployMethod ]] || {
-  echo "deployMethod empty"
+  echo deployMethod empty
   exit 1
 }
-[[ -n $leaderIp ]] || {
-  echo "leaderIp empty"
+[[ -n $entrypointIp ]] || {
+  echo entrypointIp empty
   exit 1
 }
 [[ -n $numNodes ]] || {
-  echo "numNodes empty"
+  echo numNodes empty
   exit 1
 }
 
 ledgerVerify=true
 validatorSanity=true
-while [[ $1 = "-o" ]]; do
+while [[ $1 = -o ]]; do
   opt="$2"
   shift 2
   case $opt in
@@ -56,7 +61,7 @@ local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-  solana_bench_tps="multinode-demo/client.sh $leaderIp:~/solana"
+  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana"
   solana_ledger_tool=solana-ledger-tool
   ledger=config/ledger
   ;;
@@ -66,19 +71,19 @@ local)
 esac
 
 
-echo "--- $leaderIp: wallet sanity"
+echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  multinode-demo/test/wallet-sanity.sh "$leaderIp"
+  multinode-demo/test/wallet-sanity.sh "$entrypointIp"
 )
 
-echo "--- $leaderIp: node count"
+echo "--- $entrypointIp: node count"
 (
   set -x
   $solana_bench_tps --num-nodes "$numNodes" --converge-only
 )
 
-echo "--- $leaderIp: verify ledger"
+echo "--- $entrypointIp: verify ledger"
 if $ledgerVerify; then
   if [[ -d $ledger ]]; then
     (
@@ -97,12 +102,12 @@ else
 fi
 
 
-echo "--- $leaderIp: validator sanity"
+echo "--- $entrypointIp: validator sanity"
 if $validatorSanity; then
   (
     set -ex -o pipefail
     ./multinode-demo/setup.sh -t validator
-    timeout 10s ./multinode-demo/validator.sh "$leaderIp" "$leaderIp:8001" 2>&1 | tee validator.log
+    timeout 10s ./multinode-demo/validator.sh "$entrypointIp" "$entrypointIp:8001" 2>&1 | tee validator.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode

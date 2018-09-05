@@ -25,7 +25,6 @@ Operate a configured testnet
  start-specific options:
    -S snapFilename      - Deploy the specified Snap file
    -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
-   -a "setup args"      - Optional additional arguments for ./multinode-demo/setup.sh
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
@@ -43,7 +42,6 @@ EOF
 
 snapChannel=
 snapFilename=
-nodeSetupArgs=
 deployMethod=local
 sanityExtraArgs=
 
@@ -51,7 +49,7 @@ command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:a:o:" opt; do
+while getopts "h?S:s:o:" opt; do
   case $opt in
   h | \?)
     usage
@@ -71,9 +69,6 @@ while getopts "h?S:s:a:o:" opt; do
       usage "Invalid snap channel: $OPTARG"
       ;;
     esac
-    ;;
-  a)
-    nodeSetupArgs="$OPTARG"
     ;;
   o)
     case $OPTARG in
@@ -144,7 +139,7 @@ startLeader() {
     esac
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod leader $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod leader $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -161,7 +156,7 @@ startValidator() {
     set -x
     common_start_setup "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod validator $leaderIp $expectedNodeCount \"$nodeSetupArgs\" \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod validator $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
   declare pid=$!
   ln -sfT "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
@@ -177,7 +172,7 @@ startClient() {
     set -x
     common_start_setup "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $leaderIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"

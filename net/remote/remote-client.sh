@@ -3,11 +3,12 @@
 cd "$(dirname "$0")"/../..
 
 deployMethod="$1"
-leaderIp="$2"
+entrypointIp="$2"
 numNodes="$3"
 RUST_LOG="$4"
+
 [[ -n $deployMethod ]] || exit
-[[ -n $leaderIp ]] || exit
+[[ -n $entrypointIp ]] || exit
 [[ -n $numNodes ]] || exit
 
 source net/common.sh
@@ -22,12 +23,12 @@ scripts/install-earlyoom.sh
 
 case $deployMethod in
 snap)
-  rsync -vPrc "$leaderIp:~/solana/solana.snap" .
+  rsync -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
   rm solana.snap
 
   nodeConfig="\
-    leader-ip=$leaderIp \
+    leader-ip=$entrypointIp \
     default-metrics-rate=1 \
     metrics-config=$SOLANA_METRICS_CONFIG \
     rust-log=$RUST_LOG \
@@ -43,8 +44,8 @@ local)
   export SOLANA_DEFAULT_METRICS_RATE=1
   export RUST_LOG
 
-  rsync -vPrc "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
-  solana_bench_tps="multinode-demo/client.sh $leaderIp:~/solana"
+  rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana"
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"

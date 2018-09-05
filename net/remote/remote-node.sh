@@ -4,35 +4,43 @@ cd "$(dirname "$0")"/../..
 
 deployMethod="$1"
 nodeType="$2"
-leaderIp="$3"
-numNodes="$4"
-setupArgs="$5"
+publicNetwork="$3"
+entrypointIp="$4"
+numNodes="$5"
 RUST_LOG="$6"
-
-cat > deployConfig <<EOF
-deployMethod="$deployMethod"
-leaderIp="$leaderIp"
-numNodes="$numNodes"
-EOF
 
 [[ -n $deployMethod ]] || exit
 [[ -n $nodeType ]] || exit
-[[ -n $leaderIp ]] || exit
+[[ -n $publicNetwork ]] || exit
+[[ -n $entrypointIp ]] || exit
+[[ -n $numNodes ]] || exit
+
+cat > deployConfig <<EOF
+deployMethod="$deployMethod"
+entrypointIp="$entrypointIp"
+numNodes="$numNodes"
+EOF
 
 source net/common.sh
 loadConfigFile
 
 scripts/install-earlyoom.sh
 
+if [[ $publicNetwork = true ]]; then
+  setupArgs="-p"
+else
+  setupArgs="-l"
+fi
+
 
 case $deployMethod in
 snap)
   SECONDS=0
-  rsync -vPrc "$leaderIp:~/solana/solana.snap" .
+  rsync -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
   commonNodeConfig="\
-    leader-ip=$leaderIp \
+    leader-ip=$entrypointIp \
     default-metrics-rate=1 \
     metrics-config=$SOLANA_METRICS_CONFIG \
     rust-log=$RUST_LOG \
@@ -76,17 +84,15 @@ local)
 
   case $nodeType in
   leader)
-    # shellcheck disable=SC2086 # Don't want to double quote "$setupArgs"
-    ./multinode-demo/setup.sh -t leader -p $setupArgs
+    ./multinode-demo/setup.sh -t leader $setupArgs
     ./multinode-demo/drone.sh > drone.log 2>&1 &
     ./multinode-demo/leader.sh > leader.log 2>&1 &
     ;;
   validator)
-    rsync -vPrc "$leaderIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+    rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
 
-    # shellcheck disable=SC2086 # Don't want to double quote "$setupArgs"
-    ./multinode-demo/setup.sh -t validator -p $setupArgs
-    ./multinode-demo/validator.sh "$leaderIp":~/solana "$leaderIp" >validator.log 2>&1 &
+    ./multinode-demo/setup.sh -t validator $setupArgs
+    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp" >validator.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
