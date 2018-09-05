@@ -58,7 +58,7 @@ your odds of success if you check out the
 before proceeding:
 
 ```bash
-$ git checkout v0.7.0-beta
+$ git checkout v0.7.2
 ```
 
 Configuration Setup
@@ -92,20 +92,21 @@ Before you start a fullnode, make sure you know the IP address of the machine yo
 want to be the leader for the demo, and make sure that udp ports 8000-10000 are
 open on all the machines you want to test with.
 
-Now start the server:
+Now start the server in a separate shell:
 
 ```bash
 $ ./multinode-demo/leader.sh
 ```
 
-Wait a few seconds for the server to initialize. It will print "Ready." when it's ready to
+Wait a few seconds for the server to initialize. It will print "leader ready..." when it's ready to
 receive transactions. The leader will request some tokens from the drone if it doesn't have any.
 The drone does not need to be running for subsequent leader starts.
 
 Multinode Testnet
 ---
 
-To run a multinode testnet, after starting a leader node, spin up some validator nodes:
+To run a multinode testnet, after starting a leader node, spin up some validator nodes in
+separate shells:
 
 ```bash
 $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
@@ -114,11 +115,11 @@ $ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
 To run a performance-enhanced leader or validator (on Linux),
 [CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
 your system:
+
 ```bash
 $ ./fetch-perf-libs.sh
 $ SOLANA_CUDA=1 ./multinode-demo/leader.sh
 $ SOLANA_CUDA=1 ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
-
 ```
 
 
@@ -126,11 +127,14 @@ $ SOLANA_CUDA=1 ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.5
 Testnet Client Demo
 ---
 
-Now that your singlenode or multinode testnet is up and running, in a separate shell, let's send it some transactions! Note we pass in
-the JSON configuration file here, not the genesis ledger.
+Now that your singlenode or multinode testnet is up and running let's send it some transactions! Note that we pass in
+the expected number of nodes in the network.  If running singlenode, pass 1; if multinode, pass the number
+of validators you started.
+
+In a separate shell start the client:
 
 ```bash
-$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 3
+$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 1
 ```
 
 What just happened? The client demo spins up several threads to send 500,000 transactions
@@ -145,9 +149,11 @@ multinode variation, you'll see TPS measurements for each validator node as well
 Public Testnet
 --------------
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
+
 ```bash
 $ ./multinode-demo/client.sh testnet.solana.com 1 #The minumum number of nodes to discover on the network
 ```
+
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
 
 
@@ -157,15 +163,18 @@ A Linux [Snap](https://snapcraft.io/) is available, which can be used to
 easily get Solana running on supported Linux systems without building anything
 from source.  The `edge` Snap channel is updated daily with the latest
 development from the `master` branch.  To install:
+
 ```bash
 $ sudo snap install solana --edge --devmode
 ```
+
 (`--devmode` flag is required only for `solana.fullnode-cuda`)
 
 Once installed the usual Solana programs will be available as `solona.*` instead
 of `solana-*`.  For example, `solana.fullnode` instead of `solana-fullnode`.
 
 Update to the latest version at any time with:
+
 ```bash
 $ snap info solana
 $ sudo snap refresh solana --devmode
@@ -185,6 +194,7 @@ contains the latest log, and the files `*.s` (if present) contain older rotated
 logs.
 
 Disable the daemon at any time by running:
+
 ```bash
 $ sudo snap set solana mode=
 ```
@@ -193,11 +203,13 @@ Runtime configuration files for the daemon can be found in
 `/var/snap/solana/current/config`.
 
 #### Leader daemon
+
 ```bash
 $ sudo snap set solana mode=leader
 ```
 
 If CUDA is available:
+
 ```bash
 $ sudo snap set solana mode=leader enable-cuda=1
 ```
@@ -220,26 +232,31 @@ to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000**
 
 
 To run both the Leader and Drone:
+
 ```bash
 $ sudo snap set solana mode=leader+drone
 
 ```
 
 #### Validator daemon
+
 ```bash
 $ sudo snap set solana mode=validator
 
 ```
 If CUDA is available:
+
 ```bash
 $ sudo snap set solana mode=validator enable-cuda=1
 ```
 
 By default the validator will connect to **testnet.solana.com**, override
 the leader IP address by running:
+
 ```bash
 $ sudo snap set solana mode=validator leader-address=127.0.0.1 #<-- change IP address
 ```
+
 It's assumed that the leader will be running `rsync` configured as described in
 the previous **Leader daemon** section.
 
@@ -264,6 +281,7 @@ $ rustup update
 ```
 
 On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, etc.  On Ubuntu:
+
 ```bash
 $ sudo apt-get install libssl-dev pkg-config zlib1g-dev
 ```
@@ -285,6 +303,7 @@ $ cargo test
 ```
 
 To emulate all the tests that will run on a Pull Request, run:
+
 ```bash
 $ ./ci/run-local.sh
 ```
@@ -293,17 +312,21 @@ Debugging
 ---
 
 There are some useful debug messages in the code, you can enable them on a per-module and per-level
-basis with the normal RUST\_LOG environment variable. Run the fullnode with this syntax:
+basis.  Before running a leader or validator set the normal RUST\_LOG environment variable.
+
+For example, to enable info everywhere and debug only in the solana::banking_stage module:
+
 ```bash
-$ RUST_LOG=solana::streamer=debug,solana::server=info cat genesis.log | ./target/release/solana-fullnode > transactions0.log
+$ export RUST_LOG=info,solana::banking_stage=debug
 ```
-to see the debug and info sections for streamer and server respectively. Generally
-we are using debug for infrequent debug messages, trace for potentially frequent messages and
-info for performance-related logging.
 
-Attaching to a running process with gdb:
+Generally we are using debug for infrequent debug messages, trace for potentially frequent
+messages and info for performance-related logging.
 
-```
+You can also attach to a running process with GDB.  The leader's process is named
+_solana-fullnode_:
+
+```bash
 $ sudo gdb
 attach <PID>
 set logging on
