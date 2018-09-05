@@ -34,7 +34,7 @@ $ ./gce create -P ...
 ```
 
 ### Deploying a Snap-based network
-To deploy the latest pre-build `edge` channel Snap (ie, latest from the `master`
+To deploy the latest pre-built `edge` channel Snap (ie, latest from the `master`
 branch), once the testnet has been created run:
 
 ```bash
