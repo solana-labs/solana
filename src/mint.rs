@@ -74,9 +74,9 @@ mod tests {
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        if let Instruction::NewContract(contract) = tx.instruction {
+        if let Instruction::NewContract(contract) = tx.instruction() {
             if let Plan::Budget(Budget::Pay(payment)) = contract.plan {
-                assert_eq!(tx.from, payment.to);
+                assert_eq!(*tx.from(), payment.to);
             }
         }
         assert_eq!(transactions.next(), None);

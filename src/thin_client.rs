@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use bank::Account;
+use bank::{Account, Bank};
 use bincode::{deserialize, serialize};
 use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
@@ -177,9 +177,12 @@ impl ThinClient {
             }
             self.process_response(&resp);
         }
+        trace!("get_balance {:?}", self.balances.get(pubkey));
+        //TODO: call the contract specific get_balance for contract_id's thin client can introspect
+        //instead of hard coding to budget_dsl only
         self.balances
             .get(pubkey)
-            .map(|a| a.tokens)
+            .map(Bank::get_balance_of_budget_payment_plan)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
@@ -508,10 +511,12 @@ mod tests {
         let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        if let Instruction::NewContract(contract) = &mut tr2.instruction {
+        let mut instruction2 = tr2.instruction();
+        if let Instruction::NewContract(ref mut contract) = instruction2 {
             contract.tokens = 502;
             contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
         }
+        tr2.userdata = serialize(&instruction2).unwrap();
         let signature = client.transfer_signed(&tr2).unwrap();
         client.poll_for_signature(&signature).unwrap();
 
