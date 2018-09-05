@@ -92,9 +92,12 @@ common_start_setup() {
       rsync -vPrz "$ssh_keys"/id_rsa "$remote_user@$ip_addr":~/.ssh/
       rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/
       rsync -vPrz "$ssh_keys"/id_rsa.pub "$remote_user@$ip_addr":~/.ssh/authorized_keys
-      rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
     } >>log/"$ip_addr".log
   fi
+  {
+    rsync -vPrz ./multinode-demo "$remote_user@$ip_addr":~/solana/
+    rsync -vPrz ./scripts "$remote_user@$ip_addr":~/solana/
+  } >>log/"$ip_addr".log
 }
 
 start_leader() {
@@ -154,6 +157,7 @@ start_all_nodes() {
 stop_all_nodes() {
   SECONDS=0
   local count=0
+  mkdir -p log
   for ip_addr in "${ip_addr_array[@]}"; do
     ssh-keygen -R "$ip_addr" >log/local.log
     ssh-keyscan "$ip_addr" >>~/.ssh/known_hosts 2>/dev/null
