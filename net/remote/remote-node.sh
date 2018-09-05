@@ -75,11 +75,10 @@ local)
   export USE_INSTALL=1
   export RUST_LOG
   export SOLANA_DEFAULT_METRICS_RATE=1
-  if [[ -e /dev/nvidia0 ]]; then
-    export SOLANA_CUDA=1
-  fi
 
   ./fetch-perf-libs.sh
+  export LD_LIBRARY_PATH="$PWD/target/perf-libs:$LD_LIBRARY_PATH"
+
   scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
 
   case $nodeType in
