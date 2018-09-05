@@ -205,7 +205,7 @@ gcloud_FigureRemoteUsername() {
     # instance is reported as RUNNING and when it's reachable over the network
     timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
 
-    gcloud compute ssh "$name" --zone "$zone" -- "echo whoami \$(whoami)" | tee whoami
+    gcloud compute ssh "$name" --zone "$zone" -- "echo whoami \$(id -un)" | tee whoami
   )
 
   [[ "$(tr -dc '[:print:]' < whoami; rm -f whoami)" =~ ^whoami\ (.*)$ ]] || {
