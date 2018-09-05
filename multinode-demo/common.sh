@@ -166,6 +166,9 @@ find_leader() {
   declare shift=0
 
   if [[ -d $SNAP ]]; then
+    if [[ -n $1 ]]; then
+      usage "Error: unexpected parameter: $1"
+    fi
 
     # Select leader from the Snap configuration
     leader_ip=$(snapctl get leader-ip)
