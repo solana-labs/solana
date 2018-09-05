@@ -202,7 +202,7 @@ gcloud_FigureRemoteUsername() {
 
     # Try to ping the machine first.  There can be a delay between when the
     # instance is reported as RUNNING and when it's reachable over the network
-    timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; sleep 1; done"
+    timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
 
     gcloud compute ssh "$name" --zone "$zone" -- "echo whoami:\$USER:iamwho" | tr -d $'\r '| tee /tmp/whoami-$$
   )
