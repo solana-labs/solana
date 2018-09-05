@@ -1,4 +1,7 @@
 #!/bin/bash -e
+#
+# This script is to be run on the leader node
+#
 
 cd "$(dirname "$0")"/../..
 
