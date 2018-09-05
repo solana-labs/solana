@@ -11,7 +11,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [ipAddress]
+usage: $0 [ipAddress] [extra ssh arguments]
 
 ssh into a node
 
@@ -37,17 +37,19 @@ done
 loadConfigFile
 
 ipAddress=$1
+shift
 if [[ -n "$ipAddress" ]]; then
   set -x
-  exec ssh "${sshOptions[@]}" "$ipAddress"
+  exec ssh "${sshOptions[@]}" "$ipAddress" "$@"
 fi
 
+
 echo Leader:
-echo "  $0 $leaderIp"
+echo -e "  $0 $leaderIp\t|  $0 $leaderIp tail -f solana/leader.log"
 echo
 echo Validators:
 for ipAddress in "${validatorIpList[@]}"; do
-  echo "  $0 $ipAddress"
+  echo -e "  $0 $ipAddress\t|  $0 $ipAddress tail -f solana/validator.log"
 done
 echo
 echo Clients:
@@ -55,7 +57,7 @@ if [[ ${#clientIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
   for ipAddress in "${clientIpList[@]}"; do
-    echo "  $0 $ipAddress"
+    echo -e "  $0 $ipAddress\t|  $0 $ipAddress tail -f solana/client.log"
   done
 fi
 
