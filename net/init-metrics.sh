@@ -11,12 +11,14 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-d] [username]
+usage: $0 [-e] [-d] [username]
 
 Creates a testnet dev metrics database
 
   username        InfluxDB user with access to create a new database
   -d              Delete the database instead of creating it
+  -e              Assume database already exists and SOLANA_METRICS_CONFIG is
+                  defined in the environment already
 
 EOF
   exit $exitcode
@@ -24,8 +26,9 @@ EOF
 
 loadConfigFile
 
+useEnv=false
 delete=false
-while getopts "hd" opt; do
+while getopts "hde" opt; do
   case $opt in
   h|\?)
     usage
@@ -34,6 +37,9 @@ while getopts "hd" opt; do
   d)
     delete=true
     ;;
+  e)
+    useEnv=true
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
@@ -41,29 +47,34 @@ while getopts "hd" opt; do
 done
 shift $((OPTIND - 1))
 
-username=$1
-[[ -n "$username" ]] || usage "username not specified"
+if $useEnv; then
+  [[ -n $SOLANA_METRICS_CONFIG ]] ||
+    usage "Error: SOLANA_METRICS_CONFIG is not defined in the environment"
+else
+  username=$1
+  [[ -n "$username" ]] || usage "username not specified"
 
-read -rs -p "InfluxDB password for $username: " password
-[[ -n $password ]] || { echo "Password not specified"; exit 1; }
-echo
+  read -rs -p "InfluxDB password for $username: " password
+  [[ -n $password ]] || { echo "Password not specified"; exit 1; }
+  echo
 
-query() {
-  echo "$*"
-  curl -XPOST \
-    "https://metrics.solana.com:8086/query?u=${username}&p=${password}" \
-    --data-urlencode "q=$*"
-}
+  query() {
+    echo "$*"
+    curl -XPOST \
+      "https://metrics.solana.com:8086/query?u=${username}&p=${password}" \
+      --data-urlencode "q=$*"
+  }
 
-query "DROP DATABASE \"$netBasename\""
-! $delete || exit 0
-query "CREATE DATABASE \"$netBasename\""
-query "ALTER RETENTION POLICY autogen ON \"$netBasename\" DURATION 7d"
-query "GRANT READ ON \"$netBasename\" TO \"ro\""
-query "GRANT WRITE ON \"$netBasename\" TO \"scratch_writer\""
+  query "DROP DATABASE \"$netBasename\""
+  ! $delete || exit 0
+  query "CREATE DATABASE \"$netBasename\""
+  query "ALTER RETENTION POLICY autogen ON \"$netBasename\" DURATION 7d"
+  query "GRANT READ ON \"$netBasename\" TO \"ro\""
+  query "GRANT WRITE ON \"$netBasename\" TO \"scratch_writer\""
 
-echo "export \
-  SOLANA_METRICS_CONFIG=\"db=$netBasename,u=scratch_writer,p=topsecret\" \
-" >> "$configFile"
+  SOLANA_METRICS_CONFIG="db=$netBasename,u=scratch_writer,p=topsecret"
+fi
+
+echo "export SOLANA_METRICS_CONFIG=\"$SOLANA_METRICS_CONFIG\"" >> "$configFile"
 
 exit 0
