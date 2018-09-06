@@ -21,6 +21,9 @@ if [[ -z $SOLANA_METRICS_CONFIG ]]; then
   exit 1
 fi
 
+# shellcheck source=scripts/configure-metrics.sh
+source "$here"/../scripts/configure-metrics.sh
+
 # Default to edge channel.  To select the beta channel:
 #   export SOLANA_SNAP_CHANNEL=beta
 if [[ -z $SOLANA_SNAP_CHANNEL ]]; then
