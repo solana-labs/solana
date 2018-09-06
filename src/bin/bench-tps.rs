@@ -401,11 +401,6 @@ fn should_switch_directions(num_tokens_per_account: i64, i: i64) -> bool {
 fn main() {
     logger::setup();
     metrics::set_panic_hook("bench-tps");
-    let mut threads = 4usize;
-    let mut num_nodes = 1usize;
-    let mut time_sec = 90;
-    let mut sustained = false;
-    let mut tx_count = 500_000;
 
     let matches = App::new("solana-bench-tps")
         .version(crate_version!())
@@ -443,23 +438,21 @@ fn main() {
                 .help("number of threads"),
         )
         .arg(
-            Arg::with_name("seconds")
-                .short("s")
-                .long("seconds")
-                .value_name("NUM")
+            Arg::with_name("duration")
+                .long("duration")
+                .value_name("SECS")
                 .takes_value(true)
-                .help("send transactions for this many seconds"),
+                .help("run benchmark for SECS seconds then exit, default is forever"),
         )
         .arg(
             Arg::with_name("converge-only")
-                .short("c")
                 .long("converge-only")
                 .help("exit immediately after converging"),
         )
         .arg(
             Arg::with_name("sustained")
                 .long("sustained")
-                .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
+                .help("use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
         )
         .arg(
             Arg::with_name("tx_count")
@@ -480,30 +473,37 @@ fn main() {
         });
 
     let id = if let Some(k) = matches.value_of("keypair") {
-        read_keypair(k).expect("client keypair")
+        read_keypair(k).expect("can't read client keypair")
     } else {
         Keypair::new()
     };
 
-    if let Some(t) = matches.value_of("threads") {
-        threads = t.to_string().parse().expect("integer");
-    }
+    let threads = if let Some(t) = matches.value_of("threads") {
+        t.to_string().parse().expect("can't parse threads")
+    } else {
+        4usize
+    };
 
-    if let Some(n) = matches.value_of("num-nodes") {
-        num_nodes = n.to_string().parse().expect("integer");
-    }
+    let num_nodes = if let Some(n) = matches.value_of("num-nodes") {
+        n.to_string().parse().expect("can't parse num-nodes")
+    } else {
+        1usize
+    };
 
-    if let Some(s) = matches.value_of("seconds") {
-        time_sec = s.to_string().parse().expect("integer");
-    }
+    let duration = if let Some(s) = matches.value_of("duration") {
+        Duration::new(s.to_string().parse().expect("can't parse duration"), 0)
+    } else {
+        Duration::new(std::u64::MAX, 0)
+    };
 
-    if let Some(s) = matches.value_of("tx_count") {
-        tx_count = s.to_string().parse().expect("integer");
-    }
+    let tx_count = if let Some(s) = matches.value_of("tx_count") {
+        s.to_string().parse().expect("can't parse tx_count")
+    } else {
+        500_000
+    };
 
-    if matches.is_present("sustained") {
-        sustained = true;
-    }
+    let sustained = matches.is_present("sustained");
+    let loop_forever = matches.is_present("loop");
 
     let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
@@ -620,11 +620,10 @@ fn main() {
         .collect();
 
     // generate and send transactions for the specified duration
-    let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
     let mut i = keypair0_balance;
-    while now.elapsed() < time {
+    while now.elapsed() < duration {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
         metrics_submit_token_balance(balance);
 
