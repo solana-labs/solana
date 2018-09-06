@@ -196,7 +196,6 @@ gcloud_FigureRemoteUsername() {
 
   echo "Detecting remote username using $zone in $zone:"
 
-
   # Figure the gcp ssh username
   (
     set -x
@@ -205,14 +204,18 @@ gcloud_FigureRemoteUsername() {
     # instance is reported as RUNNING and when it's reachable over the network
     timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
 
-    gcloud compute ssh "$name" --zone "$zone" -- "echo whoami \$(id -un)" | tee whoami
+    gcloud compute ssh "$name" --zone "$zone" -- "echo whoami:\$USER:iamwho" | tr -d $'\r '| tee /tmp/whoami-$$
   )
+  while IFS=: read -r whoami gcloud_username iamwho ; do
+    [[ $whoami == "whoami" && $iamwho == "iamwho" ]] && break;
+  done < /tmp/whoami-$$
+  rm -f /tmp/whoami-$$
 
-  [[ "$(tr -dc '[:print:]' < whoami; rm -f whoami)" =~ ^whoami\ (.*)$ ]] || {
-    echo Unable to figure remote user name;
-    exit 1
-  }
-  gcloud_username="${BASH_REMATCH[1]}"
+  if [[ -z $gcloud_username ]]; then
+      echo Unable to figure remote user name
+      exit 1
+  fi
+
   echo "Remote username: $gcloud_username"
 }
 
@@ -303,4 +306,3 @@ gcloud_PrepInstancesForSsh() {
     fi
   done
 }
-

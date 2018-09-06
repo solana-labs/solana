@@ -6,7 +6,7 @@ source "$here"/../scripts/gcloud.sh
 # shellcheck source=net/common.sh
 source "$here"/common.sh
 
-prefix=testnet-dev-$(id -un | sed -e s/[^a-z0-9].*//)
+prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 validatorNodeCount=5
 clientNodeCount=1
 leaderMachineType=n1-standard-16
@@ -37,8 +37,8 @@ Configure a GCE-based testnet
  delete - delete the testnet
 
  common options:
-   -p prefix        - Optional common prefix for instance names to avoid collisions
-                      (default: $prefix)
+   -p prefix        - Optional common prefix for instance names to avoid
+                        collisions (default: $prefix)
 
  create-specific options:
    -n [number]      - Number of validator nodes (default: $validatorNodeCount)
@@ -71,6 +71,7 @@ while getopts "h?p:Pi:n:c:z:ga:" opt; do
     usage
     ;;
   p)
+    [[ ${OPTARG//[^A-Za-z0-9]/} == "$OPTARG" ]] || usage "Invalid prefix: \"$OPTARG\", alphanumeric only"
     prefix=$OPTARG
     ;;
   P)
