@@ -511,11 +511,7 @@ fn main() {
     println!(" Node address         | Node identifier");
     println!("----------------------+------------------");
     for node in &validators {
-        println!(
-            " {:20} | {:16x}",
-            node.contact_info.tpu.to_string(),
-            node.debug_id()
-        );
+        println!(" {:20} | {}", node.contact_info.tpu.to_string(), node.id);
     }
     println!("Nodes: {}", validators.len());
 

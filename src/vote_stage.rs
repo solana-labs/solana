@@ -11,7 +11,7 @@ use metrics;
 use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use service::Service;
-use signature::Keypair;
+use signature::{Keypair, Pubkey};
 use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -58,7 +58,7 @@ pub fn create_new_signed_vote_blob(
 }
 
 fn get_last_id_to_vote_on(
-    debug_id: u64,
+    id: &Pubkey,
     ids: &[Hash],
     bank: &Arc<Bank>,
     now: u64,
@@ -70,8 +70,8 @@ fn get_last_id_to_vote_on(
 
     //TODO(anatoly): this isn't stake based voting
     debug!(
-        "{:x}: valid_ids {}/{} {}",
-        debug_id,
+        "{}: valid_ids {}/{} {}",
+        id,
         valid_ids.len(),
         ids.len(),
         super_majority_index,
@@ -112,7 +112,7 @@ fn get_last_id_to_vote_on(
 }
 
 pub fn send_leader_vote(
-    debug_id: u64,
+    id: &Pubkey,
     keypair: &Keypair,
     bank: &Arc<Bank>,
     crdt: &Arc<RwLock<Crdt>>,
@@ -125,7 +125,7 @@ pub fn send_leader_vote(
     if now - *last_vote > VOTE_TIMEOUT_MS {
         let ids: Vec<_> = crdt.read().unwrap().valid_last_ids();
         if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
-            debug_id,
+            id,
             &ids,
             bank,
             now,
@@ -139,10 +139,7 @@ pub fn send_leader_vote(
                 let finality_ms = now - super_majority_timestamp;
 
                 *last_valid_validator_timestamp = super_majority_timestamp;
-                debug!(
-                    "{:x} leader_sent_vote finality: {} ms",
-                    debug_id, finality_ms
-                );
+                debug!("{} leader_sent_vote finality: {} ms", id, finality_ms);
                 inc_new_counter_info!("vote_stage-leader_sent_vote", 1);
 
                 bank.set_finality((now - *last_valid_validator_timestamp) as usize);
@@ -329,7 +326,7 @@ pub mod tests {
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
         let mut last_valid_validator_timestamp = 0;
         let res = send_leader_vote(
-            1234,
+            &mint.pubkey(),
             &mint.keypair(),
             &bank,
             &leader,
@@ -369,7 +366,7 @@ pub mod tests {
 
         last_vote = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
         let res = send_leader_vote(
-            2345,
+            &Pubkey::default(),
             &mint.keypair(),
             &bank,
             &leader,
@@ -417,7 +414,7 @@ pub mod tests {
         // see that we fail to have 2/3rds consensus
         assert!(
             get_last_id_to_vote_on(
-                1234,
+                &Pubkey::default(),
                 &ids,
                 &bank,
                 0,
@@ -430,7 +427,7 @@ pub mod tests {
         bank.register_entry_id(&ids[6]);
 
         let res = get_last_id_to_vote_on(
-            1234,
+            &Pubkey::default(),
             &ids,
             &bank,
             0,
