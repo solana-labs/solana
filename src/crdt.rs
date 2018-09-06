@@ -19,20 +19,16 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
-use nat::bind_in_range;
-use nix::sys::socket::setsockopt;
-use nix::sys::socket::sockopt::ReusePort;
+use nat::{bind_in_range, bind_to};
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::{Keypair, KeypairUtil, Pubkey};
-use socket2::{Domain, SockAddr, Socket, Type};
 use std;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -1322,19 +1318,6 @@ impl Node {
                 Ok(socket) => (socket.local_addr().unwrap().port(), socket),
                 Err(err) => {
                     panic!("Failed to bind err: {}", err);
-                }
-            }
-        };
-
-        fn bind_to(port: u16) -> UdpSocket {
-            let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
-            let sock_fd = sock.as_raw_fd();
-            setsockopt(sock_fd, ReusePort, &true).unwrap();
-            let addr = socketaddr!(0, port);
-            match sock.bind(&SockAddr::from(addr)) {
-                Ok(_) => sock.into_udp_socket(),
-                Err(err) => {
-                    panic!("Failed to bind to {:?}, err: {}", addr, err);
                 }
             }
         };

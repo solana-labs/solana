@@ -16,6 +16,7 @@ pub mod broadcast_stage;
 pub mod budget;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
+#[macro_use]
 pub mod crdt;
 pub mod drone;
 pub mod entry;

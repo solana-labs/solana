@@ -93,6 +93,19 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<UdpSocket> {
     }
 }
 
+pub fn bind_to(port: u16) -> UdpSocket {
+    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
+    let sock_fd = sock.as_raw_fd();
+    setsockopt(sock_fd, ReusePort, &true).unwrap();
+    let addr = socketaddr!(0, port);
+    match sock.bind(&SockAddr::from(addr)) {
+        Ok(_) => sock.into_udp_socket(),
+        Err(err) => {
+            panic!("Failed to bind to {:?}, err: {}", addr, err);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use nat::parse_port_or_addr;

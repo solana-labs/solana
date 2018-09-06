@@ -1,19 +1,13 @@
 extern crate clap;
-extern crate nix;
-extern crate socket2;
-#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg};
-use nix::sys::socket::setsockopt;
-use nix::sys::socket::sockopt::ReusePort;
-use socket2::{Domain, SockAddr, Socket, Type};
+use solana::nat::bind_to;
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
 use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -80,19 +74,6 @@ fn main() -> Result<()> {
     if let Some(n) = matches.value_of("num-recv-sockets") {
         num_sockets = max(num_sockets, n.to_string().parse().expect("integer"));
     }
-
-    fn bind_to(port: u16) -> UdpSocket {
-        let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
-        let sock_fd = sock.as_raw_fd();
-        setsockopt(sock_fd, ReusePort, &true).unwrap();
-        let addr = socketaddr!(0, port);
-        match sock.bind(&SockAddr::from(addr)) {
-            Ok(_) => sock.into_udp_socket(),
-            Err(err) => {
-                panic!("Failed to bind to {:?}, err: {}", addr, err);
-            }
-        }
-    };
 
     let mut port = 0;
     let mut addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
