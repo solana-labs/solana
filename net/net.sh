@@ -26,6 +26,7 @@ Operate a configured testnet
    -S [snapFilename]    - Deploy the specified Snap file
    -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
    -f [cargoFeatures]   - List of |cargo --feaures=| to activate
+                          (ignored if -s or -S is specified)
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
