@@ -149,11 +149,18 @@ gcloud_CreateInstances() {
 }
 
 #
-# gcloud_DeleteInstances
+# gcloud_DeleteInstances [yes]
 #
 # Deletes all the instances listed in the `instances` array
 #
+# If yes = "true", skip the delete confirmation
+#
 gcloud_DeleteInstances() {
+  declare maybeQuiet=
+  if [[ $1 = true ]]; then
+    maybeQuiet=--quiet
+  fi
+
   if [[ ${#instances[0]} -eq 0 ]]; then
     echo No instances to delete
     return
@@ -167,7 +174,7 @@ gcloud_DeleteInstances() {
 
   (
     set -x
-    gcloud beta compute instances delete --zone "$zone" "${names[@]}"
+    gcloud beta compute instances delete --zone "$zone" $maybeQuiet "${names[@]}"
   )
 }
 

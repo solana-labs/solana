@@ -20,6 +20,7 @@ imageName="ubuntu-16-04-cuda-9-2-new"
 publicNetwork=false
 zone="us-west1-b"
 leaderAddress=
+yes=false
 
 usage() {
   exitcode=0
@@ -53,7 +54,7 @@ Configure a GCE-based testnet
    none
 
  delete-specific options:
-   none
+   -y               - Skip delete confirmation, assume yes
 
 EOF
   exit $exitcode
@@ -65,7 +66,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pi:n:c:z:ga:" opt; do
+while getopts "h?p:Pi:n:c:z:ga:y" opt; do
   case $opt in
   h | \?)
     usage
@@ -79,6 +80,9 @@ while getopts "h?p:Pi:n:c:z:ga:" opt; do
     ;;
   i)
     imageName=$OPTARG
+    ;;
+  y)
+    yes=true
     ;;
   n)
     validatorNodeCount=$OPTARG
@@ -180,7 +184,7 @@ delete)
     echo "No instances found matching '^$prefix-'"
     exit 0
   fi
-  gcloud_DeleteInstances
+  gcloud_DeleteInstances "$yes"
   rm -f "$configFile"
   ;;
 
