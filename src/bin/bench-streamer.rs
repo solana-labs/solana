@@ -1,9 +1,17 @@
+extern crate clap;
+extern crate nix;
+extern crate socket2;
 extern crate solana;
 
+use clap::{App, Arg};
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::ReusePort;
+use socket2::{Domain, SockAddr, Socket, Type};
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -54,28 +62,83 @@ fn sink(
     })
 }
 
-fn main() -> Result<()> {
-    let read = UdpSocket::bind("127.0.0.1:0")?;
-    read.set_read_timeout(Some(Duration::new(1, 0)))?;
+macro_rules! socketaddr {
+    ($ip:expr, $port:expr) => {
+        SocketAddr::from((Ipv4Addr::from($ip), $port))
+    };
+    ($str:expr) => {{
+        let a: SocketAddr = $str.parse().unwrap();
+        a
+    }};
+}
 
-    let addr = read.local_addr()?;
+fn main() -> Result<()> {
+    let mut num_sockets = 1usize;
+
+    let matches = App::new("solana-bench-streamer")
+        .arg(
+            Arg::with_name("num-recv-sockets")
+                .short("N")
+                .long("num-recv-sockets")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Use NUM receive sockets"),
+        )
+        .get_matches();
+
+    if let Some(n) = matches.value_of("num-recv-sockets") {
+        num_sockets = n.to_string().parse().expect("integer");
+    }
+
+    fn bind_to(port: u16) -> UdpSocket {
+        let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
+        let sock_fd = sock.as_raw_fd();
+        setsockopt(sock_fd, ReusePort, &true).unwrap();
+        let addr = socketaddr!(0, port);
+        match sock.bind(&SockAddr::from(addr)) {
+            Ok(_) => sock.into_udp_socket(),
+            Err(err) => {
+                panic!("Failed to bind to {:?}, err: {}", addr, err);
+            }
+        }
+    };
+
+    let mut port = 0;
+    let mut addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+
     let exit = Arc::new(AtomicBool::new(false));
     let pack_recycler = PacketRecycler::default();
 
-    let (s_reader, r_reader) = channel();
-    let t_reader = receiver(
-        Arc::new(read),
-        exit.clone(),
-        pack_recycler.clone(),
-        s_reader,
-    );
+    let mut read_channels = Vec::new();
+    let read_threads: Vec<JoinHandle<()>> = (0..num_sockets)
+        .into_iter()
+        .map(|_| {
+            let read = bind_to(port);
+            read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+
+            addr = read.local_addr().unwrap();
+            port = addr.port();
+
+            let (s_reader, r_reader) = channel();
+            read_channels.push(r_reader);
+            receiver(
+                Arc::new(read),
+                exit.clone(),
+                pack_recycler.clone(),
+                s_reader,
+            )
+        })
+        .collect();
+
     let t_producer1 = producer(&addr, &pack_recycler, exit.clone());
     let t_producer2 = producer(&addr, &pack_recycler, exit.clone());
     let t_producer3 = producer(&addr, &pack_recycler, exit.clone());
 
     let rvs = Arc::new(AtomicUsize::new(0));
-    let t_sink = sink(pack_recycler.clone(), exit.clone(), rvs.clone(), r_reader);
-
+    let sink_threads: Vec<JoinHandle<()>> = read_channels
+        .into_iter()
+        .map(|r_reader| sink(pack_recycler.clone(), exit.clone(), rvs.clone(), r_reader))
+        .collect();
     let start = SystemTime::now();
     let start_val = rvs.load(Ordering::Relaxed);
     sleep(Duration::new(5, 0));
@@ -86,10 +149,14 @@ fn main() -> Result<()> {
     let fcount = (end_val - start_val) as f64;
     println!("performance: {:?}", fcount / ftime);
     exit.store(true, Ordering::Relaxed);
-    t_reader.join()?;
+    for t_reader in read_threads {
+        t_reader.join()?;
+    }
     t_producer1.join()?;
     t_producer2.join()?;
     t_producer3.join()?;
-    t_sink.join()?;
+    for t_sink in sink_threads {
+        t_sink.join()?;
+    }
     Ok(())
 }
