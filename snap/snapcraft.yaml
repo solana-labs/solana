@@ -124,10 +124,11 @@ parts:
       mkdir -p $SNAPCRAFT_PART_INSTALL/scripts/
       cp -av scripts/* $SNAPCRAFT_PART_INSTALL/scripts/
 
-      # TODO: build curl,rsync/multilog from source instead of sneaking it in from the host
-      # system...
+      # TODO: build curl,dig,rsync/multilog from source instead of sneaking it
+      # in from the host system...
       set -x
       mkdir -p $SNAPCRAFT_PART_INSTALL/bin
       cp -av /usr/bin/curl $SNAPCRAFT_PART_INSTALL/bin/
+      cp -av /usr/bin/dig $SNAPCRAFT_PART_INSTALL/bin/
       cp -av /usr/bin/multilog $SNAPCRAFT_PART_INSTALL/bin/
       cp -av /usr/bin/rsync $SNAPCRAFT_PART_INSTALL/bin/

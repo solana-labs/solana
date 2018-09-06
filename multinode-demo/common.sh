@@ -173,8 +173,11 @@ find_leader() {
     # Select leader from the Snap configuration
     leader_ip=$(snapctl get leader-ip)
     if [[ -z $leader_ip ]]; then
-      # Assume public testnet by default
-      leader_ip=35.227.93.37  # testnet.solana.com
+      leader=testnet.solana.com
+      leader_ip=$(dig +short "${leader%:*}" | head -n1)
+      if [[ -z $leader_ip ]]; then
+          usage "Error: unable to resolve IP address for $leader"
+      fi
     fi
     leader=$leader_ip
     leader_address=$leader_ip:8001
