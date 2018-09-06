@@ -272,7 +272,7 @@ start() {
     networkVersion=${networkVersion/0+git./}
   fi
 
-  $metricsWriteDatapoint "testnet-deploy,name=$netBasename start=1,version=\"$networkVersion\""
+  $metricsWriteDatapoint "testnet-deploy start=1,version=\"$networkVersion\""
 
   echo
   echo "================================================================="
@@ -304,7 +304,7 @@ stop_node() {
 stop() {
   SECONDS=0
 
-  $metricsWriteDatapoint "testnet-deploy,name=$netBasename stop=1"
+  $metricsWriteDatapoint "testnet-deploy stop=1"
 
   stop_node "$leaderIp"
 
