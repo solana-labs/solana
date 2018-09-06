@@ -1,6 +1,7 @@
 extern crate clap;
 extern crate nix;
 extern crate socket2;
+#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg};
@@ -63,23 +64,12 @@ fn sink(
     })
 }
 
-macro_rules! socketaddr {
-    ($ip:expr, $port:expr) => {
-        SocketAddr::from((Ipv4Addr::from($ip), $port))
-    };
-    ($str:expr) => {{
-        let a: SocketAddr = $str.parse().unwrap();
-        a
-    }};
-}
-
 fn main() -> Result<()> {
     let mut num_sockets = 1usize;
 
     let matches = App::new("solana-bench-streamer")
         .arg(
             Arg::with_name("num-recv-sockets")
-                .short("N")
                 .long("num-recv-sockets")
                 .value_name("NUM")
                 .takes_value(true)
@@ -111,32 +101,30 @@ fn main() -> Result<()> {
     let pack_recycler = PacketRecycler::default();
 
     let mut read_channels = Vec::new();
-    let read_threads: Vec<JoinHandle<()>> = (0..num_sockets)
-        .into_iter()
-        .map(|_| {
-            let read = bind_to(port);
-            read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
+    let mut read_threads = Vec::new();
+    for _ in 0..num_sockets {
+        let read = bind_to(port);
+        read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
-            addr = read.local_addr().unwrap();
-            port = addr.port();
+        addr = read.local_addr().unwrap();
+        port = addr.port();
 
-            let (s_reader, r_reader) = channel();
-            read_channels.push(r_reader);
-            receiver(
-                Arc::new(read),
-                exit.clone(),
-                pack_recycler.clone(),
-                s_reader,
-            )
-        })
-        .collect();
+        let (s_reader, r_reader) = channel();
+        read_channels.push(r_reader);
+        read_threads.push(receiver(
+            Arc::new(read),
+            exit.clone(),
+            pack_recycler.clone(),
+            s_reader,
+        ));
+    }
 
     let t_producer1 = producer(&addr, &pack_recycler, exit.clone());
     let t_producer2 = producer(&addr, &pack_recycler, exit.clone());
     let t_producer3 = producer(&addr, &pack_recycler, exit.clone());
 
     let rvs = Arc::new(AtomicUsize::new(0));
-    let sink_threads: Vec<JoinHandle<()>> = read_channels
+    let sink_threads: Vec<_> = read_channels
         .into_iter()
         .map(|r_reader| sink(pack_recycler.clone(), exit.clone(), rvs.clone(), r_reader))
         .collect();
