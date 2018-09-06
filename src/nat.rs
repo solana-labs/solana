@@ -2,10 +2,14 @@
 
 extern crate reqwest;
 
+use nix::sys::socket::setsockopt;
+use nix::sys::socket::sockopt::ReusePort;
 use pnet_datalink as datalink;
 use rand::{thread_rng, Rng};
+use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::os::unix::io::AsRawFd;
 
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
@@ -72,17 +76,33 @@ pub fn get_ip_addr() -> Option<IpAddr> {
 pub fn bind_in_range(range: (u16, u16)) -> io::Result<UdpSocket> {
     let (start, end) = range;
     let mut tries_left = end - start;
+    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
+    let sock_fd = sock.as_raw_fd();
+    setsockopt(sock_fd, ReusePort, &true).unwrap();
     loop {
         let rand_port = thread_rng().gen_range(start, end);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
 
-        match UdpSocket::bind(addr) {
-            Result::Ok(val) => break Result::Ok(val),
+        match sock.bind(&SockAddr::from(addr)) {
+            Result::Ok(_) => break Result::Ok(sock.into_udp_socket()),
             Result::Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
                 return Err(err);
             },
         }
         tries_left -= 1;
+    }
+}
+
+pub fn bind_to(port: u16) -> UdpSocket {
+    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
+    let sock_fd = sock.as_raw_fd();
+    setsockopt(sock_fd, ReusePort, &true).unwrap();
+    let addr = socketaddr!(0, port);
+    match sock.bind(&SockAddr::from(addr)) {
+        Ok(_) => sock.into_udp_socket(),
+        Err(err) => {
+            panic!("Failed to bind to {:?}, err: {}", addr, err);
+        }
     }
 }
 

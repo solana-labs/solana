@@ -56,7 +56,7 @@ impl Tpu {
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
-        transactions_socket: UdpSocket,
+        transactions_sockets: Vec<UdpSocket>,
         blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
         ledger_path: &str,
@@ -65,7 +65,7 @@ impl Tpu {
         let packet_recycler = PacketRecycler::default();
 
         let (fetch_stage, packet_receiver) =
-            FetchStage::new(Arc::new(transactions_socket), exit, &packet_recycler);
+            FetchStage::new(transactions_sockets, exit, &packet_recycler);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);

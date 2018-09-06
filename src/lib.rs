@@ -16,6 +16,7 @@ pub mod broadcast_stage;
 pub mod budget;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
+#[macro_use]
 pub mod crdt;
 pub mod drone;
 pub mod entry;
@@ -69,6 +70,7 @@ extern crate jsonrpc_macros;
 extern crate jsonrpc_http_server;
 #[macro_use]
 extern crate log;
+extern crate nix;
 extern crate rayon;
 extern crate ring;
 extern crate serde;
@@ -77,6 +79,7 @@ extern crate serde_derive;
 extern crate pnet_datalink;
 extern crate serde_json;
 extern crate sha2;
+extern crate socket2;
 extern crate sys_info;
 extern crate untrusted;
 
