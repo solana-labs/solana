@@ -263,6 +263,7 @@ start() {
     startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
   done
   clientDeployTime=$SECONDS
+  $metricsWriteDatapoint "testnet-deploy start=1"
 
   if [[ $deployMethod = "snap" ]]; then
     IFS=\  read -r _ networkVersion _ < <(
@@ -270,9 +271,8 @@ start() {
         "snap info solana | grep \"^installed:\""
     )
     networkVersion=${networkVersion/0+git./}
+    $metricsWriteDatapoint "testnet-deploy version=\"$networkVersion\""
   fi
-
-  $metricsWriteDatapoint "testnet-deploy start=1,version=\"$networkVersion\""
 
   echo
   echo "================================================================="
