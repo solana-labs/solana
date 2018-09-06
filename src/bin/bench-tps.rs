@@ -4,6 +4,7 @@ extern crate clap;
 extern crate influx_db_client;
 extern crate rayon;
 extern crate serde_json;
+#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg};
@@ -408,10 +409,9 @@ fn main() {
             Arg::with_name("network")
                 .short("n")
                 .long("network")
-                .value_name("HOST:PORT")
+                .value_name("IP:PORT")
                 .takes_value(true)
-                .required(true)
-                .help("rendezvous with the network at this gossip entry point"),
+                .help("rendezvous with the network at this gossip entry point, defaults to 127.0.0.1:8001"),
         )
         .arg(
             Arg::with_name("keypair")
@@ -457,20 +457,20 @@ fn main() {
         .arg(
             Arg::with_name("tx_count")
                 .long("tx_count")
-                .value_name("NUMBER")
+                .value_name("NUM")
                 .takes_value(true)
-                .help("number of transactions to send in a single batch")
+                .help("number of transactions to send per batch")
         )
         .get_matches();
 
-    let network = matches
-        .value_of("network")
-        .unwrap()
-        .parse()
-        .unwrap_or_else(|e| {
+    let network = if let Some(addr) = matches.value_of("network") {
+        addr.parse().unwrap_or_else(|e| {
             eprintln!("failed to parse network: {}", e);
             exit(1)
-        });
+        })
+    } else {
+        socketaddr!("127.0.0.1:8001")
+    };
 
     let id = if let Some(k) = matches.value_of("keypair") {
         read_keypair(k).expect("can't read client keypair")
@@ -503,7 +503,6 @@ fn main() {
     };
 
     let sustained = matches.is_present("sustained");
-    let loop_forever = matches.is_present("loop");
 
     let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
