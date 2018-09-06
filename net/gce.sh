@@ -215,7 +215,7 @@ create)
   gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" "$zone" \
     "$imageName" "$validatorMachineType" "$validatorBootDiskSize" "$validatorAccelerator" \
     "$here/remote/remote-startup.sh" ""
-  if [[ -n $clientNodeCount ]]; then
+  if [[ $clientNodeCount -gt 0 ]]; then
     gcloud_CreateInstances "$prefix-client" "$clientNodeCount" "$zone" \
       "$imageName" "$clientMachineType" "$clientBootDiskSize" "$clientAccelerator" \
       "$here/remote/remote-startup.sh" ""
