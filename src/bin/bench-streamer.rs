@@ -10,6 +10,7 @@ use socket2::{Domain, SockAddr, Socket, Type};
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
+use std::cmp::max;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -87,7 +88,7 @@ fn main() -> Result<()> {
         .get_matches();
 
     if let Some(n) = matches.value_of("num-recv-sockets") {
-        num_sockets = n.to_string().parse().expect("integer");
+        num_sockets = max(num_sockets, n.to_string().parse().expect("integer"));
     }
 
     fn bind_to(port: u16) -> UdpSocket {
