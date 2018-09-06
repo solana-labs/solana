@@ -1268,7 +1268,7 @@ pub struct Sockets {
     pub gossip: UdpSocket,
     pub requests: UdpSocket,
     pub replicate: UdpSocket,
-    pub transaction: Vec<Arc<UdpSocket>>,
+    pub transaction: Vec<UdpSocket>,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
@@ -1308,7 +1308,7 @@ impl Node {
                 gossip,
                 requests,
                 replicate,
-                transaction: vec![Arc::new(transaction)],
+                transaction: vec![transaction],
                 respond,
                 broadcast,
                 repair,
@@ -1349,10 +1349,10 @@ impl Node {
         let (requests_port, requests) = bind();
         let (transaction_port, transaction) = bind();
 
-        let mut transaction_sockets = vec![Arc::new(transaction)];
+        let mut transaction_sockets = vec![transaction];
 
         for _ in 0..4 {
-            transaction_sockets.push(Arc::new(bind_to(transaction_port)));
+            transaction_sockets.push(bind_to(transaction_port));
         }
 
         let (_, repair) = bind();
@@ -2072,10 +2072,9 @@ mod tests {
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
-        let num_tx_sockets = node.sockets.transaction.len();
-        assert!(num_tx_sockets > 1);
-        for i in 0..num_tx_sockets {
-            assert_eq!(node.sockets.transaction[i].local_addr().unwrap().ip(), ip);
+        assert!(node.sockets.transaction.len() > 1);
+        for tx_socket in node.sockets.transaction.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
         }
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
@@ -2088,11 +2087,8 @@ mod tests {
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();
         assert!(tx_port >= FULLNODE_PORT_RANGE.0);
         assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for i in 1..num_tx_sockets {
-            assert_eq!(
-                tx_port,
-                node.sockets.transaction[i].local_addr().unwrap().port()
-            )
+        for tx_socket in node.sockets.transaction.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
         }
         assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
@@ -2105,10 +2101,9 @@ mod tests {
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
-        let num_tx_sockets = node.sockets.transaction.len();
-        assert!(num_tx_sockets > 1);
-        for i in 0..num_tx_sockets {
-            assert_eq!(node.sockets.transaction[i].local_addr().unwrap().ip(), ip);
+        assert!(node.sockets.transaction.len() > 1);
+        for tx_socket in node.sockets.transaction.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
         }
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
@@ -2120,11 +2115,8 @@ mod tests {
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();
         assert!(tx_port >= FULLNODE_PORT_RANGE.0);
         assert!(tx_port < FULLNODE_PORT_RANGE.1);
-        for i in 1..num_tx_sockets {
-            assert_eq!(
-                tx_port,
-                node.sockets.transaction[i].local_addr().unwrap().port()
-            )
+        for tx_socket in node.sockets.transaction.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
         }
         assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
