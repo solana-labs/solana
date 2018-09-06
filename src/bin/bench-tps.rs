@@ -424,8 +424,7 @@ fn main() {
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
-                .default_value("~/.config/solana/id.json")
-                .help("/path/to/id.json"),
+                .help("file containing a client keypair, (ephemeral by default)"),
         )
         .arg(
             Arg::with_name("num-nodes")
@@ -480,7 +479,11 @@ fn main() {
             exit(1)
         });
 
-    let id = read_keypair(matches.value_of("keypair").unwrap()).expect("client keypair");
+    let id = if let Some(k) = matches.value_of("keypair") {
+        read_keypair(k).expect("client keypair")
+    } else {
+        Keypair::new()
+    };
 
     if let Some(t) = matches.value_of("threads") {
         threads = t.to_string().parse().expect("integer");
