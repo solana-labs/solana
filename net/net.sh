@@ -188,13 +188,20 @@ startClient() {
 
 sanity() {
   declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
+  declare ok=true
+
   echo "--- Sanity"
+  $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
+
   (
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$leaderIp" \
       "./solana/net/remote/remote-sanity.sh $sanityExtraArgs"
-  ) || exit 1
+  ) || ok=false
+
+  $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
+  $ok || exit 1
 }
 
 start() {
@@ -231,6 +238,7 @@ start() {
   esac
 
   echo "Deployment started at $(date)"
+  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   SECONDS=0
   declare leaderDeployTime=
@@ -263,7 +271,7 @@ start() {
     startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
   done
   clientDeployTime=$SECONDS
-  $metricsWriteDatapoint "testnet-deploy start=1"
+  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
 
   if [[ $deployMethod = "snap" ]]; then
     IFS=\  read -r _ networkVersion _ < <(
@@ -303,8 +311,7 @@ stop_node() {
 
 stop() {
   SECONDS=0
-
-  $metricsWriteDatapoint "testnet-deploy stop=1"
+  $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
   stop_node "$leaderIp"
 
@@ -312,6 +319,7 @@ stop() {
     stop_node "$ipAddress"
   done
 
+  $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
   echo "Stopping nodes took $SECONDS seconds"
 }
 

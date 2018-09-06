@@ -54,16 +54,13 @@ esac
 
 scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
 
+set +e
 while true; do
   echo "=== Client start: $(date)" >> client.log
+  $metricsWriteDatapoint "testnet-deploy client-begin=1"
   clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
   echo "$ $clientCommand" >> client.log
-
-  set +e
   $clientCommand >> client.log 2>&1
-  set -e
-
-  $metricsWriteDatapoint "testnet-deploy,name=$netBasename clientexit=1"
-  echo Error: bench-tps should never exit | tee -a client.log
+  $metricsWriteDatapoint "testnet-deploy client-complete=1"
 done
 
