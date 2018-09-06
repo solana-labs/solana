@@ -391,6 +391,13 @@ fn compute_and_report_stats(
     );
 }
 
+// First transfer 3/4 of the tokens to the dest accounts
+// then ping-pong 1/4 of the tokens back to the other account
+// this leaves 1/4 token buffer in each account
+fn should_switch_directions(num_tokens_per_account: i64, i: i64) -> bool {
+    i % (num_tokens_per_account / 4) == 0 && (i >= (3 * num_tokens_per_account) / 4)
+}
+
 fn main() {
     logger::setup();
     metrics::set_panic_hook("bench-tps");
@@ -543,7 +550,20 @@ fn main() {
     let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
 
     println!("Get tokens...");
-    airdrop_tokens(&mut client, &leader, &id, tx_count);
+    let num_tokens_per_account = 20;
+
+    // Sample the first keypair, see if it has tokens, if so then resume
+    // to avoid token loss
+    let keypair0_balance = client.poll_get_balance(&keypairs[0].pubkey()).unwrap_or(0);
+
+    if num_tokens_per_account > keypair0_balance {
+        airdrop_tokens(
+            &mut client,
+            &leader,
+            &id,
+            (num_tokens_per_account - keypair0_balance) * tx_count,
+        );
+    }
     airdrop_tokens(&mut barrier_client, &leader, &barrier_id, 1);
 
     println!("Get last ID...");
@@ -604,7 +624,8 @@ fn main() {
     let time = Duration::new(time_sec, 0);
     let now = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
-    while now.elapsed() < time || reclaim_tokens_back_to_source_account {
+    let mut i = keypair0_balance;
+    while now.elapsed() < time {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
         metrics_submit_token_balance(balance);
 
@@ -619,8 +640,6 @@ fn main() {
             threads,
             reclaim_tokens_back_to_source_account,
         );
-        reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
-
         // In sustained mode overlap the transfers with generation
         // this has higher average performance but lower peak performance
         // in tested environments.
@@ -633,6 +652,11 @@ fn main() {
         // transactions sent by `generate_txs()` so instead send and confirm a single transaction
         // to validate the network is still functional.
         send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
+
+        i += 1;
+        if should_switch_directions(num_tokens_per_account, i) {
+            reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
+        }
     }
 
     // Stop the sampling threads so it will collect the stats
@@ -720,4 +744,24 @@ fn converge(
     threads.extend(ncp.thread_hdls().into_iter());
     let leader = spy_ref.read().unwrap().leader_data().cloned();
     (v, leader)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_switch_directions() {
+        assert_eq!(should_switch_directions(20, 0), false);
+        assert_eq!(should_switch_directions(20, 1), false);
+        assert_eq!(should_switch_directions(20, 14), false);
+        assert_eq!(should_switch_directions(20, 15), true);
+        assert_eq!(should_switch_directions(20, 16), false);
+        assert_eq!(should_switch_directions(20, 19), false);
+        assert_eq!(should_switch_directions(20, 20), true);
+        assert_eq!(should_switch_directions(20, 21), false);
+        assert_eq!(should_switch_directions(20, 99), false);
+        assert_eq!(should_switch_directions(20, 100), true);
+        assert_eq!(should_switch_directions(20, 101), false);
+    }
 }
