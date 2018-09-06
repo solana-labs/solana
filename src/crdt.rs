@@ -13,7 +13,6 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use bincode::{deserialize, serialize};
-use byteorder::{LittleEndian, ReadBytesExt};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
@@ -27,7 +26,6 @@ use result::{Error, Result};
 use signature::{Keypair, KeypairUtil, Pubkey};
 use std;
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -110,13 +108,6 @@ pub struct NodeInfo {
     pub ledger_state: LedgerState,
 }
 
-fn make_debug_id(key: &Pubkey) -> u64 {
-    let buf: &[u8] = &key.as_ref();
-    let mut rdr = Cursor::new(&buf[..8]);
-    rdr.read_u64::<LittleEndian>()
-        .expect("rdr.read_u64 in fn debug_id")
-}
-
 impl NodeInfo {
     pub fn new(
         id: Pubkey,
@@ -155,9 +146,6 @@ impl NodeInfo {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
         Self::new(Keypair::new().pubkey(), addr, addr, addr, addr)
-    }
-    pub fn debug_id(&self) -> u64 {
-        make_debug_id(&self.id)
     }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
         let mut nxt_addr = *addr;
@@ -252,9 +240,6 @@ impl Crdt {
         me.table.insert(node_info.id, node_info);
         Ok(me)
     }
-    pub fn debug_id(&self) -> u64 {
-        make_debug_id(&self.id)
-    }
     pub fn my_data(&self) -> &NodeInfo {
         &self.table[&self.id]
     }
@@ -271,12 +256,7 @@ impl Crdt {
 
     pub fn set_leader(&mut self, key: Pubkey) -> () {
         let mut me = self.my_data().clone();
-        warn!(
-            "{:x}: LEADER_UPDATE TO {:x} from {:x}",
-            me.debug_id(),
-            make_debug_id(&key),
-            make_debug_id(&me.leader_id),
-        );
+        warn!("{}: LEADER_UPDATE TO {} from {}", me.id, key, me.leader_id);
         me.leader_id = key;
         me.version += 1;
         self.insert(&me);
@@ -288,38 +268,23 @@ impl Crdt {
 
     pub fn insert_vote(&mut self, pubkey: &Pubkey, v: &Vote, last_id: Hash) {
         if self.table.get(pubkey).is_none() {
-            warn!(
-                "{:x}: VOTE for unknown id: {:x}",
-                self.debug_id(),
-                make_debug_id(pubkey)
-            );
+            warn!("{}: VOTE for unknown id: {}", self.id, pubkey);
             return;
         }
         if v.contact_info_version > self.table[pubkey].contact_info.version {
             warn!(
-                "{:x}: VOTE for new address version from: {:x} ours: {} vote: {:?}",
-                self.debug_id(),
-                make_debug_id(pubkey),
-                self.table[pubkey].contact_info.version,
-                v,
+                "{}: VOTE for new address version from: {} ours: {} vote: {:?}",
+                self.id, pubkey, self.table[pubkey].contact_info.version, v,
             );
             return;
         }
         if *pubkey == self.my_data().leader_id {
-            info!(
-                "{:x}: LEADER_VOTED! {:x}",
-                self.debug_id(),
-                make_debug_id(&pubkey)
-            );
+            info!("{}: LEADER_VOTED! {}", self.id, pubkey);
             inc_new_counter_info!("crdt-insert_vote-leader_voted", 1);
         }
 
         if v.version <= self.table[pubkey].version {
-            debug!(
-                "{:x}: VOTE for old version: {:x}",
-                self.debug_id(),
-                make_debug_id(&pubkey)
-            );
+            debug!("{}: VOTE for old version: {}", self.id, pubkey);
             self.update_liveness(*pubkey);
             return;
         } else {
@@ -327,11 +292,7 @@ impl Crdt {
             data.version = v.version;
             data.ledger_state.last_id = last_id;
 
-            debug!(
-                "{:x}: INSERTING VOTE! for {:x}",
-                self.debug_id(),
-                data.debug_id()
-            );
+            debug!("{}: INSERTING VOTE! for {}", self.id, data.id);
             self.update_liveness(data.id);
             self.insert(&data);
         }
@@ -339,7 +300,7 @@ impl Crdt {
     pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
         inc_new_counter_info!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
-            info!("{:x}: INSERTING VOTES {}", self.debug_id(), votes.len());
+            info!("{}: INSERTING VOTES {}", self.id, votes.len());
         }
         for v in votes {
             self.insert_vote(&v.0, &v.1, v.2);
@@ -352,12 +313,7 @@ impl Crdt {
         if self.table.get(&v.id).is_none() || (v.version > self.table[&v.id].version) {
             //somehow we signed a message for our own identity with a higher version than
             // we have stored ourselves
-            trace!(
-                "{:x}: insert v.id: {:x} version: {}",
-                self.debug_id(),
-                v.debug_id(),
-                v.version
-            );
+            trace!("{}: insert v.id: {} version: {}", self.id, v.id, v.version);
             if self.table.get(&v.id).is_none() {
                 inc_new_counter_info!("crdt-insert-new_entry", 1, 1);
             }
@@ -369,9 +325,9 @@ impl Crdt {
             1
         } else {
             trace!(
-                "{:x}: INSERT FAILED data: {:x} new.version: {} me.version: {}",
-                self.debug_id(),
-                v.debug_id(),
+                "{}: INSERT FAILED data: {} new.version: {} me.version: {}",
+                self.id,
+                v.id,
                 v.version,
                 self.table[&v.id].version
             );
@@ -382,12 +338,7 @@ impl Crdt {
     fn update_liveness(&mut self, id: Pubkey) {
         //update the liveness table
         let now = timestamp();
-        trace!(
-            "{:x} updating liveness {:x} to {}",
-            self.debug_id(),
-            make_debug_id(&id),
-            now
-        );
+        trace!("{} updating liveness {} to {}", self.id, id, now);
         *self.alive.entry(id).or_insert(now) = now;
     }
     /// purge old validators
@@ -412,13 +363,7 @@ impl Crdt {
                 if k != self.id && (now - v) > limit {
                     Some(k)
                 } else {
-                    trace!(
-                        "{:x} purge skipped {:x} {} {}",
-                        self.debug_id(),
-                        make_debug_id(&k),
-                        now - v,
-                        limit
-                    );
+                    trace!("{} purge skipped {} {} {}", self.id, k, now - v, limit);
                     None
                 }
             })
@@ -432,16 +377,12 @@ impl Crdt {
             self.remote.remove(id);
             self.local.remove(id);
             self.external_liveness.remove(id);
-            info!("{:x}: PURGE {:x}", self.debug_id(), make_debug_id(id));
+            info!("{}: PURGE {}", self.id, id);
             for map in self.external_liveness.values_mut() {
                 map.remove(id);
             }
             if *id == leader_id {
-                info!(
-                    "{:x}: PURGE LEADER {:x}",
-                    self.debug_id(),
-                    make_debug_id(id),
-                );
+                info!("{}: PURGE LEADER {}", self.id, id,);
                 inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
                 self.set_leader(Pubkey::default());
             }
@@ -463,19 +404,14 @@ impl Crdt {
                     false
                 } else if !(Self::is_valid_address(&v.contact_info.tvu)) {
                     trace!(
-                        "{:x}:broadcast skip not listening {:x} {}",
-                        me.debug_id(),
-                        v.debug_id(),
+                        "{}:broadcast skip not listening {} {}",
+                        me.id,
+                        v.id,
                         v.contact_info.tvu,
                     );
                     false
                 } else {
-                    trace!(
-                        "{:x}:broadcast node {:x} {}",
-                        me.debug_id(),
-                        v.debug_id(),
-                        v.contact_info.tvu
-                    );
+                    trace!("{}:broadcast node {} {}", me.id, v.id, v.contact_info.tvu);
                     true
                 }
             })
@@ -496,13 +432,13 @@ impl Crdt {
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.is_empty() {
-            warn!("{:x}:not enough peers in crdt table", me.debug_id());
+            warn!("{}:not enough peers in crdt table", me.id);
             inc_new_counter_info!("crdt-broadcast-not_enough_peers_error", 1);
             Err(CrdtError::NoPeers)?;
         }
         trace!(
-            "{:x} transmit_index: {:?} received_index: {} broadcast_len: {}",
-            me.debug_id(),
+            "{} transmit_index: {:?} received_index: {} broadcast_len: {}",
+            me.id,
             *transmit_index,
             received_index,
             broadcast_table.len()
@@ -521,8 +457,8 @@ impl Crdt {
             let w_idx = idx as usize % window_l.len();
 
             trace!(
-                "{:x} broadcast order data w_idx {} br_idx {}",
-                me.debug_id(),
+                "{} broadcast order data w_idx {} br_idx {}",
+                me.id,
                 w_idx,
                 br_idx
             );
@@ -541,8 +477,8 @@ impl Crdt {
             }
 
             trace!(
-                "{:x} broadcast order coding w_idx: {} br_idx  :{}",
-                me.debug_id(),
+                "{} broadcast order coding w_idx: {} br_idx  :{}",
+                me.id,
                 w_idx,
                 br_idx,
             );
@@ -562,21 +498,21 @@ impl Crdt {
                 let blob = bl.read().expect("blob read lock in streamer::broadcast");
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!(
-                    "{:x}: BROADCAST idx: {} sz: {} to {:x},{} coding: {}",
-                    me.debug_id(),
+                    "{}: BROADCAST idx: {} sz: {} to {},{} coding: {}",
+                    me.id,
                     blob.get_index().unwrap(),
                     blob.meta.size,
-                    v.debug_id(),
+                    v.id,
                     v.contact_info.tvu,
                     blob.is_coding()
                 );
                 assert!(blob.meta.size <= BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
                 trace!(
-                    "{:x}: done broadcast {} to {:x} {}",
-                    me.debug_id(),
+                    "{}: done broadcast {} to {} {}",
+                    me.id,
                     blob.meta.size,
-                    v.debug_id(),
+                    v.id,
                     v.contact_info.tvu
                 );
                 e
@@ -642,10 +578,10 @@ impl Crdt {
             .par_iter()
             .map(|v| {
                 debug!(
-                    "{:x}: retransmit blob {} to {:x} {}",
-                    me.debug_id(),
+                    "{}: retransmit blob {} to {} {}",
+                    me.id,
                     rblob.get_index().unwrap(),
-                    v.debug_id(),
+                    v.id,
                     v.contact_info.tvu,
                 );
                 //TODO profile this, may need multiple sockets for par_iter
@@ -742,21 +678,17 @@ impl Crdt {
         let choose_peer_result = choose_peer_strategy.choose_peer(options);
 
         if let Err(Error::CrdtError(CrdtError::NoPeers)) = &choose_peer_result {
-            trace!(
-                "crdt too small for gossip {:x} {}",
-                self.debug_id(),
-                self.table.len()
-            );
+            trace!("crdt too small for gossip {} {}", self.id, self.table.len());
         };
         let v = choose_peer_result?;
 
         let remote_update_index = *self.remote.get(&v.id).unwrap_or(&0);
         let req = Protocol::RequestUpdates(remote_update_index, self.my_data().clone());
         trace!(
-            "created gossip request from {:x} {:?} to {:x} {}",
-            self.debug_id(),
+            "created gossip request from {} {:?} to {} {}",
+            self.id,
             self.my_data(),
-            v.debug_id(),
+            v.id,
             v.contact_info.ncp
         );
 
@@ -806,17 +738,11 @@ impl Crdt {
         for v in cur {
             let cnt = table.entry(&v.leader_id).or_insert(0);
             *cnt += 1;
-            trace!("leader {:x} {}", make_debug_id(&v.leader_id), *cnt);
+            trace!("leader {} {}", v.leader_id, *cnt);
         }
         let mut sorted: Vec<(&Pubkey, usize)> = table.into_iter().collect();
-        let my_id = self.debug_id();
         for x in &sorted {
-            trace!(
-                "{:x}: sorted leaders {:x} votes: {}",
-                my_id,
-                make_debug_id(&x.0),
-                x.1
-            );
+            trace!("{}: sorted leaders {} votes: {}", self.id, x.0, x.1);
         }
         sorted.sort_by_key(|a| a.1);
         sorted.last().map(|a| *a.0)
@@ -980,9 +906,9 @@ impl Crdt {
 
         inc_new_counter_info!("crdt-window-request-fail", 1);
         trace!(
-            "{:x}: failed RequestWindowIndex {:x} {} {}",
-            me.debug_id(),
-            from.debug_id(),
+            "{}: failed RequestWindowIndex {} {} {}",
+            me.id,
+            from.id,
             ix,
             pos,
         );
@@ -1025,11 +951,11 @@ impl Crdt {
         match request {
             // TODO sigverify these
             Protocol::RequestUpdates(version, mut from) => {
-                let debug_id = me.read().unwrap().debug_id();
+                let id = me.read().unwrap().id;
 
                 trace!(
-                    "{:x} RequestUpdates {} from {}, professing to be {}",
-                    debug_id,
+                    "{} RequestUpdates {} from {}, professing to be {}",
+                    id,
                     version,
                     from_addr,
                     from.contact_info.ncp
@@ -1037,9 +963,9 @@ impl Crdt {
 
                 if from.id == me.read().unwrap().id {
                     warn!(
-                        "RequestUpdates ignored, I'm talking to myself: me={:x} remoteme={:x}",
-                        me.read().unwrap().debug_id(),
-                        from.debug_id()
+                        "RequestUpdates ignored, I'm talking to myself: me={} remoteme={}",
+                        me.read().unwrap().id,
+                        from.id
                     );
                     inc_new_counter_info!("crdt-window-request-loopback", 1);
                     return None;
@@ -1080,8 +1006,8 @@ impl Crdt {
                 if len < 1 {
                     let me = me.read().unwrap();
                     trace!(
-                        "no updates me {:x} ix {} since {}",
-                        debug_id,
+                        "no updates me {} ix {} since {}",
+                        id,
                         me.update_index,
                         version
                     );
@@ -1091,10 +1017,10 @@ impl Crdt {
 
                     if let Ok(r) = to_blob(rsp, from.contact_info.ncp, &blob_recycler) {
                         trace!(
-                            "sending updates me {:x} len {} to {:x} {}",
-                            debug_id,
+                            "sending updates me {} len {} to {} {}",
+                            id,
                             len,
-                            from.debug_id(),
+                            from.id,
                             from.contact_info.ncp,
                         );
                         Some(r)
@@ -1107,8 +1033,8 @@ impl Crdt {
             Protocol::ReceiveUpdates(from, update_index, data, external_liveness) => {
                 let now = Instant::now();
                 trace!(
-                    "ReceivedUpdates from={:x} update_index={} len={}",
-                    make_debug_id(&from),
+                    "ReceivedUpdates from={} update_index={} len={}",
+                    from,
                     update_index,
                     data.len()
                 );
@@ -1133,9 +1059,9 @@ impl Crdt {
 
                 if from.id == me.read().unwrap().id {
                     warn!(
-                        "{:x}: Ignored received RequestWindowIndex from ME {:x} {} ",
-                        me.read().unwrap().debug_id(),
-                        from.debug_id(),
+                        "{}: Ignored received RequestWindowIndex from ME {} {} ",
+                        me.read().unwrap().id,
+                        from.id,
                         ix,
                     );
                     inc_new_counter_info!("crdt-window-request-address-eq", 1);
@@ -1145,12 +1071,7 @@ impl Crdt {
                 me.write().unwrap().insert(&from);
                 let me = me.read().unwrap().my_data().clone();
                 inc_new_counter_info!("crdt-window-request-recv", 1);
-                trace!(
-                    "{:x}: received RequestWindowIndex {:x} {} ",
-                    me.debug_id(),
-                    from.debug_id(),
-                    ix,
-                );
+                trace!("{}: received RequestWindowIndex {} {} ", me.id, from.id, ix,);
                 let res = Self::run_window_request(
                     &from,
                     &from_addr,
@@ -1229,8 +1150,8 @@ impl Crdt {
                 if e.is_err() {
                     let me = me.read().unwrap();
                     debug!(
-                        "{:x}: run_listen timeout, table size: {}",
-                        me.debug_id(),
+                        "{}: run_listen timeout, table size: {}",
+                        me.id,
                         me.table.len()
                     );
                 }

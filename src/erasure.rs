@@ -1,5 +1,6 @@
 // Support erasure coding
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
+use signature::Pubkey;
 use std::cmp;
 use std::mem;
 use std::result;
@@ -214,7 +215,7 @@ pub fn decode_blocks(
 //
 //
 pub fn generate_coding(
-    debug_id: u64,
+    id: &Pubkey,
     window: &mut [WindowSlot],
     recycler: &BlobRecycler,
     receive_index: u64,
@@ -234,8 +235,8 @@ pub fn generate_coding(
             break;
         }
         info!(
-            "generate_coding {:x} start: {} end: {} start_idx: {} num_blobs: {}",
-            debug_id, block_start, block_end, start_idx, num_blobs
+            "generate_coding {} start: {} end: {} start_idx: {} num_blobs: {}",
+            id, block_start, block_end, start_idx, num_blobs
         );
 
         let mut max_data_size = 0;
@@ -243,12 +244,12 @@ pub fn generate_coding(
         // find max_data_size, maybe bail if not all the data is here
         for i in block_start..block_end {
             let n = i % window.len();
-            trace!("{:x} window[{}] = {:?}", debug_id, n, window[n].data);
+            trace!("{} window[{}] = {:?}", id, n, window[n].data);
 
             if let Some(b) = &window[n].data {
                 max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
             } else {
-                trace!("{:x} data block is null @ {}", debug_id, n);
+                trace!("{} data block is null @ {}", id, n);
                 return Ok(());
             }
         }
@@ -256,7 +257,7 @@ pub fn generate_coding(
         // round up to the nearest jerasure alignment
         max_data_size = align!(max_data_size, JERASURE_ALIGN);
 
-        trace!("{:x} max_data_size: {}", debug_id, max_data_size);
+        trace!("{} max_data_size: {}", id, max_data_size);
 
         let mut data_blobs = Vec::with_capacity(NUM_DATA);
         for i in block_start..block_end {
@@ -299,8 +300,8 @@ pub fn generate_coding(
                 let id = data_rl.get_id().unwrap();
 
                 trace!(
-                    "{:x} copying index {} id {:?} from data to coding",
-                    debug_id,
+                    "{} copying index {} id {:?} from data to coding",
+                    id,
                     index,
                     id
                 );
@@ -324,7 +325,7 @@ pub fn generate_coding(
             .iter()
             .enumerate()
             .map(|(i, l)| {
-                trace!("{:x} i: {} data: {}", debug_id, i, l.data[0]);
+                trace!("{} i: {} data: {}", id, i, l.data[0]);
                 &l.data[..max_data_size]
             })
             .collect();
@@ -338,15 +339,15 @@ pub fn generate_coding(
             .iter_mut()
             .enumerate()
             .map(|(i, l)| {
-                trace!("{:x} i: {} coding: {}", debug_id, i, l.data[0],);
+                trace!("{} i: {} coding: {}", id, i, l.data[0],);
                 &mut l.data_mut()[..max_data_size]
             })
             .collect();
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(
-            "{:x} start_idx: {} data: {}:{} coding: {}:{}",
-            debug_id, start_idx, block_start, block_end, coding_start, block_end
+            "{} start_idx: {} data: {}:{} coding: {}:{}",
+            id, start_idx, block_start, block_end, coding_start, block_end
         );
         block_start = block_end;
     }
@@ -358,7 +359,7 @@ pub fn generate_coding(
 //  true if slot is stale (i.e. has the wrong index), old blob is flushed
 //  false if slot has a blob with the right index
 fn is_missing(
-    debug_id: u64,
+    id: &Pubkey,
     idx: u64,
     window_slot: &mut Option<SharedBlob>,
     recycler: &BlobRecycler,
@@ -367,14 +368,14 @@ fn is_missing(
     if let Some(blob) = mem::replace(window_slot, None) {
         let blob_idx = blob.read().unwrap().get_index().unwrap();
         if blob_idx == idx {
-            trace!("recover {:x}: idx: {} good {}", debug_id, idx, c_or_d);
+            trace!("recover {}: idx: {} good {}", id, idx, c_or_d);
             // put it back
             mem::replace(window_slot, Some(blob));
             false
         } else {
             trace!(
-                "recover {:x}: idx: {} old {} {}, recycling",
-                debug_id,
+                "recover {}: idx: {} old {} {}, recycling",
+                id,
                 idx,
                 c_or_d,
                 blob_idx,
@@ -384,7 +385,7 @@ fn is_missing(
             true
         }
     } else {
-        trace!("recover {:x}: idx: {} None {}", debug_id, idx, c_or_d);
+        trace!("recover {}: idx: {} None {}", id, idx, c_or_d);
         // nothing there
         true
     }
@@ -395,7 +396,7 @@ fn is_missing(
 // if a blob is stale, remove it from the window slot
 //  side effect: block will be cleaned of old blobs
 fn find_missing(
-    debug_id: u64,
+    id: &Pubkey,
     block_start_idx: u64,
     block_start: usize,
     window: &mut [WindowSlot],
@@ -411,12 +412,11 @@ fn find_missing(
         let idx = (i - block_start) as u64 + block_start_idx;
         let n = i % window.len();
 
-        if is_missing(debug_id, idx, &mut window[n].data, recycler, "data") {
+        if is_missing(id, idx, &mut window[n].data, recycler, "data") {
             data_missing += 1;
         }
 
-        if i >= coding_start && is_missing(debug_id, idx, &mut window[n].coding, recycler, "coding")
-        {
+        if i >= coding_start && is_missing(id, idx, &mut window[n].coding, recycler, "coding") {
             coding_missing += 1;
         }
     }
@@ -430,7 +430,7 @@ fn find_missing(
 //    any of the blocks, the block is skipped.
 //   Side effect: old blobs in a block are None'd
 pub fn recover(
-    debug_id: u64,
+    id: &Pubkey,
     recycler: &BlobRecycler,
     window: &mut [WindowSlot],
     start_idx: u64,
@@ -444,8 +444,8 @@ pub fn recover(
     let coding_start = block_start + NUM_DATA - NUM_CODING;
     let block_end = block_start + NUM_DATA;
     trace!(
-        "recover {:x}: block_start_idx: {} block_start: {} coding_start: {} block_end: {}",
-        debug_id,
+        "recover {}: block_start_idx: {} block_start: {} coding_start: {} block_end: {}",
+        id,
         block_start_idx,
         block_start,
         coding_start,
@@ -453,7 +453,7 @@ pub fn recover(
     );
 
     let (data_missing, coding_missing) =
-        find_missing(debug_id, block_start_idx, block_start, window, recycler);
+        find_missing(id, block_start_idx, block_start, window, recycler);
 
     // if we're not missing data, or if we have too much missin but have enough coding
     if data_missing == 0 {
@@ -463,8 +463,8 @@ pub fn recover(
 
     if (data_missing + coding_missing) > NUM_CODING {
         trace!(
-            "recover {:x}: start: {} skipping recovery data: {} coding: {}",
-            debug_id,
+            "recover {}: start: {} skipping recovery data: {} coding: {}",
+            id,
             block_start,
             data_missing,
             coding_missing
@@ -474,8 +474,8 @@ pub fn recover(
     }
 
     trace!(
-        "recover {:x}: recovering: data: {} coding: {}",
-        debug_id,
+        "recover {}: recovering: data: {} coding: {}",
+        id,
         data_missing,
         coding_missing
     );
@@ -492,7 +492,7 @@ pub fn recover(
         if let Some(b) = window[j].data.clone() {
             if meta.is_none() {
                 meta = Some(b.read().unwrap().meta.clone());
-                trace!("recover {:x} meta at {} {:?}", debug_id, j, meta);
+                trace!("recover {} meta at {} {:?}", id, j, meta);
             }
             blobs.push(b);
         } else {
@@ -509,8 +509,8 @@ pub fn recover(
             if size.is_none() {
                 size = Some(b.read().unwrap().meta.size - BLOB_HEADER_SIZE);
                 trace!(
-                    "{:x} recover size {} from {}",
-                    debug_id,
+                    "{} recover size {} from {}",
+                    id,
                     size.unwrap(),
                     i as u64 + block_start_idx
                 );
@@ -540,12 +540,7 @@ pub fn recover(
 
     // marks end of erasures
     erasures.push(-1);
-    trace!(
-        "erasures[]: {:x} {:?} data_size: {}",
-        debug_id,
-        erasures,
-        size,
-    );
+    trace!("erasures[]: {} {:?} data_size: {}", id, erasures, size,);
     //lock everything for write
     for b in &blobs {
         locks.push(b.write().expect("'locks' arr in pb fn recover"));
@@ -556,16 +551,16 @@ pub fn recover(
         let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
         for (i, l) in locks.iter_mut().enumerate() {
             if i < NUM_DATA {
-                trace!("{:x} pushing data: {}", debug_id, i);
+                trace!("{} pushing data: {}", id, i);
                 data_ptrs.push(&mut l.data[..size]);
             } else {
-                trace!("{:x} pushing coding: {}", debug_id, i);
+                trace!("{} pushing coding: {}", id, i);
                 coding_ptrs.push(&mut l.data_mut()[..size]);
             }
         }
         trace!(
-            "{:x} coding_ptrs.len: {} data_ptrs.len {}",
-            debug_id,
+            "{} coding_ptrs.len: {} data_ptrs.len {}",
+            id,
             coding_ptrs.len(),
             data_ptrs.len()
         );
@@ -587,10 +582,7 @@ pub fn recover(
             data_size = locks[n].get_data_size().unwrap() as usize;
             data_size -= BLOB_HEADER_SIZE;
             if data_size > BLOB_DATA_SIZE {
-                error!(
-                    "{:x} corrupt data blob[{}] data_size: {}",
-                    debug_id, idx, data_size
-                );
+                error!("{} corrupt data blob[{}] data_size: {}", id, idx, data_size);
                 corrupt = true;
             }
         } else {
@@ -600,8 +592,8 @@ pub fn recover(
 
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
                 error!(
-                    "{:x} corrupt coding blob[{}] data_size: {}",
-                    debug_id, idx, data_size
+                    "{} corrupt coding blob[{}] data_size: {}",
+                    id, idx, data_size
                 );
                 corrupt = true;
             }
@@ -610,15 +602,15 @@ pub fn recover(
         locks[n].meta = meta.clone().unwrap();
         locks[n].set_size(data_size);
         trace!(
-            "{:x} erasures[{}] ({}) size: {:x} data[0]: {}",
-            debug_id,
+            "{} erasures[{}] ({}) size: {} data[0]: {}",
+            id,
             *i,
             idx,
             data_size,
             locks[n].data()[0]
         );
     }
-    assert!(!corrupt, " {:x} ", debug_id);
+    assert!(!corrupt, " {} ", id);
 
     Ok(())
 }
@@ -630,8 +622,7 @@ mod test {
     use logger;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
-    use signature::Keypair;
-    use signature::KeypairUtil;
+    use signature::{Keypair, KeypairUtil, Pubkey};
     //    use std::sync::{Arc, RwLock};
     use window::{index_blobs, WindowSlot};
 
@@ -842,9 +833,10 @@ mod test {
 
         // Generate the coding blocks
         let mut index = (erasure::NUM_DATA + 2) as u64;
+        let id = Pubkey::default();
         assert!(
             erasure::generate_coding(
-                0,
+                &id,
                 &mut window,
                 &blob_recycler,
                 offset as u64,
@@ -871,7 +863,7 @@ mod test {
         // Recover it from coding
         assert!(
             erasure::recover(
-                0,
+                &id,
                 &blob_recycler,
                 &mut window,
                 (offset + WINDOW_SIZE) as u64,
@@ -921,7 +913,7 @@ mod test {
         // Recover it from coding
         assert!(
             erasure::recover(
-                0,
+                &id,
                 &blob_recycler,
                 &mut window,
                 (offset + WINDOW_SIZE) as u64,
@@ -967,7 +959,7 @@ mod test {
         // Recover it from coding
         assert!(
             erasure::recover(
-                0,
+                &id,
                 &blob_recycler,
                 &mut window,
                 (offset + WINDOW_SIZE) as u64,

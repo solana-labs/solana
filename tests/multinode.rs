@@ -247,7 +247,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     //verify validator has the same balance
     let mut success = 0usize;
     for server in servers.iter() {
-        info!("0server: {:x}", server.debug_id());
+        info!("0server: {}", server.id);
         let mut client = mk_client(server);
         if let Ok(bal) = client.poll_get_balance(&bob_pubkey) {
             info!("validator balance {}", bal);
@@ -289,7 +289,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
 
     for server in servers.iter() {
         let mut client = mk_client(server);
-        info!("1server: {:x}", server.debug_id());
+        info!("1server: {}", server.id);
         for _ in 0..15 {
             if let Ok(bal) = client.poll_get_balance(&bob_pubkey) {
                 info!("validator balance {}", bal);
@@ -548,7 +548,7 @@ fn test_multi_node_dynamic_network() {
     ).unwrap();
     info!("leader balance {}", leader_balance);
 
-    info!("{:x} LEADER", leader_data.debug_id());
+    info!("{} LEADER", leader_data.id);
     let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
@@ -604,7 +604,7 @@ fn test_multi_node_dynamic_network() {
                 .spawn(move || {
                     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
                     let rd = validator.info.clone();
-                    info!("starting {} {:x}", keypair.pubkey(), rd.debug_id());
+                    info!("starting {} {}", keypair.pubkey(), rd.id);
                     let val = Fullnode::new(
                         validator,
                         &ledger_path,
@@ -676,7 +676,7 @@ fn test_multi_node_dynamic_network() {
             let mut num_nodes_behind = 0i64;
             validators.retain(|server| {
                 let mut client = mk_client(&server.0);
-                trace!("{:x} checking signature", server.0.debug_id());
+                trace!("{} checking signature", server.0.id);
                 num_nodes_behind += if client.check_signature(&sig) { 0 } else { 1 };
                 server.1.exit();
                 true

@@ -28,7 +28,7 @@ fn broadcast(
     transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
 ) -> Result<()> {
-    let debug_id = node_info.debug_id();
+    let id = node_info.id;
     let timer = Duration::new(1, 0);
     let mut dq = receiver.recv_timeout(timer)?;
     while let Ok(mut nq) = receiver.try_recv() {
@@ -43,12 +43,12 @@ fn broadcast(
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
     if log_enabled!(Level::Trace) {
-        trace!("{}", window::print_window(debug_id, window, *receive_index));
+        trace!("{}", window::print_window(&id, window, *receive_index));
     }
 
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();
-        trace!("{:x}: broadcast blobs.len: {}", debug_id, blobs_len);
+        trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
         // Index the blobs
         window::index_blobs(node_info, &blobs, receive_index)
@@ -64,8 +64,8 @@ fn broadcast(
                 let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = mem::replace(&mut win[pos].data, None) {
                     trace!(
-                        "{:x} popped {} at {}",
-                        debug_id,
+                        "{} popped {} at {}",
+                        id,
                         x.read().unwrap().get_index().unwrap(),
                         pos
                     );
@@ -73,20 +73,20 @@ fn broadcast(
                 }
                 if let Some(x) = mem::replace(&mut win[pos].coding, None) {
                     trace!(
-                        "{:x} popped {} at {}",
-                        debug_id,
+                        "{} popped {} at {}",
+                        id,
                         x.read().unwrap().get_index().unwrap(),
                         pos
                     );
                     recycler.recycle(x, "broadcast-coding");
                 }
 
-                trace!("{:x} null {}", debug_id, pos);
+                trace!("{} null {}", id, pos);
             }
             while let Some(b) = blobs.pop() {
                 let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
-                trace!("{:x} caching {} at {}", debug_id, ix, pos);
+                trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
                 win[pos].data = Some(b);
             }
@@ -96,7 +96,7 @@ fn broadcast(
         #[cfg(feature = "erasure")]
         {
             erasure::generate_coding(
-                debug_id,
+                &id,
                 &mut window.write().unwrap(),
                 recycler,
                 *receive_index,

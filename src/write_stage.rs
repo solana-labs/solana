@@ -90,7 +90,7 @@ impl WriteStage {
             .spawn(move || {
                 let mut last_vote = 0;
                 let mut last_valid_validator_timestamp = 0;
-                let debug_id = crdt.read().unwrap().debug_id();
+                let id = crdt.read().unwrap().id;
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
                         &crdt,
@@ -113,7 +113,7 @@ impl WriteStage {
                         }
                     };
                     if let Err(e) = send_leader_vote(
-                        debug_id,
+                        &id,
                         &keypair,
                         &bank,
                         &crdt,
