@@ -33,7 +33,7 @@ Operate a configured testnet
 
  sanity/start-specific options:
    -o noLedgerVerify    - Skip ledger verification
-   -o noValidatorSanity - Skip validatory sanity
+   -o noValidatorSanity - Skip validator sanity
 
  stop-specific options:
    none
