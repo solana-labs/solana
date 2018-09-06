@@ -218,7 +218,18 @@ gcloud_FigureRemoteUsername() {
     # instance is reported as RUNNING and when it's reachable over the network
     timeout 30s bash -c "set -o pipefail; until ping -c 3 $publicIp | tr - _; do echo .; done"
 
-    gcloud compute ssh "$name" --zone "$zone" -- "echo whoami:\$USER:iamwho" | tr -d $'\r '| tee /tmp/whoami-$$
+    # Try to ssh in a couple times, sshd may not yet be up even though the
+    # machine can be pinged...
+    set -o pipefail
+    for i in $(seq 1 10); do
+      if gcloud compute ssh "$name" \
+          --zone "$zone" -- "echo whoami:\$USER:iamwho" \
+          | tr -d $'\r '| tee /tmp/whoami-$$; then
+        break
+      fi
+      sleep 1
+      echo "Retry $i..."
+    done
   )
   while IFS=: read -r whoami gcloud_username iamwho ; do
     [[ $whoami == "whoami" && $iamwho == "iamwho" ]] && break;
