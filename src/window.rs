@@ -261,17 +261,16 @@ fn retransmit_all_leader_blocks(
 /// * `consumed` - input/output, the entry-height to which this
 ///                 node has populated and rebroadcast entries
 fn process_blob(
+    window: &mut Window,
     id: &Pubkey,
     blob: SharedBlob,
     pix: u64,
     consume_queue: &mut SharedBlobs,
-    window: &SharedWindow,
     recycler: &BlobRecycler,
     consumed: &mut u64,
     leader_unknown: bool,
     pending_retransmits: &mut bool,
 ) {
-    let mut window = window.write().unwrap();
     let w = (pix % WINDOW_SIZE) as usize;
 
     let is_coding = {
@@ -453,11 +452,11 @@ fn recv_window(
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
         process_blob(
+            &mut window.write().unwrap(),
             id,
             b,
             pix,
             &mut consume_queue,
-            window,
             recycler,
             consumed,
             leader_unknown,
