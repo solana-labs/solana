@@ -486,7 +486,7 @@ fn main() {
         threads = t.to_string().parse().expect("integer");
     }
 
-    if let Some(n) = matches.value_of("num_nodes") {
+    if let Some(n) = matches.value_of("num-nodes") {
         num_nodes = n.to_string().parse().expect("integer");
     }
 
