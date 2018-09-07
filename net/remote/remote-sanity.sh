@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 #
 # This script is to be run on the leader node
 #
@@ -16,18 +16,14 @@ numNodes=
 # shellcheck source=/dev/null # deployConfig is written by remote-node.sh
 source deployConfig
 
-[[ -n $deployMethod ]] || {
-  echo deployMethod empty
+missing() {
+  echo "Error: $1 not specified"
   exit 1
 }
-[[ -n $entrypointIp ]] || {
-  echo entrypointIp empty
-  exit 1
-}
-[[ -n $numNodes ]] || {
-  echo numNodes empty
-  exit 1
-}
+
+[[ -n $deployMethod ]] || missing deployMethod
+[[ -n $entrypointIp ]] || missing entrypointIp
+[[ -n $numNodes ]]     || missing numNodes
 
 ledgerVerify=true
 validatorSanity=true
