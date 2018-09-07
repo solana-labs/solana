@@ -91,13 +91,17 @@ fi
 
 set -x
 
+echo --- gce.sh delete
 time net/gce.sh delete -p "$netName" -y
 if $delete; then
   exit 0
 fi
 
+echo --- gce.sh create
 time net/gce.sh create "${gce_create_args[@]}"
 net/init-metrics.sh -e
+
+echo --- net.sh create
 time net/net.sh start -s "$snapChannel"
 
 exit 0
