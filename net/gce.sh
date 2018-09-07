@@ -7,7 +7,7 @@ source "$here"/../scripts/gcloud.sh
 source "$here"/common.sh
 
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
-validatorNodeCount=10
+validatorNodeCount=5
 clientNodeCount=1
 leaderBootDiskSize=1TB
 leaderMachineType=n1-standard-16
