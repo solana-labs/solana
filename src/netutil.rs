@@ -1,12 +1,18 @@
 //! The `netutil` module assists with networking
 
-use nix::sys::socket::setsockopt;
+use libc::{
+    c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, time_t, timespec, MSG_WAITFORONE,
+};
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
+use nix::sys::socket::{setsockopt, InetAddr};
+use packet::Packet;
 use pnet_datalink as datalink;
 use rand::{thread_rng, Rng};
 use reqwest;
 use socket2::{Domain, SockAddr, Socket, Type};
+use std::cmp;
 use std::io;
+use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 
@@ -131,6 +137,49 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
         Ok(_) => Result::Ok(sock.into_udp_socket()),
         Err(err) => Err(err),
     }
+}
+
+pub const NUM_RCVMMSGS: usize = 16;
+
+pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
+    let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
+    let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
+    let mut addr: [sockaddr_in; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
+    let addrlen = mem::size_of_val(&addr) as socklen_t;
+
+    let sock_fd = sock.as_raw_fd();
+
+    let count = cmp::min(iovs.len(), packets.len());
+
+    for i in 0..count {
+        iovs[i].iov_base = packets[i].data.as_mut_ptr() as *mut c_void;
+        iovs[i].iov_len = packets[i].data.len();
+
+        hdrs[i].msg_hdr.msg_name = &mut addr[i] as *mut _ as *mut _;
+        hdrs[i].msg_hdr.msg_namelen = addrlen;
+        hdrs[i].msg_hdr.msg_iov = &mut iovs[i];
+        hdrs[i].msg_hdr.msg_iovlen = 1;
+    }
+    let mut ts = timespec {
+        tv_sec: 1 as time_t,
+        tv_nsec: 0,
+    };
+
+    let npkts =
+        match unsafe { recvmmsg(sock_fd, &mut hdrs[0], count as u32, MSG_WAITFORONE, &mut ts) } {
+            -1 => return Err(io::Error::last_os_error()),
+            n => {
+                for i in 0..n as usize {
+                    let mut p = &mut packets[i];
+                    p.meta.size = hdrs[i].msg_len as usize;
+                    let inet_addr = InetAddr::V4(addr[i]);
+                    p.meta.set_addr(&inet_addr.to_std());
+                }
+                n as usize
+            }
+        };
+
+    Ok(npkts)
 }
 
 #[cfg(test)]
