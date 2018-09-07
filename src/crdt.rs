@@ -449,7 +449,7 @@ impl Crdt {
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
         let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
-        let window_l = window.write().unwrap();
+        let window_l = window.read().unwrap();
 
         let mut br_idx = transmit_index.data as usize % broadcast_table.len();
 
