@@ -64,7 +64,7 @@ flag_error() {
 echo "--- Wallet sanity"
 (
   set -x
-  multinode-demo/test/wallet-sanity.sh
+  scripts/wallet-sanity.sh
 ) || flag_error
 
 echo "--- Node count"
