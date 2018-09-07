@@ -44,7 +44,7 @@ set -x
 
 echo --- checking for multilog
 if [[ ! -x /usr/bin/multilog ]]; then
-  if [[ -n $CI ]]; then
+  if [[ -z $CI ]]; then
     echo "multilog not found, install with: sudo apt-get install -y daemontools"
     exit 1
   fi
