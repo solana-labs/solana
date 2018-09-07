@@ -299,12 +299,15 @@ stop_node() {
   (
     set -x
     ssh "${sshOptions[@]}" "$ipAddress" "
-      set -x;
+      set -x
       if snap list solana; then
-        sudo snap set solana mode=;
-        sudo snap remove solana;
-      fi;
-      for pattern in solana- remote- oom-monitor; do pkill -9 \$pattern; done;
+        sudo snap set solana mode=
+        sudo snap remove solana
+      fi
+      ! tmux list-sessions || tmux kill-session
+      for pattern in solana- remote- oom-monitor; do
+        pkill -9 \$pattern
+      done
     "
   ) || true
 }

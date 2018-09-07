@@ -54,13 +54,17 @@ esac
 
 scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
 
-set +e
-while true; do
-  echo "=== Client start: $(date)" >> client.log
-  $metricsWriteDatapoint "testnet-deploy client-begin=1"
-  clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
-  echo "$ $clientCommand" >> client.log
-  $clientCommand >> client.log 2>&1
-  $metricsWriteDatapoint "testnet-deploy client-complete=1"
-done
+! tmux list-sessions || tmux kill-session
 
+clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
+tmux new -s solana-bench-tps -d "
+  while true; do
+    echo === Client start: \$(date) >> client.log
+    $metricsWriteDatapoint 'testnet-deploy client-begin=1'
+    echo '$ $clientCommand' >> client.log
+    $clientCommand >> client.log 2>&1
+    $metricsWriteDatapoint 'testnet-deploy client-complete=1'
+  done
+"
+sleep 1
+tmux capture-pane -t solana-bench-tps -p -S -100
