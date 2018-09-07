@@ -31,7 +31,8 @@ pub struct WindowSlot {
     pub leader_unknown: bool,
 }
 
-pub type SharedWindow = Arc<RwLock<Vec<WindowSlot>>>;
+type Window = Vec<WindowSlot>;
+pub type SharedWindow = Arc<RwLock<Window>>;
 
 #[derive(Debug)]
 pub struct WindowIndex {
@@ -40,13 +41,12 @@ pub struct WindowIndex {
 }
 
 fn find_next_missing(
-    window: &SharedWindow,
+    window: &mut Window,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: u64,
     received: u64,
 ) -> Vec<(SocketAddr, Vec<u8>)> {
-    let mut window = window.write().unwrap();
     (consumed..received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
@@ -132,7 +132,8 @@ fn repair_window(
         return None;
     }
 
-    let reqs = find_next_missing(window, crdt, recycler, consumed, highest_lost);
+    let mut window = window.write().unwrap();
+    let reqs = find_next_missing(&mut window, crdt, recycler, consumed, highest_lost);
     inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
     if log_enabled!(Level::Trace) {
         trace!(
