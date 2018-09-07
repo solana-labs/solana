@@ -187,13 +187,19 @@ case $command in
 delete)
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
-  gcloud_FindInstances "name~^$prefix-"
+  # Delete the leader node first to prevent unusual metrics on the dashboard
+  # during shutdown.
+  # TODO: It would be better to fully cut-off metrics reporting before any
+  # instances are deleted.
+  for filter in "^$prefix-leader" "^$prefix-"; do
+    gcloud_FindInstances "name~$filter"
 
-  if [[ ${#instances[@]} -eq 0 ]]; then
-    echo "No instances found matching '^$prefix-'"
-  else
-    gcloud_DeleteInstances "$yes"
-  fi
+    if [[ ${#instances[@]} -eq 0 ]]; then
+      echo "No instances found matching '$filter'"
+    else
+      gcloud_DeleteInstances "$yes"
+    fi
+  done
   rm -f "$configFile"
 
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
