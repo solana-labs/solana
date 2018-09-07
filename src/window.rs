@@ -55,6 +55,80 @@ pub struct WindowIndex {
     pub coding: u64,
 }
 
+pub trait WindowUtil {
+    fn clear_slots(&mut self, recycler: &BlobRecycler, consumed: u64, received: u64) -> Vec<u64>;
+
+    fn repair(
+        &mut self,
+        crdt: &Arc<RwLock<Crdt>>,
+        recycler: &BlobRecycler,
+        id: &Pubkey,
+        times: usize,
+        consumed: u64,
+        received: u64,
+    ) -> Vec<(SocketAddr, Vec<u8>)>;
+
+    fn print(&self, id: &Pubkey, consumed: u64) -> String;
+
+    fn process_blob(
+        &mut self,
+        id: &Pubkey,
+        blob: SharedBlob,
+        pix: u64,
+        consume_queue: &mut SharedBlobs,
+        recycler: &BlobRecycler,
+        consumed: &mut u64,
+        leader_unknown: bool,
+        pending_retransmits: &mut bool,
+    );
+}
+
+impl WindowUtil for Window {
+    fn clear_slots(&mut self, recycler: &BlobRecycler, consumed: u64, received: u64) -> Vec<u64> {
+        clear_window_slots(self, recycler, consumed, received)
+    }
+
+    fn repair(
+        &mut self,
+        crdt: &Arc<RwLock<Crdt>>,
+        recycler: &BlobRecycler,
+        id: &Pubkey,
+        times: usize,
+        consumed: u64,
+        received: u64,
+    ) -> Vec<(SocketAddr, Vec<u8>)> {
+        repair_window(self, crdt, recycler, id, times, consumed, received)
+    }
+
+    fn print(&self, id: &Pubkey, consumed: u64) -> String {
+        print_window(self, id, consumed)
+    }
+
+    fn process_blob(
+        &mut self,
+        id: &Pubkey,
+        blob: SharedBlob,
+        pix: u64,
+        consume_queue: &mut SharedBlobs,
+        recycler: &BlobRecycler,
+        consumed: &mut u64,
+        leader_unknown: bool,
+        pending_retransmits: &mut bool,
+    ) {
+        process_blob(
+            self,
+            id,
+            blob,
+            pix,
+            consume_queue,
+            recycler,
+            consumed,
+            leader_unknown,
+            pending_retransmits,
+        );
+    }
+}
+
 /// Finds available slots, clears them, and returns their indices.
 fn clear_window_slots(
     window: &mut Window,
