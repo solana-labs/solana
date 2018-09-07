@@ -113,7 +113,7 @@ build() {
   echo "Build took $SECONDS seconds"
 }
 
-common_start_setup() {
+startCommon() {
   declare ipAddress=$1
   test -d "$SOLANA_ROOT"
   ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
@@ -131,7 +131,7 @@ startLeader() {
   # binaries from the leader.
   (
     set -x
-    common_start_setup "$ipAddress" || exit 1
+    startCommon "$ipAddress" || exit 1
     case $deployMethod in
     snap)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
@@ -160,7 +160,7 @@ startValidator() {
   echo "--- Starting validator: $leaderIp"
   (
     set -x
-    common_start_setup "$ipAddress"
+    startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh $deployMethod validator $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
@@ -176,7 +176,7 @@ startClient() {
 
   (
     set -x
-    common_start_setup "$ipAddress"
+    startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
       "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
@@ -293,7 +293,7 @@ start() {
 }
 
 
-stop_node() {
+stopNode() {
   local ipAddress=$1
   echo "--- Stopping node: $ipAddress"
   (
@@ -316,10 +316,10 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  stop_node "$leaderIp"
+  stopNode "$leaderIp"
 
   for ipAddress in "${validatorIpList[@]}" "${clientIpList[@]}"; do
-    stop_node "$ipAddress"
+    stopNode "$ipAddress"
   done
 
   $metricsWriteDatapoint "testnet-deploy net-stop-complete=1"
