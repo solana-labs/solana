@@ -60,13 +60,13 @@ fn find_next_missing(
                     recycler.recycle(blob, "find_next_missing");
                 }
             }
-            if slot.data.is_none() {
-                let val = crdt.read().unwrap().window_index_request(pix as u64);
-                if let Ok((to, req)) = val {
-                    return Some((to, req));
-                }
+
+            if slot.data.is_some() {
+                return None;
             }
-            None
+
+            let val = crdt.read().unwrap().window_index_request(pix as u64);
+            val.ok()
         })
         .collect()
 }
