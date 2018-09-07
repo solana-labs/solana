@@ -45,12 +45,9 @@ fn find_next_missing(
     recycler: &BlobRecycler,
     consumed: u64,
     received: u64,
-) -> Option<Vec<(SocketAddr, Vec<u8>)>> {
-    if received <= consumed {
-        return None;
-    }
+) -> Vec<(SocketAddr, Vec<u8>)> {
     let mut window = window.write().unwrap();
-    let reqs: Vec<_> = (consumed..received)
+    (consumed..received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
 
@@ -70,8 +67,7 @@ fn find_next_missing(
             }
             None
         })
-        .collect();
-    Some(reqs)
+        .collect()
 }
 
 fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u64) -> u64 {
@@ -131,26 +127,28 @@ fn repair_window(
         consumed,
         received,
     );
-    if let Some(reqs) = find_next_missing(window, crdt, recycler, consumed, highest_lost) {
-        inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
-        if log_enabled!(Level::Trace) {
-            trace!(
-                "{}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
-                id,
-                *times,
-                consumed,
-                highest_lost,
-                reqs.len()
-            );
 
-            for (to, _) in reqs.clone() {
-                trace!("{}: repair_window request to {}", id, to);
-            }
-        }
-        Some(reqs)
-    } else {
-        None
+    if received <= consumed {
+        return None;
     }
+
+    let reqs = find_next_missing(window, crdt, recycler, consumed, highest_lost);
+    inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
+    if log_enabled!(Level::Trace) {
+        trace!(
+            "{}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
+            id,
+            *times,
+            consumed,
+            highest_lost,
+            reqs.len()
+        );
+
+        for (to, _) in reqs.clone() {
+            trace!("{}: repair_window request to {}", id, to);
+        }
+    }
+    Some(reqs)
 }
 
 fn add_block_to_retransmit_queue(
