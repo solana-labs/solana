@@ -1,3 +1,5 @@
+# Note: when the rust version (1.28) is changed also modify
+# ci/buildkite.yml to pick up the new image tag
 FROM rust:1.28
 
 RUN set -x && \

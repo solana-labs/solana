@@ -1,10 +1,10 @@
 FROM solanalabs/rust
-ARG nightly=nightly-2018-09-03
+ARG date
 
 RUN set -x && \
-    rustup install $nightly && \
-    rustup default $nightly && \
-    rustup component add clippy-preview --toolchain=$nightly && \
+    rustup install nightly-$date && \
+    rustup default nightly-$date && \
+    rustup component add clippy-preview --toolchain=nightly-$date && \
     rustc --version && \
     cargo --version && \
-    cargo +$nightly install cargo-cov
+    cargo +nightly-$date install cargo-cov
