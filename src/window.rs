@@ -192,6 +192,7 @@ fn add_block_to_retransmit_queue(
 }
 
 fn retransmit_all_leader_blocks(
+    window: &SharedWindow,
     maybe_leader: Option<NodeInfo>,
     dq: &[SharedBlob],
     id: &Pubkey,
@@ -199,7 +200,6 @@ fn retransmit_all_leader_blocks(
     consumed: u64,
     received: u64,
     retransmit: &BlobSender,
-    window: &SharedWindow,
     pending_retransmits: &mut bool,
 ) -> Result<()> {
     let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
@@ -390,8 +390,8 @@ fn blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) 
 
 #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn recv_window(
-    id: &Pubkey,
     window: &SharedWindow,
+    id: &Pubkey,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     consumed: &mut u64,
@@ -423,6 +423,7 @@ fn recv_window(
     );
 
     retransmit_all_leader_blocks(
+        window,
         maybe_leader,
         &dq,
         id,
@@ -430,7 +431,6 @@ fn recv_window(
         *consumed,
         *received,
         retransmit,
-        window,
         pending_retransmits,
     )?;
 
@@ -622,8 +622,8 @@ pub fn window(
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if let Err(e) = recv_window(
-                    &id,
                     &window,
+                    &id,
                     &crdt,
                     &recycler,
                     &mut consumed,
