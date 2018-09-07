@@ -198,7 +198,7 @@ fn repair_window(
     let num_peers = crdt.read().unwrap().table.len() as u64;
     let highest_lost = calculate_highest_lost_blob_index(num_peers, consumed, received);
 
-    let idxs = clear_window_slots(window, recycler, consumed, highest_lost);
+    let idxs = window.clear_slots(recycler, consumed, highest_lost);
     let reqs: Vec<_> = idxs
         .into_iter()
         .filter_map(|pix| crdt.read().unwrap().window_index_request(pix).ok())
@@ -525,8 +525,7 @@ fn recv_window(
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
-        process_blob(
-            &mut window.write().unwrap(),
+        window.write().unwrap().process_blob(
             id,
             b,
             pix,
@@ -538,7 +537,7 @@ fn recv_window(
         );
     }
     if log_enabled!(Level::Trace) {
-        trace!("{}", print_window(&window.read().unwrap(), id, *consumed));
+        trace!("{}", window.read().unwrap().print(id, *consumed));
         trace!(
             "{}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
             id,
@@ -728,15 +727,7 @@ pub fn window_service(
                 }
 
                 let mut window = window.write().unwrap();
-                let reqs = repair_window(
-                    &mut window,
-                    &crdt,
-                    &recycler,
-                    &id,
-                    times,
-                    consumed,
-                    received,
-                );
+                let reqs = window.repair(&crdt, &recycler, &id, times, consumed, received);
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);

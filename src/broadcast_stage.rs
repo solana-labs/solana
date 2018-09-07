@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
-use window::{self, SharedWindow, WindowIndex, WINDOW_SIZE};
+use window::{self, SharedWindow, WindowIndex, WindowUtil, WINDOW_SIZE};
 
 fn broadcast(
     node_info: &NodeInfo,
@@ -42,12 +42,7 @@ fn broadcast(
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
-    if log_enabled!(Level::Trace) {
-        trace!(
-            "{}",
-            window::print_window(&window.read().unwrap(), &id, *receive_index)
-        );
-    }
+    trace!("{}", window.read().unwrap().print(&id, *receive_index));
 
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();
