@@ -92,8 +92,9 @@ if $ledgerVerify; then
     (
       set -x
       rm -rf /var/tmp/ledger-verify
-      cp -r $ledger /var/tmp/ledger-verify
-      $solana_ledger_tool --ledger /var/tmp/ledger-verify verify
+      du -hs "$ledger"
+      time cp -r "$ledger" /var/tmp/ledger-verify
+      time $solana_ledger_tool --ledger /var/tmp/ledger-verify verify
     )
   else
     echo "^^^ +++"

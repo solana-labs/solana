@@ -25,8 +25,10 @@ netName=$1
 [[ -n $netName ]] || usage ""
 
 set -x
+echo --- gce.sh config
 net/gce.sh config -p "$netName"
 net/init-metrics.sh -e
+echo --- net.sh sanity
 net/net.sh sanity ${NO_LEDGER_VERIFY:+-o noLedgerVerify}
 
 exit 0
