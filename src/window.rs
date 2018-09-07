@@ -327,7 +327,7 @@ fn process_blob(
         if erasure::recover(
             id,
             recycler,
-            &mut window,
+            window,
             *consumed,
             (*consumed % WINDOW_SIZE) as usize,
         ).is_err()
