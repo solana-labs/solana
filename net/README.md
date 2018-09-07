@@ -56,3 +56,11 @@ ensure the `cuda` feature is specified at network start:
 $ ./net.sh start -f "cuda,erasure"
 ```
 
+### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
+
+Taking **master-testnet-solana-com** as an example, configure your workspace for
+the testnet using:
+```
+$ ./gce.sh config -p master-testnet-solana-com
+$ ./ssh.sh                                     # <-- Details on how to ssh into any testnet node
+```
