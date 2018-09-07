@@ -156,7 +156,7 @@ fn repair_window(
             reqs.len()
         );
 
-        for (to, _) in &reqs.clone() {
+        for (to, _) in &reqs {
             trace!("{}: repair_window request to {}", id, to);
         }
     }
