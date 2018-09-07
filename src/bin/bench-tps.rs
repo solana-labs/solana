@@ -419,6 +419,7 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
+                .required(true)
                 .help("file containing a client identity (keypair)"),
         )
         .arg(
