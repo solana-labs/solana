@@ -326,11 +326,8 @@ pub fn blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: &mut u
     }
 }
 
-pub fn default_window() -> SharedWindow {
-    Arc::new(RwLock::new(vec![
-        WindowSlot::default();
-        WINDOW_SIZE as usize
-    ]))
+pub fn default_window() -> Window {
+    vec![WindowSlot::default(); WINDOW_SIZE as usize]
 }
 
 pub fn index_blobs(
@@ -361,33 +358,29 @@ pub fn initialized_window(
     node_info: &NodeInfo,
     blobs: Vec<SharedBlob>,
     entry_height: u64,
-) -> SharedWindow {
-    let window = default_window();
+) -> Window {
+    let mut window = default_window();
     let id = node_info.id;
 
-    {
-        let mut win = window.write().unwrap();
+    trace!(
+        "{} initialized window entry_height:{} blobs_len:{}",
+        id,
+        entry_height,
+        blobs.len()
+    );
 
-        trace!(
-            "{} initialized window entry_height:{} blobs_len:{}",
-            id,
-            entry_height,
-            blobs.len()
-        );
+    // Index the blobs
+    let mut received = entry_height - blobs.len() as u64;
+    index_blobs(&node_info, &blobs, &mut received).expect("index blobs for initial window");
 
-        // Index the blobs
-        let mut received = entry_height - blobs.len() as u64;
-        index_blobs(&node_info, &blobs, &mut received).expect("index blobs for initial window");
-
-        // populate the window, offset by implied index
-        let diff = cmp::max(blobs.len() as isize - win.len() as isize, 0) as usize;
-        for b in blobs.into_iter().skip(diff) {
-            let ix = b.read().unwrap().get_index().expect("blob index");
-            let pos = (ix % WINDOW_SIZE) as usize;
-            trace!("{} caching {} at {}", id, ix, pos);
-            assert!(win[pos].data.is_none());
-            win[pos].data = Some(b);
-        }
+    // populate the window, offset by implied index
+    let diff = cmp::max(blobs.len() as isize - window.len() as isize, 0) as usize;
+    for b in blobs.into_iter().skip(diff) {
+        let ix = b.read().unwrap().get_index().expect("blob index");
+        let pos = (ix % WINDOW_SIZE) as usize;
+        trace!("{} caching {} at {}", id, ix, pos);
+        assert!(window[pos].data.is_none());
+        window[pos].data = Some(b);
     }
 
     window
@@ -398,7 +391,7 @@ pub fn new_window_from_entries(
     entry_height: u64,
     node_info: &NodeInfo,
     blob_recycler: &BlobRecycler,
-) -> SharedWindow {
+) -> Window {
     // convert to blobs
     let blobs = ledger_tail.to_blobs(&blob_recycler);
     initialized_window(&node_info, blobs, entry_height)
@@ -406,8 +399,6 @@ pub fn new_window_from_entries(
 
 #[cfg(test)]
 mod test {
-    use crdt::{Crdt, Node};
-    use logger;
     use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
     use signature::Pubkey;
     use std::io;
@@ -415,12 +406,10 @@ mod test {
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use std::time::Duration;
-    use streamer::{blob_receiver, receiver, responder, BlobReceiver, PacketReceiver};
-    use window::{
-        blob_idx_in_window, calculate_highest_lost_blob_index, default_window, WINDOW_SIZE,
-    };
+    use streamer::{receiver, responder, PacketReceiver};
+    use window::{blob_idx_in_window, calculate_highest_lost_blob_index, WINDOW_SIZE};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {

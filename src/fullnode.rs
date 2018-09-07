@@ -202,12 +202,13 @@ impl Fullnode {
         let blob_recycler = BlobRecycler::default();
         let window =
             window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
+        let shared_window = Arc::new(RwLock::new(window));
 
         let crdt = Arc::new(RwLock::new(Crdt::new(node.info).expect("Crdt::new")));
 
         let ncp = Ncp::new(
             &crdt,
-            window.clone(),
+            shared_window.clone(),
             ledger_path,
             node.sockets.gossip,
             exit.clone(),
@@ -224,7 +225,7 @@ impl Fullnode {
                     &bank,
                     entry_height,
                     crdt,
-                    window,
+                    shared_window,
                     node.sockets.replicate,
                     node.sockets.repair,
                     node.sockets.retransmit,
@@ -256,7 +257,7 @@ impl Fullnode {
                 let broadcast_stage = BroadcastStage::new(
                     node.sockets.broadcast,
                     crdt,
-                    window,
+                    shared_window,
                     entry_height,
                     blob_recycler.clone(),
                     blob_receiver,
