@@ -43,7 +43,10 @@ fn broadcast(
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
 
     if log_enabled!(Level::Trace) {
-        trace!("{}", window::print_window(&id, window, *receive_index));
+        trace!(
+            "{}",
+            window::print_window(&id, &window.read().unwrap(), *receive_index)
+        );
     }
 
     for mut blobs in blobs_chunked {

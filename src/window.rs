@@ -465,7 +465,7 @@ fn recv_window(
         );
     }
     if log_enabled!(Level::Trace) {
-        trace!("{}", print_window(id, window, *consumed));
+        trace!("{}", print_window(id, &window.read().unwrap(), *consumed));
         trace!(
             "{}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
             id,
@@ -483,10 +483,8 @@ fn recv_window(
     Ok(())
 }
 
-pub fn print_window(id: &Pubkey, window: &SharedWindow, consumed: u64) -> String {
+pub fn print_window(id: &Pubkey, window: &Window, consumed: u64) -> String {
     let pointer: Vec<_> = window
-        .read()
-        .unwrap()
         .iter()
         .enumerate()
         .map(|(i, _v)| {
@@ -499,8 +497,6 @@ pub fn print_window(id: &Pubkey, window: &SharedWindow, consumed: u64) -> String
         .collect();
 
     let buf: Vec<_> = window
-        .read()
-        .unwrap()
         .iter()
         .map(|v| {
             if v.data.is_none() && v.coding.is_none() {
