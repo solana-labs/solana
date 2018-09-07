@@ -5,7 +5,7 @@
 
 
 #
-# gcloud_FindInstances [filter]
+# gcloud_FindInstances [filter] [options]
 #
 # Find instances matching the specified pattern.
 #
