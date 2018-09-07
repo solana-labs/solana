@@ -169,7 +169,7 @@ pub mod tests {
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> (Ncp, SharedWindow) {
-        let window = window::default_window();
+        let window = Arc::new(RwLock::new(window::default_window()));
         let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
         (ncp, window)
     }

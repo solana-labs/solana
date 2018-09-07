@@ -731,14 +731,8 @@ fn converge(
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
-    let window = default_window();
-    let ncp = Ncp::new(
-        &spy_ref,
-        window.clone(),
-        None,
-        gossip_socket,
-        exit_signal.clone(),
-    );
+    let window = Arc::new(RwLock::new(default_window()));
+    let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {

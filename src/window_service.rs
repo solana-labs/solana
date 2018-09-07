@@ -303,16 +303,13 @@ pub fn window_service(
 mod test {
     use crdt::{Crdt, Node};
     use logger;
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
-    use signature::Pubkey;
-    use std::io;
-    use std::net::UdpSocket;
+    use packet::{BlobRecycler, PACKET_DATA_SIZE};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{blob_receiver, receiver, responder, BlobReceiver, PacketReceiver};
-    use window::{default_window, WINDOW_SIZE};
+    use streamer::{blob_receiver, responder, BlobReceiver};
+    use window::default_window;
     use window_service::{repair_backoff, window_service};
 
     fn get_blobs(r: BlobReceiver, num: &mut usize) {
@@ -353,7 +350,7 @@ mod test {
         );
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
-        let win = default_window();
+        let win = Arc::new(RwLock::new(default_window()));
         let t_window = window_service(
             subs,
             win,
@@ -423,7 +420,7 @@ mod test {
         );
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
-        let win = default_window();
+        let win = Arc::new(RwLock::new(default_window()));
         let t_window = window_service(
             subs.clone(),
             win,
@@ -486,7 +483,7 @@ mod test {
         );
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
-        let win = default_window();
+        let win = Arc::new(RwLock::new(default_window()));
         let t_window = window_service(
             subs.clone(),
             win,

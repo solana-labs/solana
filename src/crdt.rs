@@ -1684,7 +1684,7 @@ mod tests {
     #[test]
     fn run_window_request() {
         logger::setup();
-        let window = default_window();
+        let window = Arc::new(RwLock::new(default_window()));
         let me = NodeInfo::new(
             Keypair::new().pubkey(),
             socketaddr!("127.0.0.1:1234"),
@@ -1767,7 +1767,7 @@ mod tests {
     /// test window requests respond with the right blob, and do not overrun
     #[test]
     fn run_window_request_with_backoff() {
-        let window = default_window();
+        let window = Arc::new(RwLock::new(default_window()));
 
         let mut me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         me.leader_id = me.id;
@@ -1874,7 +1874,7 @@ mod tests {
     #[test]
     fn protocol_requestupdate_alive() {
         logger::setup();
-        let window = default_window();
+        let window = Arc::new(RwLock::new(default_window()));
         let recycler = BlobRecycler::default();
 
         let node = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));

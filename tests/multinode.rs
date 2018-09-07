@@ -41,7 +41,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     spy_crdt.insert(&leader);
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
-    let spy_window = default_window();
+    let spy_window = Arc::new(RwLock::new(default_window()));
     let ncp = Ncp::new(&spy_ref, spy_window, None, spy.sockets.gossip, exit.clone());
     //wait for the network to converge
     let mut converged = false;
@@ -439,7 +439,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let (alice, ledger_path) = genesis(
         "leader_restart_validator_start_from_old_ledger",
-        100_000 + 500 * solana::window::MAX_REPAIR_BACKOFF as i64,
+        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as i64,
     );
     let bob_pubkey = Keypair::new().pubkey();
 
@@ -487,7 +487,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     //   send requests so the validator eventually sees a gap and requests a repair
     let mut expected = 1500;
     let mut client = mk_client(&validator_data);
-    for _ in 0..solana::window::MAX_REPAIR_BACKOFF {
+    for _ in 0..solana::window_service::MAX_REPAIR_BACKOFF {
         let leader_balance =
             send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, Some(expected))
                 .unwrap();
