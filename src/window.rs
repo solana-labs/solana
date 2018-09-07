@@ -600,7 +600,7 @@ pub fn new_window_from_entries(
     initialized_window(&node_info, blobs, entry_height)
 }
 
-pub fn window(
+pub fn window_service(
     crdt: Arc<RwLock<Crdt>>,
     window: SharedWindow,
     entry_height: u64,
@@ -690,7 +690,7 @@ mod test {
     use streamer::{blob_receiver, receiver, responder, BlobReceiver, PacketReceiver};
     use window::{
         blob_idx_in_window, calculate_highest_lost_blob_index, default_window, repair_backoff,
-        window, WINDOW_SIZE,
+        window_service, WINDOW_SIZE,
     };
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
@@ -798,7 +798,7 @@ mod test {
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
-        let t_window = window(
+        let t_window = window_service(
             subs,
             win,
             0,
@@ -868,7 +868,7 @@ mod test {
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
-        let t_window = window(
+        let t_window = window_service(
             subs.clone(),
             win,
             0,
@@ -931,7 +931,7 @@ mod test {
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = default_window();
-        let t_window = window(
+        let t_window = window_service(
             subs.clone(),
             win,
             0,
