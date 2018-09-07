@@ -5,6 +5,7 @@ cd "$(dirname "$0")"/..
 zone=
 leaderAddress=
 clientNodeCount=0
+validatorNodeCount=10
 publicNetwork=false
 snapChannel=edge
 delete=false
@@ -26,6 +27,7 @@ Deploys a CD testnet
   options:
    -s edge|beta|stable  - Deploy the specified Snap release channel
                           (default: $snapChannel)
+   -n [number]          - Number of validator nodes (default: $validatorNodeCount)
    -c [number]          - Number of client nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -a [address]         - Set the leader node's external IP address to this GCE address
@@ -43,13 +45,16 @@ zone=$2
 [[ -n $zone ]] || usage "Zone not specified"
 shift 2
 
-while getopts "h?p:Pc:s:a:d" opt; do
+while getopts "h?p:Pn:c:s:a:d" opt; do
   case $opt in
   h | \?)
     usage
     ;;
   P)
     publicNetwork=true
+    ;;
+  n)
+    validatorNodeCount=$OPTARG
     ;;
   c)
     clientNodeCount=$OPTARG
@@ -80,6 +85,7 @@ done
 gce_create_args=(
   -a "$leaderAddress"
   -c "$clientNodeCount"
+  -n "$validatorNodeCount"
   -g
   -p "$netName"
   -z "$zone"
