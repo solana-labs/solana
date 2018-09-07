@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 cd "$(dirname "$0")"/../..
 
@@ -7,9 +7,14 @@ entrypointIp="$2"
 numNodes="$3"
 RUST_LOG="$4"
 
-[[ -n $deployMethod ]] || exit
-[[ -n $entrypointIp ]] || exit
-[[ -n $numNodes ]] || exit
+missing() {
+  echo "Error: $1 not specified"
+  exit 1
+}
+
+[[ -n $deployMethod ]] || missing deployMethod
+[[ -n $entrypointIp ]] || missing entrypointIp
+[[ -n $numNodes ]]     || missing numNodes
 
 source net/common.sh
 loadConfigFile

@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 cd "$(dirname "$0")"/../..
 
@@ -9,11 +9,16 @@ entrypointIp="$4"
 numNodes="$5"
 RUST_LOG="$6"
 
-[[ -n $deployMethod ]] || exit
-[[ -n $nodeType ]] || exit
-[[ -n $publicNetwork ]] || exit
-[[ -n $entrypointIp ]] || exit
-[[ -n $numNodes ]] || exit
+missing() {
+  echo "Error: $1 not specified"
+  exit 1
+}
+
+[[ -n $deployMethod ]]  || missing deployMethod
+[[ -n $nodeType ]]      || missing nodeType
+[[ -n $publicNetwork ]] || missing publicNetwork
+[[ -n $entrypointIp ]]  || missing entrypointIp
+[[ -n $numNodes ]]      || missing numNodes
 
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
