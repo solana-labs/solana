@@ -1,11 +1,14 @@
 #!/bin/bash -e
 
-[[ -n "$CARGO_TARGET_CACHE_NAME" ]] || exit 0
+# Ensure the pattern "+++ ..." never occurs when |set -x| is set, as buildkite
+# interprets this as the start of a log group.
+# Ref: https://buildkite.com/docs/pipelines/managing-log-output
+export PS4="++"
 
 #
 # Restore target/ from the previous CI build on this machine
 #
-(
+[[ -n "$CARGO_TARGET_CACHE_NAME" ]] || (
   d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
 
   if [[ -d $d ]]; then
@@ -21,3 +24,4 @@
   set -x
   rsync -a --delete --link-dest="$d" "$d"/target .
 )
+
