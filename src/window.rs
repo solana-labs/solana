@@ -122,6 +122,10 @@ fn repair_window(
     consumed: u64,
     received: u64,
 ) -> Option<Vec<(SocketAddr, Vec<u8>)>> {
+    if received <= consumed {
+        return None;
+    }
+
     //exponential backoff
     if !repair_backoff(last, times, consumed) {
         trace!("{} !repair_backoff() times = {}", id, times);
@@ -133,10 +137,6 @@ fn repair_window(
         consumed,
         received,
     );
-
-    if received <= consumed {
-        return None;
-    }
 
     let mut window = window.write().unwrap();
     let idxs = clear_window_slots(&mut window, recycler, consumed, highest_lost);
