@@ -32,16 +32,8 @@ snap)
   sudo snap install solana.snap --devmode --dangerous
   rm solana.snap
 
-  nodeConfig="\
-    leader-ip=$entrypointIp \
-    default-metrics-rate=1 \
-    metrics-config=$SOLANA_METRICS_CONFIG \
-    rust-log=$RUST_LOG \
-  "
-  # shellcheck disable=SC2086 # Don't want to double quote "$nodeConfig"
-  sudo snap set solana $nodeConfig
-
   solana_bench_tps=/snap/bin/solana.bench-tps
+  solana_keygen=/snap/bin/solana.keygen
   ;;
 local)
   PATH="$HOME"/.cargo/bin:"$PATH"
@@ -50,7 +42,8 @@ local)
   export RUST_LOG
 
   rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
-  solana_bench_tps="multinode-demo/client.sh $entrypointIp:~/solana $entrypointIp:8001"
+  solana_bench_tps=solana-bench-tps
+  solana_keygen=solana-keygen
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -62,7 +55,13 @@ scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
 ! tmux list-sessions || tmux kill-session
 
 clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
+keygenCommand="$solana_keygen -o client.id"
 tmux new -s solana-bench-tps -d "
+  [[ -r client.json ]] || {
+    echo '$ $keygenCommand' >> client.log
+    $keygenCommand >> client.log 2>&1
+  }
+
   while true; do
     echo === Client start: \$(date) >> client.log
     $metricsWriteDatapoint 'testnet-deploy client-begin=1'

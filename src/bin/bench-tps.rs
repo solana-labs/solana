@@ -409,17 +409,17 @@ fn main() {
             Arg::with_name("network")
                 .short("n")
                 .long("network")
-                .value_name("IP:PORT")
+                .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("rendezvous with the network at this gossip entry point, defaults to 127.0.0.1:8001"),
         )
         .arg(
-            Arg::with_name("keypair")
-                .short("k")
-                .long("keypair")
+            Arg::with_name("identity")
+                .short("i")
+                .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .help("file containing a client keypair, (ephemeral by default)"),
+                .help("file containing a client identity (keypair)"),
         )
         .arg(
             Arg::with_name("num-nodes")
@@ -472,11 +472,8 @@ fn main() {
         socketaddr!("127.0.0.1:8001")
     };
 
-    let id = if let Some(k) = matches.value_of("keypair") {
-        read_keypair(k).expect("can't read client keypair")
-    } else {
-        Keypair::new()
-    };
+    let id =
+        read_keypair(matches.value_of("identity").unwrap()).expect("can't read client identity");
 
     let threads = if let Some(t) = matches.value_of("threads") {
         t.to_string().parse().expect("can't parse threads")
@@ -620,6 +617,8 @@ fn main() {
 
     // generate and send transactions for the specified duration
     let now = Instant::now();
+    let mut last_stat = Instant::now();
+    let stat_interval = Duration::new(90, 0);
     let mut reclaim_tokens_back_to_source_account = false;
     let mut i = keypair0_balance;
     while now.elapsed() < duration {
@@ -653,6 +652,16 @@ fn main() {
         i += 1;
         if should_switch_directions(num_tokens_per_account, i) {
             reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
+        }
+
+        if last_stat.elapsed() >= stat_interval {
+            last_stat = Instant::now();
+            compute_and_report_stats(
+                &maxes,
+                sample_period,
+                &now.elapsed(),
+                total_tx_sent_count.load(Ordering::Relaxed),
+            );
         }
     }
 
