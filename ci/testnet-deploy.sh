@@ -101,7 +101,7 @@ echo --- gce.sh create
 time net/gce.sh create "${gce_create_args[@]}"
 net/init-metrics.sh -e
 
-echo --- net.sh create
+echo --- net.sh start
 time net/net.sh start -s "$snapChannel"
 
 exit 0
