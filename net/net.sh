@@ -242,9 +242,9 @@ start() {
 
   SECONDS=0
   declare leaderDeployTime=
-  declare networkVersion=unknown
   startLeader "$leaderIp" "$netLogDir/leader-$leaderIp.log"
   leaderDeployTime=$SECONDS
+  $metricsWriteDatapoint "testnet-deploy net-leader-started=1"
 
   SECONDS=0
   pids=()
@@ -262,6 +262,7 @@ start() {
     fi
   done
 
+  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
   validatorDeployTime=$SECONDS
 
   sanity
@@ -274,6 +275,7 @@ start() {
   $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
 
   if [[ $deployMethod = "snap" ]]; then
+    declare networkVersion=unknown
     IFS=\  read -r _ networkVersion _ < <(
       ssh "${sshOptions[@]}" "$leaderIp" \
         "snap info solana | grep \"^installed:\""
