@@ -113,7 +113,7 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
 }
 
 fn repair_window(
-    window: &SharedWindow,
+    window: &mut Window,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
     id: &Pubkey,
@@ -124,8 +124,7 @@ fn repair_window(
     let num_peers = crdt.read().unwrap().table.len() as u64;
     let highest_lost = calculate_highest_lost_blob_index(num_peers, consumed, received);
 
-    let mut window = window.write().unwrap();
-    let idxs = clear_window_slots(&mut window, recycler, consumed, highest_lost);
+    let idxs = clear_window_slots(window, recycler, consumed, highest_lost);
     let reqs: Vec<_> = idxs
         .into_iter()
         .filter_map(|pix| crdt.read().unwrap().window_index_request(pix).ok())
@@ -659,7 +658,16 @@ pub fn window(
                     continue;
                 }
 
-                let reqs = repair_window(&window, &crdt, &recycler, &id, times, consumed, received);
+                let mut window = window.write().unwrap();
+                let reqs = repair_window(
+                    &mut window,
+                    &crdt,
+                    &recycler,
+                    &id,
+                    times,
+                    consumed,
+                    received,
+                );
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
