@@ -50,16 +50,17 @@ fn find_next_missing(
     (consumed..received)
         .filter_map(|pix| {
             let i = (pix % WINDOW_SIZE) as usize;
+            let ref mut slot = &mut window[i];
 
-            if let Some(blob) = mem::replace(&mut window[i].data, None) {
+            if let Some(blob) = mem::replace(&mut slot.data, None) {
                 let blob_idx = blob.read().unwrap().get_index().unwrap();
                 if blob_idx == pix {
-                    mem::replace(&mut window[i].data, Some(blob));
+                    mem::replace(&mut slot.data, Some(blob));
                 } else {
                     recycler.recycle(blob, "find_next_missing");
                 }
             }
-            if window[i].data.is_none() {
+            if slot.data.is_none() {
                 let val = crdt.read().unwrap().window_index_request(pix as u64);
                 if let Ok((to, req)) = val {
                     return Some((to, req));
