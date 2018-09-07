@@ -51,22 +51,27 @@ case $deployMethod in
 snap)
   PATH="/snap/bin:$PATH"
   export USE_SNAP=1
+  entrypointRsyncUrl="$entrypointIp"
 
   solana_bench_tps=solana.bench-tps
   solana_ledger_tool=solana.ledger-tool
-  ledger=/var/snap/solana/current/config/ledger
+  solana_keygen=solana.keygen
 
-  entrypointRsyncUrl="$entrypointIp"
+  ledger=/var/snap/solana/current/config/ledger
+  client_id=/var/snap/solana/current/config/client-id.json
+
   ;;
 local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-
   entrypointRsyncUrl="$entrypointIp:~/solana"
 
-  solana_bench_tps="multinode-demo/client.sh $entrypointRsyncUrl $entrypointIp:8001"
+  solana_bench_tps=solana-bench-tps
   solana_ledger_tool=solana-ledger-tool
+  solana_keygen=solana-keygen
+
   ledger=config/ledger
+  client_id=config/client-id.json
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -83,7 +88,8 @@ echo "--- $entrypointIp: wallet sanity"
 echo "--- $entrypointIp: node count"
 (
   set -x
-  $solana_bench_tps --num-nodes "$numNodes" --converge-only
+  [[ -r $client_id ]] || $solana_keygen -o "$client_id"
+  $solana_bench_tps --network "$entrypointIp:8001" --identity "$client_id" --num-nodes "$numNodes" --converge-only
 )
 
 echo "--- $entrypointIp: verify ledger"
@@ -128,4 +134,3 @@ else
   echo "^^^ +++"
   echo "Validator sanity disabled (NO_VALIDATOR_SANITY defined)"
 fi
-

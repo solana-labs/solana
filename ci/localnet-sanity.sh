@@ -70,7 +70,11 @@ echo "--- Wallet sanity"
 echo "--- Node count"
 (
   set -x
-  ./multinode-demo/client.sh --num-nodes 3 --converge-only
+  source multinode-demo/common.sh
+  client_id=/tmp/client-id.json-$$
+  $solana_keygen -o $client_id
+  $solana_bench_tps --identity $client_id --num-nodes 3 --converge-only
+  rm -rf $client_id
 ) || flag_error
 
 killBackgroundCommands

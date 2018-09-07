@@ -49,9 +49,7 @@ apps:
     plugs:
       - home
   bench-tps:
-    # TODO: Merge client.sh functionality into solana-bench-tps proper
-    command: multinode-demo/client.sh
-    #command: solana-bench-tps
+    command: solana-bench-tps
     plugs:
       - network
       - network-bind
