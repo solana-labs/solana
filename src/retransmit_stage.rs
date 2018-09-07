@@ -14,7 +14,8 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
-use window::{self, SharedWindow};
+use window::SharedWindow;
+use window_service::window_service;
 
 fn retransmit(
     crdt: &Arc<RwLock<Crdt>>,
@@ -95,7 +96,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
-        let t_window = window::window_service(
+        let t_window = window_service(
             crdt.clone(),
             window,
             entry_height,
