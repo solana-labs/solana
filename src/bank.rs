@@ -3,10 +3,11 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
+use bincode::serialize;
 use chrono::prelude::*;
 use counter::Counter;
 use entry::Entry;
-use hash::Hash;
+use hash::{hash, Hash};
 use itertools::Itertools;
 use ledger::Block;
 use log::Level;
@@ -15,7 +16,7 @@ use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::{Keypair, Pubkey, Signature};
 use std;
 use std::collections::hash_map::Entry::Occupied;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
@@ -637,6 +638,16 @@ impl Bank {
         false
     }
 
+    /// Hash the `accounts` HashMap. This represents a validator's interpretation
+    ///  of the ledger up to the `last_id`, to be sent back to the leader when voting.
+    pub fn hash_internal_state(&self) -> Hash {
+        let mut ordered_accounts = BTreeMap::new();
+        for (pubkey, account) in self.accounts.read().unwrap().iter() {
+            ordered_accounts.insert(*pubkey, account.clone());
+        }
+        hash(&serialize(&ordered_accounts).unwrap())
+    }
+
     pub fn finality(&self) -> usize {
         self.finality_time.load(Ordering::Relaxed)
     }
@@ -656,7 +667,7 @@ mod tests {
     use hash::hash;
     use ledger;
     use packet::BLOB_DATA_SIZE;
-    use signature::KeypairUtil;
+    use signature::{GenKeys, KeypairUtil};
     use std;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
     use std::mem::size_of;
@@ -945,6 +956,19 @@ mod tests {
         entries.into_iter()
     }
 
+    fn create_sample_block_with_next_entries_using_keypairs(
+        mint: &Mint,
+        keypairs: &[Keypair],
+    ) -> impl Iterator<Item = Entry> {
+        let hash = mint.last_id();
+        let transactions: Vec<_> = keypairs
+            .iter()
+            .map(|keypair| Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash))
+            .collect();
+        let entries = ledger::next_entries(&hash, 0, transactions);
+        entries.into_iter()
+    }
+
     fn create_sample_block(mint: &Mint, length: usize) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
@@ -972,6 +996,15 @@ mod tests {
         let genesis = mint.create_entries();
         let block = create_sample_block(&mint, length);
         (genesis.into_iter().chain(block), mint.pubkey())
+    }
+
+    fn create_sample_ledger_with_mint_and_keypairs(
+        mint: &Mint,
+        keypairs: &[Keypair],
+    ) -> impl Iterator<Item = Entry> {
+        let genesis = mint.create_entries();
+        let block = create_sample_block_with_next_entries_using_keypairs(mint, keypairs);
+        genesis.into_iter().chain(block)
     }
 
     #[test]
@@ -1059,6 +1092,34 @@ mod tests {
         assert!(leader_bank.is_leader);
         let validator_bank = Bank::new_default(false);
         assert!(!validator_bank.is_leader);
+    }
+    #[test]
+    fn test_hash_internal_state() {
+        let mint = Mint::new(2_000);
+        let seed = [0u8; 32];
+        let mut rnd = GenKeys::new(seed);
+        let keypairs = rnd.gen_n_keypairs(5);
+        let ledger0 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
+        let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
+
+        let bank0 = Bank::default();
+        bank0.process_ledger(ledger0).unwrap();
+        let bank1 = Bank::default();
+        bank1.process_ledger(ledger1).unwrap();
+
+        let initial_state = bank0.hash_internal_state();
+
+        assert_eq!(bank1.hash_internal_state(), initial_state);
+
+        let pubkey = keypairs[0].pubkey();
+        bank0
+            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+            .unwrap();
+        assert_ne!(bank0.hash_internal_state(), initial_state);
+        bank1
+            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+            .unwrap();
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
     #[test]
     fn test_finality() {
