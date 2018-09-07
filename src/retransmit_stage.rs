@@ -95,7 +95,7 @@ impl RetransmitStage {
             retransmit_receiver,
         );
         let (blob_sender, blob_receiver) = channel();
-        let t_window = window::window(
+        let t_window = window::window_service(
             crdt.clone(),
             window,
             entry_height,
