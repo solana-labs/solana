@@ -65,7 +65,7 @@ fn find_next_missing(
                 return None;
             }
 
-            let val = crdt.read().unwrap().window_index_request(pix as u64);
+            let val = crdt.read().unwrap().window_index_request(pix);
             val.ok()
         })
         .collect()
