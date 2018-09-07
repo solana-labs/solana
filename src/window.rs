@@ -113,30 +113,16 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
 }
 
 fn repair_window(
-    id: &Pubkey,
     window: &SharedWindow,
     crdt: &Arc<RwLock<Crdt>>,
     recycler: &BlobRecycler,
-    last: &mut u64,
-    times: &mut usize,
+    id: &Pubkey,
+    times: usize,
     consumed: u64,
     received: u64,
-) -> Option<Vec<(SocketAddr, Vec<u8>)>> {
-    if received <= consumed {
-        return None;
-    }
-
-    //exponential backoff
-    if !repair_backoff(last, times, consumed) {
-        trace!("{} !repair_backoff() times = {}", id, times);
-        return None;
-    }
-
-    let highest_lost = calculate_highest_lost_blob_index(
-        crdt.read().unwrap().table.len() as u64,
-        consumed,
-        received,
-    );
+) -> Vec<(SocketAddr, Vec<u8>)> {
+    let num_peers = crdt.read().unwrap().table.len() as u64;
+    let highest_lost = calculate_highest_lost_blob_index(num_peers, consumed, received);
 
     let mut window = window.write().unwrap();
     let idxs = clear_window_slots(&mut window, recycler, consumed, highest_lost);
@@ -150,7 +136,7 @@ fn repair_window(
         trace!(
             "{}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
             id,
-            *times,
+            times,
             consumed,
             highest_lost,
             reqs.len()
@@ -160,7 +146,7 @@ fn repair_window(
             trace!("{}: repair_window request to {}", id, to);
         }
     }
-    Some(reqs)
+    reqs
 }
 
 fn add_block_to_retransmit_queue(
@@ -662,15 +648,23 @@ pub fn window(
                         }
                     }
                 }
-                if let Some(reqs) = repair_window(
-                    &id, &window, &crdt, &recycler, &mut last, &mut times, consumed, received,
-                ) {
-                    for (to, req) in reqs {
-                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                            info!("{} repair req send_to({}) error {:?}", id, to, e);
-                            0
-                        });
-                    }
+
+                if received <= consumed {
+                    continue;
+                }
+
+                //exponential backoff
+                if !repair_backoff(&mut last, &mut times, consumed) {
+                    trace!("{} !repair_backoff() times = {}", id, times);
+                    continue;
+                }
+
+                let reqs = repair_window(&window, &crdt, &recycler, &id, times, consumed, received);
+                for (to, req) in reqs {
+                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                        info!("{} repair req send_to({}) error {:?}", id, to, e);
+                        0
+                    });
                 }
             }
         })
