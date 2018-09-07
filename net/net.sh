@@ -116,7 +116,16 @@ build() {
 startCommon() {
   declare ipAddress=$1
   test -d "$SOLANA_ROOT"
-  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
+  ssh "${sshOptions[@]}" "$ipAddress" "
+    mkdir -p ~/solana ~/.cargo/bin
+
+    # Help other users of the machine locate network logs
+    [[ -d /tmp/solana/ ]] || {
+      mkdir /tmp/solana/
+      chmod go+w /tmp/solana/
+    }
+    ln -sfT ~/solana /tmp/solana/=
+  "
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
@@ -290,7 +299,7 @@ start() {
   echo "Leader deployment took $leaderDeployTime seconds"
   echo "Validator deployment (${#validatorIpList[@]} instances) took $validatorDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
-  echo "Logs in $netLogDir:"
+  echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
 }
 

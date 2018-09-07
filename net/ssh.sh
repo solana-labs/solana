@@ -43,13 +43,18 @@ if [[ -n "$ipAddress" ]]; then
   exec ssh "${sshOptions[@]}" "$ipAddress" "$@"
 fi
 
+printNode() {
+  declare nodeType=$1
+  declare ip=$2
+  printf "  %-25s | For logs run: $0 $ip tail -f /tmp/solana/=/$nodeType.log\n" "$0 $ip"
+}
 
 echo Leader:
-echo -e "  $0 $leaderIp\t|  $0 $leaderIp tail -f solana/leader.log"
+printNode leader "$leaderIp"
 echo
 echo Validators:
 for ipAddress in "${validatorIpList[@]}"; do
-  echo -e "  $0 $ipAddress\t|  $0 $ipAddress tail -f solana/validator.log"
+  printNode validator "$ipAddress"
 done
 echo
 echo Clients:
@@ -57,7 +62,7 @@ if [[ ${#clientIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
   for ipAddress in "${clientIpList[@]}"; do
-    echo -e "  $0 $ipAddress\t|  $0 $ipAddress tail -f solana/client.log"
+    printNode client "$ipAddress"
   done
 fi
 
