@@ -107,7 +107,9 @@ while getopts "h?p:Pi:n:c:z:ga:y" opt; do
     ;;
   esac
 done
+shift $((OPTIND - 1))
 
+[[ -z $1 ]] || usage "Unexpected argument: $1"
 
 prepareInstancesAndWriteConfigFile() {
   $metricsWriteDatapoint "testnet-deploy net-config-begin=1"
