@@ -3,15 +3,14 @@
 # Wallet sanity test
 #
 
-here=$(dirname "$0")
-cd "$here"
+cd "$(dirname "$0")"/..
 
 if [[ -n "$USE_SNAP" ]]; then
   # TODO: Merge wallet.sh functionality into solana-wallet proper and
   #       remove this USE_SNAP case
   wallet="solana.wallet $1"
 else
-  wallet="../wallet.sh $1"
+  wallet="multinode-demo/wallet.sh $1"
 fi
 
 # Tokens transferred to this address are lost forever...

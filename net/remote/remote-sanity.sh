@@ -77,7 +77,7 @@ esac
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  multinode-demo/test/wallet-sanity.sh "$entrypointRsyncUrl"
+  scripts/wallet-sanity.sh "$entrypointRsyncUrl"
 )
 
 echo "--- $entrypointIp: node count"
