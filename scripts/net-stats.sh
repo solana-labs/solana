@@ -3,6 +3,8 @@
 # Reports network statistics
 #
 
+[[ $(uname) == Linux ]] || exit 0
+
 cd "$(dirname "$0")"
 
 # shellcheck source=scripts/configure-metrics.sh
@@ -16,9 +18,9 @@ rcvbuf_errors=0
 rcvbuf_errors_diff=0
 
 update_netstat() {
-  net_stat=$(netstat -suna)
+  declare net_stat=$(netstat -suna)
 
-  stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /packets received/ {tmp_var = $1} END { print tmp_var }')
+  declare stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /packets received/ {tmp_var = $1} END { print tmp_var }')
   packets_received_diff=$(( stats-packets_received ))
   packets_received="$stats"
 
@@ -33,7 +35,6 @@ update_netstat() {
 
 update_netstat
 
-[[ $(uname) == Linux ]] || exit 0
 while true; do
   update_netstat
   report="packets_received=$packets_received_diff,receive_errors=$receive_errors_diff,rcvbuf_errors=$rcvbuf_errors_diff"
