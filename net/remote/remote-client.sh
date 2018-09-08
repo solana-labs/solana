@@ -25,7 +25,7 @@ if [[ $threadCount -gt 4 ]]; then
   threadCount=4
 fi
 
-scripts/install-earlyoom.sh
+net/scripts/install-earlyoom.sh
 
 case $deployMethod in
 snap)
