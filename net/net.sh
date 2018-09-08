@@ -135,6 +135,7 @@ startLeader() {
   declare ipAddress=$1
   declare logFile="$2"
   echo "--- Starting leader: $leaderIp"
+  echo "start log: $logFile"
 
   # Deploy local binaries to leader.  Validators and clients later fetch the
   # binaries from the leader.
@@ -164,15 +165,16 @@ startLeader() {
 
 startValidator() {
   declare ipAddress=$1
-  declare logFile="$2"
+  declare logFile="$netLogDir/validator-$ipAddress.log"
 
   echo "--- Starting validator: $leaderIp"
+  echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh $deployMethod validator $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
-  ) >> "$netLogDir/validator-$ipAddress.log" 2>&1 &
+  ) >> "$logFile" 2>&1 &
   declare pid=$!
   ln -sfT "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
@@ -182,7 +184,7 @@ startClient() {
   declare ipAddress=$1
   declare logFile="$2"
   echo "--- Starting client: $ipAddress"
-
+  echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
