@@ -251,7 +251,7 @@ impl WindowUtil for Window {
             if erasure::recover(
                 id,
                 recycler,
-                window,
+                self,
                 *consumed,
                 (*consumed % WINDOW_SIZE) as usize,
             ).is_err()
