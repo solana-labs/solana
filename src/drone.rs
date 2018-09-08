@@ -162,7 +162,7 @@ mod tests {
     use fullnode::Fullnode;
     use logger;
     use mint::Mint;
-    use nat::get_ip_addr;
+    use netutil::get_ip_addr;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;

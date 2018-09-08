@@ -30,8 +30,8 @@ pub mod ledger;
 pub mod logger;
 pub mod metrics;
 pub mod mint;
-pub mod nat;
 pub mod ncp;
+pub mod netutil;
 pub mod packet;
 pub mod payment_plan;
 pub mod record_stage;
@@ -72,6 +72,7 @@ extern crate jsonrpc_http_server;
 extern crate log;
 extern crate nix;
 extern crate rayon;
+extern crate reqwest;
 extern crate ring;
 extern crate serde;
 #[macro_use]

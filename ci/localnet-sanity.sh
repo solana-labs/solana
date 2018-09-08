@@ -69,8 +69,8 @@ echo "--- Wallet sanity"
 
 echo "--- Node count"
 (
-  set -x
   source multinode-demo/common.sh
+  set -x
   client_id=/tmp/client-id.json-$$
   $solana_keygen -o $client_id
   $solana_bench_tps --identity $client_id --num-nodes 3 --converge-only
@@ -81,8 +81,8 @@ killBackgroundCommands
 
 echo "--- Ledger verification"
 (
-  set -x
   source multinode-demo/common.sh
+  set -x
   cp -R "$SOLANA_CONFIG_DIR"/ledger /tmp/ledger-$$
   $solana_ledger_tool --ledger /tmp/ledger-$$ verify
   rm -rf /tmp/ledger-$$
