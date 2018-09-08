@@ -104,11 +104,11 @@ if $ledgerVerify; then
     )
   else
     echo "^^^ +++"
-    echo "Ledger verify skipped"
+    echo "Ledger verify skipped: directory does not exist: $ledger"
   fi
 else
   echo "^^^ +++"
-  echo "Ledger verify skipped (NO_LEDGER_VERIFY defined)"
+  echo "Note: ledger verify disabled"
 fi
 
 
@@ -132,5 +132,5 @@ if $validatorSanity; then
   fi
 else
   echo "^^^ +++"
-  echo "Validator sanity disabled (NO_VALIDATOR_SANITY defined)"
+  echo "Note: validator sanity disabled"
 fi
