@@ -39,7 +39,8 @@ fi
 case $deployMethod in
 snap)
   SECONDS=0
-  rsync -vPrc "$entrypointIp:~/solana/solana.snap" .
+  [[ $nodeType = leader ]] ||
+    net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
   commonNodeConfig="\
@@ -94,7 +95,7 @@ local)
     ./multinode-demo/leader.sh > leader.log 2>&1 &
     ;;
   validator)
-    rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+    net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
 
     ./multinode-demo/setup.sh -t validator $setupArgs
     ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" >validator.log 2>&1 &

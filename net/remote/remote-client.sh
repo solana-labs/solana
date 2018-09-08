@@ -27,9 +27,8 @@ fi
 
 case $deployMethod in
 snap)
-  rsync -vPrc "$entrypointIp:~/solana/solana.snap" .
+  net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
-  rm solana.snap
 
   solana_bench_tps=/snap/bin/solana.bench-tps
   solana_keygen=/snap/bin/solana.keygen
@@ -39,7 +38,7 @@ local)
   export USE_INSTALL=1
   export SOLANA_DEFAULT_METRICS_RATE=1
 
-  rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   solana_bench_tps=solana-bench-tps
   solana_keygen=solana-keygen
   ;;
