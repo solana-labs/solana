@@ -29,6 +29,8 @@ echo --- gce.sh config
 net/gce.sh config -p "$netName"
 net/init-metrics.sh -e
 echo --- net.sh sanity
-net/net.sh sanity ${NO_LEDGER_VERIFY:+-o noLedgerVerify}
+net/net.sh sanity \
+  ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
+  ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
 
 exit 0
