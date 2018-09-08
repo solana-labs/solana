@@ -111,7 +111,7 @@ gcloud_CreateInstances() {
   if [[ $numNodes = 1 ]]; then
     nodes=("$namePrefix")
   else
-    read -ra nodes <<<$(seq -f "${namePrefix}%g" 1 "$numNodes")
+    read -ra nodes <<<$(seq -f "${namePrefix}%0${#numNodes}g" 1 "$numNodes")
   fi
 
   declare -a args
