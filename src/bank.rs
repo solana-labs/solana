@@ -176,23 +176,6 @@ impl Bank {
         Ok(())
     }
 
-    ///// Forget the given `signature` because its transaction was rejected.
-    //fn forget_signature(signatures: &mut HashSet<Signature>, signature: &Signature) {
-    //    signatures.remove(signature);
-    //}
-
-    ///// Forget the given `signature` with `last_id` because the transaction was rejected.
-    //fn forget_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) {
-    //    if let Some(entry) = self
-    //        .last_ids_sigs
-    //        .write()
-    //        .expect("'last_ids' read lock in forget_signature_with_last_id")
-    //        .get_mut(last_id)
-    //    {
-    //        Self::forget_signature(&mut entry.0, signature);
-    //    }
-    //}
-
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
         for (_, sigs) in self.last_ids_sigs.write().unwrap().iter_mut() {
@@ -818,6 +801,23 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
     }
 
+    // TODO: This test verifies potentially undesirable behavior
+    // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
+    #[test]
+    fn test_detect_failed_duplicate_transactions_issue_1157() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+
+        let tx = Transaction::new(&mint.keypair(), mint.keypair().pubkey(), -1, mint.last_id());
+        let signature = tx.signature;
+        assert!(!bank.has_signature(&signature));
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(BankError::NegativeTokens)
+        );
+        assert!(bank.has_signature(&signature));
+    }
+
     #[test]
     fn test_account_not_found() {
         let mint = Mint::new(1);
@@ -967,20 +967,6 @@ mod tests {
                 .is_ok()
         );
     }
-
-    //#[test]
-    //fn test_forget_signature() {
-    //    let mint = Mint::new(1);
-    //    let bank = Bank::new(&mint);
-    //    let signature = Signature::default();
-    //    bank.reserve_signature_with_last_id(&signature, &mint.last_id())
-    //        .unwrap();
-    //    bank.forget_signature_with_last_id(&signature, &mint.last_id());
-    //    assert!(
-    //        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
-    //            .is_ok()
-    //    );
-    //}
 
     #[test]
     fn test_has_signature() {
