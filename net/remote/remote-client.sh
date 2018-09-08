@@ -6,6 +6,7 @@ deployMethod="$1"
 entrypointIp="$2"
 numNodes="$3"
 RUST_LOG="$4"
+export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 
 missing() {
   echo "Error: $1 not specified"
@@ -39,7 +40,6 @@ local)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   export SOLANA_DEFAULT_METRICS_RATE=1
-  export RUST_LOG
 
   rsync -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   solana_bench_tps=solana-bench-tps
@@ -67,14 +67,14 @@ clientCommand="\
 keygenCommand="$solana_keygen -o client.json"
 tmux new -s solana-bench-tps -d "
   [[ -r client.json ]] || {
-    echo '$ $keygenCommand' >> client.log
+    echo '$ $keygenCommand'  | tee -a client.log
     $keygenCommand >> client.log 2>&1
   }
 
   while true; do
-    echo === Client start: \$(date) >> client.log
+    echo === Client start: \$(date) | tee -a client.log
     $metricsWriteDatapoint 'testnet-deploy client-begin=1'
-    echo '$ $clientCommand' >> client.log
+    echo '$ $clientCommand' | tee -a client.log
     $clientCommand >> client.log 2>&1
     $metricsWriteDatapoint 'testnet-deploy client-complete=1'
   done
