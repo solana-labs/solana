@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
 here=$(dirname "$0")
-# shellcheck source=scripts/gcloud.sh
-source "$here"/../scripts/gcloud.sh
+# shellcheck source=net/scripts/gcloud.sh
+source "$here"/scripts/gcloud.sh
 # shellcheck source=net/common.sh
 source "$here"/common.sh
 

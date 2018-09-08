@@ -29,7 +29,7 @@ EOF
 source net/common.sh
 loadConfigFile
 
-scripts/install-earlyoom.sh
+time net/scripts/install-earlyoom.sh
 
 if [[ $publicNetwork = true ]]; then
   setupArgs="-p"
