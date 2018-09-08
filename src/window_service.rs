@@ -2,8 +2,6 @@
 //!
 use counter::Counter;
 use crdt::{Crdt, NodeInfo};
-#[cfg(feature = "erasure")]
-use erasure;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob};
 use rand::{thread_rng, Rng};
