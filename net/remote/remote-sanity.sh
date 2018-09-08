@@ -58,7 +58,7 @@ snap)
   solana_keygen=solana.keygen
 
   ledger=/var/snap/solana/current/config/ledger
-  client_id=/var/snap/solana/current/config/client-id.json
+  client_id=~/snap/solana/current/config/client-id.json
 
   ;;
 local)
