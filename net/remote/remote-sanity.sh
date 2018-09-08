@@ -85,10 +85,10 @@ echo "--- $entrypointIp: wallet sanity"
   scripts/wallet-sanity.sh "$entrypointRsyncUrl"
 )
 
-echo "--- $entrypointIp: node count"
+echo "+++ $entrypointIp: node count ($numNodes expected)"
 (
   set -x
-  [[ -r $client_id ]] || $solana_keygen -o "$client_id"
+  $solana_keygen -o "$client_id"
   $solana_bench_tps --network "$entrypointIp:8001" --identity "$client_id" --num-nodes "$numNodes" --converge-only
 )
 
@@ -134,3 +134,5 @@ else
   echo "^^^ +++"
   echo "Note: validator sanity disabled"
 fi
+
+echo --- Pass

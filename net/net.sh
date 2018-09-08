@@ -296,8 +296,7 @@ start() {
   fi
 
   echo
-  echo "================================================================="
-  echo "Deployment finished at $(date)"
+  echo "+++ Deployment Successful"
   echo "Leader deployment took $leaderDeployTime seconds"
   echo "Validator deployment (${#validatorIpList[@]} instances) took $validatorDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
