@@ -54,8 +54,17 @@ scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
 
 ! tmux list-sessions || tmux kill-session
 
-clientCommand="$solana_bench_tps --num-nodes $numNodes --seconds 600 --sustained --threads $threadCount"
-keygenCommand="$solana_keygen -o client.id"
+clientCommand="\
+  $solana_bench_tps \
+    --network $entrypointIp:8001 \
+    --identity client.json \
+    --num-nodes $numNodes \
+    --duration 600 \
+    --sustained \
+    --threads $threadCount \
+"
+
+keygenCommand="$solana_keygen -o client.json"
 tmux new -s solana-bench-tps -d "
   [[ -r client.json ]] || {
     echo '$ $keygenCommand' >> client.log
