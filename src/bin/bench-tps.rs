@@ -502,6 +502,7 @@ fn main() {
 
     let sustained = matches.is_present("sustained");
 
+    println!("Looking for leader at {:?}", network);
     let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
     let exit_signal = Arc::new(AtomicBool::new(false));
