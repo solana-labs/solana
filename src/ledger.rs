@@ -590,7 +590,12 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![Transaction::new_timestamp(&keypair, Utc::now(), one)],
+                    vec![Transaction::new_timestamp(
+                        &keypair,
+                        keypair.pubkey(),
+                        Utc::now(),
+                        one,
+                    )],
                     false,
                 )
             })
@@ -610,7 +615,7 @@ mod tests {
             one,
             1,
         );
-        let tx1 = Transaction::new_timestamp(&keypair, Utc::now(), one);
+        let tx1 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), one);
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,

@@ -503,7 +503,7 @@ impl Blob {
 mod tests {
     use packet::{
         to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycler, Reset,
-        BLOB_HEADER_SIZE, NUM_PACKETS,
+        BLOB_HEADER_SIZE, NUM_PACKETS, PACKET_DATA_SIZE,
     };
     use request::Request;
     use std::io;
@@ -577,12 +577,12 @@ mod tests {
         p.write().unwrap().packets.resize(10, Packet::default());
         for m in p.write().unwrap().packets.iter_mut() {
             m.meta.set_addr(&addr);
-            m.meta.size = 256;
+            m.meta.size = PACKET_DATA_SIZE;
         }
         p.read().unwrap().send_to(&sender).unwrap();
         p.write().unwrap().recv_from(&reader).unwrap();
         for m in p.write().unwrap().packets.iter_mut() {
-            assert_eq!(m.meta.size, 256);
+            assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
 

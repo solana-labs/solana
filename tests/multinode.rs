@@ -522,7 +522,7 @@ fn test_multi_node_dynamic_network() {
         Ok(val) => val
             .parse()
             .expect(&format!("env var {} is not parse-able as usize", key)),
-        Err(_) => 160,
+        Err(_) => 120,
     };
 
     let leader_keypair = Keypair::new();

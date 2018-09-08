@@ -101,9 +101,11 @@ pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<En
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::serialize;
     use ledger;
     use mint::Mint;
     use packet::BLOB_DATA_SIZE;
+    use packet::PACKET_DATA_SIZE;
     use signature::{Keypair, KeypairUtil};
     use std::io::Cursor;
     use transaction::Transaction;
@@ -117,9 +119,11 @@ mod tests {
         let mut entry_writer = EntryWriter::new(&bank, writer);
         let keypair = Keypair::new();
         let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
+        let tx_size = serialize(&tx).unwrap().len();
 
-        // NOTE: if Entry grows to larger than a transaction, the code below falls over
-        let threshold = (BLOB_DATA_SIZE / 256) - 1; // 256 is transaction size
+        assert!(tx_size <= PACKET_DATA_SIZE);
+        assert!(BLOB_DATA_SIZE >= PACKET_DATA_SIZE);
+        let threshold = (BLOB_DATA_SIZE / tx_size) - 1; // PACKET_DATA_SIZE is transaction size
 
         // Verify large entries are split up and the first sets has_more.
         let txs = vec![tx.clone(); threshold * 2];
