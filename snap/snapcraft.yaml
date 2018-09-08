@@ -84,6 +84,11 @@ apps:
     command: scripts/snap-config-to-env.sh $SNAP/scripts/oom-monitor.sh
     plugs:
       - network
+  daemon-net-stats:
+    daemon: simple
+    command: scripts/snap-config-to-env.sh $SNAP/scripts/net-stats.sh
+    plugs:
+      - network
 
 parts:
   solana:
