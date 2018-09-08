@@ -25,8 +25,6 @@ if [[ $threadCount -gt 4 ]]; then
   threadCount=4
 fi
 
-net/scripts/install-earlyoom.sh
-
 case $deployMethod in
 snap)
   rsync -vPrc "$entrypointIp:~/solana/solana.snap" .
