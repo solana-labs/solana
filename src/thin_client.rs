@@ -7,10 +7,12 @@ use bank::{Account, Bank};
 use bincode::{deserialize, serialize};
 use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
+use log::Level;
 use ncp::Ncp;
 use request::{Request, Response};
 use result::{Error, Result};
 use signature::{Keypair, Pubkey, Signature};
+use std;
 use std::collections::HashMap;
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
@@ -64,9 +66,17 @@ impl ThinClient {
     pub fn recv_response(&self) -> io::Result<Response> {
         let mut buf = vec![0u8; 1024];
         trace!("start recv_from");
-        let (len, from) = self.requests_socket.recv_from(&mut buf)?;
-        trace!("end recv_from got {} {}", len, from);
-        deserialize(&buf).or_else(|_| Err(io::Error::new(io::ErrorKind::Other, "deserialize")))
+        match self.requests_socket.recv_from(&mut buf) {
+            Ok((len, from)) => {
+                trace!("end recv_from got {} {}", len, from);
+                deserialize(&buf)
+                    .or_else(|_| Err(io::Error::new(io::ErrorKind::Other, "deserialize")))
+            }
+            Err(e) => {
+                trace!("end recv_from got {:?}", e);
+                Err(e)
+            }
+        }
     }
 
     pub fn process_response(&mut self, resp: &Response) {
@@ -361,29 +371,97 @@ impl Drop for ThinClient {
     }
 }
 
+fn trace_node_info(nodes: &Vec<NodeInfo>, leader_id: &Pubkey) -> () {
+    trace!(" NodeInfo.contact_info     | Node identifier");
+    trace!("---------------------------+------------------");
+    for node in nodes {
+        trace!(
+            " ncp: {:20} | {}{}",
+            node.contact_info.ncp.to_string(),
+            node.id,
+            if node.id == *leader_id {
+                " <==== leader"
+            } else {
+                ""
+            }
+        );
+        trace!(" rpu: {:20} | ", node.contact_info.rpu.to_string(),);
+        trace!(" tpu: {:20} | ", node.contact_info.tpu.to_string(),);
+    }
+    trace!("Nodes: {}", nodes.len());
+}
+
 pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    trace!("polling {:?} for leader", leader_ncp);
     let (node, gossip_socket) = Crdt::spy_node();
+    let my_addr = gossip_socket.local_addr().unwrap();
     let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
     let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone());
+
     let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
     crdt.write().unwrap().insert(&leader_entry_point);
 
     sleep(Duration::from_millis(100));
 
+    let deadline = match timeout {
+        Some(timeout) => Duration::new(timeout, 0),
+        None => Duration::new(std::u64::MAX, 0),
+    };
     let now = Instant::now();
     // Block until leader's correct contact info is received
-    while crdt.read().unwrap().leader_data().is_none() {
-        if timeout.is_some() && now.elapsed() > Duration::new(timeout.unwrap(), 0) {
+    let leader;
+
+    loop {
+        trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
+
+        if let Some(l) = crdt.read().unwrap().leader_data() {
+            leader = Some(l.clone());
+            break;
+        }
+
+        if log_enabled!(Level::Trace) {
+            // print validators/fullnodes
+            let nodes: Vec<NodeInfo> = crdt
+                .read()
+                .unwrap()
+                .table
+                .values()
+                .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+                .cloned()
+                .collect();
+            trace_node_info(&nodes, &Default::default());
+        }
+
+        if now.elapsed() > deadline {
             return Err(Error::CrdtError(CrdtError::NoLeader));
         }
+
+        sleep(Duration::from_millis(100));
     }
 
     ncp.close()?;
-    let leader = crdt.read().unwrap().leader_data().unwrap().clone();
-    Ok(leader)
+
+    if log_enabled!(Level::Trace) {
+        let leader_id = if let Some(leader) = &leader {
+            leader.id
+        } else {
+            Default::default()
+        };
+
+        // print validators/fullnodes
+        let nodes: Vec<NodeInfo> = crdt
+            .read()
+            .unwrap()
+            .table
+            .values()
+            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+            .cloned()
+            .collect();
+        trace_node_info(&nodes, &leader_id);
+    }
+
+    Ok(leader.unwrap().clone())
 }
 
 #[cfg(test)]

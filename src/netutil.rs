@@ -1,11 +1,10 @@
-//! The `nat` module assists with NAT traversal
-
-extern crate reqwest;
+//! The `netutil` module assists with networking
 
 use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
 use pnet_datalink as datalink;
 use rand::{thread_rng, Rng};
+use reqwest;
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -73,20 +72,34 @@ pub fn get_ip_addr() -> Option<IpAddr> {
     None
 }
 
-pub fn bind_in_range(range: (u16, u16)) -> io::Result<UdpSocket> {
+fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
+    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None)?;
+    let sock_fd = sock.as_raw_fd();
+
+    if reuseaddr {
+        // best effort, i.e. ignore errors here, we'll get the failure in caller
+        setsockopt(sock_fd, ReusePort, &true).ok();
+        setsockopt(sock_fd, ReuseAddr, &true).ok();
+    }
+
+    Ok(sock)
+}
+
+pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
+    let sock = udp_socket(false)?;
+
     let (start, end) = range;
     let mut tries_left = end - start;
-    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
-    let sock_fd = sock.as_raw_fd();
-    setsockopt(sock_fd, ReusePort, &true).unwrap();
-    setsockopt(sock_fd, ReuseAddr, &true).unwrap();
     loop {
         let rand_port = thread_rng().gen_range(start, end);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
 
         match sock.bind(&SockAddr::from(addr)) {
-            Result::Ok(_) => break Result::Ok(sock.into_udp_socket()),
-            Result::Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
+            Ok(_) => {
+                let sock = sock.into_udp_socket();
+                break Result::Ok((sock.local_addr().unwrap().port(), sock));
+            }
+            Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
                 return Err(err);
             },
         }
@@ -94,23 +107,35 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<UdpSocket> {
     }
 }
 
-pub fn bind_to(port: u16) -> UdpSocket {
-    let sock = Socket::new(Domain::ipv4(), Type::dgram(), None).unwrap();
-    let sock_fd = sock.as_raw_fd();
-    setsockopt(sock_fd, ReusePort, &true).unwrap();
-    setsockopt(sock_fd, ReuseAddr, &true).unwrap();
-    let addr = socketaddr!(0, port);
+// binds many sockets to the same port in a range
+pub fn multi_bind_in_range(range: (u16, u16), num: usize) -> io::Result<(u16, Vec<UdpSocket>)> {
+    let mut sockets = Vec::with_capacity(num);
+
+    let port = {
+        let (port, _) = bind_in_range(range)?;
+        port
+    }; // drop the probe, port should be available... briefly.
+
+    for _ in 0..num {
+        sockets.push(bind_to(port, true)?);
+    }
+    Ok((port, sockets))
+}
+
+pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
+    let sock = udp_socket(reuseaddr)?;
+
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+
     match sock.bind(&SockAddr::from(addr)) {
-        Ok(_) => sock.into_udp_socket(),
-        Err(err) => {
-            panic!("Failed to bind to {:?}, err: {}", addr, err);
-        }
+        Ok(_) => Result::Ok(sock.into_udp_socket()),
+        Err(err) => Err(err),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use nat::parse_port_or_addr;
+    use netutil::*;
 
     #[test]
     fn test_parse_port_or_addr() {
@@ -123,4 +148,26 @@ mod tests {
         let p3 = parse_port_or_addr(None, 1);
         assert_eq!(p3.port(), 1);
     }
+
+    #[test]
+    fn test_bind() {
+        assert_eq!(bind_in_range((2000, 2001)).unwrap().0, 2000);
+        let x = bind_to(2002, true).unwrap();
+        let y = bind_to(2002, true).unwrap();
+        assert_eq!(
+            x.local_addr().unwrap().port(),
+            y.local_addr().unwrap().port()
+        );
+        let (port, v) = multi_bind_in_range((2010, 2110), 10).unwrap();
+        for sock in &v {
+            assert_eq!(port, sock.local_addr().unwrap().port());
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_bind_in_range_nil() {
+        let _ = bind_in_range((2000, 2000));
+    }
+
 }

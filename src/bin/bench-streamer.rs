@@ -2,7 +2,7 @@ extern crate clap;
 extern crate solana;
 
 use clap::{App, Arg};
-use solana::nat::bind_to;
+use solana::netutil::bind_to;
 use solana::packet::{Packet, PacketRecycler, BLOB_SIZE, PACKET_DATA_SIZE};
 use solana::result::Result;
 use solana::streamer::{receiver, PacketReceiver};
@@ -84,7 +84,7 @@ fn main() -> Result<()> {
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
     for _ in 0..num_sockets {
-        let read = bind_to(port);
+        let read = bind_to(port, false).unwrap();
         read.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
 
         addr = read.local_addr().unwrap();

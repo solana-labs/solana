@@ -18,7 +18,7 @@ use counter::Counter;
 use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
-use nat::{bind_in_range, bind_to};
+use netutil::{bind_in_range, bind_to, multi_bind_in_range};
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
@@ -1172,7 +1172,7 @@ impl Crdt {
     }
 
     pub fn spy_node() -> (NodeInfo, UdpSocket) {
-        let gossip_socket = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
+        let (_, gossip_socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
         let pubkey = Keypair::new().pubkey();
         let daddr = socketaddr_any!();
 
@@ -1235,29 +1235,20 @@ impl Node {
     }
     pub fn new_with_external_ip(pubkey: Pubkey, ncp: &SocketAddr) -> Node {
         fn bind() -> (u16, UdpSocket) {
-            match bind_in_range(FULLNODE_PORT_RANGE) {
-                Ok(socket) => (socket.local_addr().unwrap().port(), socket),
-                Err(err) => {
-                    panic!("Failed to bind err: {}", err);
-                }
-            }
+            bind_in_range(FULLNODE_PORT_RANGE).expect("Failed to bind")
         };
 
         let (gossip_port, gossip) = if ncp.port() != 0 {
-            (ncp.port(), bind_to(ncp.port()))
+            (ncp.port(), bind_to(ncp.port(), false).expect("ncp bind"))
         } else {
             bind()
         };
 
         let (replicate_port, replicate) = bind();
         let (requests_port, requests) = bind();
-        let (transaction_port, transaction) = bind();
 
-        let mut transaction_sockets = vec![transaction];
-
-        for _ in 0..4 {
-            transaction_sockets.push(bind_to(transaction_port));
-        }
+        let (transaction_port, transaction_sockets) =
+            multi_bind_in_range(FULLNODE_PORT_RANGE, 5).expect("tpu multi_bind");
 
         let (_, repair) = bind();
         let (_, broadcast) = bind();
@@ -1275,6 +1266,7 @@ impl Node {
             SocketAddr::new(ncp.ip(), requests_port),
             SocketAddr::new(ncp.ip(), transaction_port),
         );
+        trace!("new NodeInfo: {:?}", info);
 
         Node {
             info,

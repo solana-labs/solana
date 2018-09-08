@@ -18,7 +18,7 @@ use solana::logger;
 use solana::metrics;
 use solana::ncp::Ncp;
 use solana::service::Service;
-use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
+use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil, Pubkey};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
@@ -507,16 +507,34 @@ fn main() {
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let mut c_threads = vec![];
-    let (validators, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads);
+    let (nodes, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads);
 
-    println!(" Node address         | Node identifier");
-    println!("----------------------+------------------");
-    for node in &validators {
-        println!(" {:20} | {}", node.contact_info.tpu.to_string(), node.id);
+    let leader_id = if let Some(leader) = &leader {
+        leader.id
+    } else {
+        Default::default()
+    };
+
+    fn print_gossip_info(nodes: &Vec<NodeInfo>, leader_id: &Pubkey) -> () {
+        println!(" Node gossip address | Node identifier");
+        println!("---------------------+------------------");
+        for node in nodes {
+            println!(
+                " {:20} | {}{}",
+                node.contact_info.ncp.to_string(),
+                node.id,
+                if node.id == *leader_id {
+                    " <==== leader"
+                } else {
+                    ""
+                }
+            );
+        }
+        println!("Nodes: {}", nodes.len());
     }
-    println!("Nodes: {}", validators.len());
+    print_gossip_info(&nodes, &leader_id);
 
-    if validators.len() < num_nodes {
+    if nodes.len() < num_nodes {
         println!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",
             num_nodes
@@ -575,7 +593,7 @@ fn main() {
     let maxes = Arc::new(RwLock::new(Vec::new()));
     let sample_period = 1; // in seconds
     println!("Sampling TPS every {} second...", sample_period);
-    let v_threads: Vec<_> = validators
+    let v_threads: Vec<_> = nodes
         .into_iter()
         .map(|v| {
             let exit_signal = exit_signal.clone();
@@ -725,6 +743,7 @@ fn converge(
     //wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
         if spy_ref.read().unwrap().leader_data().is_none() {
+            sleep(Duration::new(1, 0));
             continue;
         }
 
