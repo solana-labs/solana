@@ -45,12 +45,6 @@ if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   # 0700
   mkdir -p "$SNAP_DATA"/{drone,leader,validator}
 
-  SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
-  SOLANA_DEFAULT_METRICS_RATE="$(snapctl get default-metrics-rate)"
-  export SOLANA_DEFAULT_METRICS_RATE
-  SOLANA_CUDA="$(snapctl get enable-cuda)"
-  RUST_LOG="$(snapctl get rust-log)"
-
 elif [[ -n $USE_SNAP ]]; then # Use the Linux Snap binaries
   solana_program() {
     declare program="$1"
