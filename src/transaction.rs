@@ -84,9 +84,9 @@ pub struct Transaction {
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
     /// contract-specific.
-    /// * keys[0] - Typically this is the `from` public key.  `signature` is verified with keys[0].
+    /// * keys[0] - Typically this is the `caller` public key.  `signature` is verified with keys[0].
     /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * keys[1] - Typically this is the contract context or the recepient of the tokens
+    /// * keys[1] - Typically this is the contract context or the recipient of the tokens
     pub keys: Vec<Pubkey>,
 
     /// The ID of a recent ledger entry.
@@ -103,7 +103,7 @@ impl Transaction {
     /// Create a signed transaction from the given `Instruction`.
     /// * `from_keypair` - The key used to sign the transcation.  This key is stored as keys[0]
     /// * `transaction_keys` - The keys for the transaction.  These are the contract state
-    ///    instances or token recepient keys.
+    ///    instances or token recipient keys.
     /// * `userdata` - The input data that the contract will execute with
     /// * `last_id` - The PoH hash.
     /// * `fee` - The transaction fee.
@@ -135,7 +135,7 @@ impl Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let userdata = serialize(&instruction).expect("serealize instruction");
+        let userdata = serialize(&instruction).unwrap();
         Self::new_with_userdata(from_keypair, &[contract], userdata, last_id, fee)
     }
 

@@ -188,8 +188,8 @@ impl ThinClient {
             self.process_response(&resp);
         }
         trace!("get_balance {:?}", self.balances.get(pubkey));
-        //TODO: call the contract specific get_balance for contract_id's thin client can introspect
-        //instead of hard coding to budget_dsl only
+        // TODO: This is a hard coded call to introspect the balance of a budget_dsl contract
+        // In the future custom contracts would need their own introspection
         self.balances
             .get(pubkey)
             .map(Bank::get_balance_of_budget_payment_plan)
