@@ -36,6 +36,7 @@ pub mod packet;
 pub mod payment_plan;
 pub mod record_stage;
 pub mod recorder;
+pub mod recvmmsg;
 pub mod replicate_stage;
 pub mod request;
 pub mod request_processor;

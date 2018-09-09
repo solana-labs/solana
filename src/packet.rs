@@ -3,7 +3,7 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
 use log::Level;
-use netutil::{recv_mmsg, NUM_RCVMMSGS};
+use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use result::{Error, Result};
 use serde::Serialize;
 use signature::Pubkey;
