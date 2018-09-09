@@ -1,17 +1,22 @@
 //! The `netutil` module assists with networking
 
+#[cfg(target_os = "linux")]
 use libc::{
     c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, time_t, timespec, MSG_WAITFORONE,
 };
+use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
-use nix::sys::socket::{setsockopt, InetAddr};
+#[cfg(target_os = "linux")]
+use nix::sys::socket::InetAddr;
 use packet::Packet;
 use pnet_datalink as datalink;
 use rand::{thread_rng, Rng};
 use reqwest;
 use socket2::{Domain, SockAddr, Socket, Type};
+#[cfg(target_os = "linux")]
 use std::cmp;
 use std::io;
+#[cfg(target_os = "linux")]
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
@@ -141,6 +146,34 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     }
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
+    let mut i = 0;
+    socket.set_nonblocking(false)?;
+    for n in 0..NUM_RCVMMSGS {
+        let p = &mut packets[n];
+        p.meta.size = 0;
+        match socket.recv_from(&mut p.data) {
+            Err(_) if i > 0 => {
+                break;
+            }
+            Err(e) => {
+                return Err(e);
+            }
+            Ok((nrecv, from)) => {
+                p.meta.size = nrecv;
+                p.meta.set_addr(&from);
+                if i == 0 {
+                    socket.set_nonblocking(true)?;
+                }
+            }
+        }
+        i += 1;
+    }
+    Ok(i)
+}
+
+#[cfg(target_os = "linux")]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
