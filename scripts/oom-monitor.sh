@@ -3,19 +3,21 @@
 # Reports Linux OOM Killer activity
 #
 
-here=$(dirname "$0")
-# shellcheck source=scripts/oom-score-adj.sh
-source "$here"/oom-score-adj.sh
+cd "$(dirname "$0")"
 
-if [[ $(uname) != Linux ]]; then
-  exit 0
-fi
+# shellcheck source=scripts/oom-score-adj.sh
+source oom-score-adj.sh
+
+# shellcheck source=scripts/configure-metrics.sh
+source configure-metrics.sh
+
+[[ $(uname) = Linux ]] || exit 0
 
 syslog=/var/log/syslog
-if [[ ! -r $syslog ]]; then
+[[ -r $syslog ]] || {
   echo Unable to read $syslog
-  exit 0
-fi
+  exit 1
+}
 
 # Adjust OOM score to reduce the chance that this script will be killed
 # during an Out of Memory event since the purpose of this script is to
@@ -24,9 +26,10 @@ oom_score_adj "self" -500
 
 while read -r victim; do
   echo "Out of memory event detected, $victim killed"
-  "$here"/metrics-write-datapoint.sh "oom-killer,victim=$victim killed=1"
+  ./metrics-write-datapoint.sh "oom-killer,victim=$victim,hostname=$HOSTNAME killed=1"
 done < <( \
   tail --follow=name --retry -n0 $syslog \
   | sed --unbuffered -n 's/^.* Out of memory: Kill process [1-9][0-9]* (\([^)]*\)) .*/\1/p' \
 )
+
 exit 1

@@ -63,25 +63,25 @@ apps:
       - home
   daemon-validator:
     daemon: simple
-    command: multinode-demo/validator.sh
+    command: scripts/snap-config-to-env.sh $SNAP/multinode-demo/validator.sh
     plugs:
       - network
       - network-bind
   daemon-leader:
     daemon: simple
-    command: multinode-demo/leader.sh
+    command: scripts/snap-config-to-env.sh $SNAP/multinode-demo/leader.sh
     plugs:
       - network
       - network-bind
   daemon-drone:
     daemon: simple
-    command: multinode-demo/drone.sh
+    command: scripts/snap-config-to-env.sh $SNAP/multinode-demo/drone.sh
     plugs:
       - network
       - network-bind
   daemon-oom-monitor:
     daemon: simple
-    command: scripts/oom-monitor.sh
+    command: scripts/snap-config-to-env.sh $SNAP/scripts/oom-monitor.sh
     plugs:
       - network
 
