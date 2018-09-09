@@ -12,6 +12,7 @@ use std::io;
 #[cfg(target_os = "linux")]
 use std::mem;
 use std::net::UdpSocket;
+#[cfg(target_os = "linux")]
 use std::os::unix::io::AsRawFd;
 
 pub const NUM_RCVMMSGS: usize = 16;
