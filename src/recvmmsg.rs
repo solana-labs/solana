@@ -1,19 +1,9 @@
 //! The `recvmmsg` module provides recvmmsg() API implementation
 
-#[cfg(target_os = "linux")]
-use libc::{
-    c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, time_t, timespec, MSG_WAITFORONE,
-};
-#[cfg(target_os = "linux")]
-use nix::sys::socket::InetAddr;
 use packet::Packet;
 use std::cmp;
 use std::io;
-#[cfg(target_os = "linux")]
-use std::mem;
 use std::net::UdpSocket;
-#[cfg(target_os = "linux")]
-use std::os::unix::io::AsRawFd;
 
 pub const NUM_RCVMMSGS: usize = 16;
 
@@ -47,6 +37,13 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize
 
 #[cfg(target_os = "linux")]
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
+    use libc::{
+        c_void, iovec, mmsghdr, recvmmsg, sockaddr_in, socklen_t, time_t, timespec, MSG_WAITFORONE,
+    };
+    use nix::sys::socket::InetAddr;
+    use std::mem;
+    use std::os::unix::io::AsRawFd;
+
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut addr: [sockaddr_in; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
