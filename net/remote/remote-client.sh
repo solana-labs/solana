@@ -2,6 +2,8 @@
 
 cd "$(dirname "$0")"/../..
 
+echo "$(date) | $0 $*" > client.log
+
 deployMethod="$1"
 entrypointIp="$2"
 numNodes="$3"

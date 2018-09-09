@@ -1,5 +1,5 @@
 #!/bin/bash -ex
-
+#
 # Prevent background upgrades that block |apt-get|
 #
 # TODO: This approach is pretty uncompromising.  An alternative solution that
@@ -17,5 +17,4 @@ while fuser /var/lib/dpkg/lock; do
   echo Waiting for lock release...
   sleep 1
 done
-
 
