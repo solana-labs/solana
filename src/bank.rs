@@ -63,7 +63,7 @@ pub enum BankError {
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
     UnbalancedTransaction(Signature),
-    /// ContractAlreadyPending
+    /// Contract location Pubkey already contains userdata
     ContractAlreadyPending(Pubkey),
 }
 
@@ -232,16 +232,19 @@ impl Bank {
         last_ids.push_back(*last_id);
     }
 
-    /// Deduct tokens from the 'from' address the account has sufficient
-    /// funds and isn't a duplicate.
-    fn apply_debits(
+    /// Deduct tokens from the source account if it has sufficient funds and the contract isn't
+    /// pending
+    fn apply_debits_to_budget_payment_plan(
         tx: &Transaction,
         accounts: &mut [Account],
         instruction: &Instruction,
     ) -> Result<()> {
         {
-            let empty = accounts[0].userdata.is_empty();
-            let tokens = if !empty { 0 } else { accounts[0].tokens };
+            let tokens = if !accounts[0].userdata.is_empty() {
+                0
+            } else {
+                accounts[0].tokens
+            };
             if let Instruction::NewContract(contract) = &instruction {
                 if contract.tokens < 0 {
                     return Err(BankError::NegativeTokens);
@@ -260,7 +263,7 @@ impl Bank {
 
     /// Apply only a transaction's credits.
     /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits(
+    fn apply_credits_to_budget_payment_plan(
         tx: &Transaction,
         accounts: &mut [Account],
         instruction: &Instruction,
@@ -276,7 +279,7 @@ impl Bank {
                 } else {
                     let mut pending = HashMap::new();
                     pending.insert(tx.signature, plan);
-                    //TODO this is a temporary on demand allocaiton
+                    //TODO this is a temporary on demand allocation
                     //until system contract requires explicit allocation of memory
                     accounts[1].userdata = serialize(&pending).unwrap();
                     accounts[1].tokens += contract.tokens;
@@ -308,8 +311,8 @@ impl Bank {
         accounts: &mut [Account],
     ) -> Result<()> {
         let instruction = tx.instruction();
-        Self::apply_debits(tx, accounts, &instruction)?;
-        Self::apply_credits(tx, accounts, &instruction)
+        Self::apply_debits_to_budget_payment_plan(tx, accounts, &instruction)?;
+        Self::apply_credits_to_budget_payment_plan(tx, accounts, &instruction)
     }
     //TODO the contract needs to provide a "get_balance" introspection call of the userdata
     pub fn get_balance_of_budget_payment_plan(account: &Account) -> i64 {
@@ -918,7 +921,7 @@ mod tests {
         // pubkey's balance will be 0 because the funds are locked up
         assert_eq!(bank.get_balance(&pubkey), 0);
 
-        // Now, cancel the trancaction. Mint gets her funds back, pubkey never sees them.
+        // Now, cancel the transaction. Mint gets her funds back, pubkey never sees them.
         let tx = Transaction::new_signature(&mint.keypair(), pubkey, signature, bank.last_id());
         let res = bank.process_transaction(&tx);
         assert!(res.is_ok());
