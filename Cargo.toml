@@ -18,6 +18,10 @@ authors = [
 license = "Apache-2.0"
 
 [[bin]]
+name = "solana-upload-perf"
+path = "src/bin/upload-perf.rs"
+
+[[bin]]
 name = "solana-bench-streamer"
 path = "src/bin/bench-streamer.rs"
 
