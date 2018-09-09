@@ -16,6 +16,8 @@ use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::os::unix::io::AsRawFd;
 
+pub const NUM_RCVMMSGS: usize = 16;
+
 /// A data type representing a public Udp socket
 pub struct UdpSocketPair {
     pub addr: SocketAddr,    // Public address of the socket
@@ -139,8 +141,6 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     }
 }
 
-pub const NUM_RCVMMSGS: usize = 16;
-
 pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
     let mut hdrs: [mmsghdr; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
     let mut iovs: [iovec; NUM_RCVMMSGS] = unsafe { mem::zeroed() };
@@ -185,6 +185,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> 
 #[cfg(test)]
 mod tests {
     use netutil::*;
+    use packet::PACKET_DATA_SIZE;
 
     #[test]
     fn test_parse_port_or_addr() {
@@ -219,4 +220,97 @@ mod tests {
         let _ = bind_in_range((2000, 2000));
     }
 
+    #[test]
+    pub fn test_recv_mmsg_one_iter() {
+        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let addr = reader.local_addr().unwrap();
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let saddr = sender.local_addr().unwrap();
+        let sent = NUM_RCVMMSGS - 1;
+        for _ in 0..sent {
+            let data = [0; PACKET_DATA_SIZE];
+            sender.send_to(&data[..], &addr).unwrap();
+        }
+
+        let mut packets = vec![Packet::default(); NUM_RCVMMSGS];
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
+        assert_eq!(sent, recv);
+        for i in 0..recv {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr);
+        }
+    }
+
+    #[test]
+    pub fn test_recv_mmsg_multi_iter() {
+        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let addr = reader.local_addr().unwrap();
+        let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let saddr = sender.local_addr().unwrap();
+        let sent = NUM_RCVMMSGS + 10;
+        for _ in 0..sent {
+            let data = [0; PACKET_DATA_SIZE];
+            sender.send_to(&data[..], &addr).unwrap();
+        }
+
+        let mut packets = vec![Packet::default(); NUM_RCVMMSGS * 2];
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
+        assert_eq!(NUM_RCVMMSGS, recv);
+        for i in 0..recv {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr);
+        }
+
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
+        assert_eq!(sent - NUM_RCVMMSGS, recv);
+        for i in 0..recv {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr);
+        }
+    }
+
+    #[test]
+    pub fn test_recv_mmsg_multi_addrs() {
+        let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let addr = reader.local_addr().unwrap();
+
+        let sender1 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let saddr1 = sender1.local_addr().unwrap();
+        let sent1 = NUM_RCVMMSGS - 1;
+
+        let sender2 = UdpSocket::bind("127.0.0.1:0").expect("bind");
+        let saddr2 = sender2.local_addr().unwrap();
+        let sent2 = NUM_RCVMMSGS + 1;
+
+        for _ in 0..sent1 {
+            let data = [0; PACKET_DATA_SIZE];
+            sender1.send_to(&data[..], &addr).unwrap();
+        }
+
+        for _ in 0..sent2 {
+            let data = [0; PACKET_DATA_SIZE];
+            sender2.send_to(&data[..], &addr).unwrap();
+        }
+
+        let mut packets = vec![Packet::default(); NUM_RCVMMSGS * 2];
+
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
+        assert_eq!(NUM_RCVMMSGS, recv);
+        for i in 0..sent1 {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr1);
+        }
+
+        for i in sent1..recv {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr2);
+        }
+
+        let recv = recv_mmsg(&reader, &mut packets[..]).unwrap();
+        assert_eq!(sent1 + sent2 - NUM_RCVMMSGS, recv);
+        for i in 0..recv {
+            assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
+            assert_eq!(packets[i].meta.addr(), saddr2);
+        }
+    }
 }
