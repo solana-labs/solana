@@ -46,7 +46,7 @@ fi
 printNode() {
   declare nodeType=$1
   declare ip=$2
-  printf "  %-25s | For logs run: $0 $ip tail -f /tmp/solana/=/$nodeType.log\n" "$0 $ip"
+  printf "  %-25s | For logs run: $0 $ip tail -f solana/$nodeType.log\n" "$0 $ip"
 }
 
 echo Leader:

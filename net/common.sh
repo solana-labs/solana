@@ -7,8 +7,12 @@
 # shellcheck disable=2034
 #
 
-netConfigDir="$(dirname "${BASH_SOURCE[0]}")"/config
-netLogDir="$(dirname "${BASH_SOURCE[0]}")"/log
+netDir=$(
+  cd "$(dirname "${BASH_SOURCE[0]}")" || exit
+  echo "$PWD"
+)
+netConfigDir="$netDir"/config
+netLogDir="$netDir"/log
 mkdir -p "$netConfigDir" "$netLogDir"
 
 # shellcheck source=scripts/configure-metrics.sh
@@ -21,7 +25,6 @@ publicNetwork=
 leaderIp=
 netBasename=
 sshPrivateKey=
-sshUsername=
 clientIpList=()
 sshOptions=()
 validatorIpList=()
@@ -31,9 +34,10 @@ buildSshOptions() {
     -o "BatchMode=yes"
     -o "StrictHostKeyChecking=no"
     -o "UserKnownHostsFile=/dev/null"
-    -o "User=$sshUsername"
+    -o "User=solana"
     -o "IdentityFile=$sshPrivateKey"
     -o "LogLevel=ERROR"
+    -F /dev/null
   )
 }
 
@@ -47,7 +51,6 @@ loadConfigFile() {
   [[ -n "$leaderIp" ]] || usage "Config file invalid, leaderIp unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  [[ -n $sshUsername ]] || usage "Config file invalid, sshUsername unspecified: $configFile"
   [[ ${#validatorIpList[@]} -gt 0 ]] || usage "Config file invalid, validatorIpList unspecified: $configFile"
 
   buildSshOptions

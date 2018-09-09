@@ -116,16 +116,7 @@ build() {
 startCommon() {
   declare ipAddress=$1
   test -d "$SOLANA_ROOT"
-  ssh "${sshOptions[@]}" "$ipAddress" "
-    mkdir -p ~/solana ~/.cargo/bin
-
-    # Help other users of the machine locate network logs
-    [[ -d /tmp/solana/ ]] || {
-      mkdir /tmp/solana/
-      chmod go+w /tmp/solana/
-    }
-    ln -sfT ~/solana /tmp/solana/=
-  "
+  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
@@ -231,7 +222,10 @@ start() {
           "
         )
       else
-        snap download --channel="$snapChannel" solana
+        (
+          cd "$SOLANA_ROOT"
+          snap download --channel="$snapChannel" solana
+        )
       fi
       snapFilename="$(echo "$SOLANA_ROOT"/solana_*.snap)"
       [[ -r $snapFilename ]] || {
