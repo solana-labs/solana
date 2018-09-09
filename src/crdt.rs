@@ -1284,7 +1284,7 @@ impl Node {
         let (requests_port, requests) = bind();
 
         let (transaction_port, transaction_sockets) =
-            multi_bind_in_range(FULLNODE_PORT_RANGE, 5).expect("tpu multi_bind");
+            multi_bind_in_range(FULLNODE_PORT_RANGE, 32).expect("tpu multi_bind");
 
         let (_, repair) = bind();
         let (_, broadcast) = bind();
