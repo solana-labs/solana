@@ -50,6 +50,7 @@ local)
 esac
 
 scripts/oom-monitor.sh > oom-monitor.log 2>&1 &
+scripts/net-stats.sh  > net-stats.log 2>&1 &
 
 ! tmux list-sessions || tmux kill-session
 

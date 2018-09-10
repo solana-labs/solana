@@ -37,3 +37,4 @@ validator)
 esac
 
 snapctl start --enable solana.daemon-oom-monitor
+snapctl start --enable solana.daemon-net-stats

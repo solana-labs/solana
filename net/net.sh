@@ -311,7 +311,7 @@ stopNode() {
         sudo snap remove solana
       fi
       ! tmux list-sessions || tmux kill-session
-      for pattern in solana- remote- oom-monitor; do
+      for pattern in solana- remote- oom-monitor net-stats; do
         pkill -9 \$pattern
       done
     "
