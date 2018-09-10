@@ -58,6 +58,7 @@ impl JsonRpcService {
                         server.unwrap().close();
                         break;
                     }
+                    sleep(Duration::from_millis(100));
                 }
                 ()
             })
