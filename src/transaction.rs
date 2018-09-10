@@ -62,7 +62,7 @@ pub struct Vote {
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
-    /// Declare and instanstansiate `Contract`.
+    /// Declare and instantiate `Contract`.
     NewContract(Contract),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
@@ -101,7 +101,7 @@ pub struct Transaction {
 
 impl Transaction {
     /// Create a signed transaction from the given `Instruction`.
-    /// * `from_keypair` - The key used to sign the transcation.  This key is stored as keys[0]
+    /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
     /// * `transaction_keys` - The keys for the transaction.  These are the contract state
     ///    instances or token recipient keys.
     /// * `userdata` - The input data that the contract will execute with
