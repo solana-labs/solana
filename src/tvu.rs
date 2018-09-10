@@ -104,7 +104,6 @@ impl Tvu {
             crdt,
             blob_window_receiver,
             ledger_path,
-            exit,
         );
 
         Tvu {
