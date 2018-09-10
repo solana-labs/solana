@@ -6,23 +6,22 @@ use crdt::Crdt;
 use entry::EntryReceiver;
 use ledger::{Block, LedgerWriter};
 use log::Level;
+use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::responder;
-use vote_stage::VoteStage;
+use streamer::{responder, BlobSender};
+use vote_stage::send_validator_vote;
 
 pub struct ReplicateStage {
     thread_hdls: Vec<JoinHandle<()>>,
-    vote_stage: VoteStage,
 }
 
 impl ReplicateStage {
@@ -30,8 +29,11 @@ impl ReplicateStage {
     fn replicate_requests(
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
+        blob_recycler: &BlobRecycler,
         window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
+        keypair: &Arc<Keypair>,
+        vote_blob_sender: &BlobSender,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -41,6 +43,11 @@ impl ReplicateStage {
         }
 
         let res = bank.process_entries(&entries);
+
+        if let Err(err) = send_validator_vote(bank, keypair, crdt, blob_recycler, vote_blob_sender)
+        {
+            info!("Vote failed: {:?}", err);
+        }
 
         {
             let mut wcrdt = crdt.write().unwrap();
@@ -66,23 +73,27 @@ impl ReplicateStage {
         crdt: Arc<RwLock<Crdt>>,
         window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
-        exit: Arc<AtomicBool>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder("replicate_stage", Arc::new(send), vote_blob_receiver);
 
-        let vote_stage =
-            VoteStage::new(keypair, bank.clone(), crdt.clone(), vote_blob_sender, exit);
-
         let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
+        let keypair = Arc::new(keypair);
+        let blob_recycler = BlobRecycler::default();
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || loop {
-                if let Err(e) =
-                    Self::replicate_requests(&bank, &crdt, &window_receiver, ledger_writer.as_mut())
-                {
+                if let Err(e) = Self::replicate_requests(
+                    &bank,
+                    &crdt,
+                    &blob_recycler,
+                    &window_receiver,
+                    ledger_writer.as_mut(),
+                    &keypair,
+                    &vote_blob_sender,
+                ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -93,10 +104,7 @@ impl ReplicateStage {
 
         let thread_hdls = vec![t_responder, t_replicate];
 
-        ReplicateStage {
-            thread_hdls,
-            vote_stage,
-        }
+        ReplicateStage { thread_hdls }
     }
 }
 
@@ -107,7 +115,6 @@ impl Service for ReplicateStage {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
-        self.vote_stage.join()?;
         Ok(())
     }
 }
