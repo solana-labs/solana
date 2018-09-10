@@ -635,7 +635,7 @@ impl Bank {
                 e.remove_entry();
             }
         };
-        //TODO this allocation needs to be changed once the runtime only allows for explitly
+        //TODO this allocation needs to be changed once the runtime only allows for explicitly
         //allocated memory
         account[1].userdata = if pending.is_empty() {
             vec![]
@@ -664,7 +664,7 @@ impl Bank {
         for key in completed {
             pending.remove(&key);
         }
-        //TODO this allocation needs to be changed once the runtime only allows for explitly
+        //TODO this allocation needs to be changed once the runtime only allows for explicitly
         //allocated memory
         account.userdata = if pending.is_empty() {
             vec![]
