@@ -108,7 +108,6 @@ impl Tvu {
             blob_recycler,
             blob_window_receiver,
             ledger_path,
-            exit,
         );
 
         Tvu {
