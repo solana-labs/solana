@@ -371,26 +371,6 @@ impl Drop for ThinClient {
     }
 }
 
-fn trace_node_info(nodes: &Vec<NodeInfo>, leader_id: &Pubkey) -> () {
-    trace!(" NodeInfo.contact_info     | Node identifier");
-    trace!("---------------------------+------------------");
-    for node in nodes {
-        trace!(
-            " ncp: {:20} | {}{}",
-            node.contact_info.ncp.to_string(),
-            node.id,
-            if node.id == *leader_id {
-                " <==== leader"
-            } else {
-                ""
-            }
-        );
-        trace!(" rpu: {:20} | ", node.contact_info.rpu.to_string(),);
-        trace!(" tpu: {:20} | ", node.contact_info.tpu.to_string(),);
-    }
-    trace!("Nodes: {}", nodes.len());
-}
-
 pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
     let (node, gossip_socket) = Crdt::spy_node();
@@ -421,16 +401,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
         }
 
         if log_enabled!(Level::Trace) {
-            // print validators/fullnodes
-            let nodes: Vec<NodeInfo> = crdt
-                .read()
-                .unwrap()
-                .table
-                .values()
-                .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
-                .cloned()
-                .collect();
-            trace_node_info(&nodes, &Default::default());
+            trace!("{}", crdt.read().unwrap().node_info_trace());
         }
 
         if now.elapsed() > deadline {
@@ -443,22 +414,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     ncp.close()?;
 
     if log_enabled!(Level::Trace) {
-        let leader_id = if let Some(leader) = &leader {
-            leader.id
-        } else {
-            Default::default()
-        };
-
-        // print validators/fullnodes
-        let nodes: Vec<NodeInfo> = crdt
-            .read()
-            .unwrap()
-            .table
-            .values()
-            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
-            .cloned()
-            .collect();
-        trace_node_info(&nodes, &leader_id);
+        trace!("{}", crdt.read().unwrap().node_info_trace());
     }
 
     Ok(leader.unwrap().clone())

@@ -254,6 +254,42 @@ impl Crdt {
         self.table.get(&leader_id)
     }
 
+    pub fn node_info_trace(&self) -> String {
+        let leader_id = self.table[&self.id].leader_id;
+
+        let nodes: Vec<_> = self
+            .table
+            .values()
+            .filter(|n| Self::is_valid_address(&n.contact_info.rpu))
+            .cloned()
+            .map(|node| {
+                format!(
+                    " ncp: {:20} | {}{}\n \
+                     rpu: {:20} |\n \
+                     tpu: {:20} |\n",
+                    node.contact_info.ncp.to_string(),
+                    node.id,
+                    if node.id == leader_id {
+                        " <==== leader"
+                    } else {
+                        ""
+                    },
+                    node.contact_info.rpu.to_string(),
+                    node.contact_info.tpu.to_string()
+                )
+            })
+            .collect();
+
+        format!(
+            " NodeInfo.contact_info     | Node identifier\n\
+             ---------------------------+------------------\n\
+             {}\n \
+             Nodes: {}",
+            nodes.join(""),
+            nodes.len()
+        )
+    }
+
     pub fn set_leader(&mut self, key: Pubkey) -> () {
         let mut me = self.my_data().clone();
         warn!("{}: LEADER_UPDATE TO {} from {}", me.id, key, me.leader_id);

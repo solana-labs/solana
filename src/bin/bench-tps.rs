@@ -18,7 +18,7 @@ use solana::logger;
 use solana::metrics;
 use solana::ncp::Ncp;
 use solana::service::Service;
-use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil, Pubkey};
+use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
@@ -509,31 +509,6 @@ fn main() {
     let mut c_threads = vec![];
     let (nodes, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads);
 
-    let leader_id = if let Some(leader) = &leader {
-        leader.id
-    } else {
-        Default::default()
-    };
-
-    fn print_gossip_info(nodes: &Vec<NodeInfo>, leader_id: &Pubkey) -> () {
-        println!(" Node gossip address | Node identifier");
-        println!("---------------------+------------------");
-        for node in nodes {
-            println!(
-                " {:20} | {}{}",
-                node.contact_info.ncp.to_string(),
-                node.id,
-                if node.id == *leader_id {
-                    " <==== leader"
-                } else {
-                    ""
-                }
-            );
-        }
-        println!("Nodes: {}", nodes.len());
-    }
-    print_gossip_info(&nodes, &leader_id);
-
     if nodes.len() < num_nodes {
         println!(
             "Error: Insufficient nodes discovered.  Expecting {} or more",
@@ -734,31 +709,32 @@ fn converge(
     let window = Arc::new(RwLock::new(default_window()));
     let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
-    //wait for the network to converge, 30 seconds should be plenty
+    // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
-        if spy_ref.read().unwrap().leader_data().is_none() {
-            sleep(Duration::new(1, 0));
-            continue;
-        }
+        {
+            let spy_ref = spy_ref.read().unwrap();
 
-        v = spy_ref
-            .read()
-            .unwrap()
-            .table
-            .values()
-            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
-            .cloned()
-            .collect();
+            println!("{}", spy_ref.node_info_trace());
 
-        if v.len() >= num_nodes {
-            println!("CONVERGED!");
-            break;
-        } else {
-            println!(
-                "{} node(s) discovered (looking for {} or more)",
-                v.len(),
-                num_nodes
-            );
+            if spy_ref.leader_data().is_some() {
+                v = spy_ref
+                    .table
+                    .values()
+                    .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+                    .cloned()
+                    .collect();
+
+                if v.len() >= num_nodes {
+                    println!("CONVERGED!");
+                    break;
+                } else {
+                    println!(
+                        "{} node(s) discovered (looking for {} or more)",
+                        v.len(),
+                        num_nodes
+                    );
+                }
+            }
         }
         sleep(Duration::new(1, 0));
     }
