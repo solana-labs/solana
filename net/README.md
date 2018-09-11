@@ -17,7 +17,7 @@ access to create a new database.
 ```bash
 $ cd net/
 $ ./gce.sh create -n 5 -c 1  #<-- Create a GCE testnet with 5 validators, 1 client (billing starts here)
-$ ./init-metrics $(whoami)   #<-- Configure a metrics database for the testnet
+$ ./init-metrics.sh $(whoami)   #<-- Configure a metrics database for the testnet
 $ ./net.sh start             #<-- Deploy the network from the local workspace
 $ ./ssh.sh                   #<-- Details on how to ssh into any testnet node
 $ ./gce.sh delete            #<-- Dispose of the network (billing stops here)
@@ -30,7 +30,7 @@ By default private IP addresses are used with all instances in the same
 availability zone to avoid GCE network engress charges.  However to run the
 network over public IP addresses:
 ```bash
-$ ./gce create -P ...
+$ ./gce.sh create -P ...
 ```
 
 ### Deploying a Snap-based network
@@ -38,7 +38,7 @@ To deploy the latest pre-built `edge` channel Snap (ie, latest from the `master`
 branch), once the testnet has been created run:
 
 ```bash
-$ ./net start -s edge
+$ ./net.sh start -s edge
 ```
 
 ### Enabling CUDA
