@@ -21,7 +21,7 @@ fn recv_loop(
     channel: &PacketSender,
 ) -> Result<()> {
     loop {
-        let msgs = re.allocate();
+        let msgs = re.allocate("recv_loop");
         loop {
             let result = msgs
                 .write()
@@ -196,7 +196,7 @@ mod test {
             );
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let b = resp_recycler.allocate();
+                let b = resp_recycler.allocate("");
                 {
                     let mut w = b.write().unwrap();
                     w.data[0] = i as u8;

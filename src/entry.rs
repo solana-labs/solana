@@ -82,7 +82,7 @@ impl Entry {
         id: Option<Pubkey>,
         addr: Option<&SocketAddr>,
     ) -> SharedBlob {
-        let blob = blob_recycler.allocate();
+        let blob = blob_recycler.allocate("entry::to_blob");
         {
             let mut blob_w = blob.write().unwrap();
             let pos = {

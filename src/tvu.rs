@@ -276,7 +276,7 @@ pub mod tests {
             alice_ref_balance -= transfer_amount;
 
             for entry in vec![entry0, entry1] {
-                let b = recycler.allocate();
+                let b = recycler.allocate("");
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(blob_id).unwrap();

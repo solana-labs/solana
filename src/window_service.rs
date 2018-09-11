@@ -71,7 +71,7 @@ fn add_block_to_retransmit_queue(
         //
         //a better abstraction would be to recycle when the blob
         //is dropped via a weakref to the recycler
-        let nv = recycler.allocate();
+        let nv = recycler.allocate("window_service::add_block");
         {
             let mut mnv = nv
                 .write()
@@ -374,7 +374,7 @@ mod test {
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
-                let b = resp_recycler.allocate();
+                let b = resp_recycler.allocate("send_test");
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
@@ -446,7 +446,7 @@ mod test {
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
-                let b = resp_recycler.allocate();
+                let b = resp_recycler.allocate("send_test");
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
@@ -511,7 +511,7 @@ mod test {
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
-                let b = resp_recycler.allocate();
+                let b = resp_recycler.allocate("");
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
@@ -531,7 +531,7 @@ mod test {
             let mut msgs1 = Vec::new();
             for v in 1..5 {
                 let i = 9 + v;
-                let b = resp_recycler.allocate();
+                let b = resp_recycler.allocate("");
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();

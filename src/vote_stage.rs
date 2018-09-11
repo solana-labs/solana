@@ -38,7 +38,7 @@ pub fn create_new_signed_vote_blob(
     crdt: &Arc<RwLock<Crdt>>,
     blob_recycler: &BlobRecycler,
 ) -> Result<SharedBlob> {
-    let shared_blob = blob_recycler.allocate();
+    let shared_blob = blob_recycler.allocate("new_signed_vote_blob");
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id

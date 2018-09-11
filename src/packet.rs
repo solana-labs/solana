@@ -70,9 +70,23 @@ pub trait Reset {
     fn reset(&mut self);
 }
 
+pub trait Gid {
+    // This object can keep track of a unique identifier to help debug
+    fn set_gid(&mut self, id: usize);
+    fn get_gid(&self) -> usize;
+}
+
 impl Reset for Packet {
     fn reset(&mut self) {
         self.meta = Meta::default();
+    }
+}
+
+impl Gid for Packet {
+    fn set_gid(&mut self, _id: usize) {}
+
+    fn get_gid(&self) -> usize {
+        0
     }
 }
 
@@ -119,6 +133,7 @@ impl Meta {
 #[derive(Debug)]
 pub struct Packets {
     pub packets: Vec<Packet>,
+    pub gid: usize,
 }
 
 //auto derive doesn't support large arrays
@@ -126,6 +141,7 @@ impl Default for Packets {
     fn default() -> Packets {
         Packets {
             packets: vec![Packet::default(); NUM_PACKETS],
+            gid: 0,
         }
     }
 }
@@ -138,10 +154,21 @@ impl Reset for Packets {
     }
 }
 
+impl Gid for Packets {
+    fn set_gid(&mut self, id: usize) {
+        self.gid = id;
+    }
+
+    fn get_gid(&self) -> usize {
+        self.gid
+    }
+}
+
 #[derive(Clone)]
 pub struct Blob {
     pub data: [u8; BLOB_SIZE],
     pub meta: Meta,
+    pub gid: usize,
 }
 
 impl fmt::Debug for Blob {
@@ -155,12 +182,19 @@ impl fmt::Debug for Blob {
     }
 }
 
+impl Drop for Blob {
+    fn drop(&mut self) {
+        info!("dropping blob: {}", self.gid);
+    }
+}
+
 //auto derive doesn't support large arrays
 impl Default for Blob {
     fn default() -> Blob {
         Blob {
             data: [0u8; BLOB_SIZE],
             meta: Meta::default(),
+            gid: 0,
         }
     }
 }
@@ -169,6 +203,16 @@ impl Reset for Blob {
     fn reset(&mut self) {
         self.meta = Meta::default();
         self.data[..BLOB_HEADER_SIZE].copy_from_slice(&[0u8; BLOB_HEADER_SIZE]);
+    }
+}
+
+impl Gid for Blob {
+    fn set_gid(&mut self, id: usize) {
+        self.gid = id;
+    }
+
+    fn get_gid(&self) -> usize {
+        self.gid
     }
 }
 
@@ -186,6 +230,7 @@ pub struct Recycler<T> {
     reuse_count: Arc<AtomicUsize>,
     skipped_count: Arc<AtomicUsize>,
     name: String,
+    counter: Arc<AtomicUsize>,
 }
 
 impl<T: Default> Default for Recycler<T> {
@@ -197,6 +242,7 @@ impl<T: Default> Default for Recycler<T> {
             reuse_count: Arc::new(AtomicUsize::new(0)),
             skipped_count: Arc::new(AtomicUsize::new(0)),
             name: format!("? sz: {}", size_of::<T>()).to_string(),
+            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -210,6 +256,7 @@ impl<T: Default> Clone for Recycler<T> {
             reuse_count: self.reuse_count.clone(),
             skipped_count: self.skipped_count.clone(),
             name: self.name.clone(),
+            counter: self.counter.clone(),
         }
     }
 }
@@ -218,12 +265,12 @@ fn inc_counter(x: &AtomicUsize) {
     x.fetch_add(1, Ordering::Relaxed);
 }
 
-impl<T: Default + Reset> Recycler<T> {
+impl<T: Default + Reset + Gid> Recycler<T> {
     pub fn set_name(&mut self, name: &'static str) {
         self.name = name.to_string();
     }
 
-    pub fn allocate(&self) -> Arc<RwLock<T>> {
+    pub fn allocate(&self, name: &'static str) -> Arc<RwLock<T>> {
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
         let gc_count = gc.len();
 
@@ -242,10 +289,11 @@ impl<T: Default + Reset> Recycler<T> {
                     //
                     // warn!("Recycled item still in use. Booting it.");
                     trace!(
-                        "{} Recycled item from \"{}\" still in use. {} Booting it.",
+                        "{} Recycled item from \"{}\" still in use. {} Booting it. id: {}",
                         self.name,
                         who,
-                        Arc::strong_count(&x)
+                        Arc::strong_count(&x),
+                        x.read().unwrap().get_gid(),
                     );
                     inc_counter(&self.skipped_count);
                     continue;
@@ -256,13 +304,33 @@ impl<T: Default + Reset> Recycler<T> {
                     w.reset();
                 }
                 inc_counter(&self.reuse_count);
+                debug!(
+                    "reusing from: {} gc_count: {} gid: {} arc: {}",
+                    name,
+                    gc_count,
+                    x.read().unwrap().get_gid(),
+                    Arc::strong_count(&x)
+                );
                 return x;
             } else {
                 inc_counter(&self.allocated_count);
                 if self.allocated_count.load(Ordering::Relaxed) % 2048 == 0 {
                     self.print_stats(gc_count);
                 }
-                return Arc::new(RwLock::new(Default::default()));
+
+                let count = self.counter.fetch_add(1, Ordering::Relaxed);
+
+                info!(
+                    "allocated from: {} gc_count: {} gid: {}",
+                    name, gc_count, count
+                );
+
+                let mut n: Arc<RwLock<T>> = Arc::new(RwLock::new(Default::default()));
+                {
+                    let mut w = n.write().unwrap();
+                    w.set_gid(count);
+                }
+                return n;
             }
         }
     }
@@ -348,7 +416,7 @@ pub fn to_packets_chunked<T: Serialize>(
 ) -> Vec<SharedPackets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let p = r.allocate();
+        let p = r.allocate("to_packets_chunked");
         p.write()
             .unwrap()
             .packets
@@ -373,7 +441,7 @@ pub fn to_blob<T: Serialize>(
     rsp_addr: SocketAddr,
     blob_recycler: &BlobRecycler,
 ) -> Result<SharedBlob> {
-    let blob = blob_recycler.allocate();
+    let blob = blob_recycler.allocate("to_blob");
     {
         let mut b = blob.write().unwrap();
         let v = serialize(&resp)?;
@@ -410,6 +478,12 @@ macro_rules! align {
 
 pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 pub const BLOB_HEADER_SIZE: usize = align!(BLOB_SIZE_END, 64);
+
+impl Drop for Packets {
+    fn drop(&mut self) {
+        info!("dropping packets: {}", self.get_gid());
+    }
+}
 
 impl Blob {
     pub fn get_index(&self) -> Result<u64> {
@@ -512,7 +586,7 @@ impl Blob {
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
         for i in 0..NUM_BLOBS {
-            let r = re.allocate();
+            let r = re.allocate("recv_from");
 
             match Blob::recv_blob(socket, &r) {
                 Err(_) if i > 0 => {
@@ -558,7 +632,7 @@ impl Blob {
 mod tests {
     use packet::{
         to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycler, Reset,
-        BLOB_HEADER_SIZE, NUM_PACKETS, PACKET_DATA_SIZE,
+        BLOB_HEADER_SIZE, NUM_PACKETS, PACKET_DATA_SIZE, Gid
     };
     use request::Request;
     use std::io;
@@ -569,11 +643,19 @@ mod tests {
     #[test]
     pub fn packet_recycler_test() {
         let r = PacketRecycler::default();
-        let p = r.allocate();
+        let p = r.allocate("");
         r.recycle(p, "recycler_test");
         assert_eq!(r.gc.lock().unwrap().len(), 1);
-        let _ = r.allocate();
+        let _ = r.allocate("");
         assert_eq!(r.gc.lock().unwrap().len(), 0);
+    }
+
+    impl Gid for u8 {
+        fn set_gid(&mut self, _id: usize) {}
+
+        fn get_gid(&self) -> usize {
+            0
+        }
     }
 
     impl Reset for u8 {
@@ -587,12 +669,12 @@ mod tests {
         // Ensure that the recycler won't return an item
         // that is still referenced outside the recycler.
         let r = Recycler::<u8>::default();
-        let x0 = r.allocate();
+        let x0 = r.allocate("");
         r.recycle(x0.clone(), "leaked_recyclable:1");
         assert_eq!(Arc::strong_count(&x0), 2);
         assert_eq!(r.gc.lock().unwrap().len(), 1);
 
-        let x1 = r.allocate();
+        let x1 = r.allocate("");
         assert_eq!(Arc::strong_count(&x1), 1);
         assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
@@ -601,14 +683,14 @@ mod tests {
     pub fn test_leaked_recyclable_recursion() {
         // In the case of a leaked recyclable, ensure the recycler drops its lock before recursing.
         let r = Recycler::<u8>::default();
-        let x0 = r.allocate();
-        let x1 = r.allocate();
+        let x0 = r.allocate("");
+        let x1 = r.allocate("");
         r.recycle(x0, "leaked_recyclable_recursion:1"); // <-- allocate() of this will require locking the recycler's stack.
         r.recycle(x1.clone(), "leaked_recyclable_recursion:2"); // <-- allocate() of this will cause it to be dropped and recurse.
         assert_eq!(Arc::strong_count(&x1), 2);
         assert_eq!(r.gc.lock().unwrap().len(), 2);
 
-        r.allocate(); // Ensure lock is released before recursing.
+        r.allocate(""); // Ensure lock is released before recursing.
         assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
 
@@ -617,12 +699,12 @@ mod tests {
         // Test the case in allocate() which should return a re-used object and not allocate a new
         // one.
         let r = PacketRecycler::default();
-        let x0 = r.allocate();
+        let x0 = r.allocate("");
         {
             x0.write().unwrap().packets.resize(1, Packet::default());
         }
         r.recycle(x0, "recycle");
-        let x1 = r.allocate();
+        let x1 = r.allocate("");
         assert_ne!(
             x1.read().unwrap().packets.len(),
             Packets::default().packets.len()
@@ -632,10 +714,10 @@ mod tests {
     #[test]
     pub fn blob_recycler_test() {
         let r = BlobRecycler::default();
-        let p = r.allocate();
+        let p = r.allocate("");
         r.recycle(p, "blob_recycler_test");
         assert_eq!(r.gc.lock().unwrap().len(), 1);
-        let _ = r.allocate();
+        let _ = r.allocate("");
         assert_eq!(r.gc.lock().unwrap().len(), 0);
     }
     #[test]
@@ -645,7 +727,7 @@ mod tests {
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = sender.local_addr().unwrap();
         let r = PacketRecycler::default();
-        let p = r.allocate();
+        let p = r.allocate("");
         p.write().unwrap().packets.resize(10, Packet::default());
         for m in p.write().unwrap().packets.iter_mut() {
             m.meta.set_addr(&addr);
@@ -686,7 +768,7 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let r = BlobRecycler::default();
-        let p = r.allocate();
+        let p = r.allocate("");
         p.write().unwrap().meta.set_addr(&addr);
         p.write().unwrap().meta.size = 1024;
         let v = vec![p];
@@ -705,7 +787,7 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("[::1]:0").expect("bind");
         let r = BlobRecycler::default();
-        let p = r.allocate();
+        let p = r.allocate("");
         p.write().unwrap().meta.set_addr(&addr);
         p.write().unwrap().meta.size = 1024;
         let mut v = VecDeque::default();

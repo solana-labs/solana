@@ -891,7 +891,7 @@ impl Crdt {
                     sender_id = me.id
                 }
 
-                let out = blob_recycler.allocate();
+                let out = blob_recycler.allocate("window_request");
 
                 // copy to avoid doing IO inside the lock
                 {
@@ -1731,7 +1731,7 @@ mod tests {
             &recycler,
         );
         assert!(rv.is_none());
-        let out = recycler.allocate();
+        let out = recycler.allocate("");
         out.write().unwrap().meta.size = 200;
         window.write().unwrap()[0].data = Some(out);
         let rv = Crdt::run_window_request(
@@ -1815,7 +1815,7 @@ mod tests {
             &recycler,
         );
         assert!(rv.is_none());
-        let blob = recycler.allocate();
+        let blob = recycler.allocate("");
         let blob_size = 200;
         blob.write().unwrap().meta.size = blob_size;
         window.write().unwrap()[0].data = Some(blob);

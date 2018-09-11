@@ -18,7 +18,7 @@ use std::time::SystemTime;
 
 fn producer(addr: &SocketAddr, recycler: &PacketRecycler, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let msgs = recycler.allocate();
+    let msgs = recycler.allocate("");
     let msgs_ = msgs.clone();
     msgs.write().unwrap().packets.resize(10, Packet::default());
     for w in &mut msgs.write().unwrap().packets {
