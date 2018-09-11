@@ -163,12 +163,9 @@ mod tests {
     use logger;
     use mint::Mint;
     use netutil::get_ip_addr;
-    use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{SocketAddr, UdpSocket};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
     use std::time::Duration;
     use thin_client::ThinClient;
 
@@ -262,7 +259,6 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger_path("send_airdrop");
 
@@ -273,7 +269,6 @@ mod tests {
             &[],
             leader,
             None,
-            exit.clone(),
             Some(&ledger_path),
             false,
         );
@@ -307,8 +302,7 @@ mod tests {
         assert!(client.poll_for_signature(&bob_sig).is_ok());
 
         // restart the leader, drone should find the new one at the same gossip port
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
 
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
