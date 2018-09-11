@@ -438,11 +438,8 @@ mod tests {
     use ledger::LedgerWriter;
     use logger;
     use mint::Mint;
-    use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
     use transaction::{Instruction, Plan};
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
@@ -468,7 +465,6 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
         let ledger_path = tmp_ledger("thin_client", &alice);
 
         let server = Fullnode::new_with_bank(
@@ -478,7 +474,6 @@ mod tests {
             &[],
             leader,
             None,
-            exit.clone(),
             Some(&ledger_path),
             false,
         );
@@ -500,8 +495,7 @@ mod tests {
         client.poll_for_signature(&signature).unwrap();
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -515,7 +509,6 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("bad_sig", &alice);
 
@@ -526,7 +519,6 @@ mod tests {
             &[],
             leader,
             None,
-            exit.clone(),
             Some(&ledger_path),
             false,
         );
@@ -564,8 +556,7 @@ mod tests {
 
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -577,7 +568,6 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
@@ -588,7 +578,6 @@ mod tests {
             &[],
             leader,
             None,
-            exit.clone(),
             Some(&ledger_path),
             false,
         );
@@ -613,8 +602,7 @@ mod tests {
 
         assert!(client.check_signature(&signature));
 
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -640,7 +628,6 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_keypair = Keypair::new();
-        let exit = Arc::new(AtomicBool::new(false));
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("zero_balance_check", &alice);
 
@@ -651,7 +638,6 @@ mod tests {
             &[],
             leader,
             None,
-            exit.clone(),
             Some(&ledger_path),
             false,
         );
@@ -690,8 +676,7 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }

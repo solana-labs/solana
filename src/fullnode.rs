@@ -61,7 +61,8 @@ impl Fullnode {
 
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
 
-        let entries = entries.map(|e| e.expect("failed to parse entry"));
+        let entries = entries
+            .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
 
         info!("processing ledger...");
         let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
@@ -76,7 +77,7 @@ impl Fullnode {
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.info.contact_info.ncp
         );
-        let exit = Arc::new(AtomicBool::new(false));
+
         let local_requests_addr = node.sockets.requests.local_addr().unwrap();
         let requests_addr = node.info.contact_info.rpu;
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
@@ -87,7 +88,6 @@ impl Fullnode {
             &ledger_tail,
             node,
             leader_info.as_ref(),
-            exit,
             Some(ledger_path),
             sigverify_disabled,
         );
@@ -167,14 +167,13 @@ impl Fullnode {
         ledger_tail: &[Entry],
         mut node: Node,
         leader_info: Option<&NodeInfo>,
-        exit: Arc<AtomicBool>,
         ledger_path: Option<&str>,
         sigverify_disabled: bool,
     ) -> Self {
         if leader_info.is_none() {
             node.info.leader_id = node.info.id;
         }
-
+        let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
         let blob_recycler = BlobRecycler::default();
         let mut thread_hdls = vec![];
@@ -303,8 +302,6 @@ mod tests {
     use mint::Mint;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
 
     #[test]
     fn validator_exit() {
@@ -312,11 +309,9 @@ mod tests {
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
-        let exit = Arc::new(AtomicBool::new(false));
         let entry = tn.info.clone();
-        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false);
-        v.exit();
-        v.join().unwrap();
+        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), None, false);
+        v.close().unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
@@ -326,9 +321,8 @@ mod tests {
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
                 let alice = Mint::new(10_000);
                 let bank = Bank::new(&alice);
-                let exit = Arc::new(AtomicBool::new(false));
                 let entry = tn.info.clone();
-                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), exit, None, false)
+                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), None, false)
             })
             .collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
