@@ -31,7 +31,7 @@ impl Condition {
     }
 }
 
-/// A data type reprsenting a payment plan.
+/// A data type representing a payment plan.
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Budget {

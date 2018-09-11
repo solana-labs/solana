@@ -12,7 +12,7 @@ pub enum Witness {
     /// The current time.
     Timestamp(DateTime<Utc>),
 
-    /// A siganture from Pubkey.
+    /// A signature from Pubkey.
     Signature,
 }
 
