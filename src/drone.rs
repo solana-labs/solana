@@ -12,7 +12,7 @@ use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::time::Duration;
-use thin_client::ThinClient;
+use thin_client::{poll_gossip_for_leader, ThinClient};
 use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
@@ -31,8 +31,7 @@ pub struct Drone {
     mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
     _airdrop_addr: SocketAddr,
-    transactions_addr: SocketAddr,
-    requests_addr: SocketAddr,
+    network_addr: SocketAddr,
     pub time_slice: Duration,
     request_cap: u64,
     pub request_current: u64,
@@ -42,8 +41,7 @@ impl Drone {
     pub fn new(
         mint_keypair: Keypair,
         _airdrop_addr: SocketAddr,
-        transactions_addr: SocketAddr,
-        requests_addr: SocketAddr,
+        network_addr: SocketAddr,
         time_input: Option<u64>,
         request_cap_input: Option<u64>,
     ) -> Drone {
@@ -59,8 +57,7 @@ impl Drone {
             mint_keypair,
             ip_cache: Vec::new(),
             _airdrop_addr,
-            transactions_addr,
-            requests_addr,
+            network_addr,
             time_slice,
             request_cap,
             request_current: 0,
@@ -100,10 +97,13 @@ impl Drone {
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
+        let leader = poll_gossip_for_leader(self.network_addr, Some(10))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
         let mut client = ThinClient::new(
-            self.requests_addr,
+            leader.contact_info.rpu,
             requests_socket,
-            self.transactions_addr,
+            leader.contact_info.tpu,
             transactions_socket,
         );
         let last_id = client.get_last_id();
@@ -169,7 +169,6 @@ mod tests {
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use std::thread::sleep;
     use std::time::Duration;
     use thin_client::ThinClient;
 
@@ -178,16 +177,8 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let transactions_addr = "0.0.0.0:0".parse().unwrap();
-        let requests_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(
-            keypair,
-            addr,
-            transactions_addr,
-            requests_addr,
-            None,
-            Some(3),
-        );
+        let network_addr = "0.0.0.0:0".parse().unwrap();
+        let mut drone = Drone::new(keypair, addr, network_addr, None, Some(3));
         assert!(drone.check_request_limit(1));
         drone.request_current = 3;
         assert!(!drone.check_request_limit(1));
@@ -198,9 +189,8 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let transactions_addr = "0.0.0.0:0".parse().unwrap();
-        let requests_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let network_addr = "0.0.0.0:0".parse().unwrap();
+        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
         drone.request_current = drone.request_current + 256;
         assert_eq!(drone.request_current, 256);
         drone.clear_request_count();
@@ -212,9 +202,8 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let transactions_addr = "0.0.0.0:0".parse().unwrap();
-        let requests_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let network_addr = "0.0.0.0:0".parse().unwrap();
+        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -227,9 +216,8 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let transactions_addr = "0.0.0.0:0".parse().unwrap();
-        let requests_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, transactions_addr, requests_addr, None, None);
+        let network_addr = "0.0.0.0:0".parse().unwrap();
+        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -244,18 +232,10 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let transactions_addr = "0.0.0.0:0".parse().unwrap();
-        let requests_addr = "0.0.0.0:0".parse().unwrap();
+        let network_addr = "0.0.0.0:0".parse().unwrap();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(
-            keypair,
-            addr,
-            transactions_addr,
-            requests_addr,
-            time_slice,
-            request_cap,
-        );
+        let drone = Drone::new(keypair, addr, network_addr, time_slice, request_cap);
         assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
@@ -297,16 +277,13 @@ mod tests {
             Some(&ledger_path),
             false,
         );
-        //TODO: this seems unstable
-        sleep(Duration::from_millis(900));
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
         addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
         let mut drone = Drone::new(
             alice.keypair(),
             addr,
-            leader_data.contact_info.tpu,
-            leader_data.contact_info.rpu,
+            leader_data.contact_info.ncp,
             None,
             Some(150_000),
         );
@@ -329,10 +306,32 @@ mod tests {
         let bob_sig = drone.send_airdrop(bob_req).unwrap();
         assert!(client.poll_for_signature(&bob_sig).is_ok());
 
+        // restart the leader, drone should find the new one at the same gossip port
+        exit.store(true, Ordering::Relaxed);
+        server.join().unwrap();
+
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_data = leader.info.clone();
+        let server = Fullnode::new(leader, &ledger_path, leader_keypair, None, false);
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
+        let transactions_socket =
+            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
+
+        let mut client = ThinClient::new(
+            leader_data.contact_info.rpu,
+            requests_socket,
+            leader_data.contact_info.tpu,
+            transactions_socket,
+        );
+
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
             client_pubkey: carlos_pubkey,
         };
+
+        // using existing drone, new thin client
         let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
         assert!(client.poll_for_signature(&carlos_sig).is_ok());
 
@@ -344,8 +343,7 @@ mod tests {
         info!("TPS request balance: {:?}", carlos_balance);
         assert_eq!(carlos_balance.unwrap(), TPS_BATCH);
 
-        exit.store(true, Ordering::Relaxed);
-        server.join().unwrap();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }

@@ -2,7 +2,6 @@ extern crate bincode;
 extern crate bytes;
 #[macro_use]
 extern crate clap;
-#[macro_use]
 extern crate log;
 extern crate serde_json;
 extern crate solana;
@@ -16,7 +15,6 @@ use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
-use solana::thin_client::poll_gossip_for_leader;
 use std::error;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -74,13 +72,6 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .help("Request limit for time slice"),
         )
-        .arg(
-            Arg::with_name("timeout")
-                .long("timeout")
-                .value_name("SECONDS")
-                .takes_value(true)
-                .help("Max SECONDS to wait to get necessary gossip from the network"),
-        )
         .get_matches();
 
     let network = matches
@@ -107,23 +98,13 @@ fn main() -> Result<(), Box<error::Error>> {
     } else {
         request_cap = None;
     }
-    let timeout: Option<u64>;
-    if let Some(secs) = matches.value_of("timeout") {
-        timeout = Some(secs.to_string().parse().expect("failed to parse timeout"));
-    } else {
-        timeout = None;
-    }
-
-    info!("Drone waiting for network at {:?}...", network);
-    let leader = poll_gossip_for_leader(network, timeout)?;
 
     let drone_addr = socketaddr!(0, DRONE_PORT);
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
         drone_addr,
-        leader.contact_info.tpu,
-        leader.contact_info.rpu,
+        network,
         time_slice,
         request_cap,
     )));
