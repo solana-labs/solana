@@ -24,6 +24,7 @@ use window;
 pub struct Fullnode {
     exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
+    _rpc_service: JsonRpcService,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -190,14 +191,8 @@ impl Fullnode {
         let mut drone_addr = node.info.contact_info.tpu;
         drone_addr.set_port(DRONE_PORT);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), RPC_PORT);
-        let rpc_service = JsonRpcService::new(
-            &bank,
-            node.info.contact_info.tpu,
-            drone_addr,
-            rpc_addr,
-            exit.clone(),
-        );
-        thread_hdls.extend(rpc_service.thread_hdls());
+        let _rpc_service =
+            JsonRpcService::new(&bank, node.info.contact_info.tpu, drone_addr, rpc_addr);
 
         let blob_recycler = BlobRecycler::default();
         let window =
@@ -266,7 +261,11 @@ impl Fullnode {
             }
         }
 
-        Fullnode { exit, thread_hdls }
+        Fullnode {
+            exit,
+            thread_hdls,
+            _rpc_service,
+        }
     }
 
     //used for notifying many nodes in parallel to exit
