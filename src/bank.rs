@@ -494,6 +494,10 @@ impl Bank {
                 );
             }
         }
+        let cur_tx_count = self.transaction_count.load(Ordering::Relaxed);
+        if ((cur_tx_count + tx_count) & !(262144 - 1)) > cur_tx_count & !(262144 - 1) {
+            info!("accounts.len: {}", accounts.len());
+        }
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
         res
