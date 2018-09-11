@@ -210,7 +210,7 @@ impl<T: Default + Reset> Recycler<T> {
                 // be passed across threads ('alloc' is a nightly-only API), and so our
                 // reference-counted recyclables are awkwardly being recycled by hand,
                 // which allows this race condition to exist.
-                if Arc::strong_count(&x) >= 1 {
+                if Arc::strong_count(&x) > 1 {
                     // Commenting out this message, is annoying for known use case of
                     //   validator hanging onto a blob in the window, but also sending it over
                     //   to retransmmit_request
@@ -555,6 +555,23 @@ mod tests {
 
         r.allocate(); // Ensure lock is released before recursing.
         assert_eq!(r.gc.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    pub fn test_recycling_is_happening() {
+        // Test the case in allocate() which should return a re-used object and not allocate a new
+        // one.
+        let r = PacketRecycler::default();
+        let x0 = r.allocate();
+        {
+            x0.write().unwrap().packets.resize(1, Packet::default());
+        }
+        r.recycle(x0, "recycle");
+        let x1 = r.allocate();
+        assert_ne!(
+            x1.read().unwrap().packets.len(),
+            Packets::default().packets.len()
+        );
     }
 
     #[test]
