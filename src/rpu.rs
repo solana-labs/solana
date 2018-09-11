@@ -44,6 +44,7 @@ impl Rpu {
         bank: &Arc<Bank>,
         requests_socket: UdpSocket,
         respond_socket: UdpSocket,
+        blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let packet_recycler = PacketRecycler::default();
@@ -55,7 +56,6 @@ impl Rpu {
             packet_sender,
         );
 
-        let blob_recycler = BlobRecycler::default();
         let request_processor = RequestProcessor::new(bank.clone());
         let (request_stage, blob_receiver) = RequestStage::new(
             request_processor,

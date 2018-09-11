@@ -75,6 +75,7 @@ impl Tvu {
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
+        blob_recycler: BlobRecycler,
         replicate_socket: UdpSocket,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
@@ -82,7 +83,6 @@ impl Tvu {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let repair_socket = Arc::new(repair_socket);
-        let blob_recycler = BlobRecycler::default();
         let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
             vec![Arc::new(replicate_socket), repair_socket.clone()],
             exit.clone(),
@@ -168,10 +168,11 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> (Ncp, SharedWindow) {
+    ) -> (Ncp, SharedWindow, BlobRecycler) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
-        (ncp, window)
+        let recycler = BlobRecycler::default();
+        let ncp = Ncp::new(&crdt, window.clone(), recycler.clone(), None, gossip, exit);
+        (ncp, window, recycler)
     }
 
     /// Test that message sent from leader to target1 and replicated to target2
@@ -202,13 +203,12 @@ pub mod tests {
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
         // simulate target peer
-        let recv_recycler = BlobRecycler::default();
-        let resp_recycler = BlobRecycler::default();
+        let recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = streamer::blob_receiver(
             Arc::new(target2.sockets.replicate),
             exit.clone(),
-            recv_recycler.clone(),
+            recycler.clone(),
             s_reader,
         );
 
@@ -217,7 +217,7 @@ pub mod tests {
         let t_responder = streamer::responder(
             "test_replicate",
             Arc::new(leader.sockets.requests),
-            resp_recycler.clone(),
+            recycler.clone(),
             r_responder,
         );
 
@@ -239,6 +239,7 @@ pub mod tests {
             0,
             cref1,
             dr_1.1,
+            dr_1.2,
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
@@ -273,7 +274,7 @@ pub mod tests {
             alice_ref_balance -= transfer_amount;
 
             for entry in vec![entry0, entry1] {
-                let b = resp_recycler.allocate();
+                let b = recycler.allocate();
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(blob_id).unwrap();

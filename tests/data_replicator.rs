@@ -7,7 +7,7 @@ use rayon::iter::*;
 use solana::crdt::{Crdt, Node};
 use solana::logger;
 use solana::ncp::Ncp;
-use solana::packet::Blob;
+use solana::packet::{Blob, BlobRecycler};
 use solana::result;
 use solana::service::Service;
 use std::net::UdpSocket;
@@ -21,7 +21,14 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
     let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
-    let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit);
+    let d = Ncp::new(
+        &c.clone(),
+        w,
+        BlobRecycler::default(),
+        None,
+        tn.sockets.gossip,
+        exit,
+    );
     (c, d, tn.sockets.replicate)
 }
 
