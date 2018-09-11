@@ -176,12 +176,14 @@ impl Fullnode {
         }
 
         let bank = Arc::new(bank);
+        let blob_recycler = BlobRecycler::default();
         let mut thread_hdls = vec![];
 
         let rpu = Rpu::new(
             &bank,
             node.sockets.requests,
             node.sockets.respond,
+            &blob_recycler,
             exit.clone(),
         );
         thread_hdls.extend(rpu.thread_hdls());
@@ -199,7 +201,6 @@ impl Fullnode {
         );
         thread_hdls.extend(rpc_service.thread_hdls());
 
-        let blob_recycler = BlobRecycler::default();
         let window =
             window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
         let shared_window = Arc::new(RwLock::new(window));
@@ -209,6 +210,7 @@ impl Fullnode {
         let ncp = Ncp::new(
             &crdt,
             shared_window.clone(),
+            blob_recycler.clone(),
             ledger_path,
             node.sockets.gossip,
             exit.clone(),
@@ -226,6 +228,7 @@ impl Fullnode {
                     entry_height,
                     crdt,
                     shared_window,
+                    blob_recycler.clone(),
                     node.sockets.replicate,
                     node.sockets.repair,
                     node.sockets.retransmit,
@@ -247,7 +250,7 @@ impl Fullnode {
                     &crdt,
                     tick_duration,
                     node.sockets.transaction,
-                    &blob_recycler,
+                    blob_recycler.clone(),
                     exit.clone(),
                     ledger_path,
                     sigverify_disabled,

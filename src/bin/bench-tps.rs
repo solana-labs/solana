@@ -17,6 +17,7 @@ use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
 use solana::ncp::Ncp;
+use solana::packet::BlobRecycler;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
@@ -611,12 +612,10 @@ fn main() {
         .collect();
 
     // generate and send transactions for the specified duration
-    let now = Instant::now();
-    let mut last_stat = Instant::now();
-    let stat_interval = Duration::new(90, 0);
+    let start = Instant::now();
     let mut reclaim_tokens_back_to_source_account = false;
     let mut i = keypair0_balance;
-    while now.elapsed() < duration {
+    while start.elapsed() < duration {
         let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
         metrics_submit_token_balance(balance);
 
@@ -648,16 +647,6 @@ fn main() {
         if should_switch_directions(num_tokens_per_account, i) {
             reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
         }
-
-        if last_stat.elapsed() >= stat_interval {
-            last_stat = Instant::now();
-            compute_and_report_stats(
-                &maxes,
-                sample_period,
-                &now.elapsed(),
-                total_tx_sent_count.load(Ordering::Relaxed),
-            );
-        }
     }
 
     // Stop the sampling threads so it will collect the stats
@@ -684,7 +673,7 @@ fn main() {
     compute_and_report_stats(
         &maxes,
         sample_period,
-        &now.elapsed(),
+        &start.elapsed(),
         total_tx_sent_count.load(Ordering::Relaxed),
     );
 
@@ -707,7 +696,14 @@ fn converge(
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
+    let ncp = Ncp::new(
+        &spy_ref,
+        window,
+        BlobRecycler::default(),
+        None,
+        gossip_socket,
+        exit_signal.clone(),
+    );
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {

@@ -13,6 +13,7 @@ use solana::ledger::LedgerWriter;
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
+use solana::packet::BlobRecycler;
 use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil, Pubkey};
@@ -42,7 +43,15 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(&spy_ref, spy_window, None, spy.sockets.gossip, exit.clone());
+    let recycler = BlobRecycler::default();
+    let ncp = Ncp::new(
+        &spy_ref,
+        spy_window,
+        recycler,
+        None,
+        spy.sockets.gossip,
+        exit.clone(),
+    );
     //wait for the network to converge
     let mut converged = false;
     let mut rv = vec![];

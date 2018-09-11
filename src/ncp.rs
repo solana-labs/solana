@@ -20,11 +20,11 @@ impl Ncp {
     pub fn new(
         crdt: &Arc<RwLock<Crdt>>,
         window: SharedWindow,
+        blob_recycler: BlobRecycler,
         ledger_path: Option<&str>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let blob_recycler = BlobRecycler::default();
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
@@ -82,6 +82,7 @@ impl Service for Ncp {
 mod tests {
     use crdt::{Crdt, Node};
     use ncp::Ncp;
+    use packet::BlobRecycler;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, RwLock};
 
@@ -94,7 +95,14 @@ mod tests {
         let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
         let c = Arc::new(RwLock::new(crdt));
         let w = Arc::new(RwLock::new(vec![]));
-        let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone());
+        let d = Ncp::new(
+            &c,
+            w,
+            BlobRecycler::default(),
+            None,
+            tn.sockets.gossip,
+            exit.clone(),
+        );
         d.close().expect("thread join");
     }
 }

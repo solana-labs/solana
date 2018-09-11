@@ -9,6 +9,7 @@ use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
 use log::Level;
 use ncp::Ncp;
+use packet::BlobRecycler;
 use request::{Request, Response};
 use result::{Error, Result};
 use signature::{Keypair, Pubkey, Signature};
@@ -377,7 +378,14 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let my_addr = gossip_socket.local_addr().unwrap();
     let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
     let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone());
+    let ncp = Ncp::new(
+        &crdt.clone(),
+        window,
+        BlobRecycler::default(),
+        None,
+        gossip_socket,
+        exit.clone(),
+    );
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
     crdt.write().unwrap().insert(&leader_entry_point);
