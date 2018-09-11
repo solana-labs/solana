@@ -220,7 +220,8 @@ impl Fullnode {
         }
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-        let blob_recycler = BlobRecycler::default();
+        let mut blob_recycler = BlobRecycler::default();
+        blob_recycler.set_name("fullnode::Blob");
 
         let rpu = Rpu::new(
             &bank,

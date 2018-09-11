@@ -62,7 +62,8 @@ impl Tpu {
         ledger_path: &str,
         sigverify_disabled: bool,
     ) -> (Self, BlobReceiver) {
-        let packet_recycler = PacketRecycler::default();
+        let mut packet_recycler = PacketRecycler::default();
+        packet_recycler.set_name("tpu::Packet");
 
         let (fetch_stage, packet_receiver) =
             FetchStage::new(transactions_sockets, exit, &packet_recycler);
