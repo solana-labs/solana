@@ -261,7 +261,7 @@ pub mod tests {
             bank.register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
-            let tx0 = Transaction::new(
+            let tx0 = Transaction::system_new(
                 &mint.keypair(),
                 bob_keypair.pubkey(),
                 transfer_amount,

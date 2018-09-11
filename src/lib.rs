@@ -16,8 +16,10 @@ pub mod broadcast_stage;
 pub mod budget;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
+pub mod instruction;
 #[macro_use]
 pub mod crdt;
+pub mod budget_contract;
 pub mod drone;
 pub mod entry;
 pub mod entry_writer;
@@ -50,6 +52,7 @@ pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
 pub mod streamer;
+pub mod system_contract;
 pub mod thin_client;
 pub mod timing;
 pub mod tpu;

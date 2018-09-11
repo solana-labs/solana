@@ -226,7 +226,7 @@ mod tests {
         let bank = Bank::new(&alice);
 
         let last_id = bank.last_id();
-        let tx = Transaction::new(&alice.keypair(), bob_pubkey, 20, last_id);
+        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));

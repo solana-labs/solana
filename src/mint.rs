@@ -52,7 +52,7 @@ impl Mint {
 
     pub fn create_transactions(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
-        let tx = Transaction::new(&keypair, self.pubkey(), self.tokens, self.seed());
+        let tx = Transaction::budget_new(&keypair, self.pubkey(), self.tokens, self.seed());
         vec![tx]
     }
 
@@ -67,14 +67,14 @@ impl Mint {
 mod tests {
     use super::*;
     use budget::Budget;
+    use instruction::{Instruction, Plan};
     use ledger::Block;
-    use transaction::{Instruction, Plan};
 
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        if let Instruction::NewContract(contract) = tx.instruction() {
+        if let Some(Instruction::NewContract(contract)) = tx.instruction() {
             if let Plan::Budget(Budget::Pay(payment)) = contract.plan {
                 assert_eq!(*tx.from(), payment.to);
             }

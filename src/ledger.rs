@@ -5,6 +5,7 @@
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
 use entry::Entry;
 use hash::Hash;
+use instruction::Vote;
 use log::Level::Trace;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
@@ -15,7 +16,7 @@ use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
-use transaction::{Transaction, Vote};
+use transaction::Transaction;
 use window::WINDOW_SIZE;
 
 //
@@ -548,11 +549,12 @@ mod tests {
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
+    use instruction::Vote;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::{Transaction, Vote};
+    use transaction::Transaction;
 
     fn tmp_ledger_path(name: &str) -> String {
         use std::env;
@@ -590,8 +592,9 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![Transaction::new_timestamp(
+                    vec![Transaction::budget_new_timestamp(
                         &keypair,
+                        keypair.pubkey(),
                         keypair.pubkey(),
                         Utc::now(),
                         one,
@@ -605,7 +608,7 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
-        let tx0 = Transaction::new_vote(
+        let tx0 = Transaction::budget_new_vote(
             &keypair,
             Vote {
                 version: 0,
@@ -614,7 +617,13 @@ mod tests {
             one,
             1,
         );
-        let tx1 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), one);
+        let tx1 = Transaction::budget_new_timestamp(
+            &keypair,
+            keypair.pubkey(),
+            keypair.pubkey(),
+            Utc::now(),
+            one,
+        );
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,
@@ -659,7 +668,7 @@ mod tests {
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
-        let tx_small = Transaction::new_vote(
+        let tx_small = Transaction::budget_new_vote(
             &keypair,
             Vote {
                 version: 0,
@@ -668,7 +677,7 @@ mod tests {
             next_id,
             2,
         );
-        let tx_large = Transaction::new(&keypair, keypair.pubkey(), 1, next_id);
+        let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
         let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
