@@ -43,7 +43,7 @@ while true; do
 
   echo "$report"
   ./metrics-write-datapoint.sh "net-stats,hostname=$HOSTNAME $report"
-  sleep 60
+  sleep 1
 done
 
 exit 1
