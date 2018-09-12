@@ -297,8 +297,8 @@ $(
     disable-background-upgrades.sh \
     create-solana-user.sh \
     install-earlyoom.sh \
-    install-rsync.sh \
     install-libssl-compatability.sh \
+    install-rsync.sh \
 )
 
 cat > /etc/motd <<EOM
