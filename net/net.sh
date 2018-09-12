@@ -34,6 +34,7 @@ Operate a configured testnet
  sanity/start-specific options:
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip validator sanity
+   -o rejectExtraNodes  - Require the exact number of nodes
 
  stop-specific options:
    none
@@ -78,7 +79,7 @@ while getopts "h?S:s:o:f:" opt; do
     ;;
   o)
     case $OPTARG in
-    noLedgerVerify|noValidatorSanity)
+    noLedgerVerify|noValidatorSanity|rejectExtraNodes)
       sanityExtraArgs="$sanityExtraArgs -o $OPTARG"
       ;;
     *)
