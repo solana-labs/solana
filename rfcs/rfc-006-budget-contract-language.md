@@ -1,110 +1,117 @@
-The external Budget language is defined by the following Transactions.  Note that this is not currently 1-1
-with the src/budget.rs DSL.
 
-A compiler will convert the input below into individual Transactions.
-Initially this compiler will live within `solana-wallet`.
+### Transfer (aka, Budget v2) Transaction Format
+```rust
+pub enum TransferCondition {
+    /// Wait for a `Timestamp` `Instruction` at or after the given `DateTime` from `Pubkey`
+    Timestamp(DateTime<Utc>, Pubkey),
 
-Notes:
-* `key[0]` is always the sender's key and is automatically added by the wallet before sending
-* `fee` is not described here.  Assumed to be added at transaction send time
-* `key[1]` is always the recipient, but the funds may be locked for a time
-* get_balance for `key[1]` returns 0 until the funds are unlocked
-* issuing a new "transfer" to a locked `key[1]` will be rejected
-* `key[2]` is supplied only when creating a "transfer" requiring a witness to complete.
+    /// Wait for a `Witness` `Instruction` from `Pubkey`
+    Witness(Pubkey),
+}
 
-###  Unconditional Immediate Transfer
-```yml
-transfer:
-  tokens: 120
-  to: $key[1]
-```
-or
-```json
-{
-  "transfer": {
-    "tokens": 120,
-    "to": "$key[1]"
-  }
+pub struct Transfer {
+    /// Amount to be transferred
+    tokens: i64,
+
+    /// `Pubkey` that the `Cancel` `Instruction` may be issued from prior to the
+    // `Transfer` meeting all `conditions`
+    cancellable: Maybe<Pubkey>,
+
+    /// The list of conditions that must be met before the `Transfer` is unlocked
+    conditions: Vec<TransferCondition>,
+}
+
+/// The `Transaction` `userdata` contain a serialized `TransferInstruction`
+///
+/// * key[0] - the `caller` key
+/// * key[1] - the contract key
+///
+pub enum TransferInstruction {
+    /// Declare and instantiate a new `Transfer` into `key[1]` using tokens from `key[0]`.
+    ///
+    /// `key[1]` must be unallocated before calling `Create`
+    Create(Transfer),
+
+    /// Cancel the `Transfer` identified by `key[1]`.  Fails if `key[0]` is not in `Transfer`
+    /// `cancellable`, or if the `Transfer` is already unlocked.   The `tokens` will be returned to
+    /// `key[0]`.
+    Cancel,
+
+    /// Tell a `Transfer` to acknowledge the given `DateTime` has past from `key[0]`.
+    Timestamp(DateTime<Utc>),
+
+    /// Tell a `Transfer` to acknowledge that `key[0]` has witnessed the transaction.
+    Witness,
 }
 ```
-or
+
+### Wallet CLI
+
+The general form is:
+```
+$ solana-wallet transfer [common-options] [subcommand] [subcommand-specific options]
+```
+
+`common-options` include:
+* `--fee xyz` - Transaction fee (0 by default)
+* `--output file` - Write the raw Transaction to a file instead of sending it
+
+#### Unconditional Immediate Transfer
 ```sh
-$ solana-wallet pay --tokens 123 --to $key[1]
+$ solana-wallet transfer create PubKey 123
 ```
 
-### Time-based Transfer
-Contract creator must issue an "timestamp" transaction to unlock the tokens.
-That is, elapsed time is defined by the contract creator.
-
-```yml
-transfer:
-  tokens: 120
-  to: $key[1]
-  at: 2018-12-24T23:59
-```
-or
+#### Time-based Transfer
 ```sh
-$ solana-wallet pay --tokens 123 --to $key[1] --at 2018-12-24T23:59
+$ solana-wallet transfer create TransferPubKey 123 \
+    at 2018-12-24T23:59 from TimestampPubKey
 ```
 
-### Witness-based Transfer
-A third party, `key[2]`, must issue a "witness" transaction to unlock the tokens.
-
-```yml
-transfer:
-  tokens: 120
-  to: $key[1]
-  witness: $key[2]
-```
-or
+#### Witness-based Transfer
+A third party must issue a "witness" transaction to unlock the tokens.
 ```sh
-$ solana-wallet pay --tokens 123 --to $key[1] --witness $key[2]
+$ solana-wallet transfer create TransferPubKey 123 \
+    witness WitnessPubKey
 ```
 
-### Time and Witness Transfer
-```yml
-transfer:
-  tokens: 120
-  to: $key[1]
-  at: 2018-12-24T23:59
-  witness: $key[2]
-```
-or
+#### Time and Witness Transfer
 ```sh
-$ solana-wallet pay --tokens 123 --to $key[1] --at 2018-12-24T23:59 --witness $key[2]
+$ solana-wallet transfer create TransferPubKey 123 \
+    at 2018-12-24T23:59 from TimestampPubKey \
+    witness WitnessPubKey
 ```
 
-### Cancel Transfer
-Only the `key[0]` that created the "transfer" may cancel it,
-and the "transfer" may only be cancelled if it is still locked
-```yml
-cancel: $key[1]
-```
-or
+#### Multiple Witnesses
 ```sh
-$ solana-wallet cancel-transfer $key[1]
+$ solana-wallet transfer create TransferPubKey 123 \
+    witness Witness1PubKey \
+    witness Witness2PubKey
 ```
 
-### Approve Transfer
-The `key[0]` of this transaction must be equal to the "witness" field in the "transfer"
-```yml
-witness:
-  to: $key[1]
-```
-or
+#### Cancellable Witnesses
 ```sh
-$ solana-wallet witness-transfer $key[1]
+$ solana-wallet transfer create TransferPubKey 123 \
+    witness WitnessPubKey \
+    cancellable \
 ```
 
-### Indicate Elapsed Time.
-Apply the timestamp to `key[1]`, potentially unlocking a time-based transfer
-Only the `key[0]` that created the "transfer" may perform this transaction.
-```yml
-timestamp:
-  to: $key[1]
-  when: 2018-12-24T23:59
-```
-or
+#### Cancel Transfer
 ```sh
-$ solana-wallet send-timestamp $key[1] 2018-12-24T23:59
+$ solana-wallet transfer cancel TransferPubKey
 ```
+
+#### Witness Transfer
+```sh
+$ solana-wallet transfer witness TransferPubKey
+```
+
+#### Indicate Elapsed Time.
+```sh
+$ solana-wallet transfer timestamp TransferPubKey 2018-12-24T23:59
+```
+
+
+## Javascript solana-web3.js Interface
+
+*TBD, but will look similar to what the Wallet CLI offers wrapped up in a
+Javacsript object*
