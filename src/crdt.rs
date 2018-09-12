@@ -335,7 +335,7 @@ impl Crdt {
     pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
         inc_new_counter_info!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
-            info!("{}: INSERTING VOTES {}", self.id, votes.len());
+            debug!("{}: INSERTING VOTES {}", self.id, votes.len());
         }
         for v in votes {
             self.insert_vote(&v.0, &v.1, v.2);
@@ -465,7 +465,7 @@ impl Crdt {
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.is_empty() {
-            warn!("{}:not enough peers in crdt table", me.id);
+            debug!("{}:not enough peers in crdt table", me.id);
             inc_new_counter_info!("crdt-broadcast-not_enough_peers_error", 1);
             Err(CrdtError::NoPeers)?;
         }
@@ -541,12 +541,9 @@ impl Crdt {
                 );
                 assert!(blob.meta.size <= BLOB_SIZE);
                 let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
-                trace!(
+                debug!(
                     "{}: done broadcast {} to {} {}",
-                    me.id,
-                    blob.meta.size,
-                    v.id,
-                    v.contact_info.tvu
+                    me.id, blob.meta.size, v.id, v.contact_info.tvu
                 );
                 e
             }).collect();

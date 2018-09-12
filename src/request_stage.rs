@@ -59,7 +59,7 @@ impl RequestStage {
 
             let blobs = to_blobs(rsps, blob_recycler)?;
             if !blobs.is_empty() {
-                info!("process: sending blobs: {}", blobs.len());
+                debug!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
                 blob_sender.send(blobs)?;
             }

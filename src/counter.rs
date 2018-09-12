@@ -36,10 +36,10 @@ macro_rules! inc_counter {
 
 macro_rules! inc_new_counter_info {
     ($name:expr, $count:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, 0);
+        inc_new_counter!($name, $count, Level::Debug, 0);
     }};
     ($name:expr, $count:expr, $lograte:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, $lograte);
+        inc_new_counter!($name, $count, Level::Debug, $lograte);
     }};
 }
 
@@ -73,7 +73,7 @@ impl Counter {
         }
         if times % lograte == 0 && times > 0 {
             let lastlog = self.lastlog.load(Ordering::Relaxed);
-            info!(
+            debug!(
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
                 self.name,
                 counts + events,
