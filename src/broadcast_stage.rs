@@ -1,7 +1,7 @@
 //! The `broadcast_stage` broadcasts data from a leader node to validators
 //!
 use counter::Counter;
-use crdt::{Crdt, CrdtError, NodeInfo};
+use crdt::{Crdt, CrdtError, NodeInfo, LEADER_ROTATION_INTERVAL};
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
@@ -162,6 +162,19 @@ impl BroadcastStage {
         let mut receive_index = entry_height;
         let me = crdt.read().unwrap().my_data().clone();
         loop {
+            if transmit_index.data % (LEADER_ROTATION_INTERVAL as u64) == 0 {
+                let rcrdt = crdt.read().unwrap();
+                let my_id = rcrdt.my_data().id;
+                match rcrdt.get_scheduled_leader(transmit_index.data) {
+                    Some(id) if id == my_id => (),
+                    // If the leader stays in power for the next 
+                    // round as well, then we don't exit. Otherwise, exit.
+                    _ => {
+                        return;
+                    }
+                }
+            }
+
             let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
                 &me,
@@ -207,7 +220,8 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
-            }).unwrap();
+            })
+            .unwrap();
 
         BroadcastStage { thread_hdl }
     }

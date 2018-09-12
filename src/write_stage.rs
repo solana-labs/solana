@@ -290,11 +290,8 @@ mod tests {
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::fs::remove_dir_all;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
     use write_stage::{WriteStage, WriteStageReturnType};
 
     fn process_ledger(ledger_path: &str, bank: &Bank) -> (u64, Vec<Entry>) {
@@ -310,7 +307,6 @@ mod tests {
     fn setup_dummy_write_stage() -> (
         Pubkey,
         WriteStage,
-        Arc<AtomicBool>,
         Sender<Vec<Entry>>,
         Receiver<Vec<Entry>>,
         Arc<RwLock<Crdt>>,
@@ -347,11 +343,9 @@ mod tests {
             entry_height,
         );
 
-        let exit_sender = Arc::new(AtomicBool::new(false));
         (
             id,
             write_stage,
-            exit_sender,
             entry_sender,
             write_stage_entry_receiver,
             crdt,
@@ -366,7 +360,6 @@ mod tests {
         let (
             id,
             write_stage,
-            exit_sender,
             entry_sender,
             _write_stage_entry_receiver,
             crdt,
@@ -392,16 +385,6 @@ mod tests {
             entry_sender.send(new_entry).unwrap();
         }
 
-        // Wait until at least LEADER_ROTATION_INTERVAL have been written to the ledger
-        loop {
-            sleep(Duration::from_secs(1));
-            let (current_entry_height, _) = process_ledger(&leader_ledger_path, &bank);
-
-            if current_entry_height == LEADER_ROTATION_INTERVAL {
-                break;
-            }
-        }
-
         // Set the scheduled next leader in the crdt to some other node
         let leader2_keypair = Keypair::new();
         let leader2_info = Node::new_localhost_with_pubkey(leader2_keypair.pubkey());
@@ -415,14 +398,12 @@ mod tests {
         // Input another LEADER_ROTATION_INTERVAL dummy entries one at a time,
         // which will take us past the point of the leader rotation.
         // The write_stage will see that it's no longer the leader after
-        // checking the crdt, and exit
+        // checking the schedule, and exit
         for _ in 0..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
             entry_sender.send(new_entry).unwrap();
         }
 
-        // Make sure the threads closed cleanly
-        exit_sender.store(true, Ordering::Relaxed);
         assert_eq!(
             write_stage.join().unwrap(),
             WriteStageReturnType::LeaderRotation
