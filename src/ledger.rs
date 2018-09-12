@@ -12,9 +12,9 @@ use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
-use signature::Pubkey;
 #[cfg(test)]
 use signature::{Keypair, KeypairUtil};
+use signature::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
@@ -449,7 +449,7 @@ impl Block for [Entry] {
             .flat_map(|entry| entry.transactions.iter().filter_map(Transaction::vote))
             .collect()
     }
-}
+} 
 
 pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
@@ -549,14 +549,17 @@ pub fn next_entries(
 #[cfg(test)]
 pub fn tmp_ledger_path(name: &str) -> String {
     let keypair = Keypair::new();
+
     format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
 }
+
 #[cfg(test)]
 pub fn genesis(name: &str, num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
     let path = tmp_ledger_path(name);
     let mut writer = LedgerWriter::open(&path, true).unwrap();
     writer.write_entries(mint.create_entries()).unwrap();
+
     (mint, path)
 }
 
@@ -573,14 +576,6 @@ mod tests {
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
-
-    fn tmp_ledger_path(name: &str) -> String {
-        use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-        let keypair = Keypair::new();
-
-        format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey())
-    }
 
     #[test]
     fn test_verify_slice() {

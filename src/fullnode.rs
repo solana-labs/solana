@@ -39,7 +39,7 @@ impl LeaderServices {
         }
     }
 
-    fn join(self) -> Result<()> {
+    pub fn join(self) -> Result<()> {
         self.tpu.join()?;
         self.broadcast_stage.join()
     }
@@ -54,7 +54,7 @@ impl ValidatorServices {
         ValidatorServices { tvu }
     }
 
-    fn join(self) -> Result<()> {
+    pub fn join(self) -> Result<()> {
         self.tvu.join()
     }
 }
@@ -68,7 +68,7 @@ pub struct Fullnode {
     rpu: Rpu,
     rpc_service: JsonRpcService,
     ncp: Ncp,
-    pub node_role: NodeRole,
+    pub node_role: Option<NodeRole>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -140,9 +140,9 @@ impl Fullnode {
         match leader_addr {
             Some(leader_addr) => {
                 info!(
-                "validator ready... local request address: {} (advertising {}) connected to: {}",
-                local_requests_addr, requests_addr, leader_addr
-            );
+                    "validator ready... local request address: {} (advertising {}) connected to: {}",
+                    local_requests_addr, requests_addr, leader_addr
+                );
             }
             None => {
                 info!(
@@ -278,7 +278,7 @@ impl Fullnode {
                     exit.clone(),
                 );
                 let validator_state = ValidatorServices::new(tvu);
-                node_role = NodeRole::Validator(validator_state);
+                node_role = Some(NodeRole::Validator(validator_state));
             }
             None => {
                 // Start in leader mode.
@@ -309,7 +309,7 @@ impl Fullnode {
                     entry_receiver,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
-                node_role = NodeRole::Leader(leader_state);
+                node_role = Some(NodeRole::Leader(leader_state));
             }
         }
 
@@ -340,13 +340,15 @@ impl Service for Fullnode {
         self.rpu.join()?;
         self.ncp.join()?;
         self.rpc_service.join()?;
+
         match self.node_role {
-            NodeRole::Validator(validator_service) => {
+            Some(NodeRole::Validator(validator_service)) => {
                 validator_service.join()?;
-            }
-            NodeRole::Leader(leader_service) => {
+            },
+            Some(NodeRole::Leader(leader_service)) => {
                 leader_service.join()?;
-            }
+            },
+            _ => (),
         }
 
         // TODO: Case on join values above to determine if
