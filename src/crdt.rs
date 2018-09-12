@@ -37,6 +37,11 @@ use timing::{duration_as_ms, timestamp};
 use window::{SharedWindow, WindowIndex};
 
 pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
+#[cfg(test)]
+pub const LEADER_ROTATION_INTERVAL: u64 = 10;
+#[cfg(not(test))]
+pub const LEADER_ROTATION_INTERVAL: u64 = 100;
+
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
 const GOSSIP_PURGE_MILLIS: u64 = 15000;
@@ -205,6 +210,9 @@ pub struct Crdt {
     /// last time we heard from anyone getting a message fro this public key
     /// these are rumers and shouldn't be trusted directly
     external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>>,
+    /// TODO: Clearly not the correct implementation of this, but a temporary abstraction
+    /// for testing
+    pub scheduled_leaders: HashMap<u64, Pubkey>,
 }
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
@@ -235,6 +243,7 @@ impl Crdt {
             external_liveness: HashMap::new(),
             id: node_info.id,
             update_index: 1,
+            scheduled_leaders: HashMap::new(),
         };
         me.local.insert(node_info.id, me.update_index);
         me.table.insert(node_info.id, node_info);
@@ -295,6 +304,19 @@ impl Crdt {
         me.leader_id = key;
         me.version += 1;
         self.insert(&me);
+    }
+
+    // TODO: Dummy leader scheduler, need to implement actual leader scheduling.
+    pub fn get_scheduled_leader(&self, entry_height: u64) -> Option<Pubkey> {
+        match self.scheduled_leaders.get(&entry_height) {
+            Some(x) => Some(x.clone()),
+            None => Some(self.my_data().leader_id),
+        }
+    }
+
+    // TODO: Dummy leader schedule setter, need to implement actual leader scheduling.
+    pub fn set_scheduled_leader(&mut self, entry_height: u64, new_leader_id: Pubkey) -> () {
+        self.scheduled_leaders.insert(entry_height, new_leader_id);
     }
 
     pub fn get_external_liveness_entry(&self, key: &Pubkey) -> Option<&HashMap<Pubkey, u64>> {
