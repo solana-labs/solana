@@ -36,6 +36,7 @@ use std::thread::{self, JoinHandle};
 use streamer;
 
 pub struct Rpu {
+    request_stage: RequestStage,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
@@ -71,21 +72,22 @@ impl Rpu {
             blob_receiver,
         );
 
-        let mut thread_hdls = vec![t_receiver, t_responder];
-        thread_hdls.extend(request_stage.thread_hdls().into_iter());
-        Rpu { thread_hdls }
+        let thread_hdls = vec![t_receiver, t_responder];
+        Rpu {
+            thread_hdls,
+            request_stage,
+        }
     }
 }
 
 impl Service for Rpu {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        self.thread_hdls
-    }
+    type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls() {
+        for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
+        self.request_stage.join()?;
         Ok(())
     }
 }

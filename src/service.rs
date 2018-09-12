@@ -1,6 +1,7 @@
-use std::thread::{JoinHandle, Result};
+use std::thread::Result;
 
 pub trait Service {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>>;
-    fn join(self) -> Result<()>;
+    type JoinReturnType;
+
+    fn join(self) -> Result<Self::JoinReturnType>;
 }

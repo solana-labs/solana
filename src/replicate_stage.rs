@@ -22,6 +22,7 @@ use vote_stage::VoteStage;
 
 pub struct ReplicateStage {
     thread_hdls: Vec<JoinHandle<()>>,
+    vote_stage: VoteStage,
 }
 
 impl ReplicateStage {
@@ -113,21 +114,23 @@ impl ReplicateStage {
             })
             .unwrap();
 
-        let mut thread_hdls = vec![t_responder, t_replicate];
-        thread_hdls.extend(vote_stage.thread_hdls());
+        let thread_hdls = vec![t_responder, t_replicate];
 
-        ReplicateStage { thread_hdls }
+        ReplicateStage {
+            thread_hdls,
+            vote_stage,
+        }
     }
 }
 
 impl Service for ReplicateStage {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        self.thread_hdls
-    }
+    type JoinReturnType = ();
+
     fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls() {
+        for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
+        self.vote_stage.join()?;
         Ok(())
     }
 }

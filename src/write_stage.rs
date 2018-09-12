@@ -135,11 +135,10 @@ impl WriteStage {
 }
 
 impl Service for WriteStage {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        self.thread_hdls
-    }
+    type JoinReturnType = ();
+
     fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls() {
+        for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
         Ok(())

@@ -32,7 +32,6 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Builder;
-use std::thread::JoinHandle;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -512,8 +511,7 @@ fn main() {
     let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
     let exit_signal = Arc::new(AtomicBool::new(false));
-    let mut c_threads = vec![];
-    let (nodes, leader) = converge(&leader, &exit_signal, num_nodes, &mut c_threads);
+    let (nodes, leader, ncp) = converge(&leader, &exit_signal, num_nodes);
 
     if nodes.len() < num_nodes {
         println!(
@@ -693,17 +691,14 @@ fn main() {
     );
 
     // join the crdt client threads
-    for t in c_threads {
-        t.join().unwrap();
-    }
+    ncp.join().unwrap();
 }
 
 fn converge(
     leader: &NodeInfo,
     exit_signal: &Arc<AtomicBool>,
     num_nodes: usize,
-    threads: &mut Vec<JoinHandle<()>>,
-) -> (Vec<NodeInfo>, Option<NodeInfo>) {
+) -> (Vec<NodeInfo>, Option<NodeInfo>, Ncp) {
     //lets spy on the network
     let (node, gossip_socket) = Crdt::spy_node();
     let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
@@ -749,9 +744,8 @@ fn converge(
         }
         sleep(Duration::new(1, 0));
     }
-    threads.extend(ncp.thread_hdls().into_iter());
     let leader = spy_ref.read().unwrap().leader_data().cloned();
-    (v, leader)
+    (v, leader, ncp)
 }
 
 #[cfg(test)]

@@ -37,7 +37,7 @@ use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::Duration;
 use streamer::BlobReceiver;
 use write_stage::WriteStage;
@@ -106,20 +106,15 @@ impl Tpu {
 }
 
 impl Service for Tpu {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        let mut thread_hdls = vec![];
-        thread_hdls.extend(self.fetch_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.sigverify_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.banking_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.record_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.write_stage.thread_hdls().into_iter());
-        thread_hdls
-    }
+    type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls() {
-            thread_hdl.join()?;
-        }
+        self.fetch_stage.join()?;
+        self.sigverify_stage.join()?;
+        self.banking_stage.join()?;
+        self.record_stage.join()?;
+        self.write_stage.join()?;
+
         Ok(())
     }
 }

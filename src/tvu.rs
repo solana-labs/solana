@@ -47,7 +47,7 @@ use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use window::SharedWindow;
 
 pub struct Tvu {
@@ -125,18 +125,13 @@ impl Tvu {
 }
 
 impl Service for Tvu {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        let mut thread_hdls = vec![];
-        thread_hdls.extend(self.replicate_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.fetch_stage.thread_hdls().into_iter());
-        thread_hdls.extend(self.retransmit_stage.thread_hdls().into_iter());
-        thread_hdls
-    }
+    type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls() {
-            thread_hdl.join()?;
-        }
+        self.replicate_stage.join()?;
+        self.fetch_stage.join()?;
+        self.retransmit_stage.join()?;
+
         Ok(())
     }
 }
