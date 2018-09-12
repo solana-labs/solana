@@ -441,6 +441,18 @@ impl Blob {
         self.meta.size = new_size;
         self.set_data_size(new_size as u64).unwrap();
     }
+
+    pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
+        let mut p = r.write().expect("'r' write lock in pub fn recv_from");
+        trace!("receiving on {}", socket.local_addr().unwrap());
+
+        let (nrecv, from) = socket.recv_from(&mut p.data)?;
+        p.meta.size = nrecv;
+        p.meta.set_addr(&from);
+        trace!("got {} bytes from {}", nrecv, from);
+        Ok(())
+    }
+
     pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<SharedBlobs> {
         let mut v = Vec::new();
         //DOCUMENTED SIDE-EFFECT
@@ -453,17 +465,7 @@ impl Blob {
         for i in 0..NUM_BLOBS {
             let r = re.allocate();
 
-            fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
-                let mut p = r.write().expect("'r' write lock in pub fn recv_from");
-                trace!("receiving on {}", socket.local_addr().unwrap());
-
-                let (nrecv, from) = socket.recv_from(&mut p.data)?;
-                p.meta.size = nrecv;
-                p.meta.set_addr(&from);
-                trace!("got {} bytes from {}", nrecv, from);
-                Ok(())
-            }
-            match recv_blob(socket, &r) {
+            match Blob::recv_blob(socket, &r) {
                 Err(_) if i > 0 => {
                     trace!("got {:?} messages on {}", i, socket.local_addr().unwrap());
                     break;
