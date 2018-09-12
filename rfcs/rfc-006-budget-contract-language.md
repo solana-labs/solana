@@ -27,6 +27,10 @@ or
   }
 }
 ```
+or
+```sh
+$ solana-wallet pay --tokens 123 --to $key[1]
+```
 
 ### Time-based Transfer
 Contract creator must issue an "timestamp" transaction to unlock the tokens.
@@ -38,6 +42,10 @@ transfer:
   to: $key[1]
   at: 2018-12-24T23:59
 ```
+or
+```sh
+$ solana-wallet pay --tokens 123 --to $key[1] --at 2018-12-24T23:59
+```
 
 ### Witness-based Transfer
 A third party, `key[2]`, must issue a "witness" transaction to unlock the tokens.
@@ -48,6 +56,10 @@ transfer:
   to: $key[1]
   witness: $key[2]
 ```
+or
+```sh
+$ solana-wallet pay --tokens 123 --to $key[1] --witness $key[2]
+```
 
 ### Time and Witness Transfer
 ```yml
@@ -57,6 +69,10 @@ transfer:
   at: 2018-12-24T23:59
   witness: $key[2]
 ```
+or
+```sh
+$ solana-wallet pay --tokens 123 --to $key[1] --at 2018-12-24T23:59 --witness $key[2]
+```
 
 ### Cancel Transfer
 Only the `key[0]` that created the "transfer" may cancel it,
@@ -64,12 +80,20 @@ and the "transfer" may only be cancelled if it is still locked
 ```yml
 cancel: $key[1]
 ```
+or
+```sh
+$ solana-wallet cancel-transfer $key[1]
+```
 
 ### Approve Transfer
 The `key[0]` of this transaction must be equal to the "witness" field in the "transfer"
 ```yml
 witness:
   to: $key[1]
+```
+or
+```sh
+$ solana-wallet witness-transfer $key[1]
 ```
 
 ### Indicate Elapsed Time.
@@ -79,4 +103,8 @@ Only the `key[0]` that created the "transfer" may perform this transaction.
 timestamp:
   to: $key[1]
   when: 2018-12-24T23:59
+```
+or
+```sh
+$ solana-wallet send-timestamp $key[1] 2018-12-24T23:59
 ```
