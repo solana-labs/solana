@@ -108,6 +108,11 @@ time net/gce.sh create "${gce_create_args[@]}"
 net/init-metrics.sh -e
 
 echo --- net.sh start
-time net/net.sh start -s "$snapChannel"
+maybeRejectExtraNodes=
+if ! $publicNetwork; then
+  maybeRejectExtraNodes="-o rejectExtraNodes"
+fi
+# shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes
 
 exit 0

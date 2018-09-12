@@ -432,6 +432,11 @@ fn main() {
                 .help("wait for NUM nodes to converge"),
         )
         .arg(
+            Arg::with_name("reject-extra-nodes")
+                .long("reject-extra-nodes")
+                .help("require exactly num-nodes on convergence.  Appropriate only for internal networks"),
+        )
+        .arg(
             Arg::with_name("threads")
                 .short("t")
                 .long("threads")
@@ -517,6 +522,16 @@ fn main() {
         );
         exit(1);
     }
+    if matches.is_present("reject-extra-nodes") {
+        if nodes.len() > num_nodes {
+            println!(
+                "Error: Extra nodes discovered.  Expecting exactly {}",
+                num_nodes
+            );
+            exit(1);
+        }
+    }
+
     if leader.is_none() {
         println!("no leader");
         exit(1);

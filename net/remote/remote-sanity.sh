@@ -27,6 +27,7 @@ missing() {
 
 ledgerVerify=true
 validatorSanity=true
+rejectExtraNodes=false
 while [[ $1 = -o ]]; do
   opt="$2"
   shift 2
@@ -36,6 +37,9 @@ while [[ $1 = -o ]]; do
     ;;
   noValidatorSanity)
     validatorSanity=false
+    ;;
+  rejectExtraNodes)
+    rejectExtraNodes=true
     ;;
   *)
     echo "Error: unknown option: $opt"
@@ -89,7 +93,18 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
 (
   set -x
   $solana_keygen -o "$client_id"
-  $solana_bench_tps --network "$entrypointIp:8001" --identity "$client_id" --num-nodes "$numNodes" --converge-only
+
+  maybeRejectExtraNodes=
+  if $rejectExtraNodes; then
+    maybeRejectExtraNodes="--reject-extra-nodes"
+  fi
+
+  $solana_bench_tps \
+    --network "$entrypointIp:8001" \
+    --identity "$client_id" \
+    --num-nodes "$numNodes" \
+    $maybeRejectExtraNodes \
+    --converge-only
 )
 
 echo "--- $entrypointIp: verify ledger"

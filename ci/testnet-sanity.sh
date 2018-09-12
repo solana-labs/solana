@@ -32,5 +32,6 @@ echo --- net.sh sanity
 net/net.sh sanity \
   ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
   ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
+  ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
 
 exit 0
