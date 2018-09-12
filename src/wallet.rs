@@ -15,6 +15,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
 use thin_client::ThinClient;
+use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
@@ -23,6 +24,7 @@ pub enum WalletCommand {
     AirDrop(i64),
     Pay(i64, Pubkey),
     Confirm(Signature),
+    TransferRaw(Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +113,30 @@ pub fn parse_command(
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
+        ("transfer", Some(userdata_matches)) => {
+            let userdata: Vec<u8> = if userdata_matches.is_present("serial_userdata") {
+                serde_json::from_str(userdata_matches.value_of("serial_userdata").unwrap())
+                    .or_else(|err| {
+                        Err(WalletError::BadParameter(format!(
+                            "{}: Unable to read userdata serialization: {}",
+                            err,
+                            userdata_matches.value_of("serial_userdata").unwrap()
+                        )))
+                    })?
+            } else {
+                let userdata_path = userdata_matches.value_of("userdata_path").unwrap();
+                let mut file = File::open(userdata_path).or_else(|err| {
+                    Err(WalletError::BadParameter(format!(
+                        "{}: Unable to open userdata file: {}",
+                        err, userdata_path
+                    )))
+                })?;
+                let mut buf = vec![0u8; 60];
+                file.read(&mut buf)?;
+                buf
+            };
+            Ok(WalletCommand::TransferRaw(userdata))
+        }
         ("", None) => {
             println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -188,6 +214,20 @@ pub fn process_command(
             } else {
                 println!("Not found");
             }
+        }
+        // Make a transaction from raw instruction data
+        WalletCommand::TransferRaw(ref userdata) => {
+            let last_id = client.get_last_id();
+
+            // TODO: Userdata & transaction specifics will need to be updated
+            // vis-a-vis Budget DSL determinations
+            let pubkey_vec: Vec<u8> = userdata.iter().cloned().skip(28).collect();
+            let tx_key = Pubkey::new(&pubkey_vec);
+            let tx =
+                Transaction::new_with_userdata(&config.id, &[tx_key], userdata.clone(), last_id, 0);
+
+            let signature = client.transfer_signed(&tx)?;
+            println!("{}", signature);
         }
     }
     Ok(())
