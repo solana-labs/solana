@@ -205,7 +205,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
-    pub fn new_with_bank(
+pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
