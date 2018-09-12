@@ -7,10 +7,14 @@ use entry::Entry;
 use hash::Hash;
 use instruction::Vote;
 use log::Level::Trace;
+#[cfg(test)]
+use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::Pubkey;
+#[cfg(test)]
+use signature::{Keypair, KeypairUtil};
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
@@ -540,6 +544,20 @@ pub fn next_entries(
     let mut id = *start_hash;
     let mut num_hashes = num_hashes;
     next_entries_mut(&mut id, &mut num_hashes, transactions)
+}
+
+#[cfg(test)]
+pub fn tmp_ledger_path(name: &str) -> String {
+    let keypair = Keypair::new();
+    format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
+}
+#[cfg(test)]
+pub fn genesis(name: &str, num: i64) -> (Mint, String) {
+    let mint = Mint::new(num);
+    let path = tmp_ledger_path(name);
+    let mut writer = LedgerWriter::open(&path, true).unwrap();
+    writer.write_entries(mint.create_entries()).unwrap();
+    (mint, path)
 }
 
 #[cfg(test)]

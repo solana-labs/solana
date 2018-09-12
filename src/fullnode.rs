@@ -205,7 +205,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
-pub fn new_with_bank(
+    pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,
         entry_height: u64,
@@ -297,6 +297,7 @@ pub fn new_with_bank(
                     exit.clone(),
                     ledger_path,
                     sigverify_disabled,
+                    entry_height,
                 );
 
                 let broadcast_stage = BroadcastStage::new(
