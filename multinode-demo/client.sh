@@ -18,4 +18,10 @@ usage() {
   exit 1
 }
 
-$solana_bench_tps "$@"
+if [[ -z $1 ]]; then
+  mkdir -p config-client
+  [[ -r config-client/client-id.json ]] || $solana_keygen -o config-client/client-id.json
+  $solana_bench_tps --identity config-client/client-id.json --network 127.0.0.1:8001
+else
+  $solana_bench_tps "$@"
+fi
