@@ -15,15 +15,60 @@ use signature::{Keypair, KeypairUtil};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::{JoinHandle, Result};
+use std::thread::Result;
 use tpu::Tpu;
 use tvu::Tvu;
 use untrusted::Input;
 use window;
 
+pub enum NodeRole {
+    Leader(LeaderServices),
+    Validator(ValidatorServices),
+}
+
+pub struct LeaderServices {
+    tpu: Tpu,
+    broadcast_stage: BroadcastStage,
+}
+
+impl LeaderServices {
+    fn new(tpu: Tpu, broadcast_stage: BroadcastStage) -> Self {
+        LeaderServices {
+            tpu,
+            broadcast_stage,
+        }
+    }
+
+    fn join(self) -> Result<()> {
+        self.tpu.join()?;
+        self.broadcast_stage.join()
+    }
+}
+
+pub struct ValidatorServices {
+    tvu: Tvu,
+}
+
+impl ValidatorServices {
+    fn new(tvu: Tvu) -> Self {
+        ValidatorServices { tvu }
+    }
+
+    fn join(self) -> Result<()> {
+        self.tvu.join()
+    }
+}
+
+pub enum FullNodeReturnType {
+    LeaderRotation,
+}
+
 pub struct Fullnode {
     exit: Arc<AtomicBool>,
-    thread_hdls: Vec<JoinHandle<()>>,
+    rpu: Rpu,
+    rpc_service: JsonRpcService,
+    ncp: Ncp,
+    pub node_role: NodeRole,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -176,7 +221,6 @@ impl Fullnode {
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
         let blob_recycler = BlobRecycler::default();
-        let mut thread_hdls = vec![];
 
         let rpu = Rpu::new(
             &bank,
@@ -185,7 +229,6 @@ impl Fullnode {
             &blob_recycler,
             exit.clone(),
         );
-        thread_hdls.extend(rpu.thread_hdls());
 
         // TODO: this code assumes this node is the leader
         let mut drone_addr = node.info.contact_info.tpu;
@@ -198,7 +241,6 @@ impl Fullnode {
             rpc_addr,
             exit.clone(),
         );
-        thread_hdls.extend(rpc_service.thread_hdls());
 
         let window =
             window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
@@ -214,8 +256,8 @@ impl Fullnode {
             node.sockets.gossip,
             exit.clone(),
         );
-        thread_hdls.extend(ncp.thread_hdls());
 
+        let node_role;
         match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
@@ -234,7 +276,8 @@ impl Fullnode {
                     ledger_path,
                     exit.clone(),
                 );
-                thread_hdls.extend(tvu.thread_hdls());
+                let validator_state = ValidatorServices::new(tvu);
+                node_role = NodeRole::Validator(validator_state);
             }
             None => {
                 // Start in leader mode.
@@ -254,7 +297,6 @@ impl Fullnode {
                     ledger_path,
                     sigverify_disabled,
                 );
-                thread_hdls.extend(tpu.thread_hdls());
 
                 let broadcast_stage = BroadcastStage::new(
                     node.sockets.broadcast,
@@ -264,33 +306,51 @@ impl Fullnode {
                     blob_recycler.clone(),
                     blob_receiver,
                 );
-                thread_hdls.extend(broadcast_stage.thread_hdls());
+                let leader_state = LeaderServices::new(tpu, broadcast_stage);
+                node_role = NodeRole::Leader(leader_state);
             }
         }
 
-        Fullnode { exit, thread_hdls }
+        Fullnode {
+            rpu,
+            ncp,
+            rpc_service,
+            node_role,
+            exit,
+        }
     }
 
     //used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
-    pub fn close(self) -> Result<()> {
+
+    pub fn close(self) -> Result<(Option<FullNodeReturnType>)> {
         self.exit();
         self.join()
     }
 }
 
 impl Service for Fullnode {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        self.thread_hdls
-    }
+    type JoinReturnType = Option<FullNodeReturnType>;
 
-    fn join(self) -> Result<()> {
-        for thread_hdl in self.thread_hdls() {
-            thread_hdl.join()?;
+    fn join(self) -> Result<Option<FullNodeReturnType>> {
+        self.rpu.join()?;
+        self.ncp.join()?;
+        self.rpc_service.join()?;
+        match self.node_role {
+            NodeRole::Validator(validator_service) => {
+                validator_service.join()?;
+            }
+            NodeRole::Leader(leader_service) => {
+                leader_service.join()?;
+            }
         }
-        Ok(())
+
+        // TODO: Case on join values above to determine if
+        // a leader rotation was in order, and propagate up a
+        // signal to reflect that
+        Ok(None)
     }
 }
 

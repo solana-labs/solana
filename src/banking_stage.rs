@@ -136,9 +136,7 @@ impl BankingStage {
 }
 
 impl Service for BankingStage {
-    fn thread_hdls(self) -> Vec<JoinHandle<()>> {
-        vec![self.thread_hdl]
-    }
+    type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
         self.thread_hdl.join()
