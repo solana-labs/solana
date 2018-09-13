@@ -468,13 +468,14 @@ impl Blob {
             match Blob::recv_blob(socket, &r) {
                 Err(_) if i > 0 => {
                     trace!("got {:?} messages on {}", i, socket.local_addr().unwrap());
+                    re.recycle(r, "Bob::recv_from::i>0");
                     break;
                 }
                 Err(e) => {
                     if e.kind() != io::ErrorKind::WouldBlock {
                         info!("recv_from err {:?}", e);
                     }
-                    re.recycle(r, "Blob::recv_from");
+                    re.recycle(r, "Blob::recv_from::empty");
                     return Err(Error::IO(e));
                 }
                 Ok(()) => if i == 0 {
