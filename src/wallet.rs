@@ -6,11 +6,12 @@ use drone::DroneRequest;
 use fullnode::Config;
 use serde_json;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind, Write};
 use std::mem::size_of;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
@@ -24,6 +25,7 @@ pub enum WalletCommand {
     AirDrop(i64),
     Pay(i64, Pubkey),
     Confirm(Signature),
+    Build(i64, Pubkey, Option<String>),
     TransferRaw(Vec<u8>),
 }
 
@@ -84,7 +86,7 @@ pub fn parse_command(
                     .into_vec()
                     .expect("base58-encoded public key");
 
-                if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                if pubkey_vec.len() != size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
@@ -95,7 +97,16 @@ pub fn parse_command(
 
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
 
-            Ok(WalletCommand::Pay(tokens, to))
+            if pay_matches.is_present("build_only") {
+                let outfile = if pay_matches.is_present("outfile") {
+                    Some(pay_matches.value_of("outfile").unwrap().to_string())
+                } else {
+                    None
+                };
+                Ok(WalletCommand::Build(tokens, to, outfile))
+            } else {
+                Ok(WalletCommand::Pay(tokens, to))
+            }
         }
         ("confirm", Some(confirm_matches)) => {
             println!("{:?}", confirm_matches.value_of("signature").unwrap());
@@ -199,6 +210,23 @@ pub fn process_command(
             println!("Your balance is: {:?}", current_balance);
             if current_balance - previous_balance != tokens {
                 Err("Airdrop failed!")?;
+            }
+        }
+        // Build transaction userdata from simple payment
+        // Return to stdout or save to `outfile`
+        WalletCommand::Build(tokens, to, ref outfile) => {
+            let last_id = client.get_last_id();
+            // TODO: Update userdata & transaction specifics vis-a-vis Budget DSL determinations
+            let transaction = Transaction::new_taxed(&config.id, to, tokens, 0, last_id);
+            match outfile {
+                Some(path) => {
+                    if let Some(outdir) = Path::new(&path).parent() {
+                        fs::create_dir_all(outdir)?;
+                    }
+                    let mut f = File::create(path)?;
+                    f.write_all(&transaction.userdata)?;
+                }
+                None => println!("{:?}", transaction.userdata),
             }
         }
         // If client has positive balance, spend tokens in {balance} number of transactions

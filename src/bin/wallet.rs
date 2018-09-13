@@ -114,6 +114,22 @@ fn main() -> Result<(), Box<error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("build_only")
+                        .long("build")
+                        .takes_value(false)
+                        .group("build")
+                        .help("Build transaction userdata without submitting it"),
+                )
+                .arg(
+                    Arg::with_name("outfile")
+                        .short("o")
+                        .long("outfile")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .help("path to generated file")
+                        .requires("build"),
                 ),
         )
         .subcommand(
