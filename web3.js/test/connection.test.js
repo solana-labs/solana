@@ -144,7 +144,7 @@ test('request airdrop', async () => {
     },
     {
       error: null,
-      result: true,
+      result: '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     }
   ]);
   mockRpc.push([
@@ -155,7 +155,7 @@ test('request airdrop', async () => {
     },
     {
       error: null,
-      result: true,
+      result: '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     }
   ]);
   mockRpc.push([
@@ -207,7 +207,7 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: true,
+      result: '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     }
   ]);
   mockRpc.push([
@@ -232,7 +232,7 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: true,
+      result: '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
     }
   ]);
   mockRpc.push([

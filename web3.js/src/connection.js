@@ -113,7 +113,7 @@ const RequestAirdropRpcResult = struct({
   jsonrpc: struct.literal('2.0'),
   id: 'string',
   error: 'any?',
-  result: 'boolean?',
+  result: 'string?',
 });
 
 /**
@@ -218,14 +218,14 @@ export class Connection {
   /**
    * Request an allocation of tokens to the specified account
    */
-  async requestAirdrop(to: PublicKey, amount: number): Promise<void> {
+  async requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('requestAirdrop', [to, amount]);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
     assert(typeof res.result !== 'undefined');
-    assert(res.result);
+    return res.result;
   }
 
   /**
