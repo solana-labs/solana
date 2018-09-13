@@ -3,6 +3,7 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
 use log::Level;
+use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use result::{Error, Result};
 use serde::Serialize;
 use signature::Pubkey;
@@ -251,31 +252,30 @@ impl Packets {
         //  * read until it fails
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
-        for p in &mut self.packets {
-            p.meta.size = 0;
-            trace!("receiving on {}", socket.local_addr().unwrap());
-            match socket.recv_from(&mut p.data) {
+        trace!("receiving on {}", socket.local_addr().unwrap());
+        loop {
+            match recv_mmsg(socket, &mut self.packets[i..]) {
                 Err(_) if i > 0 => {
                     inc_new_counter_info!("packets-recv_count", i);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
-                    break;
+                    socket.set_nonblocking(true)?;
+                    return Ok(i);
                 }
                 Err(e) => {
                     trace!("recv_from err {:?}", e);
                     return Err(Error::IO(e));
                 }
-                Ok((nrecv, from)) => {
-                    p.meta.size = nrecv;
-                    p.meta.set_addr(&from);
-                    trace!("got {} bytes from {}", nrecv, from);
-                    if i == 0 {
+                Ok(npkts) => {
+                    trace!("got {} packets", npkts);
+                    i += npkts;
+                    if npkts != NUM_RCVMMSGS {
                         socket.set_nonblocking(true)?;
+                        inc_new_counter_info!("packets-recv_count", i);
+                        return Ok(i);
                     }
                 }
             }
-            i += 1;
         }
-        Ok(i)
     }
     pub fn recv_from(&mut self, socket: &UdpSocket) -> Result<()> {
         let sz = self.run_read_from(socket)?;

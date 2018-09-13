@@ -36,6 +36,7 @@ pub mod packet;
 pub mod payment_plan;
 pub mod record_stage;
 pub mod recorder;
+pub mod recvmmsg;
 pub mod replicate_stage;
 pub mod request;
 pub mod request_processor;
@@ -69,6 +70,7 @@ extern crate jsonrpc_core;
 #[macro_use]
 extern crate jsonrpc_macros;
 extern crate jsonrpc_http_server;
+extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate nix;
