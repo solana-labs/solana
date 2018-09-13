@@ -4,7 +4,7 @@ import {Connection} from '../src/connection';
 import {Account} from '../src/account';
 import {mockRpc} from './__mocks__/node-fetch';
 
-const url = 'http://master.testnet.solana.com:8899';
+const url = 'http://testnet.solana.com:8899';
 //const url = 'http://localhost:8899';
 
 const errorMessage = 'Invalid request';
