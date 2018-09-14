@@ -5,7 +5,7 @@ import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
 
-import {bs58DecodePublicKey, Transaction} from './transaction';
+import {Transaction} from './transaction';
 import type {Account, PublicKey} from './account';
 import type {TransactionSignature, TransactionId} from './transaction';
 
@@ -218,30 +218,13 @@ export class Connection {
     return res.result;
   }
 
-
   /**
-   * Send tokens to another account
+   * Sign and send a transaction
    */
-  async sendTokens(from: Account, to: PublicKey, amount: number): Promise<TransactionSignature> {
-    const transaction = new Transaction();
-    transaction.fee = 0;
+  async sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature> {
     transaction.lastId = await this.getLastId();
-    transaction.keys[0] = from.publicKey;
-    transaction.keys[1] = to;
-
-    // Forge a simple Budget Pay contract into `userdata`
-    // TODO: Clean this up
-    const userdata = Buffer.alloc(68); // 68 = serialized size of Budget enum
-    userdata.writeUInt32LE(60, 0);
-    userdata.writeUInt32LE(amount, 12);        // u64
-    userdata.writeUInt32LE(amount, 28);        // u64
-    const toData = bs58DecodePublicKey(to);
-    toData.copy(userdata, 36);
-    transaction.userdata = userdata;
-
     transaction.sign(from);
 
-    // Send it
     const wireTransaction = transaction.serialize();
     const unsafeRes = await this._rpcRequest('sendTransaction', [[...wireTransaction]]);
     const res = SendTokensRpcResult(unsafeRes);

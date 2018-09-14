@@ -1,7 +1,8 @@
 // @flow
 
-import {Connection} from '../src/connection';
 import {Account} from '../src/account';
+import {Connection} from '../src/connection';
+import {TransferTokensTransaction} from '../src/transaction';
 import {mockRpc} from './__mocks__/node-fetch';
 
 const url = 'http://testnet.solana.com:8899';
@@ -272,7 +273,13 @@ test('transaction', async () => {
     }
   ]
   );
-  const signature = await connection.sendTokens(accountFrom, accountTo.publicKey, 10);
+
+  const transaction = new TransferTokensTransaction(
+    accountFrom.publicKey,
+    accountTo.publicKey,
+    10
+  );
+  const signature = await connection.sendTransaction(accountFrom, transaction);
 
   mockRpc.push([
     url,

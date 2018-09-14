@@ -9,7 +9,7 @@ import type {Account, PublicKey} from './account';
 /**
  * @private
  */
-export function bs58DecodePublicKey(key: PublicKey): Buffer {
+function bs58DecodePublicKey(key: PublicKey): Buffer {
   const keyBytes = Buffer.from(bs58.decode(key));
   assert(keyBytes.length === 32);
   return keyBytes;
@@ -130,5 +130,29 @@ export class Transaction {
     Buffer.from(signature).copy(wireTransaction, 0);
     transactionData.copy(wireTransaction, signature.length);
     return wireTransaction;
+  }
+}
+
+/**
+ * A Transaction that immediately transfers tokens
+ */
+export class TransferTokensTransaction extends Transaction {
+  constructor(from: PublicKey, to: PublicKey, amount: number) {
+    super();
+
+    // Forge a simple Budget Pay contract into `userdata`
+    // TODO: Clean this up
+    const userdata = Buffer.alloc(68); // 68 = serialized size of Budget enum
+    userdata.writeUInt32LE(60, 0);
+    userdata.writeUInt32LE(amount, 12);        // u64
+    userdata.writeUInt32LE(amount, 28);        // u64
+    const toData = bs58DecodePublicKey(to);
+    toData.copy(userdata, 36);
+
+    Object.assign(this, {
+      fee: 0,
+      keys: [from, to],
+      userdata
+    });
   }
 }
