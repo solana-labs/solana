@@ -128,7 +128,7 @@ impl Transaction {
         tx
     }
     /// Create a signed transaction from the given `Instruction`.
-    fn new_from_instruction(
+    pub fn new_from_instruction(
         from_keypair: &Keypair,
         contract: Pubkey,
         instruction: Instruction,
