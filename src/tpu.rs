@@ -57,7 +57,7 @@ pub struct Tpu {
 
 impl Tpu {
     pub fn new(
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,

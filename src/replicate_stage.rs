@@ -67,7 +67,7 @@ impl ReplicateStage {
         Ok(())
     }
     pub fn new(
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
@@ -85,7 +85,7 @@ impl ReplicateStage {
         );
 
         let vote_stage = VoteStage::new(
-            Arc::new(keypair),
+            keypair,
             bank.clone(),
             crdt.clone(),
             blob_recycler.clone(),

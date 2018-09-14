@@ -70,7 +70,7 @@ impl Tvu {
     /// * `exit` - The exit signal.
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
@@ -236,7 +236,7 @@ pub mod tests {
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let tvu = Tvu::new(
-            target1_keypair,
+            Arc::new(target1_keypair),
             &bank,
             0,
             cref1,

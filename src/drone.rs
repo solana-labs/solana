@@ -335,7 +335,7 @@ mod tests {
             &[],
             leader,
             None,
-            Some(&ledger_path),
+            &ledger_path,
             false,
         );
 

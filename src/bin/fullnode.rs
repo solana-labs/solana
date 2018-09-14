@@ -11,12 +11,11 @@ use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::crdt::Node;
 use solana::drone::DRONE_PORT;
-use solana::fullnode::{Config, Fullnode, NodeRole};
+use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
-use solana::tpu::TpuReturnType;
 use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -125,23 +124,14 @@ fn main() -> () {
     }
 
     loop {
-        let node_role = fullnode.node_role.take();
-        match node_role {
-            Some(NodeRole::Leader(leader_services)) => {
-                match leader_services.join() {
-                    Ok(Some(TpuReturnType::LeaderRotation)) => (),
-                    //fullnode.start_tvu();
-                    Err(e) => {
-                        eprintln!("Leader returned error: {:?}", e);
-                        exit(1);
-                    }
-                    _ => (),
-                }
+        let status = fullnode.handle_role_transition();
+        match status {
+            Ok(Some(FullnodeReturnType::LeaderRotation)) => (),
+            _ => {
+                // Fullnode tpu/tvu exited for some unexpected
+                // reason, so exit
+                exit(1);
             }
-            Some(NodeRole::Validator(validator_services)) => {
-                let _ = validator_services.join();
-            }
-            _ => (),
         }
     }
 }
