@@ -77,13 +77,13 @@ extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate nix;
+extern crate pnet_datalink;
 extern crate rayon;
 extern crate reqwest;
 extern crate ring;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate pnet_datalink;
 extern crate serde_json;
 extern crate sha2;
 extern crate socket2;
