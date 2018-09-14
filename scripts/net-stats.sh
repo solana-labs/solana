@@ -10,6 +10,8 @@ cd "$(dirname "$0")"
 # shellcheck source=scripts/configure-metrics.sh
 source configure-metrics.sh
 
+packets_sent=0
+packets_sent_diff=0
 packets_received=0
 packets_received_diff=0
 receive_errors=0
@@ -22,6 +24,10 @@ update_netstat() {
   net_stat=$(netstat -suna)
 
   declare stats
+  stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /packets sent/ {tmp_var = $1} END { print tmp_var }')
+  packets_sent_diff=$((stats - packets_sent))
+  packets_sent="$stats"
+
   stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /packets received/ {tmp_var = $1} END { print tmp_var }')
   packets_received_diff=$((stats - packets_received))
   packets_received="$stats"
@@ -39,7 +45,7 @@ update_netstat
 
 while true; do
   update_netstat
-  report="packets_received=$packets_received_diff,receive_errors=$receive_errors_diff,rcvbuf_errors=$rcvbuf_errors_diff"
+  report="packets_sent=$packets_sent_diff,packets_received=$packets_received_diff,receive_errors=$receive_errors_diff,rcvbuf_errors=$rcvbuf_errors_diff"
 
   echo "$report"
   ./metrics-write-datapoint.sh "net-stats,hostname=$HOSTNAME $report"
