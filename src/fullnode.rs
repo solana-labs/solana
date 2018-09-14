@@ -344,10 +344,10 @@ impl Service for Fullnode {
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
                 validator_service.join()?;
-            },
+            }
             Some(NodeRole::Leader(leader_service)) => {
                 leader_service.join()?;
-            },
+            }
             _ => (),
         }
 

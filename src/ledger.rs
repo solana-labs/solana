@@ -12,9 +12,9 @@ use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
+use signature::Pubkey;
 #[cfg(test)]
 use signature::{Keypair, KeypairUtil};
-use signature::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
@@ -449,7 +449,7 @@ impl Block for [Entry] {
             .flat_map(|entry| entry.transactions.iter().filter_map(Transaction::vote))
             .collect()
     }
-} 
+}
 
 pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
