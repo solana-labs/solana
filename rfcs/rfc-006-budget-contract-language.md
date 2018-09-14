@@ -60,6 +60,13 @@ $ solana-wallet transfer witness TransferPubKey
 ```
 
 #### Indicate Elapsed Time.
+
+Use the current system time:
+```sh
+$ solana-wallet transfer timestamp TransferPubKey
+```
+
+Or specify some other arbitrary timestamp:
 ```sh
 $ solana-wallet transfer timestamp TransferPubKey 2018-12-24T23:59
 ```
