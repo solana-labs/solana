@@ -6,15 +6,17 @@ use drone::DroneRequest;
 use fullnode::Config;
 use serde_json;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind, Write};
 use std::mem::size_of;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
 use thin_client::ThinClient;
+use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
@@ -23,6 +25,8 @@ pub enum WalletCommand {
     AirDrop(i64),
     Pay(i64, Pubkey),
     Confirm(Signature),
+    Build(i64, Pubkey, Option<String>),
+    TransferRaw(Vec<u8>),
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +86,7 @@ pub fn parse_command(
                     .into_vec()
                     .expect("base58-encoded public key");
 
-                if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                if pubkey_vec.len() != size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
                     Err(WalletError::BadParameter("Invalid public key".to_string()))?;
                 }
@@ -93,7 +97,16 @@ pub fn parse_command(
 
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
 
-            Ok(WalletCommand::Pay(tokens, to))
+            if pay_matches.is_present("build-only") {
+                let outfile = if pay_matches.is_present("outfile") {
+                    Some(pay_matches.value_of("outfile").unwrap().to_string())
+                } else {
+                    None
+                };
+                Ok(WalletCommand::Build(tokens, to, outfile))
+            } else {
+                Ok(WalletCommand::Pay(tokens, to))
+            }
         }
         ("confirm", Some(confirm_matches)) => {
             println!("{:?}", confirm_matches.value_of("signature").unwrap());
@@ -111,6 +124,31 @@ pub fn parse_command(
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
+        ("transfer", Some(userdata_matches)) => {
+            let userdata: Vec<u8> = if userdata_matches.is_present("userdata-path") {
+                let userdata_path = userdata_matches.value_of("userdata-path").unwrap();
+                let mut file = File::open(userdata_path).or_else(|err| {
+                    Err(WalletError::BadParameter(format!(
+                        "{}: Unable to open userdata file: {}",
+                        err, userdata_path
+                    )))
+                })?;
+                // let mut buf = vec![0u8; 60];
+                // file.read(&mut buf)?;
+                // buf
+                serde_json::from_reader(file)?
+            } else {
+                serde_json::from_str(userdata_matches.value_of("serial-userdata").unwrap())
+                    .or_else(|err| {
+                        Err(WalletError::BadParameter(format!(
+                            "{}: Unable to read userdata serialization: {}",
+                            err,
+                            userdata_matches.value_of("serial-userdata").unwrap()
+                        )))
+                    })?
+            };
+            Ok(WalletCommand::TransferRaw(userdata))
+        }
         ("", None) => {
             println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -175,6 +213,23 @@ pub fn process_command(
                 Err("Airdrop failed!")?;
             }
         }
+        // Build transaction userdata from simple payment
+        // Return to stdout or save to `outfile`
+        WalletCommand::Build(tokens, to, ref outfile) => {
+            let last_id = client.get_last_id();
+            // TODO: Update userdata & transaction specifics vis-a-vis Budget DSL determinations
+            let transaction = Transaction::new_taxed(&config.id, to, tokens, 0, last_id);
+            match outfile {
+                Some(path) => {
+                    if let Some(outdir) = Path::new(&path).parent() {
+                        fs::create_dir_all(outdir)?;
+                    }
+                    let mut f = File::create(path)?;
+                    serde_json::to_writer(f, &transaction.userdata)?;
+                }
+                None => println!("{:?}", transaction.userdata),
+            }
+        }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
@@ -188,6 +243,20 @@ pub fn process_command(
             } else {
                 println!("Not found");
             }
+        }
+        // Make a transaction from raw instruction data
+        WalletCommand::TransferRaw(ref userdata) => {
+            let last_id = client.get_last_id();
+
+            // TODO: Userdata & transaction specifics will need to be updated
+            // vis-a-vis Budget DSL determinations
+            let pubkey_vec: Vec<u8> = userdata.iter().cloned().skip(28).collect();
+            let tx_key = Pubkey::new(&pubkey_vec);
+            let tx =
+                Transaction::new_with_userdata(&config.id, &[tx_key], userdata.clone(), last_id, 0);
+
+            let signature = client.transfer_signed(&tx)?;
+            println!("{}", signature);
         }
     }
     Ok(())

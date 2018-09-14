@@ -3,7 +3,7 @@ extern crate clap;
 extern crate dirs;
 extern crate solana;
 
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand};
 use solana::client::mk_client;
 use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
@@ -114,6 +114,22 @@ fn main() -> Result<(), Box<error::Error>> {
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .help("The pubkey of recipient"),
+                )
+                .arg(
+                    Arg::with_name("build-only")
+                        .long("build")
+                        .takes_value(false)
+                        .group("build")
+                        .help("Build transaction userdata without submitting it"),
+                )
+                .arg(
+                    Arg::with_name("outfile")
+                        .short("o")
+                        .long("outfile")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .help("path to generated file")
+                        .requires("build"),
                 ),
         )
         .subcommand(
@@ -125,6 +141,27 @@ fn main() -> Result<(), Box<error::Error>> {
                         .value_name("SIGNATURE")
                         .required(true)
                         .help("The transaction signature to confirm"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("transfer")
+                .about("Transfer raw transaction from file or stdin")
+                .arg(
+                    Arg::with_name("userdata-path")
+                        .short("f")
+                        .long("file")
+                        .value_name("PATH")
+                        .help("/path/to/userdata.bin"),
+                )
+                .arg(
+                    Arg::with_name("serial-userdata")
+                        .index(1)
+                        .value_name("ARRAY of [BYTES]"),
+                )
+                .group(
+                    ArgGroup::with_name("userdata")
+                        .required(true)
+                        .args(&["userdata-path", "serial-userdata"]),
                 ),
         )
         .subcommand(SubCommand::with_name("balance").about("Get your balance"))
