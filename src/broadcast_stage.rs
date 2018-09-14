@@ -20,6 +20,12 @@ use std::time::{Duration, Instant};
 use timing::duration_as_ms;
 use window::{self, SharedWindow, WindowIndex, WindowUtil, WINDOW_SIZE};
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BroadcastStageReturnType {
+    LeaderRotation,
+    ChannelDisconnected,
+}
+
 fn broadcast(
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
@@ -143,7 +149,7 @@ fn broadcast(
 }
 
 pub struct BroadcastStage {
-    thread_hdl: JoinHandle<()>,
+    thread_hdl: JoinHandle<BroadcastStageReturnType>,
 }
 
 impl BroadcastStage {
@@ -154,7 +160,7 @@ impl BroadcastStage {
         entry_height: u64,
         recycler: &BlobRecycler,
         receiver: &Receiver<Vec<Entry>>,
-    ) {
+    ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
             coding: entry_height,
@@ -170,7 +176,7 @@ impl BroadcastStage {
                     // If the leader stays in power for the next
                     // round as well, then we don't exit. Otherwise, exit.
                     _ => {
-                        return;
+                        return BroadcastStageReturnType::LeaderRotation;
                     }
                 }
             }
@@ -187,7 +193,9 @@ impl BroadcastStage {
                 &mut receive_index,
             ) {
                 match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                        return BroadcastStageReturnType::ChannelDisconnected
+                    }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::CrdtError(CrdtError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                     _ => {
@@ -218,17 +226,7 @@ impl BroadcastStage {
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
-            .spawn(move || {
-                Self::run(
-                    &sock,
-                    &crdt,
-                    &window,
-                    entry_height,
-                    &recycler,
-                    &receiver,
-                    exit_sender,
-                );
-            })
+            .spawn(move || Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver))
             .unwrap();
 
         BroadcastStage { thread_hdl }
@@ -236,32 +234,26 @@ impl BroadcastStage {
 }
 
 impl Service for BroadcastStage {
-    type JoinReturnType = ();
+    type JoinReturnType = BroadcastStageReturnType;
 
-    fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()?;
-        Ok(())
+    fn join(self) -> thread::Result<BroadcastStageReturnType> {
+        self.thread_hdl.join()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use broadcast_stage::BroadcastStage;
+    use broadcast_stage::{BroadcastStage, BroadcastStageReturnType};
     use crdt::{Crdt, Node, LEADER_ROTATION_INTERVAL};
     use entry::Entry;
-    use hash::Hash;
-    use ledger::Block;
     use mint::Mint;
     use packet::BlobRecycler;
     use recorder::Recorder;
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::cmp;
-    use std::sync::mpsc::{channel, Receiver};
+    use std::sync::mpsc::{channel, Sender};
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
-    use streamer::BlobSender;
     use window::{new_window_from_entries, SharedWindow};
 
     fn setup_dummy_broadcast_stage() -> (
@@ -269,11 +261,9 @@ mod tests {
         Pubkey,
         BroadcastStage,
         SharedWindow,
-        BlobSender,
-        BlobRecycler,
+        Sender<Vec<Entry>>,
         Arc<RwLock<Crdt>>,
         Vec<Entry>,
-        Receiver<bool>,
     ) {
         // Setup dummy leader info
         let leader_keypair = Keypair::new();
@@ -302,8 +292,7 @@ mod tests {
 
         let shared_window = Arc::new(RwLock::new(window));
 
-        let (blob_sender, blob_receiver) = channel();
-        let (exit_sender, exit_receiver) = channel();
+        let (entry_sender, entry_receiver) = channel();
 
         // Start up the broadcast stage
         let broadcast_stage = BroadcastStage::new(
@@ -312,8 +301,7 @@ mod tests {
             shared_window.clone(),
             entry_height,
             blob_recycler.clone(),
-            blob_receiver,
-            exit_sender,
+            entry_receiver,
         );
 
         (
@@ -321,11 +309,9 @@ mod tests {
             buddy_id,
             broadcast_stage,
             shared_window,
-            blob_sender,
-            blob_recycler,
+            entry_sender,
             crdt,
             entries,
-            exit_receiver,
         )
     }
 
@@ -342,17 +328,8 @@ mod tests {
 
     #[test]
     fn test_broadcast_stage_leader_rotation_exit() {
-        let (
-            id,
-            buddy_id,
-            broadcast_stage,
-            shared_window,
-            blob_sender,
-            blob_recycler,
-            crdt,
-            entries,
-            exit_receiver,
-        ) = setup_dummy_broadcast_stage();
+        let (id, buddy_id, broadcast_stage, shared_window, entry_sender, crdt, entries) =
+            setup_dummy_broadcast_stage();
         {
             let mut wcrdt = crdt.write().unwrap();
             // Set leader to myself
@@ -371,8 +348,7 @@ mod tests {
 
         for _ in genesis_len..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            let blob = new_entry.to_blobs(&blob_recycler);
-            blob_sender.send(blob).unwrap();
+            entry_sender.send(new_entry).unwrap();
         }
 
         // Set the scheduled next leader in the crdt to the other buddy on the network
@@ -385,23 +361,22 @@ mod tests {
         // it's no longer the leader after checking the crdt, and exit
         for _ in 0..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            let blob = new_entry.to_blobs(&blob_recycler);
-            match blob_sender.send(blob) {
+            match entry_sender.send(new_entry) {
                 // We disconnected, break out of loop and check the results
                 Err(_) => break,
                 _ => (),
             };
         }
 
-        match exit_receiver.recv() {
-            Ok(x) if x == false => panic!("Unexpected value on exit channel for Broadcast stage"),
-            _ => (),
-        }
-
         let highest_index = find_highest_window_index(&shared_window);
 
+        // TODO: 2 * LEADER_ROTATION_INTERVAL - 1 due to the same bug in
+        // index_blobs() as mentioned above
         assert_eq!(highest_index, 2 * LEADER_ROTATION_INTERVAL - 1);
         // Make sure the threads closed cleanly
-        broadcast_stage.join().unwrap();
+        assert_eq!(
+            broadcast_stage.join().unwrap(),
+            BroadcastStageReturnType::LeaderRotation
+        );
     }
 }

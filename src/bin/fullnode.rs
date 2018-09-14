@@ -11,12 +11,12 @@ use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::crdt::Node;
 use solana::drone::DRONE_PORT;
-use solana::fullnode::{Config, Fullnode};
+use solana::fullnode::{Config, Fullnode, NodeRole};
 use solana::logger;
 use solana::metrics::set_panic_hook;
-use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
+use solana::tpu::TpuReturnType;
 use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -84,7 +84,7 @@ fn main() -> () {
     let node_info = node.info.clone();
     let pubkey = keypair.pubkey();
 
-    let fullnode = Fullnode::new(node, ledger_path, keypair, network, false);
+    let mut fullnode = Fullnode::new(node, ledger_path, keypair, network, false);
 
     // airdrop stuff, probably goes away at some point
     let leader = match network {
@@ -124,18 +124,24 @@ fn main() -> () {
         }
     }
 
-    /*loop {
-        match fullnode.node_role {
-            NodeRole::Leader(leader_services) => {
-                // TODO: return an exit code that signals we should do a role switch
-                leader_services.join();
-                //fullnode.start_tvu();
-            },
-            NodeRole::Validator(validator_services) => {
-                validator_services.join();
+    loop {
+        let node_role = fullnode.node_role.take();
+        match node_role {
+            Some(NodeRole::Leader(leader_services)) => {
+                match leader_services.join() {
+                    Ok(Some(TpuReturnType::LeaderRotation)) => (),
+                    //fullnode.start_tvu();
+                    Err(e) => {
+                        eprintln!("Leader returned error: {:?}", e);
+                        exit(1);
+                    }
+                    _ => (),
+                }
             }
+            Some(NodeRole::Validator(validator_services)) => {
+                let _ = validator_services.join();
+            }
+            _ => (),
         }
-    }*/
-
-    let _ = fullnode.join();
+    }
 }
