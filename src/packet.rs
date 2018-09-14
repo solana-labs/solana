@@ -349,9 +349,10 @@ impl<T: Default + Reset + Gid> Recycler<T> {
 
     pub fn recycle(&self, x: Arc<RwLock<T>>, who: &'static str) {
         let mut gc = self.gc.lock().expect("recycler lock in pub fn recycle");
+        let gc_count = gc.len();
         inc_counter(&self.recycled_count);
         if self.recycled_count.load(Ordering::Relaxed) % 2048 == 0 {
-            self.print_stats(0);
+            self.print_stats(gc_count);
         }
 
         gc.push((x, who));
