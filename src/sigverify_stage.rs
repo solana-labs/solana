@@ -65,10 +65,15 @@ impl SigVerifyStage {
         );
 
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
-        sendr
+
+        match sendr
             .lock()
             .expect("lock in fn verify_batch in tpu")
-            .send(verified_batch)?;
+            .send(verified_batch)
+        {
+            Err(_) => return Err(Error::SendError),
+            _ => (),
+        }
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());
         let total_time_s = timing::duration_as_s(&now.elapsed());
@@ -105,6 +110,9 @@ impl SigVerifyStage {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                    Error::SendError => {
+                        break;
+                    }
                     _ => error!("{:?}", e),
                 }
             }

@@ -36,7 +36,7 @@ use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -53,6 +53,7 @@ pub struct Tpu {
     banking_stage: BankingStage,
     record_stage: RecordStage,
     write_stage: WriteStage,
+    exit: Arc<AtomicBool>,
 }
 
 impl Tpu {
@@ -63,16 +64,16 @@ impl Tpu {
         tick_duration: Option<Duration>,
         transactions_sockets: Vec<UdpSocket>,
         blob_recycler: &BlobRecycler,
-        exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
         entry_height: u64,
-    ) -> (Self, Receiver<Vec<Entry>>) {
+    ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
+        let exit = Arc::new(AtomicBool::new(false));
         let mut packet_recycler = PacketRecycler::default();
         packet_recycler.set_name("tpu::Packet");
 
         let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_sockets, exit, &packet_recycler);
+            FetchStage::new(transactions_sockets, exit.clone(), &packet_recycler);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -103,8 +104,13 @@ impl Tpu {
             banking_stage,
             record_stage,
             write_stage,
+            exit: exit.clone(),
         };
-        (tpu, entry_forwarder)
+        (tpu, entry_forwarder, exit)
+    }
+
+    pub fn exit(&self) -> () {
+        self.exit.store(true, Ordering::Relaxed);
     }
 
     pub fn close(self) -> thread::Result<Option<TpuReturnType>> {
