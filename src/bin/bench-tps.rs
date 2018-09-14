@@ -515,14 +515,12 @@ fn main() {
         );
         exit(1);
     }
-    if matches.is_present("reject-extra-nodes") {
-        if nodes.len() > num_nodes {
-            println!(
-                "Error: Extra nodes discovered.  Expecting exactly {}",
-                num_nodes
-            );
-            exit(1);
-        }
+    if matches.is_present("reject-extra-nodes") && nodes.len() > num_nodes {
+        println!(
+            "Error: Extra nodes discovered.  Expecting exactly {}",
+            num_nodes
+        );
+        exit(1);
     }
 
     if leader.is_none() {

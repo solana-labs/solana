@@ -293,7 +293,7 @@ impl Fullnode {
                     &crdt,
                     tick_duration,
                     node.sockets.transaction,
-                    blob_recycler.clone(),
+                    &blob_recycler,
                     exit.clone(),
                     ledger_path,
                     sigverify_disabled,

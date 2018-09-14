@@ -131,11 +131,11 @@ impl Transaction {
     fn new_from_instruction(
         from_keypair: &Keypair,
         contract: Pubkey,
-        instruction: Instruction,
+        instruction: &Instruction,
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let userdata = serialize(&instruction).unwrap();
+        let userdata = serialize(instruction).unwrap();
         Self::new_with_userdata(from_keypair, &[contract], userdata, last_id, fee)
     }
 
@@ -154,7 +154,7 @@ impl Transaction {
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        Self::new_from_instruction(from_keypair, contract, instruction, last_id, fee)
+        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, fee)
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -170,7 +170,7 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
-        Self::new_from_instruction(from_keypair, contract, instruction, last_id, 0)
+        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, 0)
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
@@ -181,7 +181,7 @@ impl Transaction {
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplySignature(signature);
-        Self::new_from_instruction(from_keypair, contract, instruction, last_id, 0)
+        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, 0)
     }
 
     pub fn new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {

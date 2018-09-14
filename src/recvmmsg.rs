@@ -12,8 +12,7 @@ pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize
     let mut i = 0;
     socket.set_nonblocking(false)?;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
-    for n in 0..count {
-        let p = &mut packets[n];
+    for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
         match socket.recv_from(&mut p.data) {
             Err(_) if i > 0 => {

@@ -363,7 +363,7 @@ impl Bank {
             let mut called_accounts: Vec<Account> = tx
                 .keys
                 .iter()
-                .map(|key| accounts.get(key).cloned().unwrap_or(Account::default()))
+                .map(|key| accounts.get(key).cloned().unwrap_or_default())
                 .collect();
             // There is no way to predict what contract will execute without an error
             // If a fee can pay for execution then the contract will be scheduled
@@ -374,7 +374,7 @@ impl Bank {
     }
     fn load_accounts(
         &self,
-        txs: &Vec<Transaction>,
+        txs: &[Transaction],
         accounts: &HashMap<Pubkey, Account>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<Vec<Account>>> {
@@ -409,8 +409,8 @@ impl Bank {
     }
 
     pub fn store_accounts(
-        res: &Vec<Result<Transaction>>,
-        loaded: &Vec<Result<Vec<Account>>>,
+        res: &[Result<Transaction>],
+        loaded: &[Result<Vec<Account>>],
         accounts: &mut HashMap<Pubkey, Account>,
     ) {
         loaded.iter().zip(res.iter()).for_each(|(racc, rtx)| {
@@ -439,7 +439,7 @@ impl Bank {
         let txs_len = txs.len();
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let mut loaded_accounts = self.load_accounts(&txs, &mut accounts, &mut error_counters);
+        let mut loaded_accounts = self.load_accounts(&txs, &accounts, &mut error_counters);
         let load_elapsed = now.elapsed();
         let now = Instant::now();
 
@@ -494,7 +494,7 @@ impl Bank {
             }
         }
         let cur_tx_count = self.transaction_count.load(Ordering::Relaxed);
-        if ((cur_tx_count + tx_count) & !(262144 - 1)) > cur_tx_count & !(262144 - 1) {
+        if ((cur_tx_count + tx_count) & !(262_144 - 1)) > cur_tx_count & !(262_144 - 1) {
             info!("accounts.len: {}", accounts.len());
         }
         self.transaction_count
@@ -628,7 +628,7 @@ impl Bank {
     /// will progress one step.
     fn apply_signature(from: Pubkey, signature: Signature, account: &mut [Account]) {
         let mut pending: HashMap<Signature, Plan> =
-            deserialize(&account[1].userdata).unwrap_or(HashMap::new());
+            deserialize(&account[1].userdata).unwrap_or_default();
         if let Occupied(mut e) = pending.entry(signature) {
             e.get_mut().apply_witness(&Witness::Signature, &from);
             if let Some(payment) = e.get().final_payment() {
@@ -651,13 +651,15 @@ impl Bank {
     /// will progress one step.
     fn apply_timestamp(from: Pubkey, dt: DateTime<Utc>, account: &mut Account) {
         let mut pending: HashMap<Signature, Plan> =
-            deserialize(&account.userdata).unwrap_or(HashMap::new());
+            deserialize(&account.userdata).unwrap_or_default();
+        //deserialize(&account.userdata).unwrap_or(HashMap::new());
+
         // Check to see if any timelocked transactions can be completed.
         let mut completed = vec![];
 
         // Hold 'pending' write lock until the end of this function. Otherwise another thread can
         // double-spend if it enters before the modified plan is removed from 'pending'.
-        for (key, plan) in pending.iter_mut() {
+        for (key, plan) in &mut pending {
             plan.apply_witness(&Witness::Timestamp(dt), &from);
             if let Some(_payment) = plan.final_payment() {
                 completed.push(key.clone());
