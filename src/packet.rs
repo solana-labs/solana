@@ -304,13 +304,15 @@ impl<T: Default + Reset + Gid> Recycler<T> {
                     w.reset();
                 }
                 inc_counter(&self.reuse_count);
-                debug!(
-                    "reusing from: {} gc_count: {} gid: {} arc: {}",
-                    name,
-                    gc_count,
-                    x.read().unwrap().get_gid(),
-                    Arc::strong_count(&x)
-                );
+                if (self.allocated_count.load(Ordering::Relaxed) - gc_count) % 32 == 0 {
+                    info!(
+                        "reusing from: {} gc_count: {} gid: {} arc: {}",
+                        name,
+                        gc_count,
+                        x.read().unwrap().get_gid(),
+                        Arc::strong_count(&x)
+                        );
+                }
                 return x;
             } else {
                 inc_counter(&self.allocated_count);
