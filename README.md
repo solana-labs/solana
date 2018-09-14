@@ -62,7 +62,7 @@ your odds of success if you check out the
 before proceeding:
 
 ```bash
-$ git checkout v0.7.2
+$ git checkout v0.8.0
 ```
 
 Configuration Setup
@@ -113,7 +113,7 @@ To run a multinode testnet, after starting a leader node, spin up some validator
 separate shells:
 
 ```bash
-$ ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
+$ ./multinode-demo/validator.sh
 ```
 
 To run a performance-enhanced leader or validator (on Linux),
@@ -123,22 +123,20 @@ your system:
 ```bash
 $ ./fetch-perf-libs.sh
 $ SOLANA_CUDA=1 ./multinode-demo/leader.sh
-$ SOLANA_CUDA=1 ./multinode-demo/validator.sh ubuntu@10.0.1.51:~/solana 10.0.1.51
+$ SOLANA_CUDA=1 ./multinode-demo/validator.sh
 ```
-
 
 
 Testnet Client Demo
 ---
 
-Now that your singlenode or multinode testnet is up and running let's send it some transactions! Note that we pass in
-the expected number of nodes in the network.  If running singlenode, pass 1; if multinode, pass the number
-of validators you started.
+Now that your singlenode or multinode testnet is up and running let's send it
+some transactions!
 
 In a separate shell start the client:
 
 ```bash
-$ ./multinode-demo/client.sh ubuntu@10.0.1.51:~/solana 1
+$ ./multinode-demo/client.sh # runs against localhost by default
 ```
 
 What just happened? The client demo spins up several threads to send 500,000 transactions
@@ -155,7 +153,7 @@ Public Testnet
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-$ ./multinode-demo/client.sh testnet.solana.com 1 #The minumum number of nodes to discover on the network
+$ ./multinode-demo/client.sh --network $(dig +short testnet.solana.com):8001 --identity config-private/client-id.json --duration 60
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
