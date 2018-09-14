@@ -64,6 +64,8 @@ extern crate bincode;
 extern crate bs58;
 extern crate byteorder;
 extern crate chrono;
+extern crate clap;
+extern crate dirs;
 extern crate generic_array;
 extern crate itertools;
 extern crate jsonrpc_core;
