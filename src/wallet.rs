@@ -16,6 +16,7 @@ use std::time::Duration;
 use std::{error, fmt, mem};
 use thin_client::ThinClient;
 
+#[derive(Debug, PartialEq)]
 pub enum WalletCommand {
     Address,
     Balance,
@@ -95,6 +96,7 @@ pub fn parse_command(
             Ok(WalletCommand::Pay(tokens, to))
         }
         ("confirm", Some(confirm_matches)) => {
+            println!("{:?}", confirm_matches.value_of("signature").unwrap());
             let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
                 .expect("base58-encoded signature");
@@ -235,4 +237,212 @@ pub fn request_airdrop(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use bank::Bank;
+    use clap::{App, Arg, SubCommand};
+    use client::mk_client;
+    use crdt::Node;
+    use drone::run_local_drone;
+    use fullnode::Fullnode;
+    use ledger::LedgerWriter;
+    use mint::Mint;
+    use signature::{Keypair, KeypairUtil};
+    use std::net::UdpSocket;
+    use std::sync::mpsc::channel;
+
+    fn tmp_ledger(name: &str, mint: &Mint) -> String {
+        use std::env;
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let keypair = Keypair::new();
+
+        let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
+
+        let mut writer = LedgerWriter::open(&path, true).unwrap();
+        writer.write_entries(mint.create_entries()).unwrap();
+
+        path
+    }
+
+    #[test]
+    fn test_parse_command() {
+        let pubkey = Keypair::new().pubkey();
+        let test_commands = App::new("test")
+            .subcommand(
+                SubCommand::with_name("airdrop")
+                    .about("Request a batch of tokens")
+                    .arg(
+                        Arg::with_name("tokens")
+                            .long("tokens")
+                            .value_name("NUMBER")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The number of tokens to request"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("pay")
+                    .about("Send a payment")
+                    .arg(
+                        Arg::with_name("tokens")
+                            .long("tokens")
+                            .value_name("NUMBER")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The number of tokens to send"),
+                    )
+                    .arg(
+                        Arg::with_name("to")
+                            .long("to")
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .help("The pubkey of recipient"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("confirm")
+                    .about("Confirm your payment by signature")
+                    .arg(
+                        Arg::with_name("signature")
+                            .index(1)
+                            .value_name("SIGNATURE")
+                            .required(true)
+                            .help("The transaction signature to confirm"),
+                    ),
+            )
+            .subcommand(SubCommand::with_name("balance").about("Get your balance"))
+            .subcommand(SubCommand::with_name("address").about("Get your public key"));
+
+        let test_airdrop = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "airdrop", "--tokens", "50"]);
+        assert_eq!(
+            parse_command(pubkey, &test_airdrop).unwrap(),
+            WalletCommand::AirDrop(50)
+        );
+        let test_bad_airdrop = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "airdrop", "--tokens", "notint"]);
+        assert!(parse_command(pubkey, &test_bad_airdrop).is_err());
+
+        let pubkey_string = format!("{}", pubkey);
+        let test_pay = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            "--tokens",
+            "50",
+            "--to",
+            &pubkey_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay).unwrap(),
+            WalletCommand::Pay(50, pubkey)
+        );
+        let test_bad_pubkey = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "pay", "--tokens", "50", "--to", "deadbeef"]);
+        assert!(parse_command(pubkey, &test_bad_pubkey).is_err());
+
+        let signature = Signature::new(&vec![1; 64]);
+        let signature_string = format!("{:?}", signature);
+        let test_confirm =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "confirm", &signature_string]);
+        assert_eq!(
+            parse_command(pubkey, &test_confirm).unwrap(),
+            WalletCommand::Confirm(signature)
+        );
+        let test_bad_signature =
+            test_commands.get_matches_from(vec!["test", "confirm", "deadbeef"]);
+        assert!(parse_command(pubkey, &test_bad_signature).is_err());
+    }
+    #[test]
+    fn test_process_command() {
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+
+        let alice = Mint::new(10_000_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = Keypair::new().pubkey();
+        let leader_data = leader.info.clone();
+        let leader_data1 = leader.info.clone();
+        let ledger_path = tmp_ledger("thin_client", &alice);
+
+        let mut config = WalletConfig::default();
+
+        let _server = Fullnode::new_with_bank(
+            leader_keypair,
+            bank,
+            0,
+            &[],
+            leader,
+            None,
+            Some(&ledger_path),
+            false,
+        );
+        sleep(Duration::from_millis(200));
+
+        let (sender, receiver) = channel();
+        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        config.drone_addr = receiver.recv().unwrap();
+        config.leader = leader_data1;
+
+        config.command = WalletCommand::AirDrop(50);
+        let mut client = mk_client(&config.leader);
+        assert!(process_command(&config, &mut client).is_ok());
+
+        config.command = WalletCommand::Balance;
+        assert!(process_command(&config, &mut client).is_ok());
+
+        config.command = WalletCommand::Address;
+        assert!(process_command(&config, &mut client).is_ok());
+
+        config.command = WalletCommand::Pay(10, bob_pubkey);
+        assert!(process_command(&config, &mut client).is_ok());
+
+        config.command = WalletCommand::Balance;
+        assert!(process_command(&config, &mut client).is_ok());
+    }
+    #[test]
+    fn test_request_airdrop() {
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+
+        let alice = Mint::new(10_000_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = Keypair::new().pubkey();
+        let leader_data = leader.info.clone();
+        let ledger_path = tmp_ledger("thin_client", &alice);
+
+        let _server = Fullnode::new_with_bank(
+            leader_keypair,
+            bank,
+            0,
+            &[],
+            leader,
+            None,
+            Some(&ledger_path),
+            false,
+        );
+        sleep(Duration::from_millis(200));
+
+        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        let mut client = ThinClient::new(
+            leader_data.contact_info.rpu,
+            requests_socket,
+            leader_data.contact_info.tpu,
+            transactions_socket,
+        );
+
+        let (sender, receiver) = channel();
+        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        let drone_addr = receiver.recv().unwrap();
+
+        let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
+        assert!(signature.is_ok());
+        assert!(client.check_signature(&signature.unwrap()));
+    }
+}
