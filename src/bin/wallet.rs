@@ -1,80 +1,65 @@
-extern crate atty;
-extern crate bincode;
-extern crate bs58;
 #[macro_use]
 extern crate clap;
 extern crate dirs;
-extern crate serde_json;
-#[macro_use]
 extern crate solana;
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::client::mk_client;
 use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
-use solana::fullnode::Config;
 use solana::logger;
-use solana::signature::{read_keypair, Keypair, KeypairUtil, Pubkey, Signature};
-use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana::wallet::request_airdrop;
+use solana::signature::{read_keypair, KeypairUtil};
+use solana::thin_client::poll_gossip_for_leader;
+use solana::wallet::{parse_command, process_command, read_leader, WalletConfig, WalletError};
 use std::error;
-use std::fmt;
-use std::fs::File;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::thread::sleep;
-use std::time::Duration;
 
-enum WalletCommand {
-    Address,
-    Balance,
-    AirDrop(i64),
-    Pay(i64, Pubkey),
-    Confirm(Signature),
-}
-
-#[derive(Debug, Clone)]
-enum WalletError {
-    CommandNotRecognized(String),
-    BadParameter(String),
-}
-
-impl fmt::Display for WalletError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invalid")
-    }
-}
-
-impl error::Error for WalletError {
-    fn description(&self) -> &str {
-        "invalid"
+pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
+    let leader: NodeInfo;
+    if let Some(l) = matches.value_of("leader") {
+        leader = read_leader(l)?.node_info;
+    } else {
+        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
+        leader = NodeInfo::new_with_socketaddr(&server_addr);
+    };
+    let timeout: Option<u64>;
+    if let Some(secs) = matches.value_of("timeout") {
+        timeout = Some(secs.to_string().parse().expect("integer"));
+    } else {
+        timeout = None;
     }
 
-    fn cause(&self) -> Option<&error::Error> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
+    let mut path = dirs::home_dir().expect("home directory");
+    let id_path = if matches.is_present("keypair") {
+        matches.value_of("keypair").unwrap()
+    } else {
+        path.extend(&[".config", "solana", "id.json"]);
+        path.to_str().unwrap()
+    };
+    let id = read_keypair(id_path).or_else(|err| {
+        Err(WalletError::BadParameter(format!(
+            "{}: Unable to open keypair file: {}",
+            err, id_path
+        )))
+    })?;
+
+    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
+
+    let mut drone_addr = leader.contact_info.tpu;
+    drone_addr.set_port(DRONE_PORT);
+
+    let command = parse_command(id.pubkey(), &matches)?;
+
+    Ok(WalletConfig {
+        leader,
+        id,
+        drone_addr, // TODO: Add an option for this.
+        command,
+    })
 }
 
-struct WalletConfig {
-    leader: NodeInfo,
-    id: Keypair,
-    drone_addr: SocketAddr,
-    command: WalletCommand,
-}
-
-impl Default for WalletConfig {
-    fn default() -> WalletConfig {
-        let default_addr = socketaddr!(0, 8000);
-        WalletConfig {
-            leader: NodeInfo::new_with_socketaddr(&default_addr),
-            id: Keypair::new(),
-            drone_addr: default_addr,
-            command: WalletCommand::Balance,
-        }
-    }
-}
-
-fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
+fn main() -> Result<(), Box<error::Error>> {
+    logger::setup();
     let matches = App::new("solana-wallet")
         .version(crate_version!())
         .arg(
@@ -146,185 +131,7 @@ fn parse_args() -> Result<WalletConfig, Box<error::Error>> {
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .get_matches();
 
-    let leader: NodeInfo;
-    if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l)?.node_info;
-    } else {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = NodeInfo::new_with_socketaddr(&server_addr);
-    };
-    let timeout: Option<u64>;
-    if let Some(secs) = matches.value_of("timeout") {
-        timeout = Some(secs.to_string().parse().expect("integer"));
-    } else {
-        timeout = None;
-    }
-
-    let mut path = dirs::home_dir().expect("home directory");
-    let id_path = if matches.is_present("keypair") {
-        matches.value_of("keypair").unwrap()
-    } else {
-        path.extend(&[".config", "solana", "id.json"]);
-        path.to_str().unwrap()
-    };
-    let id = read_keypair(id_path).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "{}: Unable to open keypair file: {}",
-            err, id_path
-        )))
-    })?;
-
-    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
-
-    let mut drone_addr = leader.contact_info.tpu;
-    drone_addr.set_port(DRONE_PORT);
-
-    let command = match matches.subcommand() {
-        ("airdrop", Some(airdrop_matches)) => {
-            let tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
-            Ok(WalletCommand::AirDrop(tokens))
-        }
-        ("pay", Some(pay_matches)) => {
-            let to = if pay_matches.is_present("to") {
-                let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
-                    .into_vec()
-                    .expect("base58-encoded public key");
-
-                if pubkey_vec.len() != std::mem::size_of::<Pubkey>() {
-                    eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter("Invalid public key".to_string()))?;
-                }
-                Pubkey::new(&pubkey_vec)
-            } else {
-                id.pubkey()
-            };
-
-            let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
-
-            Ok(WalletCommand::Pay(tokens, to))
-        }
-        ("confirm", Some(confirm_matches)) => {
-            let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
-                .into_vec()
-                .expect("base58-encoded signature");
-
-            if signatures.len() == std::mem::size_of::<Signature>() {
-                let signature = Signature::new(&signatures);
-                Ok(WalletCommand::Confirm(signature))
-            } else {
-                eprintln!("{}", confirm_matches.usage());
-                Err(WalletError::BadParameter("Invalid signature".to_string()))
-            }
-        }
-        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
-        ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
-        ("", None) => {
-            println!("{}", matches.usage());
-            Err(WalletError::CommandNotRecognized(
-                "no subcommand given".to_string(),
-            ))
-        }
-        _ => unreachable!(),
-    }?;
-
-    Ok(WalletConfig {
-        leader,
-        id,
-        drone_addr, // TODO: Add an option for this.
-        command,
-    })
-}
-
-fn process_command(
-    config: &WalletConfig,
-    client: &mut ThinClient,
-) -> Result<(), Box<error::Error>> {
-    match config.command {
-        // Check client balance
-        WalletCommand::Address => {
-            println!("{}", config.id.pubkey());
-        }
-        WalletCommand::Balance => {
-            println!("Balance requested...");
-            let balance = client.poll_get_balance(&config.id.pubkey());
-            match balance {
-                Ok(balance) => {
-                    println!("Your balance is: {:?}", balance);
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
-                    println!("No account found! Request an airdrop to get started.");
-                }
-                Err(error) => {
-                    println!("An error occurred: {:?}", error);
-                }
-            }
-        }
-        // Request an airdrop from Solana Drone;
-        // Request amount is set in request_airdrop function
-        WalletCommand::AirDrop(tokens) => {
-            println!(
-                "Requesting airdrop of {:?} tokens from {}",
-                tokens, config.drone_addr
-            );
-            let previous_balance = client.poll_get_balance(&config.id.pubkey()).unwrap_or(0);
-            request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
-
-            // TODO: return airdrop Result from Drone instead of polling the
-            //       network
-            let mut current_balance = previous_balance;
-            for _ in 0..20 {
-                sleep(Duration::from_millis(500));
-                current_balance = client
-                    .poll_get_balance(&config.id.pubkey())
-                    .unwrap_or(previous_balance);
-
-                if previous_balance != current_balance {
-                    break;
-                }
-                println!(".");
-            }
-            println!("Your balance is: {:?}", current_balance);
-            if current_balance - previous_balance != tokens {
-                Err("Airdrop failed!")?;
-            }
-        }
-        // If client has positive balance, spend tokens in {balance} number of transactions
-        WalletCommand::Pay(tokens, to) => {
-            let last_id = client.get_last_id();
-            let signature = client.transfer(tokens, &config.id, to, &last_id)?;
-            println!("{}", signature);
-        }
-        // Confirm the last client transaction by signature
-        WalletCommand::Confirm(signature) => {
-            if client.check_signature(&signature) {
-                println!("Confirmed");
-            } else {
-                println!("Not found");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn read_leader(path: &str) -> Result<Config, WalletError> {
-    let file = File::open(path.to_string()).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "{}: Unable to open leader file: {}",
-            err, path
-        )))
-    })?;
-
-    serde_json::from_reader(file).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "{}: Failed to parse leader file: {}",
-            err, path
-        )))
-    })
-}
-
-fn main() -> Result<(), Box<error::Error>> {
-    logger::setup();
-    let config = parse_args()?;
+    let config = parse_args(&matches)?;
     let mut client = mk_client(&config.leader);
     process_command(&config, &mut client)
 }
