@@ -16,7 +16,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
-use tpu::Tpu;
+use tpu::{Tpu, TpuReturnType};
 use tvu::Tvu;
 use untrusted::Input;
 use window;
@@ -39,9 +39,9 @@ impl LeaderServices {
         }
     }
 
-    pub fn join(self) -> Result<()> {
-        self.tpu.join()?;
-        self.broadcast_stage.join()
+    pub fn join(self) -> Result<Option<TpuReturnType>> {
+        self.broadcast_stage.join()?;
+        self.tpu.join()
     }
 }
 
@@ -59,7 +59,7 @@ impl ValidatorServices {
     }
 }
 
-pub enum FullNodeReturnType {
+pub enum FullnodeReturnType {
     LeaderRotation,
 }
 
@@ -327,16 +327,16 @@ impl Fullnode {
         self.exit.store(true, Ordering::Relaxed);
     }
 
-    pub fn close(self) -> Result<(Option<FullNodeReturnType>)> {
+    pub fn close(self) -> Result<(Option<FullnodeReturnType>)> {
         self.exit();
         self.join()
     }
 }
 
 impl Service for Fullnode {
-    type JoinReturnType = Option<FullNodeReturnType>;
+    type JoinReturnType = Option<FullnodeReturnType>;
 
-    fn join(self) -> Result<Option<FullNodeReturnType>> {
+    fn join(self) -> Result<Option<FullnodeReturnType>> {
         self.rpu.join()?;
         self.ncp.join()?;
         self.rpc_service.join()?;
@@ -346,7 +346,9 @@ impl Service for Fullnode {
                 validator_service.join()?;
             }
             Some(NodeRole::Leader(leader_service)) => {
-                leader_service.join()?;
+                if let Some(TpuReturnType::LeaderRotation) = leader_service.join()? {
+                    return Ok(Some(FullnodeReturnType::LeaderRotation));
+                }
             }
             _ => (),
         }
