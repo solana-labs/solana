@@ -76,18 +76,18 @@ impl Tvu {
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
         blob_recycler: BlobRecycler,
-        replicate_socket: UdpSocket,
+        replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let repair_socket = Arc::new(repair_socket);
-        let (fetch_stage, blob_fetch_receiver) = BlobFetchStage::new_multi_socket(
-            vec![Arc::new(replicate_socket), repair_socket.clone()],
-            exit.clone(),
-            &blob_recycler,
-        );
+        let mut blob_sockets: Vec<Arc<UdpSocket>> =
+            replicate_sockets.into_iter().map(Arc::new).collect();
+        blob_sockets.push(repair_socket.clone());
+        let (fetch_stage, blob_fetch_receiver) =
+            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone(), &blob_recycler);
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
@@ -200,8 +200,15 @@ pub mod tests {
         // simulate target peer
         let recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
+        let blob_sockets: Vec<Arc<UdpSocket>> = target2
+            .sockets
+            .replicate
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+
         let t_receiver = streamer::blob_receiver(
-            Arc::new(target2.sockets.replicate),
+            blob_sockets[0].clone(),
             exit.clone(),
             recycler.clone(),
             s_reader,

@@ -1210,7 +1210,7 @@ impl Crdt {
 pub struct Sockets {
     pub gossip: UdpSocket,
     pub requests: UdpSocket,
-    pub replicate: UdpSocket,
+    pub replicate: Vec<UdpSocket>,
     pub transaction: Vec<UdpSocket>,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
@@ -1250,7 +1250,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 requests,
-                replicate,
+                replicate: vec![replicate],
                 transaction: vec![transaction],
                 respond,
                 broadcast,
@@ -1270,7 +1270,9 @@ impl Node {
             bind()
         };
 
-        let (replicate_port, replicate) = bind();
+        let (replicate_port, replicate_sockets) =
+            multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
+
         let (requests_port, requests) = bind();
 
         let (transaction_port, transaction_sockets) =
@@ -1299,7 +1301,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 requests,
-                replicate,
+                replicate: replicate_sockets,
                 transaction: transaction_sockets,
                 respond,
                 broadcast,
@@ -1992,7 +1994,10 @@ mod tests {
         let ip = Ipv4Addr::from(0);
         let node = Node::new_with_external_ip(Keypair::new().pubkey(), &socketaddr!(ip, 0));
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
-        assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
+        assert!(node.sockets.replicate.len() > 1);
+        for tx_socket in node.sockets.replicate.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
+        }
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
         assert!(node.sockets.transaction.len() > 1);
         for tx_socket in node.sockets.transaction.iter() {
@@ -2002,8 +2007,12 @@ mod tests {
 
         assert!(node.sockets.gossip.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.gossip.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        let tx_port = node.sockets.replicate[0].local_addr().unwrap().port();
+        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
+        assert!(tx_port < FULLNODE_PORT_RANGE.1);
+        for tx_socket in node.sockets.replicate.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
+        }
         assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();
@@ -2021,7 +2030,10 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::from(0));
         let node = Node::new_with_external_ip(Keypair::new().pubkey(), &socketaddr!(0, 8050));
         assert_eq!(node.sockets.gossip.local_addr().unwrap().ip(), ip);
-        assert_eq!(node.sockets.replicate.local_addr().unwrap().ip(), ip);
+        assert!(node.sockets.replicate.len() > 1);
+        for tx_socket in node.sockets.replicate.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
+        }
         assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
         assert!(node.sockets.transaction.len() > 1);
         for tx_socket in node.sockets.transaction.iter() {
@@ -2030,8 +2042,12 @@ mod tests {
         assert_eq!(node.sockets.repair.local_addr().unwrap().ip(), ip);
 
         assert_eq!(node.sockets.gossip.local_addr().unwrap().port(), 8050);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.replicate.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+        let tx_port = node.sockets.replicate[0].local_addr().unwrap().port();
+        assert!(tx_port >= FULLNODE_PORT_RANGE.0);
+        assert!(tx_port < FULLNODE_PORT_RANGE.1);
+        for tx_socket in node.sockets.replicate.iter() {
+            assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
+        }
         assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();

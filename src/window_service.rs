@@ -302,6 +302,7 @@ mod test {
     use crdt::{Crdt, Node};
     use logger;
     use packet::{BlobRecycler, PACKET_DATA_SIZE};
+    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -361,9 +362,12 @@ mod test {
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
+            let blob_sockets: Vec<Arc<UdpSocket>> =
+                tn.sockets.replicate.into_iter().map(Arc::new).collect();
+
             let t_responder = responder(
                 "window_send_test",
-                Arc::new(tn.sockets.replicate),
+                blob_sockets[0].clone(),
                 resp_recycler.clone(),
                 r_responder,
             );
@@ -431,9 +435,11 @@ mod test {
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
+            let blob_sockets: Vec<Arc<UdpSocket>> =
+                tn.sockets.replicate.into_iter().map(Arc::new).collect();
             let t_responder = responder(
                 "window_send_test",
-                Arc::new(tn.sockets.replicate),
+                blob_sockets[0].clone(),
                 resp_recycler.clone(),
                 r_responder,
             );
@@ -494,9 +500,11 @@ mod test {
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
+            let blob_sockets: Vec<Arc<UdpSocket>> =
+                tn.sockets.replicate.into_iter().map(Arc::new).collect();
             let t_responder = responder(
                 "window_send_test",
-                Arc::new(tn.sockets.replicate),
+                blob_sockets[0].clone(),
                 resp_recycler.clone(),
                 r_responder,
             );
