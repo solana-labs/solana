@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<error::Error>> {
             Arg::with_name("tokens")
                 .short("t")
                 .long("tokens")
-                .value_name("NUMBER")
+                .value_name("NUM")
                 .takes_value(true)
                 .required(true)
                 .help("Number of tokens with which to initialize mint"),
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("DIR")
                 .takes_value(true)
                 .required(true)
-                .help("use DIR as persistent ledger location"),
+                .help("Use directory as persistent ledger location"),
         ).get_matches();
 
     let tokens = value_t_or_exit!(matches, "tokens", i64);

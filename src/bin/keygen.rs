@@ -21,8 +21,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .long("outfile")
                 .value_name("PATH")
                 .takes_value(true)
-                .required(true)
-                .help("path to generated file"),
+                .help("Path to generated file"),
         ).get_matches();
 
     let rnd = SystemRandom::new();

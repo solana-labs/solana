@@ -79,16 +79,16 @@ fn main() -> Result<(), Box<error::Error>> {
         ).arg(
             Arg::with_name("timeout")
                 .long("timeout")
-                .value_name("SECONDS")
+                .value_name("SECS")
                 .takes_value(true)
-                .help("Max SECONDS to wait to get necessary gossip from the network"),
+                .help("Max seconds to wait to get necessary gossip from the network"),
         ).subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
                 .arg(
                     Arg::with_name("tokens")
                         .long("tokens")
-                        .value_name("NUMBER")
+                        .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to request"),
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .arg(
                     Arg::with_name("tokens")
                         .long("tokens")
-                        .value_name("NUMBER")
+                        .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to send"),

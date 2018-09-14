@@ -406,7 +406,7 @@ fn main() {
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("rendezvous with the network at this gossip entry point, defaults to 127.0.0.1:8001"),
+                .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
             Arg::with_name("identity")
@@ -415,7 +415,7 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
-                .help("file containing a client identity (keypair)"),
+                .help("File containing a client identity (keypair)"),
         )
         .arg(
             Arg::with_name("num-nodes")
@@ -423,12 +423,12 @@ fn main() {
                 .long("num-nodes")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("wait for NUM nodes to converge"),
+                .help("Wait for NUM nodes to converge"),
         )
         .arg(
             Arg::with_name("reject-extra-nodes")
                 .long("reject-extra-nodes")
-                .help("require exactly num-nodes on convergence.  Appropriate only for internal networks"),
+                .help("Require exactly `num-nodes` on convergence. Appropriate only for internal networks"),
         )
         .arg(
             Arg::with_name("threads")
@@ -436,31 +436,31 @@ fn main() {
                 .long("threads")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("number of threads"),
+                .help("Number of threads"),
         )
         .arg(
             Arg::with_name("duration")
                 .long("duration")
                 .value_name("SECS")
                 .takes_value(true)
-                .help("run benchmark for SECS seconds then exit, default is forever"),
+                .help("Seconds to run benchmark, then exit; default is forever"),
         )
         .arg(
             Arg::with_name("converge-only")
                 .long("converge-only")
-                .help("exit immediately after converging"),
+                .help("Exit immediately after converging"),
         )
         .arg(
             Arg::with_name("sustained")
                 .long("sustained")
-                .help("use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
+                .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
         )
         .arg(
             Arg::with_name("tx_count")
                 .long("tx_count")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("number of transactions to send per batch")
+                .help("Number of transactions to send per batch")
         )
         .get_matches();
 

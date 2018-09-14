@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .required(true)
-                .help("rendezvous with the network at this gossip entry point"),
+                .help("Rendezvous with the network at this gossip entry point"),
         ).arg(
             Arg::with_name("keypair")
                 .short("k")
@@ -55,17 +55,17 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .required(true)
-                .help("File to read the client's keypair from"),
+                .help("File from which to read the mint's keypair"),
         ).arg(
             Arg::with_name("slice")
                 .long("slice")
-                .value_name("SECONDS")
+                .value_name("SECS")
                 .takes_value(true)
                 .help("Time slice over which to limit requests to drone"),
         ).arg(
             Arg::with_name("cap")
                 .long("cap")
-                .value_name("NUMBER")
+                .value_name("NUM")
                 .takes_value(true)
                 .help("Request limit for time slice"),
         ).get_matches();
