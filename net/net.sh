@@ -109,7 +109,7 @@ build() {
 
     set -x
     rm -rf farf
-    $MAYBE_DOCKER cargo install --features="$cargoFeatures" --root farf
+    $MAYBE_DOCKER cargo +nightly install --features="$cargoFeatures" --root farf
   )
   echo "Build took $SECONDS seconds"
 }
