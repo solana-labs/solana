@@ -1210,7 +1210,7 @@ impl Crdt {
 pub struct Sockets {
     pub gossip: UdpSocket,
     pub requests: UdpSocket,
-    pub replicate: UdpSocket,
+    pub replicate: Vec<UdpSocket>,
     pub transaction: Vec<UdpSocket>,
     pub respond: UdpSocket,
     pub broadcast: UdpSocket,
@@ -1250,7 +1250,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 requests,
-                replicate,
+                replicate: vec![replicate],
                 transaction: vec![transaction],
                 respond,
                 broadcast,
@@ -1270,7 +1270,9 @@ impl Node {
             bind()
         };
 
-        let (replicate_port, replicate) = bind();
+        let (replicate_port, replicate_sockets) =
+            multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
+
         let (requests_port, requests) = bind();
 
         let (transaction_port, transaction_sockets) =
@@ -1299,7 +1301,7 @@ impl Node {
             sockets: Sockets {
                 gossip,
                 requests,
-                replicate,
+                replicate: replicate_sockets,
                 transaction: transaction_sockets,
                 respond,
                 broadcast,
