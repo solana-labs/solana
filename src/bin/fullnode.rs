@@ -33,16 +33,16 @@ fn main() -> () {
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
-                .value_name("FILE")
+                .value_name("PATH")
                 .takes_value(true)
-                .help("run with the identity found in FILE"),
+                .help("Run with the identity found in FILE"),
         ).arg(
             Arg::with_name("network")
                 .short("n")
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("connect/rendezvous with the network at this gossip entry point"),
+                .help("Rendezvous with the network at this gossip entry point"),
         ).arg(
             Arg::with_name("ledger")
                 .short("l")

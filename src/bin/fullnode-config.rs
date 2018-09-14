@@ -20,7 +20,7 @@ fn main() {
                 .short("l")
                 .long("local")
                 .takes_value(false)
-                .help("detect network address from local machine configuration"),
+                .help("Detect network address from local machine configuration"),
         ).arg(
             Arg::with_name("keypair")
                 .short("k")
@@ -33,14 +33,14 @@ fn main() {
                 .short("p")
                 .long("public")
                 .takes_value(false)
-                .help("detect public network address using public servers"),
+                .help("Detect public network address using public servers"),
         ).arg(
             Arg::with_name("bind")
                 .short("b")
                 .long("bind")
                 .value_name("PORT")
                 .takes_value(true)
-                .help("bind to port or address"),
+                .help("Bind to port or address"),
         ).get_matches();
 
     let bind_addr: SocketAddr = {

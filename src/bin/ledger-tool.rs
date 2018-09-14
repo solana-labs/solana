@@ -21,7 +21,7 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .required(true)
-                .help("use DIR for ledger location"),
+                .help("Use directory for ledger location"),
         )
         .arg(
             Arg::with_name("head")
@@ -29,13 +29,13 @@ fn main() {
                 .long("head")
                 .value_name("NUM")
                 .takes_value(true)
-                .help("at most the first NUM entries in ledger\n  (only applies to verify, print, json commands)"),
+                .help("Limit to at most the first NUM entries in ledger\n  (only applies to verify, print, json commands)"),
         )
         .arg(
             Arg::with_name("precheck")
                 .short("p")
                 .long("precheck")
-                .help("use ledger_verify() to check internal ledger consistency before proceeding"),
+                .help("Use ledger_verify() to check internal ledger consistency before proceeding"),
         )
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
