@@ -200,8 +200,15 @@ pub mod tests {
         // simulate target peer
         let recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
+        let blob_sockets: Vec<Arc<UdpSocket>> = target2
+            .sockets
+            .replicate
+            .into_iter()
+            .map(Arc::new)
+            .collect();
+
         let t_receiver = streamer::blob_receiver(
-            Arc::new(target2.sockets.replicate),
+            blob_sockets[0].clone(),
             exit.clone(),
             recycler.clone(),
             s_reader,

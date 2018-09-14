@@ -17,7 +17,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
-    let tn = Node::new_localhost();
+    let mut tn = Node::new_localhost();
     let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
@@ -29,7 +29,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
         tn.sockets.gossip,
         exit,
     );
-    (c, d, tn.sockets.replicate)
+    (c, d, tn.sockets.replicate.pop().unwrap())
 }
 
 /// Test that the network converges.
