@@ -3,21 +3,11 @@
 import assert from 'assert';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
-import nacl from 'tweetnacl';
 import {struct} from 'superstruct';
-import bs58 from 'bs58';
 
+import {bs58DecodePublicKey, Transaction} from './transaction';
 import type {Account, PublicKey} from './account';
-
-/**
- * @typedef {string} TransactionSignature
- */
-export type TransactionSignature = string;
-
-/**
- * @typedef {string} TransactionId
- */
-export type TransactionId = string;
+import type {TransactionSignature, TransactionId} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
@@ -228,54 +218,31 @@ export class Connection {
     return res.result;
   }
 
+
   /**
    * Send tokens to another account
    */
   async sendTokens(from: Account, to: PublicKey, amount: number): Promise<TransactionSignature> {
-    const lastId = await this.getLastId();
-    const fee = 0;
+    const transaction = new Transaction();
+    transaction.fee = 0;
+    transaction.lastId = await this.getLastId();
+    transaction.keys[0] = from.publicKey;
+    transaction.keys[1] = to;
 
-    //
-    // TODO: Redo this...
-    //
+    // Forge a simple Budget Pay contract into `userdata`
+    // TODO: Clean this up
+    const userdata = Buffer.alloc(68); // 68 = serialized size of Budget enum
+    userdata.writeUInt32LE(60, 0);
+    userdata.writeUInt32LE(amount, 12);        // u64
+    userdata.writeUInt32LE(amount, 28);        // u64
+    const toData = bs58DecodePublicKey(to);
+    toData.copy(userdata, 36);
+    transaction.userdata = userdata;
 
-    // Build the transaction data to be signed.
-    const transactionData = Buffer.alloc(124);
-    transactionData.writeUInt32LE(amount, 4);        // u64
-    transactionData.writeUInt32LE(amount - fee, 20); // u64
-    transactionData.writeUInt32LE(32, 28);           // length of public key (u64)
-    {
-      const toBytes = Buffer.from(bs58.decode(to));
-      assert(toBytes.length === 32);
-      toBytes.copy(transactionData, 36);
-    }
-
-    transactionData.writeUInt32LE(32, 68);          // length of last id (u64)
-    {
-      const lastIdBytes = Buffer.from(bs58.decode(lastId));
-      assert(lastIdBytes.length === 32);
-      lastIdBytes.copy(transactionData, 76);
-    }
-
-    // Sign it
-    const signature = nacl.sign.detached(transactionData, from.secretKey);
-    assert(signature.length === 64);
-
-    // Build the over-the-wire transaction buffer
-    const wireTransaction = Buffer.alloc(236);
-    wireTransaction.writeUInt32LE(64, 0);  // signature length (u64)
-    Buffer.from(signature).copy(wireTransaction, 8);
-
-
-    wireTransaction.writeUInt32LE(32, 72);  // public key length (u64)
-    {
-      const fromBytes = Buffer.from(bs58.decode(from.publicKey));
-      assert(fromBytes.length === 32);
-      fromBytes.copy(wireTransaction, 80);
-    }
-    transactionData.copy(wireTransaction, 112);
+    transaction.sign(from);
 
     // Send it
+    const wireTransaction = transaction.serialize();
     const unsafeRes = await this._rpcRequest('sendTransaction', [[...wireTransaction]]);
     const res = SendTokensRpcResult(unsafeRes);
     if (res.error) {
