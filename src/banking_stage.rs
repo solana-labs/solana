@@ -52,8 +52,7 @@ impl BankingStage {
                         _ => error!("{:?}", e),
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
         (BankingStage { thread_hdl }, signal_receiver)
     }
 
@@ -66,8 +65,7 @@ impl BankingStage {
                 deserialize(&x.data[0..x.meta.size])
                     .map(|req| (req, x.meta.addr()))
                     .ok()
-            })
-            .collect()
+            }).collect()
     }
 
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
@@ -105,8 +103,7 @@ impl BankingStage {
                     } else {
                         None
                     },
-                })
-                .collect();
+                }).collect();
 
             debug!("process_transactions");
             let results = bank.process_transactions(transactions);

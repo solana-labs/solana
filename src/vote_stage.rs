@@ -83,8 +83,7 @@ fn get_last_id_to_vote_on(
             .add_field(
                 "valid_peers",
                 influxdb::Value::Integer(valid_ids.len() as i64),
-            )
-            .to_owned(),
+            ).to_owned(),
     );
 
     if valid_ids.len() > super_majority_index {
@@ -103,8 +102,7 @@ fn get_last_id_to_vote_on(
                 .add_field(
                     "duration_ms",
                     influxdb::Value::Integer((now - *last_valid_validator_timestamp) as i64),
-                )
-                .to_owned(),
+                ).to_owned(),
         );
     }
 
@@ -406,8 +404,7 @@ pub mod tests {
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id
-            })
-            .collect();
+            }).collect();
 
         // see that we fail to have 2/3rds consensus
         assert!(

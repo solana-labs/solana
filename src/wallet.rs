@@ -279,8 +279,7 @@ mod tests {
                             .required(true)
                             .help("The number of tokens to request"),
                     ),
-            )
-            .subcommand(
+            ).subcommand(
                 SubCommand::with_name("pay")
                     .about("Send a payment")
                     .arg(
@@ -290,16 +289,14 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("The number of tokens to send"),
-                    )
-                    .arg(
+                    ).arg(
                         Arg::with_name("to")
                             .long("to")
                             .value_name("PUBKEY")
                             .takes_value(true)
                             .help("The pubkey of recipient"),
                     ),
-            )
-            .subcommand(
+            ).subcommand(
                 SubCommand::with_name("confirm")
                     .about("Confirm your payment by signature")
                     .arg(
@@ -309,8 +306,7 @@ mod tests {
                             .required(true)
                             .help("The transaction signature to confirm"),
                     ),
-            )
-            .subcommand(SubCommand::with_name("balance").about("Get your balance"))
+            ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
             .subcommand(SubCommand::with_name("address").about("Get your public key"));
 
         let test_airdrop = test_commands

@@ -90,8 +90,7 @@ impl WindowUtil for Window {
                 }
                 self[i].clear_data(recycler);
                 Some(pix)
-            })
-            .collect()
+            }).collect()
     }
 
     fn repair(
@@ -140,8 +139,7 @@ impl WindowUtil for Window {
                 } else {
                     " "
                 }
-            })
-            .collect();
+            }).collect();
 
         let buf: Vec<_> = self
             .iter()
@@ -157,8 +155,7 @@ impl WindowUtil for Window {
                     // data.is_none()
                     "c"
                 }
-            })
-            .collect();
+            }).collect();
         format!(
             "\n{}: WINDOW ({}): {}\n{}: WINDOW ({}): {}",
             id,

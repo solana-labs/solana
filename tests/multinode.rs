@@ -593,10 +593,8 @@ fn test_multi_node_dynamic_network() {
                     assert_eq!(bal, Some(500));
                     info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
                     keypair
-                })
-                .unwrap()
-        })
-        .collect();
+                }).unwrap()
+        }).collect();
 
     info!("Waiting for keypairs to be created");
     let keypairs: Vec<_> = t1.into_iter().map(|t| t.join().unwrap()).collect();
@@ -622,10 +620,8 @@ fn test_multi_node_dynamic_network() {
                         true,
                     );
                     (rd, val)
-                })
-                .unwrap()
-        })
-        .collect();
+                }).unwrap()
+        }).collect();
 
     let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
@@ -645,8 +641,7 @@ fn test_multi_node_dynamic_network() {
                 &alice_arc.read().unwrap().keypair(),
                 bob_pubkey,
                 &last_id,
-            )
-            .unwrap();
+            ).unwrap();
 
         expected_balance += 500;
 

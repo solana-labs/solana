@@ -183,8 +183,7 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
-            })
-            .unwrap();
+            }).unwrap();
 
         BroadcastStage { thread_hdl }
     }

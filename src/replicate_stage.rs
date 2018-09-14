@@ -111,8 +111,7 @@ impl ReplicateStage {
                         _ => error!("{:?}", e),
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
 
         let thread_hdls = vec![t_responder, t_replicate];
 

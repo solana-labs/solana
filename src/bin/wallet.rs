@@ -69,23 +69,20 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/leader.json"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("timeout")
                 .long("timeout")
                 .value_name("SECONDS")
                 .takes_value(true)
                 .help("Max SECONDS to wait to get necessary gossip from the network"),
-        )
-        .subcommand(
+        ).subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
                 .arg(
@@ -96,8 +93,7 @@ fn main() -> Result<(), Box<error::Error>> {
                         .required(true)
                         .help("The number of tokens to request"),
                 ),
-        )
-        .subcommand(
+        ).subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
@@ -107,16 +103,14 @@ fn main() -> Result<(), Box<error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to send"),
-                )
-                .arg(
+                ).arg(
                     Arg::with_name("to")
                         .long("to")
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .help("The pubkey of recipient"),
                 ),
-        )
-        .subcommand(
+        ).subcommand(
             SubCommand::with_name("confirm")
                 .about("Confirm your payment by signature")
                 .arg(
@@ -126,8 +120,7 @@ fn main() -> Result<(), Box<error::Error>> {
                         .required(true)
                         .help("The transaction signature to confirm"),
                 ),
-        )
-        .subcommand(SubCommand::with_name("balance").about("Get your balance"))
+        ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
         .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .get_matches();
 
