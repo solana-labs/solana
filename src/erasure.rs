@@ -363,7 +363,7 @@ fn is_missing(
     recycler: &BlobRecycler,
     c_or_d: &str,
 ) -> bool {
-    if let Some(blob) = mem::replace(window_slot, None) {
+    if let Some(blob) = window_slot.take() {
         let blob_idx = blob.read().unwrap().get_index().unwrap();
         if blob_idx == idx {
             trace!("recover {}: idx: {} good {}", id, idx, c_or_d);

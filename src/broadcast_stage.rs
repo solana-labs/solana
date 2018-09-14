@@ -8,7 +8,6 @@ use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
-use std::mem;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::RecvTimeoutError;
@@ -60,7 +59,7 @@ fn broadcast(
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
-                if let Some(x) = mem::replace(&mut win[pos].data, None) {
+                if let Some(x) = win[pos].data.take() {
                     trace!(
                         "{} popped {} at {}",
                         id,
@@ -69,7 +68,7 @@ fn broadcast(
                     );
                     recycler.recycle(x, "broadcast-data");
                 }
-                if let Some(x) = mem::replace(&mut win[pos].coding, None) {
+                if let Some(x) = win[pos].coding.take() {
                     trace!(
                         "{} popped {} at {}",
                         id,

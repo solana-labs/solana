@@ -34,7 +34,7 @@ impl WindowSlot {
     }
 
     fn clear_data(&mut self, recycler: &BlobRecycler) {
-        if let Some(blob) = mem::replace(&mut self.data, None) {
+        if let Some(blob) = self.data.take() {
             recycler.recycle(blob, "WindowSlot::clear_data");
         }
     }
