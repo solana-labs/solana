@@ -342,12 +342,10 @@ mod test {
             .add_field(
                 "random_bool",
                 influxdb::Value::Boolean(random::<u8>() < 128),
-            )
-            .add_field(
+            ).add_field(
                 "random_int",
                 influxdb::Value::Integer(random::<u8>() as i64),
-            )
-            .to_owned();
+            ).to_owned();
         agent.submit(point);
     }
 

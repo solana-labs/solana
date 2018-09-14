@@ -112,7 +112,8 @@ impl Entry {
             id: Hash::default(),
             transactions,
             has_more: false,
-        }).unwrap() <= BLOB_DATA_SIZE as u64
+        }).unwrap()
+            <= BLOB_DATA_SIZE as u64
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.

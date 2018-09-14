@@ -36,16 +36,14 @@ fn main() -> () {
                 .value_name("FILE")
                 .takes_value(true)
                 .help("run with the identity found in FILE"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("network")
                 .short("n")
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("connect/rendezvous with the network at this gossip entry point"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -53,8 +51,7 @@ fn main() -> () {
                 .takes_value(true)
                 .required(true)
                 .help("use DIR as persistent ledger location"),
-        )
-        .get_matches();
+        ).get_matches();
 
     let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();

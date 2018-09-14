@@ -96,8 +96,7 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .par_iter()
                 .map(verify_packet)
                 .collect()
-        })
-        .collect();
+        }).collect();
     inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
@@ -115,8 +114,7 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .par_iter()
                 .map(verify_packet_disabled)
                 .collect()
-        })
-        .collect();
+        }).collect();
     inc_new_counter_info!("ed25519_verify_disabled", count);
     rv
 }

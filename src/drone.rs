@@ -143,12 +143,10 @@ impl Drone {
                     .add_field(
                         "request_amount",
                         influxdb::Value::Integer(request_amount as i64),
-                    )
-                    .add_field(
+                    ).add_field(
                         "request_current",
                         influxdb::Value::Integer(self.request_current as i64),
-                    )
-                    .to_owned(),
+                    ).to_owned(),
             );
             client.retry_transfer_signed(&tx, 10)
         } else {
@@ -215,8 +213,7 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
                             io::ErrorKind::Other,
                             format!("Drone response: {:?}", err),
                         ))
-                    }))
-                    .then(|_| Ok(()));
+                    })).then(|_| Ok(()));
                 tokio::spawn(server)
             });
         tokio::run(done);

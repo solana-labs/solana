@@ -163,8 +163,7 @@ impl ThinClient {
                 .add_field(
                     "duration_ms",
                     influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
+                ).to_owned(),
         );
         result
     }
@@ -285,8 +284,7 @@ impl ThinClient {
                 .add_field(
                     "duration_ms",
                     influxdb::Value::Integer(timing::duration_as_ms(elapsed) as i64),
-                )
-                .to_owned(),
+                ).to_owned(),
         );
     }
 
@@ -359,8 +357,7 @@ impl ThinClient {
                 .add_field(
                     "duration_ms",
                     influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
+                ).to_owned(),
         );
         self.signature_status
     }

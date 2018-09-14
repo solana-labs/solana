@@ -69,8 +69,7 @@ fn retransmitter(
                 }
             }
             trace!("exiting retransmitter");
-        })
-        .unwrap()
+        }).unwrap()
 }
 
 pub struct RetransmitStage {
