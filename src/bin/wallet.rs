@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<error::Error>> {
                         .help("The pubkey of recipient"),
                 )
                 .arg(
-                    Arg::with_name("build_only")
+                    Arg::with_name("build-only")
                         .long("build")
                         .takes_value(false)
                         .group("build")
@@ -147,21 +147,21 @@ fn main() -> Result<(), Box<error::Error>> {
             SubCommand::with_name("transfer")
                 .about("Transfer raw transaction from file or stdin")
                 .arg(
-                    Arg::with_name("userdata_path")
+                    Arg::with_name("userdata-path")
                         .short("f")
                         .long("file")
                         .value_name("PATH")
                         .help("/path/to/userdata.bin"),
                 )
                 .arg(
-                    Arg::with_name("serial_userdata")
+                    Arg::with_name("serial-userdata")
                         .index(1)
                         .value_name("ARRAY of [BYTES]"),
                 )
                 .group(
                     ArgGroup::with_name("userdata")
                         .required(true)
-                        .args(&["userdata_path", "serial_userdata"]),
+                        .args(&["userdata-path", "serial-userdata"]),
                 ),
         )
         .subcommand(SubCommand::with_name("balance").about("Get your balance"))

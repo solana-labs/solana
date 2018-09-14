@@ -97,7 +97,7 @@ pub fn parse_command(
 
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
 
-            if pay_matches.is_present("build_only") {
+            if pay_matches.is_present("build-only") {
                 let outfile = if pay_matches.is_present("outfile") {
                     Some(pay_matches.value_of("outfile").unwrap().to_string())
                 } else {
@@ -125,17 +125,8 @@ pub fn parse_command(
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("transfer", Some(userdata_matches)) => {
-            let userdata: Vec<u8> = if userdata_matches.is_present("serial_userdata") {
-                serde_json::from_str(userdata_matches.value_of("serial_userdata").unwrap())
-                    .or_else(|err| {
-                        Err(WalletError::BadParameter(format!(
-                            "{}: Unable to read userdata serialization: {}",
-                            err,
-                            userdata_matches.value_of("serial_userdata").unwrap()
-                        )))
-                    })?
-            } else {
-                let userdata_path = userdata_matches.value_of("userdata_path").unwrap();
+            let userdata: Vec<u8> = if userdata_matches.is_present("userdata-path") {
+                let userdata_path = userdata_matches.value_of("userdata-path").unwrap();
                 let mut file = File::open(userdata_path).or_else(|err| {
                     Err(WalletError::BadParameter(format!(
                         "{}: Unable to open userdata file: {}",
@@ -145,6 +136,15 @@ pub fn parse_command(
                 let mut buf = vec![0u8; 60];
                 file.read(&mut buf)?;
                 buf
+            } else {
+                serde_json::from_str(userdata_matches.value_of("serial-userdata").unwrap())
+                    .or_else(|err| {
+                        Err(WalletError::BadParameter(format!(
+                            "{}: Unable to read userdata serialization: {}",
+                            err,
+                            userdata_matches.value_of("serial-userdata").unwrap()
+                        )))
+                    })?
             };
             Ok(WalletCommand::TransferRaw(userdata))
         }
