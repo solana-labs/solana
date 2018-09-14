@@ -34,6 +34,7 @@ ip_address_arg=-l
 num_tokens=1000000000
 node_type_leader=true
 node_type_validator=true
+node_type_client=true
 while getopts "h?n:lpt:" opt; do
   case $opt in
   h|\?)
@@ -55,10 +56,17 @@ while getopts "h?n:lpt:" opt; do
     leader)
       node_type_leader=true
       node_type_validator=false
+      node_type_client=false
       ;;
     validator)
       node_type_leader=false
       node_type_validator=true
+      node_type_client=false
+      ;;
+    client)
+      node_type_leader=false
+      node_type_validator=false
+      node_type_client=true
       ;;
     *)
       usage "Error: unknown node type: $node_type"
@@ -74,13 +82,19 @@ done
 
 set -e
 
-if $node_type_leader; then
-  for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_PRIVATE_DIR"; do
-    echo "Cleaning $i"
-    rm -rvf "$i"
-    mkdir -p "$i"
-  done
+for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_VALIDATOR_DIR" "$SOLANA_CONFIG_PRIVATE_DIR"; do
+  echo "Cleaning $i"
+  rm -rvf "$i"
+  mkdir -p "$i"
+done
 
+if $node_type_client; then
+  client_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/client-id.json
+  $solana_keygen -o "$client_id_path"
+  ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"/
+fi
+
+if $node_type_leader; then
   leader_address_args=("$ip_address_arg")
   leader_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/leader-id.json
   mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
@@ -102,11 +116,6 @@ fi
 
 
 if $node_type_validator; then
-  echo "Cleaning $SOLANA_CONFIG_VALIDATOR_DIR"
-  rm -rvf "$SOLANA_CONFIG_VALIDATOR_DIR"
-  mkdir -p "$SOLANA_CONFIG_VALIDATOR_DIR"
-
-
   validator_address_args=("$ip_address_arg" -b 9000)
   validator_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/validator-id.json
 
