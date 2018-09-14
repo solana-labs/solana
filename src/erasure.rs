@@ -285,7 +285,7 @@ pub fn generate_coding(
             let n = i % window.len();
             assert!(window[n].coding.is_none());
 
-            window[n].coding = Some(recycler.allocate());
+            window[n].coding = Some(recycler.allocate("erasure::coding"));
 
             let coding = window[n].coding.clone().unwrap();
             let mut coding_wl = coding.write().unwrap();
@@ -494,7 +494,7 @@ pub fn recover(
             }
             blobs.push(b);
         } else {
-            let n = recycler.allocate();
+            let n = recycler.allocate("erasure::recover_data");
             window[j].data = Some(n.clone());
             // mark the missing memory
             blobs.push(n);
@@ -515,7 +515,7 @@ pub fn recover(
             }
             blobs.push(b);
         } else {
-            let n = recycler.allocate();
+            let n = recycler.allocate("erasure::recover_coding");
             window[j].coding = Some(n.clone());
             //mark the missing memory
             blobs.push(n);
@@ -728,7 +728,7 @@ mod test {
         ];
         let mut blobs = Vec::with_capacity(num_blobs);
         for i in 0..num_blobs {
-            let b = blob_recycler.allocate();
+            let b = blob_recycler.allocate("");
             let b_ = b.clone();
             let mut w = b.write().unwrap();
             // generate a random length, multiple of 4 between 8 and 32
@@ -788,7 +788,7 @@ mod test {
     fn pollute_recycler(blob_recycler: &BlobRecycler) {
         let mut blobs = Vec::with_capacity(WINDOW_SIZE * 2);
         for _ in 0..WINDOW_SIZE * 10 {
-            let blob = blob_recycler.allocate();
+            let blob = blob_recycler.allocate("");
             {
                 let mut b_l = blob.write().unwrap();
 
