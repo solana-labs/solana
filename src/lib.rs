@@ -62,6 +62,7 @@ pub mod write_stage;
 extern crate bincode;
 extern crate bs58;
 extern crate byteorder;
+extern crate bytes;
 extern crate chrono;
 extern crate clap;
 extern crate dirs;
@@ -85,6 +86,8 @@ extern crate serde_json;
 extern crate sha2;
 extern crate socket2;
 extern crate sys_info;
+extern crate tokio;
+extern crate tokio_codec;
 extern crate untrusted;
 
 #[cfg(test)]
