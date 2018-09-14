@@ -254,8 +254,10 @@ start() {
 
   SECONDS=0
   pids=()
+  loopCount=0
   for ipAddress in "${validatorIpList[@]}"; do
     startValidator "$ipAddress"
+    ((loopCount++ % 2 == 0)) && sleep 2
   done
 
   for pid in "${pids[@]}"; do
