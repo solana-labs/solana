@@ -28,16 +28,18 @@ use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use service::Service;
+use std::mem;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer;
 
 pub struct Rpu {
     request_stage: RequestStage,
     thread_hdls: Vec<JoinHandle<()>>,
+    request_processor: Arc<RwLock<RequestProcessor>>,
 }
 
 impl Rpu {
@@ -58,9 +60,9 @@ impl Rpu {
             packet_sender,
         );
 
-        let request_processor = RequestProcessor::new(bank.clone());
+        let request_processor = Arc::new(RwLock::new(RequestProcessor::new(bank.clone())));
         let (request_stage, blob_receiver) = RequestStage::new(
-            request_processor,
+            request_processor.clone(),
             packet_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
@@ -74,10 +76,17 @@ impl Rpu {
         );
 
         let thread_hdls = vec![t_receiver, t_responder];
+
         Rpu {
             thread_hdls,
             request_stage,
+            request_processor,
         }
+    }
+
+    pub fn set_new_bank(&self, new_bank: Arc<Bank>) {
+        let mut w_request_procesor = self.request_processor.write().unwrap();
+        mem::replace(&mut *w_request_procesor, RequestProcessor::new(new_bank));
     }
 }
 

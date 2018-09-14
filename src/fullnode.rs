@@ -11,7 +11,7 @@ use packet::BlobRecycler;
 use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;
-use signature::{Keypair, KeypairUtil};
+use signature::{Keypair, KeypairUtil, Pubkey};
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,6 +44,10 @@ impl LeaderServices {
         self.broadcast_stage.join()?;
         self.tpu.join()
     }
+
+    pub fn exit(&self) -> () {
+        self.tpu.exit();
+    }
 }
 
 pub struct ValidatorServices {
@@ -57,6 +61,10 @@ impl ValidatorServices {
 
     pub fn join(self) -> Result<()> {
         self.tvu.join()
+    }
+
+    pub fn exit(&self) -> () {
+        //TODO: implement exit for Tvu
     }
 }
 
@@ -298,8 +306,7 @@ impl Fullnode {
                 let tick_duration = None;
                 // TODO: To light up PoH, uncomment the following line:
                 //let tick_duration = Some(Duration::from_millis(1000));
-
-                let (tpu, entry_receiver) = Tpu::new(
+                let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                     keypair.clone(),
                     &bank,
                     &crdt,
@@ -310,7 +317,6 @@ impl Fullnode {
                         .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
                         .collect(),
                     &blob_recycler,
-                    exit.clone(),
                     ledger_path,
                     sigverify_disabled,
                     entry_height,
@@ -326,6 +332,7 @@ impl Fullnode {
                     entry_height,
                     blob_recycler.clone(),
                     entry_receiver,
+                    tpu_exit,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
                 node_role = Some(NodeRole::Leader(leader_state));
@@ -370,6 +377,7 @@ impl Fullnode {
             }
         }
 
+        self.rpu.set_new_bank(self.bank.clone());
         let tvu = Tvu::new(
             self.keypair.clone(),
             &self.bank,
@@ -414,11 +422,24 @@ impl Fullnode {
     //used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
+
+        match self.node_role {
+            Some(NodeRole::Leader(ref leader_services)) => leader_services.exit(),
+            Some(NodeRole::Validator(ref validator_services)) => validator_services.exit(),
+            _ => (),
+        }
     }
 
     pub fn close(self) -> Result<(Option<FullnodeReturnType>)> {
         self.exit();
         self.join()
+    }
+
+    // TODO: only used for testing, get rid of this once we have actual
+    // leader scheduling
+    pub fn set_scheduled_leader(&self, leader_id: Pubkey, entry_height: u64) {
+        let mut wcrdt = self.crdt.write().unwrap();
+        wcrdt.set_scheduled_leader(entry_height, leader_id);
     }
 
     fn new_bank_from_ledger(ledger_path: &str) -> (Bank, u64, Vec<Entry>) {

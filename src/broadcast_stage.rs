@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -148,6 +148,24 @@ fn broadcast(
     Ok(())
 }
 
+// Implement a destructor for the BroadcastStage thread to signal it exited
+// even on panics
+struct Finalizer {
+    exit_sender: Arc<AtomicBool>,
+}
+
+impl Finalizer {
+    fn new(exit_sender: Arc<AtomicBool>) -> Self {
+        Finalizer { exit_sender }
+    }
+}
+// Implement a destructor for Finalizer.
+impl Drop for Finalizer {
+    fn drop(&mut self) {
+        self.exit_sender.clone().store(true, Ordering::Relaxed);
+    }
+}
+
 pub struct BroadcastStage {
     thread_hdl: JoinHandle<BroadcastStageReturnType>,
 }
@@ -216,6 +234,13 @@ impl BroadcastStage {
     /// * `window` - Cache of blobs that we have broadcast
     /// * `recycler` - Blob recycler.
     /// * `receiver` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
+    /// * `exit_sender` - Set to true when this stage exits, allows rest of Tpu to exit cleanly. Otherwise,
+    /// when a Tpu stage closes, it only closes the stages that come after it. The stages
+    /// that come before could be blocked on a receive, and never notice that they need to
+    /// exit. Now, if any stage of the Tpu closes, it will lead to closing the WriteStage (b/c
+    /// WriteStage is the last stage in the pipeline), which will then close Broadcast stage,
+    /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
+    /// completing the cycle.
     pub fn new(
         sock: UdpSocket,
         crdt: Arc<RwLock<Crdt>>,
@@ -223,13 +248,17 @@ impl BroadcastStage {
         entry_height: u64,
         recycler: BlobRecycler,
         receiver: Receiver<Vec<Entry>>,
+        exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
-            .spawn(move || Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver))
+            .spawn(move || {
+                let _exit = Finalizer::new(exit_sender);
+                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver)
+            })
             .unwrap();
 
-        BroadcastStage { thread_hdl }
+        (BroadcastStage { thread_hdl })
     }
 }
 
@@ -252,6 +281,7 @@ mod tests {
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::cmp;
+    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::{channel, Sender};
     use std::sync::{Arc, RwLock};
     use window::{new_window_from_entries, SharedWindow};
@@ -293,7 +323,7 @@ mod tests {
         let shared_window = Arc::new(RwLock::new(window));
 
         let (entry_sender, entry_receiver) = channel();
-
+        let exit_sender = Arc::new(AtomicBool::new(false));
         // Start up the broadcast stage
         let broadcast_stage = BroadcastStage::new(
             leader_info.sockets.broadcast,
@@ -302,6 +332,7 @@ mod tests {
             entry_height,
             blob_recycler.clone(),
             entry_receiver,
+            exit_sender,
         );
 
         (
@@ -375,15 +406,13 @@ mod tests {
             };
         }
 
-        let highest_index = find_highest_window_index(&shared_window);
-
-        // TODO: 2 * LEADER_ROTATION_INTERVAL - 1 due to the same bug in
-        // index_blobs() as mentioned above
-        assert_eq!(highest_index, 2 * LEADER_ROTATION_INTERVAL - 1);
         // Make sure the threads closed cleanly
         assert_eq!(
             broadcast_stage.join().unwrap(),
             BroadcastStageReturnType::LeaderRotation
         );
+
+        let highest_index = find_highest_window_index(&shared_window);
+        assert_eq!(highest_index, 2 * LEADER_ROTATION_INTERVAL - 1);
     }
 }

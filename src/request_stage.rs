@@ -9,7 +9,7 @@ use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
 use streamer::{self, BlobReceiver, BlobSender};
@@ -17,7 +17,7 @@ use timing;
 
 pub struct RequestStage {
     thread_hdl: JoinHandle<()>,
-    pub request_processor: Arc<RequestProcessor>,
+    pub request_processor: Arc<RwLock<RequestProcessor>>,
 }
 
 impl RequestStage {
@@ -78,19 +78,18 @@ impl RequestStage {
         Ok(())
     }
     pub fn new(
-        request_processor: RequestProcessor,
+        request_processor: Arc<RwLock<RequestProcessor>>,
         packet_receiver: Receiver<SharedPackets>,
         packet_recycler: PacketRecycler,
         blob_recycler: BlobRecycler,
     ) -> (Self, BlobReceiver) {
-        let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-request-stage".to_string())
             .spawn(move || loop {
                 if let Err(e) = Self::process_request_packets(
-                    &request_processor_,
+                    &request_processor_.read().unwrap(),
                     &packet_receiver,
                     &blob_sender,
                     &packet_recycler,

@@ -49,7 +49,10 @@ impl BankingStage {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => error!("{:?}", e),
+                        Error::SendError => {
+                            break;
+                        }
+                        _ => println!("BANKING ERROR {:?}", e),
                     }
                 }
             }).unwrap();
@@ -108,7 +111,10 @@ impl BankingStage {
             debug!("process_transactions");
             let results = bank.process_transactions(transactions);
             let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
-            signal_sender.send(Signal::Transactions(transactions))?;
+            match signal_sender.send(Signal::Transactions(transactions)) {
+                Err(_) => return Err(Error::SendError),
+                _ => (),
+            }
             debug!("done process_transactions");
 
             packet_recycler.recycle(msgs, "process_transactions");
