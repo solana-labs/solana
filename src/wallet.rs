@@ -133,9 +133,10 @@ pub fn parse_command(
                         err, userdata_path
                     )))
                 })?;
-                let mut buf = vec![0u8; 60];
-                file.read(&mut buf)?;
-                buf
+                // let mut buf = vec![0u8; 60];
+                // file.read(&mut buf)?;
+                // buf
+                serde_json::from_reader(file)?
             } else {
                 serde_json::from_str(userdata_matches.value_of("serial-userdata").unwrap())
                     .or_else(|err| {
@@ -224,7 +225,7 @@ pub fn process_command(
                         fs::create_dir_all(outdir)?;
                     }
                     let mut f = File::create(path)?;
-                    f.write_all(&transaction.userdata)?;
+                    serde_json::to_writer(f, &transaction.userdata)?;
                 }
                 None => println!("{:?}", transaction.userdata),
             }
