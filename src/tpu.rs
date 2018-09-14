@@ -57,7 +57,7 @@ impl Tpu {
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
         transactions_sockets: Vec<UdpSocket>,
-        blob_recycler: BlobRecycler,
+        blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
