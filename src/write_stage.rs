@@ -170,7 +170,7 @@ impl WriteStage {
 
     /// Create a new WriteStage for writing and broadcasting entries.
     pub fn new(
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
         blob_recycler: BlobRecycler,
@@ -315,7 +315,7 @@ mod tests {
         Vec<Entry>,
     ) {
         // Setup leader info
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let id = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 

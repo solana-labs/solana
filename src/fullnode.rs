@@ -12,6 +12,7 @@ use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
+use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -64,11 +65,23 @@ pub enum FullnodeReturnType {
 }
 
 pub struct Fullnode {
+    pub node_role: Option<NodeRole>,
+    keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Rpu,
     rpc_service: JsonRpcService,
     ncp: Ncp,
-    pub node_role: Option<NodeRole>,
+    bank: Arc<Bank>,
+    crdt: Arc<RwLock<Crdt>>,
+    ledger_path: String,
+    sigverify_disabled: bool,
+    shared_window: window::SharedWindow,
+    replicate_socket: Vec<UdpSocket>,
+    repair_socket: UdpSocket,
+    retransmit_socket: UdpSocket,
+    transaction_sockets: Vec<UdpSocket>,
+    broadcast_socket: UdpSocket,
+    blob_recycler: BlobRecycler,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -102,22 +115,11 @@ impl Fullnode {
         sigverify_disabled: bool,
     ) -> Self {
         info!("creating bank...");
-        let bank = Bank::new_default(leader_addr.is_none());
-
-        let entries = read_ledger(ledger_path, true).expect("opening ledger");
-
-        let entries = entries
-            .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
-
-        info!("processing ledger...");
-        let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
-        // entry_height is the network-wide agreed height of the ledger.
-        //  initialize it from the input ledger
-        info!("processed {} ledger...", entry_height);
+        let (bank, entry_height, ledger_tail) = Self::new_bank_from_ledger(ledger_path);
 
         info!("creating networking stack...");
-
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
+
         info!(
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.info.contact_info.ncp
@@ -133,7 +135,7 @@ impl Fullnode {
             &ledger_tail,
             node,
             leader_info.as_ref(),
-            Some(ledger_path),
+            ledger_path,
             sigverify_disabled,
         );
 
@@ -212,7 +214,7 @@ impl Fullnode {
         ledger_tail: &[Entry],
         mut node: Node,
         leader_info: Option<&NodeInfo>,
-        ledger_path: Option<&str>,
+        ledger_path: &str,
         sigverify_disabled: bool,
     ) -> Self {
         if leader_info.is_none() {
@@ -253,11 +255,12 @@ impl Fullnode {
             &crdt,
             shared_window.clone(),
             blob_recycler.clone(),
-            ledger_path,
+            Some(ledger_path),
             node.sockets.gossip,
             exit.clone(),
         );
 
+        let keypair = Arc::new(keypair);
         let node_role;
         match leader_info {
             Some(leader_info) => {
@@ -265,16 +268,26 @@ impl Fullnode {
                 // TODO: let Crdt get that data from the network?
                 crdt.write().unwrap().insert(leader_info);
                 let tvu = Tvu::new(
-                    keypair,
+                    keypair.clone(),
                     &bank,
                     entry_height,
-                    crdt,
-                    shared_window,
+                    crdt.clone(),
+                    shared_window.clone(),
                     blob_recycler.clone(),
-                    node.sockets.replicate,
-                    node.sockets.repair,
-                    node.sockets.retransmit,
-                    ledger_path,
+                    node.sockets
+                        .replicate
+                        .iter()
+                        .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                        .collect(),
+                    node.sockets
+                        .repair
+                        .try_clone()
+                        .expect("Failed to clone repair socket"),
+                    node.sockets
+                        .retransmit
+                        .try_clone()
+                        .expect("Failed to clone retransmit socket"),
+                    Some(ledger_path),
                     exit.clone(),
                 );
                 let validator_state = ValidatorServices::new(tvu);
@@ -282,17 +295,20 @@ impl Fullnode {
             }
             None => {
                 // Start in leader mode.
-                let ledger_path = ledger_path.expect("ledger path");
                 let tick_duration = None;
                 // TODO: To light up PoH, uncomment the following line:
                 //let tick_duration = Some(Duration::from_millis(1000));
 
                 let (tpu, entry_receiver) = Tpu::new(
-                    keypair,
+                    keypair.clone(),
                     &bank,
                     &crdt,
                     tick_duration,
-                    node.sockets.transaction,
+                    node.sockets
+                        .transaction
+                        .iter()
+                        .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                        .collect(),
                     &blob_recycler,
                     exit.clone(),
                     ledger_path,
@@ -301,9 +317,12 @@ impl Fullnode {
                 );
 
                 let broadcast_stage = BroadcastStage::new(
-                    node.sockets.broadcast,
-                    crdt,
-                    shared_window,
+                    node.sockets
+                        .broadcast
+                        .try_clone()
+                        .expect("Failed to clone broadcast socket"),
+                    crdt.clone(),
+                    shared_window.clone(),
                     entry_height,
                     blob_recycler.clone(),
                     entry_receiver,
@@ -314,11 +333,81 @@ impl Fullnode {
         }
 
         Fullnode {
+            keypair,
+            crdt,
+            shared_window,
+            bank,
+            sigverify_disabled,
             rpu,
             ncp,
             rpc_service,
             node_role,
+            blob_recycler: blob_recycler.clone(),
+            ledger_path: ledger_path.to_owned(),
             exit,
+            replicate_socket: node.sockets.replicate,
+            repair_socket: node.sockets.repair,
+            retransmit_socket: node.sockets.retransmit,
+            transaction_sockets: node.sockets.transaction,
+            broadcast_socket: node.sockets.broadcast,
+        }
+    }
+
+    fn leader_to_validator(&mut self) {
+        // TODO: We can avoid building the bank again once RecordStage is
+        // integrated with BankingStage
+        let (bank, entry_height, _) = Self::new_bank_from_ledger(&self.ledger_path);
+        self.bank = Arc::new(bank);
+
+        {
+            let mut wcrdt = self.crdt.write().unwrap();
+            let scheduled_leader = wcrdt.get_scheduled_leader(entry_height);
+            match scheduled_leader {
+                //TODO: Handle the case where we don't know who the next
+                //scheduled leader is
+                None => (),
+                Some(leader_id) => wcrdt.set_leader(leader_id),
+            }
+        }
+
+        let tvu = Tvu::new(
+            self.keypair.clone(),
+            &self.bank,
+            entry_height,
+            self.crdt.clone(),
+            self.shared_window.clone(),
+            self.blob_recycler.clone(),
+            self.replicate_socket
+                .iter()
+                .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                .collect(),
+            self.repair_socket
+                .try_clone()
+                .expect("Failed to clone repair socket"),
+            self.retransmit_socket
+                .try_clone()
+                .expect("Failed to clone retransmit socket"),
+            Some(&self.ledger_path),
+            self.exit.clone(),
+        );
+        let validator_state = ValidatorServices::new(tvu);
+        self.node_role = Some(NodeRole::Validator(validator_state));
+    }
+
+    pub fn handle_role_transition(&mut self) -> Result<Option<FullnodeReturnType>> {
+        let node_role = self.node_role.take();
+        match node_role {
+            Some(NodeRole::Leader(leader_services)) => match leader_services.join()? {
+                Some(TpuReturnType::LeaderRotation) => {
+                    self.leader_to_validator();
+                    Ok(Some(FullnodeReturnType::LeaderRotation))
+                }
+                _ => Ok(None),
+            },
+            Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
+                _ => Ok(None),
+            },
+            None => Ok(None),
         }
     }
 
@@ -330,6 +419,19 @@ impl Fullnode {
     pub fn close(self) -> Result<(Option<FullnodeReturnType>)> {
         self.exit();
         self.join()
+    }
+
+    fn new_bank_from_ledger(ledger_path: &str) -> (Bank, u64, Vec<Entry>) {
+        let bank = Bank::new_default(false);
+        let entries = read_ledger(ledger_path, true).expect("opening ledger");
+        let entries = entries
+            .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
+        info!("processing ledger...");
+        let (entry_height, ledger_tail) = bank.process_ledger(entries).expect("process_ledger");
+        // entry_height is the network-wide agreed height of the ledger.
+        //  initialize it from the input ledger
+        info!("processed {} ledger...", entry_height);
+        (bank, entry_height, ledger_tail)
     }
 }
 
@@ -365,31 +467,56 @@ mod tests {
     use bank::Bank;
     use crdt::Node;
     use fullnode::Fullnode;
-    use mint::Mint;
+    use ledger::genesis;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
 
     #[test]
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let alice = Mint::new(10_000);
+        let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
         let bank = Bank::new(&alice);
         let entry = tn.info.clone();
-        let v = Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), None, false);
+        let v = Fullnode::new_with_bank(
+            keypair,
+            bank,
+            0,
+            &[],
+            tn,
+            Some(&entry),
+            &validator_ledger_path,
+            false,
+        );
         v.close().unwrap();
+        remove_dir_all(validator_ledger_path).unwrap();
     }
     #[test]
     fn validator_parallel_exit() {
+        let mut ledger_paths = vec![];
         let vals: Vec<Fullnode> = (0..2)
-            .map(|_| {
+            .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let alice = Mint::new(10_000);
+                let (alice, validator_ledger_path) =
+                    genesis(&format!("validator_parallel_exit_{}", i), 10_000);
+                ledger_paths.push(validator_ledger_path.clone());
                 let bank = Bank::new(&alice);
                 let entry = tn.info.clone();
-                Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), None, false)
-            }).collect();
+                Fullnode::new_with_bank(
+                    keypair,
+                    bank,
+                    0,
+                    &[],
+                    tn,
+                    Some(&entry),
+                    &validator_ledger_path,
+                    false,
+                )
+            })
+            .collect();
+
         //each validator can exit in parallel to speed many sequential calls to `join`
         vals.iter().for_each(|v| v.exit());
         //while join is called sequentially, the above exit call notified all the
@@ -397,5 +524,9 @@ mod tests {
         vals.into_iter().for_each(|v| {
             v.join().unwrap();
         });
+
+        for path in ledger_paths {
+            remove_dir_all(path).unwrap();
+        }
     }
 }

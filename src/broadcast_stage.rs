@@ -328,8 +328,15 @@ mod tests {
 
     #[test]
     fn test_broadcast_stage_leader_rotation_exit() {
-        let (id, buddy_id, broadcast_stage, shared_window, entry_sender, crdt, entries) =
-            setup_dummy_broadcast_stage();
+        let (
+            id,
+            buddy_id,
+            broadcast_stage,
+            shared_window,
+            entry_sender,
+            crdt,
+            entries,
+        ) = setup_dummy_broadcast_stage();
         {
             let mut wcrdt = crdt.write().unwrap();
             // Set leader to myself

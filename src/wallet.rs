@@ -385,7 +385,7 @@ mod tests {
             &[],
             leader,
             None,
-            Some(&ledger_path),
+            &ledger_path,
             false,
         );
         sleep(Duration::from_millis(200));
@@ -451,7 +451,7 @@ mod tests {
             &[],
             leader,
             None,
-            Some(&ledger_path),
+            &ledger_path,
             false,
         );
         sleep(Duration::from_millis(200));
