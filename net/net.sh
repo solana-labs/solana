@@ -254,8 +254,14 @@ start() {
 
   SECONDS=0
   pids=()
+  loopCount=0
   for ipAddress in "${validatorIpList[@]}"; do
     startValidator "$ipAddress"
+
+    # Staggering validator startup time. If too many validators
+    # bootup simultaneously, leader node gets more rsync requests
+    # from the validators than it can handle.
+    ((loopCount++ % 2 == 0)) && sleep 2
   done
 
   for pid in "${pids[@]}"; do
