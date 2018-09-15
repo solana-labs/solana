@@ -13,6 +13,7 @@ use solana::thin_client::poll_gossip_for_leader;
 use solana::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
 use std::net::SocketAddr;
+use std::process::Command;
 
 pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
@@ -35,6 +36,15 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         matches.value_of("keypair").unwrap()
     } else {
         path.extend(&[".config", "solana", "id.json"]);
+        if !path.exists() {
+            Command::new("cargo")
+                .arg("run")
+                .arg("--bin")
+                .arg("solana-keygen")
+                .status()
+                .expect("failed to execute process");
+        }
+
         path.to_str().unwrap()
     };
     let id = read_keypair(id_path).or_else(|err| {
