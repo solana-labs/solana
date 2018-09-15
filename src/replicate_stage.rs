@@ -110,8 +110,7 @@ impl ReplicateStage {
                         _ => error!("{:?}", e),
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
 
         let mut thread_hdls = vec![t_responder, t_replicate];
         thread_hdls.extend(vote_stage.thread_hdls());

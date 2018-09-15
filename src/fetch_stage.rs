@@ -33,8 +33,7 @@ impl FetchStage {
             .into_iter()
             .map(|socket| {
                 streamer::receiver(socket, exit.clone(), recycler.clone(), sender.clone())
-            })
-            .collect();
+            }).collect();
 
         (FetchStage { exit, thread_hdls }, receiver)
     }

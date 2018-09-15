@@ -21,31 +21,27 @@ fn main() {
                 .long("local")
                 .takes_value(false)
                 .help("detect network address from local machine configuration"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("public")
                 .short("p")
                 .long("public")
                 .takes_value(false)
                 .help("detect public network address using public servers"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("bind")
                 .short("b")
                 .long("bind")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("bind to port or address"),
-        )
-        .get_matches();
+        ).get_matches();
 
     let bind_addr: SocketAddr = {
         let mut bind_addr = parse_port_or_addr(matches.value_of("bind"), FULLNODE_PORT_RANGE.0);

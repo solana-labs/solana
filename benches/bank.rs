@@ -37,8 +37,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             // Finally, return the transaction to the benchmark.
             tx
-        })
-        .collect();
+        }).collect();
 
     bencher.iter(|| {
         // Since benchmarker runs this multiple times, we need to clear the signatures.

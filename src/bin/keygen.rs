@@ -22,8 +22,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("path to generated file"),
-        )
-        .get_matches();
+        ).get_matches();
 
     let rnd = SystemRandom::new();
     let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
