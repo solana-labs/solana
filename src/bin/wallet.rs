@@ -1,26 +1,28 @@
 #[macro_use]
 extern crate clap;
 extern crate dirs;
+#[macro_use]
 extern crate solana;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::client::mk_client;
-use solana::crdt::NodeInfo;
 use solana::drone::DRONE_PORT;
 use solana::logger;
 use solana::signature::{read_keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
-use solana::wallet::{parse_command, process_command, read_leader, WalletConfig, WalletError};
+use solana::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
 pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
-    let leader: NodeInfo;
-    if let Some(l) = matches.value_of("leader") {
-        leader = read_leader(l)?.node_info;
+    let network = if let Some(addr) = matches.value_of("network") {
+        addr.parse().or_else(|_| {
+            Err(WalletError::BadParameter(
+                "Invalid network location".to_string(),
+            ))
+        })?
     } else {
-        let server_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        leader = NodeInfo::new_with_socketaddr(&server_addr);
+        socketaddr!("127.0.0.1:8001")
     };
     let timeout: Option<u64>;
     if let Some(secs) = matches.value_of("timeout") {
@@ -43,7 +45,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         )))
     })?;
 
-    let leader = poll_gossip_for_leader(leader.contact_info.ncp, timeout)?;
+    let leader = poll_gossip_for_leader(network, timeout)?;
 
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
@@ -63,13 +65,14 @@ fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("solana-wallet")
         .version(crate_version!())
         .arg(
-            Arg::with_name("leader")
-                .short("l")
-                .long("leader")
-                .value_name("PATH")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
+                .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("/path/to/leader.json"),
-        ).arg(
+                .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
+        )
+        .arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
