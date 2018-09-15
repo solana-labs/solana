@@ -24,12 +24,11 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     } else {
         socketaddr!("127.0.0.1:8001")
     };
-    let timeout: Option<u64>;
-    if let Some(secs) = matches.value_of("timeout") {
-        timeout = Some(secs.to_string().parse().expect("integer"));
+    let timeout = if let Some(secs) = matches.value_of("timeout") {
+        Some(secs.to_string().parse().expect("integer"))
     } else {
-        timeout = None;
-    }
+        None
+    };
 
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
