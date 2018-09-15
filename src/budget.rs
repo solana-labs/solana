@@ -191,4 +191,20 @@ mod tests {
         budget.apply_witness(&Witness::Signature, &from);
         assert_eq!(budget, Budget::new_payment(42, from));
     }
+
+    #[test]
+    fn test_unauthorized_cancel() {
+        let dt = Utc.ymd(2014, 11, 14).and_hms(8, 9, 10);
+        let from = Pubkey::default();
+        let to = Pubkey::default();
+
+        let mut budget = Budget::new_cancelable_future_payment(dt, from, 42, to);
+        budget.apply_witness(&Witness::Timestamp(dt), &from);
+        assert_eq!(budget, Budget::new_payment(42, to));
+
+        let mut budget = Budget::new_cancelable_future_payment(dt, from, 42, to);
+        // Attack! try to witness the signature with the wrong key
+        budget.apply_witness(&Witness::Signature, &to);
+        assert_ne!(budget, Budget::new_payment(42, from));
+    }
 }
