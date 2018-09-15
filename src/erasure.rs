@@ -327,8 +327,7 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} data: {}", id, i, l.data[0]);
                 &l.data[..max_data_size]
-            })
-            .collect();
+            }).collect();
 
         let mut coding_locks: Vec<_> = coding_blobs
             .iter()
@@ -341,8 +340,7 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} coding: {}", id, i, l.data[0],);
                 &mut l.data_mut()[..max_data_size]
-            })
-            .collect();
+            }).collect();
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(

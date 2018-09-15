@@ -126,8 +126,7 @@ impl WriteStage {
                         error!("{:?}", e);
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
 
         let thread_hdls = vec![t_responder, thread_hdl];
         (WriteStage { thread_hdls }, blob_receiver)

@@ -28,8 +28,7 @@ impl RequestStage {
                 deserialize(&x.data[0..x.meta.size])
                     .map(|req| (req, x.meta.addr()))
                     .ok()
-            })
-            .collect()
+            }).collect()
     }
 
     pub fn process_request_packets(
@@ -103,8 +102,7 @@ impl RequestStage {
                         _ => error!("{:?}", e),
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
         (
             RequestStage {
                 thread_hdl,
