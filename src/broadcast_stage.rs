@@ -255,10 +255,9 @@ impl BroadcastStage {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver)
-            })
-            .unwrap();
+            }).unwrap();
 
-        (BroadcastStage { thread_hdl })
+        BroadcastStage { thread_hdl }
     }
 }
 
@@ -286,18 +285,20 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use window::{new_window_from_entries, SharedWindow};
 
-    fn setup_dummy_broadcast_stage() -> (
-        Pubkey,
-        Pubkey,
-        BroadcastStage,
-        SharedWindow,
-        Sender<Vec<Entry>>,
-        Arc<RwLock<Crdt>>,
-        Vec<Entry>,
-    ) {
+    struct DummyBroadcastStage {
+        my_id: Pubkey,
+        buddy_id: Pubkey,
+        broadcast_stage: BroadcastStage,
+        shared_window: SharedWindow,
+        entry_sender: Sender<Vec<Entry>>,
+        crdt: Arc<RwLock<Crdt>>,
+        entries: Vec<Entry>,
+    }
+
+    fn setup_dummy_broadcast_stage() -> DummyBroadcastStage {
         // Setup dummy leader info
         let leader_keypair = Keypair::new();
-        let id = leader_keypair.pubkey();
+        let my_id = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Give the leader somebody to broadcast to so he isn't lonely
@@ -335,15 +336,15 @@ mod tests {
             exit_sender,
         );
 
-        (
-            id,
+        DummyBroadcastStage {
+            my_id,
             buddy_id,
             broadcast_stage,
             shared_window,
             entry_sender,
             crdt,
             entries,
-        )
+        }
     }
 
     fn find_highest_window_index(shared_window: &SharedWindow) -> u64 {
@@ -359,25 +360,20 @@ mod tests {
 
     #[test]
     fn test_broadcast_stage_leader_rotation_exit() {
-        let (
-            id,
-            buddy_id,
-            broadcast_stage,
-            shared_window,
-            entry_sender,
-            crdt,
-            entries,
-        ) = setup_dummy_broadcast_stage();
+        let broadcast_info = setup_dummy_broadcast_stage();
+
         {
-            let mut wcrdt = crdt.write().unwrap();
-            // Set leader to myself
-            wcrdt.set_leader(id);
-            // Set the leader for the next rotation to also be myself
-            wcrdt.set_scheduled_leader(LEADER_ROTATION_INTERVAL, id);
+            let mut wcrdt = broadcast_info.crdt.write().unwrap();
+            // Set the leader for the next rotation to be myself
+            wcrdt.set_scheduled_leader(LEADER_ROTATION_INTERVAL, broadcast_info.my_id);
         }
 
-        let genesis_len = entries.len() as u64;
-        let last_entry_hash = entries.last().expect("Ledger should not be empty").id;
+        let genesis_len = broadcast_info.entries.len() as u64;
+        let last_entry_hash = broadcast_info
+            .entries
+            .last()
+            .expect("Ledger should not be empty")
+            .id;
 
         // Input enough entries to make exactly LEADER_ROTATION_INTERVAL entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
@@ -386,20 +382,22 @@ mod tests {
 
         for _ in genesis_len..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            entry_sender.send(new_entry).unwrap();
+            broadcast_info.entry_sender.send(new_entry).unwrap();
         }
 
         // Set the scheduled next leader in the crdt to the other buddy on the network
-        crdt.write()
+        broadcast_info
+            .crdt
+            .write()
             .unwrap()
-            .set_scheduled_leader(2 * LEADER_ROTATION_INTERVAL, buddy_id);
+            .set_scheduled_leader(2 * LEADER_ROTATION_INTERVAL, broadcast_info.buddy_id);
 
         // Input another LEADER_ROTATION_INTERVAL dummy entries, which will take us
         // past the point of the leader rotation. The write_stage will see that
         // it's no longer the leader after checking the crdt, and exit
         for _ in 0..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            match entry_sender.send(new_entry) {
+            match broadcast_info.entry_sender.send(new_entry) {
                 // We disconnected, break out of loop and check the results
                 Err(_) => break,
                 _ => (),
@@ -408,11 +406,13 @@ mod tests {
 
         // Make sure the threads closed cleanly
         assert_eq!(
-            broadcast_stage.join().unwrap(),
+            broadcast_info.broadcast_stage.join().unwrap(),
             BroadcastStageReturnType::LeaderRotation
         );
 
-        let highest_index = find_highest_window_index(&shared_window);
+        let highest_index = find_highest_window_index(&broadcast_info.shared_window);
+        // The blob index is zero indexed, so it will always be one behind the entry height
+        // which starts at one.
         assert_eq!(highest_index, 2 * LEADER_ROTATION_INTERVAL - 1);
     }
 }

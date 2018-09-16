@@ -56,23 +56,14 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<Crdt>>, Pubkey) {
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     //lets spy on the network
-    let (ncp, spy_ref, me) = make_spy_node(leader);
+    let (ncp, spy_ref, _) = make_spy_node(leader);
 
     //wait for the network to converge
     let mut converged = false;
     let mut rv = vec![];
     for _ in 0..30 {
         let num = spy_ref.read().unwrap().convergence();
-        let mut v: Vec<NodeInfo> = spy_ref
-            .read()
-            .unwrap()
-            .table
-            .values()
-            .into_iter()
-            .filter(|x| x.id != me)
-            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
-            .cloned()
-            .collect();
+        let mut v = spy_ref.read().unwrap().get_valid_peers();
         if num >= num_nodes as u64 && v.len() >= num_nodes {
             rv.append(&mut v);
             converged = true;
@@ -753,22 +744,13 @@ fn test_leader_to_validator_transition() {
 
     // Make an extra node for our leader to broadcast to,
     // who won't vote and mess with our leader's entry count
-    let (ncp, spy_node, me) = make_spy_node(&leader_info);
+    let (ncp, spy_node, _) = make_spy_node(&leader_info);
 
     // Wait for the leader to see the spy node
     let mut converged = false;
     for _ in 0..30 {
         let num = spy_node.read().unwrap().convergence();
-        let mut v: Vec<NodeInfo> = spy_node
-            .read()
-            .unwrap()
-            .table
-            .values()
-            .into_iter()
-            .filter(|x| x.id != me)
-            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
-            .cloned()
-            .collect();
+        let mut v: Vec<NodeInfo> = spy_node.read().unwrap().get_valid_peers();
         // There's only one person excluding the spy node (the leader) who should see
         // two nodes on the network
         if num >= 2 as u64 && v.len() >= 1 {
@@ -780,15 +762,16 @@ fn test_leader_to_validator_transition() {
 
     assert!(converged);
 
-    let extra_transactions = std::cmp::max(LEADER_ROTATION_INTERVAL / 4, 1);
+    let extra_transactions = std::cmp::max(LEADER_ROTATION_INTERVAL / 20, 1);
 
-    // Push leader "extra_transactions" past LEADER_ROTATION_INTERVAL entry height, 
+    // Push leader "extra_transactions" past LEADER_ROTATION_INTERVAL entry height,
     // make sure the leader stops.
     assert!(genesis_height < LEADER_ROTATION_INTERVAL);
     for i in genesis_height..(LEADER_ROTATION_INTERVAL + extra_transactions) {
         let expected_balance = std::cmp::min(
             LEADER_ROTATION_INTERVAL - genesis_height,
-            i - genesis_height);
+            i - genesis_height,
+        );
 
         send_tx_and_retry_get_balance(
             &leader_info,
@@ -806,7 +789,7 @@ fn test_leader_to_validator_transition() {
     }
 
     // Query now validator to make sure that he has the proper balances in his bank
-    // after the transition, even though we submitted "extra_transactions" 
+    // after the transition, even though we submitted "extra_transactions"
     // transactions earlier
     let mut leader_client = mk_client(&leader_info);
 

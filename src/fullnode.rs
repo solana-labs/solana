@@ -377,6 +377,8 @@ impl Fullnode {
             }
         }
 
+        // Tell the RPU to serve requests out of the new bank we've created
+        // instead of the old one
         self.rpu.set_new_bank(self.bank.clone());
         let tvu = Tvu::new(
             self.keypair.clone(),
@@ -476,9 +478,6 @@ impl Service for Fullnode {
             _ => (),
         }
 
-        // TODO: Case on join values above to determine if
-        // a leader rotation was in order, and propagate up a
-        // signal to reflect that
         Ok(None)
     }
 }
@@ -535,8 +534,7 @@ mod tests {
                     &validator_ledger_path,
                     false,
                 )
-            })
-            .collect();
+            }).collect();
 
         //each validator can exit in parallel to speed many sequential calls to `join`
         vals.iter().for_each(|v| v.exit());

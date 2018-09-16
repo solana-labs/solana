@@ -319,6 +319,17 @@ impl Crdt {
         self.scheduled_leaders.insert(entry_height, new_leader_id);
     }
 
+    pub fn get_valid_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
+        self.table
+            .values()
+            .into_iter()
+            .filter(|x| x.id != me)
+            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+            .cloned()
+            .collect()
+    }
+
     pub fn get_external_liveness_entry(&self, key: &Pubkey) -> Option<&HashMap<Pubkey, u64>> {
         self.external_liveness.get(key)
     }

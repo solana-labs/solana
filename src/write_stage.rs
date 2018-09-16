@@ -199,8 +199,8 @@ impl WriteStage {
                 loop {
                     // Note that entry height is not zero indexed, it starts at 1, so the
                     // old leader is in power up to and including entry height
-                    // n * LEADER_ROTATION_INTERVAL, so once we've forwarded that last block,
-                    // check for the next leader.
+                    // n * LEADER_ROTATION_INTERVAL for some "n". Once we've forwarded
+                    // that last block, check for the next scheduled leader.
                     if entry_height % (LEADER_ROTATION_INTERVAL as u64) == 0 {
                         let rcrdt = crdt.read().unwrap();
                         let my_id = rcrdt.my_data().id;
@@ -294,6 +294,17 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use write_stage::{WriteStage, WriteStageReturnType};
 
+    struct DummyWriteStage {
+        my_id: Pubkey,
+        write_stage: WriteStage,
+        entry_sender: Sender<Vec<Entry>>,
+        write_stage_entry_receiver: Receiver<Vec<Entry>>,
+        crdt: Arc<RwLock<Crdt>>,
+        bank: Arc<Bank>,
+        leader_ledger_path: String,
+        ledger_tail: Vec<Entry>,
+    }
+
     fn process_ledger(ledger_path: &str, bank: &Bank) -> (u64, Vec<Entry>) {
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
 
@@ -304,19 +315,10 @@ mod tests {
         bank.process_ledger(entries).expect("process_ledger")
     }
 
-    fn setup_dummy_write_stage() -> (
-        Pubkey,
-        WriteStage,
-        Sender<Vec<Entry>>,
-        Receiver<Vec<Entry>>,
-        Arc<RwLock<Crdt>>,
-        Arc<Bank>,
-        String,
-        Vec<Entry>,
-    ) {
+    fn setup_dummy_write_stage() -> DummyWriteStage {
         // Setup leader info
         let leader_keypair = Arc::new(Keypair::new());
-        let id = leader_keypair.pubkey();
+        let my_id = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let crdt = Arc::new(RwLock::new(Crdt::new(leader_info.info).expect("Crdt::new")));
@@ -343,8 +345,8 @@ mod tests {
             entry_height,
         );
 
-        (
-            id,
+        DummyWriteStage {
+            my_id,
             write_stage,
             entry_sender,
             write_stage_entry_receiver,
@@ -352,29 +354,26 @@ mod tests {
             bank,
             leader_ledger_path,
             ledger_tail,
-        )
+        }
     }
 
     #[test]
     fn test_write_stage_leader_rotation_exit() {
-        let (
-            id,
-            write_stage,
-            entry_sender,
-            _write_stage_entry_receiver,
-            crdt,
-            bank,
-            leader_ledger_path,
-            ledger_tail,
-        ) = setup_dummy_write_stage();
+        let write_stage_info = setup_dummy_write_stage();
 
-        crdt.write()
+        write_stage_info
+            .crdt
+            .write()
             .unwrap()
-            .set_scheduled_leader(LEADER_ROTATION_INTERVAL, id);
+            .set_scheduled_leader(LEADER_ROTATION_INTERVAL, write_stage_info.my_id);
 
-        let last_entry_hash = ledger_tail.last().expect("Ledger should not be empty").id;
+        let last_entry_hash = write_stage_info
+            .ledger_tail
+            .last()
+            .expect("Ledger should not be empty")
+            .id;
 
-        let genesis_entry_height = ledger_tail.len() as u64;
+        let genesis_entry_height = write_stage_info.ledger_tail.len() as u64;
 
         // Input enough entries to make exactly LEADER_ROTATION_INTERVAL entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
@@ -382,7 +381,7 @@ mod tests {
         let mut recorder = Recorder::new(last_entry_hash);
         for _ in genesis_entry_height..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            entry_sender.send(new_entry).unwrap();
+            write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
         // Set the scheduled next leader in the crdt to some other node
@@ -390,7 +389,7 @@ mod tests {
         let leader2_info = Node::new_localhost_with_pubkey(leader2_keypair.pubkey());
 
         {
-            let mut wcrdt = crdt.write().unwrap();
+            let mut wcrdt = write_stage_info.crdt.write().unwrap();
             wcrdt.insert(&leader2_info.info);
             wcrdt.set_scheduled_leader(2 * LEADER_ROTATION_INTERVAL, leader2_keypair.pubkey());
         }
@@ -401,17 +400,18 @@ mod tests {
         // checking the schedule, and exit
         for _ in 0..LEADER_ROTATION_INTERVAL {
             let new_entry = recorder.record(vec![]);
-            entry_sender.send(new_entry).unwrap();
+            write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
         assert_eq!(
-            write_stage.join().unwrap(),
+            write_stage_info.write_stage.join().unwrap(),
             WriteStageReturnType::LeaderRotation
         );
 
         // Make sure the ledger contains exactly LEADER_ROTATION_INTERVAL entries
-        let (entry_height, _) = process_ledger(&leader_ledger_path, &bank);
-        remove_dir_all(leader_ledger_path).unwrap();
+        let (entry_height, _) =
+            process_ledger(&write_stage_info.leader_ledger_path, &write_stage_info.bank);
+        remove_dir_all(write_stage_info.leader_ledger_path).unwrap();
         assert_eq!(entry_height, 2 * LEADER_ROTATION_INTERVAL);
     }
 }
