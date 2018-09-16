@@ -13,6 +13,8 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread::sleep;
+use std::time::Duration;
 
 pub type SharedPackets = Arc<RwLock<Packets>>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
@@ -231,6 +233,7 @@ pub struct Recycler<T> {
     skipped_count: Arc<AtomicUsize>,
     name: String,
     counter: Arc<AtomicUsize>,
+    limit: usize,
 }
 
 impl<T: Default> Default for Recycler<T> {
@@ -243,6 +246,7 @@ impl<T: Default> Default for Recycler<T> {
             skipped_count: Arc::new(AtomicUsize::new(0)),
             name: format!("? sz: {}", size_of::<T>()).to_string(),
             counter: Arc::new(AtomicUsize::new(0)),
+            limit: 0,
         }
     }
 }
@@ -257,6 +261,7 @@ impl<T: Default> Clone for Recycler<T> {
             skipped_count: self.skipped_count.clone(),
             name: self.name.clone(),
             counter: self.counter.clone(),
+            limit: self.limit,
         }
     }
 }
@@ -266,11 +271,27 @@ fn inc_counter(x: &AtomicUsize) {
 }
 
 impl<T: Default + Reset + Gid> Recycler<T> {
+    pub fn new_with_limit(limit: usize) -> Recycler<T> {
+        let mut r: Recycler<T> = Default::default();
+        r.limit = limit;
+        r
+    }
+
     pub fn set_name(&mut self, name: &'static str) {
         self.name = name.to_string();
     }
 
     pub fn allocate(&self, name: &'static str) -> Arc<RwLock<T>> {
+        if self.limit != 0 {
+            loop {
+                if self.allocated_count.load(Ordering::Relaxed) < self.limit
+                    || self.gc.lock().unwrap().len() > 1
+                {
+                    break;
+                }
+                sleep(Duration::from_millis(10));
+            }
+        }
         let mut gc = self.gc.lock().expect("recycler lock in pb fn allocate");
         let gc_count = gc.len();
 
@@ -311,7 +332,7 @@ impl<T: Default + Reset + Gid> Recycler<T> {
                         gc_count,
                         x.read().unwrap().get_gid(),
                         Arc::strong_count(&x)
-                        );
+                    );
                 }
                 return x;
             } else {
@@ -634,8 +655,8 @@ impl Blob {
 #[cfg(test)]
 mod tests {
     use packet::{
-        to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, Recycler, Reset,
-        BLOB_HEADER_SIZE, NUM_PACKETS, PACKET_DATA_SIZE, Gid
+        to_packets, Blob, BlobRecycler, Gid, Meta, Packet, PacketRecycler, Packets, Recycler,
+        Reset, BLOB_HEADER_SIZE, NUM_PACKETS, PACKET_DATA_SIZE,
     };
     use request::Request;
     use std::io;

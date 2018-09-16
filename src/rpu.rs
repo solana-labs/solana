@@ -24,13 +24,13 @@
 //! ```
 
 use bank::Bank;
+use channel::mk_channel;
 use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use streamer;
@@ -50,7 +50,7 @@ impl Rpu {
     ) -> Self {
         let mut packet_recycler = PacketRecycler::default();
         packet_recycler.set_name("rpu::Packet");
-        let (packet_sender, packet_receiver) = channel();
+        let (packet_sender, packet_receiver) = mk_channel();
         let t_receiver = streamer::receiver(
             Arc::new(requests_socket),
             exit,

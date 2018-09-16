@@ -4,6 +4,7 @@
 
 use bank::Bank;
 use bincode::deserialize;
+use channel::mk_channel;
 use counter::Counter;
 use log::Level;
 use packet::{PacketRecycler, Packets, SharedPackets};
@@ -13,7 +14,7 @@ use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -36,7 +37,7 @@ impl BankingStage {
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         packet_recycler: PacketRecycler,
     ) -> (Self, Receiver<Signal>) {
-        let (signal_sender, signal_receiver) = channel();
+        let (signal_sender, signal_receiver) = mk_channel();
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
             .spawn(move || loop {
@@ -73,7 +74,7 @@ impl BankingStage {
     pub fn process_packets(
         bank: &Arc<Bank>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        signal_sender: &Sender<Signal>,
+        signal_sender: &SyncSender<Signal>,
         packet_recycler: &PacketRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
@@ -81,7 +82,7 @@ impl BankingStage {
         let mms = verified_receiver.recv_timeout(timer)?;
         let mut reqs_len = 0;
         let mms_len = mms.len();
-        debug!(
+        info!(
             "@{:?} process start stalled for: {:?}ms batches: {}",
             timing::timestamp(),
             timing::duration_as_ms(&recv_start.elapsed()),
@@ -115,7 +116,7 @@ impl BankingStage {
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
-        debug!(
+        info!(
             "@{:?} done processing transaction batches: {} time: {:?}ms reqs: {} reqs/s: {}",
             timing::timestamp(),
             mms_len,

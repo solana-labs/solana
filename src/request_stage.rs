@@ -1,6 +1,7 @@
 //! The `request_stage` processes thin client Request messages.
 
 use bincode::deserialize;
+use channel::mk_channel;
 use packet::{to_blobs, BlobRecycler, PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
@@ -8,7 +9,7 @@ use request_processor::RequestProcessor;
 use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -85,7 +86,7 @@ impl RequestStage {
     ) -> (Self, BlobReceiver) {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
-        let (blob_sender, blob_receiver) = channel();
+        let (blob_sender, blob_receiver) = mk_channel();
         let thread_hdl = Builder::new()
             .name("solana-request-stage".to_string())
             .spawn(move || loop {

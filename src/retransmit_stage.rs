@@ -1,5 +1,6 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
+use channel::mk_channel;
 use counter::Counter;
 use crdt::Crdt;
 use log::Level;
@@ -8,7 +9,6 @@ use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -86,7 +86,7 @@ impl RetransmitStage {
         blob_recycler: &BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let (retransmit_sender, retransmit_receiver) = mk_channel();
 
         let t_retransmit = retransmitter(
             retransmit_socket,
@@ -94,7 +94,7 @@ impl RetransmitStage {
             blob_recycler.clone(),
             retransmit_receiver,
         );
-        let (blob_sender, blob_receiver) = channel();
+        let (blob_sender, blob_receiver) = mk_channel();
         let t_window = window_service(
             crdt.clone(),
             window,

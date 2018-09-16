@@ -5,14 +5,17 @@
 //! Transaction, the latest hash, and the number of hashes since the last transaction.
 //! The resulting stream of entries represents ordered transactions in time.
 
+use channel::mk_channel;
 use entry::Entry;
 use hash::Hash;
 use recorder::Recorder;
 use service::Service;
-use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use transaction::Transaction;
+
+type EntrySender = SyncSender<Vec<Entry>>;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 pub enum Signal {
@@ -31,7 +34,7 @@ impl RecordStage {
         signal_receiver: Receiver<Signal>,
         start_hash: &Hash,
     ) -> (Self, Receiver<Vec<Entry>>) {
-        let (entry_sender, entry_receiver) = channel();
+        let (entry_sender, entry_receiver) = mk_channel();
         let start_hash = *start_hash;
 
         let thread_hdl = Builder::new()
@@ -50,7 +53,7 @@ impl RecordStage {
         start_hash: &Hash,
         tick_duration: Duration,
     ) -> (Self, Receiver<Vec<Entry>>) {
-        let (entry_sender, entry_receiver) = channel();
+        let (entry_sender, entry_receiver) = mk_channel();
         let start_hash = *start_hash;
 
         let thread_hdl = Builder::new()
@@ -79,7 +82,7 @@ impl RecordStage {
     fn process_signal(
         signal: Signal,
         recorder: &mut Recorder,
-        sender: &Sender<Vec<Entry>>,
+        sender: &EntrySender,
     ) -> Result<(), ()> {
         let txs = if let Signal::Transactions(txs) = signal {
             txs
@@ -94,7 +97,7 @@ impl RecordStage {
     fn process_signals(
         recorder: &mut Recorder,
         receiver: &Receiver<Signal>,
-        sender: &Sender<Vec<Entry>>,
+        sender: &EntrySender,
     ) -> Result<(), ()> {
         loop {
             match receiver.recv() {
@@ -109,7 +112,7 @@ impl RecordStage {
         start_time: Instant,
         tick_duration: Duration,
         receiver: &Receiver<Signal>,
-        sender: &Sender<Vec<Entry>>,
+        sender: &EntrySender,
     ) -> Result<(), ()> {
         loop {
             if let Some(entry) = recorder.tick(start_time, tick_duration) {

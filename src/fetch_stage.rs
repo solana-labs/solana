@@ -1,10 +1,10 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
+use channel::mk_channel;
 use packet::PacketRecycler;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use streamer::{self, PacketReceiver};
@@ -28,7 +28,7 @@ impl FetchStage {
         exit: Arc<AtomicBool>,
         recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
-        let (sender, receiver) = channel();
+        let (sender, receiver) = mk_channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| {

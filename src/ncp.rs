@@ -1,11 +1,11 @@
 //! The `ncp` module implements the network control plane.
 
+use channel::mk_channel;
 use crdt::Crdt;
 use packet::BlobRecycler;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer;
@@ -25,7 +25,7 @@ impl Ncp {
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let (request_sender, request_receiver) = channel();
+        let (request_sender, request_receiver) = mk_channel();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
@@ -38,7 +38,7 @@ impl Ncp {
             blob_recycler.clone(),
             request_sender,
         );
-        let (response_sender, response_receiver) = channel();
+        let (response_sender, response_receiver) = mk_channel();
         let t_responder = streamer::responder(
             "ncp",
             gossip_socket,

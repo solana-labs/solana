@@ -3,6 +3,7 @@
 //! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
+use channel::mk_channel;
 use counter::Counter;
 use crdt::Crdt;
 use entry::Entry;
@@ -14,7 +15,7 @@ use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -74,7 +75,7 @@ impl WriteStage {
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> (Self, BlobReceiver) {
-        let (vote_blob_sender, vote_blob_receiver) = channel();
+        let (vote_blob_sender, vote_blob_receiver) = mk_channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(
             "write_stage_vote_sender",
@@ -82,7 +83,7 @@ impl WriteStage {
             blob_recycler.clone(),
             vote_blob_receiver,
         );
-        let (blob_sender, blob_receiver) = channel();
+        let (blob_sender, blob_receiver) = mk_channel();
         let mut ledger_writer = LedgerWriter::recover(ledger_path).unwrap();
 
         let thread_hdl = Builder::new()

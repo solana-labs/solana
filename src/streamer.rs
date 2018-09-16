@@ -4,14 +4,14 @@ use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlobs, SharedPackets};
 use result::{Error, Result};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::Duration;
 
 pub type PacketReceiver = Receiver<SharedPackets>;
-pub type PacketSender = Sender<SharedPackets>;
-pub type BlobSender = Sender<SharedBlobs>;
+pub type PacketSender = SyncSender<SharedPackets>;
+pub type BlobSender = SyncSender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
 
 fn recv_loop(

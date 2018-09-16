@@ -1,6 +1,7 @@
 //! The `replicate_stage` replicates transactions broadcast by the leader.
 
 use bank::Bank;
+use channel::mk_channel;
 use counter::Counter;
 use crdt::Crdt;
 use ledger::{reconstruct_entries_from_blobs, Block, LedgerWriter};
@@ -12,7 +13,6 @@ use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
@@ -75,7 +75,7 @@ impl ReplicateStage {
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let (vote_blob_sender, vote_blob_receiver) = channel();
+        let (vote_blob_sender, vote_blob_receiver) = mk_channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(
             "replicate_stage",
