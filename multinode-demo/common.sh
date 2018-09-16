@@ -28,13 +28,7 @@ fi
 if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   solana_program() {
     declare program="$1"
-    if [[ "$program" = wallet || "$program" = bench-tps ]]; then
-      # TODO: Merge wallet.sh/client.sh functionality into
-      #       solana-wallet/solana-demo-client proper and remove this special case
-      printf "%s/bin/solana-%s" "$SNAP" "$program"
-    else
-      printf "%s/command-%s.wrapper" "$SNAP" "$program"
-    fi
+    printf "%s/command-%s.wrapper" "$SNAP" "$program"
   }
   rsync="$SNAP"/bin/rsync
   multilog="$SNAP/bin/multilog t s16777215 n200"

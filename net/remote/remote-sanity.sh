@@ -86,7 +86,7 @@ esac
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh "$entrypointRsyncUrl"
+  scripts/wallet-sanity.sh "$entrypointIp"
 )
 
 echo "+++ $entrypointIp: node count ($numNodes expected)"
