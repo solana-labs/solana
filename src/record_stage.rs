@@ -146,8 +146,7 @@ impl Service for RecordStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()?;
-        Ok(())
+        self.thread_hdl.join()
     }
 }
 
