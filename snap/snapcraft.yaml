@@ -55,9 +55,7 @@ apps:
       - network-bind
       - home
   wallet:
-    # TODO: Merge wallet.sh functionality into solana-wallet proper
-    command: multinode-demo/wallet.sh
-    #command: solana-wallet
+    command: solana-wallet
     plugs:
       - network
       - home

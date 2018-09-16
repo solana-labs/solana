@@ -88,7 +88,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("timeout")
                 .long("timeout")
                 .value_name("SECS")
