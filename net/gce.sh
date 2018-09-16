@@ -1,27 +1,44 @@
 #!/bin/bash -e
 
 here=$(dirname "$0")
-# shellcheck source=net/scripts/gcloud.sh
-source "$here"/scripts/gcloud.sh
 # shellcheck source=net/common.sh
 source "$here"/common.sh
+
+cloudProvider=$(basename "$0" .sh)
+case $cloudProvider in
+gce)
+  # shellcheck source=net/scripts/gce-provider.sh
+  source "$here"/scripts/gce-provider.sh
+
+  imageName="ubuntu-16-04-cuda-9-2-new"
+  leaderMachineType=n1-standard-16
+  validatorMachineType=n1-standard-4
+  clientMachineType=n1-standard-16
+  ;;
+ec2)
+  # shellcheck source=net/scripts/ec2-provider.sh
+  source "$here"/scripts/ec2-provider.sh
+
+  imageName="ami-04169656fea786776"
+  leaderMachineType=m4.4xlarge
+  validatorMachineType=m4.xlarge
+  clientMachineType=m4.4xlarge
+  ;;
+*)
+  echo "Error: Unknown cloud provider: $cloudProvider"
+  ;;
+esac
+
 
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 validatorNodeCount=5
 clientNodeCount=1
-leaderBootDiskSize=1TB
-leaderMachineType=n1-standard-16
-leaderAccelerator=
-validatorMachineType=n1-standard-4
-validatorBootDiskSize=$leaderBootDiskSize
-validatorAccelerator=
-clientMachineType=n1-standard-16
-clientBootDiskSize=40GB
-clientAccelerator=
+leaderBootDiskSizeInGb=1000
+validatorBootDiskSizeInGb=$leaderBootDiskSizeInGb
+clientBootDiskSizeInGb=40
 
-imageName="ubuntu-16-04-cuda-9-2-new"
 publicNetwork=false
-zone="us-west1-b"
+enableGpu=false
 leaderAddress=
 
 usage() {
@@ -33,7 +50,7 @@ usage() {
   cat <<EOF
 usage: $0 [create|config|delete] [common options] [command-specific options]
 
-Configure a GCE-based testnet
+Manage testnet instances
 
  create - create a new testnet (implies 'config')
  config - configure the testnet and write a config file describing it
@@ -47,10 +64,13 @@ Configure a GCE-based testnet
    -n [number]      - Number of validator nodes (default: $validatorNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
    -P               - Use public network IP addresses (default: $publicNetwork)
-   -z [zone]        - GCP Zone for the nodes (default: $zone)
-   -i [imageName]   - Existing image on GCE (default: $imageName)
-   -g               - Enable GPU
-   -a [address]     - Set the leader node's external IP address to this GCE address
+   -z [zone]        - Zone for the nodes (default: $zone)
+   -g               - Enable GPU (default: $enableGpu)
+   -a [address]     - Set the leader node's external IP address to this value.
+                      For GCE, [address] is the "name" of the desired External
+                      IP Address.
+                      For EC2, [address] is the "allocation ID" of the desired
+                      Elastic IP.
 
  config-specific options:
    none
@@ -68,7 +88,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pi:n:c:z:ga:" opt; do
+while getopts "h?p:Pn:c:z:ga:" opt; do
   case $opt in
   h | \?)
     usage
@@ -80,9 +100,6 @@ while getopts "h?p:Pi:n:c:z:ga:" opt; do
   P)
     publicNetwork=true
     ;;
-  i)
-    imageName=$OPTARG
-    ;;
   n)
     validatorNodeCount=$OPTARG
     ;;
@@ -90,10 +107,10 @@ while getopts "h?p:Pi:n:c:z:ga:" opt; do
     clientNodeCount=$OPTARG
     ;;
   z)
-    zone=$OPTARG
+    cloud_SetZone "$OPTARG"
     ;;
   g)
-    leaderAccelerator="count=4,type=nvidia-tesla-k80"
+    enableGpu=true
     ;;
   a)
     leaderAddress=$OPTARG
@@ -107,6 +124,37 @@ shift $((OPTIND - 1))
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
 sshPrivateKey="$netConfigDir/id_$prefix"
+
+
+# cloud_ForEachInstance [cmd] [extra args to cmd]
+#
+# Execute a command for each element in the `instances` array
+#
+#   cmd   - The command to execute on each instance
+#           The command will receive arguments followed by any
+#           additionl arguments supplied to cloud_ForEachInstance:
+#               name     - name of the instance
+#               publicIp - The public IP address of this instance
+#               privateIp - The priate IP address of this instance
+#               count    - Monotonically increasing count for each
+#                          invocation of cmd, starting at 1
+#               ...      - Extra args to cmd..
+#
+#
+cloud_ForEachInstance() {
+  declare cmd="$1"
+  shift
+  [[ -n $cmd ]] || { echo cloud_ForEachInstance: cmd not specified; exit 1; }
+
+  declare count=1
+  for info in "${instances[@]}"; do
+    declare name publicIp privateIp
+    IFS=: read -r name publicIp privateIp < <(echo "$info")
+
+    eval "$cmd" "$name" "$publicIp" "$privateIp" "$count" "$@"
+    count=$((count + 1))
+  done
+}
 
 prepareInstancesAndWriteConfigFile() {
   $metricsWriteDatapoint "testnet-deploy net-config-begin=1"
@@ -122,10 +170,10 @@ EOF
 
   recordInstanceIp() {
     declare name="$1"
-    declare publicIp="$3"
-    declare privateIp="$4"
+    declare publicIp="$2"
+    declare privateIp="$3"
 
-    declare arrayName="$6"
+    declare arrayName="$5"
 
     echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
     if [[ $arrayName = "leaderIp" ]]; then
@@ -139,121 +187,133 @@ EOF
 
   waitForStartupComplete() {
     declare name="$1"
-    declare publicIp="$3"
+    declare publicIp="$2"
 
     echo "Waiting for $name to finish booting..."
     (
       for i in $(seq 1 30); do
-        if (set -x; ssh "${sshOptions[@]}" "$publicIp" "test -f /.gce-startup-complete"); then
+        if (set -x; ssh "${sshOptions[@]}" "$publicIp" "test -f /.instance-startup-complete"); then
           break
         fi
         sleep 2
         echo "Retry $i..."
       done
     )
+    echo "$name has booted."
   }
 
   echo "Looking for leader instance..."
-  gcloud_FindInstances "name=$prefix-leader" show
+  cloud_FindInstance "$prefix-leader"
   [[ ${#instances[@]} -eq 1 ]] || {
     echo "Unable to find leader"
     exit 1
   }
 
-  echo "Fetching $sshPrivateKey from $leaderName"
   (
-    rm -rf "$sshPrivateKey"{,pub}
-
     declare leaderName
-    declare leaderZone
     declare leaderIp
-    IFS=: read -r leaderName leaderZone leaderIp _ < <(echo "${instances[0]}")
+    IFS=: read -r leaderName leaderIp _ < <(echo "${instances[0]}")
 
-    set -x
+    # Try to ping the machine first.
+    timeout 60s bash -c "set -o pipefail; until ping -c 3 $leaderIp | tr - _; do echo .; done"
 
-    # Try to ping the machine first.  There can be a delay between when the
-    # instance is reported as RUNNING and when it's reachable over the network
-    timeout 30s bash -c "set -o pipefail; until ping -c 3 $leaderIp | tr - _; do echo .; done"
+    if [[ ! -r $sshPrivateKey ]]; then
+      echo "Fetching $sshPrivateKey from $leaderName"
 
-    # Try to scp in a couple times, sshd may not yet be up even though the
-    # machine can be pinged...
-    set -o pipefail
-    for i in $(seq 1 10); do
-      if gcloud compute scp --zone "$leaderZone" \
-          "$leaderName:/solana-id_ecdsa" "$sshPrivateKey"; then
-        break
-      fi
-      sleep 1
-      echo "Retry $i..."
-    done
+      # Try to scp in a couple times, sshd may not yet be up even though the
+      # machine can be pinged...
+      set -x -o pipefail
+      for i in $(seq 1 30); do
+        if cloud_FetchFile "$leaderName" "$leaderIp" /solana-id_ecdsa "$sshPrivateKey"; then
+          break
+        fi
 
-    chmod 400 "$sshPrivateKey"
+        sleep 1
+        echo "Retry $i..."
+      done
+
+      chmod 400 "$sshPrivateKey"
+      ls -l "$sshPrivateKey"
+    fi
   )
 
   echo "leaderIp=()" >> "$configFile"
-  gcloud_ForEachInstance recordInstanceIp leaderIp
-  gcloud_ForEachInstance waitForStartupComplete
+  cloud_ForEachInstance recordInstanceIp leaderIp
+  cloud_ForEachInstance waitForStartupComplete
 
   echo "Looking for validator instances..."
-  gcloud_FindInstances "name~^$prefix-validator" show
+  cloud_FindInstances "$prefix-validator"
   [[ ${#instances[@]} -gt 0 ]] || {
     echo "Unable to find validators"
     exit 1
   }
   echo "validatorIpList=()" >> "$configFile"
-  gcloud_ForEachInstance recordInstanceIp validatorIpList
-  gcloud_ForEachInstance waitForStartupComplete
+  cloud_ForEachInstance recordInstanceIp validatorIpList
+  cloud_ForEachInstance waitForStartupComplete
 
   echo "clientIpList=()" >> "$configFile"
   echo "Looking for client instances..."
-  gcloud_FindInstances "name~^$prefix-client" show
+  cloud_FindInstances "$prefix-client"
   [[ ${#instances[@]} -eq 0 ]] || {
-    gcloud_ForEachInstance recordInstanceIp clientIpList
-    gcloud_ForEachInstance waitForStartupComplete
+    cloud_ForEachInstance recordInstanceIp clientIpList
+    cloud_ForEachInstance waitForStartupComplete
   }
 
   echo "Wrote $configFile"
   $metricsWriteDatapoint "testnet-deploy net-config-complete=1"
 }
 
-case $command in
-delete)
+delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
   # Delete the leader node first to prevent unusual metrics on the dashboard
   # during shutdown.
   # TODO: It would be better to fully cut-off metrics reporting before any
   # instances are deleted.
-  for filter in "^$prefix-leader" "^$prefix-"; do
-    gcloud_FindInstances "name~$filter"
+  for filter in "$prefix-leader" "$prefix-"; do
+    echo "Searching for instances: $filter"
+    cloud_FindInstances "$filter"
 
     if [[ ${#instances[@]} -eq 0 ]]; then
       echo "No instances found matching '$filter'"
     else
-      gcloud_DeleteInstances true
+      cloud_DeleteInstances true
     fi
   done
   rm -f "$configFile"
 
   $metricsWriteDatapoint "testnet-deploy net-delete-complete=1"
+
+}
+
+case $command in
+delete)
+  delete
   ;;
 
 create)
   [[ -n $validatorNodeCount ]] || usage "Need number of nodes"
+  if [[ $validatorNodeCount -le 0 ]]; then
+    usage "One or more validator nodes is required"
+  fi
+
+  delete
 
   $metricsWriteDatapoint "testnet-deploy net-create-begin=1"
 
   rm -rf "$sshPrivateKey"{,.pub}
-  ssh-keygen -t ecdsa -N '' -f "$sshPrivateKey"
+
+  # Note: using rsa because |aws ec2 import-key-pair| seems to fail for ecdsa
+  ssh-keygen -t rsa -N '' -f "$sshPrivateKey"
 
   printNetworkInfo() {
     cat <<EOF
 ========================================================================================
 
 Network composition:
-  Leader = $leaderMachineType (GPU=${leaderAccelerator:-none})
-  Validators = $validatorNodeCount x $validatorMachineType (GPU=${validatorAccelerator:-none})
-  Client(s) = $clientNodeCount x $clientMachineType (GPU=${clientAccelerator:-none})
+  Leader = $leaderMachineType (GPU=$enableGpu)
+  Validators = $validatorNodeCount x $validatorMachineType
+  Client(s) = $clientNodeCount x $clientMachineType
 
 ========================================================================================
 
@@ -261,7 +321,7 @@ EOF
   }
   printNetworkInfo
 
-  declare startupScript="$netConfigDir"/gce-startup-script.sh
+  declare startupScript="$netConfigDir"/instance-startup-script.sh
   cat > "$startupScript" <<EOF
 #!/bin/bash -ex
 # autogenerated at $(date)
@@ -270,11 +330,12 @@ cat > /etc/motd <<EOM
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   This instance has not been fully configured.
-  See "startup-script" log messages in /var/log/syslog for status:
-    $ sudo cat /var/log/syslog | grep startup-script
+
+  See startup script log messages in /var/log/syslog for status:
+    $ sudo cat /var/log/syslog | egrep \\(startup-script\\|cloud-init\)
 
   To block until setup is complete, run:
-    $ until [[ -f /.gce-startup-complete ]]; do sleep 1; done
+    $ until [[ -f /.instance-startup-complete ]]; do sleep 1; done
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 EOM
@@ -296,6 +357,7 @@ $(
   cat \
     disable-background-upgrades.sh \
     create-solana-user.sh \
+    add-solana-user-authorized_keys.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \
     install-rsync.sh \
@@ -305,21 +367,21 @@ cat > /etc/motd <<EOM
 $(printNetworkInfo)
 EOM
 
-touch /.gce-startup-complete
+touch /.instance-startup-complete
 
 EOF
 
-  gcloud_CreateInstances "$prefix-leader" 1 "$zone" \
-    "$imageName" "$leaderMachineType" "$leaderBootDiskSize" "$leaderAccelerator" \
+  cloud_CreateInstances "$prefix" "$prefix-leader" 1 \
+    "$imageName" "$leaderMachineType" "$leaderBootDiskSizeInGb" "$enableGpu" \
     "$startupScript" "$leaderAddress"
 
-  gcloud_CreateInstances "$prefix-validator" "$validatorNodeCount" "$zone" \
-    "$imageName" "$validatorMachineType" "$validatorBootDiskSize" "$validatorAccelerator" \
+  cloud_CreateInstances "$prefix" "$prefix-validator" "$validatorNodeCount" \
+    "$imageName" "$validatorMachineType" "$validatorBootDiskSizeInGb" false \
     "$startupScript" ""
 
   if [[ $clientNodeCount -gt 0 ]]; then
-    gcloud_CreateInstances "$prefix-client" "$clientNodeCount" "$zone" \
-      "$imageName" "$clientMachineType" "$clientBootDiskSize" "$clientAccelerator" \
+    cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
+      "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" false \
       "$startupScript" ""
   fi
 

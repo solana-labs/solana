@@ -5,15 +5,30 @@ intended to be both dev and CD friendly.
 
 ### User Account Prerequisites
 
-Log in to GCP with:
+GCP and AWS are supported.
+
+#### GCP
+First authenticate with
 ```bash
 $ gcloud auth login
 ```
 
-Also ensure that `$(whoami)` is the name of an InfluxDB user account with enough
-access to create a new database.
+#### AWS
+Obtain your credentials from the AWS IAM Console and configure the AWS CLI with
+```bash
+$ aws configure
+```
+More information on AWS CLI configuration can be found [here](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html#cli-quick-configuration)
+
+### Metrics configuration
+Ensure that `$(whoami)` is the name of an InfluxDB user account with enough
+access to create a new InfluxDB database.  Ask mvines@ for help if needed.
 
 ## Quick Start
+
+NOTE: This example uses GCP.  If you are using AWS, replace `./gce.sh` with
+`./ec2.sh` in the commands.
+
 ```bash
 $ cd net/
 $ ./gce.sh create -n 5 -c 1  #<-- Create a GCE testnet with 5 validators, 1 client (billing starts here)
@@ -32,6 +47,10 @@ network over public IP addresses:
 ```bash
 $ ./gce.sh create -P ...
 ```
+or
+```bash
+$ ./ec2.sh create -P ...
+```
 
 ### Deploying a Snap-based network
 To deploy the latest pre-built `edge` channel Snap (ie, latest from the `master`
@@ -46,6 +65,10 @@ First ensure the network instances are created with GPU enabled:
 ```bash
 $ ./gce.sh create -g ...
 ```
+or
+```bash
+$ ./ec2.sh create -g ...
+```
 
 If deploying a Snap-based network nothing further is required, as GPU presence
 is detected at runtime and the CUDA build is auto selected.
@@ -58,9 +81,20 @@ $ ./net.sh start -f "cuda,erasure"
 
 ### How to interact with a CD testnet deployed by ci/testnet-deploy.sh
 
+**AWS-Specific Extra Setup**: Follow the steps in `scripts/add-solana-user-authorized_keys.sh`,
+then redeploy the testnet before continuing in this section.
+
 Taking **master-testnet-solana-com** as an example, configure your workspace for
 the testnet using:
-```
+```bash
 $ ./gce.sh config -p master-testnet-solana-com
-$ ./ssh.sh                                     # <-- Details on how to ssh into any testnet node
+```
+or
+```bash
+$ ./ec2.sh config -p master-testnet-solana-com
+```
+
+Then run the following for details on how to ssh into any testnet node
+```bash
+$ ./ssh.sh
 ```
