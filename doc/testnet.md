@@ -1,8 +1,11 @@
 # TestNet debugging info
 
-Currently we have two testnets, 'perf' and 'master', both on the master branch of the solana repo. Deploys happen
-at the top of every hour with the latest code. 'perf' has more cores for the client machine to flood the network
-with transactions until failure.
+Currently we have three testnets:
+* `testnet` - public beta channel testnet accessible via testnet.solana.com. Runs 24/7
+* `testnet-perf` - private beta channel testnet with clients trying to flood the network
+with transactions until failure.  Runs 24/7
+* `testnet-master` - private edge channel testnet with clients trying to flood the network
+with transactions until failure.  Runs on weekday mornings for a couple hours
 
 ## Deploy process
 
@@ -12,17 +15,21 @@ Validators are selected based on their machine name and everyone gets the binari
 
 ## Where are the testnet logs?
 
-For the client they are put in `/tmp/solana`; for validators and leaders they are in `/var/snap/solana/current/`.
-You can also see the backtrace of the client by ssh'ing into the client node and doing:
-
+Attach to the testnet first by running one of:
 ```bash
-$ sudo -u testnet-deploy
-$ tmux attach -t solana
+$ net/gce.sh config testnet-solana-com
+$ net/gce.sh config master-testnet-solana-com
+$ net/gce.sh config perf-testnet-solana-com
 ```
 
-## How do I reset the testnet?
+Then run:
+```bash
+$ net/ssh.sh
+```
+for log location details
 
-Through buildkite.
+## How do I reset the testnet?
+Manually trigger the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/) pipeline
 
 ## How can I scale the tx generation rate?
 
@@ -32,13 +39,9 @@ variable `RAYON_NUM_THREADS=<xx>`
 
 ## How can I test a change on the testnet?
 
-Currently, a merged PR is the only way to test a change on the testnet.
+Currently, a merged PR is the only way to test a change on the testnet.  But you
+can run your own testnet using the scripts in the `net/` directory.
 
 ## Adjusting the number of clients or validators on the testnet
+Through the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/) settings.
 
-1. Go to the [GCP Instance Group](https://console.cloud.google.com/compute/instanceGroups/list?project=principal-lane-200702) tab
-2. Find the client or validator instance group you'd like to adjust
-3. Edit it (pencil icon), change the "Number of instances", then click "Save" button
-4. Refresh until the change to number of instances has been executed
-5. Click the "New Build" button on the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/)
-   buildkite job to initiate a redeploy of the network with the updated instance count.
