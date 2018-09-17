@@ -39,7 +39,7 @@ __cloud_FindInstances() {
 
     instances+=("$name:$publicIp:$privateIp")
   done < <(gcloud compute instances list \
-             --filter="$filter" \
+             --filter "$filter" \
              --format 'value(name,networkInterfaces[0].accessConfigs[0].natIP,networkInterfaces[0].networkIP,status)')
 }
 #
@@ -91,7 +91,9 @@ cloud_FindInstance() {
 # namePrefix    - unique string to prefix all the instance names with
 # numNodes      - number of instances to create
 # imageName     - Disk image for the instances
-# machineType   - GCE machine type
+# machineType   - GCE machine type.  Note that this may also include an
+#                 `--accelerator=` or other |gcloud compute instances create|
+#                 options
 # bootDiskSize  - Optional size of the boot disk in GB
 # enableGpu     - Optionally enable GPU, use the value "true" to enable
 #                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
@@ -109,9 +111,8 @@ cloud_CreateInstances() {
   declare imageName="$4"
   declare machineType="$5"
   declare optionalBootDiskSize="$6"
-  declare optionalGpu="$7"
-  declare optionalStartupScript="$8"
-  declare optionalAddress="$9"
+  declare optionalStartupScript="$7"
+  declare optionalAddress="$8"
 
   declare nodes
   if [[ $numNodes = 1 ]]; then
@@ -122,22 +123,19 @@ cloud_CreateInstances() {
 
   declare -a args
   args=(
-    "--zone=$zone"
-    "--tags=testnet"
-    "--metadata=testnet=$networkName"
-    "--image=$imageName"
-    "--machine-type=$machineType"
+    --zone "$zone"
+    --tags testnet
+    --metadata "testnet=$networkName"
+    --image "$imageName"
+    --maintenance-policy TERMINATE
+    --no-restart-on-failure
   )
+
+  # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
+  args+=(--machine-type $machineType)
   if [[ -n $optionalBootDiskSize ]]; then
     args+=(
-      "--boot-disk-size=${optionalBootDiskSize}GB"
-    )
-  fi
-  if [[ $optionalGpu = true ]]; then
-    args+=(
-      "--accelerator=count=4,type=nvidia-tesla-k80"
-      --maintenance-policy TERMINATE
-      --restart-on-failure
+      --boot-disk-size "${optionalBootDiskSize}GB"
     )
   fi
   if [[ -n $optionalStartupScript ]]; then
@@ -152,7 +150,7 @@ cloud_CreateInstances() {
       exit 1
     }
     args+=(
-      "--address=$optionalAddress"
+      --address "$optionalAddress"
     )
   fi
 
