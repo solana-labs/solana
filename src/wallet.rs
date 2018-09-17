@@ -128,25 +128,19 @@ pub fn parse_command(
 pub fn process_command(
     config: &WalletConfig,
     client: &mut ThinClient,
-) -> Result<(), Box<error::Error>> {
+) -> Result<String, Box<error::Error>> {
     match config.command {
         // Check client balance
-        WalletCommand::Address => {
-            println!("{}", config.id.pubkey());
-        }
+        WalletCommand::Address => Ok(format!("{}", config.id.pubkey())),
         WalletCommand::Balance => {
             println!("Balance requested...");
             let balance = client.poll_get_balance(&config.id.pubkey());
             match balance {
-                Ok(balance) => {
-                    println!("Your balance is: {:?}", balance);
-                }
+                Ok(balance) => Ok(format!("Your balance is: {:?}", balance)),
                 Err(ref e) if e.kind() == ErrorKind::Other => {
-                    println!("No account found! Request an airdrop to get started.");
+                    Ok("No account found! Request an airdrop to get started.".to_string())
                 }
-                Err(error) => {
-                    println!("An error occurred: {:?}", error);
-                }
+                Err(error) => Err(error)?,
             }
         }
         // Request an airdrop from Solana Drone;
@@ -173,27 +167,26 @@ pub fn process_command(
                 }
                 println!(".");
             }
-            println!("Your balance is: {:?}", current_balance);
             if current_balance - previous_balance != tokens {
                 Err("Airdrop failed!")?;
             }
+            Ok(format!("Your balance is: {:?}", current_balance))
         }
         // If client has positive balance, spend tokens in {balance} number of transactions
         WalletCommand::Pay(tokens, to) => {
             let last_id = client.get_last_id();
             let signature = client.transfer(tokens, &config.id, to, &last_id)?;
-            println!("{}", signature);
+            Ok(format!("{}", signature))
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             if client.check_signature(&signature) {
-                println!("Confirmed");
+                Ok("Confirmed".to_string())
             } else {
-                println!("Not found");
+                Ok("Not found".to_string())
             }
         }
     }
-    Ok(())
 }
 
 pub fn read_leader(path: &str) -> Result<Config, WalletError> {
@@ -402,21 +395,43 @@ mod tests {
         config.drone_addr = receiver.recv().unwrap();
         config.leader = leader_data1;
 
-        config.command = WalletCommand::AirDrop(50);
+        let tokens = 50;
+        config.command = WalletCommand::AirDrop(tokens);
         let mut client = mk_client(&config.leader);
-        assert!(process_command(&config, &mut client).is_ok());
+        assert_eq!(
+            process_command(&config, &mut client).unwrap(),
+            format!("Your balance is: {:?}", tokens)
+        );
 
         config.command = WalletCommand::Balance;
-        assert!(process_command(&config, &mut client).is_ok());
+        assert_eq!(
+            process_command(&config, &mut client).unwrap(),
+            format!("Your balance is: {:?}", tokens)
+        );
 
         config.command = WalletCommand::Address;
-        assert!(process_command(&config, &mut client).is_ok());
+        assert_eq!(
+            process_command(&config, &mut client).unwrap(),
+            format!("{}", config.id.pubkey())
+        );
 
         config.command = WalletCommand::Pay(10, bob_pubkey);
-        assert!(process_command(&config, &mut client).is_ok());
+        let sig_response = process_command(&config, &mut client);
+        assert!(sig_response.is_ok());
+        sleep(Duration::from_millis(100));
+
+        let signatures = bs58::decode(sig_response.unwrap())
+            .into_vec()
+            .expect("base58-encoded signature");
+        let signature = Signature::new(&signatures);
+        config.command = WalletCommand::Confirm(signature);
+        assert_eq!(process_command(&config, &mut client).unwrap(), "Confirmed");
 
         config.command = WalletCommand::Balance;
-        assert!(process_command(&config, &mut client).is_ok());
+        assert_eq!(
+            process_command(&config, &mut client).unwrap(),
+            format!("Your balance is: {:?}", tokens - 10)
+        );
     }
     #[test]
     fn test_request_airdrop() {
