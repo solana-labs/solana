@@ -260,8 +260,7 @@ impl Bank {
         last_ids.push_back(*last_id);
     }
 
-    /// Process a Transaction. If it contains a payment plan that requires a witness
-    /// to progress, the payment plan will be stored in the bank.
+    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         match self.process_transactions(vec![tx.clone()])[0] {
             Err(ref e) => {
@@ -338,7 +337,11 @@ impl Bank {
         }
         Ok(())
     }
-    pub fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
+    /// Execute a transaction.
+    /// This method calls the contract's process_transaction method and verifies that the result of
+    /// the contract does not violate the bank's accounting rules.
+    /// The accounts are commited back to the bank only if this function returns Ok(_).
+    fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
             .iter_mut()
