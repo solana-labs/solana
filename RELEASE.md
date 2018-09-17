@@ -22,10 +22,9 @@ At this point, ci/channel-info.sh should show your freshly cut release branch as
 
 We use [github's Rleases UI](https://github.com/solana-labs/solana/releases) for tagging a release.
 
-1. Go here.
+1. Go [there ;)](https://github.com/solana-labs/solana/releases).
 2. Click "Draft new release".
-3. Paste in this template and fill it in.
- TODO need template
+3. Paste in [this template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md) and fill it in.
 4. Test the release by generating a tag using semver's rules.  First try at a release should be <branchname>.X-rc.0.
 5. Verify release automation:
    1. [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.
