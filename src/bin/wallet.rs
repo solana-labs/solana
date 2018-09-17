@@ -10,10 +10,9 @@ use solana::drone::DRONE_PORT;
 use solana::logger;
 use solana::signature::{read_keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
-use solana::wallet::{parse_command, process_command, WalletConfig, WalletError};
+use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
 use std::net::SocketAddr;
-use std::process::Command;
 
 pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
@@ -37,12 +36,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     } else {
         path.extend(&[".config", "solana", "id.json"]);
         if !path.exists() {
-            Command::new("cargo")
-                .arg("run")
-                .arg("--bin")
-                .arg("solana-keygen")
-                .status()
-                .expect("failed to execute process");
+            gen_keypair_file(path.to_str().unwrap().to_string())?;
+            println!("New keypair generated at: {:?}", path.to_str().unwrap());
         }
 
         path.to_str().unwrap()

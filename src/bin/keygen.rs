@@ -3,14 +3,11 @@ extern crate clap;
 extern crate dirs;
 extern crate ring;
 extern crate serde_json;
+extern crate solana;
 
 use clap::{App, Arg};
-use ring::rand::SystemRandom;
-use ring::signature::Ed25519KeyPair;
+use solana::wallet::gen_keypair_file;
 use std::error;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
 
 fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("solana-keygen")
@@ -24,10 +21,6 @@ fn main() -> Result<(), Box<error::Error>> {
                 .help("Path to generated file"),
         ).get_matches();
 
-    let rnd = SystemRandom::new();
-    let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
-    let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
-
     let mut path = dirs::home_dir().expect("home directory");
     let outfile = if matches.is_present("outfile") {
         matches.value_of("outfile").unwrap()
@@ -36,15 +29,9 @@ fn main() -> Result<(), Box<error::Error>> {
         path.to_str().unwrap()
     };
 
+    let serialized_keypair = gen_keypair_file(outfile.to_string())?;
     if outfile == "-" {
-        println!("{}", serialized);
-    } else {
-        if let Some(outdir) = Path::new(outfile).parent() {
-            fs::create_dir_all(outdir)?;
-        }
-        let mut f = File::create(outfile)?;
-        f.write_all(&serialized.into_bytes())?;
+        println!("{}", serialized_keypair);
     }
-
     Ok(())
 }
