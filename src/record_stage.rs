@@ -6,10 +6,13 @@
 //! The resulting stream of entries represents ordered transactions in time.
 
 use channel::mk_channel;
+use counter::Counter;
 use entry::Entry;
 use hash::Hash;
+use log::Level;
 use recorder::Recorder;
 use service::Service;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
@@ -89,8 +92,14 @@ impl RecordStage {
         } else {
             vec![]
         };
+        let txs_len = txs.len();
         let entries = recorder.record(txs);
+        let entries_len = entries.len();
         sender.send(entries).or(Err(()))?;
+
+        inc_new_counter_info!("record_stage-txs", txs_len);
+        inc_new_counter_info!("record_stage-entries", entries_len);
+
         Ok(())
     }
 
@@ -101,7 +110,9 @@ impl RecordStage {
     ) -> Result<(), ()> {
         loop {
             match receiver.recv() {
-                Ok(signal) => Self::process_signal(signal, recorder, sender)?,
+                Ok(signal) => {
+                    Self::process_signal(signal, recorder, sender)?;
+                },
                 Err(RecvError) => return Err(()),
             }
         }
