@@ -71,6 +71,7 @@ impl SystemContract {
                 accounts[0].contract_id = contract_id;
             }
             SystemContract::Move { tokens } => {
+                //bank should be verifying correctness
                 accounts[0].tokens -= tokens;
                 accounts[1].tokens += tokens;
             }
