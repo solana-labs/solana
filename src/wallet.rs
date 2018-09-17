@@ -4,13 +4,16 @@ use clap::ArgMatches;
 use crdt::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
+use ring::rand::SystemRandom;
+use ring::signature::Ed25519KeyPair;
 use serde_json;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind, Write};
 use std::mem::size_of;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
@@ -236,6 +239,21 @@ pub fn request_airdrop(
     Ok(signature)
 }
 
+pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
+    let rnd = SystemRandom::new();
+    let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
+    let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
+
+    if outfile != "-" {
+        if let Some(outdir) = Path::new(&outfile).parent() {
+            fs::create_dir_all(outdir)?;
+        }
+        let mut f = File::create(outfile)?;
+        f.write_all(&serialized.clone().into_bytes())?;
+    }
+    Ok(serialized)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,7 +265,7 @@ mod tests {
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use mint::Mint;
-    use signature::{Keypair, KeypairUtil};
+    use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
 
@@ -440,5 +458,20 @@ mod tests {
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
         assert!(client.check_signature(&signature.unwrap()));
+    }
+    #[test]
+    fn test_gen_keypair_file() {
+        let outfile = "test_gen_keypair_file.json";
+        let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
+        let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
+        assert!(Path::new(outfile).exists());
+        assert_eq!(keypair_vec, read_pkcs8(&outfile).unwrap());
+        assert!(read_keypair(&outfile).is_ok());
+        assert_eq!(
+            read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
+            mem::size_of::<Pubkey>()
+        );
+        fs::remove_file(outfile).unwrap();
+        assert!(!Path::new(outfile).exists());
     }
 }
