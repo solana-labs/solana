@@ -13,7 +13,7 @@ fi
 (
   set -x
   curl -o solana-perf.tgz \
-    https://solana-perf.s3.amazonaws.com/master/x86_64-unknown-linux-gnu/solana-perf.tgz
+    https://solana-perf.s3.amazonaws.com/v0.8.0/x86_64-unknown-linux-gnu/solana-perf.tgz
   tar zxvf solana-perf.tgz
 )
 
