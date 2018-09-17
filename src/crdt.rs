@@ -37,10 +37,6 @@ use timing::{duration_as_ms, timestamp};
 use window::{SharedWindow, WindowIndex};
 
 pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
-#[cfg(test)]
-pub const LEADER_ROTATION_INTERVAL: u64 = 10;
-#[cfg(not(test))]
-pub const LEADER_ROTATION_INTERVAL: u64 = 100;
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -213,7 +209,11 @@ pub struct Crdt {
     /// TODO: Clearly not the correct implementation of this, but a temporary abstraction
     /// for testing
     pub scheduled_leaders: HashMap<u64, Pubkey>,
+    // TODO: Is there a better way to do this? We didn't make this a constant because
+    // we want to be able to set it in integration tests so that the tests don't time out.
+    pub leader_rotation_interval: u64,
 }
+
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
 enum Protocol {
@@ -244,6 +244,7 @@ impl Crdt {
             id: node_info.id,
             update_index: 1,
             scheduled_leaders: HashMap::new(),
+            leader_rotation_interval: 100,
         };
         me.local.insert(node_info.id, me.update_index);
         me.table.insert(node_info.id, node_info);
@@ -312,6 +313,14 @@ impl Crdt {
             Some(x) => Some(x.clone()),
             None => Some(self.my_data().leader_id),
         }
+    }
+
+    pub fn set_leader_rotation_interval(&mut self, leader_rotation_interval: u64) {
+        self.leader_rotation_interval = leader_rotation_interval;
+    }
+
+    pub fn get_leader_rotation_interval(&self) -> u64 {
+        self.leader_rotation_interval
     }
 
     // TODO: Dummy leader schedule setter, need to implement actual leader scheduling.

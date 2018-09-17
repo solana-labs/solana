@@ -121,6 +121,7 @@ impl Fullnode {
         keypair: Keypair,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
+        leader_rotation_interval: Option<u64>,
     ) -> Self {
         info!("creating bank...");
         let (bank, entry_height, ledger_tail) = Self::new_bank_from_ledger(ledger_path);
@@ -145,6 +146,7 @@ impl Fullnode {
             leader_info.as_ref(),
             ledger_path,
             sigverify_disabled,
+            leader_rotation_interval,
         );
 
         match leader_addr {
@@ -224,6 +226,7 @@ impl Fullnode {
         leader_info: Option<&NodeInfo>,
         ledger_path: &str,
         sigverify_disabled: bool,
+        leader_rotation_interval: Option<u64>,
     ) -> Self {
         if leader_info.is_none() {
             node.info.leader_id = node.info.id;
@@ -257,7 +260,11 @@ impl Fullnode {
             window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
         let shared_window = Arc::new(RwLock::new(window));
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.info).expect("Crdt::new")));
+        let mut crdt = Crdt::new(node.info).expect("Crdt::new");
+        if let Some(interval) = leader_rotation_interval {
+            crdt.set_leader_rotation_interval(interval);
+        }
+        let crdt = Arc::new(RwLock::new(crdt));
 
         let ncp = Ncp::new(
             &crdt,
@@ -440,8 +447,10 @@ impl Fullnode {
     // TODO: only used for testing, get rid of this once we have actual
     // leader scheduling
     pub fn set_scheduled_leader(&self, leader_id: Pubkey, entry_height: u64) {
-        let mut wcrdt = self.crdt.write().unwrap();
-        wcrdt.set_scheduled_leader(entry_height, leader_id);
+        self.crdt
+            .write()
+            .unwrap()
+            .set_scheduled_leader(entry_height, leader_id);
     }
 
     fn new_bank_from_ledger(ledger_path: &str) -> (Bank, u64, Vec<Entry>) {
@@ -508,6 +517,7 @@ mod tests {
             Some(&entry),
             &validator_ledger_path,
             false,
+            None,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -533,6 +543,7 @@ mod tests {
                     Some(&entry),
                     &validator_ledger_path,
                     false,
+                    None,
                 )
             }).collect();
 

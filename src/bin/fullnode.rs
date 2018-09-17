@@ -83,7 +83,7 @@ fn main() -> () {
     let node_info = node.info.clone();
     let pubkey = keypair.pubkey();
 
-    let mut fullnode = Fullnode::new(node, ledger_path, keypair, network, false);
+    let mut fullnode = Fullnode::new(node, ledger_path, keypair, network, false, None);
 
     // airdrop stuff, probably goes away at some point
     let leader = match network {

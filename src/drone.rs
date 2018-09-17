@@ -337,6 +337,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            None,
         );
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
@@ -373,7 +374,7 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let server = Fullnode::new(leader, &ledger_path, leader_keypair, None, false);
+        let server = Fullnode::new(leader, &ledger_path, leader_keypair, None, false, None);
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =

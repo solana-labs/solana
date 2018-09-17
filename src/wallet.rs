@@ -387,6 +387,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            None,
         );
         sleep(Duration::from_millis(200));
 
@@ -453,6 +454,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            None,
         );
         sleep(Duration::from_millis(200));
 
