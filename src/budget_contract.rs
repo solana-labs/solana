@@ -89,7 +89,7 @@ impl BudgetContract {
 
         // Hold 'pending' write lock until the end of this function. Otherwise another thread can
         // double-spend if it enters before the modified plan is removed from 'pending'.
-        for (key, plan) in self.pending.iter_mut() {
+        for (key, plan) in &mut self.pending {
             plan.apply_witness(&Witness::Timestamp(dt), &tx.keys[0]);
             if let Some(payment) = plan.final_payment() {
                 if tx.keys.len() < 2 || payment.to != tx.keys[2] {

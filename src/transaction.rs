@@ -62,7 +62,7 @@ impl Transaction {
         let mut tx = Transaction {
             signature: Signature::default(),
             keys,
-            contract_id: contract_id,
+            contract_id,
             last_id,
             fee,
             userdata,
@@ -191,9 +191,9 @@ impl Transaction {
         fee: i64,
     ) -> Self {
         let create = SystemContract::CreateAccount {
-            tokens: tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
-            space: space,
-            contract_id: contract_id,
+            tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
+            space,
+            contract_id,
         };
         Transaction::new_with_userdata(
             from_keypair,
@@ -216,7 +216,7 @@ impl Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let create = SystemContract::Move { tokens: tokens };
+        let create = SystemContract::Move { tokens };
         Transaction::new_with_userdata(
             from_keypair,
             &[to],

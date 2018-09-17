@@ -54,7 +54,7 @@ impl SystemContract {
                 if !Self::check_id(&accounts[0].contract_id) {
                     return;
                 }
-                if space > 0 && accounts[1].userdata.len() != 0 {
+                if space > 0 && !accounts[1].userdata.is_empty() {
                     return;
                 }
                 accounts[0].tokens -= tokens;
