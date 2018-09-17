@@ -104,8 +104,7 @@ cloud_FindInstance() {
 
 #
 # cloud_CreateInstances [networkName] [namePrefix] [numNodes] [imageName]
-#                       [machineType] [bootDiskSize] [enableGpu]
-#                       [startupScript] [address]
+#                       [machineType] [bootDiskSize] [startupScript] [address]
 #
 # Creates one more identical instances.
 #
@@ -115,8 +114,6 @@ cloud_FindInstance() {
 # imageName     - Disk image for the instances
 # machineType   - GCE machine type
 # bootDiskSize  - Optional size of the boot disk in GB
-# enableGpu     - Optionally enable GPU, use the value "true" to enable
-#                 eg, request 4 K80 GPUs with "count=4,type=nvidia-tesla-k80"
 # startupScript - Optional startup script to execute when the instance boots
 # address       - Optional name of the GCE static IP address to attach to the
 #                 instance.  Requires that |numNodes| = 1 and that addressName
@@ -131,9 +128,8 @@ cloud_CreateInstances() {
   declare imageName="$4"
   declare machineType="$5"
   declare optionalBootDiskSize="$6"
-  declare optionalGpu="$7"
-  declare optionalStartupScript="$8"
-  declare optionalAddress="$9"
+  declare optionalStartupScript="$7"
+  declare optionalAddress="$8"
 
   __cloud_SshPrivateKeyCheck
   (
@@ -158,10 +154,6 @@ cloud_CreateInstances() {
     args+=(
       --block-device-mapping "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": { \"VolumeSize\": $optionalBootDiskSize }}]"
     )
-  fi
-  if [[ $optionalGpu = true ]]; then
-    echo TODO: GPU support not implemented yet
-    exit 1
   fi
   if [[ -n $optionalStartupScript ]]; then
     args+=(
@@ -189,10 +181,16 @@ cloud_CreateInstances() {
 
     declare instanceId
     IFS=: read -r instanceId _ < <(echo "${instances[0]}")
-    aws ec2 associate-address \
-      --instance-id "$instanceId" \
-      --region "region" \
-      --allocation-id "$optionalAddress"
+    (
+      set -x
+      # TODO: Poll that the instance has moved to the 'running' state instead of
+      #       blindly sleeping for 30 seconds...
+      sleep 30
+      aws ec2 associate-address \
+        --instance-id "$instanceId" \
+        --region "$region" \
+        --allocation-id "$optionalAddress"
+    )
   fi
 }
 

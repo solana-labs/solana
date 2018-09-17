@@ -11,7 +11,9 @@ gce)
   source "$here"/scripts/gce-provider.sh
 
   imageName="ubuntu-16-04-cuda-9-2-new"
-  leaderMachineType=n1-standard-16
+  cpuLeaderMachineType=n1-standard-16
+  gpuLeaderMachineType="$cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
+  leaderMachineType=$cpuLeaderMachineType
   validatorMachineType=n1-standard-4
   clientMachineType=n1-standard-16
   ;;
@@ -19,8 +21,10 @@ ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  imageName="ami-04169656fea786776"
-  leaderMachineType=m4.4xlarge
+  imageName="ami-0466e26ccc0e752c1"
+  cpuLeaderMachineType=m4.4xlarge
+  gpuLeaderMachineType=p2.xlarge
+  leaderMachineType=$cpuLeaderMachineType
   validatorMachineType=m4.xlarge
   clientMachineType=m4.4xlarge
   ;;
@@ -35,7 +39,7 @@ validatorNodeCount=5
 clientNodeCount=1
 leaderBootDiskSizeInGb=1000
 validatorBootDiskSizeInGb=$leaderBootDiskSizeInGb
-clientBootDiskSizeInGb=40
+clientBootDiskSizeInGb=75
 
 publicNetwork=false
 enableGpu=false
@@ -111,6 +115,7 @@ while getopts "h?p:Pn:c:z:ga:" opt; do
     ;;
   g)
     enableGpu=true
+    leaderMachineType="$gpuLeaderMachineType"
     ;;
   a)
     leaderAddress=$OPTARG
@@ -372,16 +377,16 @@ touch /.instance-startup-complete
 EOF
 
   cloud_CreateInstances "$prefix" "$prefix-leader" 1 \
-    "$imageName" "$leaderMachineType" "$leaderBootDiskSizeInGb" "$enableGpu" \
+    "$imageName" "$leaderMachineType" "$leaderBootDiskSizeInGb" \
     "$startupScript" "$leaderAddress"
 
   cloud_CreateInstances "$prefix" "$prefix-validator" "$validatorNodeCount" \
-    "$imageName" "$validatorMachineType" "$validatorBootDiskSizeInGb" false \
+    "$imageName" "$validatorMachineType" "$validatorBootDiskSizeInGb" \
     "$startupScript" ""
 
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
-      "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" false \
+      "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" \
       "$startupScript" ""
   fi
 
