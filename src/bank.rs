@@ -449,8 +449,7 @@ impl Bank {
             .map(|(acc, tx)| match acc {
                 Err(e) => Err(e.clone()),
                 Ok(ref mut accounts) => Self::execute_transaction(tx, accounts),
-            })
-            .collect();
+            }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
         Self::store_accounts(&res, &loaded_accounts, &mut accounts);
@@ -1010,8 +1009,7 @@ mod tests {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 bank.register_entry_id(&last_id);
                 last_id
-            })
-            .collect();
+            }).collect();
         assert_eq!(bank.count_valid_ids(&[]).len(), 0);
         assert_eq!(bank.count_valid_ids(&[mint.last_id()]).len(), 0);
         for (i, id) in bank.count_valid_ids(&ids).iter().enumerate() {

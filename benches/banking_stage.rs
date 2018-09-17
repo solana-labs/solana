@@ -116,8 +116,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 i as i64,
                 mint.last_id(),
             )
-        })
-        .collect();
+        }).collect();
 
     let (verified_sender, verified_receiver) = channel();
     let (signal_sender, signal_receiver) = channel();
@@ -131,8 +130,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 mint_total / num_src_accounts as i64,
                 mint.last_id(),
             )
-        })
-        .collect();
+        }).collect();
 
     bencher.iter(move || {
         let bank = Arc::new(Bank::new(&mint));
@@ -143,8 +141,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
                 .map(|x| {
                     let len = (*x).read().unwrap().packets.len();
                     (x, iter::repeat(1).take(len).collect())
-                })
-                .collect();
+                }).collect();
 
         verified_sender.send(verified_setup).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
@@ -157,8 +154,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();
                 (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
+            }).collect();
 
         verified_sender.send(verified).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
@@ -187,8 +183,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
                 i as i64,
                 mint.last_id(),
             )
-        })
-        .collect();
+        }).collect();
 
     let (verified_sender, verified_receiver) = channel();
     let (signal_sender, signal_receiver) = channel();
@@ -201,8 +196,7 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
             .map(|x| {
                 let len = (*x).read().unwrap().packets.len();
                 (x, iter::repeat(1).take(len).collect())
-            })
-            .collect();
+            }).collect();
         verified_sender.send(verified).unwrap();
         BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
             .unwrap();

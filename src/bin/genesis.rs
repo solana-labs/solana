@@ -25,8 +25,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("Number of tokens with which to initialize mint"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -34,8 +33,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("use DIR as persistent ledger location"),
-        )
-        .get_matches();
+        ).get_matches();
 
     let tokens = value_t_or_exit!(matches, "tokens", i64);
     let ledger_path = matches.value_of("ledger").unwrap();

@@ -277,8 +277,7 @@ impl Crdt {
                     node.contact_info.rpu.to_string(),
                     node.contact_info.tpu.to_string()
                 )
-            })
-            .collect();
+            }).collect();
 
         format!(
             " NodeInfo.contact_info     | Node identifier\n\
@@ -402,8 +401,7 @@ impl Crdt {
                     trace!("{} purge skipped {} {} {}", self.id, k, now - v, limit);
                     None
                 }
-            })
-            .collect();
+            }).collect();
 
         inc_new_counter_info!("crdt-purge-count", dead_ids.len());
 
@@ -450,8 +448,7 @@ impl Crdt {
                     trace!("{}:broadcast node {} {}", me.id, v.id, v.contact_info.tvu);
                     true
                 }
-            })
-            .cloned()
+            }).cloned()
             .collect();
         cloned_table
     }
@@ -552,8 +549,7 @@ impl Crdt {
                     v.contact_info.tvu
                 );
                 e
-            })
-            .collect();
+            }).collect();
 
         trace!("broadcast results {}", errs.len());
         for e in errs {
@@ -607,8 +603,7 @@ impl Crdt {
                 } else {
                     true
                 }
-            })
-            .collect();
+            }).collect();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
@@ -623,8 +618,7 @@ impl Crdt {
                 //TODO profile this, may need multiple sockets for par_iter
                 assert!(rblob.meta.size <= BLOB_SIZE);
                 s.send_to(&rblob.data[..rblob.meta.size], &v.contact_info.tvu)
-            })
-            .collect();
+            }).collect();
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_info!("crdt-retransmit-send_to_error", 1, 1);
@@ -666,8 +660,7 @@ impl Crdt {
                 r.id != Pubkey::default()
                     && (Self::is_valid_address(&r.contact_info.tpu)
                         || Self::is_valid_address(&r.contact_info.tvu))
-            })
-            .map(|x| x.ledger_state.last_id)
+            }).map(|x| x.ledger_state.last_id)
             .collect()
     }
 
@@ -702,8 +695,7 @@ impl Crdt {
                 v.id != self.id
                     && !v.contact_info.ncp.ip().is_unspecified()
                     && !v.contact_info.ncp.ip().is_multicast()
-            })
-            .collect();
+            }).collect();
 
         let choose_peer_strategy = ChooseWeightedPeerStrategy::new(
             &self.remote,
@@ -867,8 +859,7 @@ impl Crdt {
                     let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                     sleep(Duration::from_millis(time_left));
                 }
-            })
-            .unwrap()
+            }).unwrap()
     }
     fn run_window_request(
         from: &NodeInfo,
@@ -1191,8 +1182,7 @@ impl Crdt {
                         me.table.len()
                     );
                 }
-            })
-            .unwrap()
+            }).unwrap()
     }
 
     fn is_valid_ip(addr: IpAddr) -> bool {

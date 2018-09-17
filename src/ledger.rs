@@ -598,8 +598,7 @@ mod tests {
                     )],
                     false,
                 )
-            })
-            .collect()
+            }).collect()
     }
 
     fn make_test_entries() -> Vec<Entry> {

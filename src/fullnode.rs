@@ -384,8 +384,7 @@ mod tests {
                 let bank = Bank::new(&alice);
                 let entry = tn.info.clone();
                 Fullnode::new_with_bank(keypair, bank, 0, &[], tn, Some(&entry), None, false)
-            })
-            .collect();
+            }).collect();
         //each validator can exit in parallel to speed many sequential calls to `join`
         vals.iter().for_each(|v| v.exit());
         //while join is called sequentially, the above exit call notified all the
