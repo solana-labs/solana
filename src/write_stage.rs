@@ -201,11 +201,12 @@ impl WriteStage {
                 let leader_rotation_interval;
                 {
                     let rcrdt = crdt.read().unwrap();
-                    id = crdt.read().unwrap().id;
+                    id = rcrdt.id;
                     leader_rotation_interval = rcrdt.get_leader_rotation_interval();
                 }
                 let mut entry_height = entry_height;
                 loop {
+                    info!("write_stage entry height: {}", entry_height);
                     // Note that entry height is not zero indexed, it starts at 1, so the
                     // old leader is in power up to and including entry height
                     // n * leader_rotation_interval for some "n". Once we've forwarded
@@ -325,13 +326,15 @@ mod tests {
         bank.process_ledger(entries).expect("process_ledger")
     }
 
-    fn setup_dummy_write_stage() -> DummyWriteStage {
+    fn setup_dummy_write_stage(leader_rotation_interval: u64) -> DummyWriteStage {
         // Setup leader info
         let leader_keypair = Arc::new(Keypair::new());
         let my_id = leader_keypair.pubkey();
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(leader_info.info).expect("Crdt::new")));
+        let mut crdt = Crdt::new(leader_info.info).expect("Crdt::new");
+        crdt.set_leader_rotation_interval(leader_rotation_interval);
+        let crdt = Arc::new(RwLock::new(crdt));
         let bank = Bank::new_default(true);
         let bank = Arc::new(bank);
         let blob_recycler = BlobRecycler::default();
@@ -369,13 +372,11 @@ mod tests {
 
     #[test]
     fn test_write_stage_leader_rotation_exit() {
-        let write_stage_info = setup_dummy_write_stage();
         let leader_rotation_interval = 10;
+        let write_stage_info = setup_dummy_write_stage(leader_rotation_interval);
 
         {
             let mut wcrdt = write_stage_info.crdt.write().unwrap();
-
-            wcrdt.set_leader_rotation_interval(leader_rotation_interval);
             wcrdt.set_scheduled_leader(leader_rotation_interval, write_stage_info.my_id);
         }
 
@@ -420,7 +421,7 @@ mod tests {
             WriteStageReturnType::LeaderRotation
         );
 
-        // Make sure the ledger contains exactly leader_rotation_interval entries
+        // Make sure the ledger contains exactly 2 * leader_rotation_interval entries
         let (entry_height, _) =
             process_ledger(&write_stage_info.leader_ledger_path, &write_stage_info.bank);
         remove_dir_all(write_stage_info.leader_ledger_path).unwrap();

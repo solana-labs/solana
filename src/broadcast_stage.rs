@@ -302,7 +302,7 @@ mod tests {
         entries: Vec<Entry>,
     }
 
-    fn setup_dummy_broadcast_stage() -> DummyBroadcastStage {
+    fn setup_dummy_broadcast_stage(leader_rotation_interval: u64) -> DummyBroadcastStage {
         // Setup dummy leader info
         let leader_keypair = Keypair::new();
         let my_id = leader_keypair.pubkey();
@@ -316,6 +316,7 @@ mod tests {
         // Fill the crdt with the buddy's info
         let mut crdt = Crdt::new(leader_info.info.clone()).expect("Crdt::new");
         crdt.insert(&broadcast_buddy.info);
+        crdt.set_leader_rotation_interval(leader_rotation_interval);
         let crdt = Arc::new(RwLock::new(crdt));
         let blob_recycler = BlobRecycler::default();
 
@@ -367,11 +368,10 @@ mod tests {
 
     #[test]
     fn test_broadcast_stage_leader_rotation_exit() {
-        let broadcast_info = setup_dummy_broadcast_stage();
         let leader_rotation_interval = 10;
+        let broadcast_info = setup_dummy_broadcast_stage(leader_rotation_interval);
         {
             let mut wcrdt = broadcast_info.crdt.write().unwrap();
-            wcrdt.set_leader_rotation_interval(leader_rotation_interval);
             // Set the leader for the next rotation to be myself
             wcrdt.set_scheduled_leader(leader_rotation_interval, broadcast_info.my_id);
         }
