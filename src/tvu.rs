@@ -40,7 +40,7 @@ use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
 use replicate_stage::ReplicateStage;
-use retransmit_stage::RetransmitStage;
+use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
 use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
@@ -48,6 +48,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use window::SharedWindow;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TvuReturnType {
+    LeaderRotation(u64),
+}
 
 pub struct Tvu {
     replicate_stage: ReplicateStage,
@@ -113,21 +118,24 @@ impl Tvu {
         }
     }
 
-    pub fn close(self) -> thread::Result<()> {
+    pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
         self.fetch_stage.close();
         self.join()
     }
 }
 
 impl Service for Tvu {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<TvuReturnType>;
 
-    fn join(self) -> thread::Result<()> {
+    fn join(self) -> thread::Result<Option<TvuReturnType>> {
         self.replicate_stage.join()?;
         self.fetch_stage.join()?;
-        self.retransmit_stage.join()?;
-
-        Ok(())
+        match self.retransmit_stage.join()? {
+            Some(RetransmitStageReturnType::LeaderRotation(entry_height)) => {
+                Ok(Some(TvuReturnType::LeaderRotation(entry_height)))
+            }
+            _ => Ok(None),
+        }
     }
 }
 

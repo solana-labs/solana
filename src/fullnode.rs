@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
 use tpu::{Tpu, TpuReturnType};
-use tvu::Tvu;
+use tvu::{Tvu, TvuReturnType};
 use untrusted::Input;
 use window;
 
@@ -58,7 +58,7 @@ impl ValidatorServices {
         ValidatorServices { tvu }
     }
 
-    pub fn join(self) -> Result<()> {
+    pub fn join(self) -> Result<Option<TvuReturnType>> {
         self.tvu.join()
     }
 
@@ -81,10 +81,13 @@ pub struct Fullnode {
     bank: Arc<Bank>,
     crdt: Arc<RwLock<Crdt>>,
     ledger_path: String,
+    sigverify_disabled: bool,
     shared_window: window::SharedWindow,
     replicate_socket: Vec<UdpSocket>,
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
+    transaction_sockets: Vec<UdpSocket>,
+    broadcast_socket: UdpSocket,
     requests_socket: UdpSocket,
     respond_socket: UdpSocket,
 }
@@ -353,6 +356,7 @@ impl Fullnode {
             crdt,
             shared_window,
             bank,
+            sigverify_disabled,
             rpu,
             ncp,
             rpc_service,
@@ -362,6 +366,8 @@ impl Fullnode {
             replicate_socket: node.sockets.replicate,
             repair_socket: node.sockets.repair,
             retransmit_socket: node.sockets.retransmit,
+            transaction_sockets: node.sockets.transaction,
+            broadcast_socket: node.sockets.broadcast,
             requests_socket: node.sockets.requests,
             respond_socket: node.sockets.respond,
         }
@@ -424,6 +430,38 @@ impl Fullnode {
         Ok(())
     }
 
+    fn validator_to_leader(&mut self, entry_height: u64) {
+        let tick_duration = None;
+        // TODO: To light up PoH, uncomment the following line:
+        //let tick_duration = Some(Duration::from_millis(1000));
+        let (tpu, blob_receiver, tpu_exit) = Tpu::new(
+            self.keypair.clone(),
+            &self.bank,
+            &self.crdt,
+            tick_duration,
+            self.transaction_sockets
+                .iter()
+                .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                .collect(),
+            &self.ledger_path,
+            self.sigverify_disabled,
+            entry_height,
+        );
+
+        let broadcast_stage = BroadcastStage::new(
+            self.broadcast_socket
+                .try_clone()
+                .expect("Failed to clone broadcast socket"),
+            self.crdt.clone(),
+            self.shared_window.clone(),
+            entry_height,
+            blob_receiver,
+            tpu_exit,
+        );
+        let leader_state = LeaderServices::new(tpu, broadcast_stage);
+        self.node_role = Some(NodeRole::Leader(leader_state));
+    }
+
     pub fn handle_role_transition(&mut self) -> Result<Option<FullnodeReturnType>> {
         let node_role = self.node_role.take();
         match node_role {
@@ -435,6 +473,10 @@ impl Fullnode {
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
+                Some(TvuReturnType::LeaderRotation(entry_height)) => {
+                    self.validator_to_leader(entry_height);
+                    Ok(Some(FullnodeReturnType::LeaderRotation))
+                }
                 _ => Ok(None),
             },
             None => Ok(None),
@@ -494,7 +536,9 @@ impl Service for Fullnode {
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
-                validator_service.join()?;
+                if let Some(TvuReturnType::LeaderRotation(_)) = validator_service.join()? {
+                    return Ok(Some(FullnodeReturnType::LeaderRotation));
+                }
             }
             Some(NodeRole::Leader(leader_service)) => {
                 if let Some(TpuReturnType::LeaderRotation) = leader_service.join()? {

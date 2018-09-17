@@ -15,7 +15,12 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
 use window::SharedWindow;
-use window_service::window_service;
+use window_service::{window_service, WindowServiceReturnType};
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RetransmitStageReturnType {
+    LeaderRotation(u64),
+}
 
 fn retransmit(crdt: &Arc<RwLock<Crdt>>, r: &BlobReceiver, sock: &UdpSocket) -> Result<()> {
     let timer = Duration::new(1, 0);
@@ -58,7 +63,8 @@ fn retransmitter(sock: Arc<UdpSocket>, crdt: Arc<RwLock<Crdt>>, r: BlobReceiver)
 }
 
 pub struct RetransmitStage {
-    thread_hdls: Vec<JoinHandle<()>>,
+    t_retransmit: JoinHandle<()>,
+    t_window: JoinHandle<Option<WindowServiceReturnType>>,
 }
 
 impl RetransmitStage {
@@ -83,19 +89,27 @@ impl RetransmitStage {
             retransmit_sender,
             repair_socket,
         );
-        let thread_hdls = vec![t_retransmit, t_window];
 
-        (RetransmitStage { thread_hdls }, entry_receiver)
+        (
+            RetransmitStage {
+                t_window,
+                t_retransmit,
+            },
+            entry_receiver,
+        )
     }
 }
 
 impl Service for RetransmitStage {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<RetransmitStageReturnType>;
 
-    fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
+    fn join(self) -> thread::Result<Option<RetransmitStageReturnType>> {
+        self.t_retransmit.join()?;
+        match self.t_window.join()? {
+            Some(WindowServiceReturnType::LeaderRotation(entry_height)) => Ok(Some(
+                RetransmitStageReturnType::LeaderRotation(entry_height),
+            )),
+            _ => Ok(None),
         }
-        Ok(())
     }
 }
