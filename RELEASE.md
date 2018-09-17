@@ -1,16 +1,14 @@
-Solana Release process
-===
+# Solana Release process
 
-Introduction
-===
+##Introduction
+
 
 Solana uses a channel-oriented, date-based branching process described [here](https://github.com/solana-labs/solana/blob/master/rfcs/rfc-005-branches-tags-and-channels.md).
 
-Release Steps
-===
+##Release Steps
 
-Changing channels
-==
+###Changing channels
+
 When cutting a new channel branch these pre-steps are required:
 
 1. Pick your branch point for release on master.
@@ -21,8 +19,8 @@ When cutting a new channel branch these pre-steps are required:
 
 At this point, ci/channel-info.sh should show your freshly cut release branch as "BETA_CHANNEL" and the previous release branch as "STABLE_CHANNEL".
 
-Updating channels (i.e. "making a release")
-==
+###Updating channels (i.e. "making a release")
+
 We use [github's Rleases UI](https://github.com/solana-labs/solana/releases) for tagging a release.
 
 1. Go here.
