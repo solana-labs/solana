@@ -907,6 +907,63 @@ mod tests {
     }
 
     #[test]
+    fn test_transfer_on_date2() {
+        let mint = Mint::new(2);
+        let bank = Bank::new(&mint);
+        let pubkey = Keypair::new().pubkey(); // Contract public key
+        let pubkey2 = Keypair::new().pubkey(); // To public key
+        let dt = Utc::now();
+
+        let from = &mint.keypair();
+
+        use budget::{Budget, Condition};
+        use transaction::Contract;
+
+        let tokens = 1;
+
+        // Transfer tokens to pubkey2, NOT pubkey
+        let budget = Budget::After(
+            Condition::Timestamp(dt, from.pubkey()),
+            Payment {
+                tokens,
+                to: pubkey2,
+            },
+        );
+        let plan = Plan::Budget(budget);
+        let instruction = Instruction::NewContract(Contract { plan, tokens });
+
+        let tx = Transaction::new_from_instruction(from, pubkey, instruction, mint.last_id(), 0);
+        let signature = tx.signature;
+        bank.process_transaction(&tx).map(|_| signature).unwrap();
+
+        // Mint's balance will be 1 because 1 of the tokens is locked up
+        assert_eq!(bank.get_balance(&mint.pubkey()), tokens);
+
+        // tx count is 1, because debits were applied.
+        assert_eq!(bank.transaction_count(), 1);
+
+        // pubkey's balance will be 0 because the funds are locked up in the pubkey contract
+        assert_eq!(bank.get_balance(&pubkey), 0);
+
+        // pubkey2's balance will be 0 because the funds have not been
+        // sent.
+        assert_eq!(bank.get_balance(&pubkey2), 0);
+
+        // Now, acknowledge the time in the condition occurred and
+        // that pubkey2's funds are now available.
+        let tx = Transaction::new_timestamp(&mint.keypair(), pubkey, dt, bank.last_id());
+        let res = bank.process_transaction(&tx);
+        assert!(res.is_ok());
+        assert_eq!(bank.get_balance(&pubkey), tokens);
+
+        // tx count is 2
+        assert_eq!(bank.transaction_count(), 2);
+
+        assert_eq!(bank.get_balance(&pubkey), 0); // <==== KO because pubkey has a balance of `tokens`
+        assert_eq!(bank.get_balance(&pubkey2), tokens); // <==== KO because  pubkey2 has a balance of '0'
+    }
+
+    #[test]
     fn test_cancel_transfer() {
         // mint needs to have a balance to modify the external contract
         let mint = Mint::new(2);
