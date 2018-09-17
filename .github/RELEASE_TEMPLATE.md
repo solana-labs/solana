@@ -1,9 +1,11 @@
-# Release v0.X.Y
+# Release v0.X.Y <milestone name>
+
+fun blurb about the name, what's in the release
 
 ## Major Features And Improvements
 
 * bulleted
-* list of features and improbements
+* list of features and improvements
 
 ## Breaking Changes
 
