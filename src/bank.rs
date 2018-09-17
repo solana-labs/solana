@@ -3,28 +3,59 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use bincode::{deserialize, serialize};
-use chrono::prelude::*;
+use bincode::serialize;
+use budget_contract::BudgetContract;
 use counter::Counter;
 use entry::Entry;
 use hash::{hash, Hash};
+use instruction::Instruction;
 use itertools::Itertools;
 use ledger::Block;
 use log::Level;
 use mint::Mint;
-use payment_plan::{Payment, PaymentPlan, Witness};
+use payment_plan::{Payment, PaymentPlan};
 use signature::{Keypair, Pubkey, Signature};
 use std;
-use std::collections::hash_map::Entry::Occupied;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
+use system_contract::SystemContract;
 use timing::{duration_as_us, timestamp};
-use transaction::{Instruction, Plan, Transaction};
+use transaction::Transaction;
 use window::WINDOW_SIZE;
 
+/// An Account with userdata that is stored on chain
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Account {
+    /// tokens in the account
+    pub tokens: i64,
+    /// user data
+    /// A transaction can write to its userdata
+    pub userdata: Vec<u8>,
+    /// contract id this contract belongs to
+    pub contract_id: Pubkey,
+}
+impl Account {
+    pub fn new(tokens: i64, space: usize, contract_id: Pubkey) -> Account {
+        Account {
+            tokens,
+            userdata: vec![0u8; space],
+            contract_id,
+        }
+    }
+}
+
+impl Default for Account {
+    fn default() -> Self {
+        Account {
+            tokens: 0,
+            userdata: vec![],
+            contract_id: SystemContract::id(),
+        }
+    }
+}
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
 /// that `last_id` in a transaction. Lowering this value reduces memory consumption,
@@ -41,10 +72,8 @@ pub enum BankError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
     AccountNotFound(Pubkey),
 
-    /// The requested debit from `Pubkey` has the potential to draw the balance
-    /// below zero. This can occur when a debit and credit are processed in parallel.
-    /// The bank may reject the debit or push it to a future entry.
-    InsufficientFunds(Pubkey),
+    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
+    InsufficientFundsForFee(Pubkey),
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
@@ -55,28 +84,27 @@ pub enum BankError {
     /// the `last_id` has been discarded.
     LastIdNotFound(Hash),
 
-    /// The transaction is invalid and has requested a debit or credit of negative
-    /// tokens.
-    NegativeTokens,
-
     /// Proof of History verification failed.
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
     UnbalancedTransaction(Signature),
-    /// Contract location Pubkey already contains userdata
-    ContractAlreadyPending(Pubkey),
+    /// Contract's transactions resulted in an account with a negative balance
+    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
+    /// contract
+    ResultWithNegativeTokens(Signature),
+
+    /// Contract id is unknown
+    UnknownContractId(Pubkey),
+
+    /// Contract modified an accounts contract id
+    ModifiedContractId(Signature),
+
+    /// Contract spent the tokens of an account that doesn't belong to it
+    ExternalAccountTokenSpend(Signature),
 }
 
 pub type Result<T> = result::Result<T, BankError>;
-/// An Account with userdata that is stored on chain
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct Account {
-    /// tokens in the account
-    pub tokens: i64,
-    /// user data
-    /// A transaction can write to its userdata
-    pub userdata: Vec<u8>,
-}
+
 #[derive(Default)]
 struct ErrorCounters {
     account_not_found_validator: usize,
@@ -232,104 +260,7 @@ impl Bank {
         last_ids.push_back(*last_id);
     }
 
-    /// Deduct tokens from the source account if it has sufficient funds and the contract isn't
-    /// pending
-    fn apply_debits_to_budget_payment_plan(
-        tx: &Transaction,
-        accounts: &mut [Account],
-        instruction: &Instruction,
-    ) -> Result<()> {
-        {
-            let tokens = if !accounts[0].userdata.is_empty() {
-                0
-            } else {
-                accounts[0].tokens
-            };
-            if let Instruction::NewContract(contract) = &instruction {
-                if contract.tokens < 0 {
-                    return Err(BankError::NegativeTokens);
-                }
-
-                if tokens < contract.tokens {
-                    return Err(BankError::InsufficientFunds(tx.keys[0]));
-                } else {
-                    let bal = &mut accounts[0];
-                    bal.tokens -= contract.tokens;
-                }
-            };
-        }
-        Ok(())
-    }
-
-    /// Apply only a transaction's credits.
-    /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits_to_budget_payment_plan(
-        tx: &Transaction,
-        accounts: &mut [Account],
-        instruction: &Instruction,
-    ) -> Result<()> {
-        match instruction {
-            Instruction::NewContract(contract) => {
-                let plan = contract.plan.clone();
-                if let Some(payment) = plan.final_payment() {
-                    Self::apply_payment(&payment, &mut accounts[1]);
-                    Ok(())
-                } else if !accounts[1].userdata.is_empty() {
-                    Err(BankError::ContractAlreadyPending(tx.keys[1]))
-                } else {
-                    let mut pending = HashMap::new();
-                    pending.insert(tx.signature, plan);
-                    //TODO this is a temporary on demand allocation
-                    //until system contract requires explicit allocation of memory
-                    accounts[1].userdata = serialize(&pending).unwrap();
-                    accounts[1].tokens += contract.tokens;
-                    Ok(())
-                }
-            }
-            Instruction::ApplyTimestamp(dt) => {
-                Self::apply_timestamp(tx.keys[0], *dt, &mut accounts[1]);
-                Ok(())
-            }
-            Instruction::ApplySignature(signature) => {
-                Self::apply_signature(tx.keys[0], *signature, accounts);
-                Ok(())
-            }
-            Instruction::NewVote(_vote) => {
-                // TODO: record the vote in the stake table...
-                trace!("GOT VOTE! last_id={}", tx.last_id);
-                Ok(())
-            }
-        }
-    }
-    /// Budget DSL contract interface
-    /// * tx - the transaction
-    /// * accounts[0] - The source of the tokens
-    /// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
-    /// be spent from this account .
-    pub fn process_transaction_of_budget_instruction(
-        tx: &Transaction,
-        accounts: &mut [Account],
-    ) -> Result<()> {
-        let instruction = tx.instruction();
-        Self::apply_debits_to_budget_payment_plan(tx, accounts, &instruction)?;
-        Self::apply_credits_to_budget_payment_plan(tx, accounts, &instruction)
-    }
-    //TODO the contract needs to provide a "get_balance" introspection call of the userdata
-    pub fn get_balance_of_budget_payment_plan(account: &Account) -> i64 {
-        if let Ok(pending) = deserialize(&account.userdata) {
-            let pending: HashMap<Signature, Plan> = pending;
-            if !pending.is_empty() {
-                0
-            } else {
-                account.tokens
-            }
-        } else {
-            account.tokens
-        }
-    }
-
-    /// Process a Transaction. If it contains a payment plan that requires a witness
-    /// to progress, the payment plan will be stored in the bank.
+    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         match self.process_transactions(vec![tx.clone()])[0] {
             Err(ref e) => {
@@ -353,12 +284,12 @@ impl Bank {
             } else {
                 error_counters.account_not_found_leader += 1;
             }
-            if let Instruction::NewVote(_vote) = tx.instruction() {
+            if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
                 error_counters.account_not_found_vote += 1;
             }
             Err(BankError::AccountNotFound(*tx.from()))
         } else if accounts.get(&tx.keys[0]).unwrap().tokens < tx.fee {
-            Err(BankError::InsufficientFunds(*tx.from()))
+            Err(BankError::InsufficientFundsForFee(*tx.from()))
         } else {
             let mut called_accounts: Vec<Account> = tx
                 .keys
@@ -382,27 +313,60 @@ impl Bank {
             .map(|tx| self.load_account(tx, accounts, error_counters))
             .collect()
     }
-
-    pub fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
+    pub fn verify_transaction(
+        tx: &Transaction,
+        pre_contract_id: &Pubkey,
+        pre_tokens: i64,
+        account: &Account,
+    ) -> Result<()> {
+        // Verify the transaction
+        // make sure that contract_id is still the same or this was just assigned by the system call contract
+        if !((*pre_contract_id == account.contract_id)
+            || (SystemContract::check_id(&tx.contract_id)
+                && SystemContract::check_id(&pre_contract_id)))
+        {
+            //TODO, this maybe redundant bpf should be able to guarantee this property
+            return Err(BankError::ModifiedContractId(tx.signature));
+        }
+        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
+        if tx.contract_id != account.contract_id && pre_tokens > account.tokens {
+            return Err(BankError::ExternalAccountTokenSpend(tx.signature));
+        }
+        if account.tokens < 0 {
+            return Err(BankError::ResultWithNegativeTokens(tx.signature));
+        }
+        Ok(())
+    }
+    /// Execute a transaction.
+    /// This method calls the contract's process_transaction method and verifies that the result of
+    /// the contract does not violate the bank's accounting rules.
+    /// The accounts are commited back to the bank only if this function returns Ok(_).
+    fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
+        let pre_data: Vec<_> = accounts
+            .iter_mut()
+            .map(|a| (a.contract_id, a.tokens))
+            .collect();
 
-        // TODO next steps is to add hooks to call arbitrary contracts here
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        let e = Self::process_transaction_of_budget_instruction(&tx, accounts);
-
+        if SystemContract::check_id(&tx.contract_id) {
+            SystemContract::process_transaction(&tx, accounts)
+        } else if BudgetContract::check_id(&tx.contract_id) {
+            // TODO: the runtime should be checking read/write access to memory
+            // we are trusting the hard coded contracts not to clobber or allocate
+            BudgetContract::process_transaction(&tx, accounts)
+        } else {
+            return Err(BankError::UnknownContractId(tx.contract_id));
+        }
         // Verify the transaction
-        // TODO, At the moment there is only 1 contract, so 1-3 are not checked
-        // 1. For accounts assigned to the contract, the total sum of all the tokens in these accounts cannot increase.
-        // 2. For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        // 3. For accounts unassigned to the contract, the userdata cannot change.
-
-        // 4. The total sum of all the tokens in all the pages cannot change.
+        for ((pre_contract_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
+            Self::verify_transaction(&tx, pre_contract_id, *pre_tokens, post_account)?;
+        }
+        // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
             Err(BankError::UnbalancedTransaction(tx.signature))
-        } else if let Err(err) = e {
-            Err(err)
         } else {
             Ok(tx)
         }
@@ -594,7 +558,7 @@ impl Bank {
         {
             let tx = &entry1.transactions[0];
             let instruction = tx.instruction();
-            let deposit = if let Instruction::NewContract(contract) = instruction {
+            let deposit = if let Some(Instruction::NewContract(contract)) = instruction {
                 contract.plan.final_payment()
             } else {
                 None
@@ -624,60 +588,6 @@ impl Bank {
         Ok((entry_count, tail))
     }
 
-    /// Process a Witness Signature. Any payment plans waiting on this signature
-    /// will progress one step.
-    fn apply_signature(from: Pubkey, signature: Signature, account: &mut [Account]) {
-        let mut pending: HashMap<Signature, Plan> =
-            deserialize(&account[1].userdata).unwrap_or_default();
-        if let Occupied(mut e) = pending.entry(signature) {
-            e.get_mut().apply_witness(&Witness::Signature, &from);
-            if let Some(payment) = e.get().final_payment() {
-                //move the tokens back to the from account
-                account[0].tokens += payment.tokens;
-                account[1].tokens -= payment.tokens;
-                e.remove_entry();
-            }
-        };
-        //TODO this allocation needs to be changed once the runtime only allows for explicitly
-        //allocated memory
-        account[1].userdata = if pending.is_empty() {
-            vec![]
-        } else {
-            serialize(&pending).unwrap()
-        };
-    }
-
-    /// Process a Witness Timestamp. Any payment plans waiting on this timestamp
-    /// will progress one step.
-    fn apply_timestamp(from: Pubkey, dt: DateTime<Utc>, account: &mut Account) {
-        let mut pending: HashMap<Signature, Plan> =
-            deserialize(&account.userdata).unwrap_or_default();
-        //deserialize(&account.userdata).unwrap_or(HashMap::new());
-
-        // Check to see if any timelocked transactions can be completed.
-        let mut completed = vec![];
-
-        // Hold 'pending' write lock until the end of this function. Otherwise another thread can
-        // double-spend if it enters before the modified plan is removed from 'pending'.
-        for (key, plan) in &mut pending {
-            plan.apply_witness(&Witness::Timestamp(dt), &from);
-            if let Some(_payment) = plan.final_payment() {
-                completed.push(key.clone());
-            }
-        }
-
-        for key in completed {
-            pending.remove(&key);
-        }
-        //TODO this allocation needs to be changed once the runtime only allows for explicitly
-        //allocated memory
-        account.userdata = if pending.is_empty() {
-            vec![]
-        } else {
-            serialize(&pending).unwrap()
-        };
-    }
-
     /// Create, sign, and process a Transaction from `keypair` to `to` of
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
@@ -692,25 +602,20 @@ impl Bank {
         self.process_transaction(&tx).map(|_| signature)
     }
 
-    /// Create, sign, and process a postdated Transaction from `keypair`
-    /// to `to` of `n` tokens on `dt` where `last_id` is the last Entry ID
-    /// observed by the client.
-    pub fn transfer_on_date(
-        &self,
-        n: i64,
-        keypair: &Keypair,
-        to: Pubkey,
-        dt: DateTime<Utc>,
-        last_id: Hash,
-    ) -> Result<Signature> {
-        let tx = Transaction::new_on_date(keypair, to, dt, n, last_id);
-        let signature = tx.signature;
-        self.process_transaction(&tx).map(|_| signature)
+    pub fn read_balance(account: &Account) -> i64 {
+        if SystemContract::check_id(&account.contract_id) {
+            SystemContract::get_balance(account)
+        } else if BudgetContract::check_id(&account.contract_id) {
+            BudgetContract::get_balance(account)
+        } else {
+            account.tokens
+        }
     }
-
+    /// Each contract would need to be able to introspect its own state
+    /// this is hard coded to the budget contract langauge
     pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
         self.get_account(pubkey)
-            .map(|x| Self::get_balance_of_budget_payment_plan(&x))
+            .map(|x| Self::read_balance(&x))
             .unwrap_or(0)
     }
 
@@ -767,6 +672,7 @@ mod tests {
     use entry_writer::{self, EntryWriter};
     use hash::hash;
     use ledger;
+    use logger;
     use packet::BLOB_DATA_SIZE;
     use signature::{GenKeys, KeypairUtil};
     use std;
@@ -799,13 +705,13 @@ mod tests {
 
     #[test]
     fn test_negative_tokens() {
+        logger::setup();
         let mint = Mint::new(1);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
-        assert_eq!(
-            bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::NegativeTokens)
-        );
+        let res = bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
+        println!("{:?}", bank.get_account(&pubkey));
+        assert_matches!(res, Err(BankError::ResultWithNegativeTokens(_)));
         assert_eq!(bank.transaction_count(), 0);
     }
 
@@ -815,15 +721,20 @@ mod tests {
     fn test_detect_failed_duplicate_transactions_issue_1157() {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
+        let dest = Keypair::new();
 
-        let tx = Transaction::new(&mint.keypair(), mint.keypair().pubkey(), -1, mint.last_id());
+        // source with 0 contract context
+        let tx = Transaction::new(&mint.keypair(), dest.pubkey(), 2, mint.last_id());
         let signature = tx.signature;
         assert!(!bank.has_signature(&signature));
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(BankError::NegativeTokens)
-        );
+        let res = bank.process_transaction(&tx);
+        // This is the potentially wrong behavior
+        // result failed, but signature is registered
+        assert!(!res.is_ok());
         assert!(bank.has_signature(&signature));
+        // sanity check that tokens didn't move
+        assert_eq!(bank.get_balance(&dest.pubkey()), 0);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
     #[test]
@@ -847,9 +758,9 @@ mod tests {
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
-        assert_eq!(
+        assert_matches!(
             bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::InsufficientFunds(mint.pubkey()))
+            Err(BankError::ResultWithNegativeTokens(_))
         );
         assert_eq!(bank.transaction_count(), 1);
 
@@ -866,85 +777,6 @@ mod tests {
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
-    }
-
-    #[test]
-    fn test_transfer_on_date() {
-        let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
-        let pubkey = Keypair::new().pubkey();
-        let dt = Utc::now();
-        bank.transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
-            .unwrap();
-
-        // Mint's balance will be 1 because 1 of the tokens is locked up
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
-
-        // tx count is 1, because debits were applied.
-        assert_eq!(bank.transaction_count(), 1);
-
-        // pubkey's balance will be 0 because the funds have not been
-        // sent.
-        assert_eq!(bank.get_balance(&pubkey), 0);
-
-        // Now, acknowledge the time in the condition occurred and
-        // that pubkey's funds are now available.
-        let tx = Transaction::new_timestamp(&mint.keypair(), pubkey, dt, bank.last_id());
-        let res = bank.process_transaction(&tx);
-        assert!(res.is_ok());
-        assert_eq!(bank.get_balance(&pubkey), 1);
-
-        // tx count is 2
-        assert_eq!(bank.transaction_count(), 2);
-
-        // try to replay the timestamp contract
-        bank.register_entry_id(&hash(bank.last_id().as_ref()));
-        let tx = Transaction::new_timestamp(&mint.keypair(), pubkey, dt, bank.last_id());
-        let res = bank.process_transaction(&tx);
-        assert!(res.is_ok());
-
-        assert_eq!(bank.get_balance(&pubkey), 1);
-    }
-
-    #[test]
-    fn test_cancel_transfer() {
-        // mint needs to have a balance to modify the external contract
-        let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
-        let pubkey = Keypair::new().pubkey();
-        let dt = Utc::now();
-        let signature = bank
-            .transfer_on_date(1, &mint.keypair(), pubkey, dt, mint.last_id())
-            .unwrap();
-
-        // Assert the debit counts as a transaction.
-        assert_eq!(bank.transaction_count(), 1);
-
-        // Mint's balance will be 1 because 1 of the tokens is locked up.
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
-
-        // pubkey's balance will be 0 because the funds are locked up
-        assert_eq!(bank.get_balance(&pubkey), 0);
-
-        // Now, cancel the transaction. Mint gets her funds back, pubkey never sees them.
-        let tx = Transaction::new_signature(&mint.keypair(), pubkey, signature, bank.last_id());
-        let res = bank.process_transaction(&tx);
-        assert!(res.is_ok());
-        assert_eq!(bank.get_balance(&pubkey), 0);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 2);
-
-        // Assert cancel counts as a tx
-        assert_eq!(bank.transaction_count(), 2);
-
-        // try to replay the signature contract
-        bank.register_entry_id(&hash(bank.last_id().as_ref()));
-        let tx = Transaction::new_signature(&mint.keypair(), pubkey, signature, bank.last_id());
-        let res = bank.process_transaction(&tx); //<-- attack! try to get budget dsl to pay out with another signature
-        assert!(res.is_ok());
-        // balance is is still 2 for the mint
-        assert_eq!(bank.get_balance(&mint.pubkey()), 2);
-        // balance is is still 0 for the contract
-        assert_eq!(bank.get_balance(&pubkey), 0);
     }
 
     #[test]
@@ -1070,7 +902,7 @@ mod tests {
         let hash = mint.last_id();
         let mut txs = Vec::with_capacity(length);
         for i in 0..length {
-            txs.push(Transaction::new(
+            txs.push(Transaction::system_new(
                 &mint.keypair(),
                 keypair.pubkey(),
                 i as i64,
@@ -1088,7 +920,7 @@ mod tests {
         let hash = mint.last_id();
         let transactions: Vec<_> = keypairs
             .iter()
-            .map(|keypair| Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash))
+            .map(|keypair| Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, hash))
             .collect();
         let entries = ledger::next_entries(&hash, 0, transactions);
         entries.into_iter()
@@ -1100,7 +932,7 @@ mod tests {
         let mut num_hashes = 0;
         for _ in 0..length {
             let keypair = Keypair::new();
-            let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, hash);
+            let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, hash);
             let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx], false);
             entries.push(entry);
         }

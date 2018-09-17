@@ -45,7 +45,7 @@ pub fn create_new_signed_vote_blob(
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
         wcrdt.new_vote(*last_id)
     }?;
-    let tx = Transaction::new_vote(&keypair, vote, *last_id, 0);
+    let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
     {
         let mut blob = shared_blob.write().unwrap();
         let bytes = serialize(&tx)?;
@@ -227,6 +227,7 @@ pub mod tests {
     use crdt::{Crdt, Node, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
+    use instruction::Vote;
     use logger;
     use mint::Mint;
     use packet::BlobRecycler;
@@ -235,7 +236,7 @@ pub mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use transaction::{Transaction, Vote};
+    use transaction::Transaction;
 
     /// Ensure the VoteStage issues votes at the expected cadence
     #[test]
@@ -291,7 +292,7 @@ pub mod tests {
 
         // give the leader some tokens
         let give_leader_tokens_tx =
-            Transaction::new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
+            Transaction::system_new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
         bank.process_transaction(&give_leader_tokens_tx).unwrap();
 
         leader_crdt.set_leader(leader_pubkey);

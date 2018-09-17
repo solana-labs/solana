@@ -16,6 +16,7 @@ use bincode::{deserialize, serialize};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
+use instruction::Vote;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
@@ -33,7 +34,6 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
 use timing::{duration_as_ms, timestamp};
-use transaction::Vote;
 use window::{SharedWindow, WindowIndex};
 
 pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
@@ -1327,6 +1327,7 @@ mod tests {
     };
     use entry::Entry;
     use hash::{hash, Hash};
+    use instruction::Vote;
     use ledger::{LedgerWindow, LedgerWriter};
     use logger;
     use packet::BlobRecycler;
@@ -1339,7 +1340,6 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::Vote;
     use window::default_window;
 
     #[test]

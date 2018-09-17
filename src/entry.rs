@@ -249,8 +249,20 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), zero);
-        let tx1 = Transaction::new_signature(&keypair, keypair.pubkey(), Default::default(), zero);
+        let tx0 = Transaction::budget_new_timestamp(
+            &keypair,
+            keypair.pubkey(),
+            keypair.pubkey(),
+            Utc::now(),
+            zero,
+        );
+        let tx1 = Transaction::budget_new_signature(
+            &keypair,
+            keypair.pubkey(),
+            keypair.pubkey(),
+            Default::default(),
+            zero,
+        );
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 
@@ -272,7 +284,13 @@ mod tests {
         assert_eq!(tick.id, zero);
 
         let keypair = Keypair::new();
-        let tx0 = Transaction::new_timestamp(&keypair, keypair.pubkey(), Utc::now(), zero);
+        let tx0 = Transaction::budget_new_timestamp(
+            &keypair,
+            keypair.pubkey(),
+            keypair.pubkey(),
+            Utc::now(),
+            zero,
+        );
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
         assert_eq!(entry0.id, next_hash(&zero, 1, &vec![tx0]));

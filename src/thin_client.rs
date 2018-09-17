@@ -192,7 +192,7 @@ impl ThinClient {
         // In the future custom contracts would need their own introspection
         self.balances
             .get(pubkey)
-            .map(Bank::get_balance_of_budget_payment_plan)
+            .map(Bank::read_balance)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
     }
 
@@ -429,7 +429,6 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
 mod tests {
     use super::*;
     use bank::Bank;
-    use budget::Budget;
     use crdt::Node;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
@@ -437,7 +436,7 @@ mod tests {
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use transaction::{Instruction, Plan};
+    use system_contract::SystemContract;
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
         use std::env;
@@ -542,10 +541,9 @@ mod tests {
         let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
-        let mut instruction2 = tr2.instruction();
-        if let Instruction::NewContract(ref mut contract) = instruction2 {
-            contract.tokens = 502;
-            contract.plan = Plan::Budget(Budget::new_payment(502, bob_pubkey));
+        let mut instruction2 = deserialize(&tr2.userdata).unwrap();
+        if let SystemContract::Move { ref mut tokens } = instruction2 {
+            *tokens = 502;
         }
         tr2.userdata = serialize(&instruction2).unwrap();
         let signature = client.transfer_signed(&tr2).unwrap();
@@ -595,9 +593,8 @@ mod tests {
         let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
             .unwrap();
-        sleep(Duration::from_millis(100));
 
-        assert!(client.check_signature(&signature));
+        assert!(client.poll_for_signature(&signature).is_ok());
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();

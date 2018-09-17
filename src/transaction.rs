@@ -2,79 +2,18 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
+use budget_contract::BudgetContract;
 use chrono::prelude::*;
 use hash::Hash;
-use payment_plan::{Payment, PaymentPlan, Witness};
+use instruction::{Contract, Instruction, Plan, Vote};
+use payment_plan::{Payment, PaymentPlan};
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 use std::mem::size_of;
+use system_contract::SystemContract;
 
 pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
 pub const SIG_OFFSET: usize = 0;
 pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
-
-/// The type of payment plan. Each item must implement the PaymentPlan trait.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Plan {
-    /// The builtin contract language Budget.
-    Budget(Budget),
-}
-
-// A proxy for the underlying DSL.
-impl PaymentPlan for Plan {
-    fn final_payment(&self) -> Option<Payment> {
-        match self {
-            Plan::Budget(budget) => budget.final_payment(),
-        }
-    }
-
-    fn verify(&self, spendable_tokens: i64) -> bool {
-        match self {
-            Plan::Budget(budget) => budget.verify(spendable_tokens),
-        }
-    }
-
-    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
-        match self {
-            Plan::Budget(budget) => budget.apply_witness(witness, from),
-        }
-    }
-}
-
-/// A smart contract.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Contract {
-    /// The number of tokens allocated to the `Plan` and any transaction fees.
-    pub tokens: i64,
-    pub plan: Plan,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Vote {
-    /// We send some gossip specific membership information through the vote to shortcut
-    /// liveness voting
-    /// The version of the CRDT struct that the last_id of this network voted with
-    pub version: u64,
-    /// The version of the CRDT struct that has the same network configuration as this one
-    pub contact_info_version: u64,
-    // TODO: add signature of the state here as well
-}
-
-/// An instruction to progress the smart contract.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Instruction {
-    /// Declare and instantiate `Contract`.
-    NewContract(Contract),
-
-    /// Tell a payment plan acknowledge the given `DateTime` has past.
-    ApplyTimestamp(DateTime<Utc>),
-
-    /// Tell the payment plan that the `NewContract` with `Signature` has been
-    /// signed by the containing transaction's `Pubkey`.
-    ApplySignature(Signature),
-
-    /// Vote for a PoH that is equal to the lastid of this transaction
-    NewVote(Vote),
-}
 
 /// An instruction signed by a client with `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -88,6 +27,8 @@ pub struct Transaction {
     /// In the future which key pays the fee and which keys have signatures would be configurable.
     /// * keys[1] - Typically this is the contract context or the recipient of the tokens
     pub keys: Vec<Pubkey>,
+    /// the contract id to execute
+    pub contract_id: Pubkey,
 
     /// The ID of a recent ledger entry.
     pub last_id: Hash,
@@ -110,6 +51,7 @@ impl Transaction {
     fn new_with_userdata(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
+        contract_id: Pubkey,
         userdata: Vec<u8>,
         last_id: Hash,
         fee: i64,
@@ -120,6 +62,7 @@ impl Transaction {
         let mut tx = Transaction {
             signature: Signature::default(),
             keys,
+            contract_id,
             last_id,
             fee,
             userdata,
@@ -127,20 +70,8 @@ impl Transaction {
         tx.sign(from_keypair);
         tx
     }
-    /// Create a signed transaction from the given `Instruction`.
-    fn new_from_instruction(
-        from_keypair: &Keypair,
-        contract: Pubkey,
-        instruction: &Instruction,
-        last_id: Hash,
-        fee: i64,
-    ) -> Self {
-        let userdata = serialize(instruction).unwrap();
-        Self::new_with_userdata(from_keypair, &[contract], userdata, last_id, fee)
-    }
-
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new_taxed(
+    pub fn budget_new_taxed(
         from_keypair: &Keypair,
         contract: Pubkey,
         tokens: i64,
@@ -154,46 +85,80 @@ impl Transaction {
         let budget = Budget::Pay(payment);
         let plan = Plan::Budget(budget);
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, fee)
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract],
+            BudgetContract::id(),
+            userdata,
+            last_id,
+            fee,
+        )
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Self::new_taxed(from_keypair, to, tokens, 0, last_id)
+    pub fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        Self::budget_new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
     /// Create and sign a new Witness Timestamp. Used for unit-testing.
-    pub fn new_timestamp(
+    pub fn budget_new_timestamp(
         from_keypair: &Keypair,
         contract: Pubkey,
+        to: Pubkey,
         dt: DateTime<Utc>,
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
-        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, 0)
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract, to],
+            BudgetContract::id(),
+            userdata,
+            last_id,
+            0,
+        )
     }
 
     /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn new_signature(
+    pub fn budget_new_signature(
         from_keypair: &Keypair,
         contract: Pubkey,
+        to: Pubkey,
         signature: Signature,
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplySignature(signature);
-        Self::new_from_instruction(from_keypair, contract, &instruction, last_id, 0)
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract, to],
+            BudgetContract::id(),
+            userdata,
+            last_id,
+            0,
+        )
     }
 
-    pub fn new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+    pub fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
-        let userdata = serialize(&instruction).expect("serealize instruction");
-        Self::new_with_userdata(from_keypair, &[], userdata, last_id, fee)
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(
+            from_keypair,
+            &[],
+            BudgetContract::id(),
+            userdata,
+            last_id,
+            fee,
+        )
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
-    pub fn new_on_date(
+    pub fn budget_new_on_date(
         from_keypair: &Keypair,
         to: Pubkey,
+        contract: Pubkey,
         dt: DateTime<Utc>,
         tokens: i64,
         last_id: Hash,
@@ -205,13 +170,72 @@ impl Transaction {
         );
         let plan = Plan::Budget(budget);
         let instruction = Instruction::NewContract(Contract { plan, tokens });
-        let userdata = serialize(&instruction).expect("serealize instruction");
-        Self::new_with_userdata(from_keypair, &[to], userdata, last_id, 0)
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract],
+            BudgetContract::id(),
+            userdata,
+            last_id,
+            0,
+        )
     }
-
+    /// Create and sign new SystemContract::CreateAccount transaction
+    pub fn system_new_create(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        last_id: Hash,
+        tokens: i64,
+        space: u64,
+        contract_id: Option<Pubkey>,
+        fee: i64,
+    ) -> Self {
+        let create = SystemContract::CreateAccount {
+            tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
+            space,
+            contract_id,
+        };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[to],
+            SystemContract::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemContract::CreateAccount transaction with some defaults
+    pub fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        Transaction::system_new_create(from_keypair, to, last_id, tokens, 0, None, 0)
+    }
+    /// Create and sign new SystemContract::Move transaction
+    pub fn system_move(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: i64,
+        last_id: Hash,
+        fee: i64,
+    ) -> Self {
+        let create = SystemContract::Move { tokens };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[to],
+            SystemContract::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemContract::Move transaction
+    pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        Transaction::system_move(from_keypair, to, tokens, last_id, 0)
+    }
     /// Get the transaction data to sign.
     fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.keys)).expect("serialize keys");
+
+        let contract_id = serialize(&(&self.contract_id)).expect("serialize contract_id");
+        data.extend_from_slice(&contract_id);
 
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
@@ -237,19 +261,8 @@ impl Transaction {
             .verify(&self.from().as_ref(), &self.get_sign_data())
     }
 
-    /// Verify only the payment plan.
-    pub fn verify_plan(&self) -> bool {
-        let instruction = deserialize(&self.userdata);
-        if let Ok(Instruction::NewContract(contract)) = instruction {
-            self.fee >= 0
-                && self.fee <= contract.tokens
-                && contract.plan.verify(contract.tokens - self.fee)
-        } else {
-            true
-        }
-    }
     pub fn vote(&self) -> Option<(Pubkey, Vote, Hash)> {
-        if let Instruction::NewVote(vote) = self.instruction() {
+        if let Some(Instruction::NewVote(vote)) = self.instruction() {
             Some((*self.from(), vote, self.last_id))
         } else {
             None
@@ -258,8 +271,18 @@ impl Transaction {
     pub fn from(&self) -> &Pubkey {
         &self.keys[0]
     }
-    pub fn instruction(&self) -> Instruction {
-        deserialize(&self.userdata).unwrap()
+    pub fn instruction(&self) -> Option<Instruction> {
+        deserialize(&self.userdata).ok()
+    }
+    /// Verify only the payment plan.
+    pub fn verify_plan(&self) -> bool {
+        if let Some(Instruction::NewContract(contract)) = self.instruction() {
+            self.fee >= 0
+                && self.fee <= contract.tokens
+                && contract.plan.verify(contract.tokens - self.fee)
+        } else {
+            true
+        }
     }
 }
 
@@ -267,7 +290,7 @@ pub fn test_tx() -> Transaction {
     let keypair1 = Keypair::new();
     let pubkey1 = keypair1.pubkey();
     let zero = Hash::default();
-    Transaction::new(&keypair1, pubkey1, 42, zero)
+    Transaction::system_new(&keypair1, pubkey1, 42, zero)
 }
 
 #[cfg(test)]
@@ -292,7 +315,7 @@ mod tests {
     fn test_claim() {
         let keypair = Keypair::new();
         let zero = Hash::default();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 42, zero);
+        let tx0 = Transaction::budget_new(&keypair, keypair.pubkey(), 42, zero);
         assert!(tx0.verify_plan());
     }
 
@@ -302,7 +325,7 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let pubkey1 = keypair1.pubkey();
-        let tx0 = Transaction::new(&keypair0, pubkey1, 42, zero);
+        let tx0 = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
         assert!(tx0.verify_plan());
     }
 
@@ -311,9 +334,9 @@ mod tests {
         let zero = Hash::default();
         let keypair0 = Keypair::new();
         let pubkey1 = Keypair::new().pubkey();
-        assert!(Transaction::new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
-        assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
-        assert!(!Transaction::new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
+        assert!(Transaction::budget_new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
+        assert!(!Transaction::budget_new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
+        assert!(!Transaction::budget_new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
     }
 
     #[test]
@@ -329,6 +352,7 @@ mod tests {
             keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
+            contract_id: Default::default(),
             fee: 0,
             userdata,
         };
@@ -342,8 +366,8 @@ mod tests {
         let zero = Hash::default();
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
-        let mut tx = Transaction::new(&keypair, pubkey, 42, zero);
-        let mut instruction = tx.instruction();
+        let mut tx = Transaction::budget_new(&keypair, pubkey, 42, zero);
+        let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
@@ -362,9 +386,9 @@ mod tests {
         let thief_keypair = Keypair::new();
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
-        let mut tx = Transaction::new(&keypair0, pubkey1, 42, zero);
+        let mut tx = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
         let mut instruction = tx.instruction();
-        if let Instruction::NewContract(ref mut contract) = instruction {
+        if let Some(Instruction::NewContract(ref mut contract)) = instruction {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
@@ -416,8 +440,8 @@ mod tests {
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let zero = Hash::default();
-        let mut tx = Transaction::new(&keypair0, keypair1.pubkey(), 1, zero);
-        let mut instruction = tx.instruction();
+        let mut tx = Transaction::budget_new(&keypair0, keypair1.pubkey(), 1, zero);
+        let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.tokens = 2; // <-- attack!
@@ -427,7 +451,7 @@ mod tests {
         assert!(!tx.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        let mut instruction = tx.instruction();
+        let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
                 payment.tokens = 0; // <-- whoops!
