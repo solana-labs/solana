@@ -3,17 +3,17 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
+use bincode::deserialize;
 use bincode::serialize;
 use budget_contract::BudgetContract;
 use counter::Counter;
 use entry::Entry;
 use hash::{hash, Hash};
-use instruction::Instruction;
 use itertools::Itertools;
 use ledger::Block;
 use log::Level;
 use mint::Mint;
-use payment_plan::{Payment, PaymentPlan};
+use payment_plan::Payment;
 use signature::{Keypair, Pubkey, Signature};
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -284,8 +284,11 @@ impl Bank {
             } else {
                 error_counters.account_not_found_leader += 1;
             }
-            if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
-                error_counters.account_not_found_vote += 1;
+            if BudgetContract::check_id(&tx.contract_id) {
+                use instruction::Instruction;
+                if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
+                    error_counters.account_not_found_vote += 1;
+                }
             }
             Err(BankError::AccountNotFound(*tx.from()))
         } else if accounts.get(&tx.keys[0]).unwrap().tokens < tx.fee {
@@ -557,17 +560,18 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            let instruction = tx.instruction();
-            let deposit = if let Some(Instruction::NewContract(contract)) = instruction {
-                contract.plan.final_payment()
+            assert!(SystemContract::check_id(&tx.contract_id), "Invalid ledger");
+            let instruction: SystemContract = deserialize(&tx.userdata).unwrap();
+            let deposit = if let SystemContract::Move { tokens } = instruction {
+                Some(tokens)
             } else {
                 None
             }.expect("invalid ledger, needs to start with a contract");
             {
                 let mut accounts = self.accounts.write().unwrap();
-                let entry = accounts.entry(tx.keys[0]).or_insert_with(Account::default);
-                Self::apply_payment(&deposit, entry);
-                trace!("applied genesis payment {:?} {:?}", deposit, entry);
+                let account = accounts.entry(tx.keys[0]).or_insert_with(Account::default);
+                account.tokens += deposit;
+                trace!("applied genesis payment {:?} => {:?}", deposit, account);
             }
         }
         self.register_entry_id(&entry0.id);

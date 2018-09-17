@@ -52,7 +52,7 @@ impl Mint {
 
     pub fn create_transactions(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
-        let tx = Transaction::budget_new(&keypair, self.pubkey(), self.tokens, self.seed());
+        let tx = Transaction::system_move(&keypair, self.pubkey(), self.tokens, self.seed(), 0);
         vec![tx]
     }
 
@@ -66,18 +66,18 @@ impl Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use budget::Budget;
-    use instruction::{Instruction, Plan};
+    use bincode::deserialize;
     use ledger::Block;
+    use system_contract::SystemContract;
 
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        if let Some(Instruction::NewContract(contract)) = tx.instruction() {
-            if let Plan::Budget(Budget::Pay(payment)) = contract.plan {
-                assert_eq!(*tx.from(), payment.to);
-            }
+        assert!(SystemContract::check_id(&tx.contract_id));
+        let instruction: SystemContract = deserialize(&tx.userdata).unwrap();
+        if let SystemContract::Move { tokens } = instruction {
+            assert_eq!(tokens, 100);
         }
         assert_eq!(transactions.next(), None);
     }
