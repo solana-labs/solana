@@ -1,7 +1,7 @@
 //! The `broadcast_stage` broadcasts data from a leader node to validators
 //!
 use counter::Counter;
-use crdt::{Crdt, CrdtError, NodeInfo, LEADER_ROTATION_INTERVAL};
+use crdt::{Crdt, CrdtError, NodeInfo};
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
@@ -184,9 +184,16 @@ impl BroadcastStage {
             coding: entry_height,
         };
         let mut receive_index = entry_height;
-        let me = crdt.read().unwrap().my_data().clone();
+        let me;
+        let leader_rotation_interval;
+        {
+            let rcrdt = crdt.read().unwrap();
+            me = rcrdt.my_data().clone();
+            leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+        }
+
         loop {
-            if transmit_index.data % (LEADER_ROTATION_INTERVAL as u64) == 0 {
+            if transmit_index.data % (leader_rotation_interval as u64) == 0 {
                 let rcrdt = crdt.read().unwrap();
                 let my_id = rcrdt.my_data().id;
                 match rcrdt.get_scheduled_leader(transmit_index.data) {
@@ -272,7 +279,7 @@ impl Service for BroadcastStage {
 #[cfg(test)]
 mod tests {
     use broadcast_stage::{BroadcastStage, BroadcastStageReturnType};
-    use crdt::{Crdt, Node, LEADER_ROTATION_INTERVAL};
+    use crdt::{Crdt, Node};
     use entry::Entry;
     use mint::Mint;
     use packet::BlobRecycler;
@@ -361,11 +368,12 @@ mod tests {
     #[test]
     fn test_broadcast_stage_leader_rotation_exit() {
         let broadcast_info = setup_dummy_broadcast_stage();
-
+        let leader_rotation_interval = 10;
         {
             let mut wcrdt = broadcast_info.crdt.write().unwrap();
+            wcrdt.set_leader_rotation_interval(leader_rotation_interval);
             // Set the leader for the next rotation to be myself
-            wcrdt.set_scheduled_leader(LEADER_ROTATION_INTERVAL, broadcast_info.my_id);
+            wcrdt.set_scheduled_leader(leader_rotation_interval, broadcast_info.my_id);
         }
 
         let genesis_len = broadcast_info.entries.len() as u64;
@@ -375,12 +383,12 @@ mod tests {
             .expect("Ledger should not be empty")
             .id;
 
-        // Input enough entries to make exactly LEADER_ROTATION_INTERVAL entries, which will
+        // Input enough entries to make exactly leader_rotation_interval entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
         // is ourselves, we won't exit
         let mut recorder = Recorder::new(last_entry_hash);
 
-        for _ in genesis_len..LEADER_ROTATION_INTERVAL {
+        for _ in genesis_len..leader_rotation_interval {
             let new_entry = recorder.record(vec![]);
             broadcast_info.entry_sender.send(new_entry).unwrap();
         }
@@ -390,12 +398,12 @@ mod tests {
             .crdt
             .write()
             .unwrap()
-            .set_scheduled_leader(2 * LEADER_ROTATION_INTERVAL, broadcast_info.buddy_id);
+            .set_scheduled_leader(2 * leader_rotation_interval, broadcast_info.buddy_id);
 
-        // Input another LEADER_ROTATION_INTERVAL dummy entries, which will take us
+        // Input another leader_rotation_interval dummy entries, which will take us
         // past the point of the leader rotation. The write_stage will see that
         // it's no longer the leader after checking the crdt, and exit
-        for _ in 0..LEADER_ROTATION_INTERVAL {
+        for _ in 0..leader_rotation_interval {
             let new_entry = recorder.record(vec![]);
             match broadcast_info.entry_sender.send(new_entry) {
                 // We disconnected, break out of loop and check the results
@@ -413,6 +421,6 @@ mod tests {
         let highest_index = find_highest_window_index(&broadcast_info.shared_window);
         // The blob index is zero indexed, so it will always be one behind the entry height
         // which starts at one.
-        assert_eq!(highest_index, 2 * LEADER_ROTATION_INTERVAL - 1);
+        assert_eq!(highest_index, 2 * leader_rotation_interval - 1);
     }
 }

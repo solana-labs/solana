@@ -5,7 +5,7 @@ extern crate chrono;
 extern crate serde_json;
 extern crate solana;
 
-use solana::crdt::{Crdt, Node, NodeInfo, LEADER_ROTATION_INTERVAL};
+use solana::crdt::{Crdt, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
@@ -145,7 +145,14 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         writer.write_entries(entries).unwrap();
     }
 
-    let leader = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
+    let leader = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        None,
+    );
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -163,6 +170,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
+        None,
     );
 
     // contains the leader and new node
@@ -218,7 +226,14 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     );
     ledger_paths.push(zero_ledger_path.clone());
 
-    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
+    let server = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        None,
+    );
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -241,6 +256,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             keypair,
             Some(leader_data.contact_info.ncp),
             false,
+            None,
         );
         nodes.push(val);
     }
@@ -276,6 +292,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
+        None,
     );
     nodes.push(val);
     //contains the leader and new node
@@ -335,7 +352,14 @@ fn test_multi_node_basic() {
 
     let (alice, leader_ledger_path, _) = genesis("multi_node_basic", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
-    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
+    let server = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        None,
+    );
 
     // Send leader some tokens to vote
     let leader_balance =
@@ -354,6 +378,7 @@ fn test_multi_node_basic() {
             keypair,
             Some(leader_data.contact_info.ncp),
             false,
+            None,
         );
         nodes.push(val);
     }
@@ -396,7 +421,14 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     ledger_paths.push(leader_ledger_path.clone());
 
     let leader_data = leader.info.clone();
-    let leader_fullnode = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, false);
+    let leader_fullnode = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        None,
+    );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
     assert_eq!(leader_balance, 500);
@@ -415,6 +447,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
+        None,
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -433,7 +466,7 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
     let leader_keypair = Keypair::new();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
-    let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None, false);
+    let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None, false, None);
     (leader_data, leader_fullnode)
 }
 
@@ -487,6 +520,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
+        None,
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -544,7 +578,14 @@ fn test_multi_node_dynamic_network() {
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.info.clone();
 
-    let server = Fullnode::new(leader, &leader_ledger_path, leader_keypair, None, true);
+    let server = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        true,
+        None,
+    );
 
     // Send leader some tokens to vote
     let leader_balance = send_tx_and_retry_get_balance(
@@ -617,6 +658,7 @@ fn test_multi_node_dynamic_network() {
                         keypair,
                         Some(leader_data.contact_info.ncp),
                         true,
+                        None,
                     );
                     (rd, val)
                 }).unwrap()
@@ -712,6 +754,7 @@ fn test_multi_node_dynamic_network() {
 #[test]
 fn test_leader_to_validator_transition() {
     logger::setup();
+    let leader_rotation_interval = 20;
 
     // Make a dummy address to be the sink for this test's mock transactions
     let bob_pubkey = Keypair::new().pubkey();
@@ -720,7 +763,7 @@ fn test_leader_to_validator_transition() {
     // in the leader ledger
     let (mint, leader_ledger_path, entries) = genesis(
         "test_leader_to_validator_transition",
-        (3 * LEADER_ROTATION_INTERVAL) as i64,
+        (3 * leader_rotation_interval) as i64,
     );
 
     let genesis_height = entries.len() as u64;
@@ -737,10 +780,11 @@ fn test_leader_to_validator_transition() {
         leader_keypair,
         None,
         false,
+        Some(leader_rotation_interval),
     );
 
     // Set the next leader to be Bob
-    leader.set_scheduled_leader(bob_pubkey, LEADER_ROTATION_INTERVAL);
+    leader.set_scheduled_leader(bob_pubkey, leader_rotation_interval);
 
     // Make an extra node for our leader to broadcast to,
     // who won't vote and mess with our leader's entry count
@@ -762,14 +806,14 @@ fn test_leader_to_validator_transition() {
 
     assert!(converged);
 
-    let extra_transactions = std::cmp::max(LEADER_ROTATION_INTERVAL / 20, 1);
+    let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
 
-    // Push leader "extra_transactions" past LEADER_ROTATION_INTERVAL entry height,
+    // Push leader "extra_transactions" past leader_rotation_interval entry height,
     // make sure the leader stops.
-    assert!(genesis_height < LEADER_ROTATION_INTERVAL);
-    for i in genesis_height..(LEADER_ROTATION_INTERVAL + extra_transactions) {
+    assert!(genesis_height < leader_rotation_interval);
+    for i in genesis_height..(leader_rotation_interval + extra_transactions) {
         let expected_balance = std::cmp::min(
-            LEADER_ROTATION_INTERVAL - genesis_height,
+            leader_rotation_interval - genesis_height,
             i - genesis_height,
         );
 
@@ -793,7 +837,7 @@ fn test_leader_to_validator_transition() {
     // transactions earlier
     let mut leader_client = mk_client(&leader_info);
 
-    let expected_bal = LEADER_ROTATION_INTERVAL - genesis_height;
+    let expected_bal = leader_rotation_interval - genesis_height;
     let bal = leader_client
         .poll_get_balance(&bob_pubkey)
         .expect("Expected success when polling newly transitioned validator for balance")

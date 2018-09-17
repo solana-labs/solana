@@ -4,7 +4,7 @@
 
 use bank::Bank;
 use counter::Counter;
-use crdt::{Crdt, LEADER_ROTATION_INTERVAL};
+use crdt::Crdt;
 use entry::Entry;
 use ledger::{Block, LedgerWriter};
 use log::Level;
@@ -40,13 +40,14 @@ impl WriteStage {
     // reflecting whether we actually hit an entry height for leader rotation.
     fn find_leader_rotation_index(
         crdt: &Arc<RwLock<Crdt>>,
+        leader_rotation_interval: u64,
         entry_height: u64,
         mut new_entries: Vec<Entry>,
     ) -> (Vec<Entry>, bool) {
         // Find out how many more entries we can squeeze in until the next leader
         // rotation
         let entries_until_leader_rotation =
-            LEADER_ROTATION_INTERVAL - (entry_height % LEADER_ROTATION_INTERVAL);
+            leader_rotation_interval - (entry_height % leader_rotation_interval);
 
         let new_entries_length = new_entries.len();
 
@@ -55,7 +56,7 @@ impl WriteStage {
         let mut is_leader_rotation = false;
 
         loop {
-            if (entry_height + i as u64) % LEADER_ROTATION_INTERVAL == 0 {
+            if (entry_height + i as u64) % leader_rotation_interval == 0 {
                 let rcrdt = crdt.read().unwrap();
                 let my_id = rcrdt.my_data().id;
                 let next_leader = rcrdt.get_scheduled_leader(entry_height + i as u64);
@@ -69,7 +70,7 @@ impl WriteStage {
                 break;
             }
 
-            i += cmp::min(LEADER_ROTATION_INTERVAL as usize, new_entries_length - i);
+            i += cmp::min(leader_rotation_interval as usize, new_entries_length - i);
         }
 
         new_entries.truncate(i as usize);
@@ -85,6 +86,7 @@ impl WriteStage {
         entry_sender: &Sender<Vec<Entry>>,
         entry_receiver: &Receiver<Vec<Entry>>,
         entry_height: &mut u64,
+        leader_rotation_interval: u64,
     ) -> Result<()> {
         let mut ventries = Vec::new();
         let mut received_entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
@@ -96,6 +98,7 @@ impl WriteStage {
             // rotation
             let (new_entries, is_leader_rotation) = Self::find_leader_rotation_index(
                 crdt,
+                leader_rotation_interval,
                 *entry_height + num_new_entries as u64,
                 received_entries,
             );
@@ -194,14 +197,20 @@ impl WriteStage {
             .spawn(move || {
                 let mut last_vote = 0;
                 let mut last_valid_validator_timestamp = 0;
-                let id = crdt.read().unwrap().id;
+                let id;
+                let leader_rotation_interval;
+                {
+                    let rcrdt = crdt.read().unwrap();
+                    id = crdt.read().unwrap().id;
+                    leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+                }
                 let mut entry_height = entry_height;
                 loop {
                     // Note that entry height is not zero indexed, it starts at 1, so the
                     // old leader is in power up to and including entry height
-                    // n * LEADER_ROTATION_INTERVAL for some "n". Once we've forwarded
+                    // n * leader_rotation_interval for some "n". Once we've forwarded
                     // that last block, check for the next scheduled leader.
-                    if entry_height % (LEADER_ROTATION_INTERVAL as u64) == 0 {
+                    if entry_height % (leader_rotation_interval as u64) == 0 {
                         let rcrdt = crdt.read().unwrap();
                         let my_id = rcrdt.my_data().id;
                         let scheduled_leader = rcrdt.get_scheduled_leader(entry_height);
@@ -225,6 +234,7 @@ impl WriteStage {
                         &entry_sender,
                         &entry_receiver,
                         &mut entry_height,
+                        leader_rotation_interval,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -282,7 +292,7 @@ impl Service for WriteStage {
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use crdt::{Crdt, Node, LEADER_ROTATION_INTERVAL};
+    use crdt::{Crdt, Node};
     use entry::Entry;
     use ledger::{genesis, read_ledger};
     use packet::BlobRecycler;
@@ -360,12 +370,14 @@ mod tests {
     #[test]
     fn test_write_stage_leader_rotation_exit() {
         let write_stage_info = setup_dummy_write_stage();
+        let leader_rotation_interval = 10;
 
-        write_stage_info
-            .crdt
-            .write()
-            .unwrap()
-            .set_scheduled_leader(LEADER_ROTATION_INTERVAL, write_stage_info.my_id);
+        {
+            let mut wcrdt = write_stage_info.crdt.write().unwrap();
+
+            wcrdt.set_leader_rotation_interval(leader_rotation_interval);
+            wcrdt.set_scheduled_leader(leader_rotation_interval, write_stage_info.my_id);
+        }
 
         let last_entry_hash = write_stage_info
             .ledger_tail
@@ -375,11 +387,11 @@ mod tests {
 
         let genesis_entry_height = write_stage_info.ledger_tail.len() as u64;
 
-        // Input enough entries to make exactly LEADER_ROTATION_INTERVAL entries, which will
+        // Input enough entries to make exactly leader_rotation_interval entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
         // is ourselves, we won't exit
         let mut recorder = Recorder::new(last_entry_hash);
-        for _ in genesis_entry_height..LEADER_ROTATION_INTERVAL {
+        for _ in genesis_entry_height..leader_rotation_interval {
             let new_entry = recorder.record(vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
@@ -391,14 +403,14 @@ mod tests {
         {
             let mut wcrdt = write_stage_info.crdt.write().unwrap();
             wcrdt.insert(&leader2_info.info);
-            wcrdt.set_scheduled_leader(2 * LEADER_ROTATION_INTERVAL, leader2_keypair.pubkey());
+            wcrdt.set_scheduled_leader(2 * leader_rotation_interval, leader2_keypair.pubkey());
         }
 
-        // Input another LEADER_ROTATION_INTERVAL dummy entries one at a time,
+        // Input another leader_rotation_interval dummy entries one at a time,
         // which will take us past the point of the leader rotation.
         // The write_stage will see that it's no longer the leader after
         // checking the schedule, and exit
-        for _ in 0..LEADER_ROTATION_INTERVAL {
+        for _ in 0..leader_rotation_interval {
             let new_entry = recorder.record(vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
@@ -408,10 +420,10 @@ mod tests {
             WriteStageReturnType::LeaderRotation
         );
 
-        // Make sure the ledger contains exactly LEADER_ROTATION_INTERVAL entries
+        // Make sure the ledger contains exactly leader_rotation_interval entries
         let (entry_height, _) =
             process_ledger(&write_stage_info.leader_ledger_path, &write_stage_info.bank);
         remove_dir_all(write_stage_info.leader_ledger_path).unwrap();
-        assert_eq!(entry_height, 2 * LEADER_ROTATION_INTERVAL);
+        assert_eq!(entry_height, 2 * leader_rotation_interval);
     }
 }
