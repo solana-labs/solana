@@ -134,5 +134,7 @@ fn main() -> Result<(), Box<error::Error>> {
 
     let config = parse_args(&matches)?;
     let mut client = mk_client(&config.leader);
-    process_command(&config, &mut client)
+    let result = process_command(&config, &mut client)?;
+    println!("{}", result);
+    Ok(())
 }
