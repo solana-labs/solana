@@ -181,7 +181,7 @@ impl Transaction {
         )
     }
     /// Create and sign new SystemContract::CreateAccount transaction
-    pub fn system_new_create(
+    pub fn system_create(
         from_keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
@@ -204,9 +204,26 @@ impl Transaction {
             fee,
         )
     }
+    /// Create and sign new SystemContract::CreateAccount transaction
+    pub fn system_assign(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        contract_id: Pubkey,
+        fee: i64,
+    ) -> Self {
+        let create = SystemContract::Assign { contract_id };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[],
+            SystemContract::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
     /// Create and sign new SystemContract::CreateAccount transaction with some defaults
     pub fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Transaction::system_new_create(from_keypair, to, last_id, tokens, 0, None, 0)
+        Transaction::system_create(from_keypair, to, last_id, tokens, 0, None, 0)
     }
     /// Create and sign new SystemContract::Move transaction
     pub fn system_move(

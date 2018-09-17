@@ -48,13 +48,13 @@ impl SystemContract {
                 space,
                 contract_id,
             } => {
-                if !Self::check_id(&accounts[1].contract_id) {
-                    return;
-                }
                 if !Self::check_id(&accounts[0].contract_id) {
                     return;
                 }
-                if space > 0 && !accounts[1].userdata.is_empty() {
+                if space > 0
+                    && (!accounts[1].userdata.is_empty()
+                        || !Self::check_id(&accounts[1].contract_id))
+                {
                     return;
                 }
                 accounts[0].tokens -= tokens;
@@ -76,5 +76,115 @@ impl SystemContract {
                 accounts[1].tokens += tokens;
             }
         }
+    }
+}
+#[cfg(test)]
+mod test {
+    use bank::Account;
+    use hash::Hash;
+    use signature::{Keypair, KeypairUtil};
+    use system_contract::SystemContract;
+    use transaction::Transaction;
+    #[test]
+    fn test_create_noop() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        let tx = Transaction::system_new(&from, to.pubkey(), 0, Hash::default());
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[0].tokens, 0);
+        assert_eq!(accounts[1].tokens, 0);
+    }
+    #[test]
+    fn test_create_spend() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[0].tokens = 1;
+        let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[0].tokens, 0);
+        assert_eq!(accounts[1].tokens, 1);
+    }
+    #[test]
+    fn test_create_spend_wrong_source() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[0].tokens = 1;
+        accounts[0].contract_id = from.pubkey();
+        let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[0].tokens, 1);
+        assert_eq!(accounts[1].tokens, 0);
+    }
+    #[test]
+    fn test_create_assign_and_allocate() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        let tx = Transaction::system_create(
+            &from,
+            to.pubkey(),
+            Hash::default(),
+            0,
+            1,
+            Some(to.pubkey()),
+            0,
+        );
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert!(accounts[0].userdata.is_empty());
+        assert_eq!(accounts[1].userdata.len(), 1);
+        assert_eq!(accounts[1].contract_id, to.pubkey());
+    }
+    #[test]
+    fn test_create_allocate_wrong_dest_contract() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[1].contract_id = to.pubkey();
+        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, None, 0);
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert!(accounts[1].userdata.is_empty());
+    }
+    #[test]
+    fn test_create_allocate_wrong_source_contract() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[0].contract_id = to.pubkey();
+        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, None, 0);
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert!(accounts[1].userdata.is_empty());
+    }
+    #[test]
+    fn test_create_allocate_already_allocated() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[1].userdata = vec![0, 0, 0];
+        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 2, None, 0);
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[1].userdata.len(), 3);
+    }
+    #[test]
+    fn test_create_assign() {
+        let from = Keypair::new();
+        let contract = Keypair::new();
+        let mut accounts = vec![Account::default()];
+        let tx = Transaction::system_assign(&from, Hash::default(), contract.pubkey(), 0);
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[0].contract_id, contract.pubkey());
+    }
+    #[test]
+    fn test_move() {
+        let from = Keypair::new();
+        let to = Keypair::new();
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[0].tokens = 1;
+        let tx = Transaction::new(&from, to.pubkey(), 1, Hash::default());
+        SystemContract::process_transaction(&tx, &mut accounts);
+        assert_eq!(accounts[0].tokens, 0);
+        assert_eq!(accounts[1].tokens, 1);
     }
 }
