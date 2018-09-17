@@ -49,6 +49,8 @@ impl WriteStage {
             }
         }
 
+        inc_new_counter_info!("write_stage-write_entries", entries.len());
+
         //TODO(anatoly): real stake based voting needs to change this
         //leader simply votes if the current set of validators have voted
         //on a valid last id
