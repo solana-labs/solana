@@ -767,8 +767,6 @@ fn test_leader_to_validator_transition() {
     );
 
     let genesis_height = entries.len() as u64;
-    let mut ledger_paths = Vec::new();
-    ledger_paths.push(leader_ledger_path.clone());
 
     // Start the leader node
     let leader_keypair = Keypair::new();
@@ -848,6 +846,7 @@ fn test_leader_to_validator_transition() {
     // Shut down
     ncp.close().unwrap();
     leader.close().unwrap();
+    remove_dir_all(leader_ledger_path).unwrap();
 }
 
 fn mk_client(leader: &NodeInfo) -> ThinClient {
