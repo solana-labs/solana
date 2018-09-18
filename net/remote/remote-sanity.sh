@@ -86,7 +86,7 @@ esac
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh "$entrypointIp"
+  scripts/wallet-sanity.sh "$entrypointIp:8001"
 )
 
 echo "+++ $entrypointIp: node count ($numNodes expected)"
