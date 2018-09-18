@@ -40,8 +40,7 @@ impl RecordStage {
             .spawn(move || {
                 let mut recorder = Recorder::new(start_hash);
                 let _ = Self::process_signals(&mut recorder, &signal_receiver, bank, &entry_sender);
-            })
-            .unwrap();
+            }).unwrap();
 
         (RecordStage { thread_hdl }, entry_receiver)
     }
@@ -74,8 +73,7 @@ impl RecordStage {
                     }
                     recorder.hash();
                 }
-            })
-            .unwrap();
+            }).unwrap();
 
         (RecordStage { thread_hdl }, entry_receiver)
     }
