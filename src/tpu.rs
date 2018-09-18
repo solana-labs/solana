@@ -76,9 +76,9 @@ impl Tpu {
 
         let (record_stage, entry_receiver) = match tick_duration {
             Some(tick_duration) => {
-                RecordStage::new_with_clock(signal_receiver, &bank.last_id(), tick_duration)
+                RecordStage::new_with_clock(signal_receiver, bank.clone(), tick_duration)
             }
-            None => RecordStage::new(signal_receiver, &bank.last_id()),
+            None => RecordStage::new(signal_receiver, bank.clone()),
         };
 
         let (write_stage, blob_receiver) = WriteStage::new(
