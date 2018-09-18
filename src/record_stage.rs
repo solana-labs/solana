@@ -194,7 +194,6 @@ mod tests {
         let (tx_sender, tx_receiver) = channel();
         let mint = Mint::new(1234);
         let bank = Arc::new(Bank::new(&mint));
-        let zero = bank.last_id();
         let (record_stage, entry_receiver) = RecordStage::new(tx_receiver, bank);
         drop(entry_receiver);
         tx_sender.send(Signal::Tick).unwrap();
