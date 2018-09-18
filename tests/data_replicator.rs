@@ -21,14 +21,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
     let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
     let c = Arc::new(RwLock::new(crdt));
     let w = Arc::new(RwLock::new(vec![]));
-    let d = Ncp::new(
-        &c.clone(),
-        w,
-        BlobRecycler::default(),
-        None,
-        tn.sockets.gossip,
-        exit,
-    );
+    let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit);
     (c, d, tn.sockets.replicate.pop().unwrap())
 }
 
@@ -166,9 +159,10 @@ pub fn crdt_retransmit() -> result::Result<()> {
         sleep(Duration::new(1, 0));
     }
     assert!(done);
-    let mut b = Blob::default();
-    b.meta.size = 10;
-    Crdt::retransmit(&c1, &Arc::new(RwLock::new(b)), &tn1)?;
+    let r = BlobRecycler::default();
+    let b = r.allocate();
+    b.write().meta.size = 10;
+    Crdt::retransmit(&c1, &b, &tn1)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {

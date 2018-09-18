@@ -56,7 +56,7 @@ fn broadcast(
     let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
     // flatten deque to vec
-    let blobs_vec: Vec<_> = dq.into_iter().collect();
+    let blobs_vec: SharedBlobs = dq.into_iter().collect();
 
     let blobs_chunking = Instant::now();
     // We could receive more blobs than window slots so
@@ -80,36 +80,24 @@ fn broadcast(
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
-            for b in &blobs {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+            for b in blobs.iter() {
+                let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = win[pos].data.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().get_index().unwrap(),
-                        pos
-                    );
-                    recycler.recycle(x, "broadcast-data");
+                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
                 }
                 if let Some(x) = win[pos].coding.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().get_index().unwrap(),
-                        pos
-                    );
-                    recycler.recycle(x, "broadcast-coding");
+                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
                 }
 
                 trace!("{} null {}", id, pos);
             }
-            while let Some(b) = blobs.pop() {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+            for b in blobs.iter() {
+                let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
-                win[pos].data = Some(b);
+                win[pos].data = Some(b.clone());
             }
         }
 
@@ -253,10 +241,10 @@ impl BroadcastStage {
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
         entry_height: u64,
-        recycler: BlobRecycler,
         receiver: Receiver<Vec<Entry>>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
+        let recycler = BlobRecycler::default();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -282,7 +270,6 @@ mod tests {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use mint::Mint;
-    use packet::BlobRecycler;
     use recorder::Recorder;
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
@@ -318,7 +305,6 @@ mod tests {
         crdt.insert(&broadcast_buddy.info);
         crdt.set_leader_rotation_interval(leader_rotation_interval);
         let crdt = Arc::new(RwLock::new(crdt));
-        let blob_recycler = BlobRecycler::default();
 
         // Make dummy initial entries
         let mint = Mint::new(10000);
@@ -326,8 +312,7 @@ mod tests {
         let entry_height = entries.len() as u64;
 
         // Setup a window
-        let window =
-            new_window_from_entries(&entries, entry_height, &leader_info.info, &blob_recycler);
+        let window = new_window_from_entries(&entries, entry_height, &leader_info.info);
 
         let shared_window = Arc::new(RwLock::new(window));
 
@@ -339,7 +324,6 @@ mod tests {
             crdt.clone(),
             shared_window.clone(),
             entry_height,
-            blob_recycler.clone(),
             entry_receiver,
             exit_sender,
         );
@@ -359,7 +343,7 @@ mod tests {
         let window = shared_window.read().unwrap();
         window.iter().fold(0, |m, w_slot| {
             if let Some(ref blob) = w_slot.data {
-                cmp::max(m, blob.read().unwrap().get_index().unwrap())
+                cmp::max(m, blob.read().get_index().unwrap())
             } else {
                 m
             }

@@ -24,7 +24,6 @@
 //! ```
 
 use bank::Bank;
-use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use service::Service;
@@ -42,37 +41,15 @@ pub struct Rpu {
 }
 
 impl Rpu {
-    pub fn new(
-        bank: &Arc<Bank>,
-        requests_socket: UdpSocket,
-        respond_socket: UdpSocket,
-        blob_recycler: &BlobRecycler,
-    ) -> Self {
+    pub fn new(bank: &Arc<Bank>, requests_socket: UdpSocket, respond_socket: UdpSocket) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
-        let mut packet_recycler = PacketRecycler::default();
-        packet_recycler.set_name("rpu::Packet");
         let (packet_sender, packet_receiver) = channel();
-        let t_receiver = streamer::receiver(
-            Arc::new(requests_socket),
-            exit.clone(),
-            packet_recycler.clone(),
-            packet_sender,
-        );
+        let t_receiver = streamer::receiver(Arc::new(requests_socket), exit.clone(), packet_sender);
 
         let request_processor = RequestProcessor::new(bank.clone());
-        let (request_stage, blob_receiver) = RequestStage::new(
-            request_processor,
-            packet_receiver,
-            packet_recycler.clone(),
-            blob_recycler.clone(),
-        );
+        let (request_stage, blob_receiver) = RequestStage::new(request_processor, packet_receiver);
 
-        let t_responder = streamer::responder(
-            "rpu",
-            Arc::new(respond_socket),
-            blob_recycler.clone(),
-            blob_receiver,
-        );
+        let t_responder = streamer::responder("rpu", Arc::new(respond_socket), blob_receiver);
 
         let thread_hdls = vec![t_receiver, t_responder];
 

@@ -1,6 +1,5 @@
 //! The `blob_fetch_stage` pulls blobs from UDP sockets and sends it to a channel.
 
-use packet::BlobRecycler;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,24 +14,18 @@ pub struct BlobFetchStage {
 }
 
 impl BlobFetchStage {
-    pub fn new(
-        socket: Arc<UdpSocket>,
-        exit: Arc<AtomicBool>,
-        recycler: &BlobRecycler,
-    ) -> (Self, BlobReceiver) {
-        Self::new_multi_socket(vec![socket], exit, recycler)
+    pub fn new(socket: Arc<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, BlobReceiver) {
+        Self::new_multi_socket(vec![socket], exit)
     }
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        recycler: &BlobRecycler,
     ) -> (Self, BlobReceiver) {
         let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
-            .map(|socket| {
-                streamer::blob_receiver(socket, exit.clone(), recycler.clone(), sender.clone())
-            }).collect();
+            .map(|socket| streamer::blob_receiver(socket, exit.clone(), sender.clone()))
+            .collect();
 
         (BlobFetchStage { exit, thread_hdls }, receiver)
     }

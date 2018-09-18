@@ -7,7 +7,6 @@ use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
 use ncp::Ncp;
-use packet::BlobRecycler;
 use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;
@@ -91,7 +90,6 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     requests_socket: UdpSocket,
     respond_socket: UdpSocket,
-    blob_recycler: BlobRecycler,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -235,8 +233,6 @@ impl Fullnode {
         }
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-        let mut blob_recycler = BlobRecycler::default();
-        blob_recycler.set_name("fullnode::Blob");
 
         let rpu = Some(Rpu::new(
             &bank,
@@ -248,7 +244,6 @@ impl Fullnode {
                 .respond
                 .try_clone()
                 .expect("Failed to clone respond socket"),
-            &blob_recycler,
         ));
 
         // TODO: this code assumes this node is the leader
@@ -263,8 +258,7 @@ impl Fullnode {
             exit.clone(),
         );
 
-        let window =
-            window::new_window_from_entries(ledger_tail, entry_height, &node.info, &blob_recycler);
+        let window = window::new_window_from_entries(ledger_tail, entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
 
         let mut crdt = Crdt::new(node.info).expect("Crdt::new");
@@ -276,7 +270,6 @@ impl Fullnode {
         let ncp = Ncp::new(
             &crdt,
             shared_window.clone(),
-            blob_recycler.clone(),
             Some(ledger_path),
             node.sockets.gossip,
             exit.clone(),
@@ -295,7 +288,6 @@ impl Fullnode {
                     entry_height,
                     crdt.clone(),
                     shared_window.clone(),
-                    blob_recycler.clone(),
                     node.sockets
                         .replicate
                         .iter()
@@ -330,7 +322,6 @@ impl Fullnode {
                         .iter()
                         .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
                         .collect(),
-                    &blob_recycler,
                     ledger_path,
                     sigverify_disabled,
                     entry_height,
@@ -344,7 +335,6 @@ impl Fullnode {
                     crdt.clone(),
                     shared_window.clone(),
                     entry_height,
-                    blob_recycler.clone(),
                     entry_receiver,
                     tpu_exit,
                 );
@@ -363,7 +353,6 @@ impl Fullnode {
             ncp,
             rpc_service,
             node_role,
-            blob_recycler: blob_recycler.clone(),
             ledger_path: ledger_path.to_owned(),
             exit,
             replicate_socket: node.sockets.replicate,
@@ -406,7 +395,6 @@ impl Fullnode {
                 self.respond_socket
                     .try_clone()
                     .expect("Failed to clone respond socket"),
-                &self.blob_recycler,
             ));
         }
 
@@ -416,7 +404,6 @@ impl Fullnode {
             entry_height,
             self.crdt.clone(),
             self.shared_window.clone(),
-            self.blob_recycler.clone(),
             self.replicate_socket
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))

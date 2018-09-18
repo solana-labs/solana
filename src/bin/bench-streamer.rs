@@ -20,8 +20,8 @@ fn producer(addr: &SocketAddr, recycler: &PacketRecycler, exit: Arc<AtomicBool>)
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
     let msgs = recycler.allocate();
     let msgs_ = msgs.clone();
-    msgs.write().unwrap().packets.resize(10, Packet::default());
-    for w in &mut msgs.write().unwrap().packets {
+    msgs.write().packets.resize(10, Packet::default());
+    for w in &mut msgs.write().packets {
         w.meta.size = PACKET_DATA_SIZE;
         w.meta.set_addr(&addr);
     }
@@ -30,7 +30,7 @@ fn producer(addr: &SocketAddr, recycler: &PacketRecycler, exit: Arc<AtomicBool>)
             return;
         }
         let mut num = 0;
-        for p in &msgs_.read().unwrap().packets {
+        for p in &msgs_.read().packets {
             let a = p.meta.addr();
             assert!(p.meta.size < BLOB_SIZE);
             send.send_to(&p.data[..p.meta.size], &a).unwrap();
@@ -52,7 +52,7 @@ fn sink(
         }
         let timer = Duration::new(1, 0);
         if let Ok(msgs) = r.recv_timeout(timer) {
-            rvs.fetch_add(msgs.read().unwrap().packets.len(), Ordering::Relaxed);
+            rvs.fetch_add(msgs.read().packets.len(), Ordering::Relaxed);
             recycler.recycle(msgs, "sink");
         }
     })
@@ -91,12 +91,7 @@ fn main() -> Result<()> {
 
         let (s_reader, r_reader) = channel();
         read_channels.push(r_reader);
-        read_threads.push(receiver(
-            Arc::new(read),
-            exit.clone(),
-            pack_recycler.clone(),
-            s_reader,
-        ));
+        read_threads.push(receiver(Arc::new(read), exit.clone(), s_reader));
     }
 
     let t_producer1 = producer(&addr, &pack_recycler, exit.clone());

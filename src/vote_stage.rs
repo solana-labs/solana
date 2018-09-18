@@ -47,7 +47,7 @@ pub fn create_new_signed_vote_blob(
     }?;
     let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
     {
-        let mut blob = shared_blob.write().unwrap();
+        let mut blob = shared_blob.write();
         let bytes = serialize(&tx)?;
         let len = bytes.len();
         blob.data[..len].copy_from_slice(&bytes);
@@ -174,10 +174,10 @@ impl VoteStage {
         keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        blob_recycler: BlobRecycler,
         vote_blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        let blob_recycler = BlobRecycler::default();
         let thread_hdl = spawn(move || {
             Self::run(
                 &keypair,
@@ -230,7 +230,6 @@ pub mod tests {
     use instruction::Vote;
     use logger;
     use mint::Mint;
-    use packet::BlobRecycler;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
@@ -249,7 +248,6 @@ pub mod tests {
         let node = Node::new_localhost();
         let mut crdt = Crdt::new(node.info.clone()).expect("Crdt::new");
         crdt.set_leader(node.info.id);
-        let blob_recycler = BlobRecycler::default();
         let (sender, receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -257,7 +255,6 @@ pub mod tests {
             Arc::new(keypair),
             bank.clone(),
             Arc::new(RwLock::new(crdt)),
-            blob_recycler.clone(),
             sender,
             exit.clone(),
         );
@@ -382,7 +379,7 @@ pub mod tests {
 
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
-        let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
+        let tx = deserialize(&(blob.read().data)).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
     }
 

@@ -30,7 +30,6 @@ use banking_stage::BankingStage;
 use crdt::Crdt;
 use entry::Entry;
 use fetch_stage::FetchStage;
-use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
 use service::Service;
 use signature::Keypair;
@@ -63,23 +62,18 @@ impl Tpu {
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
         transactions_sockets: Vec<UdpSocket>,
-        blob_recycler: &BlobRecycler,
         ledger_path: &str,
         sigverify_disabled: bool,
         entry_height: u64,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
-        let mut packet_recycler = PacketRecycler::default();
-        packet_recycler.set_name("tpu::Packet");
 
-        let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_sockets, exit.clone(), &packet_recycler);
+        let (fetch_stage, packet_receiver) = FetchStage::new(transactions_sockets, exit.clone());
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, signal_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, packet_recycler.clone());
+        let (banking_stage, signal_receiver) = BankingStage::new(bank.clone(), verified_receiver);
 
         let (record_stage, entry_receiver) = match tick_duration {
             Some(tick_duration) => {
@@ -92,7 +86,6 @@ impl Tpu {
             keypair,
             bank.clone(),
             crdt.clone(),
-            blob_recycler.clone(),
             ledger_path,
             entry_receiver,
             entry_height,

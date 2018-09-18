@@ -39,7 +39,8 @@ impl RecordStage {
             .name("solana-record-stage".to_string())
             .spawn(move || {
                 let mut recorder = Recorder::new(start_hash);
-                let _ = Self::process_signals(&mut recorder, &signal_receiver, bank, &entry_sender);
+                let _ =
+                    Self::process_signals(&mut recorder, &signal_receiver, &bank, &entry_sender);
             }).unwrap();
 
         (RecordStage { thread_hdl }, entry_receiver)
@@ -65,7 +66,7 @@ impl RecordStage {
                         start_time,
                         tick_duration,
                         &signal_receiver,
-                        bank.clone(),
+                        &bank,
                         &entry_sender,
                     ).is_err()
                     {
@@ -92,7 +93,7 @@ impl RecordStage {
         let txs_len = txs.len();
         let entries = recorder.record(txs);
 
-        for entry in entries.iter() {
+        for entry in &entries {
             if !entry.has_more {
                 bank.register_entry_id(&entry.id);
             }
@@ -110,12 +111,12 @@ impl RecordStage {
     fn process_signals(
         recorder: &mut Recorder,
         receiver: &Receiver<Signal>,
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         sender: &Sender<Vec<Entry>>,
     ) -> Result<(), ()> {
         loop {
             match receiver.recv() {
-                Ok(signal) => Self::process_signal(signal, &bank, recorder, sender)?,
+                Ok(signal) => Self::process_signal(signal, bank, recorder, sender)?,
                 Err(RecvError) => return Err(()),
             }
         }
@@ -126,7 +127,7 @@ impl RecordStage {
         start_time: Instant,
         tick_duration: Duration,
         receiver: &Receiver<Signal>,
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         sender: &Sender<Vec<Entry>>,
     ) -> Result<(), ()> {
         loop {

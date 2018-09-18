@@ -13,7 +13,6 @@ use solana::ledger::LedgerWriter;
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
-use solana::packet::BlobRecycler;
 use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil, Pubkey};
@@ -41,11 +40,9 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<Crdt>>, Pubkey) {
     spy_crdt.set_leader(leader.id);
     let spy_crdt_ref = Arc::new(RwLock::new(spy_crdt));
     let spy_window = Arc::new(RwLock::new(default_window()));
-    let recycler = BlobRecycler::default();
     let ncp = Ncp::new(
         &spy_crdt_ref,
         spy_window,
-        recycler,
         None,
         spy.sockets.gossip,
         exit.clone(),

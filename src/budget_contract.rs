@@ -439,7 +439,7 @@ mod test {
         ]);
         let date =
             DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2016, 7, 8).and_hms(9, 10, 11), Utc);
-        let dateIso8601 = "2016-07-08T09:10:11Z";
+        let date_is_08601 = "2016-07-08T09:10:11Z";
 
         let tx = Transaction::budget_new(&keypair, to, 192, Hash::default());
         assert_eq!(
@@ -477,9 +477,9 @@ mod test {
             date,
             Hash::default(),
         );
-        let mut expectedUserdata = vec![1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0];
-        expectedUserdata.extend(dateIso8601.as_bytes());
-        assert_eq!(tx.userdata, expectedUserdata,);
+        let mut expected_userdata = vec![1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0];
+        expected_userdata.extend(date_is_08601.as_bytes());
+        assert_eq!(tx.userdata, expected_userdata,);
 
         // ApplySignature
         let tx = Transaction::budget_new_signature(&keypair, keypair.pubkey(), to, Hash::default());
