@@ -133,7 +133,7 @@ impl WriteStage {
         let start = Instant::now();
         for _ in 0..ventries.len() {
             let entries = ventries.pop().unwrap();
-            for e in entries.iter() {
+            for e in &entries {
                 num_txs += e.transactions.len();
             }
             let crdt_votes_start = Instant::now();

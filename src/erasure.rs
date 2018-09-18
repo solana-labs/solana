@@ -737,13 +737,7 @@ mod test {
             blobs.push(b_);
         }
 
-        let d = crdt::NodeInfo::new(
-            Keypair::new().pubkey(),
-            "127.0.0.1:1234".parse().unwrap(),
-            "127.0.0.1:1235".parse().unwrap(),
-            "127.0.0.1:1236".parse().unwrap(),
-            "127.0.0.1:1237".parse().unwrap(),
-        );
+        let d = crdt::NodeInfo::new_localhost(Keypair::new().pubkey());
         assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
             let idx = b.read().get_index().unwrap() as usize % WINDOW_SIZE;

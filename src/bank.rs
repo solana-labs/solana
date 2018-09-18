@@ -21,6 +21,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
+use storage_program::StorageProgram;
 use system_program::SystemProgram;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
@@ -359,6 +360,8 @@ impl Bank {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
             BudgetState::process_transaction(&tx, accounts)
+        } else if StorageProgram::check_id(&tx.program_id) {
+            StorageProgram::process_transaction(&tx, accounts)
         } else {
             return Err(BankError::UnknownContractId(tx.program_id));
         }

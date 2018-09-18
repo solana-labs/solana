@@ -82,6 +82,8 @@ pub struct ContactInfo {
     pub rpu: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
+    /// storage data address
+    pub storage_addr: SocketAddr,
     /// if this struture changes update this value as well
     /// Always update `NodeInfo` version too
     /// This separate version for addresses allows us to use the `Vote`
@@ -116,6 +118,7 @@ impl NodeInfo {
         tvu: SocketAddr,
         rpu: SocketAddr,
         tpu: SocketAddr,
+        storage_addr: SocketAddr,
     ) -> Self {
         NodeInfo {
             id,
@@ -125,6 +128,7 @@ impl NodeInfo {
                 tvu,
                 rpu,
                 tpu,
+                storage_addr,
                 version: 0,
             },
             leader_id: Pubkey::default(),
@@ -134,19 +138,30 @@ impl NodeInfo {
         }
     }
 
+    pub fn new_localhost(id: Pubkey) -> Self {
+        Self::new(
+            id,
+            socketaddr!("127.0.0.1:1234"),
+            socketaddr!("127.0.0.1:1235"),
+            socketaddr!("127.0.0.1:1236"),
+            socketaddr!("127.0.0.1:1237"),
+            socketaddr!("127.0.0.1:1238"),
+        )
+    }
+
     #[cfg(test)]
     /// NodeInfo with unspecified addresses for adversarial testing.
     pub fn new_unspecified() -> Self {
         let addr = socketaddr!(0, 0);
         assert!(addr.ip().is_unspecified());
-        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr)
+        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr)
     }
     #[cfg(test)]
     /// NodeInfo with multicast addresses for adversarial testing.
     pub fn new_multicast() -> Self {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
-        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr)
+        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr)
     }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
         let mut nxt_addr = *addr;
@@ -164,6 +179,7 @@ impl NodeInfo {
             replicate_addr,
             requests_addr,
             transactions_addr,
+            "0.0.0.0:0".parse().unwrap(),
         )
     }
     pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
@@ -173,7 +189,7 @@ impl NodeInfo {
     //
     pub fn new_entry_point(gossip_addr: &SocketAddr) -> Self {
         let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
-        NodeInfo::new(Pubkey::default(), *gossip_addr, daddr, daddr, daddr)
+        NodeInfo::new(Pubkey::default(), *gossip_addr, daddr, daddr, daddr, daddr)
     }
 }
 
@@ -1238,11 +1254,12 @@ impl Crdt {
         let pubkey = Keypair::new().pubkey();
         let daddr = socketaddr_any!();
 
-        let node = NodeInfo::new(pubkey, daddr, daddr, daddr, daddr);
+        let node = NodeInfo::new(pubkey, daddr, daddr, daddr, daddr, daddr);
         (node, gossip_socket)
     }
 }
 
+#[derive(Debug)]
 pub struct Sockets {
     pub gossip: UdpSocket,
     pub requests: UdpSocket,
@@ -1254,6 +1271,7 @@ pub struct Sockets {
     pub retransmit: UdpSocket,
 }
 
+#[derive(Debug)]
 pub struct Node {
     pub info: NodeInfo,
     pub sockets: Sockets,
@@ -1274,12 +1292,14 @@ impl Node {
         let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
         let info = NodeInfo::new(
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
             requests.local_addr().unwrap(),
             transaction.local_addr().unwrap(),
+            storage.local_addr().unwrap(),
         );
         Node {
             info,
@@ -1317,6 +1337,7 @@ impl Node {
         let (_, repair) = bind();
         let (_, broadcast) = bind();
         let (_, retransmit) = bind();
+        let (storage_port, _) = bind();
 
         // Responses are sent from the same Udp port as requests are received
         // from, in hopes that a NAT sitting in the middle will route the
@@ -1329,6 +1350,7 @@ impl Node {
             SocketAddr::new(ncp.ip(), replicate_port),
             SocketAddr::new(ncp.ip(), requests_port),
             SocketAddr::new(ncp.ip(), transaction_port),
+            SocketAddr::new(ncp.ip(), storage_port),
         );
         trace!("new NodeInfo: {:?}", info);
 
@@ -1380,13 +1402,7 @@ mod tests {
 
     #[test]
     fn insert_test() {
-        let mut d = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
+        let mut d = NodeInfo::new_localhost(Keypair::new().pubkey());
         assert_eq!(d.version, 0);
         let mut crdt = Crdt::new(d.clone()).unwrap();
         assert_eq!(crdt.table[&d.id].version, 0);
@@ -1486,27 +1502,9 @@ mod tests {
     }
     #[test]
     fn update_test() {
-        let d1 = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
-        let d2 = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
-        let d3 = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
+        let d1 = NodeInfo::new_localhost(Keypair::new().pubkey());
+        let d2 = NodeInfo::new_localhost(Keypair::new().pubkey());
+        let d3 = NodeInfo::new_localhost(Keypair::new().pubkey());
         let mut crdt = Crdt::new(d1.clone()).expect("Crdt::new");
         let (key, ix, ups) = crdt.get_updates_since(0);
         assert_eq!(key, d1.id);
@@ -1542,13 +1540,7 @@ mod tests {
     }
     #[test]
     fn window_index_request() {
-        let me = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!([127, 0, 0, 1], 1234),
-            socketaddr!([127, 0, 0, 1], 1235),
-            socketaddr!([127, 0, 0, 1], 1236),
-            socketaddr!([127, 0, 0, 1], 1237),
-        );
+        let me = NodeInfo::new_localhost(Keypair::new().pubkey());
         let mut crdt = Crdt::new(me).expect("Crdt::new");
         let rv = crdt.window_index_request(0);
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
@@ -1560,6 +1552,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
+            socketaddr!([127, 0, 0, 1], 1238),
         );
         crdt.insert(&nxt);
         let rv = crdt.window_index_request(0).unwrap();
@@ -1573,6 +1566,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
+            socketaddr!([127, 0, 0, 1], 1238),
         );
         crdt.insert(&nxt);
         let mut one = false;
@@ -1598,6 +1592,7 @@ mod tests {
             socketaddr!("127.0.0.1:127"),
             socketaddr!("127.0.0.1:127"),
             socketaddr!("127.0.0.1:127"),
+            socketaddr!("127.0.0.1:127"),
         );
 
         let mut crdt = Crdt::new(me).expect("Crdt::new");
@@ -1616,23 +1611,11 @@ mod tests {
     /// test that gossip requests are eventually generated for all nodes
     #[test]
     fn gossip_request() {
-        let me = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
+        let me = NodeInfo::new_localhost(Keypair::new().pubkey());
         let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
         let rv = crdt.gossip_request();
         assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
-        let nxt1 = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.2:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
+        let nxt1 = NodeInfo::new_localhost(Keypair::new().pubkey());
 
         crdt.insert(&nxt1);
 
@@ -1754,6 +1737,7 @@ mod tests {
             socketaddr!("127.0.0.1:1235"),
             socketaddr!("127.0.0.1:1236"),
             socketaddr!("127.0.0.1:1237"),
+            socketaddr!("127.0.0.1:1238"),
         );
         let recycler = BlobRecycler::default();
         let rv = Crdt::run_window_request(
@@ -1922,6 +1906,7 @@ mod tests {
             socketaddr_any!(),
             socketaddr!("127.0.0.1:1236"),
             socketaddr_any!(),
+            socketaddr_any!(),
         );
         leader3.ledger_state.last_id = hash(b"3");
         let mut crdt = Crdt::new(leader0.clone()).expect("Crdt::new");
@@ -2011,13 +1996,7 @@ mod tests {
     #[test]
     fn test_default_leader() {
         logger::setup();
-        let node_info = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr!("127.0.0.1:1235"),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr!("127.0.0.1:1237"),
-        );
+        let node_info = NodeInfo::new_localhost(Keypair::new().pubkey());
         let mut crdt = Crdt::new(node_info).unwrap();
         let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
         crdt.insert(&network_entry_point);
