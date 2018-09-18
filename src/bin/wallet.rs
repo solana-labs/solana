@@ -115,47 +115,114 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("URL")
                 .help("Address of TLS proxy")
                 .conflicts_with("rpc-port")
-        ).subcommand(
+        ).subcommand(SubCommand::with_name("address").about("Get your public key"))
+        .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
                 .arg(
                     Arg::with_name("tokens")
-                        .long("tokens")
+                        .index(1)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to request"),
                 ),
+        ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
+        .subcommand(
+            SubCommand::with_name("cancel")
+                .about("Cancel a transfer")
+                .arg(
+                    Arg::with_name("process-id")
+                        .index(1)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to cancel"),
+                ),
+        ).subcommand(
+            SubCommand::with_name("confirm")
+                .about("Confirm transaction by signature")
+                .arg(
+                    Arg::with_name("signature")
+                        .index(1)
+                        .value_name("SIGNATURE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The transaction signature to confirm"),
+                ),
         ).subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
+                    Arg::with_name("to")
+                        .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The pubkey of recipient"),
+                ).arg(
                     Arg::with_name("tokens")
-                        .long("tokens")
+                        .index(2)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to send"),
                 ).arg(
-                    Arg::with_name("to")
-                        .long("to")
+                    Arg::with_name("timestamp")
+                        .long("after")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("A timestamp after which transaction will execute"),
+                ).arg(
+                    Arg::with_name("timestamp-pubkey")
+                        .long("require-timestamp-from")
                         .value_name("PUBKEY")
                         .takes_value(true)
-                        .help("The pubkey of recipient"),
+                        .requires("timestamp")
+                        .help("Require timestamp from this third party"),
+                ).arg(
+                    Arg::with_name("witness")
+                        .long("require-signature-from")
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .multiple(true)
+                        .use_delimiter(true)
+                        .help("Any third party signatures required to unlock the tokens"),
+                ).arg(
+                    Arg::with_name("cancellable")
+                        .long("cancellable")
+                        .takes_value(false)
+                        .requires("witness"),
                 ),
         ).subcommand(
-            SubCommand::with_name("confirm")
-                .about("Confirm your payment by signature")
+            SubCommand::with_name("send-signature")
+                .about("Send a signature to authorize a transfer")
                 .arg(
-                    Arg::with_name("signature")
+                    Arg::with_name("process-id")
                         .index(1)
-                        .value_name("SIGNATURE")
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
                         .required(true)
-                        .help("The transaction signature to confirm"),
-                ),
-        ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
-        .subcommand(SubCommand::with_name("address").about("Get your public key"))
-        .get_matches();
+                        .help("The process id of the transfer to authorize")
+                )
+        ).subcommand(
+            SubCommand::with_name("send-timestamp")
+                .about("Send a timestamp to unlock a transfer")
+                .arg(
+                    Arg::with_name("process-id")
+                        .index(1)
+                        .value_name("PROCESS_ID")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The process id of the transfer to unlock")
+                ).arg(
+                    Arg::with_name("datetime")
+                        .long("date")
+                        .value_name("DATETIME")
+                        .takes_value(true)
+                        .help("Optional arbitrary timestamp to apply")
+                )
+        ).get_matches();
 
     let config = parse_args(&matches)?;
     let result = process_command(&config)?;

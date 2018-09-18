@@ -1,5 +1,6 @@
 use bincode::{deserialize, serialize};
 use bs58;
+use chrono::prelude::{DateTime, Utc};
 use clap::ArgMatches;
 use crdt::NodeInfo;
 use drone::DroneRequest;
@@ -25,10 +26,21 @@ use transaction::Transaction;
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
     Address,
-    Balance,
     AirDrop(i64),
-    Pay(i64, Pubkey),
+    Balance,
+    Cancel(Pubkey),
     Confirm(Signature),
+    // Pay(to, tokens, timestamp, timestamp_pubkey, witness, cancellable)
+    Pay(
+        i64,
+        Pubkey,
+        Option<DateTime<Utc>>,
+        Option<Pubkey>,
+        Option<Pubkey>,
+        Option<bool>,
+    ),
+    TimeElapsed(Pubkey, DateTime<Utc>),
+    Witness(Pubkey),
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +99,9 @@ pub fn parse_command(
             Ok(WalletCommand::AirDrop(tokens))
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
+        ("cancel", Some(cancel_matches)) => Err(WalletError::BadParameter(
+            "Cancel not built yet".to_string(),
+        )),
         ("confirm", Some(confirm_matches)) => {
             let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
@@ -117,8 +132,14 @@ pub fn parse_command(
 
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
 
-            Ok(WalletCommand::Pay(tokens, to))
+            Ok(WalletCommand::Pay(tokens, to, None, None, None, None))
         }
+        ("send-signature", Some(sig_matches)) => Err(WalletError::BadParameter(
+            "Send-signature not handled yet".to_string(),
+        )),
+        ("send-timestamp", Some(timestamp_matches)) => Err(WalletError::BadParameter(
+            "Send-timestamp not handled yet".to_string(),
+        )),
         ("", None) => {
             println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -173,6 +194,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             Ok(format!("Your balance is: {:?}", current_balance))
         }
+        // Check client balance
         WalletCommand::Balance => {
             println!("Balance requested...");
             let params = json!(format!("{}", config.id.pubkey()));
@@ -187,6 +209,10 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 ))?,
             }
         }
+        // Cancel a contract by contract Pubkey
+        WalletCommand::Cancel(pubkey) => Err(WalletError::BadParameter(
+            "Cancel not built yet".to_string(),
+        ))?,
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             let params = json!(format!("{}", signature));
@@ -207,7 +233,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
         }
         // If client has positive balance, pay tokens to another address
-        WalletCommand::Pay(tokens, to) => {
+        WalletCommand::Pay(tokens, to, _, _, _, _) => {
             let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
             if result.as_str().is_none() {
                 Err(WalletError::RpcRequestError(
@@ -237,6 +263,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             Ok(signature_str.to_string())
         }
+        // Apply time elapsed to contract
+        WalletCommand::TimeElapsed(pubkey, timestamp) => Err(WalletError::BadParameter(
+            "TimeElapsed not built yet".to_string(),
+        ))?,
+        // Apply witness signature to contract
+        WalletCommand::Witness(pubkey) => Err(WalletError::BadParameter(
+            "Witness not built yet".to_string(),
+        ))?,
     }
 }
 
