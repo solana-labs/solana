@@ -398,7 +398,7 @@ impl Bank {
     /// Process a batch of transactions.
     #[must_use]
     pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
-        debug!("processing Transactions {}", txs.len());
+        debug!("processing transactions: {}", txs.len());
         // TODO right now a single write lock is held for the duration of processing all the
         // transactions
         // To break this lock each account needs to be locked to prevent concurrent access
@@ -422,7 +422,7 @@ impl Bank {
         Self::store_accounts(&res, &loaded_accounts, &mut accounts);
         let write_elapsed = now.elapsed();
         debug!(
-            "load: {} us execution: {} us write: {} us tx: {}",
+            "load: {}us execution: {}us write: {}us txs_len={}",
             duration_as_us(&load_elapsed),
             duration_as_us(&execution_elapsed),
             duration_as_us(&write_elapsed),
@@ -435,7 +435,7 @@ impl Bank {
                 tx_count += 1;
             } else {
                 if err_count == 0 {
-                    trace!("tx error: {:?}", r);
+                    debug!("tx error: {:?}", r);
                 }
                 err_count += 1;
             }
