@@ -11,7 +11,7 @@ Solana uses a channel-oriented, date-based branching process described [here](ht
 When cutting a new channel branch these pre-steps are required:
 
 1. Pick your branch point for release on master.
-2. Create the branch.  The name should be "v" + the first 2 "version" semantic versionig fields from Cargo.toml.  For example, a Cargo.toml with version = "0.9.0" implies the next branch name is "v0.9".
+2. Create the branch.  The name should be "v" + the first 2 "version" fields from Cargo.toml.  For example, a Cargo.toml with version = "0.9.0" implies the next branch name is "v0.9".
 3. Update Cargo.toml to the next semantic version (e.g. 0.9.0 -> 0.10.0).
 4. Push your new branch to solana.git
 5. Land your Carto.toml change as a master PR.
@@ -24,7 +24,7 @@ We use [github's Releases UI](https://github.com/solana-labs/solana/releases) fo
 
 1. Go [there ;)](https://github.com/solana-labs/solana/releases).
 2. Click "Draft new release".
-3. Paste in [this template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md) and fill it in.
+3. If the first major release on the branch (e.g. v0.8.0), paste in [this template](https://raw.githubusercontent.com/solana-labs/solana/master/.github/RELEASE_TEMPLATE.md) and fill it in.
 4. Test the release by generating a tag using semver's rules.  First try at a release should be <branchname>.X-rc.0.
 5. Verify release automation:
    1. [Crates.io](https://crates.io/crates/solana) should have an updated Solana version.
