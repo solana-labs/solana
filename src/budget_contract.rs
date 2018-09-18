@@ -127,7 +127,7 @@ impl BudgetContract {
                 }
 
                 if accounts[0].tokens < contract.tokens {
-                    trace!("insufficent funds");
+                    trace!("insufficient funds");
                     return Err(BudgetError::InsufficientFunds(tx.keys[0]));
                 } else {
                     accounts[0].tokens -= contract.tokens;
@@ -175,7 +175,7 @@ impl BudgetContract {
                     Err(BudgetError::UninitializedContract(tx.keys[1]))
                 } else {
                     state.apply_timestamp(tx, accounts, *dt)?;
-                    trace!("apply timestamp commited");
+                    trace!("apply timestamp committed");
                     state.serialize(&mut accounts[1].userdata);
                     Ok(())
                 }
@@ -191,7 +191,7 @@ impl BudgetContract {
                 } else {
                     trace!("apply signature");
                     state.apply_signature(tx, *signature, accounts)?;
-                    trace!("apply signature commited");
+                    trace!("apply signature committed");
                     state.serialize(&mut accounts[1].userdata);
                     Ok(())
                 }

@@ -343,7 +343,7 @@ impl Bank {
     /// Execute a transaction.
     /// This method calls the contract's process_transaction method and verifies that the result of
     /// the contract does not violate the bank's accounting rules.
-    /// The accounts are commited back to the bank only if this function returns Ok(_).
+    /// The accounts are committed back to the bank only if this function returns Ok(_).
     fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts

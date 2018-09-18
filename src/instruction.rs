@@ -53,7 +53,7 @@ pub struct Vote {
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
-    /// Declare and instanstansiate `Contract`.
+    /// Declare and instantiate `Contract`.
     NewContract(Contract),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
