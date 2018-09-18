@@ -82,7 +82,7 @@ impl SystemContract {
 mod test {
     use bank::Account;
     use hash::Hash;
-    use signature::{Keypair, KeypairUtil};
+    use signature::{Keypair, KeypairUtil, Pubkey};
     use system_contract::SystemContract;
     use transaction::Transaction;
     #[test]
@@ -186,5 +186,67 @@ mod test {
         SystemContract::process_transaction(&tx, &mut accounts);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
+    }
+
+    /// Detect binary changes in the serialized contract userdata, which could have a downstream
+    /// affect on SDKs and DApps
+    #[test]
+    fn test_sdk_serialize() {
+        let keypair = Keypair::new();
+        use budget_contract::BUDGET_CONTRACT_ID;
+
+        // CreateAccount
+        let tx = Transaction::system_create(
+            &keypair,
+            keypair.pubkey(),
+            Hash::default(),
+            111,
+            222,
+            Some(Pubkey::new(&BUDGET_CONTRACT_ID)),
+            0,
+        );
+
+        assert_eq!(
+            tx.userdata,
+            vec![
+                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
+
+        // CreateAccount
+        let tx = Transaction::system_create(
+            &keypair,
+            keypair.pubkey(),
+            Hash::default(),
+            111,
+            222,
+            None,
+            0,
+        );
+
+        assert_eq!(
+            tx.userdata,
+            vec![0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+
+        // Assign
+        let tx = Transaction::system_assign(
+            &keypair,
+            Hash::default(),
+            Pubkey::new(&BUDGET_CONTRACT_ID),
+            0,
+        );
+        assert_eq!(
+            tx.userdata,
+            vec![
+                1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0
+            ]
+        );
+
+        // Move
+        let tx = Transaction::system_move(&keypair, keypair.pubkey(), 123, Hash::default(), 0);
+        assert_eq!(tx.userdata, vec![2, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0]);
     }
 }
