@@ -18,7 +18,7 @@ pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
 /// An instruction signed by a client with `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `instruction`, `last_id` and `fee`, signed by `Pubkey`.
+    /// A digital signature of `keys`, `contract_id`, `last_id`, `fee` and `userdata`, signed by `Pubkey`.
     pub signature: Signature,
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
@@ -27,6 +27,7 @@ pub struct Transaction {
     /// In the future which key pays the fee and which keys have signatures would be configurable.
     /// * keys[1] - Typically this is the contract context or the recipient of the tokens
     pub keys: Vec<Pubkey>,
+
     /// the contract id to execute
     pub contract_id: Pubkey,
 
