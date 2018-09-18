@@ -2,7 +2,7 @@
 
 import {Account} from '../src/account';
 import {Connection} from '../src/connection';
-import {TransferTokensTransaction} from '../src/transaction';
+import {SystemContract} from '../src/system-contract';
 import {mockRpc} from './__mocks__/node-fetch';
 
 const url = 'http://testnet.solana.com:8899';
@@ -274,7 +274,7 @@ test('transaction', async () => {
   ]
   );
 
-  const transaction = new TransferTokensTransaction(
+  const transaction = SystemContract.move(
     accountFrom.publicKey,
     accountTo.publicKey,
     10

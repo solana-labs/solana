@@ -7,15 +7,6 @@ import bs58 from 'bs58';
 import type {Account, PublicKey} from './account';
 
 /**
- * @private
- */
-function bs58DecodePublicKey(key: PublicKey): Buffer {
-  const keyBytes = Buffer.from(bs58.decode(key));
-  assert(keyBytes.length === 32);
-  return keyBytes;
-}
-
-/**
  * @typedef {string} TransactionSignature
  */
 export type TransactionSignature = string;
@@ -24,6 +15,17 @@ export type TransactionSignature = string;
  * @typedef {string} TransactionId
  */
 export type TransactionId = string;
+
+/**
+ * List of Transaction object fields that may be initialized at construction
+ */
+type TransactionCtorFields = {|
+  signature?: Buffer;
+  keys?: Array<PublicKey>;
+  contractId?: PublicKey;
+  fee?: number;
+  userdata?: Buffer;
+|};
 
 /**
  * Mirrors the Transaction struct in src/transaction.rs
@@ -42,6 +44,11 @@ export class Transaction {
   keys: Array<PublicKey> = [];
 
   /**
+   * Contract Id to execute
+   */
+  contractId: ?PublicKey;
+
+  /**
    * A recent transaction id.  Must be populated by the caller
    */
   lastId: ?TransactionId;
@@ -55,6 +62,10 @@ export class Transaction {
    * Contract input userdata to include
    */
   userdata: Buffer = Buffer.alloc(0);
+
+  constructor(opts?: TransactionCtorFields) {
+    opts && Object.assign(this, opts);
+  }
 
   /**
    * @private
@@ -74,10 +85,17 @@ export class Transaction {
     transactionData.writeUInt32LE(this.keys.length, pos);  // u64
     pos += 8;
     for (let key of this.keys) {
-      const keyBytes = bs58DecodePublicKey(key);
+      const keyBytes = Transaction.serializePublicKey(key);
       keyBytes.copy(transactionData, pos);
       pos += 32;
     }
+
+    // serialize `this.contractId`
+    if (this.contractId) {
+      const keyBytes = Transaction.serializePublicKey(this.contractId);
+      keyBytes.copy(transactionData, pos);
+    }
+    pos += 32;
 
     // serialize `this.lastId`
     {
@@ -93,6 +111,8 @@ export class Transaction {
 
     // serialize `this.userdata`
     if (this.userdata.length > 0) {
+      transactionData.writeUInt32LE(this.userdata.length, pos);  // u64
+      pos += 8;
       this.userdata.copy(transactionData, pos);
       pos += this.userdata.length;
     }
@@ -131,28 +151,14 @@ export class Transaction {
     transactionData.copy(wireTransaction, signature.length);
     return wireTransaction;
   }
-}
 
-/**
- * A Transaction that immediately transfers tokens
- */
-export class TransferTokensTransaction extends Transaction {
-  constructor(from: PublicKey, to: PublicKey, amount: number) {
-    super();
-
-    // Forge a simple Budget Pay contract into `userdata`
-    // TODO: Clean this up
-    const userdata = Buffer.alloc(68); // 68 = serialized size of Budget enum
-    userdata.writeUInt32LE(60, 0);
-    userdata.writeUInt32LE(amount, 12);        // u64
-    userdata.writeUInt32LE(amount, 28);        // u64
-    const toData = bs58DecodePublicKey(to);
-    toData.copy(userdata, 36);
-
-    Object.assign(this, {
-      fee: 0,
-      keys: [from, to],
-      userdata
-    });
+  /**
+   * Serializes a public key into the wire format
+   */
+  static serializePublicKey(key: PublicKey): Buffer {
+    const data = Buffer.from(bs58.decode(key));
+    assert(data.length === 32);
+    return data;
   }
 }
+
