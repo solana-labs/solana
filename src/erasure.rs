@@ -247,7 +247,7 @@ pub fn generate_coding(
             trace!("{} window[{}] = {:?}", id, n, window[n].data);
 
             if let Some(b) = &window[n].data {
-                max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
+                max_data_size = cmp::max(b.read().meta.size, max_data_size);
             } else {
                 trace!("{} data block is null @ {}", id, n);
                 return Ok(());
@@ -266,7 +266,7 @@ pub fn generate_coding(
             if let Some(b) = &window[n].data {
                 // make sure extra bytes in each blob are zero-d out for generation of
                 //  coding blobs
-                let mut b_wl = b.write().unwrap();
+                let mut b_wl = b.write();
                 for i in b_wl.meta.size..max_data_size {
                     b_wl.data[i] = 0;
                 }
@@ -288,13 +288,13 @@ pub fn generate_coding(
             window[n].coding = Some(recycler.allocate());
 
             let coding = window[n].coding.clone().unwrap();
-            let mut coding_wl = coding.write().unwrap();
+            let mut coding_wl = coding.write();
             for i in 0..max_data_size {
                 coding_wl.data[i] = 0;
             }
             // copy index and id from the data blob
             if let Some(data) = &window[n].data {
-                let data_rl = data.read().unwrap();
+                let data_rl = data.read();
 
                 let index = data_rl.get_index().unwrap();
                 let id = data_rl.get_id().unwrap();
@@ -318,7 +318,7 @@ pub fn generate_coding(
 
         let data_locks: Vec<_> = data_blobs
             .iter()
-            .map(|b| b.read().expect("'data_locks' of data_blobs"))
+            .map(|b| b.read())
             .collect();
 
         let data_ptrs: Vec<_> = data_locks
@@ -331,7 +331,7 @@ pub fn generate_coding(
 
         let mut coding_locks: Vec<_> = coding_blobs
             .iter()
-            .map(|b| b.write().expect("'coding_locks' of coding_blobs"))
+            .map(|b| b.write())
             .collect();
 
         let mut coding_ptrs: Vec<_> = coding_locks
@@ -364,7 +364,7 @@ fn is_missing(
     c_or_d: &str,
 ) -> bool {
     if let Some(blob) = window_slot.take() {
-        let blob_idx = blob.read().unwrap().get_index().unwrap();
+        let blob_idx = blob.read().get_index().unwrap();
         if blob_idx == idx {
             trace!("recover {}: idx: {} good {}", id, idx, c_or_d);
             // put it back
@@ -489,7 +489,7 @@ pub fn recover(
 
         if let Some(b) = window[j].data.clone() {
             if meta.is_none() {
-                meta = Some(b.read().unwrap().meta.clone());
+                meta = Some(b.read().meta.clone());
                 trace!("recover {} meta at {} {:?}", id, j, meta);
             }
             blobs.push(b);
@@ -505,7 +505,7 @@ pub fn recover(
         let j = i % window.len();
         if let Some(b) = window[j].coding.clone() {
             if size.is_none() {
-                size = Some(b.read().unwrap().meta.size - BLOB_HEADER_SIZE);
+                size = Some(b.read().meta.size - BLOB_HEADER_SIZE);
                 trace!(
                     "{} recover size {} from {}",
                     id,
@@ -529,7 +529,7 @@ pub fn recover(
         let j = i % window.len();
 
         if let Some(b) = &window[j].data {
-            let mut b_wl = b.write().unwrap();
+            let mut b_wl = b.write();
             for i in b_wl.meta.size..size {
                 b_wl.data[i] = 0;
             }
@@ -541,7 +541,7 @@ pub fn recover(
     trace!("erasures[]: {} {:?} data_size: {}", id, erasures, size,);
     //lock everything for write
     for b in &blobs {
-        locks.push(b.write().expect("'locks' arr in pb fn recover"));
+        locks.push(b.write());
     }
 
     {

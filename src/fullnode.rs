@@ -303,6 +303,7 @@ impl Fullnode {
                     crdt,
                     shared_window,
                     entry_height,
+                    blob_recycler.clone(),
                     entry_receiver,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);

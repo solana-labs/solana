@@ -7,7 +7,7 @@ use entry::Entry;
 use erasure;
 use ledger::Block;
 use log::Level;
-use packet::SharedBlobs;
+use packet::{BlobRecycler, SharedBlobs};
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
@@ -22,6 +22,7 @@ fn broadcast(
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
+    recycler: &BlobRecycler,
     receiver: &Receiver<Vec<Entry>>,
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
@@ -121,6 +122,7 @@ impl BroadcastStage {
         crdt: &Arc<RwLock<Crdt>>,
         window: &SharedWindow,
         entry_height: u64,
+        recycler: &BlobRecycler,
         receiver: &Receiver<Vec<Entry>>,
     ) {
         let mut transmit_index = WindowIndex {
@@ -135,6 +137,7 @@ impl BroadcastStage {
                 &me,
                 &broadcast_table,
                 &window,
+                &recycler,
                 &receiver,
                 &sock,
                 &mut transmit_index,
@@ -167,12 +170,13 @@ impl BroadcastStage {
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
         entry_height: u64,
+        recycler: BlobRecycler,
         receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                Self::run(&sock, &crdt, &window, entry_height, &receiver);
+                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
             }).unwrap();
 
         BroadcastStage { thread_hdl }
