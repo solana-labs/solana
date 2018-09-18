@@ -273,9 +273,9 @@ mod test {
     use bank::Account;
     use bincode::serialize;
     use budget_contract::{BudgetContract, BudgetError};
-    use chrono::prelude::Utc;
+    use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;
-    use signature::{Keypair, KeypairUtil};
+    use signature::{GenKeys, Keypair, KeypairUtil, Pubkey, Signature};
     use transaction::Transaction;
     #[test]
     fn test_serializer() {
@@ -464,6 +464,91 @@ mod test {
         assert_eq!(
             state.last_error,
             Some(BudgetError::ContractNotPending(contract.pubkey()))
+        );
+    }
+
+    /// Detect binary changes in the serialized contract userdata, which could have a downstream
+    /// affect on SDKs and DApps
+    #[test]
+    fn test_sdk_serialize() {
+        let keypair = &GenKeys::new([0u8; 32]).gen_n_keypairs(1)[0];
+        let to = Pubkey::new(&[
+            1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4,
+            1, 1, 1,
+        ]);
+        let contract = Pubkey::new(&[
+            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
+            2, 2, 2,
+        ]);
+        let signature = Signature::new(&[
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7,
+            6, 5, 4, 3, 2, 1,
+        ]);
+        let date =
+            DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2016, 7, 8).and_hms(9, 10, 11), Utc);
+
+        // NewContract(Contract)
+        let tx = Transaction::budget_new(&keypair, to, 192, Hash::default());
+        assert_eq!(
+            tx.userdata,
+            vec![
+                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0,
+                0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7,
+                6, 5, 4, 1, 1, 1
+            ]
+        );
+
+        // NewContract(Contract)
+        let tx =
+            Transaction::budget_new_on_date(&keypair, to, contract, date, 192, Hash::default());
+        assert_eq!(
+            tx.userdata,
+            vec![
+                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0,
+                0, 0, 0, 0, 0, 50, 48, 49, 54, 45, 48, 55, 45, 48, 56, 84, 48, 57, 58, 49, 48, 58,
+                49, 49, 90, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206,
+                105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 192,
+                0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 9, 8, 7, 6, 5, 4, 1, 1, 1, 1, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135,
+                187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180,
+                72, 134, 137, 247, 161, 68, 192, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177, 11,
+                117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16,
+                252, 180, 72, 134, 137, 247, 161, 68
+            ]
+        );
+
+        // ApplyTimestamp
+        let tx = Transaction::budget_new_timestamp(
+            &keypair,
+            keypair.pubkey(),
+            to,
+            date,
+            Hash::default(),
+        );
+        assert_eq!(
+            tx.userdata,
+            vec![
+                1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 50, 48, 49, 54, 45, 48, 55, 45, 48, 56, 84,
+                48, 57, 58, 49, 48, 58, 49, 49, 90
+            ]
+        );
+
+        // ApplySignature
+        let tx = Transaction::budget_new_signature(
+            &keypair,
+            keypair.pubkey(),
+            to,
+            signature,
+            Hash::default(),
+        );
+        assert_eq!(
+            tx.userdata,
+            vec![
+                2, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1
+            ]
         );
     }
 }
