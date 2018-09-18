@@ -64,16 +64,14 @@ impl Tpu {
         sigverify_disabled: bool,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let mut packet_recycler = PacketRecycler::default();
-        packet_recycler.set_name("tpu::Packet");
 
         let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_sockets, exit, &packet_recycler);
+            FetchStage::new(transactions_sockets, exit, packet_recycler.clone());
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, signal_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, packet_recycler.clone());
+        let (banking_stage, signal_receiver) = BankingStage::new(bank.clone(), verified_receiver);
 
         let (record_stage, entry_receiver) = match tick_duration {
             Some(tick_duration) => {

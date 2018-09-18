@@ -219,7 +219,6 @@ pub mod tests {
         let t_responder = streamer::responder(
             "test_replicate",
             Arc::new(leader.sockets.requests),
-            recycler.clone(),
             r_responder,
         );
 
@@ -276,9 +275,9 @@ pub mod tests {
             alice_ref_balance -= transfer_amount;
 
             for entry in vec![entry0, entry1] {
-                let b = recycler.allocate();
+                let mut b = recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.set_index(blob_id).unwrap();
                     blob_id += 1;
                     w.set_id(leader_id).unwrap();
@@ -299,8 +298,8 @@ pub mod tests {
 
         // receive retransmitted messages
         let timer = Duration::new(1, 0);
-        while let Ok(msg) = r_reader.recv_timeout(timer) {
-            trace!("msg: {:?}", msg);
+        while let Ok(_msg) = r_reader.recv_timeout(timer) {
+            trace!("got msg");
         }
 
         let alice_balance = bank.get_balance(&mint.keypair().pubkey());

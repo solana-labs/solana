@@ -48,8 +48,7 @@ impl Rpu {
         blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
     ) -> Self {
-        let mut packet_recycler = PacketRecycler::default();
-        packet_recycler.set_name("rpu::Packet");
+        let packet_recycler = PacketRecycler::default();
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
             Arc::new(requests_socket),
@@ -66,12 +65,7 @@ impl Rpu {
             blob_recycler.clone(),
         );
 
-        let t_responder = streamer::responder(
-            "rpu",
-            Arc::new(respond_socket),
-            blob_recycler.clone(),
-            blob_receiver,
-        );
+        let t_responder = streamer::responder("rpu", Arc::new(respond_socket), blob_receiver);
 
         let thread_hdls = vec![t_receiver, t_responder];
         Rpu {

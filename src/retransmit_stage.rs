@@ -17,24 +17,14 @@ use streamer::BlobReceiver;
 use window::SharedWindow;
 use window_service::window_service;
 
-fn retransmit(
-    crdt: &Arc<RwLock<Crdt>>,
-    recycler: &BlobRecycler,
-    r: &BlobReceiver,
-    sock: &UdpSocket,
-) -> Result<()> {
+fn retransmit(crdt: &Arc<RwLock<Crdt>>, r: &BlobReceiver, sock: &UdpSocket) -> Result<()> {
     let timer = Duration::new(1, 0);
     let mut dq = r.recv_timeout(timer)?;
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq);
     }
-    {
-        for b in &dq {
-            Crdt::retransmit(&crdt, b, sock)?;
-        }
-    }
-    for b in dq {
-        recycler.recycle(b, "retransmit");
+    for b in &mut dq {
+        Crdt::retransmit(&crdt, b, sock)?;
     }
     Ok(())
 }
@@ -47,18 +37,13 @@ fn retransmit(
 /// * `crdt` - This structure needs to be updated and populated by the bank and via gossip.
 /// * `recycler` - Blob recycler.
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-fn retransmitter(
-    sock: Arc<UdpSocket>,
-    crdt: Arc<RwLock<Crdt>>,
-    recycler: BlobRecycler,
-    r: BlobReceiver,
-) -> JoinHandle<()> {
+fn retransmitter(sock: Arc<UdpSocket>, crdt: Arc<RwLock<Crdt>>, r: BlobReceiver) -> JoinHandle<()> {
     Builder::new()
         .name("solana-retransmitter".to_string())
         .spawn(move || {
             trace!("retransmitter started");
             loop {
-                if let Err(e) = retransmit(&crdt, &recycler, &r, &sock) {
+                if let Err(e) = retransmit(&crdt, &r, &sock) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -88,12 +73,7 @@ impl RetransmitStage {
     ) -> (Self, BlobReceiver) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_retransmit = retransmitter(
-            retransmit_socket,
-            crdt.clone(),
-            blob_recycler.clone(),
-            retransmit_receiver,
-        );
+        let t_retransmit = retransmitter(retransmit_socket, crdt.clone(), retransmit_receiver);
         let (blob_sender, blob_receiver) = channel();
         let t_window = window_service(
             crdt.clone(),

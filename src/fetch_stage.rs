@@ -18,7 +18,7 @@ impl FetchStage {
     pub fn new(
         sockets: Vec<UdpSocket>,
         exit: Arc<AtomicBool>,
-        recycler: &PacketRecycler,
+        recycler: PacketRecycler,
     ) -> (Self, PacketReceiver) {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         Self::new_multi_socket(tx_sockets, exit, recycler)
@@ -26,7 +26,7 @@ impl FetchStage {
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        recycler: &PacketRecycler,
+        recycler: PacketRecycler,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets

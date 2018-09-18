@@ -71,7 +71,6 @@ impl WriteStage {
         let t_responder = responder(
             "write_stage_vote_sender",
             Arc::new(send),
-            blob_recycler.clone(),
             vote_blob_receiver,
         );
         let (entry_sender, entry_receiver_forward) = channel();

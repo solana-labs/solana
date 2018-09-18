@@ -47,7 +47,7 @@ pub fn create_new_signed_vote_blob(
     }?;
     let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
     {
-        let mut blob = shared_blob.write().unwrap();
+        let mut blob = shared_blob.write();
         let bytes = serialize(&tx)?;
         let len = bytes.len();
         blob.data[..len].copy_from_slice(&bytes);
@@ -382,7 +382,7 @@ pub mod tests {
 
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
-        let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
+        let tx = deserialize(&(blob.read().data)).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
     }
 

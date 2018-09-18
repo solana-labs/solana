@@ -7,7 +7,7 @@ use entry::Entry;
 use erasure;
 use ledger::Block;
 use log::Level;
-use packet::BlobRecycler;
+use packet::SharedBlobs;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
@@ -22,7 +22,6 @@ fn broadcast(
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
-    recycler: &BlobRecycler,
     receiver: &Receiver<Vec<Entry>>,
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
@@ -37,20 +36,25 @@ fn broadcast(
     }
 
     // flatten deque to vec
-    let blobs_vec: Vec<_> = dq.into_iter().collect();
+    let blobs_vec: SharedBlobs = dq.into_iter().collect();
 
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
-    let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
+    let mut blobs_chunked: Vec<SharedBlobs> = blobs_vec
+        .chunks(WINDOW_SIZE as usize)
+        .map(|bbs| {
+            let vec: SharedBlobs = bbs.into_iter().cloned().collect();
+            vec
+        }).collect();
 
     trace!("{}", window.read().unwrap().print(&id, *receive_index));
 
-    for mut blobs in blobs_chunked {
+    for blobs in &mut blobs_chunked {
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
         // Index the blobs
-        window::index_blobs(node_info, &blobs, receive_index)
+        window::index_blobs(node_info, blobs, receive_index)
             .expect("index blobs for initial window");
 
         // keep the cache of blobs that are broadcast
@@ -58,36 +62,24 @@ fn broadcast(
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
-            for b in &blobs {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+            for b in blobs.iter() {
+                let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = win[pos].data.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().get_index().unwrap(),
-                        pos
-                    );
-                    recycler.recycle(x, "broadcast-data");
+                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
                 }
                 if let Some(x) = win[pos].coding.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().get_index().unwrap(),
-                        pos
-                    );
-                    recycler.recycle(x, "broadcast-coding");
+                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
                 }
 
                 trace!("{} null {}", id, pos);
             }
-            while let Some(b) = blobs.pop() {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+            for b in blobs.into_iter() {
+                let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
-                win[pos].data = Some(b);
+                win[pos].data = Some(b.clone());
             }
         }
 
@@ -129,7 +121,6 @@ impl BroadcastStage {
         crdt: &Arc<RwLock<Crdt>>,
         window: &SharedWindow,
         entry_height: u64,
-        recycler: &BlobRecycler,
         receiver: &Receiver<Vec<Entry>>,
     ) {
         let mut transmit_index = WindowIndex {
@@ -144,7 +135,6 @@ impl BroadcastStage {
                 &me,
                 &broadcast_table,
                 &window,
-                &recycler,
                 &receiver,
                 &sock,
                 &mut transmit_index,
@@ -177,13 +167,12 @@ impl BroadcastStage {
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
         entry_height: u64,
-        recycler: BlobRecycler,
         receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver);
+                Self::run(&sock, &crdt, &window, entry_height, &receiver);
             }).unwrap();
 
         BroadcastStage { thread_hdl }

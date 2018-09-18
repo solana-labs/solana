@@ -30,7 +30,6 @@ impl ReplicateStage {
     fn replicate_requests(
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
-        blob_recycler: &BlobRecycler,
         window_receiver: &BlobReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
     ) -> Result<()> {
@@ -40,13 +39,9 @@ impl ReplicateStage {
         while let Ok(mut more) = window_receiver.try_recv() {
             blobs.append(&mut more);
         }
-        let entries = reconstruct_entries_from_blobs(blobs.clone())?;
+        let entries = reconstruct_entries_from_blobs(blobs)?;
 
         let res = bank.process_entries(entries.clone());
-
-        for blob in blobs {
-            blob_recycler.recycle(blob, "replicate_requests");
-        }
 
         {
             let mut wcrdt = crdt.write().unwrap();
@@ -77,12 +72,7 @@ impl ReplicateStage {
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
-        let t_responder = responder(
-            "replicate_stage",
-            Arc::new(send),
-            blob_recycler.clone(),
-            vote_blob_receiver,
-        );
+        let t_responder = responder("replicate_stage", Arc::new(send), vote_blob_receiver);
 
         let vote_stage = VoteStage::new(
             Arc::new(keypair),
@@ -98,13 +88,9 @@ impl ReplicateStage {
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || loop {
-                if let Err(e) = Self::replicate_requests(
-                    &bank,
-                    &crdt,
-                    &blob_recycler,
-                    &window_receiver,
-                    ledger_writer.as_mut(),
-                ) {
+                if let Err(e) =
+                    Self::replicate_requests(&bank, &crdt, &window_receiver, ledger_writer.as_mut())
+                {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),

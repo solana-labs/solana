@@ -220,8 +220,7 @@ impl Fullnode {
         }
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-        let mut blob_recycler = BlobRecycler::default();
-        blob_recycler.set_name("fullnode::Blob");
+        let blob_recycler = BlobRecycler::default();
 
         let rpu = Rpu::new(
             &bank,
@@ -304,7 +303,6 @@ impl Fullnode {
                     crdt,
                     shared_window,
                     entry_height,
-                    blob_recycler.clone(),
                     entry_receiver,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);

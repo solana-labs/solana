@@ -23,10 +23,7 @@ fn recv_loop(
     loop {
         let msgs = re.allocate();
         loop {
-            let result = msgs
-                .write()
-                .expect("write lock in fn recv_loop")
-                .recv_from(sock);
+            let result = msgs.write().recv_from(sock);
             match result {
                 Ok(()) => {
                     channel.send(msgs)?;
@@ -34,7 +31,6 @@ fn recv_loop(
                 }
                 Err(_) => {
                     if exit.load(Ordering::Relaxed) {
-                        re.recycle(msgs, "recv_loop");
                         return Ok(());
                     }
                 }
@@ -61,10 +57,10 @@ pub fn receiver(
         }).unwrap()
 }
 
-fn recv_send(sock: &UdpSocket, recycler: &BlobRecycler, r: &BlobReceiver) -> Result<()> {
+fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
     let timer = Duration::new(1, 0);
     let msgs = r.recv_timeout(timer)?;
-    Blob::send_to(recycler, sock, msgs)?;
+    Blob::send_to(sock, msgs)?;
     Ok(())
 }
 
@@ -72,11 +68,11 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
     trace!("got msgs");
-    let mut len = msgs.read().unwrap().packets.len();
+    let mut len = msgs.read().packets.len();
     let mut batch = vec![msgs];
     while let Ok(more) = recvr.try_recv() {
         trace!("got more msgs");
-        len += more.read().unwrap().packets.len();
+        len += more.read().packets.len();
         batch.push(more);
 
         if len > 100_000 {
@@ -87,16 +83,11 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
     Ok((batch, len))
 }
 
-pub fn responder(
-    name: &'static str,
-    sock: Arc<UdpSocket>,
-    recycler: BlobRecycler,
-    r: BlobReceiver,
-) -> JoinHandle<()> {
+pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> JoinHandle<()> {
     Builder::new()
         .name(format!("solana-responder-{}", name))
         .spawn(move || loop {
-            if let Err(e) = recv_send(&sock, &recycler, &r) {
+            if let Err(e) = recv_send(&sock, &r) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -155,8 +146,8 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
-                e => info!("error {:?}", e),
+                Ok(m) => *num += m.read().packets.len(),
+                _ => info!("get_msgs error"),
             }
             if *num == 10 {
                 break;
@@ -188,17 +179,12 @@ mod test {
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
-            let t_responder = responder(
-                "streamer_send_test",
-                Arc::new(send),
-                resp_recycler.clone(),
-                r_responder,
-            );
+            let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let b = resp_recycler.allocate();
+                let mut b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.data[0] = i as u8;
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);
