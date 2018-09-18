@@ -14,11 +14,11 @@ use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{responder, BlobReceiver, BlobSender};
+use streamer::responder;
 use vote_stage::send_leader_vote;
 
 pub struct WriteStage {
@@ -27,12 +27,11 @@ pub struct WriteStage {
 
 impl WriteStage {
     /// Process any Entry items that have been published by the RecordStage.
-    /// continuosly broadcast blobs of entries out
+    /// continuosly send entries out
     pub fn write_and_send_entries(
         crdt: &Arc<RwLock<Crdt>>,
         ledger_writer: &mut LedgerWriter,
-        blob_sender: &BlobSender,
-        blob_recycler: &BlobRecycler,
+        entry_sender: &Sender<Vec<Entry>>,
         entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
@@ -48,14 +47,12 @@ impl WriteStage {
         //leader simply votes if the current set of validators have voted
         //on a valid last id
 
-        trace!("New blobs? {}", entries.len());
-        let blobs = entries.to_blobs(blob_recycler);
-
-        if !blobs.is_empty() {
+        trace!("New entries? {}", entries.len());
+        if !entries.is_empty() {
             inc_new_counter_info!("write_stage-recv_vote", votes.len());
-            inc_new_counter_info!("write_stage-broadcast_blobs", blobs.len());
-            trace!("broadcasting {}", blobs.len());
-            blob_sender.send(blobs)?;
+            inc_new_counter_info!("write_stage-broadcast_entries", entries.len());
+            trace!("broadcasting {}", entries.len());
+            entry_sender.send(entries)?;
         }
         Ok(())
     }
@@ -68,7 +65,7 @@ impl WriteStage {
         blob_recycler: BlobRecycler,
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
-    ) -> (Self, BlobReceiver) {
+    ) -> (Self, Receiver<Vec<Entry>>) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder(
@@ -77,7 +74,7 @@ impl WriteStage {
             blob_recycler.clone(),
             vote_blob_receiver,
         );
-        let (blob_sender, blob_receiver) = channel();
+        let (entry_sender, entry_receiver_forward) = channel();
         let mut ledger_writer = LedgerWriter::recover(ledger_path).unwrap();
 
         let thread_hdl = Builder::new()
@@ -90,8 +87,7 @@ impl WriteStage {
                     if let Err(e) = Self::write_and_send_entries(
                         &crdt,
                         &mut ledger_writer,
-                        &blob_sender,
-                        &blob_recycler,
+                        &entry_sender,
                         &entry_receiver,
                     ) {
                         match e {
@@ -123,7 +119,7 @@ impl WriteStage {
             }).unwrap();
 
         let thread_hdls = vec![t_responder, thread_hdl];
-        (WriteStage { thread_hdls }, blob_receiver)
+        (WriteStage { thread_hdls }, entry_receiver_forward)
     }
 }
 
