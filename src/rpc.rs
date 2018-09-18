@@ -170,11 +170,17 @@ impl RpcSol for RpcSolImpl {
         }
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
-        let tx: Transaction = deserialize(&data).map_err(|_| Error::invalid_request())?;
+        let tx: Transaction = deserialize(&data).map_err(|err| {
+            debug!("send_transaction: deserialize error: {:?}", err);
+            Error::invalid_request()
+        })?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         transactions_socket
             .send_to(&data, &meta.transactions_addr)
-            .map_err(|_| Error::internal_error())?;
+            .map_err(|err| {
+                debug!("send_transaction: send_to error: {:?}", err);
+                Error::internal_error()
+            })?;
         Ok(bs58::encode(tx.signature).into_string())
     }
 }
