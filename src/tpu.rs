@@ -28,6 +28,7 @@
 use bank::Bank;
 use banking_stage::BankingStage;
 use crdt::Crdt;
+use entry::Entry;
 use fetch_stage::FetchStage;
 use packet::{BlobRecycler, PacketRecycler};
 use record_stage::RecordStage;
@@ -36,10 +37,10 @@ use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
-use streamer::BlobReceiver;
 use write_stage::WriteStage;
 
 pub struct Tpu {
@@ -61,7 +62,7 @@ impl Tpu {
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
-    ) -> (Self, BlobReceiver) {
+    ) -> (Self, Receiver<Vec<Entry>>) {
         let mut packet_recycler = PacketRecycler::default();
         packet_recycler.set_name("tpu::Packet");
 
@@ -81,7 +82,7 @@ impl Tpu {
             None => RecordStage::new(signal_receiver, bank.clone()),
         };
 
-        let (write_stage, blob_receiver) = WriteStage::new(
+        let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,
             bank.clone(),
             crdt.clone(),
@@ -97,7 +98,7 @@ impl Tpu {
             record_stage,
             write_stage,
         };
-        (tpu, blob_receiver)
+        (tpu, entry_forwarder)
     }
 
     pub fn close(self) -> thread::Result<()> {

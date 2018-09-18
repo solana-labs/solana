@@ -2,19 +2,20 @@
 //!
 use counter::Counter;
 use crdt::{Crdt, CrdtError, NodeInfo};
+use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use ledger::Block;
 use log::Level;
 use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::BlobReceiver;
 use window::{self, SharedWindow, WindowIndex, WindowUtil, WINDOW_SIZE};
 
 fn broadcast(
@@ -22,16 +23,17 @@ fn broadcast(
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
     recycler: &BlobRecycler,
-    receiver: &BlobReceiver,
+    receiver: &Receiver<Vec<Entry>>,
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
 ) -> Result<()> {
     let id = node_info.id;
     let timer = Duration::new(1, 0);
-    let mut dq = receiver.recv_timeout(timer)?;
-    while let Ok(mut nq) = receiver.try_recv() {
-        dq.append(&mut nq);
+    let entries = receiver.recv_timeout(timer)?;
+    let mut dq = entries.to_blobs(recycler);
+    while let Ok(entries) = receiver.try_recv() {
+        dq.append(&mut entries.to_blobs(recycler));
     }
 
     // flatten deque to vec
@@ -128,7 +130,7 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         recycler: &BlobRecycler,
-        receiver: &BlobReceiver,
+        receiver: &Receiver<Vec<Entry>>,
     ) {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -176,7 +178,7 @@ impl BroadcastStage {
         window: SharedWindow,
         entry_height: u64,
         recycler: BlobRecycler,
-        receiver: BlobReceiver,
+        receiver: Receiver<Vec<Entry>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())

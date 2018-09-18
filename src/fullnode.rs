@@ -287,7 +287,7 @@ impl Fullnode {
                 // TODO: To light up PoH, uncomment the following line:
                 //let tick_duration = Some(Duration::from_millis(1000));
 
-                let (tpu, blob_receiver) = Tpu::new(
+                let (tpu, entry_receiver) = Tpu::new(
                     keypair,
                     &bank,
                     &crdt,
@@ -305,7 +305,7 @@ impl Fullnode {
                     shared_window,
                     entry_height,
                     blob_recycler.clone(),
-                    blob_receiver,
+                    entry_receiver,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
                 node_role = NodeRole::Leader(leader_state);
