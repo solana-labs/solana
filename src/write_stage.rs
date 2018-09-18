@@ -30,7 +30,6 @@ impl WriteStage {
     /// continuosly broadcast blobs of entries out
     pub fn write_and_send_entries(
         crdt: &Arc<RwLock<Crdt>>,
-        bank: &Arc<Bank>,
         ledger_writer: &mut LedgerWriter,
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
@@ -43,11 +42,7 @@ impl WriteStage {
 
         ledger_writer.write_entries(entries.clone())?;
 
-        for entry in &entries {
-            if !entry.has_more {
-                bank.register_entry_id(&entry.id);
-            }
-        }
+        inc_new_counter_info!("write_stage-write_entries", entries.len());
 
         //TODO(anatoly): real stake based voting needs to change this
         //leader simply votes if the current set of validators have voted
@@ -94,7 +89,6 @@ impl WriteStage {
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
                         &crdt,
-                        &bank,
                         &mut ledger_writer,
                         &blob_sender,
                         &blob_recycler,
