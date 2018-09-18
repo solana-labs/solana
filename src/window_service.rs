@@ -46,9 +46,7 @@ fn add_block_to_retransmit_queue(
     recycler: &BlobRecycler,
     retransmit_queue: &mut Vec<SharedBlob>,
 ) {
-    let p = b
-        .read()
-        .expect("'b' read lock in fn add_block_to_retransmit_queue");
+    let p = b.read();
     //TODO this check isn't safe against adverserial packets
     //we need to maintain a sequence window
     trace!(
@@ -73,9 +71,7 @@ fn add_block_to_retransmit_queue(
         //is dropped via a weakref to the recycler
         let nv = recycler.allocate();
         {
-            let mut mnv = nv
-                .write()
-                .expect("recycler write lock in fn add_block_to_retransmit_queue");
+            let mut mnv = nv.write();
             let sz = p.meta.size;
             mnv.meta.size = sz;
             mnv.data[..sz].copy_from_slice(&p.data[..sz]);
@@ -110,9 +106,9 @@ fn retransmit_all_leader_blocks(
             {
                 *pending_retransmits = false;
                 if w.leader_unknown {
-                    if let Some(b) = w.clone().data {
+                    if let Some(ref b) = w.data {
                         add_block_to_retransmit_queue(
-                            &b,
+                            b,
                             leader_id,
                             recycler,
                             &mut retransmit_queue,
@@ -190,7 +186,7 @@ fn recv_window(
     let mut consume_queue = Vec::new();
     for b in dq {
         let (pix, meta_size) = {
-            let p = b.write().unwrap();
+            let p = b.read();
             (p.get_index()?, p.meta.size)
         };
         pixs.push(pix);
@@ -236,7 +232,6 @@ pub fn window_service(
     crdt: Arc<RwLock<Crdt>>,
     window: SharedWindow,
     entry_height: u64,
-    recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
@@ -251,6 +246,7 @@ pub fn window_service(
             let mut times = 0;
             let id = crdt.read().unwrap().id;
             let mut pending_retransmits = false;
+            let recycler = BlobRecycler::default();
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if let Err(e) = recv_window(
@@ -317,7 +313,7 @@ mod test {
             match r.recv_timeout(timer) {
                 Ok(m) => {
                     for (i, v) in m.iter().enumerate() {
-                        assert_eq!(v.read().unwrap().get_index().unwrap() as usize, *num + i);
+                        assert_eq!(v.read().get_index().unwrap() as usize, *num + i);
                     }
                     *num += m.len();
                 }
@@ -341,12 +337,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -354,7 +345,6 @@ mod test {
             subs,
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
@@ -365,18 +355,13 @@ mod test {
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 tn.sockets.replicate.into_iter().map(Arc::new).collect();
 
-            let t_responder = responder(
-                "window_send_test",
-                blob_sockets[0].clone(),
-                resp_recycler.clone(),
-                r_responder,
-            );
+            let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -414,12 +399,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -427,7 +407,6 @@ mod test {
             subs.clone(),
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
@@ -437,18 +416,13 @@ mod test {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 tn.sockets.replicate.into_iter().map(Arc::new).collect();
-            let t_responder = responder(
-                "window_send_test",
-                blob_sockets[0].clone(),
-                resp_recycler.clone(),
-                r_responder,
-            );
+            let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -479,12 +453,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -492,7 +461,6 @@ mod test {
             subs.clone(),
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
@@ -502,18 +470,13 @@ mod test {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 tn.sockets.replicate.into_iter().map(Arc::new).collect();
-            let t_responder = responder(
-                "window_send_test",
-                blob_sockets[0].clone(),
-                resp_recycler.clone(),
-                r_responder,
-            );
+            let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
                 let b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -533,7 +496,7 @@ mod test {
                 let i = 9 + v;
                 let b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());

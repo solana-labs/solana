@@ -570,7 +570,7 @@ impl Crdt {
                 // only leader should be broadcasting
                 assert!(me.leader_id != v.id);
                 let bl = b.unwrap();
-                let blob = bl.read().expect("blob read lock in streamer::broadcast");
+                let blob = bl.read();
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!(
                     "{}: BROADCAST idx: {} sz: {} to {},{} coding: {}",
@@ -622,10 +622,9 @@ impl Crdt {
             (s.my_data().clone(), s.table.values().cloned().collect())
         };
         blob.write()
-            .unwrap()
             .set_id(me.id)
             .expect("set_id in pub fn retransmit");
-        let rblob = blob.read().unwrap();
+        let rblob = blob.read();
         let orders: Vec<_> = table
             .iter()
             .filter(|v| {
@@ -880,10 +879,10 @@ impl Crdt {
     /// randomly pick a node and ask them for updates asynchronously
     pub fn gossip(
         obj: Arc<RwLock<Self>>,
-        blob_recycler: BlobRecycler,
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        let blob_recycler = BlobRecycler::default();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || loop {
@@ -913,8 +912,8 @@ impl Crdt {
         blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         let pos = (ix as usize) % window.read().unwrap().len();
-        if let Some(blob) = &window.read().unwrap()[pos].data {
-            let mut wblob = blob.write().unwrap();
+        if let Some(ref mut blob) = &mut window.write().unwrap()[pos].data {
+            let mut wblob = blob.write();
             let blob_ix = wblob.get_index().expect("run_window_request get_index");
             if blob_ix == ix {
                 let num_retransmits = wblob.meta.num_retransmits;
@@ -937,7 +936,7 @@ impl Crdt {
 
                 // copy to avoid doing IO inside the lock
                 {
-                    let mut outblob = out.write().unwrap();
+                    let mut outblob = out.write();
                     let sz = wblob.meta.size;
                     outblob.meta.size = sz;
                     outblob.data[..sz].copy_from_slice(&wblob.data[..sz]);
@@ -1177,16 +1176,11 @@ impl Crdt {
         }
         let mut resps = Vec::new();
         for req in reqs {
-            if let Some(resp) = Self::handle_blob(
-                obj,
-                window,
-                ledger_window,
-                blob_recycler,
-                &req.read().unwrap(),
-            ) {
+            if let Some(resp) =
+                Self::handle_blob(obj, window, ledger_window, blob_recycler, &req.read())
+            {
                 resps.push(resp);
             }
-            blob_recycler.recycle(req, "run_listen");
         }
         response_sender.send(resps)?;
         Ok(())
@@ -1195,12 +1189,12 @@ impl Crdt {
         me: Arc<RwLock<Self>>,
         window: SharedWindow,
         ledger_path: Option<&str>,
-        blob_recycler: BlobRecycler,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut ledger_window = ledger_path.map(|p| LedgerWindow::open(p).unwrap());
+        let blob_recycler = BlobRecycler::default();
 
         Builder::new()
             .name("solana-listen".to_string())
@@ -1650,10 +1644,9 @@ mod tests {
         // check that the service works
         // and that it eventually produces a request for both nodes
         let (sender, reader) = channel();
-        let recycler = BlobRecycler::default();
         let exit = Arc::new(AtomicBool::new(false));
         let obj = Arc::new(RwLock::new(crdt));
-        let thread = Crdt::gossip(obj, recycler, sender, exit.clone());
+        let thread = Crdt::gossip(obj, sender, exit.clone());
         let mut one = false;
         let mut two = false;
         for _ in 0..30 {
@@ -1664,9 +1657,9 @@ mod tests {
             }
             assert!(rv.len() > 0);
             for i in rv.iter() {
-                if i.read().unwrap().meta.addr() == nxt1.contact_info.ncp {
+                if i.read().meta.addr() == nxt1.contact_info.ncp {
                     one = true;
-                } else if i.read().unwrap().meta.addr() == nxt2.contact_info.ncp {
+                } else if i.read().meta.addr() == nxt2.contact_info.ncp {
                     two = true;
                 } else {
                     //unexpected request
@@ -1774,7 +1767,7 @@ mod tests {
         );
         assert!(rv.is_none());
         let out = recycler.allocate();
-        out.write().unwrap().meta.size = 200;
+        out.write().meta.size = 200;
         window.write().unwrap()[0].data = Some(out);
         let rv = Crdt::run_window_request(
             &me,
@@ -1788,7 +1781,7 @@ mod tests {
         assert!(rv.is_some());
         let v = rv.unwrap();
         //test we copied the blob
-        assert_eq!(v.read().unwrap().meta.size, 200);
+        assert_eq!(v.read().meta.size, 200);
         let len = window.read().unwrap().len() as u64;
         let rv = Crdt::run_window_request(
             &me,
@@ -1859,7 +1852,7 @@ mod tests {
         assert!(rv.is_none());
         let blob = recycler.allocate();
         let blob_size = 200;
-        blob.write().unwrap().meta.size = blob_size;
+        blob.write().meta.size = blob_size;
         window.write().unwrap()[0].data = Some(blob);
 
         let num_requests: u32 = 64;
@@ -1873,7 +1866,7 @@ mod tests {
                 0,
                 &recycler,
             ).unwrap();
-            let blob = shared_blob.read().unwrap();
+            let blob = shared_blob.read();
             // Test we copied the blob
             assert_eq!(blob.meta.size, blob_size);
 

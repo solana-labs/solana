@@ -72,10 +72,7 @@ fn verify_packet_disabled(_packet: &Packet) -> u8 {
 }
 
 fn batch_size(batches: &[SharedPackets]) -> usize {
-    batches
-        .iter()
-        .map(|p| p.read().unwrap().packets.len())
-        .sum()
+    batches.iter().map(|p| p.read().packets.len()).sum()
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -89,14 +86,8 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     info!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
-        .map(|p| {
-            p.read()
-                .expect("'p' read lock in ed25519_verify")
-                .packets
-                .par_iter()
-                .map(verify_packet)
-                .collect()
-        }).collect();
+        .map(|p| p.read().packets.par_iter().map(verify_packet).collect())
+        .collect();
     inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
@@ -109,7 +100,6 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
         .into_par_iter()
         .map(|p| {
             p.read()
-                .expect("'p' read lock in ed25519_verify")
                 .packets
                 .par_iter()
                 .map(verify_packet_disabled)
@@ -151,11 +141,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     let mut rvs = Vec::new();
 
     for packets in batches {
-        locks.push(
-            packets
-                .read()
-                .expect("'packets' read lock in pub fn ed25519_verify"),
-        );
+        locks.push(packets.read());
     }
     let mut num = 0;
     for p in locks {
@@ -209,9 +195,8 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use packet::{Packet, Packets, SharedPackets};
+    use packet::{Packet, PacketRecycler};
     use sigverify;
-    use std::sync::RwLock;
     use transaction::Transaction;
     use transaction::{memfind, test_tx};
 
@@ -242,13 +227,18 @@ mod tests {
         }
 
         // generate packet vector
-        let mut packets = Packets::default();
-        packets.packets = Vec::new();
-        for _ in 0..n {
-            packets.packets.push(packet.clone());
-        }
-        let shared_packets = SharedPackets::new(RwLock::new(packets));
-        let batches = vec![shared_packets.clone(), shared_packets.clone()];
+        let packet_recycler = PacketRecycler::default();
+        let batches: Vec<_> = (0..2)
+            .map(|_| {
+                let packets = packet_recycler.allocate();
+                packets.write().packets.resize(0, Default::default());
+                for _ in 0..n {
+                    packets.write().packets.push(packet.clone());
+                }
+                assert_eq!(packets.read().packets.len(), n);
+                packets
+            }).collect();
+        assert_eq!(batches.len(), 2);
 
         // verify packets
         let ans = sigverify::ed25519_verify(&batches);

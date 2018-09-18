@@ -6,7 +6,7 @@ use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use log::Level;
-use packet::{PacketRecycler, Packets, SharedPackets};
+use packet::{Packets, SharedPackets};
 use rayon::prelude::*;
 use record_stage::Signal;
 use result::{Error, Result};
@@ -34,18 +34,12 @@ impl BankingStage {
     pub fn new(
         bank: Arc<Bank>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        packet_recycler: PacketRecycler,
     ) -> (Self, Receiver<Signal>) {
         let (signal_sender, signal_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
             .spawn(move || loop {
-                if let Err(e) = Self::process_packets(
-                    &bank,
-                    &verified_receiver,
-                    &signal_sender,
-                    &packet_recycler,
-                ) {
+                if let Err(e) = Self::process_packets(&bank, &verified_receiver, &signal_sender) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -75,7 +69,6 @@ impl BankingStage {
         bank: &Arc<Bank>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         signal_sender: &Sender<Signal>,
-        packet_recycler: &PacketRecycler,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
@@ -92,7 +85,7 @@ impl BankingStage {
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
-            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
+            let transactions = Self::deserialize_transactions(&msgs.read());
             reqs_len += transactions.len();
             let transactions = transactions
                 .into_iter()
@@ -113,8 +106,6 @@ impl BankingStage {
                 return Err(Error::SendError);
             }
             debug!("done process_transactions");
-
-            packet_recycler.recycle(msgs, "process_transactions");
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());

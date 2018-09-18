@@ -18,7 +18,7 @@ use std::sync::{Arc, RwLock};
 
 pub const WINDOW_SIZE: u64 = 2 * 1024;
 
-#[derive(Clone, Default)]
+#[derive(Default, Clone)]
 pub struct WindowSlot {
     pub data: Option<SharedBlob>,
     pub coding: Option<SharedBlob>,
@@ -28,7 +28,7 @@ pub struct WindowSlot {
 impl WindowSlot {
     fn blob_index(&self) -> Option<u64> {
         match self.data {
-            Some(ref blob) => blob.read().unwrap().get_index().ok(),
+            Some(ref blob) => blob.read().get_index().ok(),
             None => None,
         }
     }
@@ -194,12 +194,7 @@ impl WindowUtil for Window {
     ) {
         let w = (pix % WINDOW_SIZE) as usize;
 
-        let is_coding = {
-            let blob_r = blob
-                .read()
-                .expect("blob read lock for flogs streamer::window");
-            blob_r.is_coding()
-        };
+        let is_coding = blob.read().is_coding();
 
         // insert a newly received blob into a window slot, clearing out and recycling any previous
         //  blob unless the incoming blob is a duplicate (based on idx)
@@ -213,7 +208,7 @@ impl WindowUtil for Window {
             c_or_d: &str,
         ) -> bool {
             if let Some(old) = mem::replace(window_slot, Some(blob)) {
-                let is_dup = old.read().unwrap().get_index().unwrap() == pix;
+                let is_dup = old.read().get_index().unwrap() == pix;
                 recycler.recycle(old, "insert_blob_is_dup");
                 trace!(
                     "{}: occupied {} window slot {:}, is_dup: {}",
@@ -263,7 +258,7 @@ impl WindowUtil for Window {
             trace!("{}: k: {} consumed: {}", id, k, *consumed,);
 
             if let Some(blob) = &self[k].data {
-                if blob.read().unwrap().get_index().unwrap() < *consumed {
+                if blob.read().get_index().unwrap() < *consumed {
                     // window wrap-around, end of received
                     break;
                 }
@@ -271,7 +266,10 @@ impl WindowUtil for Window {
                 // self[k].data is None, end of received
                 break;
             }
-            consume_queue.push(self[k].data.clone().expect("clone in fn recv_window"));
+            let slot = self[k].clone();
+            if let Some(r) = slot.data {
+                consume_queue.push(r)
+            }
             *consumed += 1;
         }
     }
@@ -324,7 +322,7 @@ pub fn blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: &mut u
 }
 
 pub fn default_window() -> Window {
-    vec![WindowSlot::default(); WINDOW_SIZE as usize]
+    (0..WINDOW_SIZE).map(|_| WindowSlot::default()).collect()
 }
 
 pub fn index_blobs(
@@ -336,7 +334,7 @@ pub fn index_blobs(
     trace!("{}: INDEX_BLOBS {}", node_info.id, blobs.len());
     for (i, b) in blobs.iter().enumerate() {
         // only leader should be broadcasting
-        let mut blob = b.write().expect("'blob' write lock in crdt::index_blobs");
+        let mut blob = b.write();
         blob.set_id(node_info.id)
             .expect("set_id in pub fn broadcast");
         blob.set_index(*receive_index + i as u64)
@@ -373,7 +371,7 @@ pub fn initialized_window(
     // populate the window, offset by implied index
     let diff = cmp::max(blobs.len() as isize - window.len() as isize, 0) as usize;
     for b in blobs.into_iter().skip(diff) {
-        let ix = b.read().unwrap().get_index().expect("blob index");
+        let ix = b.read().get_index().expect("blob index");
         let pos = (ix % WINDOW_SIZE) as usize;
         trace!("{} caching {} at {}", id, ix, pos);
         assert!(window[pos].data.is_none());
@@ -387,16 +385,16 @@ pub fn new_window_from_entries(
     ledger_tail: &[Entry],
     entry_height: u64,
     node_info: &NodeInfo,
-    blob_recycler: &BlobRecycler,
 ) -> Window {
     // convert to blobs
+    let blob_recycler = BlobRecycler::default();
     let blobs = ledger_tail.to_blobs(&blob_recycler);
     initialized_window(&node_info, blobs, entry_height)
 }
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
+    use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
     use signature::Pubkey;
     use std::io;
     use std::io::Write;
@@ -412,7 +410,7 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
+                Ok(m) => *num += m.read().packets.len(),
                 e => info!("error {:?}", e),
             }
             if *num == 10 {
@@ -434,28 +432,17 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(
-            Arc::new(read),
-            exit.clone(),
-            pack_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader);
         let t_responder = {
             let (s_responder, r_responder) = channel();
-            let t_responder = responder(
-                "streamer_send_test",
-                Arc::new(send),
-                resp_recycler.clone(),
-                r_responder,
-            );
+            let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let b = resp_recycler.allocate();
+                let mut b = resp_recycler.allocate();
                 {
-                    let mut w = b.write().unwrap();
+                    let mut w = b.write();
                     w.data[0] = i as u8;
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);

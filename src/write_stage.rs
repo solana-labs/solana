@@ -176,7 +176,6 @@ impl WriteStage {
         keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        blob_recycler: BlobRecycler,
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
         entry_height: u64,
@@ -186,7 +185,6 @@ impl WriteStage {
         let t_responder = responder(
             "write_stage_vote_sender",
             Arc::new(send),
-            blob_recycler.clone(),
             vote_blob_receiver,
         );
         let (entry_sender, entry_receiver_forward) = channel();
@@ -205,6 +203,7 @@ impl WriteStage {
                     leader_rotation_interval = rcrdt.get_leader_rotation_interval();
                 }
                 let mut entry_height = entry_height;
+                let blob_recycler = BlobRecycler::default();
                 loop {
                     info!("write_stage entry height: {}", entry_height);
                     // Note that entry height is not zero indexed, it starts at 1, so the
@@ -296,7 +295,6 @@ mod tests {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use ledger::{genesis, read_ledger};
-    use packet::BlobRecycler;
     use recorder::Recorder;
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
@@ -337,7 +335,6 @@ mod tests {
         let crdt = Arc::new(RwLock::new(crdt));
         let bank = Bank::new_default(true);
         let bank = Arc::new(bank);
-        let blob_recycler = BlobRecycler::default();
 
         // Make a ledger
         let (_, leader_ledger_path) = genesis("test_leader_rotation_exit", 10_000);
@@ -352,7 +349,6 @@ mod tests {
             leader_keypair,
             bank.clone(),
             crdt.clone(),
-            blob_recycler,
             &leader_ledger_path,
             entry_receiver,
             entry_height,

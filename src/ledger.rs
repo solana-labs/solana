@@ -456,7 +456,7 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entr
 
     for blob in blobs {
         let entry = {
-            let msg = blob.read().unwrap();
+            let msg = blob.read();
             let msg_size = msg.get_size()?;
             deserialize(&msg.data()[..msg_size])
         };

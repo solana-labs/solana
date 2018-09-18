@@ -1,6 +1,5 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
-use packet::PacketRecycler;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -15,25 +14,19 @@ pub struct FetchStage {
 }
 
 impl FetchStage {
-    pub fn new(
-        sockets: Vec<UdpSocket>,
-        exit: Arc<AtomicBool>,
-        recycler: &PacketRecycler,
-    ) -> (Self, PacketReceiver) {
+    pub fn new(sockets: Vec<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, PacketReceiver) {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        Self::new_multi_socket(tx_sockets, exit, recycler)
+        Self::new_multi_socket(tx_sockets, exit)
     }
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        recycler: &PacketRecycler,
     ) -> (Self, PacketReceiver) {
         let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
-            .map(|socket| {
-                streamer::receiver(socket, exit.clone(), recycler.clone(), sender.clone())
-            }).collect();
+            .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone()))
+            .collect();
 
         (FetchStage { exit, thread_hdls }, receiver)
     }

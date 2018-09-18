@@ -49,7 +49,7 @@ impl RequestStage {
         let mut reqs_len = 0;
         let proc_start = Instant::now();
         for msgs in batch {
-            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read().unwrap())
+            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read())
                 .into_iter()
                 .filter_map(|x| x)
                 .collect();
@@ -80,11 +80,11 @@ impl RequestStage {
     pub fn new(
         request_processor: RequestProcessor,
         packet_receiver: Receiver<SharedPackets>,
-        packet_recycler: PacketRecycler,
-        blob_recycler: BlobRecycler,
     ) -> (Self, BlobReceiver) {
+        let packet_recycler = PacketRecycler::default();
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
+        let blob_recycler = BlobRecycler::default();
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-request-stage".to_string())
