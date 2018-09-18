@@ -20,7 +20,7 @@ At this point, ci/channel-info.sh should show your freshly cut release branch as
 
 ### Updating channels (i.e. "making a release")
 
-We use [github's Rleases UI](https://github.com/solana-labs/solana/releases) for tagging a release.
+We use [github's Releases UI](https://github.com/solana-labs/solana/releases) for tagging a release.
 
 1. Go [there ;)](https://github.com/solana-labs/solana/releases).
 2. Click "Draft new release".
