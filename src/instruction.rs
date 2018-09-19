@@ -2,7 +2,6 @@ use budget::Budget;
 use chrono::prelude::{DateTime, Utc};
 use payment_plan::{Payment, PaymentPlan, Witness};
 use signature::Pubkey;
-use signature::Signature;
 
 /// The type of payment plan. Each item must implement the PaymentPlan trait.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -61,7 +60,7 @@ pub enum Instruction {
 
     /// Tell the payment plan that the `NewContract` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
-    ApplySignature(Signature),
+    ApplySignature,
 
     /// Vote for a PoH that is equal to the lastid of this transaction
     NewVote(Vote),
