@@ -12,8 +12,6 @@ use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
-#[cfg(test)]
-use signature::KeypairUtil;
 use std::cmp;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
