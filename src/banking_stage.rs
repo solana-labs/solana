@@ -5,6 +5,7 @@
 use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
+use crossbeam_utils::thread::{self, ScopedJoinHandle};
 use log::Level;
 use packet::{PacketRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
@@ -15,19 +16,18 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
-use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
 /// Stores the stage's thread handle and output receiver.
-pub struct BankingStage {
+pub struct BankingStage<'a> {
     /// Handle to the stage's thread.
-    thread_hdl: JoinHandle<()>,
+    thread_hdl: ScopedJoinHandle<'a, ()>,
 }
 
-impl BankingStage {
+impl<'a> BankingStage<'a> {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     /// Discard input packets using `packet_recycler` to minimize memory
     /// allocations in a previous stage such as the `fetch_stage`.
@@ -37,23 +37,26 @@ impl BankingStage {
         packet_recycler: PacketRecycler,
     ) -> (Self, Receiver<Signal>) {
         let (signal_sender, signal_receiver) = channel();
-        let thread_hdl = Builder::new()
-            .name("solana-banking-stage".to_string())
-            .spawn(move || loop {
-                if let Err(e) = Self::process_packets(
-                    &bank,
-                    &verified_receiver,
-                    &signal_sender,
-                    &packet_recycler,
-                ) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::SendError => break,
-                        _ => error!("{:?}", e),
+        let thread_hdl = thread::scope(|scope| {
+            scope
+                .builder()
+                .name("solana-banking-stage".to_string())
+                .spawn(move || loop {
+                    if let Err(e) = Self::process_packets(
+                        &bank,
+                        &verified_receiver,
+                        &signal_sender,
+                        &packet_recycler,
+                    ) {
+                        match e {
+                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::SendError => break,
+                            _ => error!("{:?}", e),
+                        }
                     }
-                }
-            }).unwrap();
+                }).unwrap()
+        });
         (BankingStage { thread_hdl }, signal_receiver)
     }
 
@@ -135,10 +138,10 @@ impl BankingStage {
     }
 }
 
-impl Service for BankingStage {
+impl<'a> Service for BankingStage<'a> {
     type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<()> {
+    fn join(self) -> ::std::thread::Result<()> {
         self.thread_hdl.join()
     }
 }

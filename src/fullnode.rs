@@ -22,18 +22,18 @@ use tvu::Tvu;
 use untrusted::Input;
 use window;
 
-pub enum NodeRole {
-    Leader(LeaderServices),
+pub enum NodeRole<'a> {
+    Leader(LeaderServices<'a>),
     Validator(ValidatorServices),
 }
 
-pub struct LeaderServices {
-    tpu: Tpu,
+pub struct LeaderServices<'a> {
+    tpu: Tpu<'a>,
     broadcast_stage: BroadcastStage,
 }
 
-impl LeaderServices {
-    fn new(tpu: Tpu, broadcast_stage: BroadcastStage) -> Self {
+impl<'a> LeaderServices<'a> {
+    fn new(tpu: Tpu<'a>, broadcast_stage: BroadcastStage) -> Self {
         LeaderServices {
             tpu,
             broadcast_stage,
@@ -72,8 +72,8 @@ pub enum FullnodeReturnType {
     LeaderRotation,
 }
 
-pub struct Fullnode {
-    pub node_role: Option<NodeRole>,
+pub struct Fullnode<'a> {
+    pub node_role: Option<NodeRole<'a>>,
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
@@ -116,7 +116,7 @@ impl Config {
     }
 }
 
-impl Fullnode {
+impl<'a> Fullnode<'a> {
     pub fn new(
         node: Node,
         ledger_path: &str,
@@ -493,7 +493,7 @@ impl Fullnode {
     }
 }
 
-impl Service for Fullnode {
+impl<'a> Service for Fullnode<'a> {
     type JoinReturnType = Option<FullnodeReturnType>;
 
     fn join(self) -> Result<Option<FullnodeReturnType>> {
