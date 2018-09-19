@@ -1,6 +1,6 @@
 use bincode::{deserialize, serialize};
 use bs58;
-use chrono::prelude::{DateTime, Utc};
+use chrono::prelude::*;
 use clap::ArgMatches;
 use crdt::NodeInfo;
 use drone::DroneRequest;
@@ -30,13 +30,13 @@ pub enum WalletCommand {
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
-    // Pay(to, tokens, timestamp, timestamp_pubkey, witness, cancellable)
+    // Pay(to, tokens, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         i64,
         Pubkey,
         Option<DateTime<Utc>>,
         Option<Pubkey>,
-        Option<Pubkey>,
+        Option<Vec<Pubkey>>,
         Option<bool>,
     ),
     TimeElapsed(Pubkey, DateTime<Utc>),
@@ -99,9 +99,18 @@ pub fn parse_command(
             Ok(WalletCommand::AirDrop(tokens))
         }
         ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
-        ("cancel", Some(cancel_matches)) => Err(WalletError::BadParameter(
-            "Cancel not built yet".to_string(),
-        )),
+        ("cancel", Some(cancel_matches)) => {
+            let pubkey_vec = bs58::decode(cancel_matches.value_of("process-id").unwrap())
+                .into_vec()
+                .expect("base58-encoded public key");
+
+            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                eprintln!("{}", cancel_matches.usage());
+                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+            }
+            let process_id = Pubkey::new(&pubkey_vec);
+            Ok(WalletCommand::Cancel(process_id))
+        }
         ("confirm", Some(confirm_matches)) => {
             let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
                 .into_vec()
@@ -116,6 +125,7 @@ pub fn parse_command(
             }
         }
         ("pay", Some(pay_matches)) => {
+            let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
             let to = if pay_matches.is_present("to") {
                 let pubkey_vec = bs58::decode(pay_matches.value_of("to").unwrap())
                     .into_vec()
@@ -123,23 +133,114 @@ pub fn parse_command(
 
                 if pubkey_vec.len() != mem::size_of::<Pubkey>() {
                     eprintln!("{}", pay_matches.usage());
-                    Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+                    Err(WalletError::BadParameter(
+                        "Invalid to public key".to_string(),
+                    ))?;
                 }
                 Pubkey::new(&pubkey_vec)
             } else {
                 pubkey
             };
+            let timestamp = if pay_matches.is_present("timestamp") {
+                // Parse input for serde_json
+                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains("Z") {
+                    format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
+                } else {
+                    format!("\"{}\"", pay_matches.value_of("timestamp").unwrap())
+                };
+                Some(serde_json::from_str(&date_string)?)
+            } else {
+                None
+            };
+            let timestamp_pubkey = if pay_matches.is_present("timestamp-pubkey") {
+                let pubkey_vec = bs58::decode(pay_matches.value_of("timestamp-pubkey").unwrap())
+                    .into_vec()
+                    .expect("base58-encoded public key");
 
-            let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
+                if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                    eprintln!("{}", pay_matches.usage());
+                    Err(WalletError::BadParameter(
+                        "Invalid timestamp public key".to_string(),
+                    ))?;
+                }
+                Some(Pubkey::new(&pubkey_vec))
+            } else {
+                None
+            };
+            let witness_vec = if pay_matches.is_present("witness") {
+                let witnesses = pay_matches.values_of("witness").unwrap();
+                let mut collection = Vec::new();
+                for witness in witnesses {
+                    let pubkey_vec = bs58::decode(witness)
+                        .into_vec()
+                        .expect("base58-encoded public key");
 
-            Ok(WalletCommand::Pay(tokens, to, None, None, None, None))
+                    if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                        eprintln!("{}", pay_matches.usage());
+                        Err(WalletError::BadParameter(
+                            "Invalid witness public key".to_string(),
+                        ))?;
+                    }
+                    collection.push(Pubkey::new(&pubkey_vec));
+                }
+                Some(collection)
+            } else {
+                None
+            };
+            let cancelable = if pay_matches.is_present("cancelable") {
+                Some(true)
+            } else {
+                None
+            };
+
+            Ok(WalletCommand::Pay(
+                tokens,
+                to,
+                timestamp,
+                timestamp_pubkey,
+                witness_vec,
+                cancelable,
+            ))
         }
-        ("send-signature", Some(sig_matches)) => Err(WalletError::BadParameter(
-            "Send-signature not handled yet".to_string(),
-        )),
-        ("send-timestamp", Some(timestamp_matches)) => Err(WalletError::BadParameter(
-            "Send-timestamp not handled yet".to_string(),
-        )),
+        ("send-signature", Some(sig_matches)) => {
+            let pubkey_vec = bs58::decode(sig_matches.value_of("process-id").unwrap())
+                .into_vec()
+                .expect("base58-encoded public key");
+
+            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                eprintln!("{}", sig_matches.usage());
+                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+            }
+            let process_id = Pubkey::new(&pubkey_vec);
+            Ok(WalletCommand::Witness(process_id))
+        }
+        ("send-timestamp", Some(timestamp_matches)) => {
+            let pubkey_vec = bs58::decode(timestamp_matches.value_of("process-id").unwrap())
+                .into_vec()
+                .expect("base58-encoded public key");
+
+            if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+                eprintln!("{}", timestamp_matches.usage());
+                Err(WalletError::BadParameter("Invalid public key".to_string()))?;
+            }
+            let process_id = Pubkey::new(&pubkey_vec);
+            let datetime = if timestamp_matches.is_present("datetime") {
+                // Parse input for serde_json
+                let date_string = if !timestamp_matches
+                    .value_of("datetime")
+                    .unwrap()
+                    .contains("Z")
+                {
+                    format!("\"{}Z\"", timestamp_matches.value_of("datetime").unwrap())
+                } else {
+                    format!("\"{}\"", timestamp_matches.value_of("datetime").unwrap())
+                };
+                serde_json::from_str(&date_string)?
+            } else {
+                Utc::now()
+            };
+            Ok(WalletCommand::TimeElapsed(process_id, datetime))
+        }
         ("", None) => {
             println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -210,9 +311,12 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
         }
         // Cancel a contract by contract Pubkey
-        WalletCommand::Cancel(pubkey) => Err(WalletError::BadParameter(
-            "Cancel not built yet".to_string(),
-        ))?,
+        WalletCommand::Cancel(pubkey) => {
+            println!("{:?}", pubkey);
+            Err(WalletError::BadParameter(
+                "Cancel not built yet".to_string(),
+            ))?
+        }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             let params = json!(format!("{}", signature));
@@ -413,79 +517,148 @@ mod tests {
 
     #[test]
     fn test_parse_command() {
-        let pubkey = Keypair::new().pubkey();
         let test_commands = App::new("test")
+            .subcommand(SubCommand::with_name("address").about("Get your public key"))
             .subcommand(
                 SubCommand::with_name("airdrop")
                     .about("Request a batch of tokens")
                     .arg(
                         Arg::with_name("tokens")
-                            .long("tokens")
-                            .value_name("NUMBER")
+                            .index(1)
+                            .value_name("NUM")
                             .takes_value(true)
                             .required(true)
                             .help("The number of tokens to request"),
+                    ),
+            ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
+            .subcommand(
+                SubCommand::with_name("cancel")
+                    .about("Cancel a transfer")
+                    .arg(
+                        Arg::with_name("process-id")
+                            .index(1)
+                            .value_name("PROCESS_ID")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The process id of the transfer to cancel"),
+                    ),
+            ).subcommand(
+                SubCommand::with_name("confirm")
+                    .about("Confirm transaction by signature")
+                    .arg(
+                        Arg::with_name("signature")
+                            .index(1)
+                            .value_name("SIGNATURE")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The transaction signature to confirm"),
                     ),
             ).subcommand(
                 SubCommand::with_name("pay")
                     .about("Send a payment")
                     .arg(
+                        Arg::with_name("to")
+                            .index(1)
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The pubkey of recipient"),
+                    ).arg(
                         Arg::with_name("tokens")
-                            .long("tokens")
-                            .value_name("NUMBER")
+                            .index(2)
+                            .value_name("NUM")
                             .takes_value(true)
                             .required(true)
                             .help("The number of tokens to send"),
                     ).arg(
-                        Arg::with_name("to")
-                            .long("to")
+                        Arg::with_name("timestamp")
+                            .long("after")
+                            .value_name("DATETIME")
+                            .allow_hyphen_values(true)
+                            .takes_value(true)
+                            .help("A timestamp after which transaction will execute"),
+                    ).arg(
+                        Arg::with_name("timestamp-pubkey")
+                            .long("require-timestamp-from")
                             .value_name("PUBKEY")
                             .takes_value(true)
-                            .help("The pubkey of recipient"),
+                            .requires("timestamp")
+                            .help("Require timestamp from this third party"),
+                    ).arg(
+                        Arg::with_name("witness")
+                            .long("require-signature-from")
+                            .value_name("PUBKEY")
+                            .takes_value(true)
+                            .multiple(true)
+                            .use_delimiter(true)
+                            .help("Any third party signatures required to unlock the tokens"),
+                    ).arg(
+                        Arg::with_name("cancellable")
+                            .long("cancellable")
+                            .takes_value(false)
+                            .requires("witness"),
                     ),
             ).subcommand(
-                SubCommand::with_name("confirm")
-                    .about("Confirm your payment by signature")
+                SubCommand::with_name("send-signature")
+                    .about("Send a signature to authorize a transfer")
                     .arg(
-                        Arg::with_name("signature")
+                        Arg::with_name("process-id")
                             .index(1)
-                            .value_name("SIGNATURE")
+                            .value_name("PROCESS_ID")
+                            .takes_value(true)
                             .required(true)
-                            .help("The transaction signature to confirm"),
+                            .help("The process id of the transfer to authorize"),
                     ),
-            ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
-            .subcommand(SubCommand::with_name("address").about("Get your public key"));
+            ).subcommand(
+                SubCommand::with_name("send-timestamp")
+                    .about("Send a timestamp to unlock a transfer")
+                    .arg(
+                        Arg::with_name("process-id")
+                            .index(1)
+                            .value_name("PROCESS_ID")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The process id of the transfer to unlock"),
+                    ).arg(
+                        Arg::with_name("datetime")
+                            .long("date")
+                            .value_name("DATETIME")
+                            .takes_value(true)
+                            .help("Optional arbitrary timestamp to apply"),
+                    ),
+            );
+        let pubkey = Keypair::new().pubkey();
+        let pubkey_string = format!("{}", pubkey);
+        let witness0 = Keypair::new().pubkey();
+        let witness0_string = format!("{}", witness0);
+        let witness1 = Keypair::new().pubkey();
+        let witness1_string = format!("{}", witness1);
+        let dt = Utc.ymd(2018, 9, 19).and_hms(17, 30, 59);
 
+        // Test Airdrop Subcommand
         let test_airdrop = test_commands
             .clone()
-            .get_matches_from(vec!["test", "airdrop", "--tokens", "50"]);
+            .get_matches_from(vec!["test", "airdrop", "50"]);
         assert_eq!(
             parse_command(pubkey, &test_airdrop).unwrap(),
             WalletCommand::AirDrop(50)
         );
         let test_bad_airdrop = test_commands
             .clone()
-            .get_matches_from(vec!["test", "airdrop", "--tokens", "notint"]);
+            .get_matches_from(vec!["test", "airdrop", "notint"]);
         assert!(parse_command(pubkey, &test_bad_airdrop).is_err());
 
-        let pubkey_string = format!("{}", pubkey);
-        let test_pay = test_commands.clone().get_matches_from(vec![
-            "test",
-            "pay",
-            "--tokens",
-            "50",
-            "--to",
-            &pubkey_string,
-        ]);
+        // Test Cancel Subcommand
+        let test_cancel =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "cancel", &pubkey_string]);
         assert_eq!(
-            parse_command(pubkey, &test_pay).unwrap(),
-            WalletCommand::Pay(50, pubkey)
+            parse_command(pubkey, &test_cancel).unwrap(),
+            WalletCommand::Cancel(pubkey)
         );
-        let test_bad_pubkey = test_commands
-            .clone()
-            .get_matches_from(vec!["test", "pay", "--tokens", "50", "--to", "deadbeef"]);
-        assert!(parse_command(pubkey, &test_bad_pubkey).is_err());
 
+        // Test Confirm Subcommand
         let signature = Signature::new(&vec![1; 64]);
         let signature_string = format!("{:?}", signature);
         let test_confirm =
@@ -496,9 +669,124 @@ mod tests {
             parse_command(pubkey, &test_confirm).unwrap(),
             WalletCommand::Confirm(signature)
         );
-        let test_bad_signature =
-            test_commands.get_matches_from(vec!["test", "confirm", "deadbeef"]);
+        let test_bad_signature = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(pubkey, &test_bad_signature).is_err());
+
+        // Test Simple Pay Subcommand
+        let test_pay =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "pay", &pubkey_string, "50"]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay).unwrap(),
+            WalletCommand::Pay(50, pubkey, None, None, None, None)
+        );
+        let test_bad_pubkey = test_commands
+            .clone()
+            .get_matches_from(vec!["test", "pay", "deadbeef", "50"]);
+        assert!(parse_command(pubkey, &test_bad_pubkey).is_err());
+
+        // Test Pay Subcommand w/ Witness
+        let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "--require-signature-from",
+            &witness0_string,
+            "--require-signature-from",
+            &witness1_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay_multiple_witnesses).unwrap(),
+            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0, witness1]), None)
+        );
+        let test_pay_single_witness = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "--require-signature-from",
+            &witness0_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay_single_witness).unwrap(),
+            WalletCommand::Pay(50, pubkey, None, None, Some(vec![witness0]), None)
+        );
+
+        // Test Pay Subcommand w/ Timestamp
+        let test_pay_timestamp = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "--after",
+            "2018-09-19T17:30:59",
+            "--require-timestamp-from",
+            &witness0_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay_timestamp).unwrap(),
+            WalletCommand::Pay(50, pubkey, Some(dt), Some(witness0), None, None)
+        );
+
+        // Test Send-Signature Subcommand
+        let test_send_signature =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "send-signature", &pubkey_string]);
+        assert_eq!(
+            parse_command(pubkey, &test_send_signature).unwrap(),
+            WalletCommand::Witness(pubkey)
+        );
+        let test_pay_multiple_witnesses = test_commands.clone().get_matches_from(vec![
+            "test",
+            "pay",
+            &pubkey_string,
+            "50",
+            "--after",
+            "2018-09-19T17:30:59",
+            "--require-signature-from",
+            &witness0_string,
+            "--require-timestamp-from",
+            &witness0_string,
+            "--require-signature-from",
+            &witness1_string,
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_pay_multiple_witnesses).unwrap(),
+            WalletCommand::Pay(
+                50,
+                pubkey,
+                Some(dt),
+                Some(witness0),
+                Some(vec![witness0, witness1]),
+                None
+            )
+        );
+
+        // Test Send-Timestamp Subcommand
+        let test_send_timestamp = test_commands.clone().get_matches_from(vec![
+            "test",
+            "send-timestamp",
+            &pubkey_string,
+            "--date",
+            "2018-09-19T17:30:59",
+        ]);
+        assert_eq!(
+            parse_command(pubkey, &test_send_timestamp).unwrap(),
+            WalletCommand::TimeElapsed(pubkey, dt)
+        );
+        let test_bad_timestamp = test_commands.clone().get_matches_from(vec![
+            "test",
+            "send-timestamp",
+            &pubkey_string,
+            "--date",
+            "20180919T17:30:59",
+        ]);
+        assert!(parse_command(pubkey, &test_bad_timestamp).is_err());
     }
     #[test]
     fn test_process_command() {
@@ -557,7 +845,7 @@ mod tests {
             format!("{}", config.id.pubkey())
         );
 
-        config.command = WalletCommand::Pay(10, bob_pubkey);
+        config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
         let sig_response = process_command(&config);
         assert!(sig_response.is_ok());
         sleep(Duration::from_millis(100));
