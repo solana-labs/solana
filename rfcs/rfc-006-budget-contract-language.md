@@ -17,82 +17,83 @@ $ solana-wallet [common-options] [command] [command-specific options]
 #### Unconditional Immediate Transfer
 ```sh
 // Command
-$ solana-wallet pay RecipientPubkey 123
+$ solana-wallet pay <PUBKEY> 123
 
 // Return
-TxSignature
+<TX_SIGNATURE>
 ```
 
-#### Time-based Transfer
+#### Post-Dated Transfer
 ```sh
 // Command
-$ solana-wallet pay RecipientPubkey 123 \
-    --after 2018-12-24T23:59 --from TimestampPubKey
+$ solana-wallet pay <PUBKEY> 123 \
+    --after 2018-12-24T23:59 --require-timestamp-from <PUBKEY>
 
 // Return
-{signature: TxSignature, contractId: ContractId}
+{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
+```
+*`require-timestamp-from` is optional. If not provided, the transaction will expect a timestamp signed by this wallet's secret key*
+
+#### Authorized Transfer
+A third party must send a signature to unlock the tokens.
+```sh
+// Command
+$ solana-wallet pay <PUBKEY> 123 \
+    --require-signature-from <PUBKEY>
+
+// Return
+{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
 
-#### Witness-based Transfer
-A third party must issue a "witness" transaction to unlock the tokens.
+#### Post-Dated and Authorized Transfer
 ```sh
 // Command
-$ solana-wallet pay RecipientPubkey 123 \
-    --witness WitnessPubKey
+$ solana-wallet pay <PUBKEY> 123 \
+    --after 2018-12-24T23:59 --require-timestamp-from <PUBKEY> \
+    --require-signature-from <PUBKEY>
 
 // Return
-{signature: TxSignature, contractId: ContractId}
-```
-
-#### Time and Witness Transfer
-```sh
-// Command
-$ solana-wallet pay RecipientPubkey 123 \
-    --after 2018-12-24T23:59 --from TimestampPubKey \
-    --witness WitnessPubKey
-
-// Return
-{signature: TxSignature, contractId: ContractId}
+{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
 
 #### Multiple Witnesses
 ```sh
 // Command
-$ solana-wallet pay RecipientPubkey 123 \
-    --witness Witness1PubKey \
-    --witness Witness2PubKey
+$ solana-wallet pay <PUBKEY> 123 \
+    --require-signature-from <PUBKEY> \
+    --require-signature-from <PUBKEY>
 
 // Return
-{signature: TxSignature, contractId: ContractId}
+{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
 
-#### Cancellable Witnesses
+#### Cancelable Transfer
 ```sh
 // Command
-$ solana-wallet pay RecipientPubkey 123 \
-    --witness WitnessPubKey \
-    --cancellable \
+$ solana-wallet pay <PUBKEY> 123 \
+    --require-signature-from <PUBKEY> \
+    --cancelable
 
 // Return
-{signature: TxSignature, contractId: ContractId}
+{signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
 ```
 
 #### Cancel Transfer
 ```sh
 // Command
-$ solana-wallet cancel ContractId
+$ solana-wallet cancel <PROCESS_ID>
 
 // Return
-TxSignature
+<TX_SIGNATURE>
 ```
 
-#### Witness Transfer
+#### Send Signature
 ```sh
 // Command
-$ solana-wallet apply ContractId --witness
+$ solana-wallet send-signature <PROCESS_ID>
 
 // Return
-TxSignature
+<TX_SIGNATURE>
 ```
 
 #### Indicate Elapsed Time
@@ -100,19 +101,19 @@ TxSignature
 Use the current system time:
 ```sh
 // Command
-$ solana-wallet apply ContractId --timestamp
+$ solana-wallet send-timestamp <PROCESS_ID>
 
 // Return
-TxSignature
+<TX_SIGNATURE>
 ```
 
 Or specify some other arbitrary timestamp:
 ```sh
 // Command
-$ solana-wallet apply ContractId --timestamp 2018-12-24T23:59
+$ solana-wallet send-timestamp <PROCESS_ID> --date 2018-12-24T23:59
 
 // Return
-TxSignature
+<TX_SIGNATURE>
 ```
 
 
