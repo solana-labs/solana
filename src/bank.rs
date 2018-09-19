@@ -741,7 +741,7 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    // This how fees are dealt in contracts that error out
+    // Test how fees are dealt in contracts that error out.
     // This test verifies current incorrect behavior. Contracts that cause
     // execution on chain should pay the fee.
     #[test]
