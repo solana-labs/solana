@@ -49,21 +49,42 @@ pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr
 }
 
 pub fn get_ip_addr() -> Option<IpAddr> {
-    for iface in datalink::interfaces() {
+    let mut ifaces = datalink::interfaces();
+
+    // put eth0 and wifi0, etc. up front of our list of candidates
+    ifaces.sort_by(|a, b| {
+        a.name
+            .chars()
+            .last()
+            .unwrap()
+            .cmp(&b.name.chars().last().unwrap())
+    });
+
+    for iface in ifaces {
         for p in iface.ips {
-            if !p.ip().is_loopback() && !p.ip().is_multicast() {
-                match p.ip() {
-                    IpAddr::V4(addr) => {
-                        if !addr.is_link_local() {
-                            return Some(p.ip());
-                        }
+            trace!("get_ip_addr considering iface {} {}", iface.name, p);
+            if p.ip().is_loopback() {
+                trace!("    loopback");
+                continue;
+            }
+            if p.ip().is_multicast() {
+                trace!("    multicast");
+                continue;
+            }
+            match p.ip() {
+                IpAddr::V4(addr) => {
+                    if addr.is_link_local() {
+                        trace!("    link local");
+                        continue;
                     }
-                    IpAddr::V6(_addr) => {
-                        // Select an ipv6 address if the config is selected
-                        #[cfg(feature = "ipv6")]
-                        {
-                            return Some(p.ip());
-                        }
+                    trace!("    using ==> {}", p.ip());
+                    return Some(p.ip());
+                }
+                IpAddr::V6(_addr) => {
+                    // Select an ipv6 address if the config is selected
+                    #[cfg(feature = "ipv6")]
+                    {
+                        return Some(p.ip());
                     }
                 }
             }
