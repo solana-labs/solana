@@ -546,7 +546,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     val_fullnode.close()?;
     leader_fullnode.close()?;
-    remove_dir_all(ledger_path)?;
+    remove_dir_all(&ledger_path)?;
     remove_dir_all(stale_ledger_path)?;
 
     Ok(())
@@ -640,31 +640,25 @@ fn test_multi_node_dynamic_network() {
     let keypairs: Vec<_> = t1.into_iter().map(|t| t.join().unwrap()).collect();
     info!("keypairs created");
 
-    let t2: Vec<_> = keypairs
+    let mut validators: Vec<_> = keypairs
         .into_iter()
         .map(|keypair| {
             let leader_data = leader_data.clone();
             let ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_dynamic_network");
             ledger_paths.push(ledger_path.clone());
-            Builder::new()
-                .name("validator-launch-thread".to_string())
-                .spawn(move || {
-                    let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-                    let rd = validator.info.clone();
-                    info!("starting {} {}", keypair.pubkey(), rd.id);
-                    let val = Fullnode::new(
-                        validator,
-                        &ledger_path,
-                        keypair,
-                        Some(leader_data.contact_info.ncp),
-                        true,
-                        None,
-                    );
-                    (rd, val)
-                }).unwrap()
+            let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
+            let rd = validator.info.clone();
+            info!("starting {} {}", keypair.pubkey(), rd.id);
+            let val = Fullnode::new(
+                validator,
+                &ledger_path,
+                keypair,
+                Some(leader_data.contact_info.ncp),
+                true,
+                None,
+            );
+            (rd, val)
         }).collect();
-
-    let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
     let mut client = mk_client(&leader_data);
     let mut last_finality = client.get_finality();
