@@ -6,9 +6,7 @@
 //! The resulting stream of entries represents ordered transactions in time.
 
 use bank::Bank;
-use counter::Counter;
 use entry::Entry;
-use log::Level;
 use recorder::Recorder;
 use service::Service;
 use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
@@ -96,7 +94,6 @@ impl RecordStage {
             }
         }
 
-        let entries_len = entries.len();
         sender.send(entries).or(Err(()))?;
         Ok(())
     }
