@@ -7,12 +7,14 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::crdt::FULLNODE_PORT_RANGE;
 use solana::fullnode::Config;
+use solana::logger;
 use solana::netutil::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
 use solana::signature::read_pkcs8;
 use std::io;
 use std::net::SocketAddr;
 
 fn main() {
+    logger::setup();
     let matches = App::new("fullnode-config")
         .version(crate_version!())
         .arg(
