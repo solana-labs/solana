@@ -674,7 +674,7 @@ mod test {
             print!("window({:>w$}): ", i, w = 2);
             if w.data.is_some() {
                 let window_l1 = w.data.clone().unwrap();
-                let window_l2 = window_l1.read().unwrap();
+                let window_l2 = window_l1.read();
                 print!(
                     "data index: {:?} meta.size: {} data: ",
                     window_l2.get_index(),
@@ -690,7 +690,7 @@ mod test {
             print!("window({:>w$}): ", i, w = 2);
             if w.coding.is_some() {
                 let window_l1 = w.coding.clone().unwrap();
-                let window_l2 = window_l1.read().unwrap();
+                let window_l2 = window_l1.read();
                 print!(
                     "coding index: {:?} meta.size: {} data: ",
                     window_l2.get_index(),
@@ -724,7 +724,7 @@ mod test {
         for i in 0..num_blobs {
             let b = blob_recycler.allocate();
             let b_ = b.clone();
-            let mut w = b.write().unwrap();
+            let mut w = b.write();
             // generate a random length, multiple of 4 between 8 and 32
             let data_len = if i == 3 {
                 BLOB_DATA_SIZE
@@ -756,7 +756,7 @@ mod test {
         );
         assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
-            let idx = b.read().unwrap().get_index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().get_index().unwrap() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
@@ -767,11 +767,11 @@ mod test {
         for i in 0..num_blobs {
             if let Some(b) = &window[i].data {
                 let size = {
-                    let b_l = b.read().unwrap();
+                    let b_l = b.read();
                     b_l.meta.size
                 } as usize;
 
-                let mut b_l = b.write().unwrap();
+                let mut b_l = b.write();
                 for i in size..BLOB_SIZE {
                     b_l.data[i] = thread_rng().gen();
                 }
@@ -784,7 +784,7 @@ mod test {
         for _ in 0..WINDOW_SIZE * 10 {
             let blob = blob_recycler.allocate();
             {
-                let mut b_l = blob.write().unwrap();
+                let mut b_l = blob.write();
 
                 for i in 0..BLOB_SIZE {
                     b_l.data[i] = thread_rng().gen();
@@ -815,7 +815,7 @@ mod test {
 
         for slot in &window {
             if let Some(blob) = &slot.data {
-                let blob_r = blob.read().unwrap();
+                let blob_r = blob.read();
                 assert!(!blob_r.is_coding());
             }
         }
@@ -869,9 +869,9 @@ mod test {
             // Check the result, block is here to drop locks
 
             let window_l = window[erase_offset].data.clone().unwrap();
-            let window_l2 = window_l.read().unwrap();
+            let window_l2 = window_l.read();
             let ref_l = refwindow.clone().unwrap();
-            let ref_l2 = ref_l.read().unwrap();
+            let ref_l2 = ref_l.read();
 
             assert_eq!(window_l2.meta.size, ref_l2.meta.size);
             assert_eq!(
@@ -918,9 +918,9 @@ mod test {
         {
             // Check the result, block is here to drop locks
             let window_l = window[erase_offset].data.clone().unwrap();
-            let window_l2 = window_l.read().unwrap();
+            let window_l2 = window_l.read();
             let ref_l = refwindow.clone().unwrap();
-            let ref_l2 = ref_l.read().unwrap();
+            let ref_l2 = ref_l.read();
             assert_eq!(window_l2.meta.size, ref_l2.meta.size);
             assert_eq!(
                 window_l2.data[..window_l2.meta.size],
@@ -942,7 +942,6 @@ mod test {
         let refwindow = window[offset].data.clone();
         if let Some(blob) = &window[erase_offset].data {
             blob.write()
-                .unwrap()
                 .set_index(erase_offset as u64)
                 .unwrap(); // this also writes to refwindow...
         }
@@ -964,7 +963,6 @@ mod test {
         // fix refwindow, we wrote to it above...
         if let Some(blob) = &refwindow {
             blob.write()
-                .unwrap()
                 .set_index((erase_offset + WINDOW_SIZE) as u64)
                 .unwrap(); // this also writes to refwindow...
         }
@@ -972,9 +970,9 @@ mod test {
         {
             // Check the result, block is here to drop locks
             let window_l = window[erase_offset].data.clone().unwrap();
-            let window_l2 = window_l.read().unwrap();
+            let window_l2 = window_l.read();
             let ref_l = refwindow.clone().unwrap();
-            let ref_l2 = ref_l.read().unwrap();
+            let ref_l2 = ref_l.read();
             assert_eq!(window_l2.meta.size, ref_l2.meta.size);
             assert_eq!(
                 window_l2.data[..window_l2.meta.size],

@@ -325,12 +325,12 @@ pub fn default_window() -> Window {
 
 pub fn index_blobs(
     node_info: &NodeInfo,
-    blobs: &mut [SharedBlob],
+    blobs: &[SharedBlob],
     receive_index: &mut u64,
 ) -> Result<()> {
     // enumerate all the blobs, those are the indices
     trace!("{}: INDEX_BLOBS {}", node_info.id, blobs.len());
-    for (i, b) in blobs.iter_mut().enumerate() {
+    for (i, b) in blobs.iter().enumerate() {
         // only leader should be broadcasting
         let mut blob = b.write();
         blob.set_id(node_info.id)
@@ -349,7 +349,7 @@ pub fn index_blobs(
 /// * `entry_height` - current entry height
 pub fn initialized_window(
     node_info: &NodeInfo,
-    mut blobs: Vec<SharedBlob>,
+    blobs: Vec<SharedBlob>,
     entry_height: u64,
 ) -> Window {
     let mut window = default_window();
@@ -364,7 +364,7 @@ pub fn initialized_window(
 
     // Index the blobs
     let mut received = entry_height - blobs.len() as u64;
-    index_blobs(&node_info, &mut blobs, &mut received).expect("index blobs for initial window");
+    index_blobs(&node_info, &blobs, &mut received).expect("index blobs for initial window");
 
     // populate the window, offset by implied index
     let diff = cmp::max(blobs.len() as isize - window.len() as isize, 0) as usize;

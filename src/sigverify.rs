@@ -144,7 +144,6 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
         locks.push(
             packets
                 .read()
-                .expect("'packets' read lock in pub fn ed25519_verify"),
         );
     }
     let mut num = 0;
