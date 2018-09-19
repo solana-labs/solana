@@ -84,7 +84,7 @@ impl Entry {
     ) -> SharedBlob {
         let blob = blob_recycler.allocate();
         {
-            let mut blob_w = blob.write().unwrap();
+            let mut blob_w = blob.write();
             let pos = {
                 let mut out = Cursor::new(blob_w.data_mut());
                 serialize_into(&mut out, &self).expect("failed to serialize output");

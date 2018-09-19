@@ -62,7 +62,6 @@ impl WriteStage {
         keypair: Keypair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        blob_recycler: BlobRecycler,
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> (Self, Receiver<Vec<Entry>>) {
@@ -71,7 +70,6 @@ impl WriteStage {
         let t_responder = responder(
             "write_stage_vote_sender",
             Arc::new(send),
-            blob_recycler.clone(),
             vote_blob_receiver,
         );
         let (entry_sender, entry_receiver_forward) = channel();
@@ -83,6 +81,7 @@ impl WriteStage {
                 let mut last_vote = 0;
                 let mut last_valid_validator_timestamp = 0;
                 let id = crdt.read().unwrap().id;
+                let blob_recycler = BlobRecycler::default();
                 loop {
                     if let Err(e) = Self::write_and_send_entries(
                         &crdt,

@@ -17,7 +17,6 @@ use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
 use solana::ncp::Ncp;
-use solana::packet::BlobRecycler;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
@@ -695,14 +694,7 @@ fn converge(
     spy_crdt.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_crdt));
     let window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(
-        &spy_ref,
-        window,
-        BlobRecycler::default(),
-        None,
-        gossip_socket,
-        exit_signal.clone(),
-    );
+    let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {

@@ -220,14 +220,12 @@ impl Fullnode {
         }
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-        let mut blob_recycler = BlobRecycler::default();
-        blob_recycler.set_name("fullnode::Blob");
+        let blob_recycler = BlobRecycler::default();
 
         let rpu = Rpu::new(
             &bank,
             node.sockets.requests,
             node.sockets.respond,
-            &blob_recycler,
             exit.clone(),
         );
 
@@ -252,7 +250,6 @@ impl Fullnode {
         let ncp = Ncp::new(
             &crdt,
             shared_window.clone(),
-            blob_recycler.clone(),
             ledger_path,
             node.sockets.gossip,
             exit.clone(),
@@ -270,7 +267,6 @@ impl Fullnode {
                     entry_height,
                     crdt,
                     shared_window,
-                    blob_recycler.clone(),
                     node.sockets.replicate,
                     node.sockets.repair,
                     node.sockets.retransmit,
@@ -293,7 +289,6 @@ impl Fullnode {
                     &crdt,
                     tick_duration,
                     node.sockets.transaction,
-                    &blob_recycler,
                     exit.clone(),
                     ledger_path,
                     sigverify_disabled,
@@ -304,7 +299,6 @@ impl Fullnode {
                     crdt,
                     shared_window,
                     entry_height,
-                    blob_recycler.clone(),
                     entry_receiver,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
