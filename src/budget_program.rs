@@ -332,6 +332,7 @@ mod test {
             to.pubkey(),
             contract.pubkey(),
             dt,
+            from.pubkey(),
             1,
             Hash::default(),
         );
@@ -405,6 +406,7 @@ mod test {
             to.pubkey(),
             contract.pubkey(),
             dt,
+            from.pubkey(),
             1,
             Hash::default(),
         );
@@ -516,8 +518,15 @@ mod test {
             ]
         );
 
-        let tx =
-            Transaction::budget_new_on_date(&keypair, to, contract, date, 192, Hash::default());
+        let tx = Transaction::budget_new_on_date(
+            &keypair,
+            to,
+            contract,
+            date,
+            keypair.pubkey(),
+            192,
+            Hash::default(),
+        );
         assert_eq!(
             tx.userdata,
             vec![
