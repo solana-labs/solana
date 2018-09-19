@@ -307,7 +307,7 @@ mod tests {
         my_id: Pubkey,
         write_stage: WriteStage,
         entry_sender: Sender<Vec<Entry>>,
-        write_stage_entry_receiver: Receiver<Vec<Entry>>,
+        _write_stage_entry_receiver: Receiver<Vec<Entry>>,
         crdt: Arc<RwLock<Crdt>>,
         bank: Arc<Bank>,
         leader_ledger_path: String,
@@ -345,7 +345,7 @@ mod tests {
         let (entry_sender, entry_receiver) = channel();
 
         // Start up the write stage
-        let (write_stage, write_stage_entry_receiver) = WriteStage::new(
+        let (write_stage, _write_stage_entry_receiver) = WriteStage::new(
             leader_keypair,
             bank.clone(),
             crdt.clone(),
@@ -358,7 +358,9 @@ mod tests {
             my_id,
             write_stage,
             entry_sender,
-            write_stage_entry_receiver,
+            // Need to keep this alive, otherwise the write_stage will detect ChannelClosed
+            // and shut down
+            _write_stage_entry_receiver,
             crdt,
             bank,
             leader_ledger_path,
