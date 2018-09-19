@@ -17,8 +17,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use streamer::responder;
+use timing::{duration_as_ms, duration_as_s};
 use vote_stage::send_leader_vote;
 
 pub struct WriteStage {
@@ -34,26 +35,65 @@ impl WriteStage {
         entry_sender: &Sender<Vec<Entry>>,
         entry_receiver: &Receiver<Vec<Entry>>,
     ) -> Result<()> {
+        let mut ventries = Vec::new();
         let entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
+        let mut num_entries = entries.len();
+        let mut num_txs = 0;
 
-        let votes = &entries.votes();
-        crdt.write().unwrap().insert_votes(&votes);
-
-        ledger_writer.write_entries(entries.clone())?;
-
-        inc_new_counter_info!("write_stage-write_entries", entries.len());
-
-        //TODO(anatoly): real stake based voting needs to change this
-        //leader simply votes if the current set of validators have voted
-        //on a valid last id
-
-        trace!("New entries? {}", entries.len());
-        if !entries.is_empty() {
-            inc_new_counter_info!("write_stage-recv_vote", votes.len());
-            inc_new_counter_info!("write_stage-broadcast_entries", entries.len());
-            trace!("broadcasting {}", entries.len());
-            entry_sender.send(entries)?;
+        ventries.push(entries);
+        while let Ok(more) = entry_receiver.try_recv() {
+            num_entries += more.len();
+            ventries.push(more);
         }
+
+        info!("write_stage entries: {}", num_entries);
+
+        let to_blobs_total = 0;
+        let mut blob_send_total = 0;
+        let mut register_entry_total = 0;
+        let mut crdt_votes_total = 0;
+
+        let start = Instant::now();
+        for _ in 0..ventries.len() {
+            let entries = ventries.pop().unwrap();
+            for e in entries.iter() {
+                num_txs += e.transactions.len();
+            }
+            let crdt_votes_start = Instant::now();
+            let votes = &entries.votes();
+            crdt.write().unwrap().insert_votes(&votes);
+            crdt_votes_total += duration_as_ms(&crdt_votes_start.elapsed());
+
+            ledger_writer.write_entries(entries.clone())?;
+
+            let register_entry_start = Instant::now();
+            register_entry_total += duration_as_ms(&register_entry_start.elapsed());
+
+            inc_new_counter_info!("write_stage-write_entries", entries.len());
+
+            //TODO(anatoly): real stake based voting needs to change this
+            //leader simply votes if the current set of validators have voted
+            //on a valid last id
+
+            trace!("New entries? {}", entries.len());
+            let blob_send_start = Instant::now();
+            if !entries.is_empty() {
+                inc_new_counter_info!("write_stage-recv_vote", votes.len());
+                inc_new_counter_info!("write_stage-broadcast_entries", entries.len());
+                trace!("broadcasting {}", entries.len());
+                entry_sender.send(entries)?;
+            }
+
+            blob_send_total += duration_as_ms(&blob_send_start.elapsed());
+        }
+        info!("done write_stage txs: {} time {} ms txs/s: {} to_blobs_total: {} register_entry_total: {} blob_send_total: {} crdt_votes_total: {}",
+              num_txs, duration_as_ms(&start.elapsed()),
+              num_txs as f32 / duration_as_s(&start.elapsed()),
+              to_blobs_total,
+              register_entry_total,
+              blob_send_total,
+              crdt_votes_total);
+
         Ok(())
     }
 

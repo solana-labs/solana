@@ -7,7 +7,8 @@ use entry::Entry;
 use erasure;
 use ledger::Block;
 use log::Level;
-use packet::BlobRecycler;
+use packet::{BlobRecycler, SharedBlobs};
+use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
@@ -15,7 +16,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use timing::duration_as_ms;
 use window::{self, SharedWindow, WindowIndex, WindowUtil, WINDOW_SIZE};
 
 fn broadcast(
@@ -31,20 +33,34 @@ fn broadcast(
     let id = node_info.id;
     let timer = Duration::new(1, 0);
     let entries = receiver.recv_timeout(timer)?;
-    let mut dq = entries.to_blobs(recycler);
+    let mut num_entries = entries.len();
+    let mut ventries = Vec::new();
+    ventries.push(entries);
     while let Ok(entries) = receiver.try_recv() {
-        dq.append(&mut entries.to_blobs(recycler));
+        num_entries += entries.len();
+        ventries.push(entries);
     }
+
+    let to_blobs_start = Instant::now();
+    let dq: SharedBlobs = ventries
+        .into_par_iter()
+        .flat_map(|p| p.to_blobs(recycler))
+        .collect();
+
+    let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
     // flatten deque to vec
     let blobs_vec: Vec<_> = dq.into_iter().collect();
 
+    let blobs_chunking = Instant::now();
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
     let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
+    let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
 
     trace!("{}", window.read().unwrap().print(&id, *receive_index));
 
+    let broadcast_start = Instant::now();
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
@@ -116,6 +132,13 @@ fn broadcast(
             *receive_index,
         )?;
     }
+    let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
+
+    info!(
+        "broadcast: {} entries, blob time {} chunking time {} broadcast time {}",
+        num_entries, to_blobs_elapsed, chunking_elapsed, broadcast_elapsed
+    );
+
     Ok(())
 }
 
