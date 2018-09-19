@@ -439,8 +439,8 @@ mod test {
         ]);
         let date =
             DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2016, 7, 8).and_hms(9, 10, 11), Utc);
+        let dateIso8601 = "2016-07-08T09:10:11Z";
 
-        // NewContract(Contract)
         let tx = Transaction::budget_new(&keypair, to, 192, Hash::default());
         assert_eq!(
             tx.userdata,
@@ -451,7 +451,6 @@ mod test {
             ]
         );
 
-        // NewContract(Contract)
         let tx =
             Transaction::budget_new_on_date(&keypair, to, contract, date, 192, Hash::default());
         assert_eq!(
@@ -470,7 +469,7 @@ mod test {
             ]
         );
 
-        // ApplyTimestamp
+        // ApplyTimestamp(date)
         let tx = Transaction::budget_new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -478,13 +477,9 @@ mod test {
             date,
             Hash::default(),
         );
-        assert_eq!(
-            tx.userdata,
-            vec![
-                1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 50, 48, 49, 54, 45, 48, 55, 45, 48, 56, 84,
-                48, 57, 58, 49, 48, 58, 49, 49, 90
-            ]
-        );
+        let mut expectedUserdata = vec![1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0];
+        expectedUserdata.extend(dateIso8601.as_bytes());
+        assert_eq!(tx.userdata, expectedUserdata,);
 
         // ApplySignature
         let tx = Transaction::budget_new_signature(&keypair, keypair.pubkey(), to, Hash::default());
