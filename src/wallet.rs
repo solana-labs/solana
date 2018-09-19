@@ -30,7 +30,7 @@ pub enum WalletCommand {
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
-    // Pay(to, tokens, timestamp, timestamp_pubkey, witness(es), cancelable)
+    // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         i64,
         Pubkey,
@@ -224,7 +224,7 @@ pub fn parse_command(
                 Err(WalletError::BadParameter("Invalid public key".to_string()))?;
             }
             let process_id = Pubkey::new(&pubkey_vec);
-            let datetime = if timestamp_matches.is_present("datetime") {
+            let dt = if timestamp_matches.is_present("datetime") {
                 // Parse input for serde_json
                 let date_string = if !timestamp_matches
                     .value_of("datetime")
@@ -239,7 +239,7 @@ pub fn parse_command(
             } else {
                 Utc::now()
             };
-            Ok(WalletCommand::TimeElapsed(process_id, datetime))
+            Ok(WalletCommand::TimeElapsed(process_id, dt))
         }
         ("", None) => {
             println!("{}", matches.usage());
@@ -312,10 +312,35 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => {
-            println!("{:?}", pubkey);
-            Err(WalletError::BadParameter(
-                "Cancel not built yet".to_string(),
-            ))?
+            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+            if result.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received bad last_id".to_string(),
+                ))?
+            }
+            let last_id_str = result.as_str().unwrap();
+            let last_id_vec = bs58::decode(last_id_str)
+                .into_vec()
+                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+            let last_id = Hash::new(&last_id_vec);
+
+            let tx =
+                Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
+            let serialized = serialize(&tx).unwrap();
+            let params = json!(serialized);
+            let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
+                &config.rpc_addr,
+                2,
+                Some(params),
+            )?;
+            if signature.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?
+            }
+            let signature_str = signature.as_str().unwrap();
+
+            Ok(format!("{}", signature_str))
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
@@ -337,7 +362,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
         }
         // If client has positive balance, pay tokens to another address
-        WalletCommand::Pay(tokens, to, _, _, _, _) => {
+        WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
             let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
             if result.as_str().is_none() {
                 Err(WalletError::RpcRequestError(
@@ -350,7 +375,77 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
             let last_id = Hash::new(&last_id_vec);
 
-            let tx = Transaction::new(&config.id, to, tokens, last_id);
+            if timestamp == None && *witnesses == None {
+                let tx = Transaction::new(&config.id, to, tokens, last_id);
+                let serialized = serialize(&tx).unwrap();
+                let params = json!(serialized);
+                let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
+                    &config.rpc_addr,
+                    2,
+                    Some(params),
+                )?;
+                if signature.as_str().is_none() {
+                    Err(WalletError::RpcRequestError(
+                        "Received result of an unexpected type".to_string(),
+                    ))?
+                }
+                let signature_str = signature.as_str().unwrap();
+
+                Ok(format!("{}", signature_str))
+            } else if *witnesses == None {
+                let dt = timestamp.unwrap();
+                let dt_pubkey = match timestamp_pubkey {
+                    Some(pubkey) => pubkey,
+                    None => config.id.pubkey(),
+                };
+                let process_id = Keypair::new().pubkey();
+                let tx = Transaction::budget_new_on_date(
+                    &config.id, to, process_id, dt, dt_pubkey, tokens, last_id,
+                );
+                let serialized = serialize(&tx).unwrap();
+                let params = json!(serialized);
+                let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
+                    &config.rpc_addr,
+                    2,
+                    Some(params),
+                )?;
+                if signature.as_str().is_none() {
+                    Err(WalletError::RpcRequestError(
+                        "Received result of an unexpected type".to_string(),
+                    ))?
+                }
+                let signature_str = signature.as_str().unwrap();
+                Ok(json!({
+                    "signature": signature_str,
+                    "processId": process_id,
+                }).to_string())
+            } else if timestamp == None {
+                Ok("Witness Txs not yet handled".to_string())
+            } else {
+                Ok("Witness Txs not yet handled".to_string())
+            }
+        }
+        // Apply time elapsed to contract
+        WalletCommand::TimeElapsed(pubkey, dt) => {
+            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+            if result.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received bad last_id".to_string(),
+                ))?
+            }
+            let last_id_str = result.as_str().unwrap();
+            let last_id_vec = bs58::decode(last_id_str)
+                .into_vec()
+                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+            let last_id = Hash::new(&last_id_vec);
+
+            let tx = Transaction::budget_new_timestamp(
+                &config.id,
+                pubkey,
+                config.id.pubkey(),
+                dt,
+                last_id,
+            );
             let serialized = serialize(&tx).unwrap();
             let params = json!(serialized);
             let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
@@ -367,14 +462,38 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             Ok(signature_str.to_string())
         }
-        // Apply time elapsed to contract
-        WalletCommand::TimeElapsed(pubkey, timestamp) => Err(WalletError::BadParameter(
-            "TimeElapsed not built yet".to_string(),
-        ))?,
         // Apply witness signature to contract
-        WalletCommand::Witness(pubkey) => Err(WalletError::BadParameter(
-            "Witness not built yet".to_string(),
-        ))?,
+        WalletCommand::Witness(pubkey) => {
+            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+            if result.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received bad last_id".to_string(),
+                ))?
+            }
+            let last_id_str = result.as_str().unwrap();
+            let last_id_vec = bs58::decode(last_id_str)
+                .into_vec()
+                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+            let last_id = Hash::new(&last_id_vec);
+
+            let tx =
+                Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
+            let serialized = serialize(&tx).unwrap();
+            let params = json!(serialized);
+            let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
+                &config.rpc_addr,
+                2,
+                Some(params),
+            )?;
+            if signature.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?
+            }
+            let signature_str = signature.as_str().unwrap();
+
+            Ok(format!("{}", signature_str))
+        }
     }
 }
 

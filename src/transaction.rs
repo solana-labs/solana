@@ -152,12 +152,13 @@ impl Transaction {
         to: Pubkey,
         contract: Pubkey,
         dt: DateTime<Utc>,
+        dt_pubkey: Pubkey,
         tokens: i64,
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
         let budget = Budget::Or(
-            (Condition::Timestamp(dt, from), Payment { tokens, to }),
+            (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
         let instruction = Instruction::NewContract(Contract { budget, tokens });
