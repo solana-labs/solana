@@ -153,7 +153,7 @@ pub fn send_leader_vote(
     Ok(())
 }
 
-fn send_validator_vote(
+pub fn send_validator_vote(
     bank: &Arc<Bank>,
     keypair: &Arc<Keypair>,
     crdt: &Arc<RwLock<Crdt>>,
