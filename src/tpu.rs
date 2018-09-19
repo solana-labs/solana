@@ -47,16 +47,16 @@ pub enum TpuReturnType {
     LeaderRotation,
 }
 
-pub struct Tpu {
+pub struct Tpu<'a> {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
-    banking_stage: BankingStage,
+    banking_stage: BankingStage<'a>,
     record_stage: RecordStage,
     write_stage: WriteStage,
     exit: Arc<AtomicBool>,
 }
 
-impl Tpu {
+impl<'a> Tpu<'a> {
     pub fn new(
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
@@ -119,7 +119,7 @@ impl Tpu {
     }
 }
 
-impl Service for Tpu {
+impl<'a> Service for Tpu<'a> {
     type JoinReturnType = Option<TpuReturnType>;
 
     fn join(self) -> thread::Result<(Option<TpuReturnType>)> {

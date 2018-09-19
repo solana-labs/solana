@@ -69,6 +69,7 @@ extern crate byteorder;
 extern crate bytes;
 extern crate chrono;
 extern crate clap;
+extern crate crossbeam_utils;
 extern crate dirs;
 extern crate generic_array;
 extern crate itertools;

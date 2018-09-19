@@ -75,6 +75,7 @@ byteorder = "1.2.1"
 bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
+crossbeam-utils = "0.5"
 dirs = "1.0.2"
 env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
