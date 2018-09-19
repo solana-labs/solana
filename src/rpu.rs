@@ -28,18 +28,17 @@ use packet::{BlobRecycler, PacketRecycler};
 use request_processor::RequestProcessor;
 use request_stage::RequestStage;
 use service::Service;
-use std::mem;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use streamer;
 
 pub struct Rpu {
     request_stage: RequestStage,
     thread_hdls: Vec<JoinHandle<()>>,
-    request_processor: Arc<RwLock<RequestProcessor>>,
+    exit: Arc<AtomicBool>,
 }
 
 impl Rpu {
@@ -48,21 +47,21 @@ impl Rpu {
         requests_socket: UdpSocket,
         respond_socket: UdpSocket,
         blob_recycler: &BlobRecycler,
-        exit: Arc<AtomicBool>,
     ) -> Self {
+        let exit = Arc::new(AtomicBool::new(false));
         let mut packet_recycler = PacketRecycler::default();
         packet_recycler.set_name("rpu::Packet");
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(
             Arc::new(requests_socket),
-            exit,
+            exit.clone(),
             packet_recycler.clone(),
             packet_sender,
         );
 
-        let request_processor = Arc::new(RwLock::new(RequestProcessor::new(bank.clone())));
+        let request_processor = RequestProcessor::new(bank.clone());
         let (request_stage, blob_receiver) = RequestStage::new(
-            request_processor.clone(),
+            request_processor,
             packet_receiver,
             packet_recycler.clone(),
             blob_recycler.clone(),
@@ -80,13 +79,17 @@ impl Rpu {
         Rpu {
             thread_hdls,
             request_stage,
-            request_processor,
+            exit,
         }
     }
 
-    pub fn set_new_bank(&self, new_bank: Arc<Bank>) {
-        let mut w_request_procesor = self.request_processor.write().unwrap();
-        mem::replace(&mut *w_request_procesor, RequestProcessor::new(new_bank));
+    pub fn exit(&self) {
+        self.exit.store(true, Ordering::Relaxed);
+    }
+
+    pub fn close(self) -> thread::Result<()> {
+        self.exit();
+        self.join()
     }
 }
 

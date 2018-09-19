@@ -76,7 +76,7 @@ pub struct Fullnode {
     pub node_role: Option<NodeRole>,
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
-    rpu: Rpu,
+    rpu: Option<Rpu>,
     rpc_service: JsonRpcService,
     ncp: Ncp,
     bank: Arc<Bank>,
@@ -89,6 +89,8 @@ pub struct Fullnode {
     retransmit_socket: UdpSocket,
     transaction_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
+    requests_socket: UdpSocket,
+    respond_socket: UdpSocket,
     blob_recycler: BlobRecycler,
 }
 
@@ -236,13 +238,18 @@ impl Fullnode {
         let mut blob_recycler = BlobRecycler::default();
         blob_recycler.set_name("fullnode::Blob");
 
-        let rpu = Rpu::new(
+        let rpu = Some(Rpu::new(
             &bank,
-            node.sockets.requests,
-            node.sockets.respond,
+            node.sockets
+                .requests
+                .try_clone()
+                .expect("Failed to clone requests socket"),
+            node.sockets
+                .respond
+                .try_clone()
+                .expect("Failed to clone respond socket"),
             &blob_recycler,
-            exit.clone(),
-        );
+        ));
 
         // TODO: this code assumes this node is the leader
         let mut drone_addr = node.info.contact_info.tpu;
@@ -364,10 +371,12 @@ impl Fullnode {
             retransmit_socket: node.sockets.retransmit,
             transaction_sockets: node.sockets.transaction,
             broadcast_socket: node.sockets.broadcast,
+            requests_socket: node.sockets.requests,
+            respond_socket: node.sockets.respond,
         }
     }
 
-    fn leader_to_validator(&mut self) {
+    fn leader_to_validator(&mut self) -> Result<()> {
         // TODO: We can avoid building the bank again once RecordStage is
         // integrated with BankingStage
         let (bank, entry_height, _) = Self::new_bank_from_ledger(&self.ledger_path);
@@ -384,9 +393,23 @@ impl Fullnode {
             }
         }
 
-        // Tell the RPU to serve requests out of the new bank we've created
+        // Make a new RPU to serve requests out of the new bank we've created
         // instead of the old one
-        self.rpu.set_new_bank(self.bank.clone());
+        if !self.rpu.is_none() {
+            let old_rpu = self.rpu.take().unwrap();
+            old_rpu.close()?;
+            self.rpu = Some(Rpu::new(
+                &self.bank,
+                self.requests_socket
+                    .try_clone()
+                    .expect("Failed to clone requests socket"),
+                self.respond_socket
+                    .try_clone()
+                    .expect("Failed to clone respond socket"),
+                &self.blob_recycler,
+            ));
+        }
+
         let tvu = Tvu::new(
             self.keypair.clone(),
             &self.bank,
@@ -409,6 +432,7 @@ impl Fullnode {
         );
         let validator_state = ValidatorServices::new(tvu);
         self.node_role = Some(NodeRole::Validator(validator_state));
+        Ok(())
     }
 
     pub fn handle_role_transition(&mut self) -> Result<Option<FullnodeReturnType>> {
@@ -416,7 +440,7 @@ impl Fullnode {
         match node_role {
             Some(NodeRole::Leader(leader_services)) => match leader_services.join()? {
                 Some(TpuReturnType::LeaderRotation) => {
-                    self.leader_to_validator();
+                    self.leader_to_validator()?;
                     Ok(Some(FullnodeReturnType::LeaderRotation))
                 }
                 _ => Ok(None),
@@ -431,7 +455,9 @@ impl Fullnode {
     //used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
-
+        if let Some(ref rpu) = self.rpu {
+            rpu.exit();
+        }
         match self.node_role {
             Some(NodeRole::Leader(ref leader_services)) => leader_services.exit(),
             Some(NodeRole::Validator(ref validator_services)) => validator_services.exit(),
@@ -471,7 +497,9 @@ impl Service for Fullnode {
     type JoinReturnType = Option<FullnodeReturnType>;
 
     fn join(self) -> Result<Option<FullnodeReturnType>> {
-        self.rpu.join()?;
+        if let Some(rpu) = self.rpu {
+            rpu.join()?;
+        }
         self.ncp.join()?;
         self.rpc_service.join()?;
 
