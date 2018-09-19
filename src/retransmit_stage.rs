@@ -3,7 +3,6 @@
 use counter::Counter;
 use crdt::Crdt;
 use log::Level;
-use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
@@ -68,7 +67,6 @@ impl RetransmitStage {
         entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
-        blob_recycler: &BlobRecycler,
         fetch_stage_receiver: BlobReceiver,
     ) -> (Self, BlobReceiver) {
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -79,7 +77,6 @@ impl RetransmitStage {
             crdt.clone(),
             window,
             entry_height,
-            blob_recycler.clone(),
             fetch_stage_receiver,
             blob_sender,
             retransmit_sender,

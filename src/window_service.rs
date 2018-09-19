@@ -232,7 +232,6 @@ pub fn window_service(
     crdt: Arc<RwLock<Crdt>>,
     window: SharedWindow,
     entry_height: u64,
-    recycler: BlobRecycler,
     r: BlobReceiver,
     s: BlobSender,
     retransmit: BlobSender,
@@ -247,6 +246,7 @@ pub fn window_service(
             let mut times = 0;
             let id = crdt.read().unwrap().id;
             let mut pending_retransmits = false;
+            let recycler = BlobRecycler::default();
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if let Err(e) = recv_window(
@@ -337,12 +337,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -350,7 +345,6 @@ mod test {
             subs,
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
@@ -405,12 +399,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -418,7 +407,6 @@ mod test {
             subs.clone(),
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,
@@ -465,12 +453,7 @@ mod test {
 
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(
-            Arc::new(tn.sockets.gossip),
-            exit.clone(),
-            resp_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
@@ -478,7 +461,6 @@ mod test {
             subs.clone(),
             win,
             0,
-            resp_recycler.clone(),
             r_reader,
             s_window,
             s_retransmit,

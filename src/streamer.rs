@@ -42,10 +42,10 @@ fn recv_loop(
 pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
-    recycler: PacketRecycler,
     packet_sender: PacketSender,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
+    let recycler = PacketRecycler::default();
     if res.is_err() {
         panic!("streamer::receiver set_read_timeout error");
     }
@@ -108,17 +108,13 @@ fn recv_blobs(recycler: &BlobRecycler, sock: &UdpSocket, s: &BlobSender) -> Resu
     Ok(())
 }
 
-pub fn blob_receiver(
-    sock: Arc<UdpSocket>,
-    exit: Arc<AtomicBool>,
-    recycler: BlobRecycler,
-    s: BlobSender,
-) -> JoinHandle<()> {
+pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender) -> JoinHandle<()> {
     //DOCUMENTED SIDE-EFFECT
     //1 second timeout on socket read
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
+    let recycler = BlobRecycler::default();
     Builder::new()
         .name("solana-blob_receiver".to_string())
         .spawn(move || loop {
@@ -131,7 +127,7 @@ pub fn blob_receiver(
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
+    use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -168,15 +164,9 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(
-            Arc::new(read),
-            exit.clone(),
-            pack_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader);
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

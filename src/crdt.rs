@@ -837,10 +837,10 @@ impl Crdt {
     /// randomly pick a node and ask them for updates asynchronously
     pub fn gossip(
         obj: Arc<RwLock<Self>>,
-        blob_recycler: BlobRecycler,
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        let blob_recycler = BlobRecycler::default();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || loop {
@@ -1147,12 +1147,12 @@ impl Crdt {
         me: Arc<RwLock<Self>>,
         window: SharedWindow,
         ledger_path: Option<&str>,
-        blob_recycler: BlobRecycler,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut ledger_window = ledger_path.map(|p| LedgerWindow::open(p).unwrap());
+        let blob_recycler = BlobRecycler::default();
 
         Builder::new()
             .name("solana-listen".to_string())
@@ -1602,10 +1602,9 @@ mod tests {
         // check that the service works
         // and that it eventually produces a request for both nodes
         let (sender, reader) = channel();
-        let recycler = BlobRecycler::default();
         let exit = Arc::new(AtomicBool::new(false));
         let obj = Arc::new(RwLock::new(crdt));
-        let thread = Crdt::gossip(obj, recycler, sender, exit.clone());
+        let thread = Crdt::gossip(obj, sender, exit.clone());
         let mut one = false;
         let mut two = false;
         for _ in 0..30 {

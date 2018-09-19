@@ -316,10 +316,7 @@ pub fn generate_coding(
             coding_blobs.push(coding.clone());
         }
 
-        let data_locks: Vec<_> = data_blobs
-            .iter()
-            .map(|b| b.read())
-            .collect();
+        let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read()).collect();
 
         let data_ptrs: Vec<_> = data_locks
             .iter()
@@ -329,10 +326,7 @@ pub fn generate_coding(
                 &l.data[..max_data_size]
             }).collect();
 
-        let mut coding_locks: Vec<_> = coding_blobs
-            .iter()
-            .map(|b| b.write())
-            .collect();
+        let mut coding_locks: Vec<_> = coding_blobs.iter().map(|b| b.write()).collect();
 
         let mut coding_ptrs: Vec<_> = coding_locks
             .iter_mut()

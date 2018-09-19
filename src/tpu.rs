@@ -30,7 +30,6 @@ use banking_stage::BankingStage;
 use crdt::Crdt;
 use entry::Entry;
 use fetch_stage::FetchStage;
-use packet::{BlobRecycler};
 use record_stage::RecordStage;
 use service::Service;
 use signature::Keypair;
@@ -58,14 +57,11 @@ impl Tpu {
         crdt: &Arc<RwLock<Crdt>>,
         tick_duration: Option<Duration>,
         transactions_sockets: Vec<UdpSocket>,
-        blob_recycler: &BlobRecycler,
         exit: Arc<AtomicBool>,
         ledger_path: &str,
         sigverify_disabled: bool,
     ) -> (Self, Receiver<Vec<Entry>>) {
-
-        let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_sockets, exit);
+        let (fetch_stage, packet_receiver) = FetchStage::new(transactions_sockets, exit);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -83,7 +79,6 @@ impl Tpu {
             keypair,
             bank.clone(),
             crdt.clone(),
-            blob_recycler.clone(),
             ledger_path,
             entry_receiver,
         );

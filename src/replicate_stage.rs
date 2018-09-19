@@ -5,7 +5,6 @@ use counter::Counter;
 use crdt::Crdt;
 use ledger::{reconstruct_entries_from_blobs, Block, LedgerWriter};
 use log::Level;
-use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
@@ -65,7 +64,6 @@ impl ReplicateStage {
         keypair: Keypair,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        blob_recycler: BlobRecycler,
         window_receiver: BlobReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
@@ -78,7 +76,6 @@ impl ReplicateStage {
             Arc::new(keypair),
             bank.clone(),
             crdt.clone(),
-            blob_recycler.clone(),
             vote_blob_sender,
             exit,
         );

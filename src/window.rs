@@ -392,7 +392,7 @@ pub fn new_window_from_entries(
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, PacketRecycler, Packets, PACKET_DATA_SIZE};
+    use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
     use signature::Pubkey;
     use std::io;
     use std::io::Write;
@@ -430,15 +430,9 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let pack_recycler = PacketRecycler::default();
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(
-            Arc::new(read),
-            exit.clone(),
-            pack_recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader);
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

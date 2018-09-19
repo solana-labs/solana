@@ -170,9 +170,9 @@ impl BroadcastStage {
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
         entry_height: u64,
-        recycler: BlobRecycler,
         receiver: Receiver<Vec<Entry>>,
     ) -> Self {
+        let recycler = BlobRecycler::default();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {

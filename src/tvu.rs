@@ -39,7 +39,6 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
-use packet::BlobRecycler;
 use replicate_stage::ReplicateStage;
 use retransmit_stage::RetransmitStage;
 use service::Service;
@@ -75,7 +74,6 @@ impl Tvu {
         entry_height: u64,
         crdt: Arc<RwLock<Crdt>>,
         window: SharedWindow,
-        blob_recycler: BlobRecycler,
         replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
@@ -87,7 +85,7 @@ impl Tvu {
             replicate_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
-            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone(), &blob_recycler);
+            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
@@ -97,7 +95,6 @@ impl Tvu {
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
-            &blob_recycler,
             blob_fetch_receiver,
         );
 
@@ -105,7 +102,6 @@ impl Tvu {
             keypair,
             bank.clone(),
             crdt,
-            blob_recycler,
             blob_window_receiver,
             ledger_path,
             exit,
@@ -163,11 +159,10 @@ pub mod tests {
         crdt: Arc<RwLock<Crdt>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> (Ncp, SharedWindow, BlobRecycler) {
+    ) -> (Ncp, SharedWindow) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let recycler = BlobRecycler::default();
-        let ncp = Ncp::new(&crdt, window.clone(), recycler.clone(), None, gossip, exit);
-        (ncp, window, recycler)
+        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
+        (ncp, window)
     }
 
     /// Test that message sent from leader to target1 and replicated to target2
@@ -207,12 +202,7 @@ pub mod tests {
             .map(Arc::new)
             .collect();
 
-        let t_receiver = streamer::blob_receiver(
-            blob_sockets[0].clone(),
-            exit.clone(),
-            recycler.clone(),
-            s_reader,
-        );
+        let t_receiver = streamer::blob_receiver(blob_sockets[0].clone(), exit.clone(), s_reader);
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
@@ -240,7 +230,6 @@ pub mod tests {
             0,
             cref1,
             dr_1.1,
-            dr_1.2,
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
