@@ -75,7 +75,7 @@ pub const ERASURE_W: i32 = 32;
 //   There are some alignment restrictions, blocks should be aligned by 16 bytes
 //   which means their size should be >= 16 bytes
 pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Result<()> {
-    if data.len() == 0 {
+    if data.is_empty() {
         return Ok(());
     }
     let k = data.len() as i32;
@@ -130,7 +130,7 @@ pub fn decode_blocks(
     coding: &mut [&mut [u8]],
     erasures: &[i32],
 ) -> Result<()> {
-    if data.len() == 0 {
+    if data.is_empty() {
         return Ok(());
     }
     let block_len = data[0].len();
@@ -686,7 +686,7 @@ mod test {
             } else {
                 print!("data null ");
             }
-            println!("");
+            println!();
             print!("window({:>w$}): ", i, w = 2);
             if w.coding.is_some() {
                 let window_l1 = w.coding.clone().unwrap();
@@ -702,7 +702,7 @@ mod test {
             } else {
                 print!("coding null");
             }
-            println!("");
+            println!();
         }
     }
 
@@ -941,9 +941,7 @@ mod test {
         // Create a hole in the window by making the blob's index stale
         let refwindow = window[offset].data.clone();
         if let Some(blob) = &window[erase_offset].data {
-            blob.write()
-                .set_index(erase_offset as u64)
-                .unwrap(); // this also writes to refwindow...
+            blob.write().set_index(erase_offset as u64).unwrap(); // this also writes to refwindow...
         }
         print_window(&window);
 

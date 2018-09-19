@@ -84,7 +84,7 @@ impl<T: Default + Reset> Recycler<T> {
                 val
             }).unwrap_or_else(|| Arc::new(RwLock::new(Default::default())));
         Recyclable {
-            val: val,
+            val,
             landfill: self.landfill.clone(),
         }
     }

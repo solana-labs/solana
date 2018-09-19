@@ -267,7 +267,9 @@ impl WindowUtil for Window {
                 break;
             }
             let slot = self[k].clone();
-            slot.data.map(|r| consume_queue.push(r));
+            if let Some(r) = slot.data {
+                consume_queue.push(r)
+            }
             *consumed += 1;
         }
     }

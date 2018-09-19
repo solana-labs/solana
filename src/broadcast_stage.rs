@@ -75,7 +75,7 @@ fn broadcast(
 
                 trace!("{} null {}", id, pos);
             }
-            for b in blobs.into_iter() {
+            for b in blobs.iter() {
                 let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
