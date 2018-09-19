@@ -256,13 +256,8 @@ mod tests {
             Utc::now(),
             zero,
         );
-        let tx1 = Transaction::budget_new_signature(
-            &keypair,
-            keypair.pubkey(),
-            keypair.pubkey(),
-            Default::default(),
-            zero,
-        );
+        let tx1 =
+            Transaction::budget_new_signature(&keypair, keypair.pubkey(), keypair.pubkey(), zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
         assert!(e0.verify(&zero));
 

@@ -127,10 +127,9 @@ impl Transaction {
         from_keypair: &Keypair,
         contract: Pubkey,
         to: Pubkey,
-        signature: Signature,
         last_id: Hash,
     ) -> Self {
-        let instruction = Instruction::ApplySignature(signature);
+        let instruction = Instruction::ApplySignature;
         let userdata = serialize(&instruction).unwrap();
         Self::new_with_userdata(
             from_keypair,
