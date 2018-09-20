@@ -119,6 +119,14 @@ export class BudgetContract {
   }
 
   /**
+   * The amount of space this contract requires
+   */
+  static get space(): number {
+    return 128;
+  }
+
+
+  /**
    * Creates a timestamp condition
    */
   static timestampCondition(from: PublicKey, when: Date) : TimeStampCondition {
@@ -196,7 +204,7 @@ export class BudgetContract {
 
       return new Transaction({
         fee: 0,
-        keys: [from, contract],
+        keys: [from, contract, to],
         contractId: this.contractId,
         userdata: userdata.slice(0, pos),
       });
@@ -217,7 +225,7 @@ export class BudgetContract {
 
       return new Transaction({
         fee: 0,
-        keys: [from, to],
+        keys: [from, contract, to],
         contractId: this.contractId,
         userdata: userdata.slice(0, pos),
       });
