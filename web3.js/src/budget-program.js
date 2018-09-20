@@ -167,9 +167,6 @@ export class BudgetProgram {
     userdata.writeUInt32LE(amount, pos); // Contract.tokens
     pos += 8;
 
-    userdata.writeUInt32LE(0, pos); // Contract.plan = Budget
-    pos += 4;
-
     switch (conditions.length) {
     case 0:
       userdata.writeUInt32LE(0, pos); // Budget enum = Pay

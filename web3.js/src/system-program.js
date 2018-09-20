@@ -24,7 +24,7 @@ export class SystemProgram {
     newAccount: PublicKey,
     tokens: number,
     space: number,
-    programId: ?PublicKey
+    programId: PublicKey
   ): Transaction {
     const userdata = Buffer.alloc(4 + 8 + 8 + 1 + 32);
     let pos = 0;
@@ -38,17 +38,9 @@ export class SystemProgram {
     userdata.writeUInt32LE(space, pos); // space as u64
     pos += 8;
 
-    if (programId) {
-      userdata.writeUInt8(1, pos); // 'Some'
-      pos += 1;
-
-      const programIdBytes = Transaction.serializePublicKey(programId);
-      programIdBytes.copy(userdata, pos);
-      pos += 32;
-    } else {
-      userdata.writeUInt8(0, pos); // 'None'
-      pos += 1;
-    }
+    const programIdBytes = Transaction.serializePublicKey(programId);
+    programIdBytes.copy(userdata, pos);
+    pos += 32;
 
     assert(pos <= userdata.length);
 
