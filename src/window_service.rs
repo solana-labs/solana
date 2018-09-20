@@ -192,7 +192,6 @@ fn recv_window(
         pixs.push(pix);
 
         if !blob_idx_in_window(&id, pix, *consumed, received) {
-            recycler.recycle(b, "recv_window");
             continue;
         }
 
@@ -282,7 +281,7 @@ pub fn window_service(
                 }
 
                 let mut window = window.write().unwrap();
-                let reqs = window.repair(&crdt, &recycler, &id, times, consumed, received);
+                let reqs = window.repair(&crdt, &id, times, consumed, received);
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);

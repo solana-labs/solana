@@ -1,7 +1,7 @@
 //! The `request_stage` processes thin client Request messages.
 
 use bincode::deserialize;
-use packet::{to_blobs, BlobRecycler, PacketRecycler, Packets, SharedPackets};
+use packet::{to_blobs, BlobRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
@@ -35,7 +35,6 @@ impl RequestStage {
         request_processor: &RequestProcessor,
         packet_receiver: &Receiver<SharedPackets>,
         blob_sender: &BlobSender,
-        packet_recycler: &PacketRecycler,
         blob_recycler: &BlobRecycler,
     ) -> Result<()> {
         let (batch, batch_len) = streamer::recv_batch(packet_receiver)?;
@@ -63,7 +62,6 @@ impl RequestStage {
                 //don't wake up the other side if there is nothing
                 blob_sender.send(blobs)?;
             }
-            packet_recycler.recycle(msgs, "process_request_packets");
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
@@ -81,7 +79,6 @@ impl RequestStage {
         request_processor: RequestProcessor,
         packet_receiver: Receiver<SharedPackets>,
     ) -> (Self, BlobReceiver) {
-        let packet_recycler = PacketRecycler::default();
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
         let blob_recycler = BlobRecycler::default();
@@ -93,7 +90,6 @@ impl RequestStage {
                     &request_processor_,
                     &packet_receiver,
                     &blob_sender,
-                    &packet_recycler,
                     &blob_recycler,
                 ) {
                     match e {

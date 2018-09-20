@@ -460,8 +460,6 @@ mod tests {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
-
-        r.recycle(p, "packet_send_recv");
     }
 
     #[test]

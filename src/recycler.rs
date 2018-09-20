@@ -88,9 +88,6 @@ impl<T: Default + Reset> Recycler<T> {
             landfill: self.landfill.clone(),
         }
     }
-    pub fn recycle(&self, r: Recyclable<T>, _name: &str) {
-        drop(r)
-    }
 }
 
 #[cfg(test)]

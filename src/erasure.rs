@@ -350,13 +350,7 @@ pub fn generate_coding(
 //  true if slot is empty
 //  true if slot is stale (i.e. has the wrong index), old blob is flushed
 //  false if slot has a blob with the right index
-fn is_missing(
-    id: &Pubkey,
-    idx: u64,
-    window_slot: &mut Option<SharedBlob>,
-    recycler: &BlobRecycler,
-    c_or_d: &str,
-) -> bool {
+fn is_missing(id: &Pubkey, idx: u64, window_slot: &mut Option<SharedBlob>, c_or_d: &str) -> bool {
     if let Some(blob) = window_slot.take() {
         let blob_idx = blob.read().get_index().unwrap();
         if blob_idx == idx {
@@ -372,8 +366,6 @@ fn is_missing(
                 c_or_d,
                 blob_idx,
             );
-            // recycle it
-            recycler.recycle(blob, "is_missing");
             true
         }
     } else {
@@ -392,7 +384,6 @@ fn find_missing(
     block_start_idx: u64,
     block_start: usize,
     window: &mut [WindowSlot],
-    recycler: &BlobRecycler,
 ) -> (usize, usize) {
     let mut data_missing = 0;
     let mut coding_missing = 0;
@@ -404,11 +395,11 @@ fn find_missing(
         let idx = (i - block_start) as u64 + block_start_idx;
         let n = i % window.len();
 
-        if is_missing(id, idx, &mut window[n].data, recycler, "data") {
+        if is_missing(id, idx, &mut window[n].data, "data") {
             data_missing += 1;
         }
 
-        if i >= coding_start && is_missing(id, idx, &mut window[n].coding, recycler, "coding") {
+        if i >= coding_start && is_missing(id, idx, &mut window[n].coding, "coding") {
             coding_missing += 1;
         }
     }
@@ -444,8 +435,7 @@ pub fn recover(
         block_end
     );
 
-    let (data_missing, coding_missing) =
-        find_missing(id, block_start_idx, block_start, window, recycler);
+    let (data_missing, coding_missing) = find_missing(id, block_start_idx, block_start, window);
 
     // if we're not missing data, or if we have too much missin but have enough coding
     if data_missing == 0 {
@@ -796,9 +786,6 @@ mod test {
             }
             blobs.push(blob);
         }
-        for blob in blobs {
-            blob_recycler.recycle(blob, "pollute_recycler");
-        }
     }
 
     #[test]
@@ -893,11 +880,6 @@ mod test {
         // Create a hole in the window
         let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
-
-        blob_recycler.recycle(
-            window[erase_offset].coding.clone().unwrap(),
-            "window_recover_basic",
-        );
         window[erase_offset].coding = None;
 
         print_window(&window);
