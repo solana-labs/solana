@@ -1,6 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use bank::Bank;
+use bank::{Account, Bank};
 use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
@@ -102,6 +102,9 @@ build_rpc_trait! {
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
+        #[rpc(meta, name = "getAccount")]
+        fn get_account(&self, Self::Metadata, String) -> Result<Account>;
+
         #[rpc(meta, name= "requestAirdrop")]
         fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
 
@@ -142,6 +145,16 @@ impl RpcSol for RpcSolImpl {
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
+    }
+    fn get_account(&self, meta: Self::Metadata, id: String) -> Result<Account> {
+        let pubkey_vec = bs58::decode(id)
+            .into_vec()
+            .map_err(|_| Error::invalid_request())?;
+        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+            return Err(Error::invalid_request());
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+        meta.request_processor.get_account(pubkey)
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         let pubkey_vec = bs58::decode(id)
@@ -212,6 +225,11 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
     }
+    fn get_account(&self, pubkey: Pubkey) -> Result<Account> {
+        self.bank
+            .get_account(&pubkey)
+            .ok_or(Error::invalid_request())
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +282,28 @@ mod tests {
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["{}"]}}"#,
+            bob_pubkey
+        );
+
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = r#"{
+            "jsonrpc":"2.0",
+            "result":{
+                "contract_id": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "tokens": 20,
+                "userdata": []
+            },
+            "id":1}
+        "#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
 
