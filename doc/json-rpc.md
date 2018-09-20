@@ -8,7 +8,7 @@ To interact with a Solana node inside a JavaScript application, use the [solana-
 RPC Endpoint
 ---
 
-**Default port:** 8899  
+**Default port:** 8899
 eg. http://localhost:8899, http://192.168.1.88:8899
 
 Methods
@@ -17,6 +17,7 @@ Methods
 * [confirmTransaction](#confirmtransaction)
 * [getAddress](#getaddress)
 * [getBalance](#getbalance)
+* [getAccount](#getaccount)
 * [getLastId](#getlastid)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
@@ -92,6 +93,30 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "
 
 // Result
 {"jsonrpc":"2.0","result":0,"id":1}
+```
+
+---
+
+### getAccount
+Returns all information associated with the account of provided Pubkey
+
+##### Parameters:
+* `string` - Pubkey of account to query, as base-58 encoded string
+
+##### Results:
+The result field will be a JSON object with the following sub fields:
+
+* `tokens`, number of tokens assigned to this account, as a signed 64-bit integer
+* `contract_id`, array of 32 bytes representing the program this account has been assigned to
+* `userdata`, array of bytes representing any userdata associated with the account
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccount", "params":["FVxxngPx368XvMCoeskdd6U8cZJFsfa1BEtGWqyAxRj4"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"contract_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
 ```
 
 ---
