@@ -49,7 +49,7 @@ impl Transaction {
     /// * `userdata` - The input data that the contract will execute with
     /// * `last_id` - The PoH hash.
     /// * `fee` - The transaction fee.
-    fn new_with_userdata(
+    pub fn new_with_userdata(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
         contract_id: Pubkey,
