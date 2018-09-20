@@ -2,14 +2,14 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
-use budget_contract::BudgetContract;
+use budget_program::BudgetProgram;
 use chrono::prelude::*;
 use hash::Hash;
 use instruction::{Contract, Instruction, Vote};
 use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 use std::mem::size_of;
-use system_contract::SystemContract;
+use system_program::SystemProgram;
 
 pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
 pub const SIG_OFFSET: usize = 0;
@@ -18,18 +18,18 @@ pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
 /// An instruction signed by a client with `Pubkey`.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `keys`, `contract_id`, `last_id`, `fee` and `userdata`, signed by `Pubkey`.
+    /// A digital signature of `keys`, `program_id`, `last_id`, `fee` and `userdata`, signed by `Pubkey`.
     pub signature: Signature,
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
-    /// contract-specific.
+    /// program-specific.
     /// * keys[0] - Typically this is the `caller` public key.  `signature` is verified with keys[0].
     /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * keys[1] - Typically this is the contract context or the recipient of the tokens
+    /// * keys[1] - Typically this is the program context or the recipient of the tokens
     pub keys: Vec<Pubkey>,
 
-    /// the contract id to execute
-    pub contract_id: Pubkey,
+    /// The program code that executes this transaction is identified by the program_id.
+    pub program_id: Pubkey,
 
     /// The ID of a recent ledger entry.
     pub last_id: Hash,
@@ -44,15 +44,15 @@ pub struct Transaction {
 impl Transaction {
     /// Create a signed transaction from the given `Instruction`.
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
-    /// * `transaction_keys` - The keys for the transaction.  These are the contract state
+    /// * `transaction_keys` - The keys for the transaction.  These are the program state
     ///    instances or token recipient keys.
-    /// * `userdata` - The input data that the contract will execute with
+    /// * `userdata` - The input data that the program will execute with
     /// * `last_id` - The PoH hash.
     /// * `fee` - The transaction fee.
     pub fn new_with_userdata(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
-        contract_id: Pubkey,
+        program_id: Pubkey,
         userdata: Vec<u8>,
         last_id: Hash,
         fee: i64,
@@ -63,7 +63,7 @@ impl Transaction {
         let mut tx = Transaction {
             signature: Signature::default(),
             keys,
-            contract_id,
+            program_id,
             last_id,
             fee,
             userdata,
@@ -74,22 +74,22 @@ impl Transaction {
     /// Create and sign a new Transaction. Used for unit-testing.
     pub fn budget_new_taxed(
         from_keypair: &Keypair,
-        contract: Pubkey,
+        to: Pubkey,
         tokens: i64,
         fee: i64,
         last_id: Hash,
     ) -> Self {
         let payment = Payment {
             tokens: tokens - fee,
-            to: contract,
+            to: to,
         };
         let budget = Budget::Pay(payment);
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).unwrap();
         Self::new_with_userdata(
             from_keypair,
-            &[contract],
-            BudgetContract::id(),
+            &[to],
+            BudgetProgram::id(),
             userdata,
             last_id,
             fee,
@@ -114,7 +114,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract, to],
-            BudgetContract::id(),
+            BudgetProgram::id(),
             userdata,
             last_id,
             0,
@@ -133,7 +133,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract, to],
-            BudgetContract::id(),
+            BudgetProgram::id(),
             userdata,
             last_id,
             0,
@@ -146,7 +146,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[],
-            BudgetContract::id(),
+            BudgetProgram::id(),
             userdata,
             last_id,
             fee,
@@ -172,58 +172,58 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract],
-            BudgetContract::id(),
+            BudgetProgram::id(),
             userdata,
             last_id,
             0,
         )
     }
-    /// Create and sign new SystemContract::CreateAccount transaction
+    /// Create and sign new SystemProgram::CreateAccount transaction
     pub fn system_create(
         from_keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
         tokens: i64,
         space: u64,
-        contract_id: Pubkey,
+        program_id: Pubkey,
         fee: i64,
     ) -> Self {
-        let create = SystemContract::CreateAccount {
+        let create = SystemProgram::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
-            contract_id,
+            program_id,
         };
         Transaction::new_with_userdata(
             from_keypair,
             &[to],
-            SystemContract::id(),
+            SystemProgram::id(),
             serialize(&create).unwrap(),
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemContract::CreateAccount transaction
+    /// Create and sign new SystemProgram::CreateAccount transaction
     pub fn system_assign(
         from_keypair: &Keypair,
         last_id: Hash,
-        contract_id: Pubkey,
+        program_id: Pubkey,
         fee: i64,
     ) -> Self {
-        let create = SystemContract::Assign { contract_id };
+        let create = SystemProgram::Assign { program_id };
         Transaction::new_with_userdata(
             from_keypair,
             &[],
-            SystemContract::id(),
+            SystemProgram::id(),
             serialize(&create).unwrap(),
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemContract::CreateAccount transaction with some defaults
+    /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
     pub fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
         Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
-    /// Create and sign new SystemContract::Move transaction
+    /// Create and sign new SystemProgram::Move transaction
     pub fn system_move(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -231,17 +231,17 @@ impl Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let create = SystemContract::Move { tokens };
+        let create = SystemProgram::Move { tokens };
         Transaction::new_with_userdata(
             from_keypair,
             &[to],
-            SystemContract::id(),
+            SystemProgram::id(),
             serialize(&create).unwrap(),
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemContract::Move transaction
+    /// Create and sign new SystemProgram::Move transaction
     pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
         Transaction::system_move(from_keypair, to, tokens, last_id, 0)
     }
@@ -249,8 +249,8 @@ impl Transaction {
     fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.keys)).expect("serialize keys");
 
-        let contract_id = serialize(&(&self.contract_id)).expect("serialize contract_id");
-        data.extend_from_slice(&contract_id);
+        let program_id = serialize(&(&self.program_id)).expect("serialize program_id");
+        data.extend_from_slice(&program_id);
 
         let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
@@ -367,7 +367,7 @@ mod tests {
             keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
-            contract_id: Default::default(),
+            program_id: Default::default(),
             fee: 0,
             userdata,
         };
@@ -486,7 +486,7 @@ mod tests {
             1, 1, 1,
         ]);
 
-        let contract = Pubkey::new(&[
+        let program_id = Pubkey::new(&[
             2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
             2, 2, 2,
         ]);
@@ -494,7 +494,7 @@ mod tests {
         let tx = Transaction::new_with_userdata(
             keypair,
             &[keypair.pubkey(), to],
-            contract,
+            program_id,
             vec![1, 2, 3],
             Hash::default(),
             99,

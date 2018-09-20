@@ -428,7 +428,7 @@ mod tests {
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use system_contract::SystemContract;
+    use system_program::SystemProgram;
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
         use std::env;
@@ -536,7 +536,7 @@ mod tests {
 
         let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
         let mut instruction2 = deserialize(&tr2.userdata).unwrap();
-        if let SystemContract::Move { ref mut tokens } = instruction2 {
+        if let SystemProgram::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
         }
         tr2.userdata = serialize(&instruction2).unwrap();

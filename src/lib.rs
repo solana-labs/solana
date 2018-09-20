@@ -19,7 +19,7 @@ pub mod client;
 pub mod instruction;
 #[macro_use]
 pub mod crdt;
-pub mod budget_contract;
+pub mod budget_program;
 pub mod drone;
 pub mod entry;
 pub mod entry_writer;
@@ -55,7 +55,7 @@ pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
 pub mod streamer;
-pub mod system_contract;
+pub mod system_program;
 pub mod thin_client;
 pub mod timing;
 pub mod tpu;
