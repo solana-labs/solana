@@ -429,6 +429,7 @@ impl Fullnode {
     }
 
     fn validator_to_leader(&mut self, entry_height: u64) {
+        self.crdt.write().unwrap().set_leader(self.keypair.pubkey());
         let tick_duration = None;
         // TODO: To light up PoH, uncomment the following line:
         //let tick_duration = Some(Duration::from_millis(1000));
@@ -662,7 +663,7 @@ mod tests {
             my_leader_begin_epoch * leader_rotation_interval,
         );
 
-        // Send blobs to the validator
+        // Send blobs to the validator from our mock leader
         let resp_recycler = BlobRecycler::default();
         let t_responder = {
             let (s_responder, r_responder) = channel();

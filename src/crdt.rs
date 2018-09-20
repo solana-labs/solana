@@ -515,6 +515,8 @@ impl Crdt {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
+        crdt: &Arc<RwLock<Crdt>>,
+        leader_rotation_interval: u64,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -539,7 +541,7 @@ impl Crdt {
 
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node
-        let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
+        let mut orders = Vec::with_capacity((received_index - transmit_index.data + 1) as usize);
         let window_l = window.read().unwrap();
 
         let mut br_idx = transmit_index.data as usize % broadcast_table.len();
@@ -553,6 +555,23 @@ impl Crdt {
                 w_idx,
                 br_idx
             );
+
+            // Make sure the next leader in line knows about the last entry before rotation
+            // so he can initiate repairs if necessary
+            let entry_height = idx + 1;
+            if entry_height % leader_rotation_interval == 0 {
+                let rcrdt = crdt.read().unwrap();
+                let next_leader_id = rcrdt.get_scheduled_leader(entry_height);
+                if next_leader_id.is_some() && next_leader_id != Some(me.id) {
+                    let info_result = broadcast_table
+                        .iter()
+                        .position(|n| n.id == next_leader_id.unwrap());
+                    if let Some(index) = info_result {
+                        orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
+                    }
+                }
+                drop(rcrdt);
+            }
 
             orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
             br_idx += 1;
