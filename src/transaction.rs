@@ -6,7 +6,7 @@ use budget_contract::BudgetContract;
 use chrono::prelude::*;
 use hash::Hash;
 use instruction::{Contract, Instruction, Vote};
-use payment_plan::{Payment, PaymentPlan};
+use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 use std::mem::size_of;
 use system_contract::SystemContract;

@@ -4,7 +4,7 @@
 //! `Payment`, the payment is executed.
 
 use chrono::prelude::*;
-use payment_plan::{Payment, PaymentPlan, Witness};
+use payment_plan::{Payment, Witness};
 use signature::Pubkey;
 use std::mem;
 
@@ -75,11 +75,9 @@ impl Budget {
             (Condition::Signature(from), Payment { tokens, to: from }),
         )
     }
-}
 
-impl PaymentPlan for Budget {
     /// Return Payment if the budget requires no additional Witnesses.
-    fn final_payment(&self) -> Option<Payment> {
+    pub fn final_payment(&self) -> Option<Payment> {
         match self {
             Budget::Pay(payment) => Some(payment.clone()),
             _ => None,
@@ -87,7 +85,7 @@ impl PaymentPlan for Budget {
     }
 
     /// Return true if the budget spends exactly `spendable_tokens`.
-    fn verify(&self, spendable_tokens: i64) -> bool {
+    pub fn verify(&self, spendable_tokens: i64) -> bool {
         match self {
             Budget::Pay(payment) | Budget::After(_, payment) => payment.tokens == spendable_tokens,
             Budget::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
@@ -96,7 +94,7 @@ impl PaymentPlan for Budget {
 
     /// Apply a witness to the budget to see if the budget can be reduced.
     /// If so, modify the budget in-place.
-    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
+    pub fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
         let new_payment = match self {
             Budget::After(cond, payment) if cond.is_satisfied(witness, from) => Some(payment),
             Budget::Or((cond, payment), _) if cond.is_satisfied(witness, from) => Some(payment),

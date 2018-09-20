@@ -4,7 +4,7 @@ use bincode::{self, deserialize, serialize_into, serialized_size};
 use budget::Budget;
 use chrono::prelude::{DateTime, Utc};
 use instruction::Instruction;
-use payment_plan::{PaymentPlan, Witness};
+use payment_plan::Witness;
 use signature::Pubkey;
 use std::io;
 use transaction::Transaction;
