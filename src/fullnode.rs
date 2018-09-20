@@ -554,17 +554,23 @@ impl Service for Fullnode {
 mod tests {
     use bank::Bank;
     use crdt::Node;
-    use fullnode::Fullnode;
+    use fullnode::{Fullnode, FullnodeReturnType};
     use ledger::genesis;
+    use packet::{make_consecutive_blobs, BlobRecycler};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use std::cmp;
     use std::fs::remove_dir_all;
+    use std::net::UdpSocket;
+    use std::sync::mpsc::channel;
+    use std::sync::Arc;
+    use streamer::responder;
 
     #[test]
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
+        let (alice, validator_ledger_path, _) = genesis("validator_exit", 10_000);
         let bank = Bank::new(&alice);
         let entry = tn.info.clone();
         let v = Fullnode::new_with_bank(
@@ -582,6 +588,7 @@ mod tests {
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
     }
+
     #[test]
     fn validator_parallel_exit() {
         let mut ledger_paths = vec![];
@@ -589,7 +596,7 @@ mod tests {
             .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (alice, validator_ledger_path) =
+                let (alice, validator_ledger_path, _) =
                     genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
                 let bank = Bank::new(&alice);
@@ -619,5 +626,97 @@ mod tests {
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_validator_to_leader_transition() {
+        // Make a leader identity
+        let leader_keypair = Keypair::new();
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_id = leader_node.info.id;
+        let leader_ncp = leader_node.info.contact_info.ncp;
+
+        // Start the validator node
+        let leader_rotation_interval = 10;
+        let (_, validator_ledger_path, genesis_entries) =
+            genesis("test_validator_to_leader_transition", 10_000);
+        let validator_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let validator_info = validator_node.info.clone();
+        let mut validator = Fullnode::new(
+            validator_node,
+            &validator_ledger_path,
+            validator_keypair,
+            Some(leader_ncp),
+            false,
+            Some(leader_rotation_interval),
+        );
+
+        // Set the leader schedule for the validator
+        let my_leader_begin_epoch = 2;
+        for i in 0..my_leader_begin_epoch {
+            validator.set_scheduled_leader(leader_id, leader_rotation_interval * i);
+        }
+        validator.set_scheduled_leader(
+            validator_info.id,
+            my_leader_begin_epoch * leader_rotation_interval,
+        );
+
+        // Send blobs to the validator
+        let resp_recycler = BlobRecycler::default();
+        let t_responder = {
+            let (s_responder, r_responder) = channel();
+            let blob_sockets: Vec<Arc<UdpSocket>> = leader_node
+                .sockets
+                .replicate
+                .into_iter()
+                .map(Arc::new)
+                .collect();
+
+            let t_responder = responder(
+                "test_validator_to_leader_transition",
+                blob_sockets[0].clone(),
+                r_responder,
+            );
+
+            // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
+            // number of blobs to make sure the window stops in the right place.
+            let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
+            let total_blobs_to_send =
+                my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
+            let last_id = genesis_entries
+                .last()
+                .expect("expected at least one genesis entry")
+                .id;
+            let tvu_address = &validator_info.contact_info.tvu;
+            let msgs = make_consecutive_blobs(
+                leader_id,
+                total_blobs_to_send,
+                last_id,
+                &tvu_address,
+                &resp_recycler,
+            );
+            s_responder.send(msgs).expect("send");
+            t_responder
+        };
+
+        // Wait for validator to shut down tvu and restart tpu
+        match validator.handle_role_transition().unwrap() {
+            Some(FullnodeReturnType::LeaderRotation) => (),
+            _ => panic!("Expected reason for exit to be leader rotation"),
+        }
+
+        // Check the validator ledger to make sure it's the right height
+        let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path);
+
+        assert_eq!(
+            entry_height,
+            my_leader_begin_epoch * leader_rotation_interval
+        );
+
+        // Shut down
+        t_responder.join().expect("responder thread join");
+        validator.close().unwrap();
+        remove_dir_all(&validator_ledger_path).unwrap();
     }
 }

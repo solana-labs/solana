@@ -336,11 +336,10 @@ mod test {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::Hash;
-    use ledger::next_entries_mut;
     use logger;
-    use packet::{BlobRecycler, SharedBlobs, PACKET_DATA_SIZE};
-    use signature::Pubkey;
-    use std::net::{SocketAddr, UdpSocket};
+    use packet::{make_consecutive_blobs, BlobRecycler, PACKET_DATA_SIZE};
+    use signature::{Keypair, KeypairUtil};
+    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver};
     use std::sync::{Arc, RwLock};
@@ -348,35 +347,6 @@ mod test {
     use streamer::{blob_receiver, responder};
     use window::default_window;
     use window_service::{repair_backoff, window_service, WindowServiceReturnType};
-
-    fn make_consecutive_blobs(
-        me_id: Pubkey,
-        mut num_blobs_to_make: u64,
-        start_hash: Hash,
-        addr: &SocketAddr,
-        resp_recycler: &BlobRecycler,
-    ) -> SharedBlobs {
-        let mut msgs = Vec::new();
-        let mut last_hash = start_hash;
-        let mut num_hashes = 0;
-        while num_blobs_to_make != 0 {
-            let new_entries = next_entries_mut(&mut last_hash, &mut num_hashes, vec![]);
-            let mut new_blobs: SharedBlobs = new_entries
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let blob_index = num_blobs_to_make - i as u64 - 1;
-                    let new_blob =
-                        e.to_blob(&resp_recycler, Some(blob_index), Some(me_id), Some(addr));
-                    assert_eq!(blob_index, new_blob.read().get_index().unwrap());
-                    new_blob
-                }).collect();
-            new_blobs.truncate(num_blobs_to_make as usize);
-            num_blobs_to_make -= new_blobs.len() as u64;
-            msgs.extend(new_blobs);
-        }
-        msgs
-    }
 
     fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {
@@ -659,6 +629,7 @@ mod test {
                 blob_sockets[0].clone(),
                 r_responder,
             );
+
             let ncp_address = &tn.info.contact_info.ncp;
             // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
             // number of blobs to make sure the window stops in the right place.
