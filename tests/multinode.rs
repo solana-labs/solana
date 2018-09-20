@@ -881,6 +881,166 @@ fn test_leader_to_validator_transition() {
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
+fn make_leader_fullnode() -> Fullnode {
+    // Initialize the leader ledger. Make a mint and a genesis entry
+    // in the leader ledger
+    let (mint, leader_ledger_path, entries) = genesis(
+        "test_leader_to_validator_transition",
+        (3 * leader_rotation_interval) as i64,
+    );
+
+    let genesis_height = entries.len() as u64;
+
+    // Start the leader node
+    let leader_keypair = Keypair::new();
+    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_info = leader_node.info.clone();
+    let mut leader = Fullnode::new(
+        leader_node,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        Some(leader_rotation_interval),
+    );
+}
+
+#[test]
+fn test_validator_to_leader_transition() {
+    logger::setup();
+    // Make a mint and a genesis entry in the leader ledger
+    let (mint, leader_ledger_path) = genesis("test_validator_to_leader_transition", 10_000);
+
+    // Initialize the leader ledger
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+
+    // Create the leader fullnode
+    let leader_keypair = Keypair::new();
+    let leader_pubkey = leader_keypair.pubkey().clone();
+    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_info = leader_node.info.clone();
+
+    let server = Fullnode::new(
+        leader,
+        &leader_ledger_path,
+        leader_keypair,
+        None,
+        false,
+        None,
+    );
+
+    // Start the validator node
+    let leader_rotation_interval = 10;
+    let validator_ledger_path =
+        tmp_copy_ledger(&leader_ledger_path, "test_validator_to_leader_transition");
+    let validator_keypair = Keypair::new();
+    let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+    let validator_info = validator_node.info.clone();
+    let mut validator = Fullnode::new(
+        validator_node,
+        &validator_ledger_path,
+        validator_keypair,
+        Some(bob_pubkey),
+        false,
+        Some(leader_rotation_interval),
+    );
+
+    ledger_paths.push(validator_ledger_path);
+
+    // Set the leader schedule for the validator
+    let my_leader_begin_epoch = 2;
+    for i in 0..my_leader_begin_epoch {
+        crdt_me.set_scheduled_leader(leader_rotation_interval * i, leader_info.id);
+    }
+    validator.set_scheduled_leader(
+        validator_node.info.id,
+        my_leader_begin_epoch * leader_rotation_interval,
+    );
+
+    /*let resp_recycler = BlobRecycler::default();
+    let t_responder = {
+        let (s_responder, r_responder) = channel();
+        let blob_sockets: Vec<Arc<UdpSocket>> =
+            validator_node.sockets.replicate.into_iter().map(Arc::new).collect();
+
+        let t_responder = responder("test_validator_to_leader_transition", blob_sockets[0].clone(), r_responder);
+        let mut msgs = Vec::new();
+
+        // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
+        // number of blobs to make sure the window stops in the right place.
+        let extra_blobs = std::cmp::max(leader_rotation_interval / 3, 1);
+        let total_blobs_to_send =
+            my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
+        for v in 0..total_blobs_to_send {
+            let i = total_blobs_to_send - 1 - v;
+            let b = resp_recycler.allocate();
+            {
+                let mut w = b.write();
+                w.set_index(i).unwrap();
+                w.set_id(me_id).unwrap();
+                assert_eq!(i, w.get_index().unwrap());
+                w.meta.size = PACKET_DATA_SIZE;
+                // Send the blob to the window through the t_receiver's gossip address
+                w.meta.set_addr(&validator_info.contact_info.tvu);
+            }
+            msgs.push(b);
+        }
+        s_responder.send(msgs).expect("send");
+        t_responder
+    };*/
+
+    let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
+    let total_transactions_to_send =
+        my_leader_begin_epoch * leader_rotation_interval + extra_transactions;
+
+    // Push "extra_transactions" past leader_rotation_interval entry height,
+    // make sure the validator stops.
+    for i in genesis_height..total_transactions_to_send {
+        if i < total_transactions_to_send {
+            // Poll to see that the bank state is updated after every transaction
+            // to ensure that each transaction is packaged as a single entry,
+            // so that we can be sure the validator gets at least enough blobs
+            // to trigger a rotation
+            let expected_balance = std::cmp::min(
+                leader_rotation_interval - genesis_height,
+                i - genesis_height + 1,
+            );
+            let result = send_tx_and_retry_get_balance(
+                &leader_info,
+                &mint,
+                &bob_pubkey,
+                1,
+                Some(expected_balance as i64),
+            );
+
+            assert_eq!(result, Some(expected_balance as i64))
+        } else {
+            // After leader_rotation_interval entries, we don't care about the
+            // number of entries generated by these transactions. These are just
+            // here for testing to make sure the validator stopped at the correct point.
+            send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+        }
+    }
+
+    // Wait for validator to shut down tvu and restart tpu
+    match validator.handle_role_transition().unwrap() {
+        Some(FullnodeReturnType::LeaderRotation) => (),
+        _ => panic!("Expected reason for exit to be leader rotation"),
+    }
+
+    // Check the ledger of the validator to make sure the entry height is correct
+    // Extra Credit: Check that the old leader and the new leader's ledgers agree
+    // up to the point of leader rotation
+
+    // Shut down
+    validator.close().unwrap();
+    leader.close().unwrap();
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
+}
+
 fn mk_client(leader: &NodeInfo) -> ThinClient {
     let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     requests_socket
