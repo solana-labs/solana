@@ -19,6 +19,7 @@ pub enum BudgetError {
     NegativeTokens,
     DestinationMissing(Pubkey),
     FailedWitness,
+    UserdataTooSmall,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -148,39 +149,42 @@ impl BudgetContract {
                         state.pending_budget = Some(budget);
                         accounts[1].tokens += contract.tokens;
                         state.initialized = true;
-                        state.serialize(&mut accounts[1].userdata);
-                        Ok(())
+                        state.serialize(&mut accounts[1].userdata)
                     }
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
-                let mut state = Self::deserialize(&accounts[1].userdata).unwrap();
-                if !state.is_pending() {
-                    Err(BudgetError::ContractNotPending(tx.keys[1]))
-                } else if !state.initialized {
-                    trace!("contract is uninitialized");
-                    Err(BudgetError::UninitializedContract(tx.keys[1]))
+                if let Ok(mut state) = Self::deserialize(&accounts[1].userdata) {
+                    if !state.is_pending() {
+                        Err(BudgetError::ContractNotPending(tx.keys[1]))
+                    } else if !state.initialized {
+                        trace!("contract is uninitialized");
+                        Err(BudgetError::UninitializedContract(tx.keys[1]))
+                    } else {
+                        trace!("apply timestamp");
+                        state.apply_timestamp(&tx.keys, accounts, *dt)?;
+                        trace!("apply timestamp committed");
+                        state.serialize(&mut accounts[1].userdata)
+                    }
                 } else {
-                    trace!("apply timestamp");
-                    state.apply_timestamp(&tx.keys, accounts, *dt)?;
-                    trace!("apply timestamp committed");
-                    state.serialize(&mut accounts[1].userdata);
-                    Ok(())
+                    Err(BudgetError::UninitializedContract(tx.keys[1]))
                 }
             }
             Instruction::ApplySignature => {
-                let mut state = Self::deserialize(&accounts[1].userdata).unwrap();
-                if !state.is_pending() {
-                    Err(BudgetError::ContractNotPending(tx.keys[1]))
-                } else if !state.initialized {
-                    trace!("contract is uninitialized");
-                    Err(BudgetError::UninitializedContract(tx.keys[1]))
+                if let Ok(mut state) = Self::deserialize(&accounts[1].userdata) {
+                    if !state.is_pending() {
+                        Err(BudgetError::ContractNotPending(tx.keys[1]))
+                    } else if !state.initialized {
+                        trace!("contract is uninitialized");
+                        Err(BudgetError::UninitializedContract(tx.keys[1]))
+                    } else {
+                        trace!("apply signature");
+                        state.apply_signature(&tx.keys, accounts)?;
+                        trace!("apply signature committed");
+                        state.serialize(&mut accounts[1].userdata)
+                    }
                 } else {
-                    trace!("apply signature");
-                    state.apply_signature(&tx.keys, accounts)?;
-                    trace!("apply signature committed");
-                    state.serialize(&mut accounts[1].userdata);
-                    Ok(())
+                    Err(BudgetError::UninitializedContract(tx.keys[1]))
                 }
             }
             Instruction::NewVote(_vote) => {
@@ -190,16 +194,26 @@ impl BudgetContract {
             }
         }
     }
-    fn serialize(&self, output: &mut [u8]) {
+    fn serialize(&self, output: &mut [u8]) -> Result<(), BudgetError> {
         let len = serialized_size(self).unwrap() as u64;
+        if output.len() < len as usize {
+            warn!(
+                "{} bytes required to serialize, only have {} bytes",
+                len,
+                output.len()
+            );
+            return Err(BudgetError::UserdataTooSmall);
+        }
         {
             let writer = io::BufWriter::new(&mut output[..8]);
             serialize_into(writer, &len).unwrap();
         }
+
         {
             let writer = io::BufWriter::new(&mut output[8..8 + len as usize]);
             serialize_into(writer, self).unwrap();
         }
+        Ok(())
     }
 
     pub fn deserialize(input: &[u8]) -> bincode::Result<Self> {
@@ -220,7 +234,7 @@ impl BudgetContract {
         if let Ok(mut state) = BudgetContract::deserialize(&accounts[1].userdata) {
             trace!("saved error {:?}", e);
             state.last_error = Some(e);
-            state.serialize(&mut accounts[1].userdata);
+            state.serialize(&mut accounts[1].userdata).unwrap();
         } else {
             trace!("error in uninitialized contract {:?}", e,);
         }
@@ -233,6 +247,7 @@ impl BudgetContract {
     /// be spent from this account .
     pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> () {
         let instruction = deserialize(&tx.userdata).unwrap();
+        trace!("process_transaction: {:?}", instruction);
         let _ = Self::apply_debits_to_budget_state(tx, accounts, &instruction)
             .and_then(|_| Self::apply_credits_to_budget_state(tx, accounts, &instruction))
             .map_err(|e| {
@@ -268,11 +283,21 @@ mod test {
     fn test_serializer() {
         let mut a = Account::new(0, 512, BudgetContract::id());
         let b = BudgetContract::default();
-        b.serialize(&mut a.userdata);
+        b.serialize(&mut a.userdata).unwrap();
         let buf = serialize(&b).unwrap();
         assert_eq!(a.userdata[8..8 + buf.len()], buf[0..]);
         let c = BudgetContract::deserialize(&a.userdata).unwrap();
         assert_eq!(b, c);
+    }
+
+    #[test]
+    fn test_serializer_userdata_too_small() {
+        let mut a = Account::new(0, 1, BudgetContract::id());
+        let b = BudgetContract::default();
+        assert_eq!(
+            b.serialize(&mut a.userdata),
+            Err(BudgetError::UserdataTooSmall)
+        );
     }
 
     #[test]
@@ -423,6 +448,41 @@ mod test {
             state.last_error,
             Some(BudgetError::ContractNotPending(contract.pubkey()))
         );
+    }
+
+    #[test]
+    fn test_userdata_too_small() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetContract::id()),
+            Account::new(1, 0, BudgetContract::id()), // <== userdata is 0, which is not enough
+            Account::new(1, 0, BudgetContract::id()),
+        ];
+        let from = Keypair::new();
+        let contract = Keypair::new();
+        let to = Keypair::new();
+        let tx = Transaction::budget_new_on_date(
+            &from,
+            to.pubkey(),
+            contract.pubkey(),
+            Utc::now(),
+            1,
+            Hash::default(),
+        );
+
+        BudgetContract::process_transaction(&tx, &mut accounts);
+        assert!(BudgetContract::deserialize(&accounts[1].userdata).is_err());
+
+        let tx = Transaction::budget_new_timestamp(
+            &from,
+            contract.pubkey(),
+            to.pubkey(),
+            Utc::now(),
+            Hash::default(),
+        );
+        BudgetContract::process_transaction(&tx, &mut accounts);
+        assert!(BudgetContract::deserialize(&accounts[1].userdata).is_err());
+
+        // Success if there was no panic...
     }
 
     /// Detect binary changes in the serialized contract userdata, which could have a downstream
