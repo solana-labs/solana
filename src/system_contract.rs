@@ -42,6 +42,7 @@ impl SystemContract {
     }
     pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) {
         let syscall: SystemContract = deserialize(&tx.userdata).unwrap();
+        trace!("process_transaction: {:?}", syscall);
         match syscall {
             SystemContract::CreateAccount {
                 tokens,
