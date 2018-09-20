@@ -83,6 +83,7 @@ influx_db_client = "0.3.4"
 jsonrpc-core = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
 jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
 jsonrpc-macros = { git = "https://github.com/paritytech/jsonrpc", rev = "4b6060b" }
+ipnetwork = "0.12.7"
 itertools = "0.7.8"
 log = "0.4.2"
 matches = "0.1.6"

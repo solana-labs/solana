@@ -48,9 +48,7 @@ pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr
     }
 }
 
-pub fn get_ip_addr() -> Option<IpAddr> {
-    let mut ifaces = datalink::interfaces();
-
+fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<IpAddr> {
     // put eth0 and wifi0, etc. up front of our list of candidates
     ifaces.sort_by(|a, b| {
         a.name
@@ -60,9 +58,10 @@ pub fn get_ip_addr() -> Option<IpAddr> {
             .cmp(&b.name.chars().last().unwrap())
     });
 
-    for iface in ifaces {
+    for iface in ifaces.clone() {
+        trace!("get_ip_addr considering iface {}", iface.name);
         for p in iface.ips {
-            trace!("get_ip_addr considering iface {} {}", iface.name, p);
+            trace!("  ip {}", p);
             if p.ip().is_loopback() {
                 trace!("    loopback");
                 continue;
@@ -77,7 +76,7 @@ pub fn get_ip_addr() -> Option<IpAddr> {
                         trace!("    link local");
                         continue;
                     }
-                    trace!("    using ==> {}", p.ip());
+                    trace!("    picked {}", p.ip());
                     return Some(p.ip());
                 }
                 IpAddr::V6(_addr) => {
@@ -91,6 +90,12 @@ pub fn get_ip_addr() -> Option<IpAddr> {
         }
     }
     None
+}
+
+pub fn get_ip_addr() -> Option<IpAddr> {
+    let mut ifaces = datalink::interfaces();
+
+    find_eth0ish_ip_addr(&mut ifaces)
 }
 
 fn udp_socket(reuseaddr: bool) -> io::Result<Socket> {
@@ -156,7 +161,74 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
 
 #[cfg(test)]
 mod tests {
+    use ipnetwork::IpNetwork;
+    use logger;
     use netutil::*;
+    use pnet_datalink as datalink;
+
+    #[test]
+    fn test_find_eth0ish_ip_addr() {
+        logger::setup();
+
+        macro_rules! mock_interface {
+            ($name:ident, $ip_mask:expr) => {
+                datalink::NetworkInterface {
+                    name: stringify!($name).to_string(),
+                    index: 0,
+                    mac: None,
+                    ips: vec![IpNetwork::V4($ip_mask.parse().unwrap())],
+                    flags: 0,
+                }
+            };
+        }
+
+        // loopback bad
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![mock_interface!(lo, "127.0.0.1/24")]),
+            None
+        );
+        // multicast bad
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![mock_interface!(eth0, "224.0.1.5/24")]),
+            None
+        );
+
+        // finds "wifi0"
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![
+                mock_interface!(eth0, "224.0.1.5/24"),
+                mock_interface!(eth2, "192.168.137.1/8"),
+                mock_interface!(eth3, "10.0.75.1/8"),
+                mock_interface!(eth4, "172.22.140.113/4"),
+                mock_interface!(lo, "127.0.0.1/24"),
+                mock_interface!(wifi0, "192.168.1.184/8"),
+            ]),
+            Some(mock_interface!(wifi0, "192.168.1.184/8").ips[0].ip())
+        );
+        // finds "wifi0" in the middle
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![
+                mock_interface!(eth0, "224.0.1.5/24"),
+                mock_interface!(eth2, "192.168.137.1/8"),
+                mock_interface!(eth3, "10.0.75.1/8"),
+                mock_interface!(wifi0, "192.168.1.184/8"),
+                mock_interface!(eth4, "172.22.140.113/4"),
+                mock_interface!(lo, "127.0.0.1/24"),
+            ]),
+            Some(mock_interface!(wifi0, "192.168.1.184/8").ips[0].ip())
+        );
+        // picks "eth2", is lowest valid "eth"
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![
+                mock_interface!(eth0, "224.0.1.5/24"),
+                mock_interface!(eth2, "192.168.137.1/8"),
+                mock_interface!(eth3, "10.0.75.1/8"),
+                mock_interface!(eth4, "172.22.140.113/4"),
+                mock_interface!(lo, "127.0.0.1/24"),
+            ]),
+            Some(mock_interface!(eth2, "192.168.137.1/8").ips[0].ip())
+        );
+    }
 
     #[test]
     fn test_parse_port_or_addr() {

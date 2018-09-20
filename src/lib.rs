@@ -72,6 +72,7 @@ extern crate chrono;
 extern crate clap;
 extern crate dirs;
 extern crate generic_array;
+extern crate ipnetwork;
 extern crate itertools;
 extern crate jsonrpc_core;
 #[macro_use]
