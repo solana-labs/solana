@@ -4,6 +4,7 @@ import assert from 'assert';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
+import bs58 from 'bs58';
 
 import {Transaction} from './transaction';
 import type {Account, PublicKey} from './account';
@@ -55,6 +56,22 @@ const GetBalanceRpcResult = struct({
   error: 'any?',
   result: 'number?',
 });
+
+
+/**
+ * Expected JSON RPC response for the "getAccountInfo" message
+ */
+const GetAccountInfoRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: struct.optional({
+    contract_id: 'array',
+    tokens: 'number',
+    userdata: 'array',
+  }),
+});
+
 
 /**
  * Expected JSON RPC response for the "confirmTransaction" message
@@ -117,6 +134,15 @@ const SendTokensRpcResult = struct({
 });
 
 /**
+ * Information describing an account
+ */
+type AccountInfo = {
+  tokens: number,
+  programId: PublicKey,
+  userdata: Buffer | null,
+}
+
+/**
  * A connection to a fullnode JSON RPC endpoint
  */
 export class Connection {
@@ -148,6 +174,33 @@ export class Connection {
     }
     assert(typeof res.result !== 'undefined');
     return res.result;
+  }
+
+  /**
+   * Fetch all the account info for the specified public key
+   */
+  async getAccountInfo(publicKey: PublicKey): Promise<AccountInfo> {
+    const unsafeRes = await this._rpcRequest(
+      'getAccountInfo',
+      [publicKey]
+    );
+    const res = GetAccountInfoRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+
+    const {result} = res;
+    assert(typeof result !== 'undefined');
+
+    let userdata = null;
+    if (result.userdata.length > 0) {
+      userdata = Buffer.from(result.userdata);
+    }
+    return {
+      tokens: result.tokens,
+      programId: bs58.encode(result.contract_id),
+      userdata,
+    };
   }
 
   /**
