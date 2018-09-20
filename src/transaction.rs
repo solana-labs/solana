@@ -5,7 +5,7 @@ use budget::{Budget, Condition};
 use budget_contract::BudgetContract;
 use chrono::prelude::*;
 use hash::Hash;
-use instruction::{Contract, Instruction, Plan, Vote};
+use instruction::{Contract, Instruction, Vote};
 use payment_plan::{Payment, PaymentPlan};
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 use std::mem::size_of;
@@ -84,8 +84,7 @@ impl Transaction {
             to: contract,
         };
         let budget = Budget::Pay(payment);
-        let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens });
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).unwrap();
         Self::new_with_userdata(
             from_keypair,
@@ -168,8 +167,7 @@ impl Transaction {
             (Condition::Timestamp(dt, from), Payment { tokens, to }),
             (Condition::Signature(from), Payment { tokens, to: from }),
         );
-        let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens });
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new_with_userdata(
             from_keypair,
@@ -296,7 +294,7 @@ impl Transaction {
         if let Some(Instruction::NewContract(contract)) = self.instruction() {
             self.fee >= 0
                 && self.fee <= contract.tokens
-                && contract.plan.verify(contract.tokens - self.fee)
+                && contract.budget.verify(contract.tokens - self.fee)
         } else {
             true
         }
@@ -363,8 +361,7 @@ mod tests {
             tokens: 0,
             to: Default::default(),
         });
-        let plan = Plan::Budget(budget);
-        let instruction = Instruction::NewContract(Contract { plan, tokens: 0 });
+        let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
         let userdata = serialize(&instruction).unwrap();
         let claim0 = Transaction {
             keys: vec![],
@@ -388,7 +385,7 @@ mod tests {
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
             }
         }
@@ -407,7 +404,7 @@ mod tests {
         let mut tx = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
         let mut instruction = tx.instruction();
         if let Some(Instruction::NewContract(ref mut contract)) = instruction {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -461,7 +458,7 @@ mod tests {
         let mut tx = Transaction::budget_new(&keypair0, keypair1.pubkey(), 1, zero);
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = 2; // <-- attack!
             }
         }
@@ -471,7 +468,7 @@ mod tests {
         // Also, ensure all branchs of the plan spend all tokens
         let mut instruction = tx.instruction().unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Plan::Budget(Budget::Pay(ref mut payment)) = contract.plan {
+            if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = 0; // <-- whoops!
             }
         }
