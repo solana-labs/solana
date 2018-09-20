@@ -135,6 +135,11 @@ const SendTokensRpcResult = struct({
 
 /**
  * Information describing an account
+ *
+ * @typedef {Object} AccountInfo
+ * @property {number} tokens Number of tokens assigned to the account
+ * @property {PublicKey} programId Identifier of the program assigned to the account
+ * @property {?Buffer} userdata Optional userdata assigned to the account
  */
 type AccountInfo = {
   tokens: number,
