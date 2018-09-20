@@ -2,6 +2,7 @@
 //!
 use counter::Counter;
 use crdt::{Crdt, NodeInfo};
+use entry::EntrySender;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob};
 use rand::{thread_rng, Rng};
@@ -144,7 +145,7 @@ fn recv_window(
     consumed: &mut u64,
     received: &mut u64,
     r: &BlobReceiver,
-    s: &BlobSender,
+    s: &EntrySender,
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
 ) -> Result<()> {
@@ -232,7 +233,7 @@ pub fn window_service(
     window: SharedWindow,
     entry_height: u64,
     r: BlobReceiver,
-    s: BlobSender,
+    s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
 ) -> JoinHandle<()> {
@@ -295,25 +296,54 @@ pub fn window_service(
 #[cfg(test)]
 mod test {
     use crdt::{Crdt, Node};
+    use entry::Entry;
+    use hash::Hash;
     use logger;
-    use packet::{BlobRecycler, PACKET_DATA_SIZE};
-    use std::net::UdpSocket;
+    use packet::{BlobRecycler, SharedBlobs, PACKET_DATA_SIZE};
+    use recorder::Recorder;
+    use signature::Pubkey;
+    use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
+    use std::sync::mpsc::{channel, Receiver};
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{blob_receiver, responder, BlobReceiver};
+    use streamer::{blob_receiver, responder};
     use window::default_window;
     use window_service::{repair_backoff, window_service};
 
-    fn get_blobs(r: BlobReceiver, num: &mut usize) {
+    fn make_consecutive_blobs(
+        me_id: Pubkey,
+        mut num_blobs_to_make: u64,
+        start_hash: Hash,
+        addr: &SocketAddr,
+        resp_recycler: &BlobRecycler,
+    ) -> SharedBlobs {
+        let mut msgs = Vec::new();
+        let mut recorder = Recorder::new(start_hash);
+        while num_blobs_to_make != 0 {
+            let new_entries = recorder.record(vec![]);
+            let mut new_blobs: SharedBlobs = new_entries
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    let blob_index = num_blobs_to_make - i as u64 - 1;
+                    let new_blob =
+                        e.to_blob(&resp_recycler, Some(blob_index), Some(me_id), Some(addr));
+                    assert_eq!(blob_index, new_blob.read().get_index().unwrap());
+                    new_blob
+                }).collect();
+            new_blobs.truncate(num_blobs_to_make as usize);
+            num_blobs_to_make -= new_blobs.len() as u64;
+            msgs.extend(new_blobs);
+        }
+        msgs
+    }
+
+    fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
                 Ok(m) => {
-                    for (i, v) in m.iter().enumerate() {
-                        assert_eq!(v.read().get_index().unwrap() as usize, *num + i);
-                    }
                     *num += m.len();
                 }
                 e => info!("error {:?}", e),
@@ -355,26 +385,21 @@ mod test {
                 tn.sockets.replicate.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
-            let mut msgs = Vec::new();
-            for v in 0..10 {
-                let i = 9 - v;
-                let b = resp_recycler.allocate();
-                {
-                    let mut w = b.write();
-                    w.set_index(i).unwrap();
-                    w.set_id(me_id).unwrap();
-                    assert_eq!(i, w.get_index().unwrap());
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.contact_info.ncp);
-                }
-                msgs.push(b);
-            }
+            let mut num_blobs_to_make = 10;
+            let gossip_address = &tn.info.contact_info.ncp;
+            let msgs = make_consecutive_blobs(
+                me_id,
+                num_blobs_to_make,
+                Hash::default(),
+                &gossip_address,
+                &resp_recycler,
+            );
             s_responder.send(msgs).expect("send");
             t_responder
         };
 
         let mut num = 0;
-        get_blobs(r_window, &mut num);
+        get_entries(r_window, &mut num);
         assert_eq!(num, 10);
         let mut q = r_retransmit.recv().unwrap();
         while let Ok(mut nq) = r_retransmit.try_recv() {

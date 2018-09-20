@@ -2,13 +2,14 @@
 
 use counter::Counter;
 use crdt::Crdt;
+use entry::Entry;
 use log::Level;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -68,23 +69,23 @@ impl RetransmitStage {
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
-    ) -> (Self, BlobReceiver) {
+    ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let t_retransmit = retransmitter(retransmit_socket, crdt.clone(), retransmit_receiver);
-        let (blob_sender, blob_receiver) = channel();
+        let (entry_sender, entry_receiver) = channel();
         let t_window = window_service(
             crdt.clone(),
             window,
             entry_height,
             fetch_stage_receiver,
-            blob_sender,
+            entry_sender,
             retransmit_sender,
             repair_socket,
         );
         let thread_hdls = vec![t_retransmit, t_window];
 
-        (RetransmitStage { thread_hdls }, blob_receiver)
+        (RetransmitStage { thread_hdls }, entry_receiver)
     }
 }
 

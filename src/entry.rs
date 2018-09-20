@@ -9,7 +9,11 @@ use rayon::prelude::*;
 use signature::Pubkey;
 use std::io::Cursor;
 use std::net::SocketAddr;
+use std::sync::mpsc::{Receiver, Sender};
 use transaction::Transaction;
+
+pub type EntrySender = Sender<Vec<Entry>>;
+pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
 /// of hashes performed since the previous entry.  The `id` field is the result
