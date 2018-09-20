@@ -1,12 +1,13 @@
 //! The `poh_service` module provides an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users. It continuously generates
-//! new Hashes, only stopping to check if it has been sent a Hash to mix in to the Poh , which
-//! stream.
-//! The returned Hash includes the mix-in request, the latest Poh Hash, and the
+//! new Hashes, only stopping to check if it has been sent a Hash to mix in
+//! to the Poh.
+//!
+//! The returned Entry includes the mix-in request, the latest Poh Hash, and the
 //! number of Hashes generated in the service since the last mix-in request.
 //!
-//! The resulting stream of Hashes represents ordered transactions in time.
-
+//! The resulting stream of Hashes represents ordered events in time.
+//!
 use hash::Hash;
 use poh::{Poh, PohEntry};
 use service::Service;

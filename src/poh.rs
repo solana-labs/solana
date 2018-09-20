@@ -1,7 +1,7 @@
 //! The `Poh` module provides an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users.
 
-use hash::{extend_and_hash, hash, Hash};
+use hash::{hash, hashv, Hash};
 use std::time::{Duration, Instant};
 
 pub struct Poh {
@@ -38,7 +38,7 @@ impl Poh {
         let num_hashes = self.num_hashes + 1;
         self.num_hashes = 0;
 
-        self.last_hash = extend_and_hash(&self.last_hash, &mixin.as_ref());
+        self.last_hash = hashv(&[&self.last_hash.as_ref(), &mixin.as_ref()]);
 
         PohEntry {
             num_hashes,
@@ -47,6 +47,8 @@ impl Poh {
         }
     }
 
+    // emissions of Ticks (i.e. PohEntries without a mixin) allows
+    //  validators to parallelize the work of catching up
     pub fn tick(&mut self) -> Option<PohEntry> {
         if let Some(tick_duration) = self.tick_duration {
             if self.last_tick.elapsed() >= tick_duration {
@@ -73,7 +75,7 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
             last_hash = hash(&last_hash.as_ref());
         }
         let id = match entry.mixin {
-            Some(mixin) => extend_and_hash(&last_hash, &mixin.as_ref()),
+            Some(mixin) => hashv(&[&last_hash.as_ref(), &mixin.as_ref()]),
             None => hash(&last_hash.as_ref()),
         };
         if id != entry.id {
