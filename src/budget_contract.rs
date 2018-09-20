@@ -246,14 +246,17 @@ impl BudgetContract {
     /// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
     /// be spent from this account .
     pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> () {
-        let instruction = deserialize(&tx.userdata).unwrap();
-        trace!("process_transaction: {:?}", instruction);
-        let _ = Self::apply_debits_to_budget_state(tx, accounts, &instruction)
-            .and_then(|_| Self::apply_credits_to_budget_state(tx, accounts, &instruction))
-            .map_err(|e| {
-                trace!("saving error {:?}", e);
-                Self::save_error_to_budget_state(e, accounts);
-            });
+        if let Ok(instruction) = deserialize(&tx.userdata) {
+            trace!("process_transaction: {:?}", instruction);
+            let _ = Self::apply_debits_to_budget_state(tx, accounts, &instruction)
+                .and_then(|_| Self::apply_credits_to_budget_state(tx, accounts, &instruction))
+                .map_err(|e| {
+                    trace!("saving error {:?}", e);
+                    Self::save_error_to_budget_state(e, accounts);
+                });
+        } else {
+            info!("Invalid transaction userdata: {:?}", tx.userdata);
+        }
     }
 
     //TODO the contract needs to provide a "get_balance" introspection call of the userdata
@@ -298,6 +301,27 @@ mod test {
             b.serialize(&mut a.userdata),
             Err(BudgetError::UserdataTooSmall)
         );
+    }
+    #[test]
+    fn test_invalid_instruction() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetContract::id()),
+            Account::new(0, 512, BudgetContract::id()),
+        ];
+        let from = Keypair::new();
+        let contract = Keypair::new();
+
+        let tx = Transaction::new_with_userdata(
+            &from,
+            &[contract.pubkey()],
+            BudgetContract::id(),
+            vec![1, 2, 3], // <== garbage instruction
+            Hash::default(),
+            0,
+        );
+        BudgetContract::process_transaction(&tx, &mut accounts);
+
+        // Success if there was no panic...
     }
 
     #[test]

@@ -41,39 +41,42 @@ impl SystemContract {
         account.tokens
     }
     pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) {
-        let syscall: SystemContract = deserialize(&tx.userdata).unwrap();
-        trace!("process_transaction: {:?}", syscall);
-        match syscall {
-            SystemContract::CreateAccount {
-                tokens,
-                space,
-                contract_id,
-            } => {
-                if !Self::check_id(&accounts[0].contract_id) {
-                    return;
+        if let Ok(syscall) = deserialize(&tx.userdata) {
+            trace!("process_transaction: {:?}", syscall);
+            match syscall {
+                SystemContract::CreateAccount {
+                    tokens,
+                    space,
+                    contract_id,
+                } => {
+                    if !Self::check_id(&accounts[0].contract_id) {
+                        return;
+                    }
+                    if space > 0
+                        && (!accounts[1].userdata.is_empty()
+                            || !Self::check_id(&accounts[1].contract_id))
+                    {
+                        return;
+                    }
+                    accounts[0].tokens -= tokens;
+                    accounts[1].tokens += tokens;
+                    accounts[1].contract_id = contract_id;
+                    accounts[1].userdata = vec![0; space as usize];
                 }
-                if space > 0
-                    && (!accounts[1].userdata.is_empty()
-                        || !Self::check_id(&accounts[1].contract_id))
-                {
-                    return;
+                SystemContract::Assign { contract_id } => {
+                    if !Self::check_id(&accounts[0].contract_id) {
+                        return;
+                    }
+                    accounts[0].contract_id = contract_id;
                 }
-                accounts[0].tokens -= tokens;
-                accounts[1].tokens += tokens;
-                accounts[1].contract_id = contract_id;
-                accounts[1].userdata = vec![0; space as usize];
-            }
-            SystemContract::Assign { contract_id } => {
-                if !Self::check_id(&accounts[0].contract_id) {
-                    return;
+                SystemContract::Move { tokens } => {
+                    //bank should be verifying correctness
+                    accounts[0].tokens -= tokens;
+                    accounts[1].tokens += tokens;
                 }
-                accounts[0].contract_id = contract_id;
             }
-            SystemContract::Move { tokens } => {
-                //bank should be verifying correctness
-                accounts[0].tokens -= tokens;
-                accounts[1].tokens += tokens;
-            }
+        } else {
+            info!("Invalid transaction userdata: {:?}", tx.userdata);
         }
     }
 }
