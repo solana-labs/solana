@@ -102,8 +102,8 @@ build_rpc_trait! {
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
 
-        #[rpc(meta, name = "getAccount")]
-        fn get_account(&self, Self::Metadata, String) -> Result<Account>;
+        #[rpc(meta, name = "getAccountInfo")]
+        fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
 
         #[rpc(meta, name= "requestAirdrop")]
         fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
@@ -146,7 +146,7 @@ impl RpcSol for RpcSolImpl {
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
     }
-    fn get_account(&self, meta: Self::Metadata, id: String) -> Result<Account> {
+    fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
         let pubkey_vec = bs58::decode(id)
             .into_vec()
             .map_err(|_| Error::invalid_request())?;
@@ -154,7 +154,7 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let pubkey = Pubkey::new(&pubkey_vec);
-        meta.request_processor.get_account(pubkey)
+        meta.request_processor.get_account_info(pubkey)
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         let pubkey_vec = bs58::decode(id)
@@ -225,7 +225,7 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
     }
-    fn get_account(&self, pubkey: Pubkey) -> Result<Account> {
+    fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank
             .get_account(&pubkey)
             .ok_or(Error::invalid_request())
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(expected, result);
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccount","params":["{}"]}}"#,
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
             bob_pubkey
         );
 
