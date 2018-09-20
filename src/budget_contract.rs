@@ -1,8 +1,9 @@
 //! budget contract
 use bank::Account;
 use bincode::{self, deserialize, serialize_into, serialized_size};
+use budget::Budget;
 use chrono::prelude::{DateTime, Utc};
-use instruction::{Instruction, Plan};
+use instruction::Instruction;
 use payment_plan::{PaymentPlan, Witness};
 use signature::Pubkey;
 use std::io;
@@ -23,7 +24,7 @@ pub enum BudgetError {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct BudgetContract {
     pub initialized: bool,
-    pub pending_plan: Option<Plan>,
+    pub pending_budget: Option<Budget>,
     pub last_error: Option<BudgetError>,
 }
 
@@ -32,7 +33,7 @@ pub const BUDGET_CONTRACT_ID: [u8; 32] = [
 ];
 impl BudgetContract {
     fn is_pending(&self) -> bool {
-        self.pending_plan != None
+        self.pending_budget != None
     }
     pub fn id() -> Pubkey {
         Pubkey::new(&BUDGET_CONTRACT_ID)
@@ -49,9 +50,9 @@ impl BudgetContract {
         account: &mut [Account],
     ) -> Result<(), BudgetError> {
         let mut final_payment = None;
-        if let Some(ref mut plan) = self.pending_plan {
-            plan.apply_witness(&Witness::Signature, &keys[0]);
-            final_payment = plan.final_payment();
+        if let Some(ref mut budget) = self.pending_budget {
+            budget.apply_witness(&Witness::Signature, &keys[0]);
+            final_payment = budget.final_payment();
         }
 
         if let Some(payment) = final_payment {
@@ -59,7 +60,7 @@ impl BudgetContract {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing(payment.to));
             }
-            self.pending_plan = None;
+            self.pending_budget = None;
             account[1].tokens -= payment.tokens;
             account[2].tokens += payment.tokens;
         }
@@ -77,9 +78,9 @@ impl BudgetContract {
         // Check to see if any timelocked transactions can be completed.
         let mut final_payment = None;
 
-        if let Some(ref mut plan) = self.pending_plan {
-            plan.apply_witness(&Witness::Timestamp(dt), &keys[0]);
-            final_payment = plan.final_payment();
+        if let Some(ref mut budget) = self.pending_budget {
+            budget.apply_witness(&Witness::Timestamp(dt), &keys[0]);
+            final_payment = budget.final_payment();
         }
 
         if let Some(payment) = final_payment {
@@ -87,7 +88,7 @@ impl BudgetContract {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing(payment.to));
             }
-            self.pending_plan = None;
+            self.pending_budget = None;
             accounts[1].tokens -= payment.tokens;
             accounts[2].tokens += payment.tokens;
         }
@@ -133,8 +134,8 @@ impl BudgetContract {
     ) -> Result<(), BudgetError> {
         match instruction {
             Instruction::NewContract(contract) => {
-                let plan = contract.plan.clone();
-                if let Some(payment) = plan.final_payment() {
+                let budget = contract.budget.clone();
+                if let Some(payment) = budget.final_payment() {
                     accounts[1].tokens += payment.tokens;
                     Ok(())
                 } else {
@@ -144,7 +145,7 @@ impl BudgetContract {
                         Err(BudgetError::ContractAlreadyExists(tx.keys[1]))
                     } else {
                         let mut state = BudgetContract::default();
-                        state.pending_plan = Some(plan);
+                        state.pending_budget = Some(budget);
                         accounts[1].tokens += contract.tokens;
                         state.initialized = true;
                         state.serialize(&mut accounts[1].userdata);
@@ -445,9 +446,9 @@ mod test {
         assert_eq!(
             tx.userdata,
             vec![
-                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0,
-                0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7,
-                6, 5, 4, 1, 1, 1
+                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4, 1,
+                1, 1
             ]
         );
 
@@ -456,16 +457,16 @@ mod test {
         assert_eq!(
             tx.userdata,
             vec![
-                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0,
-                0, 0, 0, 0, 0, 50, 48, 49, 54, 45, 48, 55, 45, 48, 56, 84, 48, 57, 58, 49, 48, 58,
-                49, 49, 90, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206,
-                105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 192,
-                0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 9, 8, 7, 6, 5, 4, 1, 1, 1, 1, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135,
+                0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0,
+                0, 50, 48, 49, 54, 45, 48, 55, 45, 48, 56, 84, 48, 57, 58, 49, 48, 58, 49, 49, 90,
+                32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231,
+                150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 192, 0, 0, 0,
+                0, 0, 0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9,
+                8, 7, 6, 5, 4, 1, 1, 1, 1, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167,
+                181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134,
+                137, 247, 161, 68, 192, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135,
                 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180,
-                72, 134, 137, 247, 161, 68, 192, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177, 11,
-                117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16,
-                252, 180, 72, 134, 137, 247, 161, 68
+                72, 134, 137, 247, 161, 68
             ]
         );
 

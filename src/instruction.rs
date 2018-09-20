@@ -1,42 +1,12 @@
 use budget::Budget;
 use chrono::prelude::{DateTime, Utc};
-use payment_plan::{Payment, PaymentPlan, Witness};
-use signature::Pubkey;
-
-/// The type of payment plan. Each item must implement the PaymentPlan trait.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Plan {
-    /// The builtin contract language Budget.
-    Budget(Budget),
-}
-
-// A proxy for the underlying DSL.
-impl PaymentPlan for Plan {
-    fn final_payment(&self) -> Option<Payment> {
-        match self {
-            Plan::Budget(budget) => budget.final_payment(),
-        }
-    }
-
-    fn verify(&self, spendable_tokens: i64) -> bool {
-        match self {
-            Plan::Budget(budget) => budget.verify(spendable_tokens),
-        }
-    }
-
-    fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
-        match self {
-            Plan::Budget(budget) => budget.apply_witness(witness, from),
-        }
-    }
-}
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
-    /// The number of tokens allocated to the `Plan` and any transaction fees.
+    /// The number of tokens allocated to the `Budget` and any transaction fees.
     pub tokens: i64,
-    pub plan: Plan,
+    pub budget: Budget,
 }
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
