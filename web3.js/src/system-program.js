@@ -6,13 +6,13 @@ import {Transaction} from './transaction';
 import type {PublicKey} from './account';
 
 /**
- * Factory class for transactions to interact with the System contract
+ * Factory class for transactions to interact with the System program
  */
-export class SystemContract {
+export class SystemProgram {
   /**
-   * Public key that identifies the System Contract
+   * Public key that identifies the System program
    */
-  static get contractId(): PublicKey {
+  static get programId(): PublicKey {
     return '11111111111111111111111111111111';
   }
 
@@ -24,7 +24,7 @@ export class SystemContract {
     newAccount: PublicKey,
     tokens: number,
     space: number,
-    contractId: ?PublicKey
+    programId: ?PublicKey
   ): Transaction {
     const userdata = Buffer.alloc(4 + 8 + 8 + 1 + 32);
     let pos = 0;
@@ -38,12 +38,12 @@ export class SystemContract {
     userdata.writeUInt32LE(space, pos); // space as u64
     pos += 8;
 
-    if (contractId) {
+    if (programId) {
       userdata.writeUInt8(1, pos); // 'Some'
       pos += 1;
 
-      const contractIdBytes = Transaction.serializePublicKey(contractId);
-      contractIdBytes.copy(userdata, pos);
+      const programIdBytes = Transaction.serializePublicKey(programId);
+      programIdBytes.copy(userdata, pos);
       pos += 32;
     } else {
       userdata.writeUInt8(0, pos); // 'None'
@@ -55,7 +55,7 @@ export class SystemContract {
     return new Transaction({
       fee: 0,
       keys: [from, newAccount],
-      contractId: SystemContract.contractId,
+      programId: SystemProgram.programId,
       userdata,
     });
   }
@@ -77,31 +77,31 @@ export class SystemContract {
     return new Transaction({
       fee: 0,
       keys: [from, to],
-      contractId: SystemContract.contractId,
+      programId: SystemProgram.programId,
       userdata,
     });
   }
 
   /**
-   * Generate a Transaction that assigns an account to a contract id
+   * Generate a Transaction that assigns an account to a program
    */
-  static assign(from: PublicKey, contractId: PublicKey): Transaction {
+  static assign(from: PublicKey, programId: PublicKey): Transaction {
     const userdata = Buffer.alloc(4 + 32);
     let pos = 0;
 
     userdata.writeUInt32LE(1, pos); // Assign instruction
     pos += 4;
 
-    const contractIdBytes = Transaction.serializePublicKey(contractId);
-    contractIdBytes.copy(userdata, pos);
-    pos += contractIdBytes.length;
+    const programIdBytes = Transaction.serializePublicKey(programId);
+    programIdBytes.copy(userdata, pos);
+    pos += programIdBytes.length;
 
     assert(pos === userdata.length);
 
     return new Transaction({
       fee: 0,
       keys: [from],
-      contractId: SystemContract.contractId,
+      programId: SystemProgram.programId,
       userdata,
     });
   }

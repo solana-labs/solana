@@ -2,7 +2,7 @@
 
 import {Account} from '../src/account';
 import {Connection} from '../src/connection';
-import {SystemContract} from '../src/system-contract';
+import {SystemProgram} from '../src/system-program';
 import {mockRpc} from './__mocks__/node-fetch';
 
 const url = 'http://testnet.solana.com:8899';
@@ -274,7 +274,7 @@ test('transaction', async () => {
   ]
   );
 
-  const transaction = SystemContract.move(
+  const transaction = SystemProgram.move(
     accountFrom.publicKey,
     accountTo.publicKey,
     10

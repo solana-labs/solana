@@ -22,7 +22,7 @@ export type TransactionId = string;
 type TransactionCtorFields = {|
   signature?: Buffer;
   keys?: Array<PublicKey>;
-  contractId?: PublicKey;
+  programId?: PublicKey;
   fee?: number;
   userdata?: Buffer;
 |};
@@ -44,9 +44,9 @@ export class Transaction {
   keys: Array<PublicKey> = [];
 
   /**
-   * Contract Id to execute
+   * Program Id to execute
    */
-  contractId: ?PublicKey;
+  programId: ?PublicKey;
 
   /**
    * A recent transaction id.  Must be populated by the caller
@@ -59,7 +59,7 @@ export class Transaction {
   fee: number = 0;
 
   /**
-   * Contract input userdata to include
+   * Program input
    */
   userdata: Buffer = Buffer.alloc(0);
 
@@ -90,9 +90,9 @@ export class Transaction {
       pos += 32;
     }
 
-    // serialize `this.contractId`
-    if (this.contractId) {
-      const keyBytes = Transaction.serializePublicKey(this.contractId);
+    // serialize `this.programId`
+    if (this.programId) {
+      const keyBytes = Transaction.serializePublicKey(this.programId);
       keyBytes.copy(transactionData, pos);
     }
     pos += 32;
