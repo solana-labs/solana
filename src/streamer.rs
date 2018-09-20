@@ -6,13 +6,21 @@ use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
-use std::thread::{Builder, JoinHandle};
+use std::thread::{sleep, Builder, JoinHandle};
 use std::time::Duration;
+use sys_info::mem_info;
 
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
 pub type BlobSender = Sender<SharedBlobs>;
 pub type BlobReceiver = Receiver<SharedBlobs>;
+
+fn calc_sleep_time(avail: u64) -> u64 {
+    let avail_inv = (2_000_000 - avail) as f32;
+    let avail_pow = avail_inv.powf(1.55f32);
+    let avail_lowered = avail_pow / 8000000f32;
+    avail_lowered as u64
+}
 
 fn recv_loop(
     sock: &UdpSocket,
@@ -23,6 +31,11 @@ fn recv_loop(
     loop {
         let msgs = re.allocate();
         loop {
+            let info = mem_info().unwrap();
+            if info.avail < 1000000 {
+                let sleep_time = calc_sleep_time(info.avail);
+                sleep(Duration::from_millis(sleep_time));
+            }
             let result = msgs.write().recv_from(sock);
             match result {
                 Ok(()) => {
@@ -127,6 +140,7 @@ pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender)
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
     use std::io;
     use std::io::Write;
@@ -191,5 +205,14 @@ mod test {
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+    }
+
+    #[test]
+    pub fn test_calc_sleep() {
+        assert_eq!(249, calc_sleep_time(999_999));
+        assert_eq!(467, calc_sleep_time(500_000));
+        assert_eq!(620, calc_sleep_time(200_000));
+        assert_eq!(730, calc_sleep_time(10));
+        assert_eq!(730, calc_sleep_time(0));
     }
 }
