@@ -5,7 +5,7 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_contract::BudgetContract;
+use budget_program::BudgetProgram;
 use counter::Counter;
 use entry::Entry;
 use hash::{hash, Hash};
@@ -21,7 +21,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
 use std::time::Instant;
-use system_contract::SystemContract;
+use system_program::SystemProgram;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
@@ -35,14 +35,14 @@ pub struct Account {
     /// A transaction can write to its userdata
     pub userdata: Vec<u8>,
     /// contract id this contract belongs to
-    pub contract_id: Pubkey,
+    pub program_id: Pubkey,
 }
 impl Account {
-    pub fn new(tokens: i64, space: usize, contract_id: Pubkey) -> Account {
+    pub fn new(tokens: i64, space: usize, program_id: Pubkey) -> Account {
         Account {
             tokens,
             userdata: vec![0u8; space],
-            contract_id,
+            program_id,
         }
     }
 }
@@ -52,7 +52,7 @@ impl Default for Account {
         Account {
             tokens: 0,
             userdata: vec![],
-            contract_id: SystemContract::id(),
+            program_id: SystemProgram::id(),
         }
     }
 }
@@ -284,7 +284,7 @@ impl Bank {
             } else {
                 error_counters.account_not_found_leader += 1;
             }
-            if BudgetContract::check_id(&tx.contract_id) {
+            if BudgetProgram::check_id(&tx.program_id) {
                 use instruction::Instruction;
                 if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
                     error_counters.account_not_found_vote += 1;
@@ -318,21 +318,21 @@ impl Bank {
     }
     pub fn verify_transaction(
         tx: &Transaction,
-        pre_contract_id: &Pubkey,
+        pre_program_id: &Pubkey,
         pre_tokens: i64,
         account: &Account,
     ) -> Result<()> {
         // Verify the transaction
-        // make sure that contract_id is still the same or this was just assigned by the system call contract
-        if !((*pre_contract_id == account.contract_id)
-            || (SystemContract::check_id(&tx.contract_id)
-                && SystemContract::check_id(&pre_contract_id)))
+        // make sure that program_id is still the same or this was just assigned by the system call contract
+        if !((*pre_program_id == account.program_id)
+            || (SystemProgram::check_id(&tx.program_id)
+                && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(BankError::ModifiedContractId(tx.signature));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if tx.contract_id != account.contract_id && pre_tokens > account.tokens {
+        if tx.program_id != account.program_id && pre_tokens > account.tokens {
             return Err(BankError::ExternalAccountTokenSpend(tx.signature));
         }
         if account.tokens < 0 {
@@ -348,23 +348,23 @@ impl Bank {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
             .iter_mut()
-            .map(|a| (a.contract_id, a.tokens))
+            .map(|a| (a.program_id, a.tokens))
             .collect();
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if SystemContract::check_id(&tx.contract_id) {
-            SystemContract::process_transaction(&tx, accounts)
-        } else if BudgetContract::check_id(&tx.contract_id) {
+        if SystemProgram::check_id(&tx.program_id) {
+            SystemProgram::process_transaction(&tx, accounts)
+        } else if BudgetProgram::check_id(&tx.program_id) {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
-            BudgetContract::process_transaction(&tx, accounts)
+            BudgetProgram::process_transaction(&tx, accounts)
         } else {
-            return Err(BankError::UnknownContractId(tx.contract_id));
+            return Err(BankError::UnknownContractId(tx.program_id));
         }
         // Verify the transaction
-        for ((pre_contract_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
-            Self::verify_transaction(&tx, pre_contract_id, *pre_tokens, post_account)?;
+        for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
+            Self::verify_transaction(&tx, pre_program_id, *pre_tokens, post_account)?;
         }
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
@@ -560,9 +560,9 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            assert!(SystemContract::check_id(&tx.contract_id), "Invalid ledger");
-            let instruction: SystemContract = deserialize(&tx.userdata).unwrap();
-            let deposit = if let SystemContract::Move { tokens } = instruction {
+            assert!(SystemProgram::check_id(&tx.program_id), "Invalid ledger");
+            let instruction: SystemProgram = deserialize(&tx.userdata).unwrap();
+            let deposit = if let SystemProgram::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
@@ -607,10 +607,10 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> i64 {
-        if SystemContract::check_id(&account.contract_id) {
-            SystemContract::get_balance(account)
-        } else if BudgetContract::check_id(&account.contract_id) {
-            BudgetContract::get_balance(account)
+        if SystemProgram::check_id(&account.program_id) {
+            SystemProgram::get_balance(account)
+        } else if BudgetProgram::check_id(&account.program_id) {
+            BudgetProgram::get_balance(account)
         } else {
             account.tokens
         }
