@@ -26,14 +26,21 @@ impl fmt::Display for Hash {
         write!(f, "{}", bs58::encode(self.0).into_string())
     }
 }
-/// Return a Sha256 hash for the given data.
-pub fn hash(val: &[u8]) -> Hash {
-    let mut hasher = Sha256::default();
-    hasher.input(val);
 
+/// Return a Sha256 hash for the given data.
+pub fn hashv(vals: &[&[u8]]) -> Hash {
+    let mut hasher = Sha256::default();
+    for val in vals {
+        hasher.input(val);
+    }
     // At the time of this writing, the sha2 library is stuck on an old version
     // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
     Hash(GenericArray::clone_from_slice(hasher.result().as_slice()))
+}
+
+/// Return a Sha256 hash for the given data.
+pub fn hash(val: &[u8]) -> Hash {
+    hashv(&[val])
 }
 
 /// Return the hash of the given hash extended with the given value.
