@@ -40,12 +40,7 @@ fn producer(addr: &SocketAddr, recycler: &PacketRecycler, exit: Arc<AtomicBool>)
     })
 }
 
-fn sink(
-    recycler: PacketRecycler,
-    exit: Arc<AtomicBool>,
-    rvs: Arc<AtomicUsize>,
-    r: PacketReceiver,
-) -> JoinHandle<()> {
+fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketReceiver) -> JoinHandle<()> {
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
@@ -53,7 +48,6 @@ fn sink(
         let timer = Duration::new(1, 0);
         if let Ok(msgs) = r.recv_timeout(timer) {
             rvs.fetch_add(msgs.read().packets.len(), Ordering::Relaxed);
-            recycler.recycle(msgs, "sink");
         }
     })
 }
@@ -101,7 +95,7 @@ fn main() -> Result<()> {
     let rvs = Arc::new(AtomicUsize::new(0));
     let sink_threads: Vec<_> = read_channels
         .into_iter()
-        .map(|r_reader| sink(pack_recycler.clone(), exit.clone(), rvs.clone(), r_reader))
+        .map(|r_reader| sink(exit.clone(), rvs.clone(), r_reader))
         .collect();
     let start = SystemTime::now();
     let start_val = rvs.load(Ordering::Relaxed);

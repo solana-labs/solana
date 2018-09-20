@@ -33,10 +33,8 @@ impl WindowSlot {
         }
     }
 
-    fn clear_data(&mut self, recycler: &BlobRecycler) {
-        if let Some(blob) = self.data.take() {
-            recycler.recycle(blob, "WindowSlot::clear_data");
-        }
+    fn clear_data(&mut self) {
+        self.data.take();
     }
 }
 
@@ -51,12 +49,11 @@ pub struct WindowIndex {
 
 pub trait WindowUtil {
     /// Finds available slots, clears them, and returns their indices.
-    fn clear_slots(&mut self, recycler: &BlobRecycler, consumed: u64, received: u64) -> Vec<u64>;
+    fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64>;
 
     fn repair(
         &mut self,
         crdt: &Arc<RwLock<Crdt>>,
-        recycler: &BlobRecycler,
         id: &Pubkey,
         times: usize,
         consumed: u64,
@@ -79,7 +76,7 @@ pub trait WindowUtil {
 }
 
 impl WindowUtil for Window {
-    fn clear_slots(&mut self, recycler: &BlobRecycler, consumed: u64, received: u64) -> Vec<u64> {
+    fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64> {
         (consumed..received)
             .filter_map(|pix| {
                 let i = (pix % WINDOW_SIZE) as usize;
@@ -88,7 +85,7 @@ impl WindowUtil for Window {
                         return None;
                     }
                 }
-                self[i].clear_data(recycler);
+                self[i].clear_data();
                 Some(pix)
             }).collect()
     }
@@ -96,7 +93,6 @@ impl WindowUtil for Window {
     fn repair(
         &mut self,
         crdt: &Arc<RwLock<Crdt>>,
-        recycler: &BlobRecycler,
         id: &Pubkey,
         times: usize,
         consumed: u64,
@@ -105,7 +101,7 @@ impl WindowUtil for Window {
         let num_peers = crdt.read().unwrap().table.len() as u64;
         let highest_lost = calculate_highest_lost_blob_index(num_peers, consumed, received);
 
-        let idxs = self.clear_slots(recycler, consumed, highest_lost);
+        let idxs = self.clear_slots(consumed, highest_lost);
         let reqs: Vec<_> = idxs
             .into_iter()
             .filter_map(|pix| crdt.read().unwrap().window_index_request(pix).ok())
@@ -177,8 +173,6 @@ impl WindowUtil for Window {
     /// * `pix` -  the index of the blob, corresponds to
     ///            the entry height of this blob
     /// * `consume_queue` - output, blobs to be rebroadcast are placed here
-    /// * `recycler` - where to return the blob once processed, also where
-    ///                  to return old blobs from the window
     /// * `consumed` - input/output, the entry-height to which this
     ///                 node has populated and rebroadcast entries
     fn process_blob(
@@ -204,12 +198,10 @@ impl WindowUtil for Window {
             blob: SharedBlob,
             pix: u64,
             window_slot: &mut Option<SharedBlob>,
-            recycler: &BlobRecycler,
             c_or_d: &str,
         ) -> bool {
             if let Some(old) = mem::replace(window_slot, Some(blob)) {
                 let is_dup = old.read().get_index().unwrap() == pix;
-                recycler.recycle(old, "insert_blob_is_dup");
                 trace!(
                     "{}: occupied {} window slot {:}, is_dup: {}",
                     id,
@@ -226,9 +218,9 @@ impl WindowUtil for Window {
 
         // insert the new blob into the window, overwrite and recycle old (or duplicate) entry
         let is_duplicate = if is_coding {
-            insert_blob_is_dup(id, blob, pix, &mut self[w].coding, recycler, "coding")
+            insert_blob_is_dup(id, blob, pix, &mut self[w].coding, "coding")
         } else {
-            insert_blob_is_dup(id, blob, pix, &mut self[w].data, recycler, "data")
+            insert_blob_is_dup(id, blob, pix, &mut self[w].data, "data")
         };
 
         if is_duplicate {
