@@ -17,6 +17,24 @@ const errorResponse = {
 };
 
 
+test('get account info - error', () => {
+  const account = new Account();
+  const connection = new Connection(url);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getAccountInfo',
+      params: [account.publicKey],
+    },
+    errorResponse,
+  ]);
+
+  expect(connection.getAccountInfo(account.publicKey))
+  .rejects.toThrow(errorMessage);
+});
+
+
 test('get balance', async () => {
   const account = new Account();
   const connection = new Connection(url);
@@ -176,6 +194,31 @@ test('request airdrop', async () => {
 
   const balance = await connection.getBalance(account.publicKey);
   expect(balance).toBe(42);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getAccountInfo',
+      params: [account.publicKey],
+    },
+    {
+      error: null,
+      result: {
+        contract_id: [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
+        tokens: 42,
+        userdata: [],
+      }
+
+    }
+  ]);
+
+  const accountInfo = await connection.getAccountInfo(account.publicKey);
+  expect(accountInfo.tokens).toBe(42);
+  expect(accountInfo.userdata).toBe(null);
+  expect(accountInfo.programId).toBe(SystemProgram.programId);
 });
 
 test('request airdrop - error', () => {

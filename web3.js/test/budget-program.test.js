@@ -16,6 +16,7 @@ test('pay', () => {
     123,
   );
   console.log('Pay:', transaction);
+  // TODO: Validate transaction contents
 
   transaction = BudgetProgram.pay(
     from.publicKey,
@@ -25,6 +26,7 @@ test('pay', () => {
     BudgetProgram.signatureCondition(from.publicKey),
   );
   console.log('After:', transaction);
+  // TODO: Validate transaction contents
 
   transaction = BudgetProgram.pay(
     from.publicKey,
@@ -35,5 +37,6 @@ test('pay', () => {
     BudgetProgram.timestampCondition(from.publicKey, new Date()),
   );
   console.log('Or:', transaction);
+  // TODO: Validate transaction contents
 });
 

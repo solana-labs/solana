@@ -10,7 +10,7 @@ type RpcRequest = {
 type RpcResponseError = {
   message: string;
 }
-type RpcResponseResult = boolean | string | number;
+type RpcResponseResult = any;
 type RpcResponse = {
   error: ?RpcResponseError;
   result: ?RpcResponseResult;
