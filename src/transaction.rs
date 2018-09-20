@@ -187,7 +187,7 @@ impl Transaction {
         last_id: Hash,
         tokens: i64,
         space: u64,
-        contract_id: Option<Pubkey>,
+        contract_id: Pubkey,
         fee: i64,
     ) -> Self {
         let create = SystemContract::CreateAccount {
@@ -223,7 +223,7 @@ impl Transaction {
     }
     /// Create and sign new SystemContract::CreateAccount transaction with some defaults
     pub fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Transaction::system_create(from_keypair, to, last_id, tokens, 0, None, 0)
+        Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
     /// Create and sign new SystemContract::Move transaction
     pub fn system_move(

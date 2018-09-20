@@ -16,7 +16,7 @@ pub enum SystemContract {
     CreateAccount {
         tokens: i64,
         space: u64,
-        contract_id: Option<Pubkey>,
+        contract_id: Pubkey,
     },
     /// Assign account to a contract
     /// * Transaction::keys[0] - account to assign
@@ -59,9 +59,7 @@ impl SystemContract {
                 }
                 accounts[0].tokens -= tokens;
                 accounts[1].tokens += tokens;
-                if let Some(id) = contract_id {
-                    accounts[1].contract_id = id;
-                }
+                accounts[1].contract_id = contract_id;
                 accounts[1].userdata = vec![0; space as usize];
             }
             SystemContract::Assign { contract_id } => {
@@ -123,15 +121,8 @@ mod test {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
-        let tx = Transaction::system_create(
-            &from,
-            to.pubkey(),
-            Hash::default(),
-            0,
-            1,
-            Some(to.pubkey()),
-            0,
-        );
+        let tx =
+            Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, to.pubkey(), 0);
         SystemContract::process_transaction(&tx, &mut accounts);
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
@@ -143,7 +134,15 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[1].contract_id = to.pubkey();
-        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, None, 0);
+        let tx = Transaction::system_create(
+            &from,
+            to.pubkey(),
+            Hash::default(),
+            0,
+            1,
+            Pubkey::default(),
+            0,
+        );
         SystemContract::process_transaction(&tx, &mut accounts);
         assert!(accounts[1].userdata.is_empty());
     }
@@ -153,7 +152,15 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].contract_id = to.pubkey();
-        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, None, 0);
+        let tx = Transaction::system_create(
+            &from,
+            to.pubkey(),
+            Hash::default(),
+            0,
+            1,
+            Pubkey::default(),
+            0,
+        );
         SystemContract::process_transaction(&tx, &mut accounts);
         assert!(accounts[1].userdata.is_empty());
     }
@@ -163,7 +170,15 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[1].userdata = vec![0, 0, 0];
-        let tx = Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 2, None, 0);
+        let tx = Transaction::system_create(
+            &from,
+            to.pubkey(),
+            Hash::default(),
+            0,
+            2,
+            Pubkey::default(),
+            0,
+        );
         SystemContract::process_transaction(&tx, &mut accounts);
         assert_eq!(accounts[1].userdata.len(), 3);
     }
@@ -202,15 +217,15 @@ mod test {
             Hash::default(),
             111,
             222,
-            Some(Pubkey::new(&BUDGET_CONTRACT_ID)),
+            Pubkey::new(&BUDGET_CONTRACT_ID),
             0,
         );
 
         assert_eq!(
             tx.userdata,
             vec![
-                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
 
@@ -221,13 +236,16 @@ mod test {
             Hash::default(),
             111,
             222,
-            None,
+            Pubkey::default(),
             0,
         );
 
         assert_eq!(
             tx.userdata,
-            vec![0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 0]
+            vec![
+                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]
         );
 
         // Assign
