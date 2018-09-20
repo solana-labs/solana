@@ -54,12 +54,12 @@ showBalance()
 .then(showBalance)
 .then(() => {
   console.log(`\n== Creating account for the contract funds`);
-  const transaction = solanaWeb3.SystemContract.createAccount(
+  const transaction = solanaWeb3.SystemProgram.createAccount(
     account1.publicKey,
     contractFunds.publicKey,
     50, // number of tokens to transfer
     0,
-    solanaWeb3.BudgetContract.contractId,
+    solanaWeb3.BudgetProgram.programId,
   );
   return connection.sendTransaction(account1, transaction);
 })
@@ -67,12 +67,12 @@ showBalance()
 .then(showBalance)
 .then(() => {
   console.log(`\n== Creating account for the contract state`);
-  const transaction = solanaWeb3.SystemContract.createAccount(
+  const transaction = solanaWeb3.SystemProgram.createAccount(
     account1.publicKey,
     contractState.publicKey,
-    1, // sender pays 1 token to hold the contract state
-    solanaWeb3.BudgetContract.space,
-    solanaWeb3.BudgetContract.contractId,
+    1, // account1 pays 1 token to hold the contract state
+    solanaWeb3.BudgetProgram.space,
+    solanaWeb3.BudgetProgram.programId,
   );
   return connection.sendTransaction(account1, transaction);
 })
@@ -80,12 +80,12 @@ showBalance()
 .then(showBalance)
 .then(() => {
   console.log(`\n== Initializing contract`);
-  const transaction = solanaWeb3.BudgetContract.pay(
+  const transaction = solanaWeb3.BudgetProgram.pay(
     contractFunds.publicKey,
     contractState.publicKey,
     account2.publicKey,
     50,
-    solanaWeb3.BudgetContract.timestampCondition(account1.publicKey, new Date("2050")),
+    solanaWeb3.BudgetProgram.timestampCondition(account1.publicKey, new Date('2050')),
   );
   return connection.sendTransaction(contractFunds, transaction);
 })
@@ -93,11 +93,11 @@ showBalance()
 .then(showBalance)
 .then(() => {
   console.log(`\n== Witness contract`);
-  const transaction = solanaWeb3.BudgetContract.applyTimestamp(
+  const transaction = solanaWeb3.BudgetProgram.applyTimestamp(
     account1.publicKey,
     contractState.publicKey,
     account2.publicKey,
-    new Date("2050"),
+    new Date('2050'),
   );
   return connection.sendTransaction(account1, transaction);
 })

@@ -107,19 +107,19 @@ function serializeCondition(condition: BudgetCondition) {
 
 
 /**
- * Factory class for transactions to interact with the Budget contract
+ * Factory class for transactions to interact with the Budget program
  */
-export class BudgetContract {
+export class BudgetProgram {
 
   /**
-   * Public key that identifies the Budget Contract
+   * Public key that identifies the Budget program
    */
-  static get contractId(): PublicKey {
+  static get programId(): PublicKey {
     return '4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM';
   }
 
   /**
-   * The amount of space this contract requires
+   * The amount of space this program requires
    */
   static get space(): number {
     return 128;
@@ -184,7 +184,7 @@ export class BudgetContract {
       return new Transaction({
         fee: 0,
         keys: [from, to],
-        contractId: this.contractId,
+        programId: this.programId,
         userdata: userdata.slice(0, pos),
       });
     case 1:
@@ -205,7 +205,7 @@ export class BudgetContract {
       return new Transaction({
         fee: 0,
         keys: [from, contract, to],
-        contractId: this.contractId,
+        programId: this.programId,
         userdata: userdata.slice(0, pos),
       });
 
@@ -226,7 +226,7 @@ export class BudgetContract {
       return new Transaction({
         fee: 0,
         keys: [from, contract, to],
-        contractId: this.contractId,
+        programId: this.programId,
         userdata: userdata.slice(0, pos),
       });
 
@@ -245,7 +245,7 @@ export class BudgetContract {
     return new Transaction({
       fee: 0,
       keys: [from, contract, to],
-      contractId: this.contractId,
+      programId: this.programId,
       userdata,
     });
   }
@@ -257,7 +257,7 @@ export class BudgetContract {
     return new Transaction({
       fee: 0,
       keys: [from, contract, to],
-      contractId: this.contractId,
+      programId: this.programId,
       userdata,
     });
   }

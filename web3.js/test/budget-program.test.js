@@ -1,7 +1,7 @@
 // @flow
 
 import {Account} from '../src/account';
-import {BudgetContract} from '../src/budget-contract';
+import {BudgetProgram} from '../src/budget-program';
 
 test('pay', () => {
   const from = new Account();
@@ -9,7 +9,7 @@ test('pay', () => {
   const to = new Account();
   let transaction;
 
-  transaction = BudgetContract.pay(
+  transaction = BudgetProgram.pay(
     from.publicKey,
     contract.publicKey,
     to.publicKey,
@@ -17,22 +17,22 @@ test('pay', () => {
   );
   console.log('Pay:', transaction);
 
-  transaction = BudgetContract.pay(
+  transaction = BudgetProgram.pay(
     from.publicKey,
     contract.publicKey,
     to.publicKey,
     123,
-    BudgetContract.signatureCondition(from.publicKey),
+    BudgetProgram.signatureCondition(from.publicKey),
   );
   console.log('After:', transaction);
 
-  transaction = BudgetContract.pay(
+  transaction = BudgetProgram.pay(
     from.publicKey,
     contract.publicKey,
     to.publicKey,
     123,
-    BudgetContract.signatureCondition(from.publicKey),
-    BudgetContract.timestampCondition(from.publicKey, new Date()),
+    BudgetProgram.signatureCondition(from.publicKey),
+    BudgetProgram.timestampCondition(from.publicKey, new Date()),
   );
   console.log('Or:', transaction);
 });
