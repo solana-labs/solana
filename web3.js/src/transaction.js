@@ -18,6 +18,13 @@ export type TransactionId = string;
 
 /**
  * List of Transaction object fields that may be initialized at construction
+ *
+ * @typedef {Object} TransactionCtorFields
+ * @property {?Buffer} signature
+ * @property {?Array<PublicKey>} keys
+ * @property {?PublicKey} programId
+ * @property {?number} fee
+ * @property {?Buffer} userdata
  */
 type TransactionCtorFields = {|
   signature?: Buffer;
