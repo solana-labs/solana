@@ -68,15 +68,15 @@ mod tests {
     use super::*;
     use bincode::deserialize;
     use ledger::Block;
-    use system_contract::SystemContract;
+    use system_program::SystemProgram;
 
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        assert!(SystemContract::check_id(&tx.contract_id));
-        let instruction: SystemContract = deserialize(&tx.userdata).unwrap();
-        if let SystemContract::Move { tokens } = instruction {
+        assert!(SystemProgram::check_id(&tx.program_id));
+        let instruction: SystemProgram = deserialize(&tx.userdata).unwrap();
+        if let SystemProgram::Move { tokens } = instruction {
             assert_eq!(tokens, 100);
         }
         assert_eq!(transactions.next(), None);
