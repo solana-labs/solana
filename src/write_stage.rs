@@ -452,7 +452,7 @@ mod tests {
         }
 
         let crdt = Arc::new(RwLock::new(crdt));
-        let entry = Entry::new(&Hash::default(), 0, vec![], false);
+        let entry = Entry::new(&Hash::default(), 0, vec![]);
 
         // A vector that is completely within a certain epoch should return that
         // entire vector

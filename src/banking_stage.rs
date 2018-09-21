@@ -45,7 +45,7 @@ impl BankingStage {
             .spawn(move || {
                 let (hash_sender, hash_receiver) = channel();
                 let (poh_service, poh_receiver) =
-                    PohService::new(Hash::default(), hash_receiver, tick_duration);
+                    PohService::new(bank.last_id(), hash_receiver, tick_duration);
                 loop {
                     if let Err(e) = Self::process_packets(
                         &bank,
@@ -89,13 +89,15 @@ impl BankingStage {
     ) -> Result<()> {
         let mut entries = Vec::new();
 
+        debug!("transactions: {}", transactions.len());
+
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(transactions[chunk_start..].to_vec());
 
-            debug!("process_transactions[{}..{}]", chunk_start, chunk_end);
-
             let results = bank.process_transactions(transactions[chunk_start..chunk_end].to_vec());
+
+            debug!("results: {}", results.len());
 
             chunk_start = chunk_end;
 
@@ -112,35 +114,45 @@ impl BankingStage {
                     }
                 }).collect();
 
+            debug!("processed ok: {}", processed_transactions.len());
+
             let hash = hasher.result();
 
             if processed_transactions.len() != 0 {
-                if let Err(_) = hash_sender.send(hash) {
-                    return Err(Error::SendError);
+                hash_sender.send(hash)?;
+
+                let mut answered = false;
+                while !answered {
+                    entries.extend(poh_receiver.try_iter().map(|poh| {
+                        if let Some(mixin) = poh.mixin {
+                            answered = true;
+                            assert_eq!(mixin, hash);
+                            bank.register_entry_id(&poh.id);
+                            Entry {
+                                num_hashes: poh.num_hashes,
+                                id: poh.id,
+                                transactions: processed_transactions.clone(),
+                            }
+                        } else {
+                            Entry {
+                                num_hashes: poh.num_hashes,
+                                id: poh.id,
+                                transactions: vec![],
+                            }
+                        }
+                    }));
                 }
+            } else {
+                entries.extend(poh_receiver.try_iter().map(|poh| Entry {
+                    num_hashes: poh.num_hashes,
+                    id: poh.id,
+                    transactions: vec![],
+                }));
             }
-
-            entries.extend(poh_receiver.try_iter().map(|poh| {
-                if let Some(mixin) = poh.mixin {
-                    assert!(mixin == hash);
-                    Entry {
-                        num_hashes: poh.num_hashes,
-                        id: poh.id,
-                        transactions: processed_transactions.clone(),
-                        has_more: chunk_end != transactions.len(),
-                    }
-                } else {
-                    Entry {
-                        num_hashes: poh.num_hashes,
-                        id: poh.id,
-                        transactions: vec![],
-                        has_more: false,
-                    }
-                }
-            }));
-
-            debug!("done process_transactions");
         }
+
+        debug!("done process_transactions, {} entries", entries.len());
+
         Ok(entry_sender.send(entries)?)
     }
 
@@ -156,6 +168,7 @@ impl BankingStage {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
         let mms = verified_receiver.recv_timeout(timer)?;
+        debug!("verified_recevier {:?}", verified_receiver);
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(

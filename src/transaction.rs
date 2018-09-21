@@ -4,7 +4,7 @@ use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
 use budget_program::BudgetState;
 use chrono::prelude::*;
-use hash::Hash;
+use hash::{Hash, Hasher};
 use instruction::{Contract, Instruction, Vote};
 use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
@@ -291,6 +291,14 @@ impl Transaction {
         } else {
             true
         }
+    }
+    // a hash of a slice of transactions only needs to hash the signatures
+    pub fn hash(transactions: &[Transaction]) -> Hash {
+        let mut hasher = Hasher::default();
+        transactions
+            .iter()
+            .for_each(|tx| hasher.hash(&tx.signature.as_ref()));
+        hasher.result()
     }
 }
 

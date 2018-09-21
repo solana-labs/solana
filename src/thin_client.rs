@@ -666,7 +666,9 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        server.close().unwrap();
+        server
+            .close()
+            .unwrap_or_else(|e| panic!("close() failed! {:?}", e));
         remove_dir_all(ledger_path).unwrap();
     }
 }

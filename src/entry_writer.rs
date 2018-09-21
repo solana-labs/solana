@@ -44,9 +44,8 @@ impl<'a, W: Write> EntryWriter<'a, W> {
 
     fn write_and_register_entry(&mut self, entry: &Entry) -> io::Result<()> {
         trace!("write_and_register_entry entry");
-        if !entry.has_more {
-            self.bank.register_entry_id(&entry.id);
-        }
+        self.bank.register_entry_id(&entry.id);
+
         Self::write_entry(&mut self.writer, entry)
     }
 
@@ -101,46 +100,8 @@ pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<En
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
-    use ledger;
     use mint::Mint;
-    use packet::BLOB_DATA_SIZE;
-    use packet::PACKET_DATA_SIZE;
-    use signature::{Keypair, KeypairUtil};
     use std::io::Cursor;
-    use transaction::Transaction;
-
-    #[test]
-    fn test_dont_register_partial_entries() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-
-        let writer = io::sink();
-        let mut entry_writer = EntryWriter::new(&bank, writer);
-        let keypair = Keypair::new();
-        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, mint.last_id());
-        let tx_size = serialize(&tx).unwrap().len();
-
-        assert!(tx_size <= PACKET_DATA_SIZE);
-        assert!(BLOB_DATA_SIZE >= PACKET_DATA_SIZE);
-        let threshold = (BLOB_DATA_SIZE / tx_size) - 1; // PACKET_DATA_SIZE is transaction size
-
-        // Verify large entries are split up and the first sets has_more.
-        let txs = vec![tx.clone(); threshold * 2];
-        let entries = ledger::next_entries(&mint.last_id(), 0, txs);
-        assert_eq!(entries.len(), 2);
-        assert!(entries[0].has_more);
-        assert!(!entries[1].has_more);
-
-        // Verify that write_and_register_entry doesn't register the first entries after a split.
-        assert_eq!(bank.last_id(), mint.last_id());
-        entry_writer.write_and_register_entry(&entries[0]).unwrap();
-        assert_eq!(bank.last_id(), mint.last_id());
-
-        // Verify that write_and_register_entry registers the final entry after a split.
-        entry_writer.write_and_register_entry(&entries[1]).unwrap();
-        assert_eq!(bank.last_id(), entries[1].id);
-    }
 
     /// Same as read_entries() but parsing a buffer and returning a vector.
     fn read_entries_from_buf(s: &[u8]) -> io::Result<Vec<Entry>> {

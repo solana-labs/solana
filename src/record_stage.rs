@@ -94,9 +94,7 @@ impl RecordStage {
         let entries = recorder.record(txs);
 
         for entry in &entries {
-            if !entry.has_more {
-                bank.register_entry_id(&entry.id);
-            }
+            bank.register_entry_id(&entry.id);
         }
 
         let entries_len = entries.len();

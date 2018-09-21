@@ -111,7 +111,7 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
     let mut id = start_hash;
     let mut num_hashes = 0;
     (0..num)
-        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![], false))
+        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![]))
         .collect()
 }
 
