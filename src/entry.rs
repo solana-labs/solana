@@ -116,6 +116,42 @@ impl Entry {
             <= BLOB_DATA_SIZE as u64
     }
 
+    pub fn num_will_fit(transactions: Vec<Transaction>) -> usize {
+        if transactions.len() == 0 {
+            return 0;
+        }
+        let mut num = transactions.len();
+        let mut upper = transactions.len();
+        let mut lower = 1; // if one won't fit, we have a lot of TODOs
+        let mut next = transactions.len(); // optimistic
+        loop {
+            debug!(
+                "num {}, upper {} lower {} next {} transactions.len() {}",
+                num,
+                upper,
+                lower,
+                next,
+                transactions.len()
+            );
+            if Entry::will_fit(transactions[..num].to_vec()) {
+                next = (upper + num) / 2;
+                lower = num;
+                debug!("num {} fits, maybe too well? trying {}", num, next);
+            } else {
+                next = (lower + num) / 2;
+                upper = num;
+                debug!("num {} doesn't fit! trying {}", num, next);
+            }
+            // same as last time
+            if next == num {
+                debug!("converged on num {}", num);
+                break;
+            }
+            num = next;
+        }
+        num
+    }
+
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
     pub fn new_mut(
         start_hash: &mut Hash,

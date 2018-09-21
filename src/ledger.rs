@@ -479,8 +479,8 @@ pub fn next_entries_mut(
     num_hashes: &mut u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
-    // TODO: find a magic number that works better than |  ?
-    //                                                  V
+    // TODO: ?? find a number that works better than |?
+    //                                               V
     if transactions.is_empty() || transactions.len() == 1 {
         vec![Entry::new_mut(start_hash, num_hashes, transactions, false)]
     } else {

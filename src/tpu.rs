@@ -2,27 +2,27 @@
 //! 5-stage transaction processing pipeline in software.
 //!
 //! ```text
-//!             .---------------------------------------------------------------.
-//!             |  TPU                                     .-----.              |
-//!             |                                          | PoH |              |
-//!             |                                          `--+--`              |
-//!             |                                             |                 |
-//!             |                                             v                 |
-//!             |  .-------.  .-----------.  .---------.  .--------.  .-------. |
-//! .---------. |  | Fetch |  | SigVerify |  | Banking |  | Record |  | Write | |  .------------.
-//! | Clients |--->| Stage |->|   Stage   |->|  Stage  |->| Stage  |->| Stage +--->| Validators |
-//! `---------` |  |       |  |           |  |         |  |        |  |       | |  `------------`
-//!             |  `-------`  `-----------`  `----+----`  `--------`  `---+---` |
-//!             |                                 |                       |     |
-//!             |                                 |                       |     |
-//!             |                                 |                       |     |
-//!             |                                 |                       |     |
-//!             `---------------------------------|-----------------------|-----`
-//!                                               |                       |
-//!                                               v                       v
-//!                                            .------.               .--------.
-//!                                            | Bank |               | Ledger |
-//!                                            `------`               `--------`
+//!             .----------------------------------------------------.
+//!             |  TPU                      .-------------.          |
+//!             |                           | PoH Service |          |
+//!             |                           `-------+-----`          |
+//!             |                              ^    |                |
+//!             |                              |    v                |
+//!             |  .-------.  .-----------.  .-+-------.   .-------. |
+//! .---------. |  | Fetch |  | SigVerify |  | Banking |   | Write | |  .------------.
+//! | Clients |--->| Stage |->|   Stage   |->|  Stage  |-->| Stage +--->| Validators |
+//! `---------` |  |       |  |           |  |         |   |       | |  `------------`
+//!             |  `-------`  `-----------`  `----+----`   `---+---` |
+//!             |                                 |            |     |
+//!             |                                 |            |     |
+//!             |                                 |            |     |
+//!             |                                 |            |     |
+//!             `---------------------------------|------------|-----`
+//!                                               |            |
+//!                                               v            v
+//!                                            .------.    .--------.
+//!                                            | Bank |    | Ledger |
+//!                                            `------`    `--------`
 //! ```
 
 use bank::Bank;
@@ -30,7 +30,6 @@ use banking_stage::BankingStage;
 use crdt::Crdt;
 use entry::Entry;
 use fetch_stage::FetchStage;
-use record_stage::RecordStage;
 use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
@@ -50,7 +49,6 @@ pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
-    record_stage: RecordStage,
     write_stage: WriteStage,
     exit: Arc<AtomicBool>,
 }
@@ -73,14 +71,8 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, signal_receiver) = BankingStage::new(bank.clone(), verified_receiver);
-
-        let (record_stage, entry_receiver) = match tick_duration {
-            Some(tick_duration) => {
-                RecordStage::new_with_clock(signal_receiver, bank.clone(), tick_duration)
-            }
-            None => RecordStage::new(signal_receiver, bank.clone()),
-        };
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(bank.clone(), verified_receiver, tick_duration);
 
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,
@@ -95,7 +87,6 @@ impl Tpu {
             fetch_stage,
             sigverify_stage,
             banking_stage,
-            record_stage,
             write_stage,
             exit: exit.clone(),
         };
@@ -119,7 +110,6 @@ impl Service for Tpu {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
         self.banking_stage.join()?;
-        self.record_stage.join()?;
         match self.write_stage.join()? {
             WriteStageReturnType::LeaderRotation => Ok(Some(TpuReturnType::LeaderRotation)),
             _ => Ok(None),
