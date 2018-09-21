@@ -268,7 +268,7 @@ impl Bank {
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
-        match self.process_transactions(vec![tx.clone()])[0] {
+        match self.process_transactions(&[tx.clone()])[0] {
             Err(ref e) => {
                 info!("process_transaction error: {:?}", e);
                 Err((*e).clone())
@@ -370,11 +370,7 @@ impl Bank {
     /// This method calls the contract's process_transaction method and verifies that the result of
     /// the contract does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
-    fn execute_transaction(
-        &self,
-        tx: Transaction,
-        accounts: &mut [Account],
-    ) -> Result<Transaction> {
+    fn execute_transaction(&self, tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
             .iter_mut()
@@ -404,33 +400,38 @@ impl Bank {
         if pre_total != post_total {
             Err(BankError::UnbalancedTransaction(tx.signature))
         } else {
-            Ok(tx)
+            Ok(())
         }
     }
 
     pub fn store_accounts(
-        res: &[Result<Transaction>],
+        txs: &[Transaction],
+        res: &[Result<()>],
         loaded: &[Result<Vec<Account>>],
         accounts: &mut HashMap<Pubkey, Account>,
     ) {
-        loaded.iter().zip(res.iter()).for_each(|(racc, rtx)| {
-            if let (Ok(acc), Ok(tx)) = (racc, rtx) {
-                tx.keys.iter().zip(acc.iter()).for_each(|(key, account)| {
-                    //purge if 0
-                    if account.tokens == 0 {
-                        accounts.remove(&key);
-                    } else {
-                        *accounts.entry(*key).or_insert_with(Account::default) = account.clone();
-                        assert_eq!(accounts.get(key).unwrap().tokens, account.tokens);
-                    }
-                });
-            };
-        });
+        for (i, racc) in loaded.iter().enumerate() {
+            if res[i].is_err() || racc.is_err() {
+                continue;
+            }
+
+            let tx = &txs[i];
+            let acc = racc.as_ref().unwrap();
+            for (key, account) in tx.keys.iter().zip(acc.iter()) {
+                //purge if 0
+                if account.tokens == 0 {
+                    accounts.remove(&key);
+                } else {
+                    *accounts.entry(*key).or_insert_with(Account::default) = account.clone();
+                    assert_eq!(accounts.get(key).unwrap().tokens, account.tokens);
+                }
+            }
+        }
     }
 
     /// Process a batch of transactions.
     #[must_use]
-    pub fn process_transactions(&self, txs: Vec<Transaction>) -> Vec<Result<Transaction>> {
+    pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         debug!("processing transactions: {}", txs.len());
         // TODO right now a single write lock is held for the duration of processing all the
         // transactions
@@ -443,16 +444,16 @@ impl Bank {
         let load_elapsed = now.elapsed();
         let now = Instant::now();
 
-        let res: Vec<Result<Transaction>> = loaded_accounts
+        let res: Vec<_> = loaded_accounts
             .iter_mut()
-            .zip(txs.into_iter())
+            .zip(txs.iter())
             .map(|(acc, tx)| match acc {
                 Err(e) => Err(e.clone()),
                 Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
             }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
-        Self::store_accounts(&res, &loaded_accounts, &mut accounts);
+        Self::store_accounts(&txs, &res, &loaded_accounts, &mut accounts);
         let write_elapsed = now.elapsed();
         debug!(
             "load: {}us execution: {}us write: {}us txs_len={}",
@@ -504,7 +505,7 @@ impl Bank {
 
     pub fn process_entry(&self, entry: Entry) -> Result<()> {
         if !entry.transactions.is_empty() {
-            for result in self.process_transactions(entry.transactions) {
+            for result in self.process_transactions(&entry.transactions) {
                 result?;
             }
         }
@@ -892,7 +893,7 @@ mod tests {
         let tx0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
         let tx1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
         let txs = vec![tx0, tx1];
-        let results = bank.process_transactions(txs);
+        let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.

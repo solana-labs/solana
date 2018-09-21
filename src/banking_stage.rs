@@ -95,28 +95,28 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(transactions[chunk_start..].to_vec());
 
-            let results = bank.process_transactions(transactions[chunk_start..chunk_end].to_vec());
-
+            let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
             debug!("results: {}", results.len());
-
-            chunk_start = chunk_end;
 
             let mut hasher = Hasher::default();
 
-            let processed_transactions: Vec<_> = results
+            let processed_transactions: Vec<_> = transactions[chunk_start..chunk_end]
                 .into_iter()
-                .filter_map(|x| match x {
-                    Ok(x) => {
+                .enumerate()
+                .filter_map(|(i, x)| match results[i] {
+                    Ok(_) => {
                         hasher.hash(&x.signature.as_ref());
-                        Some(x)
+                        Some(x.clone())
                     }
-                    Err(e) => {
+                    Err(ref e) => {
                         debug!("process transaction failed {:?}", e);
                         None
                     }
                 }).collect();
 
             debug!("processed ok: {}", processed_transactions.len());
+
+            chunk_start = chunk_end;
 
             let hash = hasher.result();
 
