@@ -2,6 +2,8 @@
 [![codecov][codecov-image]][codecov-url]
 [![esdoc][esdoc-image]][esdoc-url]
 [![npm][npm-image]][npm-url]
+[![david][david-deps-image]][david-deps-url]
+[![david][david-dev-deps-image]][david-dev-deps-url]
 
 [travis-image]: https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master
 [travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
@@ -11,6 +13,10 @@
 [npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
 [esdoc-url]: https://solana-labs.github.io/solana-web3.js/
 [npm-url]: https://www.npmjs.com/package/@solana/web3.js
+[david-deps-image]: https://david-dm.org/solana-labs/solana-web3.js.svg
+[david-deps-url]: https://david-dm.org/solana-labs/solana-web3.js
+[david-dev-deps-image]: https://david-dm.org/solana-labs/solana-web3.js/dev-status.svg
+[david-dev-deps-url]: https://david-dm.org/solana-labs/solana-web3.js?type=dev
 
 # Solana JavaScript API
 
