@@ -144,6 +144,7 @@ impl Fullnode {
             ledger_path,
             sigverify_disabled,
             leader_rotation_interval,
+            None,
         );
 
         match leader_addr {
@@ -224,6 +225,7 @@ impl Fullnode {
         ledger_path: &str,
         sigverify_disabled: bool,
         leader_rotation_interval: Option<u64>,
+        rpc_port: Option<u16>,
     ) -> Self {
         if leader_info.is_none() {
             node.info.leader_id = node.info.id;
@@ -246,7 +248,11 @@ impl Fullnode {
         // TODO: this code assumes this node is the leader
         let mut drone_addr = node.info.contact_info.tpu;
         drone_addr.set_port(DRONE_PORT);
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), RPC_PORT);
+        let rpc_addr = if let Some(port) = rpc_port {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), port)
+        } else {
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), RPC_PORT)
+        };
         let rpc_service = JsonRpcService::new(
             &bank,
             node.info.contact_info.tpu,
@@ -527,6 +533,7 @@ mod tests {
             &validator_ledger_path,
             false,
             None,
+            Some(0),
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -553,6 +560,7 @@ mod tests {
                     &validator_ledger_path,
                     false,
                     None,
+                    Some(0),
                 )
             }).collect();
 

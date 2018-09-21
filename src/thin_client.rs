@@ -465,6 +465,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(0),
         );
         sleep(Duration::from_millis(900));
 
@@ -511,6 +512,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(0),
         );
         //TODO: remove this sleep, or add a retry so CI is stable
         sleep(Duration::from_millis(300));
@@ -570,6 +572,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(0),
         );
         sleep(Duration::from_millis(300));
 
@@ -630,6 +633,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(0),
         );
         sleep(Duration::from_millis(900));
 
