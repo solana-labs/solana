@@ -59,7 +59,7 @@ pub struct WalletConfig {
     pub leader: NodeInfo,
     pub id: Keypair,
     pub drone_addr: SocketAddr,
-    pub rpc_addr: SocketAddr,
+    pub rpc_addr: String,
     pub command: WalletCommand,
 }
 
@@ -70,7 +70,7 @@ impl Default for WalletConfig {
             leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
             drone_addr: default_addr,
-            rpc_addr: default_addr,
+            rpc_addr: default_addr.to_string(),
             command: WalletCommand::Balance,
         }
     }
@@ -135,17 +135,21 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         // Get address of this client
         WalletCommand::Address => Ok(format!("{}", config.id.pubkey())),
         // Request an airdrop from Solana Drone;
-        // Request amount is set in request_airdrop function
         WalletCommand::AirDrop(tokens) => {
             println!(
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, config.drone_addr
             );
-            let params = format!("[\"{}\"]", config.id.pubkey());
-            let previous_balance = WalletRpcRequest::GetBalance
+            let params = json!(format!("{}", config.id.pubkey()));
+            let previous_balance = match WalletRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64()
-                .unwrap_or(0);
+            {
+                Some(tokens) => tokens,
+                None => Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?,
+            };
             request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
@@ -153,7 +157,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let mut current_balance = previous_balance;
             for _ in 0..20 {
                 sleep(Duration::from_millis(500));
-                let params = format!("[\"{}\"]", config.id.pubkey());
+                let params = json!(format!("{}", config.id.pubkey()));
                 current_balance = WalletRpcRequest::GetBalance
                     .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                     .as_i64()
@@ -171,7 +175,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         WalletCommand::Balance => {
             println!("Balance requested...");
-            let params = format!("[\"{}\"]", config.id.pubkey());
+            let params = json!(format!("{}", config.id.pubkey()));
             let balance = WalletRpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
@@ -185,7 +189,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
-            let params = format!("[\"{}\"]", signature);
+            let params = json!(format!("{}", signature));
             let confirmation = WalletRpcRequest::ConfirmTransaction
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_bool();
@@ -202,7 +206,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 ))?,
             }
         }
-        // If client has positive balance, spend tokens in {balance} number of transactions
+        // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to) => {
             let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
             if result.as_str().is_none() {
@@ -218,11 +222,11 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             let tx = Transaction::new(&config.id, to, tokens, last_id);
             let serialized = serialize(&tx).unwrap();
-            let params = format!("[{}]", serde_json::to_string(&serialized)?);
+            let params = json!(serialized);
             let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
                 &config.rpc_addr,
                 2,
-                Some(params.to_string()),
+                Some(params),
             )?;
             if signature.as_str().is_none() {
                 Err(WalletError::RpcRequestError(
@@ -307,11 +311,10 @@ pub enum WalletRpcRequest {
 impl WalletRpcRequest {
     fn make_rpc_request(
         &self,
-        rpc_addr: &SocketAddr,
+        rpc_addr: &String,
         id: u64,
-        params: Option<String>,
+        params: Option<Value>,
     ) -> Result<Value, Box<error::Error>> {
-        let rpc_string = format!("http://{}", rpc_addr.to_string());
         let jsonrpc = "2.0";
         let method = match self {
             WalletRpcRequest::ConfirmTransaction => "confirmTransaction",
@@ -324,18 +327,18 @@ impl WalletRpcRequest {
             WalletRpcRequest::SendTransaction => "sendTransaction",
         };
         let client = reqwest::Client::new();
-        let mut request: String = format!(
-            "{{\"jsonrpc\":\"{}\",\"id\":{},\"method\":\"{}\"",
-            jsonrpc, id, method
-        );
+        let mut request = json!({
+           "jsonrpc": jsonrpc,
+           "id": id,
+           "method": method,
+        });
         if let Some(param_string) = params {
-            request.push_str(&format!(",\"params\":{}", param_string));
+            request["params"] = json!(vec![param_string]);
         }
-        request.push_str(&"}".to_string());
         let mut response = client
-            .post(&rpc_string)
+            .post(rpc_addr)
             .header(CONTENT_TYPE, "application/json")
-            .body(request)
+            .body(request.to_string())
             .send()?;
         let json: Value = serde_json::from_str(&response.text()?)?;
         if json["error"].is_object() {
@@ -499,7 +502,7 @@ mod tests {
 
         let mut rpc_addr = leader_data.contact_info.ncp;
         rpc_addr.set_port(rpc_port);
-        config.rpc_addr = rpc_addr;
+        config.rpc_addr = format!("http://{}", rpc_addr.to_string());
 
         let tokens = 50;
         config.command = WalletCommand::AirDrop(tokens);
@@ -569,12 +572,13 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(rpc_port);
+        let mut addr = leader_data.contact_info.ncp;
+        addr.set_port(rpc_port);
+        let rpc_addr = format!("http://{}", addr.to_string());
 
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
-        let params = format!("[\"{}\"]", signature.unwrap());
+        let params = json!(format!("{}", signature.unwrap()));
         let confirmation = WalletRpcRequest::ConfirmTransaction
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
