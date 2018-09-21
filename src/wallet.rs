@@ -358,9 +358,7 @@ mod tests {
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use mint::Mint;
-    use rpc::RPC_PORT;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
-    use std::net::UdpSocket;
     use std::sync::mpsc::channel;
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
@@ -478,6 +476,7 @@ mod tests {
         let ledger_path = tmp_ledger("thin_client", &alice);
 
         let mut config = WalletConfig::default();
+        let rpc_port = 12345; // Needs to be distinct known number to not conflict with following test
 
         let _server = Fullnode::new_with_bank(
             leader_keypair,
@@ -489,6 +488,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(rpc_port),
         );
         sleep(Duration::from_millis(200));
 
@@ -498,7 +498,7 @@ mod tests {
         config.leader = leader_data1;
 
         let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(RPC_PORT);
+        rpc_addr.set_port(rpc_port);
         config.rpc_addr = rpc_addr;
 
         let tokens = 50;
@@ -549,6 +549,8 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("thin_client", &alice);
 
+        let rpc_port = 11111; // Needs to be distinct known number to not conflict with previous test
+
         let _server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
@@ -559,18 +561,16 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(rpc_port),
         );
         sleep(Duration::from_millis(200));
-
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
         let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(RPC_PORT);
+        rpc_addr.set_port(rpc_port);
 
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
@@ -596,34 +596,5 @@ mod tests {
         );
         fs::remove_file(outfile).unwrap();
         assert!(!Path::new(outfile).exists());
-    }
-    #[test]
-    fn test_make_rpc_request() {
-        // let leader_keypair = Keypair::new();
-        // let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        //
-        // let alice = Mint::new(10_000_000);
-        // let bank = Bank::new(&alice);
-        // let bob_pubkey = Keypair::new().pubkey();
-        // let leader_data = leader.info.clone();
-        // let leader_data1 = leader.info.clone();
-        // let ledger_path = tmp_ledger("thin_client", &alice);
-        //
-        // let mut config = WalletConfig::default();
-        //
-        // let _server = Fullnode::new_with_bank(
-        //     leader_keypair,
-        //     bank,
-        //     0,
-        //     &[],
-        //     leader,
-        //     None,
-        //     &ledger_path,
-        //     false,
-        //     None,
-        // );
-        // sleep(Duration::from_millis(200));
-
-        assert!(true);
     }
 }

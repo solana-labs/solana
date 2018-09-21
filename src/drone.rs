@@ -338,6 +338,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            Some(0),
         );
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
