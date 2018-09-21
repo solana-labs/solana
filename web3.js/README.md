@@ -1,7 +1,16 @@
-[![Build status](https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master)](https://travis-ci.org/solana-labs/solana-web3.js)
-[![codecov](https://codecov.io/gh/solana-labs/solana-web3.js/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana-web3.js)
-[![esdoc](https://solana-labs.github.io/solana-web3.js/badge.svg)](https://solana-labs.github.io/solana-web3.js/)
-[![npm](https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat)](https://www.npmjs.com/package/@solana/web3.js)
+[![Build status][travis-image]][travis-url]
+[![codecov][codecov-image]][codecov-url]
+[![esdoc][esdoc-image]][esdoc-url]
+[![npm][npm-image]][npm-url]
+
+[travis-image]: https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master
+[travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
+[codecov-image]: https://codecov.io/gh/solana-labs/solana-web3.js/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/solana-labs/solana-web3.js
+[esdoc-image]: https://solana-labs.github.io/solana-web3.js/badge.svg
+[npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
+[esdoc-url]: https://solana-labs.github.io/solana-web3.js/
+[npm-url]: https://www.npmjs.com/package/@solana/web3.js
 
 # Solana JavaScript API
 
