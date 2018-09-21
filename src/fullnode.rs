@@ -248,11 +248,12 @@ impl Fullnode {
         // TODO: this code assumes this node is the leader
         let mut drone_addr = node.info.contact_info.tpu;
         drone_addr.set_port(DRONE_PORT);
-        let rpc_addr = if let Some(port) = rpc_port {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), port)
-        } else {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), RPC_PORT)
-        };
+
+        // Use custom RPC port, if provided (`Some(port)`)
+        // RPC port may be any open port on the node
+        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
+        // If rpc_port == `Some(0)`, node will dynamically choose any open port. Useful for tests.
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
         let rpc_service = JsonRpcService::new(
             &bank,
             node.info.contact_info.tpu,
