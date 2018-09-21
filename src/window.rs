@@ -230,6 +230,11 @@ impl WindowUtil for Window {
         self[w].leader_unknown = leader_unknown;
         *pending_retransmits = true;
 
+        #[cfg(not(feature = "erasure"))]
+        {
+            // suppress warning: unused variable: `recycler`
+            let _ = recycler;
+        }
         #[cfg(feature = "erasure")]
         {
             if erasure::recover(
