@@ -103,6 +103,9 @@ pub enum BankError {
 
     /// Contract spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend(Signature),
+
+    /// The program returned an error
+    ProgramRuntimeError,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -387,7 +390,9 @@ impl Bank {
         } else if BudgetState::check_id(&tx.program_id) {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
-            BudgetState::process_transaction(&tx, accounts)
+            if BudgetState::process_transaction(&tx, accounts).is_err() {
+                return Err(BankError::ProgramRuntimeError);
+            }
         } else if StorageProgram::check_id(&tx.program_id) {
             StorageProgram::process_transaction(&tx, accounts)
         } else if self.loaded_contract(&tx, accounts) {

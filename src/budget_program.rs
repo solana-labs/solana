@@ -20,6 +20,7 @@ pub enum BudgetError {
     DestinationMissing(Pubkey),
     FailedWitness,
     UserdataTooSmall,
+    UserdataDeserializeFailure,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -245,17 +246,22 @@ impl BudgetState {
     /// * accounts[0] - The source of the tokens
     /// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
     /// be spent from this account .
-    pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> () {
+    pub fn process_transaction(
+        tx: &Transaction,
+        accounts: &mut [Account],
+    ) -> Result<(), BudgetError> {
         if let Ok(instruction) = deserialize(&tx.userdata) {
             trace!("process_transaction: {:?}", instruction);
-            let _ = Self::apply_debits_to_budget_state(tx, accounts, &instruction)
+            Self::apply_debits_to_budget_state(tx, accounts, &instruction)
                 .and_then(|_| Self::apply_credits_to_budget_state(tx, accounts, &instruction))
                 .map_err(|e| {
                     trace!("saving error {:?}", e);
-                    Self::save_error_to_budget_state(e, accounts);
-                });
+                    Self::save_error_to_budget_state(e.clone(), accounts);
+                    e
+                })
         } else {
             info!("Invalid transaction userdata: {:?}", tx.userdata);
+            Err(BudgetError::UserdataDeserializeFailure)
         }
     }
 
@@ -319,9 +325,7 @@ mod test {
             Hash::default(),
             0,
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
-
-        // Success if there was no panic...
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
     }
 
     #[test]
@@ -347,7 +351,7 @@ mod test {
             1,
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
@@ -362,7 +366,7 @@ mod test {
             dt,
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         assert_eq!(accounts[to_account].tokens, 0);
@@ -383,7 +387,7 @@ mod test {
             dt,
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[to_account].tokens, 1);
@@ -392,7 +396,7 @@ mod test {
         assert!(!state.is_pending());
 
         // try to replay the timestamp contract
-        BudgetState::process_transaction(&tx, &mut accounts);
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[to_account].tokens, 1);
@@ -424,7 +428,7 @@ mod test {
             1,
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
@@ -436,7 +440,7 @@ mod test {
             Transaction::budget_new_signature(&to, contract.pubkey(), to.pubkey(), Hash::default());
         // unit test hack, the `from account` is passed instead of the `to` account to avoid
         // creating more account vectors
-        BudgetState::process_transaction(&tx, &mut accounts);
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
@@ -450,7 +454,7 @@ mod test {
             from.pubkey(),
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[pay_account].tokens, 1);
@@ -462,7 +466,7 @@ mod test {
             from.pubkey(),
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[pay_account].tokens, 1);
@@ -493,7 +497,7 @@ mod test {
             Hash::default(),
         );
 
-        BudgetState::process_transaction(&tx, &mut accounts);
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
         assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
 
         let tx = Transaction::budget_new_timestamp(
@@ -503,7 +507,7 @@ mod test {
             Utc::now(),
             Hash::default(),
         );
-        BudgetState::process_transaction(&tx, &mut accounts);
+        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
         assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
 
         // Success if there was no panic...
