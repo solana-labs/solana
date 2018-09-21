@@ -195,24 +195,6 @@ impl Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Load transaction
-    pub fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self {
-        let load = SystemProgram::Load { program_id, name };
-        Transaction::new_with_userdata(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            serialize(&load).unwrap(),
-            last_id,
-            fee,
-        )
-    }
     /// Create and sign new SystemProgram::CreateAccount transaction
     pub fn system_assign(
         from_keypair: &Keypair,
@@ -248,6 +230,24 @@ impl Transaction {
             &[to],
             SystemProgram::id(),
             serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemProgram::Load transaction
+    pub fn system_load(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        fee: i64,
+        program_id: Pubkey,
+        name: String,
+    ) -> Self {
+        let load = SystemProgram::Load { program_id, name };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[],
+            SystemProgram::id(),
+            serialize(&load).unwrap(),
             last_id,
             fee,
         )

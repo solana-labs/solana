@@ -217,11 +217,11 @@ mod test {
     #[test]
     fn test_load_call() {
         // first load the program
-        let program_id = Pubkey::default(); // same program id for both
         let loaded_programs = RwLock::new(HashMap::new());
         {
             let from = Keypair::new();
             let mut accounts = vec![Account::default()];
+            let program_id = Pubkey::default(); // same program id for both
             let tx = Transaction::system_load(
                 &from,
                 Hash::default(),
@@ -234,6 +234,7 @@ mod test {
         }
         // then call the program
         {
+            let program_id = Pubkey::default(); // same program id for both
             let keys = vec![Pubkey::default(), Pubkey::default()];
             let mut accounts = vec![Account::default(), Account::default()];
             accounts[0].tokens = 100;
