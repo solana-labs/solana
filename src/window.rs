@@ -5,9 +5,9 @@ use crdt::{Crdt, NodeInfo};
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
-use ledger::Block;
+use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
-use packet::{BlobRecycler, SharedBlob, SharedBlobs};
+use packet::{BlobRecycler, SharedBlob};
 use result::Result;
 use signature::Pubkey;
 use std::cmp;
@@ -67,7 +67,7 @@ pub trait WindowUtil {
         id: &Pubkey,
         blob: SharedBlob,
         pix: u64,
-        consume_queue: &mut SharedBlobs,
+        consume_queue: &mut Vec<Entry>,
         recycler: &BlobRecycler,
         consumed: &mut u64,
         leader_unknown: bool,
@@ -180,7 +180,7 @@ impl WindowUtil for Window {
         id: &Pubkey,
         blob: SharedBlob,
         pix: u64,
-        consume_queue: &mut SharedBlobs,
+        consume_queue: &mut Vec<Entry>,
         recycler: &BlobRecycler,
         consumed: &mut u64,
         leader_unknown: bool,
@@ -254,19 +254,33 @@ impl WindowUtil for Window {
             let k = (*consumed % WINDOW_SIZE) as usize;
             trace!("{}: k: {} consumed: {}", id, k, *consumed,);
 
-            if let Some(blob) = &self[k].data {
+            let k_data_blob;
+            let k_data_slot = &mut self[k].data;
+            if let Some(blob) = k_data_slot {
                 if blob.read().get_index().unwrap() < *consumed {
                     // window wrap-around, end of received
                     break;
                 }
+                k_data_blob = (*blob).clone();
             } else {
                 // self[k].data is None, end of received
                 break;
             }
-            let slot = self[k].clone();
-            if let Some(r) = slot.data {
-                consume_queue.push(r)
+
+            // Check that we can get the entries from this blob
+            match reconstruct_entries_from_blobs(vec![k_data_blob]) {
+                Ok(entries) => {
+                    consume_queue.extend(entries);
+                }
+                Err(_) => {
+                    // If the blob can't be deserialized, then remove it from the
+                    // window and exit. *k_data_slot cannot be None at this point,
+                    // so it's safe to unwrap.
+                    k_data_slot.take();
+                    break;
+                }
             }
+
             *consumed += 1;
         }
     }

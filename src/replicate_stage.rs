@@ -3,7 +3,8 @@
 use bank::Bank;
 use counter::Counter;
 use crdt::Crdt;
-use ledger::{reconstruct_entries_from_blobs, Block, LedgerWriter};
+use entry::EntryReceiver;
+use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
 use service::Service;
@@ -16,7 +17,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::{responder, BlobReceiver};
+use streamer::responder;
 use vote_stage::VoteStage;
 
 pub struct ReplicateStage {
@@ -29,16 +30,15 @@ impl ReplicateStage {
     fn replicate_requests(
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
-        window_receiver: &BlobReceiver,
+        window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        //coalesce all the available blobs into a single vote
-        let mut blobs = window_receiver.recv_timeout(timer)?;
+        //coalesce all the available entries into a single vote
+        let mut entries = window_receiver.recv_timeout(timer)?;
         while let Ok(mut more) = window_receiver.try_recv() {
-            blobs.append(&mut more);
+            entries.append(&mut more);
         }
-        let entries = reconstruct_entries_from_blobs(blobs)?;
 
         let res = bank.process_entries(entries.clone());
 
@@ -64,7 +64,7 @@ impl ReplicateStage {
         keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         crdt: Arc<RwLock<Crdt>>,
-        window_receiver: BlobReceiver,
+        window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
     ) -> Self {
