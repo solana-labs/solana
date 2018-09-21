@@ -54,8 +54,18 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
-    let mut rpc_addr = leader.contact_info.tpu;
-    rpc_addr.set_port(RPC_PORT);
+    let rpc_addr = if let Some(proxy) = matches.value_of("proxy") {
+        proxy.to_string()
+    } else {
+        let rpc_port = if let Some(port) = matches.value_of("rpc-port") {
+            port.to_string().parse().expect("integer")
+        } else {
+            RPC_PORT
+        };
+        let mut rpc_addr = leader.contact_info.tpu;
+        rpc_addr.set_port(rpc_port);
+        format!("http://{}", rpc_addr.to_string())
+    };
 
     let command = parse_command(id.pubkey(), &matches)?;
 
@@ -63,7 +73,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         leader,
         id,
         drone_addr, // TODO: Add an option for this.
-        rpc_addr,   // TODO: Add an option for this.
+        rpc_addr,
         command,
     })
 }
@@ -92,6 +102,19 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Max seconds to wait to get necessary gossip from the network"),
+        ).arg(
+            Arg::with_name("rpc-port")
+                .long("port")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Optional rpc-port configuration to connect to non-default nodes")
+        ).arg(
+            Arg::with_name("proxy")
+                .long("proxy")
+                .takes_value(true)
+                .value_name("URL")
+                .help("Address of TLS proxy")
+                .conflicts_with("rpc-port")
         ).subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
