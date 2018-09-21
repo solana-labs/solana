@@ -2,7 +2,7 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
-use budget_program::BudgetProgram;
+use budget_program::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
 use instruction::{Contract, Instruction, Vote};
@@ -89,7 +89,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[to],
-            BudgetProgram::id(),
+            BudgetState::id(),
             userdata,
             last_id,
             fee,
@@ -114,7 +114,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract, to],
-            BudgetProgram::id(),
+            BudgetState::id(),
             userdata,
             last_id,
             0,
@@ -133,7 +133,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract, to],
-            BudgetProgram::id(),
+            BudgetState::id(),
             userdata,
             last_id,
             0,
@@ -146,7 +146,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[],
-            BudgetProgram::id(),
+            BudgetState::id(),
             userdata,
             last_id,
             fee,
@@ -172,7 +172,7 @@ impl Transaction {
         Self::new_with_userdata(
             from_keypair,
             &[contract],
-            BudgetProgram::id(),
+            BudgetState::id(),
             userdata,
             last_id,
             0,
