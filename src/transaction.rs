@@ -143,14 +143,7 @@ impl Transaction {
     pub fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(
-            from_keypair,
-            &[],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            fee,
-        )
+        Self::new_with_userdata(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.

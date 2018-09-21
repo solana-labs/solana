@@ -41,7 +41,7 @@ impl SystemProgram {
         account.tokens
     }
     pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) {
-        if let Ok(syscall) = deserialize(&tx.userdata){
+        if let Ok(syscall) = deserialize(&tx.userdata) {
             trace!("process_transaction: {:?}", syscall);
             match syscall {
                 SystemProgram::CreateAccount {
