@@ -4,9 +4,12 @@ use clap::ArgMatches;
 use crdt::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
+use hash::Hash;
+use reqwest;
+use reqwest::header::CONTENT_TYPE;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
-use serde_json;
+use serde_json::{self, Value};
 use signature::{Keypair, KeypairUtil, Pubkey, Signature};
 use std::fs::{self, File};
 use std::io::prelude::*;
@@ -17,7 +20,7 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
-use thin_client::ThinClient;
+use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
@@ -32,6 +35,7 @@ pub enum WalletCommand {
 pub enum WalletError {
     CommandNotRecognized(String),
     BadParameter(String),
+    RpcRequestError(String),
 }
 
 impl fmt::Display for WalletError {
@@ -55,6 +59,7 @@ pub struct WalletConfig {
     pub leader: NodeInfo,
     pub id: Keypair,
     pub drone_addr: SocketAddr,
+    pub rpc_addr: SocketAddr,
     pub command: WalletCommand,
 }
 
@@ -65,6 +70,7 @@ impl Default for WalletConfig {
             leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
             drone_addr: default_addr,
+            rpc_addr: default_addr,
             command: WalletCommand::Balance,
         }
     }
@@ -75,9 +81,24 @@ pub fn parse_command(
     matches: &ArgMatches,
 ) -> Result<WalletCommand, Box<error::Error>> {
     let response = match matches.subcommand() {
+        ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
             let tokens = airdrop_matches.value_of("tokens").unwrap().parse()?;
             Ok(WalletCommand::AirDrop(tokens))
+        }
+        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
+        ("confirm", Some(confirm_matches)) => {
+            let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
+                .into_vec()
+                .expect("base58-encoded signature");
+
+            if signatures.len() == mem::size_of::<Signature>() {
+                let signature = Signature::new(&signatures);
+                Ok(WalletCommand::Confirm(signature))
+            } else {
+                eprintln!("{}", confirm_matches.usage());
+                Err(WalletError::BadParameter("Invalid signature".to_string()))
+            }
         }
         ("pay", Some(pay_matches)) => {
             let to = if pay_matches.is_present("to") {
@@ -98,22 +119,6 @@ pub fn parse_command(
 
             Ok(WalletCommand::Pay(tokens, to))
         }
-        ("confirm", Some(confirm_matches)) => {
-            println!("{:?}", confirm_matches.value_of("signature").unwrap());
-            let signatures = bs58::decode(confirm_matches.value_of("signature").unwrap())
-                .into_vec()
-                .expect("base58-encoded signature");
-
-            if signatures.len() == mem::size_of::<Signature>() {
-                let signature = Signature::new(&signatures);
-                Ok(WalletCommand::Confirm(signature))
-            } else {
-                eprintln!("{}", confirm_matches.usage());
-                Err(WalletError::BadParameter("Invalid signature".to_string()))
-            }
-        }
-        ("balance", Some(_balance_matches)) => Ok(WalletCommand::Balance),
-        ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("", None) => {
             println!("{}", matches.usage());
             Err(WalletError::CommandNotRecognized(
@@ -125,24 +130,10 @@ pub fn parse_command(
     Ok(response)
 }
 
-pub fn process_command(
-    config: &WalletConfig,
-    client: &mut ThinClient,
-) -> Result<String, Box<error::Error>> {
+pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error>> {
     match config.command {
-        // Check client balance
+        // Get address of this client
         WalletCommand::Address => Ok(format!("{}", config.id.pubkey())),
-        WalletCommand::Balance => {
-            println!("Balance requested...");
-            let balance = client.poll_get_balance(&config.id.pubkey());
-            match balance {
-                Ok(balance) => Ok(format!("Your balance is: {:?}", balance)),
-                Err(ref e) if e.kind() == ErrorKind::Other => {
-                    Ok("No account found! Request an airdrop to get started.".to_string())
-                }
-                Err(error) => Err(error)?,
-            }
-        }
         // Request an airdrop from Solana Drone;
         // Request amount is set in request_airdrop function
         WalletCommand::AirDrop(tokens) => {
@@ -150,7 +141,11 @@ pub fn process_command(
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, config.drone_addr
             );
-            let previous_balance = client.poll_get_balance(&config.id.pubkey()).unwrap_or(0);
+            let params = format!("[\"{}\"]", config.id.pubkey());
+            let previous_balance = WalletRpcRequest::GetBalance
+                .make_rpc_request(&config.rpc_addr, 1, Some(params))?
+                .as_i64()
+                .unwrap_or(0);
             request_airdrop(&config.drone_addr, &config.id.pubkey(), tokens as u64)?;
 
             // TODO: return airdrop Result from Drone instead of polling the
@@ -158,8 +153,10 @@ pub fn process_command(
             let mut current_balance = previous_balance;
             for _ in 0..20 {
                 sleep(Duration::from_millis(500));
-                current_balance = client
-                    .poll_get_balance(&config.id.pubkey())
+                let params = format!("[\"{}\"]", config.id.pubkey());
+                current_balance = WalletRpcRequest::GetBalance
+                    .make_rpc_request(&config.rpc_addr, 1, Some(params))?
+                    .as_i64()
                     .unwrap_or(previous_balance);
 
                 if previous_balance != current_balance {
@@ -172,19 +169,69 @@ pub fn process_command(
             }
             Ok(format!("Your balance is: {:?}", current_balance))
         }
-        // If client has positive balance, spend tokens in {balance} number of transactions
-        WalletCommand::Pay(tokens, to) => {
-            let last_id = client.get_last_id();
-            let signature = client.transfer(tokens, &config.id, to, &last_id)?;
-            Ok(format!("{}", signature))
+        WalletCommand::Balance => {
+            println!("Balance requested...");
+            let params = format!("[\"{}\"]", config.id.pubkey());
+            let balance = WalletRpcRequest::GetBalance
+                .make_rpc_request(&config.rpc_addr, 1, Some(params))?
+                .as_i64();
+            match balance {
+                Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
+                Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
+                None => Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?,
+            }
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
-            if client.check_signature(&signature) {
-                Ok("Confirmed".to_string())
-            } else {
-                Ok("Not found".to_string())
+            let params = format!("[\"{}\"]", signature);
+            let confirmation = WalletRpcRequest::ConfirmTransaction
+                .make_rpc_request(&config.rpc_addr, 1, Some(params))?
+                .as_bool();
+            match confirmation {
+                Some(b) => {
+                    if b {
+                        Ok("Confirmed".to_string())
+                    } else {
+                        Ok("Not found".to_string())
+                    }
+                }
+                None => Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?,
             }
+        }
+        // If client has positive balance, spend tokens in {balance} number of transactions
+        WalletCommand::Pay(tokens, to) => {
+            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+            if result.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received bad last_id".to_string(),
+                ))?
+            }
+            let last_id_str = result.as_str().unwrap();
+            let last_id_vec = bs58::decode(last_id_str)
+                .into_vec()
+                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+            let last_id = Hash::new(&last_id_vec);
+
+            let tx = Transaction::new(&config.id, to, tokens, last_id);
+            let serialized = serialize(&tx).unwrap();
+            let params = format!("[{}]", serde_json::to_string(&serialized)?);
+            let signature = WalletRpcRequest::SendTransaction.make_rpc_request(
+                &config.rpc_addr,
+                2,
+                Some(params.to_string()),
+            )?;
+            if signature.as_str().is_none() {
+                Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?
+            }
+            let signature_str = signature.as_str().unwrap();
+
+            Ok(format!("{}", signature_str))
         }
     }
 }
@@ -247,17 +294,71 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
+pub enum WalletRpcRequest {
+    ConfirmTransaction,
+    GetAccountInfo,
+    GetBalance,
+    GetFinality,
+    GetLastId,
+    GetTransactionCount,
+    RequestAirdrop,
+    SendTransaction,
+}
+impl WalletRpcRequest {
+    fn make_rpc_request(
+        &self,
+        rpc_addr: &SocketAddr,
+        id: u64,
+        params: Option<String>,
+    ) -> Result<Value, Box<error::Error>> {
+        let rpc_string = format!("http://{}", rpc_addr.to_string());
+        let jsonrpc = "2.0";
+        let method = match self {
+            WalletRpcRequest::ConfirmTransaction => "confirmTransaction",
+            WalletRpcRequest::GetAccountInfo => "getAccountInfo",
+            WalletRpcRequest::GetBalance => "getBalance",
+            WalletRpcRequest::GetFinality => "getFinality",
+            WalletRpcRequest::GetLastId => "getLastId",
+            WalletRpcRequest::GetTransactionCount => "getTransactionCount",
+            WalletRpcRequest::RequestAirdrop => "requestAirdrop",
+            WalletRpcRequest::SendTransaction => "sendTransaction",
+        };
+        let client = reqwest::Client::new();
+        let mut request: String = format!(
+            "{{\"jsonrpc\":\"{}\",\"id\":{},\"method\":\"{}\"",
+            jsonrpc, id, method
+        );
+        if let Some(param_string) = params {
+            request.push_str(&format!(",\"params\":{}", param_string));
+        }
+        request.push_str(&"}".to_string());
+        let mut response = client
+            .post(&rpc_string)
+            .header(CONTENT_TYPE, "application/json")
+            .body(request)
+            .send()?;
+        let json: Value = serde_json::from_str(&response.text()?)?;
+        if json["error"].is_object() {
+            Err(WalletError::RpcRequestError(format!(
+                "RPC Error response: {}",
+                serde_json::to_string(&json["error"]).unwrap()
+            )))?
+        }
+        Ok(json["result"].clone())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use bank::Bank;
     use clap::{App, Arg, SubCommand};
-    use client::mk_client;
     use crdt::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use mint::Mint;
+    use rpc::RPC_PORT;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
@@ -396,28 +497,31 @@ mod tests {
         config.drone_addr = receiver.recv().unwrap();
         config.leader = leader_data1;
 
+        let mut rpc_addr = leader_data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+        config.rpc_addr = rpc_addr;
+
         let tokens = 50;
         config.command = WalletCommand::AirDrop(tokens);
-        let mut client = mk_client(&config.leader);
         assert_eq!(
-            process_command(&config, &mut client).unwrap(),
+            process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens)
         );
 
         config.command = WalletCommand::Balance;
         assert_eq!(
-            process_command(&config, &mut client).unwrap(),
+            process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens)
         );
 
         config.command = WalletCommand::Address;
         assert_eq!(
-            process_command(&config, &mut client).unwrap(),
+            process_command(&config).unwrap(),
             format!("{}", config.id.pubkey())
         );
 
         config.command = WalletCommand::Pay(10, bob_pubkey);
-        let sig_response = process_command(&config, &mut client);
+        let sig_response = process_command(&config);
         assert!(sig_response.is_ok());
         sleep(Duration::from_millis(100));
 
@@ -426,11 +530,11 @@ mod tests {
             .expect("base58-encoded signature");
         let signature = Signature::new(&signatures);
         config.command = WalletCommand::Confirm(signature);
-        assert_eq!(process_command(&config, &mut client).unwrap(), "Confirmed");
+        assert_eq!(process_command(&config).unwrap(), "Confirmed");
 
         config.command = WalletCommand::Balance;
         assert_eq!(
-            process_command(&config, &mut client).unwrap(),
+            process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens - 10)
         );
     }
@@ -461,20 +565,22 @@ mod tests {
         let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
-
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
+        let mut rpc_addr = leader_data.contact_info.ncp;
+        rpc_addr.set_port(RPC_PORT);
+
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
-        assert!(client.check_signature(&signature.unwrap()));
+        let params = format!("[\"{}\"]", signature.unwrap());
+        let confirmation = WalletRpcRequest::ConfirmTransaction
+            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .unwrap()
+            .as_bool()
+            .unwrap();
+        assert!(confirmation);
     }
     #[test]
     fn test_gen_keypair_file() {
@@ -490,5 +596,34 @@ mod tests {
         );
         fs::remove_file(outfile).unwrap();
         assert!(!Path::new(outfile).exists());
+    }
+    #[test]
+    fn test_make_rpc_request() {
+        // let leader_keypair = Keypair::new();
+        // let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        //
+        // let alice = Mint::new(10_000_000);
+        // let bank = Bank::new(&alice);
+        // let bob_pubkey = Keypair::new().pubkey();
+        // let leader_data = leader.info.clone();
+        // let leader_data1 = leader.info.clone();
+        // let ledger_path = tmp_ledger("thin_client", &alice);
+        //
+        // let mut config = WalletConfig::default();
+        //
+        // let _server = Fullnode::new_with_bank(
+        //     leader_keypair,
+        //     bank,
+        //     0,
+        //     &[],
+        //     leader,
+        //     None,
+        //     &ledger_path,
+        //     false,
+        //     None,
+        // );
+        // sleep(Duration::from_millis(200));
+
+        assert!(true);
     }
 }

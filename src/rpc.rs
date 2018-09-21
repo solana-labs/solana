@@ -90,6 +90,9 @@ build_rpc_trait! {
         #[rpc(meta, name = "confirmTransaction")]
         fn confirm_transaction(&self, Self::Metadata, String) -> Result<bool>;
 
+        #[rpc(meta, name = "getAccountInfo")]
+        fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
+
         #[rpc(meta, name = "getBalance")]
         fn get_balance(&self, Self::Metadata, String) -> Result<i64>;
 
@@ -101,9 +104,6 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "getTransactionCount")]
         fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
-
-        #[rpc(meta, name = "getAccountInfo")]
-        fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
 
         #[rpc(meta, name= "requestAirdrop")]
         fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
@@ -127,6 +127,16 @@ impl RpcSol for RpcSolImpl {
         let signature = Signature::new(&signature_vec);
         meta.request_processor.get_signature_status(signature)
     }
+    fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
+        let pubkey_vec = bs58::decode(id)
+            .into_vec()
+            .map_err(|_| Error::invalid_request())?;
+        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+            return Err(Error::invalid_request());
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+        meta.request_processor.get_account_info(pubkey)
+    }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64> {
         let pubkey_vec = bs58::decode(id)
             .into_vec()
@@ -145,16 +155,6 @@ impl RpcSol for RpcSolImpl {
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor.get_transaction_count()
-    }
-    fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
-        let pubkey_vec = bs58::decode(id)
-            .into_vec()
-            .map_err(|_| Error::invalid_request())?;
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            return Err(Error::invalid_request());
-        }
-        let pubkey = Pubkey::new(&pubkey_vec);
-        meta.request_processor.get_account_info(pubkey)
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         let pubkey_vec = bs58::decode(id)
@@ -208,6 +208,11 @@ impl JsonRpcRequestProcessor {
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
+    fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
+        self.bank
+            .get_account(&pubkey)
+            .ok_or(Error::invalid_request())
+    }
     fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
         let val = self.bank.get_balance(&pubkey);
         Ok(val)
@@ -224,11 +229,6 @@ impl JsonRpcRequestProcessor {
     }
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
-    }
-    fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
-        self.bank
-            .get_account(&pubkey)
-            .ok_or(Error::invalid_request())
     }
 }
 
