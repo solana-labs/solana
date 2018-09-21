@@ -5,9 +5,9 @@ extern crate dirs;
 extern crate solana;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana::client::mk_client;
 use solana::drone::DRONE_PORT;
 use solana::logger;
+use solana::rpc::RPC_PORT;
 use solana::signature::{read_keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
@@ -54,12 +54,16 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
+    let mut rpc_addr = leader.contact_info.tpu;
+    rpc_addr.set_port(RPC_PORT);
+
     let command = parse_command(id.pubkey(), &matches)?;
 
     Ok(WalletConfig {
         leader,
         id,
         drone_addr, // TODO: Add an option for this.
+        rpc_addr,   // TODO: Add an option for this.
         command,
     })
 }
@@ -75,16 +79,14 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        )
-        .arg(
+        ).arg(
             Arg::with_name("timeout")
                 .long("timeout")
                 .value_name("SECS")
@@ -133,8 +135,7 @@ fn main() -> Result<(), Box<error::Error>> {
         .get_matches();
 
     let config = parse_args(&matches)?;
-    let mut client = mk_client(&config.leader);
-    let result = process_command(&config, &mut client)?;
+    let result = process_command(&config)?;
     println!("{}", result);
     Ok(())
 }

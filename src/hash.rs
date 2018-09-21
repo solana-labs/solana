@@ -27,6 +27,11 @@ impl fmt::Display for Hash {
     }
 }
 
+impl Hash {
+    pub fn new(hash_slice: &[u8]) -> Self {
+        Hash(GenericArray::clone_from_slice(&hash_slice))
+    }
+}
 /// Return a Sha256 hash for the given data.
 pub fn hashv(vals: &[&[u8]]) -> Hash {
     let mut hasher = Sha256::default();
