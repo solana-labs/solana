@@ -7,10 +7,17 @@ usage() {
   echo a CI-appropriate environment.
   echo
   echo "--nopull   Skip the dockerhub image update"
+  echo "--shell    Skip command and enter an interactive shell"
   echo
 }
 
 cd "$(dirname "$0")/.."
+
+INTERACTIVE=false
+if [[ $1 = --shell ]]; then
+  INTERACTIVE=true
+  shift
+fi
 
 NOPULL=false
 if [[ $1 = --nopull ]]; then
@@ -63,6 +70,16 @@ ARGS+=(
   --env CRATES_IO_TOKEN
   --env SNAPCRAFT_CREDENTIALS_KEY
 )
+
+if $INTERACTIVE; then
+  if [[ -n $1 ]]; then
+    echo
+    echo "Note: '$*' ignored due to --shell argument"
+    echo
+  fi
+  set -x
+  exec docker run --interactive --tty "${ARGS[@]}" "$IMAGE" bash
+fi
 
 set -x
 exec docker run "${ARGS[@]}" "$IMAGE" "$@"
