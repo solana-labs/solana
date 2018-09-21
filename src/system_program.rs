@@ -73,6 +73,7 @@ impl SystemProgram {
                     //bank should be verifying correctness
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
+                }
             }
         } else {
             info!("Invalid transaction userdata: {:?}", tx.userdata);
@@ -126,7 +127,7 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         let tx =
             Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, to.pubkey(), 0);
-        SystemContract::process_transaction(&tx, &mut accounts);
+        SystemProgram::process_transaction(&tx, &mut accounts);
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
         assert_eq!(accounts[1].program_id, to.pubkey());
@@ -136,7 +137,7 @@ mod test {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
-        accounts[1].contract_id = to.pubkey();
+        accounts[1].program_id = to.pubkey();
         let tx = Transaction::system_create(
             &from,
             to.pubkey(),
@@ -146,7 +147,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemContract::process_transaction(&tx, &mut accounts);
+        SystemProgram::process_transaction(&tx, &mut accounts);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -164,7 +165,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemContract::process_transaction(&tx, &mut accounts);
+        SystemProgram::process_transaction(&tx, &mut accounts);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -182,7 +183,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemContract::process_transaction(&tx, &mut accounts);
+        SystemProgram::process_transaction(&tx, &mut accounts);
         assert_eq!(accounts[1].userdata.len(), 3);
     }
     #[test]

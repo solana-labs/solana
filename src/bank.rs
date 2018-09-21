@@ -5,7 +5,7 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_program::BudgetProgram;
+use budget_program::BudgetState;
 use counter::Counter;
 use entry::Entry;
 use hash::{hash, Hash};
@@ -284,7 +284,7 @@ impl Bank {
             } else {
                 error_counters.account_not_found_leader += 1;
             }
-            if BudgetProgram::check_id(&tx.program_id) {
+            if BudgetState::check_id(&tx.program_id) {
                 use instruction::Instruction;
                 if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
                     error_counters.account_not_found_vote += 1;
@@ -355,10 +355,10 @@ impl Bank {
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx.program_id) {
             SystemProgram::process_transaction(&tx, accounts)
-        } else if BudgetProgram::check_id(&tx.program_id) {
+        } else if BudgetState::check_id(&tx.program_id) {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
-            BudgetProgram::process_transaction(&tx, accounts)
+            BudgetState::process_transaction(&tx, accounts)
         } else {
             return Err(BankError::UnknownContractId(tx.program_id));
         }
@@ -609,8 +609,8 @@ impl Bank {
     pub fn read_balance(account: &Account) -> i64 {
         if SystemProgram::check_id(&account.program_id) {
             SystemProgram::get_balance(account)
-        } else if BudgetProgram::check_id(&account.program_id) {
-            BudgetProgram::get_balance(account)
+        } else if BudgetState::check_id(&account.program_id) {
+            BudgetState::get_balance(account)
         } else {
             account.tokens
         }
