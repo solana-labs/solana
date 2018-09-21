@@ -148,7 +148,7 @@ mod tests {
         let (_poh_service, poh_receiver) =
             PohService::new_with_clock(Hash::default(), hash_receiver, Duration::from_millis(1));
 
-        sleep(Duration::from_millis(3));
+        sleep(Duration::from_millis(5));
         drop(hash_sender);
         let pohs: Vec<_> = poh_receiver.iter().map(|x| x).collect();
         assert!(pohs.len() > 1);
