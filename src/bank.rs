@@ -235,6 +235,32 @@ impl Bank {
         Err(BankError::LastIdNotFound(*last_id))
     }
 
+    fn update_signature_status(
+        signatures: &mut HashMap<Signature, Result<()>>,
+        signature: &Signature,
+        result: &Result<()>,
+    ) {
+        let entry = signatures.entry(*signature).or_insert(Ok(()));
+        *entry = result.clone();
+    }
+
+    fn update_signature_status_with_last_id(
+        &self,
+        signature: &Signature,
+        result: &Result<()>,
+        last_id: &Hash,
+    ) {
+        if let Some(entry) = self.last_ids_sigs.write().unwrap().get_mut(last_id) {
+            Self::update_signature_status(&mut entry.0, signature, result);
+        }
+    }
+
+    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
+        for (i, tx) in txs.iter().enumerate() {
+            self.update_signature_status_with_last_id(&tx.signature, &res[i], &tx.last_id);
+        }
+    }
+
     /// Look through the last_ids and find all the valid ids
     /// This is batched to avoid holding the lock for a significant amount of time
     ///
@@ -462,6 +488,7 @@ impl Bank {
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
         Self::store_accounts(&txs, &res, &loaded_accounts, &mut accounts);
+        self.update_transaction_statuses(&txs, &res);
         let write_elapsed = now.elapsed();
         debug!(
             "load: {}us execution: {}us write: {}us txs_len={}",
