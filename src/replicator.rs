@@ -49,7 +49,7 @@ impl Replicator {
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
 
-        let (blob_window_sender, blob_window_receiver) = channel();
+        let (entry_window_sender, entry_window_receiver) = channel();
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
         let t_window = window_service(
@@ -57,12 +57,12 @@ impl Replicator {
             shared_window.clone(),
             entry_height,
             blob_fetch_receiver,
-            blob_window_sender,
+            entry_window_sender,
             retransmit_sender,
             repair_socket,
         );
 
-        let store_ledger_stage = StoreLedgerStage::new(blob_window_receiver, ledger_path);
+        let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
 
         let ncp = Ncp::new(
             &crdt,

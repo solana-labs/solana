@@ -1,7 +1,8 @@
-//! The `store_ledger` stores the ledger from received blobs for storage nodes
+//! The `store_ledger` stores the ledger from received entries for storage nodes
 
 use counter::Counter;
-use ledger::{reconstruct_entries_from_blobs, LedgerWriter};
+use entry::EntryReceiver;
+use ledger::LedgerWriter;
 use log::Level;
 use result::{Error, Result};
 use service::Service;
@@ -9,24 +10,22 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::RecvTimeoutError;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use streamer::BlobReceiver;
 
 pub struct StoreLedgerStage {
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl StoreLedgerStage {
-    /// Process entry blobs, already in order
+    /// Process entries, already in order
     fn store_requests(
-        window_receiver: &BlobReceiver,
+        window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
-        let mut blobs = window_receiver.recv_timeout(timer)?;
+        let mut entries = window_receiver.recv_timeout(timer)?;
         while let Ok(mut more) = window_receiver.try_recv() {
-            blobs.append(&mut more);
+            entries.append(&mut more);
         }
-        let entries = reconstruct_entries_from_blobs(blobs.clone())?;
 
         inc_new_counter_info!(
             "store-transactions",
@@ -40,7 +39,7 @@ impl StoreLedgerStage {
         Ok(())
     }
 
-    pub fn new(window_receiver: BlobReceiver, ledger_path: Option<&str>) -> Self {
+    pub fn new(window_receiver: EntryReceiver, ledger_path: Option<&str>) -> Self {
         let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, true).unwrap());
 
         let t_store_requests = Builder::new()
