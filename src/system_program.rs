@@ -240,12 +240,12 @@ mod test {
             accounts[0].tokens = 100;
             accounts[1].tokens = 1;
             let tokens: i64 = 100;
-            let data: Vec<u8> = serialize(&tokens).unwrap();
+            let _data: Vec<u8> = serialize(&tokens).unwrap();
             {
                 let hash = loaded_programs.write().unwrap();
                 match hash.get(&program_id) {
-                    Some(dp) => {
-                        let mut infos: Vec<_> = (&keys)
+                    Some(_dp) => {
+                        let mut _infos: Vec<_> = (&keys)
                             .into_iter()
                             .zip(&mut accounts)
                             .map(|(key, account)| KeyedAccount { key, account })
