@@ -6,6 +6,10 @@ import type {PublicKey} from './account';
 /**
  * Represents a condition that is met by executing a `applySignature()`
  * transaction
+ *
+ * @typedef {Object} SignatureCondition
+ * @property {string} type Must equal the string 'timestamp'
+ * @property {PublicKey} from Public key from which `applySignature()` will be accepted from
  */
 export type SignatureCondition = {
   type: 'signature';
@@ -15,6 +19,11 @@ export type SignatureCondition = {
 /**
  * Represents a condition that is met by executing a `applyTimestamp()`
  * transaction
+ *
+ * @typedef {Object} TimeStampCondition
+ * @property {string} type Must equal the string 'timestamp'
+ * @property {PublicKey} from Public key from which `applyTimestamp()` will be accepted from
+ * @property {Date} when The timestamp that was observed
  */
 export type TimeStampCondition = {
   type: 'timestamp';
@@ -24,6 +33,10 @@ export type TimeStampCondition = {
 
 /**
  * Represents a payment to a given public key
+ *
+ * @typedef {Object} Payment
+ * @property {number} amount Number of tokens
+ * @property {PublicKey} to Public key of the recipient
  */
 export type Payment = {
   amount: number;
@@ -31,7 +44,9 @@ export type Payment = {
 }
 
 /**
- * Conditions that can unlock a payment
+ * A condition that can unlock a payment
+ *
+ * @typedef {SignatureCondition|TimeStampCondition} BudgetCondition
  */
 export type BudgetCondition = SignatureCondition | TimeStampCondition;
 
