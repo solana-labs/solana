@@ -17,7 +17,7 @@ use mint::Mint;
 use payment_plan::Payment;
 use signature::{Keypair, Pubkey, Signature};
 use std;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
@@ -125,7 +125,7 @@ pub struct Bank {
 
     /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
     /// reject transactions with signatures its seen before
-    last_ids_sigs: RwLock<HashMap<Hash, (HashSet<Signature>, u64)>>,
+    last_ids_sigs: RwLock<HashMap<Hash, (HashMap<Signature, Result<()>>, u64)>>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -202,11 +202,14 @@ impl Bank {
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(signatures: &mut HashSet<Signature>, signature: &Signature) -> Result<()> {
-        if let Some(signature) = signatures.get(signature) {
+    fn reserve_signature(
+        signatures: &mut HashMap<Signature, Result<()>>,
+        signature: &Signature,
+    ) -> Result<()> {
+        if let Some(_result) = signatures.get(signature) {
             return Err(BankError::DuplicateSignature(*signature));
         }
-        signatures.insert(*signature);
+        signatures.insert(*signature, Ok(()));
         Ok(())
     }
 
@@ -262,7 +265,7 @@ impl Bank {
             let id = last_ids.pop_front().unwrap();
             last_ids_sigs.remove(&id);
         }
-        last_ids_sigs.insert(*last_id, (HashSet::new(), timestamp()));
+        last_ids_sigs.insert(*last_id, (HashMap::new(), timestamp()));
         last_ids.push_back(*last_id);
     }
 
@@ -673,7 +676,7 @@ impl Bank {
             .read()
             .expect("'last_ids_sigs' read lock");
         for (_hash, signatures) in last_ids_sigs.iter() {
-            if signatures.0.contains(signature) {
+            if signatures.0.contains_key(signature) {
                 return true;
             }
         }
