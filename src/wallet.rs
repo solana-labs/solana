@@ -363,17 +363,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
-            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
-            if result.as_str().is_none() {
-                Err(WalletError::RpcRequestError(
-                    "Received bad last_id".to_string(),
-                ))?
-            }
-            let last_id_str = result.as_str().unwrap();
-            let last_id_vec = bs58::decode(last_id_str)
-                .into_vec()
-                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
-            let last_id = Hash::new(&last_id_vec);
+            let last_id = get_last_id(&config)?;
             let cancelable_bool = cancelable.is_some();
 
             if timestamp == None && *witnesses == None {
@@ -435,17 +425,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(pubkey, dt) => {
-            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
-            if result.as_str().is_none() {
-                Err(WalletError::RpcRequestError(
-                    "Received bad last_id".to_string(),
-                ))?
-            }
-            let last_id_str = result.as_str().unwrap();
-            let last_id_vec = bs58::decode(last_id_str)
-                .into_vec()
-                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
-            let last_id = Hash::new(&last_id_vec);
+            let last_id = get_last_id(&config)?;
 
             let tx = Transaction::budget_new_timestamp(
                 &config.id,
@@ -472,17 +452,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Apply witness signature to contract
         WalletCommand::Witness(pubkey) => {
-            let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
-            if result.as_str().is_none() {
-                Err(WalletError::RpcRequestError(
-                    "Received bad last_id".to_string(),
-                ))?
-            }
-            let last_id_str = result.as_str().unwrap();
-            let last_id_vec = bs58::decode(last_id_str)
-                .into_vec()
-                .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
-            let last_id = Hash::new(&last_id_vec);
+            let last_id = get_last_id(&config)?;
 
             let tx =
                 Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
@@ -614,6 +584,20 @@ impl WalletRpcRequest {
         }
         Ok(json["result"].clone())
     }
+}
+
+fn get_last_id(config: &WalletConfig) -> Result<Hash, Box<error::Error>> {
+    let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+    if result.as_str().is_none() {
+        Err(WalletError::RpcRequestError(
+            "Received bad last_id".to_string(),
+        ))?
+    }
+    let last_id_str = result.as_str().unwrap();
+    let last_id_vec = bs58::decode(last_id_str)
+        .into_vec()
+        .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
+    Ok(Hash::new(&last_id_vec))
 }
 
 #[cfg(test)]
