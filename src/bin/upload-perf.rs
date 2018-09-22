@@ -46,4 +46,5 @@ fn main() {
             }
         }
     }
+    metrics::flush();
 }
