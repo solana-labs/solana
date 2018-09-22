@@ -333,7 +333,7 @@ mod test {
             contract.pubkey(),
             dt,
             from.pubkey(),
-            true,
+            None,
             1,
             Hash::default(),
         );
@@ -408,7 +408,7 @@ mod test {
             contract.pubkey(),
             dt,
             from.pubkey(),
-            true,
+            Some(from.pubkey()),
             1,
             Hash::default(),
         );
@@ -474,7 +474,7 @@ mod test {
             contract.pubkey(),
             Utc::now(),
             from.pubkey(),
-            true,
+            None,
             1,
             Hash::default(),
         );
@@ -528,7 +528,7 @@ mod test {
             contract,
             date,
             keypair.pubkey(),
-            true,
+            Some(keypair.pubkey()),
             192,
             Hash::default(),
         );
