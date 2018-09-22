@@ -515,7 +515,6 @@ mod tests {
         let mut rv = Blob::recv_from(&r, &reader).unwrap();
         let rp = rv.pop_front().unwrap();
         assert_eq!(rp.as_mut().meta.size, 1024);
-        r.recycle(rp, "blob_ip6_send_recv");
     }
 
     #[test]
