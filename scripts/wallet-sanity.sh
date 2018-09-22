@@ -35,11 +35,11 @@ pay_and_confirm() {
 
 $solana_wallet "${entrypoint[@]}" address
 check_balance_output "No account found" "Your balance is: 0"
-$solana_wallet "${entrypoint[@]}" airdrop --tokens 60
+$solana_wallet "${entrypoint[@]}" airdrop 60
 check_balance_output "Your balance is: 60"
-$solana_wallet "${entrypoint[@]}" airdrop --tokens 40
+$solana_wallet "${entrypoint[@]}" airdrop 40
 check_balance_output "Your balance is: 100"
-pay_and_confirm --to $garbage_address --tokens 99
+pay_and_confirm $garbage_address 99
 check_balance_output "Your balance is: 1"
 
 echo PASS
