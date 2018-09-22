@@ -1,7 +1,9 @@
 [![Build status][travis-image]][travis-url]
 [![codecov][codecov-image]][codecov-url]
 [![esdoc][esdoc-image]][esdoc-url]
+<br>
 [![npm][npm-image]][npm-url]
+[![npm-downloads][npm-downloads-image]][npm-url]
 [![david][david-deps-image]][david-deps-url]
 [![david][david-dev-deps-image]][david-dev-deps-url]
 
@@ -11,6 +13,7 @@
 [codecov-url]: https://codecov.io/gh/solana-labs/solana-web3.js
 [esdoc-image]: https://solana-labs.github.io/solana-web3.js/badge.svg
 [npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
+[npm-downloads-image]: https://img.shields.io/npm/dm/@solana/web3.js.svg?style=flat
 [esdoc-url]: https://solana-labs.github.io/solana-web3.js/
 [npm-url]: https://www.npmjs.com/package/@solana/web3.js
 [david-deps-image]: https://david-dm.org/solana-labs/solana-web3.js.svg
