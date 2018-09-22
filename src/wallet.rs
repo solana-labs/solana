@@ -143,7 +143,7 @@ pub fn parse_command(
             };
             let timestamp = if pay_matches.is_present("timestamp") {
                 // Parse input for serde_json
-                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains("Z") {
+                let date_string = if !pay_matches.value_of("timestamp").unwrap().contains('Z') {
                     format!("\"{}Z\"", pay_matches.value_of("timestamp").unwrap())
                 } else {
                     format!("\"{}\"", pay_matches.value_of("timestamp").unwrap())
@@ -229,7 +229,7 @@ pub fn parse_command(
                 let date_string = if !timestamp_matches
                     .value_of("datetime")
                     .unwrap()
-                    .contains("Z")
+                    .contains('Z')
                 {
                     format!("\"{}Z\"", timestamp_matches.value_of("datetime").unwrap())
                 } else {
@@ -340,7 +340,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             let signature_str = signature.as_str().unwrap();
 
-            Ok(format!("{}", signature_str))
+            Ok(signature_str.to_string())
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
@@ -392,7 +392,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 }
                 let signature_str = signature.as_str().unwrap();
 
-                Ok(format!("{}", signature_str))
+                Ok(signature_str.to_string())
             } else if *witnesses == None {
                 let dt = timestamp.unwrap();
                 let dt_pubkey = match timestamp_pubkey {
@@ -430,7 +430,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             } else if timestamp == None {
                 Ok("Witness Txs not yet handled".to_string())
             } else {
-                Ok("Witness Txs not yet handled".to_string())
+                Ok("Combo Txs not yet handled".to_string())
             }
         }
         // Apply time elapsed to contract
@@ -500,7 +500,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             let signature_str = signature.as_str().unwrap();
 
-            Ok(format!("{}", signature_str))
+            Ok(signature_str.to_string())
         }
     }
 }
