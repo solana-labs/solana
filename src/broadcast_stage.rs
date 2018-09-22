@@ -269,8 +269,8 @@ mod tests {
     use broadcast_stage::{BroadcastStage, BroadcastStageReturnType};
     use crdt::{Crdt, Node};
     use entry::Entry;
+    use ledger::next_entries_mut;
     use mint::Mint;
-    use recorder::Recorder;
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::cmp;
@@ -361,19 +361,19 @@ mod tests {
         }
 
         let genesis_len = broadcast_info.entries.len() as u64;
-        let last_entry_hash = broadcast_info
+        let mut last_id = broadcast_info
             .entries
             .last()
             .expect("Ledger should not be empty")
             .id;
+        let mut num_hashes = 0;
 
         // Input enough entries to make exactly leader_rotation_interval entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
         // is ourselves, we won't exit
-        let mut recorder = Recorder::new(last_entry_hash);
-
         for _ in genesis_len..leader_rotation_interval {
-            let new_entry = recorder.record(vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+
             broadcast_info.entry_sender.send(new_entry).unwrap();
         }
 
@@ -388,7 +388,8 @@ mod tests {
         // past the point of the leader rotation. The write_stage will see that
         // it's no longer the leader after checking the crdt, and exit
         for _ in 0..leader_rotation_interval {
-            let new_entry = recorder.record(vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+
             match broadcast_info.entry_sender.send(new_entry) {
                 // We disconnected, break out of loop and check the results
                 Err(_) => break,

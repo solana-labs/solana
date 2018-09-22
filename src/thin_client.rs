@@ -192,7 +192,7 @@ impl ThinClient {
         self.balances
             .get(pubkey)
             .map(Bank::read_balance)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
     /// Request the finality from the leader node

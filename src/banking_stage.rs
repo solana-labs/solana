@@ -105,11 +105,13 @@ impl BankingStage {
 
             let processed_transactions: Vec<_> = results
                 .into_iter()
-                .filter_map(|x| {
-                    if let Ok(x) = x {
+                .filter_map(|x| match x {
+                    Ok(x) => {
                         hasher.hash(&x.signature.as_ref());
                         Some(x)
-                    } else {
+                    }
+                    Err(e) => {
+                        debug!("process transaction failed {:?}", e);
                         None
                     }
                 }).collect();
