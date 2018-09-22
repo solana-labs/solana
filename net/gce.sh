@@ -5,6 +5,7 @@ here=$(dirname "$0")
 source "$here"/common.sh
 
 cloudProvider=$(basename "$0" .sh)
+bootDiskType=""
 case $cloudProvider in
 gce)
   # shellcheck source=net/scripts/gce-provider.sh
@@ -75,6 +76,7 @@ Manage testnet instances
                       IP Address.
                       For EC2, [address] is the "allocation ID" of the desired
                       Elastic IP.
+   -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
 
  config-specific options:
    none
@@ -92,7 +94,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:ga:" opt; do
+while getopts "h?p:Pn:c:z:ga:d:" opt; do
   case $opt in
   h | \?)
     usage
@@ -119,6 +121,9 @@ while getopts "h?p:Pn:c:z:ga:" opt; do
     ;;
   a)
     leaderAddress=$OPTARG
+    ;;
+  d)
+    bootDiskType=$OPTARG
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -378,16 +383,16 @@ EOF
 
   cloud_CreateInstances "$prefix" "$prefix-leader" 1 \
     "$imageName" "$leaderMachineType" "$leaderBootDiskSizeInGb" \
-    "$startupScript" "$leaderAddress"
+    "$startupScript" "$leaderAddress" "$bootDiskType"
 
   cloud_CreateInstances "$prefix" "$prefix-validator" "$validatorNodeCount" \
     "$imageName" "$validatorMachineType" "$validatorBootDiskSizeInGb" \
-    "$startupScript" ""
+    "$startupScript" "" "$bootDiskType"
 
   if [[ $clientNodeCount -gt 0 ]]; then
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" \
-      "$startupScript" ""
+      "$startupScript" "" "$bootDiskType"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"

@@ -113,6 +113,7 @@ cloud_CreateInstances() {
   declare optionalBootDiskSize="$6"
   declare optionalStartupScript="$7"
   declare optionalAddress="$8"
+  declare optionalBootDiskType="$9"
 
   declare nodes
   if [[ $numNodes = 1 ]]; then
@@ -141,6 +142,11 @@ cloud_CreateInstances() {
   if [[ -n $optionalStartupScript ]]; then
     args+=(
       --metadata-from-file "startup-script=$optionalStartupScript"
+    )
+  fi
+  if [[ -n $optionalBootDiskType ]]; then
+    args+=(
+        --boot-disk-type "${optionalBootDiskType}"
     )
   fi
 
