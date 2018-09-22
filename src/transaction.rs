@@ -153,14 +153,19 @@ impl Transaction {
         contract: Pubkey,
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
+        cancelable: bool,
         tokens: i64,
         last_id: Hash,
     ) -> Self {
         let from = from_keypair.pubkey();
-        let budget = Budget::Or(
-            (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
-            (Condition::Signature(from), Payment { tokens, to: from }),
-        );
+        let budget = if cancelable {
+            Budget::Or(
+                (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
+            )
+        } else {
+            Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
+        };
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new_with_userdata(

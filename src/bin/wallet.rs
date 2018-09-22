@@ -189,10 +189,9 @@ fn main() -> Result<(), Box<error::Error>> {
                         .use_delimiter(true)
                         .help("Any third party signatures required to unlock the tokens"),
                 ).arg(
-                    Arg::with_name("cancellable")
-                        .long("cancellable")
-                        .takes_value(false)
-                        .requires("witness"),
+                    Arg::with_name("cancelable")
+                        .long("cancelable")
+                        .takes_value(false),
                 ),
         ).subcommand(
             SubCommand::with_name("send-signature")
