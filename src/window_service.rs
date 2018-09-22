@@ -305,9 +305,9 @@ mod test {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::Hash;
+    use ledger::next_entries_mut;
     use logger;
     use packet::{BlobRecycler, SharedBlobs, PACKET_DATA_SIZE};
-    use recorder::Recorder;
     use signature::Pubkey;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -326,9 +326,10 @@ mod test {
         resp_recycler: &BlobRecycler,
     ) -> SharedBlobs {
         let mut msgs = Vec::new();
-        let mut recorder = Recorder::new(start_hash);
+        let mut last_hash = start_hash;
+        let mut num_hashes = 0;
         while num_blobs_to_make != 0 {
-            let new_entries = recorder.record(vec![]);
+            let new_entries = next_entries_mut(&mut last_hash, &mut num_hashes, vec![]);
             let mut new_blobs: SharedBlobs = new_entries
                 .iter()
                 .enumerate()
@@ -474,6 +475,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     pub fn window_send_late_leader_test() {
         logger::setup();
         let tn = Node::new_localhost();
