@@ -83,8 +83,8 @@ impl Replicator {
 
     pub fn join(self) {
         self.ncp.join().unwrap();
-        self.t_window.join().unwrap();
         self.fetch_stage.join().unwrap();
+        self.t_window.join().unwrap();
         self.store_ledger_stage.join().unwrap();
     }
 }
@@ -98,6 +98,7 @@ mod tests {
     use logger;
     use replicator::Replicator;
     use signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread::sleep;
@@ -177,5 +178,7 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         replicator.join();
         leader.exit();
+        let _ignored = remove_dir_all(&leader_ledger_path);
+        let _ignored = remove_dir_all(&replicator_ledger_path);
     }
 }
