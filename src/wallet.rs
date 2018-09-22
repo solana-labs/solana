@@ -374,6 +374,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .into_vec()
                 .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
             let last_id = Hash::new(&last_id_vec);
+            let cancelable_bool = cancelable.is_some();
 
             if timestamp == None && *witnesses == None {
                 let tx = Transaction::new(&config.id, to, tokens, last_id);
@@ -400,7 +401,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 };
                 let process_id = Keypair::new().pubkey();
                 let tx = Transaction::budget_new_on_date(
-                    &config.id, to, process_id, dt, dt_pubkey, tokens, last_id,
+                    &config.id,
+                    to,
+                    process_id,
+                    dt,
+                    dt_pubkey,
+                    cancelable_bool,
+                    tokens,
+                    last_id,
                 );
                 let serialized = serialize(&tx).unwrap();
                 let params = json!(serialized);
