@@ -478,9 +478,7 @@ impl Bank {
                 result?;
             }
         }
-        if !entry.has_more {
-            self.register_entry_id(&entry.id);
-        }
+        self.register_entry_id(&entry.id);
         Ok(())
     }
 
@@ -680,11 +678,9 @@ mod tests {
     use hash::hash;
     use ledger;
     use logger;
-    use packet::BLOB_DATA_SIZE;
     use signature::{GenKeys, KeypairUtil};
     use std;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
-    use std::mem::size_of;
 
     #[test]
     fn test_bank_new() {
@@ -901,25 +897,6 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    fn create_sample_block_with_next_entries(
-        mint: &Mint,
-        length: usize,
-    ) -> impl Iterator<Item = Entry> {
-        let keypair = Keypair::new();
-        let hash = mint.last_id();
-        let mut txs = Vec::with_capacity(length);
-        for i in 0..length {
-            txs.push(Transaction::system_new(
-                &mint.keypair(),
-                keypair.pubkey(),
-                i as i64,
-                hash,
-            ));
-        }
-        let entries = ledger::next_entries(&hash, 0, txs);
-        entries.into_iter()
-    }
-
     fn create_sample_block_with_next_entries_using_keypairs(
         mint: &Mint,
         keypairs: &[Keypair],
@@ -940,19 +917,10 @@ mod tests {
         for _ in 0..length {
             let keypair = Keypair::new();
             let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, hash);
-            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx], false);
+            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx]);
             entries.push(entry);
         }
         entries.into_iter()
-    }
-
-    fn create_sample_ledger_with_next_entries(
-        length: usize,
-    ) -> (impl Iterator<Item = Entry>, Pubkey) {
-        let mint = Mint::new((length * length) as i64);
-        let genesis = mint.create_entries();
-        let block = create_sample_block_with_next_entries(&mint, length);
-        (genesis.into_iter().chain(block), mint.pubkey())
     }
 
     fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
@@ -1038,16 +1006,6 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    #[test]
-    fn test_process_ledger_has_more_cross_block() {
-        // size_of<Transaction> is quite large for serialized size, so
-        // use 2 * verify_block_size to ensure we get enough txes to cross that
-        // block boundary with has_more set
-        let num_txs = (2 * VERIFY_BLOCK_SIZE) * BLOB_DATA_SIZE / size_of::<Transaction>();
-        let (ledger, _pubkey) = create_sample_ledger_with_next_entries(num_txs);
-        let bank = Bank::default();
-        assert!(bank.process_ledger(ledger).is_ok());
-    }
     #[test]
     fn test_new_default() {
         let def_bank = Bank::default();

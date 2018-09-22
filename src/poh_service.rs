@@ -22,34 +22,29 @@ pub struct PohService {
 impl PohService {
     /// A background thread that will continue tagging received Transaction messages and
     /// sending back Entry messages until either the receiver or sender channel is closed.
-    pub fn new(start_hash: Hash, hash_receiver: Receiver<Hash>) -> (Self, Receiver<PohEntry>) {
-        let (poh_sender, poh_receiver) = channel();
-        let thread_hdl = Builder::new()
-            .name("solana-record-service".to_string())
-            .spawn(move || {
-                let mut poh = Poh::new(start_hash, None);
-                let _ = Self::process_hashes(&mut poh, &hash_receiver, &poh_sender);
-            }).unwrap();
-
-        (PohService { thread_hdl }, poh_receiver)
-    }
-
-    /// Same as `PohService::new`, but will automatically produce entries every `tick_duration`.
-    pub fn new_with_clock(
+    /// if tick_duration is some, service will automatically produce entries every
+    ///  `tick_duration`.
+    pub fn new(
         start_hash: Hash,
         hash_receiver: Receiver<Hash>,
-        tick_duration: Duration,
+        tick_duration: Option<Duration>,
     ) -> (Self, Receiver<PohEntry>) {
         let (poh_sender, poh_receiver) = channel();
+
         let thread_hdl = Builder::new()
             .name("solana-record-service".to_string())
             .spawn(move || {
-                let mut poh = Poh::new(start_hash, Some(tick_duration));
-                loop {
-                    if Self::try_process_hashes(&mut poh, &hash_receiver, &poh_sender).is_err() {
-                        return;
+                let mut poh = Poh::new(start_hash, tick_duration);
+                if tick_duration.is_some() {
+                    loop {
+                        if Self::try_process_hashes(&mut poh, &hash_receiver, &poh_sender).is_err()
+                        {
+                            return;
+                        }
+                        poh.hash();
                     }
-                    poh.hash();
+                } else {
+                    let _ = Self::process_hashes(&mut poh, &hash_receiver, &poh_sender);
                 }
             }).unwrap();
 
@@ -111,7 +106,7 @@ mod tests {
     #[test]
     fn test_poh() {
         let (hash_sender, hash_receiver) = channel();
-        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver);
+        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, None);
 
         hash_sender.send(Hash::default()).unwrap();
         sleep(Duration::from_millis(1));
@@ -136,7 +131,7 @@ mod tests {
     #[test]
     fn test_poh_closed_sender() {
         let (hash_sender, hash_receiver) = channel();
-        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver);
+        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, None);
         drop(poh_receiver);
         hash_sender.send(Hash::default()).unwrap();
         assert_eq!(poh_service.thread_hdl.join().unwrap(), ());
@@ -145,8 +140,11 @@ mod tests {
     #[test]
     fn test_poh_clock() {
         let (hash_sender, hash_receiver) = channel();
-        let (_poh_service, poh_receiver) =
-            PohService::new_with_clock(Hash::default(), hash_receiver, Duration::from_millis(1));
+        let (_poh_service, poh_receiver) = PohService::new(
+            Hash::default(),
+            hash_receiver,
+            Some(Duration::from_millis(1)),
+        );
 
         sleep(Duration::from_millis(50));
         drop(hash_sender);

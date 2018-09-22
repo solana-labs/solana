@@ -479,10 +479,10 @@ pub fn next_entries_mut(
     num_hashes: &mut u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
-    // TODO: find a magic number that works better than |  ?
-    //                                                  V
+    // TODO: ?? find a number that works better than |?
+    //                                               V
     if transactions.is_empty() || transactions.len() == 1 {
-        vec![Entry::new_mut(start_hash, num_hashes, transactions, false)]
+        vec![Entry::new_mut(start_hash, num_hashes, transactions)]
     } else {
         let mut chunk_start = 0;
         let mut entries = Vec::new();
@@ -526,7 +526,6 @@ pub fn next_entries_mut(
                 start_hash,
                 num_hashes,
                 transactions[chunk_start..chunk_end].to_vec(),
-                transactions.len() - chunk_end > 0,
             ));
             chunk_start = chunk_end;
         }
@@ -612,7 +611,6 @@ mod tests {
                         Utc::now(),
                         one,
                     )],
-                    false,
                 )
             }).collect()
     }
@@ -698,7 +696,6 @@ mod tests {
             num_hashes: 0,
             id: Hash::default(),
             transactions: vec![],
-            has_more: false,
         }).unwrap() as usize;
         assert!(tx_small_size < tx_large_size);
         assert!(tx_large_size < PACKET_DATA_SIZE);
@@ -715,8 +712,6 @@ mod tests {
         let transactions = vec![tx_small.clone(); threshold * 2];
         let entries0 = next_entries(&id, 0, transactions.clone());
         assert_eq!(entries0.len(), 2);
-        assert!(entries0[0].has_more);
-        assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
 
         // verify the split with small transactions followed by large
@@ -728,8 +723,6 @@ mod tests {
 
         let entries0 = next_entries(&id, 0, transactions.clone());
         assert!(entries0.len() >= 2);
-        assert!(entries0[0].has_more);
-        assert!(!entries0[entries0.len() - 1].has_more);
         assert!(entries0.verify(&id));
     }
 

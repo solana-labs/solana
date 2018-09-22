@@ -192,7 +192,7 @@ impl ThinClient {
         self.balances
             .get(pubkey)
             .map(Bank::read_balance)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "nokey"))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
     /// Request the finality from the leader node
@@ -670,7 +670,9 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        server.close().unwrap();
+        server
+            .close()
+            .unwrap_or_else(|e| panic!("close() failed! {:?}", e));
         remove_dir_all(ledger_path).unwrap();
     }
 }

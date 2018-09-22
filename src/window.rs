@@ -99,9 +99,9 @@ impl WindowUtil for Window {
         received: u64,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
         let num_peers = crdt.read().unwrap().table.len() as u64;
-        let highest_lost = calculate_highest_lost_blob_index(num_peers, consumed, received);
+        let max_repair = calculate_max_repair(num_peers, consumed, received, times);
 
-        let idxs = self.clear_slots(consumed, highest_lost);
+        let idxs = self.clear_slots(consumed, max_repair);
         let reqs: Vec<_> = idxs
             .into_iter()
             .filter_map(|pix| crdt.read().unwrap().window_index_request(pix).ok())
@@ -110,14 +110,14 @@ impl WindowUtil for Window {
         inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
         if log_enabled!(Level::Trace) {
             trace!(
-                "{}: repair_window counter times: {} consumed: {} highest_lost: {} missing: {}",
+                "{}: repair_window counter times: {} consumed: {} received: {} max_repair: {} missing: {}",
                 id,
                 times,
                 consumed,
-                highest_lost,
+                received,
+                max_repair,
                 reqs.len()
             );
-
             for (to, _) in &reqs {
                 trace!("{}: repair_window request to {}", id, to);
             }
@@ -286,17 +286,22 @@ impl WindowUtil for Window {
     }
 }
 
-fn calculate_highest_lost_blob_index(num_peers: u64, consumed: u64, received: u64) -> u64 {
+fn calculate_max_repair(num_peers: u64, consumed: u64, received: u64, times: usize) -> u64 {
     // Calculate the highest blob index that this node should have already received
     // via avalanche. The avalanche splits data stream into nodes and each node retransmits
     // the data to their peer nodes. So there's a possibility that a blob (with index lower
     // than current received index) is being retransmitted by a peer node.
-    let highest_lost = cmp::max(consumed, received.saturating_sub(num_peers));
+    let max_repair = if times >= 8 {
+        // if repair backoff is getting high, don't wait for avalanche
+        cmp::max(consumed, received)
+    } else {
+        cmp::max(consumed, received.saturating_sub(num_peers))
+    };
 
     // This check prevents repairing a blob that will cause window to roll over. Even if
     // the highes_lost blob is actually missing, asking to repair it might cause our
     // current window to move past other missing blobs
-    cmp::min(consumed + WINDOW_SIZE - 1, highest_lost)
+    cmp::min(consumed + WINDOW_SIZE - 1, max_repair)
 }
 
 pub fn blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool {
@@ -415,7 +420,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use streamer::{receiver, responder, PacketReceiver};
-    use window::{blob_idx_in_window, calculate_highest_lost_blob_index, WINDOW_SIZE};
+    use window::{blob_idx_in_window, calculate_max_repair, WINDOW_SIZE};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -473,27 +478,28 @@ mod test {
     }
 
     #[test]
-    pub fn calculate_highest_lost_blob_index_test() {
-        assert_eq!(calculate_highest_lost_blob_index(0, 10, 90), 90);
-        assert_eq!(calculate_highest_lost_blob_index(15, 10, 90), 75);
-        assert_eq!(calculate_highest_lost_blob_index(90, 10, 90), 10);
-        assert_eq!(calculate_highest_lost_blob_index(90, 10, 50), 10);
-        assert_eq!(calculate_highest_lost_blob_index(90, 10, 99), 10);
-        assert_eq!(calculate_highest_lost_blob_index(90, 10, 101), 11);
+    pub fn calculate_max_repair_test() {
+        assert_eq!(calculate_max_repair(0, 10, 90, 0), 90);
+        assert_eq!(calculate_max_repair(15, 10, 90, 32), 90);
+        assert_eq!(calculate_max_repair(15, 10, 90, 0), 75);
+        assert_eq!(calculate_max_repair(90, 10, 90, 0), 10);
+        assert_eq!(calculate_max_repair(90, 10, 50, 0), 10);
+        assert_eq!(calculate_max_repair(90, 10, 99, 0), 10);
+        assert_eq!(calculate_max_repair(90, 10, 101, 0), 11);
         assert_eq!(
-            calculate_highest_lost_blob_index(90, 10, 95 + WINDOW_SIZE),
+            calculate_max_repair(90, 10, 95 + WINDOW_SIZE, 0),
             WINDOW_SIZE + 5
         );
         assert_eq!(
-            calculate_highest_lost_blob_index(90, 10, 99 + WINDOW_SIZE),
+            calculate_max_repair(90, 10, 99 + WINDOW_SIZE, 0),
             WINDOW_SIZE + 9
         );
         assert_eq!(
-            calculate_highest_lost_blob_index(90, 10, 100 + WINDOW_SIZE),
+            calculate_max_repair(90, 10, 100 + WINDOW_SIZE, 0),
             WINDOW_SIZE + 9
         );
         assert_eq!(
-            calculate_highest_lost_blob_index(90, 10, 120 + WINDOW_SIZE),
+            calculate_max_repair(90, 10, 120 + WINDOW_SIZE, 0),
             WINDOW_SIZE + 9
         );
     }

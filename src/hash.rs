@@ -9,6 +9,29 @@ use std::fmt;
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Hash(GenericArray<u8, U32>);
 
+#[derive(Clone, Default)]
+pub struct Hasher {
+    hasher: Sha256,
+}
+
+impl Hasher {
+    pub fn hash(&mut self, val: &[u8]) -> () {
+        self.hasher.input(val);
+    }
+    pub fn hashv(&mut self, vals: &[&[u8]]) -> () {
+        for val in vals {
+            self.hash(val);
+        }
+    }
+    pub fn result(self) -> Hash {
+        // At the time of this writing, the sha2 library is stuck on an old version
+        // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
+        Hash(GenericArray::clone_from_slice(
+            self.hasher.result().as_slice(),
+        ))
+    }
+}
+
 impl AsRef<[u8]> for Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
@@ -34,13 +57,9 @@ impl Hash {
 }
 /// Return a Sha256 hash for the given data.
 pub fn hashv(vals: &[&[u8]]) -> Hash {
-    let mut hasher = Sha256::default();
-    for val in vals {
-        hasher.input(val);
-    }
-    // At the time of this writing, the sha2 library is stuck on an old version
-    // of generic_array (0.9.0). Decouple ourselves with a clone to our version.
-    Hash(GenericArray::clone_from_slice(hasher.result().as_slice()))
+    let mut hasher = Hasher::default();
+    hasher.hashv(vals);
+    hasher.result()
 }
 
 /// Return a Sha256 hash for the given data.

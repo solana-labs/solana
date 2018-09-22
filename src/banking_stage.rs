@@ -5,10 +5,13 @@
 use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
+use entry::Entry;
+use hash::{Hash, Hasher};
 use log::Level;
 use packet::{Packets, SharedPackets};
+use poh::PohEntry;
+use poh_service::PohService;
 use rayon::prelude::*;
-use record_stage::Signal;
 use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
@@ -34,21 +37,35 @@ impl BankingStage {
     pub fn new(
         bank: Arc<Bank>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-    ) -> (Self, Receiver<Signal>) {
-        let (signal_sender, signal_receiver) = channel();
+        tick_duration: Option<Duration>,
+    ) -> (Self, Receiver<Vec<Entry>>) {
+        let (entry_sender, entry_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
-            .spawn(move || loop {
-                if let Err(e) = Self::process_packets(&bank, &verified_receiver, &signal_sender) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        Error::SendError => break,
-                        _ => error!("{:?}", e),
+            .spawn(move || {
+                let (hash_sender, hash_receiver) = channel();
+                let (poh_service, poh_receiver) =
+                    PohService::new(bank.last_id(), hash_receiver, tick_duration);
+                loop {
+                    if let Err(e) = Self::process_packets(
+                        &bank,
+                        &hash_sender,
+                        &poh_receiver,
+                        &verified_receiver,
+                        &entry_sender,
+                    ) {
+                        match e {
+                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::SendError => break,
+                            _ => error!("{:?}", e),
+                        }
                     }
                 }
+                drop(hash_sender);
+                poh_service.join().unwrap();
             }).unwrap();
-        (BankingStage { thread_hdl }, signal_receiver)
+        (BankingStage { thread_hdl }, entry_receiver)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
@@ -63,16 +80,97 @@ impl BankingStage {
             }).collect()
     }
 
+    fn process_transactions(
+        bank: &Arc<Bank>,
+        transactions: Vec<Transaction>,
+        hash_sender: &Sender<Hash>,
+        poh_receiver: &Receiver<PohEntry>,
+        entry_sender: &Sender<Vec<Entry>>,
+    ) -> Result<()> {
+        let mut entries = Vec::new();
+
+        debug!("transactions: {}", transactions.len());
+
+        let mut chunk_start = 0;
+        while chunk_start != transactions.len() {
+            let chunk_end = chunk_start + Entry::num_will_fit(transactions[chunk_start..].to_vec());
+
+            let results = bank.process_transactions(transactions[chunk_start..chunk_end].to_vec());
+
+            debug!("results: {}", results.len());
+
+            chunk_start = chunk_end;
+
+            let mut hasher = Hasher::default();
+
+            let processed_transactions: Vec<_> = results
+                .into_iter()
+                .filter_map(|x| match x {
+                    Ok(x) => {
+                        hasher.hash(&x.signature.as_ref());
+                        Some(x)
+                    }
+                    Err(e) => {
+                        debug!("process transaction failed {:?}", e);
+                        None
+                    }
+                }).collect();
+
+            debug!("processed ok: {}", processed_transactions.len());
+
+            let hash = hasher.result();
+
+            if processed_transactions.len() != 0 {
+                hash_sender.send(hash)?;
+
+                let mut answered = false;
+                while !answered {
+                    entries.extend(poh_receiver.try_iter().map(|poh| {
+                        if let Some(mixin) = poh.mixin {
+                            answered = true;
+                            assert_eq!(mixin, hash);
+                            bank.register_entry_id(&poh.id);
+                            Entry {
+                                num_hashes: poh.num_hashes,
+                                id: poh.id,
+                                transactions: processed_transactions.clone(),
+                            }
+                        } else {
+                            Entry {
+                                num_hashes: poh.num_hashes,
+                                id: poh.id,
+                                transactions: vec![],
+                            }
+                        }
+                    }));
+                }
+            } else {
+                entries.extend(poh_receiver.try_iter().map(|poh| Entry {
+                    num_hashes: poh.num_hashes,
+                    id: poh.id,
+                    transactions: vec![],
+                }));
+            }
+        }
+
+        debug!("done process_transactions, {} entries", entries.len());
+
+        Ok(entry_sender.send(entries)?)
+    }
+
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
         bank: &Arc<Bank>,
+        hash_sender: &Sender<Hash>,
+        poh_receiver: &Receiver<PohEntry>,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        signal_sender: &Sender<Signal>,
+        entry_sender: &Sender<Vec<Entry>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
         let mms = verified_receiver.recv_timeout(timer)?;
+        debug!("verified_recevier {:?}", verified_receiver);
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
@@ -87,7 +185,8 @@ impl BankingStage {
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read());
             reqs_len += transactions.len();
-            let transactions = transactions
+
+            let transactions: Vec<_> = transactions
                 .into_iter()
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
@@ -99,14 +198,15 @@ impl BankingStage {
                     },
                 }).collect();
 
-            debug!("process_transactions");
-            let results = bank.process_transactions(transactions);
-            let transactions = results.into_iter().filter_map(|x| x.ok()).collect();
-            if let Err(_) = signal_sender.send(Signal::Transactions(transactions)) {
-                return Err(Error::SendError);
-            }
-            debug!("done process_transactions");
+            Self::process_transactions(
+                bank,
+                transactions,
+                hash_sender,
+                poh_receiver,
+                entry_sender,
+            )?;
         }
+
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(

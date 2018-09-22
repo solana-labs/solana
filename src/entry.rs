@@ -3,8 +3,9 @@
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use bincode::{serialize_into, serialized_size};
-use hash::{extend_and_hash, hash, Hash};
+use hash::Hash;
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
+use poh::Poh;
 use rayon::prelude::*;
 use signature::Pubkey;
 use std::io::Cursor;
@@ -42,30 +43,17 @@ pub struct Entry {
     /// generated. They may have been observed before a previous Entry ID but were
     /// pushed back into this list to ensure deterministic interpretation of the ledger.
     pub transactions: Vec<Transaction>,
-
-    /// Indication that:
-    ///  1. the next Entry in the ledger has transactions that can potentially
-    ///       be verified in parallel with these transactions
-    ///  2. this Entry can be left out of the bank's entry_id cache for
-    ///       purposes of duplicate rejection
-    pub has_more: bool,
 }
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(
-        start_hash: &Hash,
-        num_hashes: u64,
-        transactions: Vec<Transaction>,
-        has_more: bool,
-    ) -> Self {
+    pub fn new(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
         let num_hashes = num_hashes + if transactions.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &transactions);
         let entry = Entry {
             num_hashes,
             id,
             transactions,
-            has_more,
         };
 
         let size = serialized_size(&entry).unwrap();
@@ -115,9 +103,44 @@ impl Entry {
             num_hashes: 0,
             id: Hash::default(),
             transactions,
-            has_more: false,
         }).unwrap()
             <= BLOB_DATA_SIZE as u64
+    }
+
+    pub fn num_will_fit(transactions: Vec<Transaction>) -> usize {
+        if transactions.len() == 0 {
+            return 0;
+        }
+        let mut num = transactions.len();
+        let mut upper = transactions.len();
+        let mut lower = 1; // if one won't fit, we have a lot of TODOs
+        let mut next = transactions.len(); // optimistic
+        loop {
+            debug!(
+                "num {}, upper {} lower {} next {} transactions.len() {}",
+                num,
+                upper,
+                lower,
+                next,
+                transactions.len()
+            );
+            if Entry::will_fit(transactions[..num].to_vec()) {
+                next = (upper + num) / 2;
+                lower = num;
+                debug!("num {} fits, maybe too well? trying {}", num, next);
+            } else {
+                next = (lower + num) / 2;
+                upper = num;
+                debug!("num {} doesn't fit! trying {}", num, next);
+            }
+            // same as last time
+            if next == num {
+                debug!("converged on num {}", num);
+                break;
+            }
+            num = next;
+        }
+        num
     }
 
     /// Creates the next Tick Entry `num_hashes` after `start_hash`.
@@ -125,9 +148,8 @@ impl Entry {
         start_hash: &mut Hash,
         num_hashes: &mut u64,
         transactions: Vec<Transaction>,
-        has_more: bool,
     ) -> Self {
-        let entry = Self::new(start_hash, *num_hashes, transactions, has_more);
+        let entry = Self::new(start_hash, *num_hashes, transactions);
         *start_hash = entry.id;
         *num_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
@@ -141,7 +163,6 @@ impl Entry {
             num_hashes,
             id: *id,
             transactions: vec![],
-            has_more: false,
         }
     }
 
@@ -170,34 +191,22 @@ impl Entry {
     }
 }
 
-fn add_transaction_data(hash_data: &mut Vec<u8>, tx: &Transaction) {
-    hash_data.push(0u8);
-    hash_data.extend_from_slice(&tx.signature.as_ref());
-}
-
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
 /// a signature, the final hash will be a hash of both the previous ID and
 /// the signature.  If num_hashes is zero and there's no transaction data,
 ///  start_hash is returned.
 fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
-    let mut id = *start_hash;
+    if num_hashes == 0 && transactions.len() == 0 {
+        return *start_hash;
+    }
+
+    let mut poh = Poh::new(*start_hash, None);
+
     for _ in 1..num_hashes {
-        id = hash(&id.as_ref());
+        poh.hash();
     }
 
-    // Hash all the transaction data
-    let mut hash_data = vec![];
-    for tx in transactions {
-        add_transaction_data(&mut hash_data, tx);
-    }
-
-    if !hash_data.is_empty() {
-        extend_and_hash(&id, &hash_data)
-    } else if num_hashes != 0 {
-        hash(&id.as_ref())
-    } else {
-        id
-    }
+    poh.record(Transaction::hash(transactions)).id
 }
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
@@ -207,7 +216,6 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
         num_hashes,
         id: next_hash(start_hash, num_hashes, &transactions),
         transactions,
-        has_more: false,
     }
 }
 
@@ -238,7 +246,7 @@ mod tests {
         let keypair = Keypair::new();
         let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
         let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
@@ -262,7 +270,7 @@ mod tests {
         );
         let tx1 =
             Transaction::budget_new_signature(&keypair, keypair.pubkey(), keypair.pubkey(), zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], false);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two witness transactions and ensure verification fails.

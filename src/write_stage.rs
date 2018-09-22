@@ -300,8 +300,7 @@ mod tests {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::Hash;
-    use ledger::{genesis, read_ledger};
-    use recorder::Recorder;
+    use ledger::{genesis, next_entries_mut, read_ledger};
     use service::Service;
     use signature::{Keypair, KeypairUtil, Pubkey};
     use std::fs::remove_dir_all;
@@ -384,20 +383,20 @@ mod tests {
             wcrdt.set_scheduled_leader(leader_rotation_interval, write_stage_info.my_id);
         }
 
-        let last_entry_hash = write_stage_info
+        let mut last_id = write_stage_info
             .ledger_tail
             .last()
             .expect("Ledger should not be empty")
             .id;
+        let mut num_hashes = 0;
 
         let genesis_entry_height = write_stage_info.ledger_tail.len() as u64;
 
         // Input enough entries to make exactly leader_rotation_interval entries, which will
         // trigger a check for leader rotation. Because the next scheduled leader
         // is ourselves, we won't exit
-        let mut recorder = Recorder::new(last_entry_hash);
         for _ in genesis_entry_height..leader_rotation_interval {
-            let new_entry = recorder.record(vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
@@ -416,7 +415,7 @@ mod tests {
         // The write_stage will see that it's no longer the leader after
         // checking the schedule, and exit
         for _ in 0..leader_rotation_interval {
-            let new_entry = recorder.record(vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
@@ -452,7 +451,7 @@ mod tests {
         }
 
         let crdt = Arc::new(RwLock::new(crdt));
-        let entry = Entry::new(&Hash::default(), 0, vec![], false);
+        let entry = Entry::new(&Hash::default(), 0, vec![]);
 
         // A vector that is completely within a certain epoch should return that
         // entire vector

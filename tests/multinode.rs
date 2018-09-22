@@ -111,7 +111,7 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
     let mut id = start_hash;
     let mut num_hashes = 0;
     (0..num)
-        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![], false))
+        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![]))
         .collect()
 }
 
@@ -136,7 +136,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // write a bunch more ledger into leader's ledger, this should populate his window
     // and force him to respond to repair from the ledger window
     {
-        let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize * 2);
+        let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize);
         let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
 
         writer.write_entries(entries).unwrap();
@@ -159,6 +159,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // start up another validator from zero, converge and then check
     // balances
     let keypair = Keypair::new();
+    let validator_pubkey = keypair.pubkey().clone();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
     let validator = Fullnode::new(
@@ -170,24 +171,32 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         None,
     );
 
+    // Send validator some tokens to vote
+    let validator_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None).unwrap();
+    info!("leader balance {}", validator_balance);
+
     // contains the leader and new node
     info!("converging....");
     let _servers = converge(&leader_data, 2);
+    info!("converged.");
 
     // another transaction with leader
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, None).unwrap();
-    info!("bob balance on leader {}", leader_balance);
-    assert_eq!(leader_balance, 500);
-
+    let bob_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 1, None).unwrap();
+    info!("bob balance on leader {}", bob_balance);
+    let mut checks = 1;
     loop {
         let mut client = mk_client(&validator_data);
         let bal = client.poll_get_balance(&bob_pubkey);
-        info!("bob balance on validator {:?}...", bal);
-        if bal.unwrap_or(0) == leader_balance {
+        info!(
+            "bob balance on validator {:?} after {} checks...",
+            bal, checks
+        );
+        if bal.unwrap_or(0) == bob_balance {
             break;
         }
-        sleep(Duration::from_millis(300));
+        checks += 1;
     }
     info!("done!");
 
@@ -240,12 +249,19 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let mut nodes = vec![server];
     for _ in 0..N {
         let keypair = Keypair::new();
+        let validator_pubkey = keypair.pubkey().clone();
         let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
         let ledger_path = tmp_copy_ledger(
             &leader_ledger_path,
             "multi_node_validator_catchup_from_zero_validator",
         );
         ledger_paths.push(ledger_path.clone());
+
+        // Send each validator some tokens to vote
+        let validator_balance =
+            send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None)
+                .unwrap();
+        info!("validator balance {}", validator_balance);
 
         let mut val = Fullnode::new(
             validator,
@@ -366,9 +382,17 @@ fn test_multi_node_basic() {
     let mut nodes = vec![server];
     for _ in 0..N {
         let keypair = Keypair::new();
+        let validator_pubkey = keypair.pubkey().clone();
         let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
         let ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_basic");
         ledger_paths.push(ledger_path.clone());
+
+        // Send each validator some tokens to vote
+        let validator_balance =
+            send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None)
+                .unwrap();
+        info!("validator balance {}", validator_balance);
+
         let val = Fullnode::new(
             validator,
             &ledger_path,
@@ -620,7 +644,7 @@ fn test_multi_node_dynamic_network() {
                 .spawn(move || {
                     info!("Spawned thread {}", n);
                     let keypair = Keypair::new();
-                    //send some tokens to the new validator
+                    //send some tokens to the new validators
                     let bal = retry_send_tx_and_retry_get_balance(
                         &leader_data,
                         &alice_clone.read().unwrap(),

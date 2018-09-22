@@ -272,6 +272,12 @@ pub fn window_service(
                 }
 
                 if received <= consumed {
+                    trace!(
+                        "{} we have everything received:{} consumed:{}",
+                        id,
+                        received,
+                        consumed
+                    );
                     continue;
                 }
 
@@ -280,6 +286,7 @@ pub fn window_service(
                     trace!("{} !repair_backoff() times = {}", id, times);
                     continue;
                 }
+                trace!("{} let's repair! times = {}", id, times);
 
                 let mut window = window.write().unwrap();
                 let reqs = window.repair(&crdt, &id, times, consumed, received);
