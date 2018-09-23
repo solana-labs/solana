@@ -215,6 +215,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,

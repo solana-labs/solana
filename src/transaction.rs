@@ -81,7 +81,7 @@ impl Transaction {
     ) -> Self {
         let payment = Payment {
             tokens: tokens - fee,
-            to: to,
+            to,
         };
         let budget = Budget::Pay(payment);
         let instruction = Instruction::NewContract(Contract { budget, tokens });

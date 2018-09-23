@@ -84,7 +84,7 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
         last_hash = id;
     }
 
-    return true;
+    true
 }
 
 #[cfg(test)]
