@@ -235,7 +235,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             let signature_str = signature.as_str().unwrap();
 
-            Ok(format!("{}", signature_str))
+            Ok(signature_str.to_string())
         }
     }
 }
