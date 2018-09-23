@@ -22,12 +22,11 @@ pub const MAX_REPAIR_BACKOFF: usize = 128;
 
 fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     //exponential backoff
-    if *last != consumed {
+    if *last != consumed || *times < 1 {
         //start with a 50% chance of asking for repairs
         *times = 1;
     }
     *last = consumed;
-    *times += 1;
 
     // Experiment with capping repair request duration.
     // Once nodes are too far behind they can spend many
@@ -38,7 +37,12 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     }
 
     //if we get lucky, make the request, which should exponentially get less likely
-    thread_rng().gen_range(0, *times as u64) == 0
+    let should_repair = thread_rng().gen_range(0, *times as u64) == 0;
+    if should_repair {
+        *times += 1;
+    }
+
+    should_repair
 }
 
 fn add_block_to_retransmit_queue(
@@ -243,7 +247,7 @@ pub fn window_service(
             let mut consumed = entry_height;
             let mut received = entry_height;
             let mut last = entry_height;
-            let mut times = 0;
+            let mut times = 1;
             let id = crdt.read().unwrap().id;
             let mut pending_retransmits = false;
             let recycler = BlobRecycler::default();
