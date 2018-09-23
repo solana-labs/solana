@@ -252,10 +252,6 @@ pub fn window_service(
             let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
-            let id = crdt.read().unwrap().id;
-            let mut pending_retransmits = false;
-            let recycler = BlobRecycler::default();
-            trace!("{}: RECV_WINDOW started", id);
             let id;
             let leader_rotation_interval;
             {
@@ -263,17 +259,20 @@ pub fn window_service(
                 id = rcrdt.id;
                 leader_rotation_interval = rcrdt.get_leader_rotation_interval();
             }
+            let mut pending_retransmits = false;
+            let recycler = BlobRecycler::default();
+            trace!("{}: RECV_WINDOW started", id);
             loop {
                 if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
-                    let rcrdt = crdt.read().unwrap();
-                    let my_id = rcrdt.my_data().id;
-                    match rcrdt.get_scheduled_leader(consumed) {
+                    match crdt.read().unwrap().get_scheduled_leader(consumed) {
                         // If we are the next leader, exit
-                        Some(id) if id == my_id => {
+                        Some(next_leader_id) if id == next_leader_id => {
                             return Some(WindowServiceReturnType::LeaderRotation(consumed));
                         }
-                        // TODO: update leader status, make sure new blobs to window
-                        // actually originate from new leader
+                        // TODO: Figure out where to set the new leader in the crdt for 
+                        // validator -> validator transition (once we have real leader scheduling, 
+                        // this decision will be clearer). Also make sure new blobs to window actually 
+                        // originate from new leader
                         _ => (),
                     }
                 }

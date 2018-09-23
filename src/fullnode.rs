@@ -680,8 +680,9 @@ mod tests {
                 r_responder,
             );
 
-            // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
-            // number of blobs to make sure the window stops in the right place.
+            // Send the blobs out of order, in reverse (taken care of by the blobs generated
+            // by the make_consecutive_blobs() function). Also send an extra
+            // "extra_blobs" number of blobs to make sure the window stops in the right place.
             let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
             let total_blobs_to_send =
                 my_leader_begin_epoch * leader_rotation_interval + extra_blobs;

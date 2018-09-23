@@ -540,7 +540,9 @@ impl Crdt {
         let old_transmit_index = transmit_index.data;
 
         // enumerate all the blobs in the window, those are the indices
-        // transmit them to nodes, starting from a different node
+        // transmit them to nodes, starting from a different node. Add one
+        // to the capacity in case we want to send an extra blob notifying the
+        // next leader about the blob right before leader rotation
         let mut orders = Vec::with_capacity((received_index - transmit_index.data + 1) as usize);
         let window_l = window.read().unwrap();
 
@@ -560,8 +562,7 @@ impl Crdt {
             // so he can initiate repairs if necessary
             let entry_height = idx + 1;
             if entry_height % leader_rotation_interval == 0 {
-                let rcrdt = crdt.read().unwrap();
-                let next_leader_id = rcrdt.get_scheduled_leader(entry_height);
+                let next_leader_id = crdt.read().unwrap().get_scheduled_leader(entry_height);
                 if next_leader_id.is_some() && next_leader_id != Some(me.id) {
                     let info_result = broadcast_table
                         .iter()
@@ -570,7 +571,6 @@ impl Crdt {
                         orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
                     }
                 }
-                drop(rcrdt);
             }
 
             orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
