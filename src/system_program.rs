@@ -319,7 +319,6 @@ mod test {
         for thread in threads {
             thread.join().unwrap();
         }
-
     }
     #[test]
     fn test_create_assign() {
