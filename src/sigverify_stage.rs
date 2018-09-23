@@ -66,13 +66,13 @@ impl SigVerifyStage {
 
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
 
-        match sendr
+        if sendr
             .lock()
             .expect("lock in fn verify_batch in tpu")
             .send(verified_batch)
+            .is_err()
         {
-            Err(_) => return Err(Error::SendError),
-            _ => (),
+            return Err(Error::SendError);
         }
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());

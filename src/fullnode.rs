@@ -215,6 +215,7 @@ impl Fullnode {
     ///   `--------`  |                               |    `------------`
     ///               `-------------------------------`
     /// ```
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,
@@ -385,7 +386,7 @@ impl Fullnode {
 
         // Make a new RPU to serve requests out of the new bank we've created
         // instead of the old one
-        if !self.rpu.is_none() {
+        if self.rpu.is_some() {
             let old_rpu = self.rpu.take().unwrap();
             old_rpu.close()?;
             self.rpu = Some(Rpu::new(

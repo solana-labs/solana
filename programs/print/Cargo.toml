@@ -1,0 +1,22 @@
+[package]
+name = "print"
+version = "0.1.0"
+authors = [
+    "Anatoly Yakovenko <anatoly@solana.com>",
+    "Greg Fitzgerald <greg@solana.com>",
+    "Stephen Akridge <stephen@solana.com>",
+    "Michael Vines <mvines@solana.com>",
+    "Rob Walker <rob@solana.com>",
+    "Pankaj Garg <pankaj@solana.com>",
+    "Tyera Eulberg <tyera@solana.com>",
+    "Jack May <jack@solana.com>",
+]
+
+[dependencies]
+libloading = "0.5.0"
+solana = { path = "../.." }
+
+[lib]
+name = "print"
+crate-type = ["dylib"]
+

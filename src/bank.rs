@@ -7,6 +7,7 @@ use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
 use counter::Counter;
+use dynamic_program::{DynamicProgram, KeyedAccount};
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -136,6 +137,9 @@ pub struct Bank {
 
     // The latest finality time for the network
     finality_time: AtomicUsize,
+
+    // loaded contracts hashed by program_id
+    loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
 }
 
 impl Default for Bank {
@@ -147,6 +151,7 @@ impl Default for Bank {
             transaction_count: AtomicUsize::new(0),
             is_leader: true,
             finality_time: AtomicUsize::new(std::usize::MAX),
+            loaded_contracts: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -307,6 +312,7 @@ impl Bank {
             Ok(called_accounts)
         }
     }
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
@@ -317,6 +323,7 @@ impl Bank {
             .map(|tx| self.load_account(tx, accounts, error_counters))
             .collect()
     }
+
     pub fn verify_transaction(
         tx: &Transaction,
         pre_program_id: &Pubkey,
@@ -341,11 +348,33 @@ impl Bank {
         }
         Ok(())
     }
+
+    fn loaded_contract(&self, tx: &Transaction, accounts: &mut [Account]) -> bool {
+        let loaded_contracts = self.loaded_contracts.write().unwrap();
+        match loaded_contracts.get(&tx.program_id) {
+            Some(dc) => {
+                let mut infos: Vec<_> = (&tx.keys)
+                    .into_iter()
+                    .zip(accounts)
+                    .map(|(key, account)| KeyedAccount { key, account })
+                    .collect();
+
+                dc.call(&mut infos, &tx.userdata);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Execute a transaction.
     /// This method calls the contract's process_transaction method and verifies that the result of
     /// the contract does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
-    fn execute_transaction(tx: Transaction, accounts: &mut [Account]) -> Result<Transaction> {
+    fn execute_transaction(
+        &self,
+        tx: Transaction,
+        accounts: &mut [Account],
+    ) -> Result<Transaction> {
         let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = accounts
             .iter_mut()
@@ -355,13 +384,14 @@ impl Bank {
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx.program_id) {
-            SystemProgram::process_transaction(&tx, accounts)
+            SystemProgram::process_transaction(&tx, accounts, &self.loaded_contracts)
         } else if BudgetState::check_id(&tx.program_id) {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
             BudgetState::process_transaction(&tx, accounts)
         } else if StorageProgram::check_id(&tx.program_id) {
             StorageProgram::process_transaction(&tx, accounts)
+        } else if self.loaded_contract(&tx, accounts) {
         } else {
             return Err(BankError::UnknownContractId(tx.program_id));
         }
@@ -418,7 +448,7 @@ impl Bank {
             .zip(txs.into_iter())
             .map(|(acc, tx)| match acc {
                 Err(e) => Err(e.clone()),
-                Ok(ref mut accounts) => Self::execute_transaction(tx, accounts),
+                Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
             }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
