@@ -389,12 +389,9 @@ impl Bank {
             // TODO: the runtime should be checking read/write access to memory
             // we are trusting the hard coded contracts not to clobber or allocate
             BudgetState::process_transaction(&tx, accounts)
-<<<<<<< HEAD
         } else if StorageProgram::check_id(&tx.program_id) {
             StorageProgram::process_transaction(&tx, accounts)
-=======
         } else if self.loaded_contract(&tx, accounts) {
->>>>>>> Integration of native dynamic programs
         } else {
             return Err(BankError::UnknownContractId(tx.program_id));
         }

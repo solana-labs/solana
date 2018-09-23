@@ -2,7 +2,8 @@ extern crate bincode;
 extern crate generic_array;
 
 use bank::Account;
-use libloading::{Library, Symbol};
+use libc;
+use libloading;
 use signature::Pubkey;
 use std::path::PathBuf;
 
@@ -55,7 +56,10 @@ pub enum DynamicProgram {
     /// * Transaction::keys[0..] - program dependent
     /// * name - name of the program, translated to a file path of the program module
     /// * userdata - program specific user data
-    Native { name: String, library: Library },
+    Native {
+        name: String,
+        library: libloading::Library,
+    },
     /// Bpf program
     /// * Transaction::keys[0..] - program dependent
     /// * TODO BPF specific stuff
@@ -66,23 +70,28 @@ pub enum DynamicProgram {
 impl DynamicProgram {
     pub fn new(name: String) -> Self {
         // TODO determine what kind of module to load
+
         // create native program
-        println!("loading {}", name);
         let path = create_library_path(&name);
-        let library = Library::new(&path).expect("Failed to load library");
+        // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
+        let os_lib =
+            libloading::os::unix::Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+                .unwrap();
+        let library = libloading::Library::from(os_lib);
         DynamicProgram::Native { name, library }
     }
 
     pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) {
         match self {
             DynamicProgram::Native { name, library } => unsafe {
-                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => panic!(
-                        "{:?} Unable to find {:?} in program {}",
-                        e, ENTRYPOINT, name
-                    ),
-                };
+                let entrypoint: libloading::Symbol<Entrypoint> =
+                    match library.get(ENTRYPOINT.as_bytes()) {
+                        Ok(s) => s,
+                        Err(e) => panic!(
+                            "{:?} Unable to find {:?} in program {}",
+                            e, ENTRYPOINT, name
+                        ),
+                    };
                 entrypoint(infos, data);
             },
             DynamicProgram::Bpf { .. } => {
@@ -100,9 +109,10 @@ mod tests {
     use bincode::serialize;
     use signature::Pubkey;
     use std::path::Path;
+    use std::thread;
 
     #[test]
-    fn test_create_library_path_1() {
+    fn test_create_library_path() {
         let path = create_library_path("noop");
         assert_eq!(true, Path::new(&path).exists());
         let path = create_library_path("print");
@@ -196,6 +206,44 @@ mod tests {
         }
         assert_eq!(10, accounts[0].tokens);
         assert_eq!(1, accounts[1].tokens);
+    }
+
+    #[test]
+    fn test_program_move_funds_succes_many_threads() {
+        let num_threads = 42; // number of threads to spawn
+        let num_iters = 100; // number of iterations of test in each thread
+        let mut threads = Vec::new();
+        for _t in 0..num_threads {
+            threads.push(thread::spawn(move || {
+                for _i in 0..num_iters {
+                    {
+                        let tokens: i64 = 100;
+                        let data: Vec<u8> = serialize(&tokens).unwrap();
+                        let keys = vec![Pubkey::default(); 2];
+                        let mut accounts = vec![Account::default(), Account::default()];
+                        accounts[0].tokens = 100;
+                        accounts[1].tokens = 1;
+
+                        {
+                            let mut infos: Vec<_> = (&keys)
+                                .into_iter()
+                                .zip(&mut accounts)
+                                .map(|(key, account)| KeyedAccount { key, account })
+                                .collect();
+
+                            let dp = DynamicProgram::new("move_funds".to_string());
+                            dp.call(&mut infos, &data);
+                        }
+                        assert_eq!(0, accounts[0].tokens);
+                        assert_eq!(101, accounts[1].tokens);
+                    }
+                }
+            }));
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
     }
 
     // TODO add more tests to validate the Userdata and Account data is
