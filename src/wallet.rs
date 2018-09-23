@@ -235,7 +235,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
             let signature_str = signature.as_str().unwrap();
 
-            Ok(format!("{}", signature_str))
+            Ok(signature_str.to_string())
         }
     }
 }
@@ -311,7 +311,7 @@ pub enum WalletRpcRequest {
 impl WalletRpcRequest {
     fn make_rpc_request(
         &self,
-        rpc_addr: &String,
+        rpc_addr: &str,
         id: u64,
         params: Option<Value>,
     ) -> Result<Value, Box<error::Error>> {
