@@ -386,7 +386,7 @@ impl Fullnode {
 
         // Make a new RPU to serve requests out of the new bank we've created
         // instead of the old one
-        if self.rpu.is_some() {
+        if !self.rpu.is_none() {
             let old_rpu = self.rpu.take().unwrap();
             old_rpu.close()?;
             self.rpu = Some(Rpu::new(
