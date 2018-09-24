@@ -21,6 +21,7 @@ pub mod instruction;
 pub mod crdt;
 pub mod budget_program;
 pub mod drone;
+pub mod dynamic_program;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
@@ -82,6 +83,7 @@ extern crate jsonrpc_core;
 extern crate jsonrpc_macros;
 extern crate jsonrpc_http_server;
 extern crate libc;
+extern crate libloading;
 #[macro_use]
 extern crate log;
 extern crate nix;

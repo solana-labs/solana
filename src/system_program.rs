@@ -2,7 +2,10 @@
 
 use bank::Account;
 use bincode::deserialize;
+use dynamic_program::DynamicProgram;
 use signature::Pubkey;
+use std::collections::HashMap;
+use std::sync::RwLock;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -25,6 +28,10 @@ pub enum SystemProgram {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { tokens: i64 },
+    /// Load a program
+    /// program_id - id to associate this program
+    /// nanme - file path of the program to load
+    Load { program_id: Pubkey, name: String },
 }
 
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
@@ -40,7 +47,11 @@ impl SystemProgram {
     pub fn get_balance(account: &Account) -> i64 {
         account.tokens
     }
-    pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) {
+    pub fn process_transaction(
+        tx: &Transaction,
+        accounts: &mut [Account],
+        loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+    ) {
         if let Ok(syscall) = deserialize(&tx.userdata) {
             trace!("process_transaction: {:?}", syscall);
             match syscall {
@@ -74,6 +85,10 @@ impl SystemProgram {
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }
+                SystemProgram::Load { program_id, name } => {
+                    let mut hashmap = loaded_programs.write().unwrap();
+                    hashmap.insert(program_id, DynamicProgram::new(name));
+                }
             }
         } else {
             info!("Invalid transaction userdata: {:?}", tx.userdata);
@@ -83,17 +98,24 @@ impl SystemProgram {
 #[cfg(test)]
 mod test {
     use bank::Account;
+    use bincode::serialize;
+    use dynamic_program::KeyedAccount;
     use hash::Hash;
     use signature::{Keypair, KeypairUtil, Pubkey};
+    use std::collections::HashMap;
+    use std::sync::RwLock;
+    use std::thread;
     use system_program::SystemProgram;
     use transaction::Transaction;
+
     #[test]
     fn test_create_noop() {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         let tx = Transaction::system_new(&from, to.pubkey(), 0, Hash::default());
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -104,7 +126,8 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
@@ -116,7 +139,8 @@ mod test {
         accounts[0].tokens = 1;
         accounts[0].program_id = from.pubkey();
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 1);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -127,7 +151,8 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         let tx =
             Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, to.pubkey(), 0);
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
         assert_eq!(accounts[1].program_id, to.pubkey());
@@ -147,7 +172,8 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -165,7 +191,8 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -183,8 +210,115 @@ mod test {
             Pubkey::default(),
             0,
         );
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[1].userdata.len(), 3);
+    }
+    #[test]
+    fn test_load_call() {
+        // first load the program
+        let loaded_programs = RwLock::new(HashMap::new());
+        {
+            let from = Keypair::new();
+            let mut accounts = vec![Account::default(), Account::default()];
+            let program_id = Pubkey::default(); // same program id for both
+            let tx = Transaction::system_load(
+                &from,
+                Hash::default(),
+                0,
+                program_id,
+                "move_funds".to_string(),
+            );
+
+            SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
+        }
+        // then call the program
+        {
+            let program_id = Pubkey::default(); // same program id for both
+            let keys = vec![Pubkey::default(), Pubkey::default()];
+            let mut accounts = vec![Account::default(), Account::default()];
+            accounts[0].tokens = 100;
+            accounts[1].tokens = 1;
+            let tokens: i64 = 100;
+            let data: Vec<u8> = serialize(&tokens).unwrap();
+            {
+                let hash = loaded_programs.write().unwrap();
+                match hash.get(&program_id) {
+                    Some(dp) => {
+                        let mut infos: Vec<_> = (&keys)
+                            .into_iter()
+                            .zip(&mut accounts)
+                            .map(|(key, account)| KeyedAccount { key, account })
+                            .collect();
+
+                        dp.call(&mut infos, &data);
+                    }
+                    None => panic!("failed to find program in hash"),
+                }
+            }
+            assert_eq!(0, accounts[0].tokens);
+            assert_eq!(101, accounts[1].tokens);
+        }
+    }
+    #[test]
+    fn test_load_call_many_threads() {
+        let num_threads = 42;
+        let num_iters = 100;
+        let mut threads = Vec::new();
+        for _t in 0..num_threads {
+            threads.push(thread::spawn(move || {
+                let _tid = thread::current().id();
+                for _i in 0..num_iters {
+                    // first load the program
+                    let loaded_programs = RwLock::new(HashMap::new());
+                    {
+                        let from = Keypair::new();
+                        let mut accounts = vec![Account::default(), Account::default()];
+                        let program_id = Pubkey::default(); // same program id for both
+                        let tx = Transaction::system_load(
+                            &from,
+                            Hash::default(),
+                            0,
+                            program_id,
+                            "move_funds".to_string(),
+                        );
+
+                        SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
+                    }
+                    // then call the program
+                    {
+                        let program_id = Pubkey::default(); // same program id for both
+                        let keys = vec![Pubkey::default(), Pubkey::default()];
+                        let mut accounts = vec![Account::default(), Account::default()];
+                        accounts[0].tokens = 100;
+                        accounts[1].tokens = 1;
+                        let tokens: i64 = 100;
+                        let data: Vec<u8> = serialize(&tokens).unwrap();
+                        {
+                            let hash = loaded_programs.write().unwrap();
+                            match hash.get(&program_id) {
+                                Some(dp) => {
+                                    let mut infos: Vec<_> = (&keys)
+                                        .into_iter()
+                                        .zip(&mut accounts)
+                                        .map(|(key, account)| KeyedAccount { key, account })
+                                        .collect();
+
+                                    dp.call(&mut infos, &data);
+                                }
+                                None => panic!("failed to find program in hash"),
+                            }
+                        }
+                        assert_eq!(0, accounts[0].tokens);
+                        assert_eq!(101, accounts[1].tokens);
+                    }
+                }
+            }));
+        }
+
+        for thread in threads {
+            thread.join().unwrap();
+        }
     }
     #[test]
     fn test_create_assign() {
@@ -192,7 +326,8 @@ mod test {
         let program = Keypair::new();
         let mut accounts = vec![Account::default()];
         let tx = Transaction::system_assign(&from, Hash::default(), program.pubkey(), 0);
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].program_id, program.pubkey());
     }
     #[test]
@@ -202,11 +337,11 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
         let tx = Transaction::new(&from, to.pubkey(), 1, Hash::default());
-        SystemProgram::process_transaction(&tx, &mut accounts);
+        let hash = RwLock::new(HashMap::new());
+        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
-
     /// Detect binary changes in the serialized program userdata, which could have a downstream
     /// affect on SDKs and DApps
     #[test]

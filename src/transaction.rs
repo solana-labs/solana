@@ -234,6 +234,24 @@ impl Transaction {
             fee,
         )
     }
+    /// Create and sign new SystemProgram::Load transaction
+    pub fn system_load(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        fee: i64,
+        program_id: Pubkey,
+        name: String,
+    ) -> Self {
+        let load = SystemProgram::Load { program_id, name };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[],
+            SystemProgram::id(),
+            serialize(&load).unwrap(),
+            last_id,
+            fee,
+        )
+    }
     /// Create and sign new SystemProgram::Move transaction
     pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
         Transaction::system_move(from_keypair, to, tokens, last_id, 0)
