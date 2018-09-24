@@ -197,8 +197,15 @@ fn main() -> Result<(), Box<error::Error>> {
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
-                    Arg::with_name("process-id")
+                    Arg::with_name("to")
                         .index(1)
+                        .value_name("PUBKEY")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The pubkey of recipient"),
+                ).arg(
+                    Arg::with_name("process-id")
+                        .index(2)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
                         .required(true)
