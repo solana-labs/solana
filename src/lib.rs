@@ -59,6 +59,7 @@ pub mod store_ledger_stage;
 pub mod streamer;
 pub mod system_program;
 pub mod thin_client;
+pub mod tictactoe_program;
 pub mod timing;
 pub mod tpu;
 pub mod transaction;
@@ -96,6 +97,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+extern crate serde_cbor;
 extern crate sha2;
 extern crate socket2;
 extern crate sys_info;
