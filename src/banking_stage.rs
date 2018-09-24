@@ -82,7 +82,7 @@ impl BankingStage {
 
     fn process_transactions(
         bank: &Arc<Bank>,
-        transactions: Vec<Transaction>,
+        transactions: &[Transaction],
         hash_sender: &Sender<Hash>,
         poh_receiver: &Receiver<PohEntry>,
         entry_sender: &Sender<Vec<Entry>>,
@@ -93,7 +93,7 @@ impl BankingStage {
 
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
-            let chunk_end = chunk_start + Entry::num_will_fit(transactions[chunk_start..].to_vec());
+            let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
             let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
             debug!("results: {}", results.len());
@@ -120,7 +120,7 @@ impl BankingStage {
 
             let hash = hasher.result();
 
-            if processed_transactions.len() != 0 {
+            if !processed_transactions.is_empty() {
                 hash_sender.send(hash)?;
 
                 let mut answered = false;
@@ -155,7 +155,8 @@ impl BankingStage {
 
         debug!("done process_transactions, {} entries", entries.len());
 
-        Ok(entry_sender.send(entries)?)
+        entry_sender.send(entries)?;
+        Ok(())
     }
 
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
@@ -200,7 +201,7 @@ impl BankingStage {
 
             Self::process_transactions(
                 bank,
-                transactions,
+                &transactions,
                 hash_sender,
                 poh_receiver,
                 entry_sender,

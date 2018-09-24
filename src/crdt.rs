@@ -326,7 +326,7 @@ impl Crdt {
     // TODO: Dummy leader scheduler, need to implement actual leader scheduling.
     pub fn get_scheduled_leader(&self, entry_height: u64) -> Option<Pubkey> {
         match self.scheduled_leaders.get(&entry_height) {
-            Some(x) => Some(x.clone()),
+            Some(x) => Some(*x),
             None => Some(self.my_data().leader_id),
         }
     }

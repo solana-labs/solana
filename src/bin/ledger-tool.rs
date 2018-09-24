@@ -122,7 +122,7 @@ fn main() {
                 if i >= head {
                     break;
                 }
-                if let Err(e) = bank.process_entry(entry) {
+                if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     exit(1);
                 }

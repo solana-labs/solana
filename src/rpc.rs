@@ -211,7 +211,7 @@ impl JsonRpcRequestProcessor {
     fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank
             .get_account(&pubkey)
-            .ok_or(Error::invalid_request())
+            .ok_or_else(Error::invalid_request)
     }
     fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
         let val = self.bank.get_balance(&pubkey);
