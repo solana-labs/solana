@@ -14,8 +14,10 @@ use solana::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 fn main() {
     logger::setup();
@@ -75,6 +77,7 @@ fn main() {
     println!("my node: {:?}", node);
 
     let exit = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
 
     let network_addr = matches
         .value_of("network")
@@ -83,7 +86,21 @@ fn main() {
     // TODO: ask network what slice we should store
     let entry_height = 0;
 
-    let replicator = Replicator::new(entry_height, &exit, ledger_path, node, network_addr);
+    let replicator = Replicator::new(
+        entry_height,
+        5,
+        &exit,
+        ledger_path,
+        node,
+        network_addr,
+        done.clone(),
+    );
+
+    while !done.load(Ordering::Relaxed) {
+        sleep(Duration::from_millis(100));
+    }
+
+    println!("Done downloading ledger");
 
     replicator.join();
 }

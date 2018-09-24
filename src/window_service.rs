@@ -9,7 +9,7 @@ use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use signature::Pubkey;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
@@ -149,11 +149,13 @@ fn recv_window(
     recycler: &BlobRecycler,
     consumed: &mut u64,
     received: &mut u64,
+    max_ix: u64,
     r: &BlobReceiver,
     s: &EntrySender,
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
     leader_rotation_interval: u64,
+    done: Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
@@ -202,6 +204,13 @@ fn recv_window(
             continue;
         }
 
+        // For downloading storage blobs,
+        // we only want up to a certain index
+        // then stop
+        if max_ix != 0 && pix > max_ix {
+            continue;
+        }
+
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
         window.write().unwrap().process_blob(
@@ -216,6 +225,11 @@ fn recv_window(
             pending_retransmits,
             leader_rotation_interval,
         );
+
+        // Send a signal when we hit the max entry_height
+        if max_ix != 0 && *consumed == (max_ix + 1) {
+            done.store(true, Ordering::Relaxed);
+        }
     }
     if log_enabled!(Level::Trace) {
         trace!("{}", window.read().unwrap().print(id, *consumed));
@@ -240,10 +254,12 @@ pub fn window_service(
     crdt: Arc<RwLock<Crdt>>,
     window: SharedWindow,
     entry_height: u64,
+    max_entry_height: u64,
     r: BlobReceiver,
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
+    done: Arc<AtomicBool>,
 ) -> JoinHandle<Option<WindowServiceReturnType>> {
     Builder::new()
         .name("solana-window".to_string())
@@ -284,11 +300,13 @@ pub fn window_service(
                     &recycler,
                     &mut consumed,
                     &mut received,
+                    max_entry_height,
                     &r,
                     &s,
                     &retransmit,
                     &mut pending_retransmits,
                     leader_rotation_interval,
+                    done.clone(),
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -318,7 +336,7 @@ pub fn window_service(
                 trace!("{} let's repair! times = {}", id, times);
 
                 let mut window = window.write().unwrap();
-                let reqs = window.repair(&crdt, &id, times, consumed, received);
+                let reqs = window.repair(&crdt, &id, times, consumed, received, max_entry_height);
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -378,14 +396,17 @@ mod test {
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
+        let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
             subs,
             win,
+            0,
             0,
             r_reader,
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            done,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -437,14 +458,17 @@ mod test {
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
+        let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
             subs.clone(),
             win,
+            0,
             0,
             r_reader,
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            done,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -491,14 +515,17 @@ mod test {
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
+        let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
             subs.clone(),
             win,
+            0,
             0,
             r_reader,
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            done,
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -610,14 +637,17 @@ mod test {
         let (s_window, _r_window) = channel();
         let (s_retransmit, _r_retransmit) = channel();
         let win = Arc::new(RwLock::new(default_window()));
+        let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
             subs,
             win,
+            0,
             0,
             r_reader,
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            done,
         );
 
         let t_responder = {

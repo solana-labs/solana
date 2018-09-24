@@ -58,6 +58,7 @@ pub trait WindowUtil {
         times: usize,
         consumed: u64,
         received: u64,
+        max_entry_height: u64,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
@@ -99,6 +100,7 @@ impl WindowUtil for Window {
         times: usize,
         consumed: u64,
         received: u64,
+        max_entry_height: u64,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
         let rcrdt = crdt.read().unwrap();
         let leader_rotation_interval = rcrdt.get_leader_rotation_interval();
@@ -108,7 +110,12 @@ impl WindowUtil for Window {
         let is_next_leader = rcrdt.get_scheduled_leader(next_leader_rotation) == Some(*id);
         let num_peers = rcrdt.table.len() as u64;
 
-        let max_repair = calculate_max_repair(num_peers, consumed, received, times, is_next_leader);
+        let max_repair = if max_entry_height == 0 {
+            calculate_max_repair(num_peers, consumed, received, times, is_next_leader)
+        } else {
+            max_entry_height + 1
+        };
+
         let idxs = self.clear_slots(consumed, max_repair);
         let reqs: Vec<_> = idxs
             .into_iter()
