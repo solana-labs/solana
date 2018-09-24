@@ -29,7 +29,7 @@ pub enum SystemProgram {
     /// * Transaction::keys[1] - destination
     Move { tokens: i64 },
     /// Load a program
-    /// programn_id - id to associate this program
+    /// program_id - id to associate this program
     /// nanme - file path of the program to load
     Load { program_id: Pubkey, name: String },
 }
