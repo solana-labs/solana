@@ -478,7 +478,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     "processId": format!("{}", contract_state.pubkey()),
                 }).to_string())
             } else {
-                Ok("Combo Txs not yet handled".to_string())
+                Ok("Combo transactions not yet handled".to_string())
             }
         }
         // Apply time elapsed to contract

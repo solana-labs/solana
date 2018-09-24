@@ -12,7 +12,8 @@ $ solana-wallet [common-options] [command] [command-specific options]
 `command` variants:
 * `pay`
 * `cancel`
-* `apply`
+* `send-signature`
+* `send-timestamp`
 
 #### Unconditional Immediate Transfer
 ```sh
@@ -27,7 +28,7 @@ $ solana-wallet pay <PUBKEY> 123
 ```sh
 // Command
 $ solana-wallet pay <PUBKEY> 123 \
-    --after 2018-12-24T23:59 --require-timestamp-from <PUBKEY>
+    --after 2018-12-24T23:59:00 --require-timestamp-from <PUBKEY>
 
 // Return
 {signature: <TX_SIGNATURE>, processId: <PROCESS_ID>}
@@ -90,7 +91,7 @@ $ solana-wallet cancel <PROCESS_ID>
 #### Send Signature
 ```sh
 // Command
-$ solana-wallet send-signature <PROCESS_ID>
+$ solana-wallet send-signature <PUBKEY> <PROCESS_ID>
 
 // Return
 <TX_SIGNATURE>
@@ -101,7 +102,7 @@ $ solana-wallet send-signature <PROCESS_ID>
 Use the current system time:
 ```sh
 // Command
-$ solana-wallet send-timestamp <PROCESS_ID>
+$ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID>
 
 // Return
 <TX_SIGNATURE>
@@ -110,7 +111,7 @@ $ solana-wallet send-timestamp <PROCESS_ID>
 Or specify some other arbitrary timestamp:
 ```sh
 // Command
-$ solana-wallet send-timestamp <PROCESS_ID> --date 2018-12-24T23:59
+$ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 
 // Return
 <TX_SIGNATURE>
