@@ -108,6 +108,12 @@ tune_networking() {
 
       sysctl net.core.rmem_default 2>/dev/null 1>/dev/null &&
           sudo sysctl -w net.core.rmem_default=26214400 1>/dev/null 2>/dev/null
+
+      sysctl net.core.wmem_max 2>/dev/null 1>/dev/null &&
+          sudo sysctl -w net.core.wmem_max=67108864 1>/dev/null 2>/dev/null
+
+      sysctl net.core.wmem_default 2>/dev/null 1>/dev/null &&
+          sudo sysctl -w net.core.wmem_default=26214400 1>/dev/null 2>/dev/null
     ) || true
   fi
 
