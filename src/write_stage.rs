@@ -342,7 +342,7 @@ mod tests {
         let bank = Arc::new(bank);
 
         // Make a ledger
-        let (_, leader_ledger_path) = genesis("test_leader_rotation_exit", 10_000);
+        let (_, leader_ledger_path, _) = genesis("test_leader_rotation_exit", 10_000);
 
         let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &bank);
 
