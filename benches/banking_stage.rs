@@ -3,6 +3,7 @@ extern crate bincode;
 extern crate rand;
 extern crate rayon;
 extern crate solana;
+extern crate solana_program_interface;
 extern crate test;
 
 use rand::{thread_rng, Rng};
@@ -11,11 +12,11 @@ use solana::bank::Bank;
 use solana::banking_stage::{BankingStage, NUM_THREADS};
 use solana::entry::Entry;
 use solana::mint::Mint;
-use solana::packet::{to_packets_chunked, PacketRecycler};
-use solana::pubkey::Pubkey;
+use solana::packet::to_packets_chunked;
 use solana::signature::{KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
+use solana_program_interface::pubkey::Pubkey;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
@@ -47,7 +48,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mint = Mint::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
-    let packet_recycler = PacketRecycler::default();
     let bank = Arc::new(Bank::new(&mint));
     let dummy = Transaction::system_move(
         &mint.keypair(),
@@ -91,10 +91,10 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
+    let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 192)
         .into_iter()
         .map(|x| {
-            let len = x.read().packets.len();
+            let len = x.read().unwrap().packets.len();
             (x, iter::repeat(1).take(len).collect())
         }).collect();
     let (_stage, signal_receiver) =

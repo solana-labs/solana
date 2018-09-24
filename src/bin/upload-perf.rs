@@ -35,7 +35,7 @@ fn main() {
                 let median = v["median"].to_string().parse().unwrap();
                 let deviation = v["deviation"].to_string().parse().unwrap();
                 metrics::submit(
-                    influxdb::Point::new(&v["name"].to_string())
+                    influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
                         .add_field("median", influxdb::Value::Integer(median))
                         .add_field("deviation", influxdb::Value::Integer(deviation))
                         .add_field(

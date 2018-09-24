@@ -4,7 +4,6 @@ extern crate test;
 
 use solana::hash::{hash, Hash};
 use solana::ledger::{next_entries, reconstruct_entries_from_blobs, Block};
-use solana::packet::BlobRecycler;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
@@ -19,9 +18,8 @@ fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
     let transactions = vec![tx0; 10];
     let entries = next_entries(&zero, 1, transactions);
 
-    let blob_recycler = BlobRecycler::default();
     bencher.iter(|| {
-        let blobs = entries.to_blobs(&blob_recycler);
+        let blobs = entries.to_blobs();
         assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap(), entries);
     });
 }
