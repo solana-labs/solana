@@ -27,7 +27,6 @@ pub enum BudgetError {
 pub struct BudgetState {
     pub initialized: bool,
     pub pending_budget: Option<Budget>,
-    pub last_error: Option<BudgetError>,
 }
 
 pub const BUDGET_PROGRAM_ID: [u8; 32] = [
@@ -222,23 +221,13 @@ impl BudgetState {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
         let len: u64 = deserialize(&input[..8]).unwrap();
-        if len < 3 {
+        if len < 2 {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
         if input.len() < 8 + len as usize {
             return Err(Box::new(bincode::ErrorKind::SizeLimit));
         }
         deserialize(&input[8..8 + len as usize])
-    }
-
-    fn save_error_to_budget_state(e: BudgetError, accounts: &mut [Account]) -> () {
-        if let Ok(mut state) = BudgetState::deserialize(&accounts[1].userdata) {
-            trace!("saved error {:?}", e);
-            state.last_error = Some(e);
-            state.serialize(&mut accounts[1].userdata).unwrap();
-        } else {
-            trace!("error in uninitialized contract {:?}", e,);
-        }
     }
 
     /// Budget DSL contract interface
@@ -254,11 +243,6 @@ impl BudgetState {
             trace!("process_transaction: {:?}", instruction);
             Self::apply_debits_to_budget_state(tx, accounts, &instruction)
                 .and_then(|_| Self::apply_credits_to_budget_state(tx, accounts, &instruction))
-                .map_err(|e| {
-                    trace!("saving error {:?}", e);
-                    Self::save_error_to_budget_state(e.clone(), accounts);
-                    e
-                })
         } else {
             info!("Invalid transaction userdata: {:?}", tx.userdata);
             Err(BudgetError::UserdataDeserializeFailure)
@@ -355,7 +339,6 @@ mod test {
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert_eq!(state.last_error, None);
         assert!(state.is_pending());
 
         // Attack! Try to payout to a rando key
@@ -366,16 +349,15 @@ mod test {
             dt,
             Hash::default(),
         );
-        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
+        assert_eq!(
+            BudgetState::process_transaction(&tx, &mut accounts),
+            Err(BudgetError::DestinationMissing(to.pubkey()))
+        );
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         assert_eq!(accounts[to_account].tokens, 0);
 
         let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert_eq!(
-            state.last_error,
-            Some(BudgetError::DestinationMissing(to.pubkey()))
-        );
         assert!(state.is_pending());
 
         // Now, acknowledge the time in the condition occurred and
@@ -396,15 +378,13 @@ mod test {
         assert!(!state.is_pending());
 
         // try to replay the timestamp contract
-        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
+        assert_eq!(
+            BudgetState::process_transaction(&tx, &mut accounts),
+            Err(BudgetError::ContractNotPending(contract.pubkey()))
+        );
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[to_account].tokens, 1);
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert_eq!(
-            state.last_error,
-            Some(BudgetError::ContractNotPending(contract.pubkey()))
-        );
     }
     #[test]
     fn test_cancel_transfer() {
@@ -432,7 +412,6 @@ mod test {
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
         let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert_eq!(state.last_error, None);
         assert!(state.is_pending());
 
         // Attack! try to put the tokens into the wrong account with cancel
@@ -466,16 +445,13 @@ mod test {
             from.pubkey(),
             Hash::default(),
         );
-        assert!(BudgetState::process_transaction(&tx, &mut accounts).is_err());
+        assert_eq!(
+            BudgetState::process_transaction(&tx, &mut accounts),
+            Err(BudgetError::ContractNotPending(contract.pubkey()))
+        );
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[pay_account].tokens, 1);
-
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert_eq!(
-            state.last_error,
-            Some(BudgetError::ContractNotPending(contract.pubkey()))
-        );
     }
 
     #[test]
