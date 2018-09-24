@@ -15,6 +15,8 @@ use result::{Error, Result};
 use signature::Pubkey;
 #[cfg(test)]
 use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use std::fs::copy;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
@@ -553,13 +555,31 @@ pub fn tmp_ledger_path(name: &str) -> String {
 }
 
 #[cfg(test)]
-pub fn genesis(name: &str, num: i64) -> (Mint, String) {
+pub fn genesis(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
     let mint = Mint::new(num);
     let path = tmp_ledger_path(name);
     let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(mint.create_entries()).unwrap();
+    let entries = mint.create_entries();
+    writer.write_entries(entries.clone()).unwrap();
 
-    (mint, path)
+    (mint, path, entries)
+}
+
+#[cfg(test)]
+pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
+    let tostr = tmp_ledger_path(name);
+
+    {
+        let to = Path::new(&tostr);
+        let from = Path::new(&from);
+
+        create_dir_all(to).unwrap();
+
+        copy(from.join("data"), to.join("data")).unwrap();
+        copy(from.join("index"), to.join("index")).unwrap();
+    }
+
+    tostr
 }
 
 #[cfg(test)]

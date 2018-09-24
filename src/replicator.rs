@@ -94,7 +94,7 @@ mod tests {
     use client::mk_client;
     use crdt::Node;
     use fullnode::Fullnode;
-    use ledger::{genesis, read_ledger};
+    use ledger::{genesis, read_ledger, tmp_copy_ledger};
     use logger;
     use replicator::Replicator;
     use signature::{Keypair, KeypairUtil};
@@ -108,14 +108,16 @@ mod tests {
     fn test_replicator_startup() {
         logger::setup();
         info!("starting replicator test");
-        let entry_height = 0;
-        let replicator_ledger_path = "replicator_test_replicator_ledger";
 
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_ledger_path = "replicator_test_leader_ledger";
-        let (mint, leader_ledger_path) = genesis(leader_ledger_path, 100);
+        let (mint, leader_ledger_path, entries) = genesis(leader_ledger_path, 100);
+        let replicator_ledger_path =
+            tmp_copy_ledger(&leader_ledger_path, "replicator_test_replicator_ledger");
+        let num_genesis_entries = entries.len() as u64;
 
+        let entry_height = num_genesis_entries;
         info!("starting leader node");
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -147,20 +149,20 @@ mod tests {
         let replicator = Replicator::new(
             entry_height,
             &exit,
-            Some(replicator_ledger_path),
+            Some(&replicator_ledger_path),
             replicator_node,
             Some(network_addr),
         );
 
-        let mut num_entries = 0;
+        let mut num_entries = num_genesis_entries;
         for _ in 0..10 {
-            match read_ledger(replicator_ledger_path, true) {
+            match read_ledger(&replicator_ledger_path, true) {
                 Ok(entries) => {
                     for _ in entries {
                         num_entries += 1;
                     }
                     info!("{} entries", num_entries);
-                    if num_entries > 0 {
+                    if num_entries > num_genesis_entries {
                         break;
                     }
                 }
@@ -174,7 +176,7 @@ mod tests {
                 .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
                 .unwrap();
         }
-        assert!(num_entries > 0);
+        assert!(num_entries > num_genesis_entries);
         exit.store(true, Ordering::Relaxed);
         replicator.join();
         leader.exit();

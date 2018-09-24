@@ -522,7 +522,7 @@ mod tests {
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
+        let (alice, validator_ledger_path, _) = genesis("validator_exit", 10_000);
         let bank = Bank::new(&alice);
         let entry = tn.info.clone();
         let v = Fullnode::new_with_bank(
@@ -547,7 +547,7 @@ mod tests {
             .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (alice, validator_ledger_path) =
+                let (alice, validator_ledger_path, _) =
                     genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
                 let bank = Bank::new(&alice);
