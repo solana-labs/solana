@@ -40,7 +40,7 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        let res = bank.process_entries(entries.clone());
+        let res = bank.process_entries(&entries);
 
         {
             let mut wcrdt = crdt.write().unwrap();

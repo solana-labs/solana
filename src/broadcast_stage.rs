@@ -80,7 +80,7 @@ fn broadcast(
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
-            for b in blobs.iter() {
+            for b in &blobs {
                 let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = win[pos].data.take() {
@@ -92,7 +92,7 @@ fn broadcast(
 
                 trace!("{} null {}", id, pos);
             }
-            for b in blobs.iter() {
+            for b in &blobs {
                 let ix = b.read().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);

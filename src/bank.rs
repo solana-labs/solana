@@ -503,7 +503,7 @@ impl Bank {
         res
     }
 
-    pub fn process_entry(&self, entry: Entry) -> Result<()> {
+    pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.transactions.is_empty() {
             for result in self.process_transactions(&entry.transactions) {
                 result?;
@@ -532,16 +532,16 @@ impl Bank {
             *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
             entry_count += 1;
-            self.process_entry(entry)?;
+            self.process_entry(&entry)?;
         }
 
         Ok(entry_count)
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries(&self, entries: Vec<Entry>) -> Result<()> {
+    pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
         for entry in entries {
-            self.process_entry(entry)?;
+            self.process_entry(&entry)?;
         }
         Ok(())
     }
@@ -915,7 +915,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.process_entries(vec![entry]).unwrap();
+        bank.process_entries(&[entry]).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
     }
 

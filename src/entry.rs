@@ -107,8 +107,8 @@ impl Entry {
             <= BLOB_DATA_SIZE as u64
     }
 
-    pub fn num_will_fit(transactions: Vec<Transaction>) -> usize {
-        if transactions.len() == 0 {
+    pub fn num_will_fit(transactions: &[Transaction]) -> usize {
+        if transactions.is_empty() {
             return 0;
         }
         let mut num = transactions.len();
@@ -196,7 +196,7 @@ impl Entry {
 /// the signature.  If num_hashes is zero and there's no transaction data,
 ///  start_hash is returned.
 fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -> Hash {
-    if num_hashes == 0 && transactions.len() == 0 {
+    if num_hashes == 0 && transactions.is_empty() {
         return *start_hash;
     }
 
