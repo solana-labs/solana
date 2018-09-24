@@ -25,7 +25,7 @@ impl FetchStage {
         let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
-            .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone()))
+            .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone(), "fetch-stage"))
             .collect();
 
         (FetchStage { exit, thread_hdls }, receiver)

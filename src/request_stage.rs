@@ -1,6 +1,8 @@
 //! The `request_stage` processes thin client Request messages.
 
 use bincode::deserialize;
+use counter::Counter;
+use log::Level;
 use packet::{to_blobs, BlobRecycler, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
@@ -8,6 +10,7 @@ use request_processor::RequestProcessor;
 use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
 use std::thread::{self, Builder, JoinHandle};
@@ -37,7 +40,7 @@ impl RequestStage {
         blob_sender: &BlobSender,
         blob_recycler: &BlobRecycler,
     ) -> Result<()> {
-        let (batch, batch_len) = streamer::recv_batch(packet_receiver)?;
+        let (batch, batch_len, _recv_time) = streamer::recv_batch(packet_receiver)?;
 
         debug!(
             "@{:?} request_stage: processing: {}",
@@ -65,6 +68,7 @@ impl RequestStage {
         }
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
+        inc_new_counter_info!("request_stage-time_ms", total_time_ms as usize);
         debug!(
             "@{:?} done process batches: {} time: {:?}ms reqs: {} reqs/s: {}",
             timing::timestamp(),

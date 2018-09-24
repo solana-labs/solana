@@ -172,6 +172,7 @@ impl BankingStage {
         let recv_start = Instant::now();
         let mms = verified_receiver.recv_timeout(timer)?;
         debug!("verified_recevier {:?}", verified_receiver);
+        let now = Instant::now();
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
@@ -180,6 +181,7 @@ impl BankingStage {
             timing::duration_as_ms(&recv_start.elapsed()),
             mms.len(),
         );
+        inc_new_counter_info!("banking_stage-entries_received", mms_len);
         let bank_starting_tx_count = bank.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
@@ -208,6 +210,10 @@ impl BankingStage {
             )?;
         }
 
+        inc_new_counter_info!(
+            "banking_stage-time_ms",
+            timing::duration_as_ms(&now.elapsed()) as usize
+        );
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
         info!(

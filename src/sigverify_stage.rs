@@ -5,13 +5,16 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
+use counter::Counter;
 use influx_db_client as influxdb;
+use log::Level;
 use metrics;
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use service::Service;
 use sigverify;
+use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, spawn, JoinHandle};
@@ -51,8 +54,9 @@ impl SigVerifyStage {
         sendr: &Arc<Mutex<Sender<VerifiedPackets>>>,
         sigverify_disabled: bool,
     ) -> Result<()> {
-        let (batch, len) =
+        let (batch, len, recv_time) =
             streamer::recv_batch(&recvr.lock().expect("'recvr' lock in fn verifier"))?;
+        inc_new_counter_info!("sigverify_stage-entries_received", len);
 
         let now = Instant::now();
         let batch_len = batch.len();
@@ -65,6 +69,10 @@ impl SigVerifyStage {
         );
 
         let verified_batch = Self::verify_batch(batch, sigverify_disabled);
+        inc_new_counter_info!(
+            "sigverify_stage-verified_entries_send",
+            verified_batch.len()
+        );
 
         if sendr
             .lock()
@@ -77,6 +85,10 @@ impl SigVerifyStage {
 
         let total_time_ms = timing::duration_as_ms(&now.elapsed());
         let total_time_s = timing::duration_as_s(&now.elapsed());
+        inc_new_counter_info!(
+            "sigverify_stage-time_ms",
+            (total_time_ms + recv_time) as usize
+        );
         info!(
             "@{:?} verifier: done. batches: {} total verify time: {:?} id: {} verified: {} v/s {}",
             timing::timestamp(),

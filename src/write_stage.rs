@@ -96,6 +96,7 @@ impl WriteStage {
     ) -> Result<()> {
         let mut ventries = Vec::new();
         let mut received_entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
+        let now = Instant::now();
         let mut num_new_entries = 0;
         let mut num_txs = 0;
 
@@ -122,6 +123,7 @@ impl WriteStage {
                 break;
             }
         }
+        inc_new_counter_info!("write_stage-entries_received", num_new_entries);
 
         info!("write_stage entries: {}", num_new_entries);
 
@@ -159,13 +161,17 @@ impl WriteStage {
             let blob_send_start = Instant::now();
             if !entries.is_empty() {
                 inc_new_counter_info!("write_stage-recv_vote", votes.len());
-                inc_new_counter_info!("write_stage-broadcast_entries", entries.len());
+                inc_new_counter_info!("write_stage-entries_sent", entries.len());
                 trace!("broadcasting {}", entries.len());
                 entry_sender.send(entries)?;
             }
 
             blob_send_total += duration_as_ms(&blob_send_start.elapsed());
         }
+        inc_new_counter_info!(
+            "write_stage-time_ms",
+            duration_as_ms(&now.elapsed()) as usize
+        );
         info!("done write_stage txs: {} time {} ms txs/s: {} to_blobs_total: {} register_entry_total: {} blob_send_total: {} crdt_votes_total: {}",
               num_txs, duration_as_ms(&start.elapsed()),
               num_txs as f32 / duration_as_s(&start.elapsed()),
