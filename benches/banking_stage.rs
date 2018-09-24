@@ -7,14 +7,16 @@ extern crate test;
 use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::banking_stage::BankingStage;
+use solana::entry::Entry;
 use solana::mint::Mint;
 use solana::packet::{to_packets_chunked, PacketRecycler};
-use solana::record_stage::Signal;
+use solana::poh_service::PohService;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
+use std::time::Duration;
 use test::Bencher;
 
 // use self::test::Bencher;
@@ -79,17 +81,19 @@ use test::Bencher;
 //     println!("{} tps", tps);
 // }
 
-fn check_txs(receiver: &Receiver<Signal>, ref_tx_count: usize) {
+fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
     let mut total = 0;
     loop {
-        let signal = receiver.recv().unwrap();
-        if let Signal::Transactions(transactions) = signal {
-            total += transactions.len();
-            if total >= ref_tx_count {
-                break;
+        let entries = receiver.recv_timeout(Duration::new(1, 0));
+        if let Ok(entries) = entries {
+            for entry in &entries {
+                total += entry.transactions.len();
             }
         } else {
-            assert!(false);
+            break;
+        }
+        if total >= ref_tx_count {
+            break;
         }
     }
     assert_eq!(total, ref_tx_count);
@@ -119,7 +123,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         }).collect();
 
     let (verified_sender, verified_receiver) = channel();
-    let (signal_sender, signal_receiver) = channel();
+    let (entry_sender, entry_receiver) = channel();
     let packet_recycler = PacketRecycler::default();
 
     let setup_transactions: Vec<_> = (0..num_src_accounts)
@@ -135,32 +139,45 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     bencher.iter(move || {
         let bank = Arc::new(Bank::new(&mint));
 
+        let (hash_sender, hash_receiver) = channel();
+        let (_poh_service, poh_receiver) = PohService::new(bank.last_id(), hash_receiver, None);
+
         let verified_setup: Vec<_> =
             to_packets_chunked(&packet_recycler, &setup_transactions.clone(), tx)
                 .into_iter()
                 .map(|x| {
-                    let len = (*x).read().unwrap().packets.len();
+                    let len = (x).read().packets.len();
                     (x, iter::repeat(1).take(len).collect())
                 }).collect();
 
         verified_sender.send(verified_setup).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
+        BankingStage::process_packets(
+            &bank,
+            &hash_sender,
+            &poh_receiver,
+            &verified_receiver,
+            &entry_sender,
+        ).unwrap();
 
-        check_txs(&signal_receiver, num_src_accounts);
+        check_txs(&entry_receiver, num_src_accounts);
 
         let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), 192)
             .into_iter()
             .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
+                let len = (x).read().packets.len();
                 (x, iter::repeat(1).take(len).collect())
             }).collect();
 
         verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
+        BankingStage::process_packets(
+            &bank,
+            &hash_sender,
+            &poh_receiver,
+            &verified_receiver,
+            &entry_sender,
+        ).unwrap();
 
-        check_txs(&signal_receiver, tx);
+        check_txs(&entry_receiver, tx);
     });
 }
 
@@ -186,21 +203,30 @@ fn bench_banking_stage_single_from(bencher: &mut Bencher) {
         }).collect();
 
     let (verified_sender, verified_receiver) = channel();
-    let (signal_sender, signal_receiver) = channel();
+    let (entry_sender, entry_receiver) = channel();
     let packet_recycler = PacketRecycler::default();
 
     bencher.iter(move || {
         let bank = Arc::new(Bank::new(&mint));
+
+        let (hash_sender, hash_receiver) = channel();
+        let (_poh_service, poh_receiver) = PohService::new(bank.last_id(), hash_receiver, None);
+
         let verified: Vec<_> = to_packets_chunked(&packet_recycler, &transactions.clone(), tx)
             .into_iter()
             .map(|x| {
-                let len = (*x).read().unwrap().packets.len();
+                let len = (x).read().packets.len();
                 (x, iter::repeat(1).take(len).collect())
             }).collect();
         verified_sender.send(verified).unwrap();
-        BankingStage::process_packets(&bank, &verified_receiver, &signal_sender, &packet_recycler)
-            .unwrap();
+        BankingStage::process_packets(
+            &bank,
+            &hash_sender,
+            &poh_receiver,
+            &verified_receiver,
+            &entry_sender,
+        ).unwrap();
 
-        check_txs(&signal_receiver, tx);
+        check_txs(&entry_receiver, tx);
     });
 }
