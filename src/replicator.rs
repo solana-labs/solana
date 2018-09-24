@@ -105,6 +105,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
+    #[ignore]
     fn test_replicator_startup() {
         logger::setup();
         info!("starting replicator test");
