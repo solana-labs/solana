@@ -176,6 +176,35 @@ impl Transaction {
             0,
         )
     }
+    /// Create and sign a multisig Transaction.
+    pub fn budget_new_when_signed(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        contract: Pubkey,
+        witness: Pubkey,
+        cancelable: Option<Pubkey>,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self {
+        let budget = if let Some(from) = cancelable {
+            Budget::Or(
+                (Condition::Signature(witness), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
+            )
+        } else {
+            Budget::After(Condition::Signature(witness), Payment { tokens, to })
+        };
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            0,
+        )
+    }
     /// Create and sign new SystemProgram::CreateAccount transaction
     pub fn system_create(
         from_keypair: &Keypair,
