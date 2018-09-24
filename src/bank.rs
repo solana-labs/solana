@@ -24,6 +24,7 @@ use std::sync::RwLock;
 use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
+use tictactoe_program::TicTacToeProgram;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
@@ -421,6 +422,10 @@ impl Bank {
             }
         } else if StorageProgram::check_id(&tx.program_id) {
             StorageProgram::process_transaction(&tx, accounts)
+        } else if TicTacToeProgram::check_id(&tx.program_id) {
+            if TicTacToeProgram::process_transaction(&tx, accounts).is_err() {
+                return Err(BankError::ProgramRuntimeError);
+            }
         } else if self.loaded_contract(&tx, accounts) {
         } else {
             return Err(BankError::UnknownContractId(tx.program_id));
@@ -683,7 +688,7 @@ impl Bank {
         }
     }
     /// Each contract would need to be able to introspect its own state
-    /// this is hard coded to the budget contract langauge
+    /// this is hard coded to the budget contract language
     pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
         self.get_account(pubkey)
             .map(|x| Self::read_balance(&x))
