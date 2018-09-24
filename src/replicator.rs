@@ -25,10 +25,12 @@ pub struct Replicator {
 impl Replicator {
     pub fn new(
         entry_height: u64,
+        max_entry_height: u64,
         exit: &Arc<AtomicBool>,
         ledger_path: Option<&str>,
         node: Node,
         network_addr: Option<SocketAddr>,
+        done: Arc<AtomicBool>,
     ) -> Replicator {
         let window = window::new_window_from_entries(&[], entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
@@ -57,10 +59,12 @@ impl Replicator {
             crdt.clone(),
             shared_window.clone(),
             entry_height,
+            max_entry_height,
             blob_fetch_receiver,
             entry_window_sender,
             retransmit_sender,
             repair_socket,
+            done,
         );
 
         let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
@@ -121,6 +125,7 @@ mod tests {
         let replicator_ledger_path = "replicator_test_replicator_ledger";
 
         let exit = Arc::new(AtomicBool::new(false));
+        let done = Arc::new(AtomicBool::new(false));
 
         let leader_ledger_path = "replicator_test_leader_ledger";
         let (mint, leader_ledger_path) = genesis(leader_ledger_path, 100);
@@ -155,10 +160,12 @@ mod tests {
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
         let replicator = Replicator::new(
             entry_height,
+            1,
             &exit,
             Some(replicator_ledger_path),
             replicator_node,
             Some(network_addr),
+            done.clone(),
         );
 
         let mut num_entries = 0;
@@ -183,6 +190,7 @@ mod tests {
                 .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
                 .unwrap();
         }
+        assert_eq!(done.load(Ordering::Relaxed), true);
         assert!(num_entries > 0);
         exit.store(true, Ordering::Relaxed);
         replicator.join();

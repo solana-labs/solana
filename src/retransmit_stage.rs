@@ -7,7 +7,7 @@ use log::Level;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
@@ -80,14 +80,17 @@ impl RetransmitStage {
 
         let t_retransmit = retransmitter(retransmit_socket, crdt.clone(), retransmit_receiver);
         let (entry_sender, entry_receiver) = channel();
+        let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
             crdt.clone(),
             window,
             entry_height,
+            0,
             fetch_stage_receiver,
             entry_sender,
             retransmit_sender,
             repair_socket,
+            done,
         );
 
         (
