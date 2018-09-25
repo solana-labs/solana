@@ -43,11 +43,7 @@ impl ReplicateStage {
         }
 
         let res = bank.process_entries(&entries);
-
-        if let Err(err) = send_validator_vote(bank, keypair, crdt, blob_recycler, vote_blob_sender)
-        {
-            info!("Vote failed: {:?}", err);
-        }
+        send_validator_vote(bank, keypair, crdt, blob_recycler, vote_blob_sender)?;
 
         {
             let mut wcrdt = crdt.write().unwrap();
