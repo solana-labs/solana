@@ -46,7 +46,7 @@ pub enum Budget {
     Or((Condition, Payment), (Condition, Payment)),
 
     /// Make a payment after both of two conditions are satisfied
-    And((Condition, Payment), (Condition, Payment)),
+    And(Condition, Condition, Payment),
 }
 
 impl Budget {
@@ -61,15 +61,11 @@ impl Budget {
     }
 
     /// Create a budget that pays tokens` to `to` after being witnessed by 2x `from`s
-    pub fn new_dual_authorized_payment(
-        from0: Pubkey,
-        from1: Pubkey,
-        tokens: i64,
-        to: Pubkey,
-    ) -> Self {
+    pub fn new_2_2_multisig_payment(from0: Pubkey, from1: Pubkey, tokens: i64, to: Pubkey) -> Self {
         Budget::And(
-            (Condition::Signature(from0), Payment { tokens, to }),
-            (Condition::Signature(from1), Payment { tokens, to }),
+            Condition::Signature(from0),
+            Condition::Signature(from1),
+            Payment { tokens, to },
         )
     }
 
@@ -103,33 +99,39 @@ impl Budget {
     /// Return true if the budget spends exactly `spendable_tokens`.
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match self {
-            Budget::Pay(payment) | Budget::After(_, payment) => payment.tokens == spendable_tokens,
+            Budget::Pay(payment) | Budget::After(_, payment) | Budget::And(_, _, payment) => {
+                payment.tokens == spendable_tokens
+            }
             Budget::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
-            Budget::And(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
     /// Apply a witness to the budget to see if the budget can be reduced.
     /// If so, modify the budget in-place.
     pub fn apply_witness(&mut self, witness: &Witness, from: &Pubkey) {
-        let new_payment = match self {
-            Budget::After(cond, payment) if cond.is_satisfied(witness, from) => Some(payment),
-            Budget::Or((cond, payment), _) if cond.is_satisfied(witness, from) => Some(payment),
-            Budget::Or(_, (cond, payment)) if cond.is_satisfied(witness, from) => Some(payment),
+        let new_budget = match self {
+            Budget::After(cond, payment) if cond.is_satisfied(witness, from) => {
+                Some(Budget::Pay(payment.clone()))
+            }
+            Budget::Or((cond, payment), _) if cond.is_satisfied(witness, from) => {
+                Some(Budget::Pay(payment.clone()))
+            }
+            Budget::Or(_, (cond, payment)) if cond.is_satisfied(witness, from) => {
+                Some(Budget::Pay(payment.clone()))
+            }
+            Budget::And(cond0, cond1, payment) => {
+                if cond0.is_satisfied(witness, from) {
+                    Some(Budget::After(cond1.clone(), payment.clone()))
+                } else if cond1.is_satisfied(witness, from) {
+                    Some(Budget::After(cond0.clone(), payment.clone()))
+                } else {
+                    None
+                }
+            }
             _ => None,
-        }.cloned();
-
-        if let Some(payment) = new_payment {
-            mem::replace(self, Budget::Pay(payment));
-        }
-        let new_partial_witness = match self {
-            Budget::And((cond, _payment), other) if cond.is_satisfied(witness, from) => Some(other),
-            Budget::And(other, (cond, _payment)) if cond.is_satisfied(witness, from) => Some(other),
-            _ => None,
-        }.cloned();
-
-        if let Some((condition, payment)) = new_partial_witness {
-            mem::replace(self, Budget::After(condition, payment));
+        };
+        if let Some(budget) = new_budget {
+            mem::replace(self, budget);
         }
     }
 }
@@ -216,12 +218,12 @@ mod tests {
         assert_eq!(budget, Budget::new_payment(42, from));
     }
     #[test]
-    fn test_dual_authorized_payment() {
+    fn test_2_2_multisig_payment() {
         let from0 = Keypair::new().pubkey();
         let from1 = Keypair::new().pubkey();
         let to = Pubkey::default();
 
-        let mut budget = Budget::new_dual_authorized_payment(from0, from1, 42, to);
+        let mut budget = Budget::new_2_2_multisig_payment(from0, from1, 42, to);
         budget.apply_witness(&Witness::Signature, &from0);
         assert_eq!(budget, Budget::new_authorized_payment(from1, 42, to));
     }
