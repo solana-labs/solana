@@ -44,6 +44,9 @@ pub enum Budget {
     /// Either make a payment after one condition or a different payment after another
     /// condition, which ever condition is satisfied first.
     Or((Condition, Payment), (Condition, Payment)),
+
+    /// Make a payment after both of two conditions are satisfied
+    And((Condition, Payment), (Condition, Payment)),
 }
 
 impl Budget {
@@ -55,6 +58,19 @@ impl Budget {
     /// Create a budget that pays `tokens` to `to` after being witnessed by `from`.
     pub fn new_authorized_payment(from: Pubkey, tokens: i64, to: Pubkey) -> Self {
         Budget::After(Condition::Signature(from), Payment { tokens, to })
+    }
+
+    /// Create a budget that pays tokens` to `to` after being witnessed by 2x `from`s
+    pub fn new_dual_authorized_payment(
+        from0: Pubkey,
+        from1: Pubkey,
+        tokens: i64,
+        to: Pubkey,
+    ) -> Self {
+        Budget::And(
+            (Condition::Signature(from0), Payment { tokens, to }),
+            (Condition::Signature(from1), Payment { tokens, to }),
+        )
     }
 
     /// Create a budget that pays `tokens` to `to` after the given DateTime.
@@ -89,6 +105,7 @@ impl Budget {
         match self {
             Budget::Pay(payment) | Budget::After(_, payment) => payment.tokens == spendable_tokens,
             Budget::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
+            Budget::And(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
@@ -104,6 +121,15 @@ impl Budget {
 
         if let Some(payment) = new_payment {
             mem::replace(self, Budget::Pay(payment));
+        }
+        let new_partial_witness = match self {
+            Budget::And((cond, _payment), other) if cond.is_satisfied(witness, from) => Some(other),
+            Budget::And(other, (cond, _payment)) if cond.is_satisfied(witness, from) => Some(other),
+            _ => None,
+        }.cloned();
+
+        if let Some((condition, payment)) = new_partial_witness {
+            mem::replace(self, Budget::After(condition, payment));
         }
     }
 }
@@ -188,5 +214,15 @@ mod tests {
         let mut budget = Budget::new_cancelable_future_payment(dt, from, 42, to);
         budget.apply_witness(&Witness::Signature, &from);
         assert_eq!(budget, Budget::new_payment(42, from));
+    }
+    #[test]
+    fn test_dual_authorized_payment() {
+        let from0 = Keypair::new().pubkey();
+        let from1 = Keypair::new().pubkey();
+        let to = Pubkey::default();
+
+        let mut budget = Budget::new_dual_authorized_payment(from0, from1, 42, to);
+        budget.apply_witness(&Witness::Signature, &from0);
+        assert_eq!(budget, Budget::new_authorized_payment(from1, 42, to));
     }
 }
