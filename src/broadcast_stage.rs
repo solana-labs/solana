@@ -39,6 +39,7 @@ fn broadcast(
     let id = node_info.id;
     let timer = Duration::new(1, 0);
     let entries = receiver.recv_timeout(timer)?;
+    let now = Instant::now();
     let mut num_entries = entries.len();
     let mut ventries = Vec::new();
     ventries.push(entries);
@@ -46,6 +47,7 @@ fn broadcast(
         num_entries += entries.len();
         ventries.push(entries);
     }
+    inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
 
     let to_blobs_start = Instant::now();
     let dq: SharedBlobs = ventries
@@ -128,6 +130,10 @@ fn broadcast(
     }
     let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
+    inc_new_counter_info!(
+        "broadcast_stage-time_ms",
+        duration_as_ms(&now.elapsed()) as usize
+    );
     info!(
         "broadcast: {} entries, blob time {} chunking time {} broadcast time {}",
         num_entries, to_blobs_elapsed, chunking_elapsed, broadcast_elapsed

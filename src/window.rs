@@ -450,7 +450,12 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader);
+        let t_receiver = receiver(
+            Arc::new(read),
+            exit.clone(),
+            s_reader,
+            "window-streamer-test",
+        );
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);

@@ -44,7 +44,12 @@ impl Rpu {
     pub fn new(bank: &Arc<Bank>, requests_socket: UdpSocket, respond_socket: UdpSocket) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
-        let t_receiver = streamer::receiver(Arc::new(requests_socket), exit.clone(), packet_sender);
+        let t_receiver = streamer::receiver(
+            Arc::new(requests_socket),
+            exit.clone(),
+            packet_sender,
+            "rpu",
+        );
 
         let request_processor = RequestProcessor::new(bank.clone());
         let (request_stage, blob_receiver) = RequestStage::new(request_processor, packet_receiver);

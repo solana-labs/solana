@@ -1,5 +1,7 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
+use influx_db_client as influxdb;
+use metrics;
 use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlobs, SharedPackets};
 use result::{Error, Result};
 use std::net::UdpSocket;
@@ -7,7 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use timing::duration_as_ms;
 
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
@@ -19,6 +22,7 @@ fn recv_loop(
     exit: &Arc<AtomicBool>,
     re: &PacketRecycler,
     channel: &PacketSender,
+    channel_tag: &'static str,
 ) -> Result<()> {
     loop {
         let msgs = re.allocate();
@@ -26,6 +30,12 @@ fn recv_loop(
             let result = msgs.write().recv_from(sock);
             match result {
                 Ok(()) => {
+                    let len = msgs.read().packets.len();
+                    metrics::submit(
+                        influxdb::Point::new(channel_tag)
+                            .add_field("count", influxdb::Value::Integer(len as i64))
+                            .to_owned(),
+                    );
                     channel.send(msgs)?;
                     break;
                 }
@@ -43,6 +53,7 @@ pub fn receiver(
     sock: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
     packet_sender: PacketSender,
+    sender_tag: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
     let recycler = PacketRecycler::default();
@@ -52,7 +63,7 @@ pub fn receiver(
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, &exit, &recycler, &packet_sender);
+            let _ = recv_loop(&sock, &exit, &recycler, &packet_sender, sender_tag);
             ()
         }).unwrap()
 }
@@ -64,9 +75,10 @@ fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
     Ok(())
 }
 
-pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)> {
+pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize, u64)> {
     let timer = Duration::new(1, 0);
     let msgs = recvr.recv_timeout(timer)?;
+    let recv_start = Instant::now();
     trace!("got msgs");
     let mut len = msgs.read().packets.len();
     let mut batch = vec![msgs];
@@ -80,7 +92,7 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize)>
         }
     }
     trace!("batch len {}", batch.len());
-    Ok((batch, len))
+    Ok((batch, len, duration_as_ms(&recv_start.elapsed())))
 }
 
 pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> JoinHandle<()> {
@@ -166,7 +178,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
-        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader);
+        let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader, "streamer-test");
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
