@@ -475,7 +475,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     pub fn window_send_late_leader_test() {
         logger::setup();
         let tn = Node::new_localhost();
@@ -541,9 +540,8 @@ mod test {
             s_responder.send(msgs1).expect("send");
             t_responder
         };
-
         let mut q = r_retransmit.recv().unwrap();
-        while let Ok(mut nq) = r_retransmit.try_recv() {
+        while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(100)) {
             q.append(&mut nq);
         }
         assert!(q.len() > 10);
