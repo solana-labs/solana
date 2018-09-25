@@ -252,8 +252,6 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown() {
-        use logger;
-        logger::setup();
         let bank = Bank::new(&Mint::new(2));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) =
@@ -264,8 +262,6 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        use logger;
-        logger::setup();
         let bank = Bank::new(&Mint::new(2));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -277,20 +273,14 @@ mod tests {
         sleep(Duration::from_millis(50));
         drop(verified_sender);
 
-        let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
-        let mut last_id = start_hash;
-        entries.iter().for_each(|entries| {
-            assert!(entries.verify(&last_id));
-            last_id = entries.last().unwrap().id;
-        });
+        assert!(entries.verify(&start_hash));
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
     #[test]
     fn test_banking_stage_no_tick() {
-        use logger;
-        logger::setup();
         let bank = Bank::new(&Mint::new(2));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
