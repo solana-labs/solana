@@ -5,13 +5,13 @@ import {BudgetProgram} from '../src/budget-program';
 
 test('pay', () => {
   const from = new Account();
-  const contract = new Account();
+  const program = new Account();
   const to = new Account();
   let transaction;
 
   transaction = BudgetProgram.pay(
     from.publicKey,
-    contract.publicKey,
+    program.publicKey,
     to.publicKey,
     123,
   );
@@ -20,7 +20,7 @@ test('pay', () => {
 
   transaction = BudgetProgram.pay(
     from.publicKey,
-    contract.publicKey,
+    program.publicKey,
     to.publicKey,
     123,
     BudgetProgram.signatureCondition(from.publicKey),
@@ -30,7 +30,7 @@ test('pay', () => {
 
   transaction = BudgetProgram.pay(
     from.publicKey,
-    contract.publicKey,
+    program.publicKey,
     to.publicKey,
     123,
     BudgetProgram.signatureCondition(from.publicKey),
