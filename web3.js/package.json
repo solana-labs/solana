@@ -38,7 +38,7 @@
     "lint:fix": "npm run lint --fix",
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
-    "prepublish": "npm run clean && npm run ok && npm run build"
+    "prepare": "npm run clean && npm run ok && npm run build"
   },
   "dependencies": {
     "babel-runtime": "^6.26.0",
