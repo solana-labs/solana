@@ -66,7 +66,7 @@ const GetAccountInfoRpcResult = struct({
   id: 'string',
   error: 'any?',
   result: struct.optional({
-    contract_id: 'array',
+    program_id: 'array',
     tokens: 'number',
     userdata: 'array',
   }),
@@ -203,7 +203,7 @@ export class Connection {
     }
     return {
       tokens: result.tokens,
-      programId: bs58.encode(result.contract_id),
+      programId: bs58.encode(result.program_id),
       userdata,
     };
   }
