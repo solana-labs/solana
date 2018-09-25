@@ -571,7 +571,7 @@ mod tests {
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (alice, validator_ledger_path, _) = genesis("validator_exit", 10_000);
+        let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
         let bank = Bank::new(&alice);
         let entry = tn.info.clone();
         let v = Fullnode::new_with_bank(
@@ -597,7 +597,7 @@ mod tests {
             .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (alice, validator_ledger_path, _) =
+                let (alice, validator_ledger_path) =
                     genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
                 let bank = Bank::new(&alice);
@@ -639,8 +639,7 @@ mod tests {
 
         // Start the validator node
         let leader_rotation_interval = 10;
-        let (_, validator_ledger_path, genesis_entries) =
-            genesis("test_validator_to_leader_transition", 10_000);
+        let (mint, validator_ledger_path) = genesis("test_validator_to_leader_transition", 10_000);
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
@@ -680,12 +679,12 @@ mod tests {
                 r_responder,
             );
 
-            // Send the blobs out of order, in reverse (taken care of by the blobs generated
-            // by the make_consecutive_blobs() function). Also send an extra
+            // Send the blobs out of order, in reverse. Also send an extra
             // "extra_blobs" number of blobs to make sure the window stops in the right place.
             let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
             let total_blobs_to_send =
                 my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
+            let genesis_entries = mint.create_entries();
             let last_id = genesis_entries
                 .last()
                 .expect("expected at least one genesis entry")
@@ -697,7 +696,9 @@ mod tests {
                 last_id,
                 &tvu_address,
                 &resp_recycler,
-            );
+            ).into_iter()
+            .rev()
+            .collect();
             s_responder.send(msgs).expect("send");
             t_responder
         };

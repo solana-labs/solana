@@ -5,7 +5,7 @@ use counter::Counter;
 #[cfg(test)]
 use hash::Hash;
 #[cfg(test)]
-use ledger::next_entries_mut;
+use ledger::{next_entries_mut, Block};
 use log::Level;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use recycler;
@@ -436,30 +436,20 @@ impl Blob {
 #[cfg(test)]
 pub fn make_consecutive_blobs(
     me_id: Pubkey,
-    mut num_blobs_to_make: u64,
+    num_blobs_to_make: u64,
     start_hash: Hash,
     addr: &SocketAddr,
     resp_recycler: &BlobRecycler,
 ) -> SharedBlobs {
-    let mut msgs = Vec::new();
     let mut last_hash = start_hash;
     let mut num_hashes = 0;
-    while num_blobs_to_make != 0 {
-        let new_entries = next_entries_mut(&mut last_hash, &mut num_hashes, vec![]);
-        let mut new_blobs: SharedBlobs = new_entries
-            .iter()
-            .enumerate()
-            .map(|(i, e)| {
-                let blob_index = num_blobs_to_make - i as u64 - 1;
-                let new_blob = e.to_blob(&resp_recycler, Some(blob_index), Some(me_id), Some(addr));
-                assert_eq!(blob_index, new_blob.read().get_index().unwrap());
-                new_blob
-            }).collect();
-        new_blobs.truncate(num_blobs_to_make as usize);
-        num_blobs_to_make -= new_blobs.len() as u64;
-        msgs.extend(new_blobs);
+    let mut all_entries = Vec::with_capacity(num_blobs_to_make as usize);
+    for _ in 0..num_blobs_to_make {
+        all_entries.extend(next_entries_mut(&mut last_hash, &mut num_hashes, vec![]));
     }
-    msgs
+    let mut new_blobs = all_entries.to_blobs_with_id(&resp_recycler, me_id, 0, addr);
+    new_blobs.truncate(num_blobs_to_make as usize);
+    new_blobs
 }
 
 #[cfg(test)]

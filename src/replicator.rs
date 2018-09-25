@@ -123,7 +123,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         let leader_ledger_path = "replicator_test_leader_ledger";
-        let (mint, leader_ledger_path, _) = genesis(leader_ledger_path, 100);
+        let (mint, leader_ledger_path) = genesis(leader_ledger_path, 100);
 
         info!("starting leader node");
         let leader_keypair = Keypair::new();

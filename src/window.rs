@@ -539,6 +539,14 @@ mod test {
             calculate_max_repair(90, 10, 120 + WINDOW_SIZE, 0, false),
             WINDOW_SIZE + 9
         );
+        assert_eq!(
+            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, false),
+            WINDOW_SIZE
+        );
+        assert_eq!(
+            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, true),
+            50 + WINDOW_SIZE
+        );
     }
 
     fn wrap_blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: u64) -> (bool, u64) {

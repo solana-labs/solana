@@ -401,7 +401,9 @@ mod test {
                 Hash::default(),
                 &gossip_address,
                 &resp_recycler,
-            );
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -641,7 +643,9 @@ mod test {
                 Hash::default(),
                 &ncp_address,
                 &resp_recycler,
-            );
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
