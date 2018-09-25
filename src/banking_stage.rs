@@ -6,10 +6,9 @@ use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use entry::Entry;
-use hash::{Hash, Hasher};
+use hash::Hasher;
 use log::Level;
 use packet::{Packets, SharedPackets};
-use poh::PohEntry;
 use poh_service::PohService;
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -43,26 +42,39 @@ impl BankingStage {
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
             .spawn(move || {
-                let (hash_sender, hash_receiver) = channel();
-                let (poh_service, poh_receiver) =
-                    PohService::new(bank.last_id(), hash_receiver, tick_duration);
+                let poh_service = PohService::new(bank.last_id(), tick_duration.is_some());
+
+                let mut last_tick = Instant::now();
+
                 loop {
+                    let timeout =
+                        tick_duration.map(|duration| duration - (Instant::now() - last_tick));
+
                     if let Err(e) = Self::process_packets(
+                        timeout,
                         &bank,
-                        &hash_sender,
-                        &poh_receiver,
+                        &poh_service,
                         &verified_receiver,
                         &entry_sender,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            Error::RecvError(_) => break,
                             Error::SendError => break,
-                            _ => error!("{:?}", e),
+                            _ => {
+                                error!("process_packets() {:?}", e);
+                                break;
+                            }
                         }
                     }
+                    if tick_duration.is_some() && last_tick.elapsed() > tick_duration.unwrap() {
+                        if let Err(e) = Self::tick(&poh_service, &entry_sender) {
+                            error!("tick() {:?}", e);
+                        }
+                        last_tick = Instant::now();
+                    }
                 }
-                drop(hash_sender);
                 poh_service.join().unwrap();
             }).unwrap();
         (BankingStage { thread_hdl }, entry_receiver)
@@ -80,26 +92,33 @@ impl BankingStage {
             }).collect()
     }
 
+    fn tick(poh_service: &PohService, entry_sender: &Sender<Vec<Entry>>) -> Result<()> {
+        let poh = poh_service.tick();
+        let entry = Entry {
+            num_hashes: poh.num_hashes,
+            id: poh.id,
+            transactions: vec![],
+        };
+        entry_sender.send(vec![entry])?;
+        Ok(())
+    }
+
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        hash_sender: &Sender<Hash>,
-        poh_receiver: &Receiver<PohEntry>,
-        entry_sender: &Sender<Vec<Entry>>,
-    ) -> Result<()> {
+        poh_service: &PohService,
+    ) -> Result<Vec<Entry>> {
         let mut entries = Vec::new();
 
-        debug!("transactions: {}", transactions.len());
+        debug!("processing: {}", transactions.len());
 
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
             let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
-            debug!("results: {}", results.len());
 
             let mut hasher = Hasher::default();
-
             let processed_transactions: Vec<_> = transactions[chunk_start..chunk_end]
                 .into_iter()
                 .enumerate()
@@ -114,64 +133,45 @@ impl BankingStage {
                     }
                 }).collect();
 
-            debug!("processed ok: {}", processed_transactions.len());
+            debug!("processed: {}", processed_transactions.len());
 
             chunk_start = chunk_end;
 
             let hash = hasher.result();
 
             if !processed_transactions.is_empty() {
-                hash_sender.send(hash)?;
+                let poh = poh_service.record(hash);
 
-                let mut answered = false;
-                while !answered {
-                    entries.extend(poh_receiver.try_iter().map(|poh| {
-                        if let Some(mixin) = poh.mixin {
-                            answered = true;
-                            assert_eq!(mixin, hash);
-                            bank.register_entry_id(&poh.id);
-                            Entry {
-                                num_hashes: poh.num_hashes,
-                                id: poh.id,
-                                transactions: processed_transactions.clone(),
-                            }
-                        } else {
-                            Entry {
-                                num_hashes: poh.num_hashes,
-                                id: poh.id,
-                                transactions: vec![],
-                            }
-                        }
-                    }));
-                }
-            } else {
-                entries.extend(poh_receiver.try_iter().map(|poh| Entry {
+                bank.register_entry_id(&poh.id);
+                entries.push(Entry {
                     num_hashes: poh.num_hashes,
                     id: poh.id,
-                    transactions: vec![],
-                }));
+                    transactions: processed_transactions,
+                });
             }
         }
 
         debug!("done process_transactions, {} entries", entries.len());
 
-        entry_sender.send(entries)?;
-        Ok(())
+        Ok(entries)
     }
 
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
+        timeout: Option<Duration>,
         bank: &Arc<Bank>,
-        hash_sender: &Sender<Hash>,
-        poh_receiver: &Receiver<PohEntry>,
+        poh_service: &PohService,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         entry_sender: &Sender<Vec<Entry>>,
     ) -> Result<()> {
-        let timer = Duration::new(1, 0);
         let recv_start = Instant::now();
-        let mms = verified_receiver.recv_timeout(timer)?;
-        debug!("verified_recevier {:?}", verified_receiver);
+        // TODO pass deadline to recv_deadline() when/if it becomes available?
+        let mms = if let Some(timeout) = timeout {
+            verified_receiver.recv_timeout(timeout)?
+        } else {
+            verified_receiver.recv()?
+        };
         let now = Instant::now();
         let mut reqs_len = 0;
         let mms_len = mms.len();
@@ -189,6 +189,8 @@ impl BankingStage {
             let transactions = Self::deserialize_transactions(&msgs.read());
             reqs_len += transactions.len();
 
+            debug!("transactions received {}", transactions.len());
+
             let transactions: Vec<_> = transactions
                 .into_iter()
                 .zip(vers)
@@ -200,14 +202,10 @@ impl BankingStage {
                         None
                     },
                 }).collect();
+            debug!("verified transactions {}", transactions.len());
 
-            Self::process_transactions(
-                bank,
-                &transactions,
-                hash_sender,
-                poh_receiver,
-                entry_sender,
-            )?;
+            let entries = Self::process_transactions(bank, &transactions, poh_service)?;
+            entry_sender.send(entries)?;
         }
 
         inc_new_counter_info!(
@@ -241,63 +239,153 @@ impl Service for BankingStage {
     }
 }
 
-// TODO: When banking is pulled out of RequestStage, add this test back in.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bank::Bank;
+    use ledger::Block;
+    use mint::Mint;
+    use packet::{to_packets, PacketRecycler};
+    use signature::{Keypair, KeypairUtil};
+    use std::thread::sleep;
+    use transaction::Transaction;
 
-//use bank::Bank;
-//use entry::Entry;
-//use hash::Hash;
-//use record_stage::RecordStage;
-//use record_stage::Signal;
-//use result::Result;
-//use std::sync::mpsc::{channel, Sender};
-//use std::sync::{Arc, Mutex};
-//use std::time::Duration;
-//use transaction::Transaction;
-//
-//#[cfg(test)]
-//mod tests {
-//    use bank::Bank;
-//    use mint::Mint;
-//    use signature::{KeyPair, KeyPairUtil};
-//    use transaction::Transaction;
-//
-//    #[test]
-//    // TODO: Move this test banking_stage. Calling process_transactions() directly
-//    // defeats the purpose of this test.
-//    fn test_banking_sequential_consistency() {
-//        // In this attack we'll demonstrate that a verifier can interpret the ledger
-//        // differently if either the server doesn't signal the ledger to add an
-//        // Entry OR if the verifier tries to parallelize across multiple Entries.
-//        let mint = Mint::new(2);
-//        let bank = Bank::new(&mint);
-//        let banking_stage = EventProcessor::new(bank, &mint.last_id(), None);
-//
-//        // Process a batch that includes a transaction that receives two tokens.
-//        let alice = KeyPair::new();
-//        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
-//        let transactions = vec![tx];
-//        let entry0 = banking_stage.process_transactions(transactions).unwrap();
-//
-//        // Process a second batch that spends one of those tokens.
-//        let tx = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
-//        let transactions = vec![tx];
-//        let entry1 = banking_stage.process_transactions(transactions).unwrap();
-//
-//        // Collect the ledger and feed it to a new bank.
-//        let entries = vec![entry0, entry1];
-//
-//        // Assert the user holds one token, not two. If the server only output one
-//        // entry, then the second transaction will be rejected, because it drives
-//        // the account balance below zero before the credit is added.
-//        let bank = Bank::new(&mint);
-//        for entry in entries {
-//            assert!(
-//                bank
-//                    .process_transactions(entry.transactions)
-//                    .into_iter()
-//                    .all(|x| x.is_ok())
-//            );
-//        }
-//        assert_eq!(bank.get_balance(&alice.pubkey()), Some(1));
-//    }
-//}
+    #[test]
+    fn test_banking_stage_shutdown() {
+        let bank = Bank::new(&Mint::new(2));
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, _entry_receiver) =
+            BankingStage::new(Arc::new(bank), verified_receiver, None);
+        drop(verified_sender);
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage_tick() {
+        let bank = Bank::new(&Mint::new(2));
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            Arc::new(bank),
+            verified_receiver,
+            Some(Duration::from_millis(1)),
+        );
+        sleep(Duration::from_millis(50));
+        drop(verified_sender);
+
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
+        assert!(entries.len() != 0);
+        assert!(entries.verify(&start_hash));
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage_no_tick() {
+        let bank = Bank::new(&Mint::new(2));
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(Arc::new(bank), verified_receiver, None);
+        sleep(Duration::from_millis(1000));
+        drop(verified_sender);
+
+        let entries: Vec<_> = entry_receiver.try_iter().map(|x| x).collect();
+        assert!(entries.len() == 0);
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage() {
+        let mint = Mint::new(2);
+        let bank = Bank::new(&mint);
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(Arc::new(bank), verified_receiver, None);
+
+        // good tx
+        let keypair = mint.keypair();
+        let tx = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // good tx, but no verify
+        let tx_no_ver = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // bad tx, AccountNotFound
+        let keypair = Keypair::new();
+        let tx_anf = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // send 'em over
+        let recycler = PacketRecycler::default();
+        let packets = to_packets(&recycler, &[tx, tx_no_ver, tx_anf]);
+
+        // glad they all fit
+        assert_eq!(packets.len(), 1);
+        verified_sender                       // tx, no_ver, anf
+            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
+            .unwrap();
+
+        drop(verified_sender);
+
+        let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
+        assert_eq!(entries.len(), 1);
+        let mut last_id = start_hash;
+        entries.iter().for_each(|entries| {
+            assert_eq!(entries.len(), 1);
+            assert!(entries.verify(&last_id));
+            last_id = entries.last().unwrap().id;
+        });
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage_entryfication() {
+        // In this attack we'll demonstrate that a verifier can interpret the ledger
+        // differently if either the server doesn't signal the ledger to add an
+        // Entry OR if the verifier tries to parallelize across multiple Entries.
+        let mint = Mint::new(2);
+        let bank = Bank::new(&mint);
+        let recycler = PacketRecycler::default();
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(Arc::new(bank), verified_receiver, None);
+
+        // Process a batch that includes a transaction that receives two tokens.
+        let alice = Keypair::new();
+        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+
+        let packets = to_packets(&recycler, &[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+
+        // Process a second batch that spends one of those tokens.
+        let tx = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+        let packets = to_packets(&recycler, &[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+        drop(verified_sender);
+        assert_eq!(banking_stage.join().unwrap(), ());
+
+        // Collect the ledger and feed it to a new bank.
+        let ventries: Vec<_> = entry_receiver.iter().collect();
+
+        // same assertion as below, really...
+        assert_eq!(ventries.len(), 2);
+
+        // Assert the user holds one token, not two. If the stage only outputs one
+        // entry, then the second transaction will be rejected, because it drives
+        // the account balance below zero before the credit is added.
+        let bank = Bank::new(&mint);
+        for entries in ventries {
+            for entry in entries {
+                assert!(
+                    bank.process_transactions(&entry.transactions)
+                        .into_iter()
+                        .all(|x| x.is_ok())
+                );
+            }
+        }
+        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+    }
+
+}

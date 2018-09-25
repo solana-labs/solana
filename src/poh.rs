@@ -1,14 +1,10 @@
 //! The `Poh` module provides an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users.
-
 use hash::{hash, hashv, Hash};
-use std::time::{Duration, Instant};
 
 pub struct Poh {
     last_hash: Hash,
     num_hashes: u64,
-    last_tick: Instant,
-    tick_duration: Option<Duration>,
 }
 
 #[derive(Debug)]
@@ -19,13 +15,10 @@ pub struct PohEntry {
 }
 
 impl Poh {
-    pub fn new(last_hash: Hash, tick_duration: Option<Duration>) -> Self {
-        let last_tick = Instant::now();
+    pub fn new(last_hash: Hash) -> Self {
         Poh {
             last_hash,
             num_hashes: 0,
-            last_tick,
-            tick_duration,
         }
     }
 
@@ -36,9 +29,9 @@ impl Poh {
 
     pub fn record(&mut self, mixin: Hash) -> PohEntry {
         let num_hashes = self.num_hashes + 1;
-        self.num_hashes = 0;
-
         self.last_hash = hashv(&[&self.last_hash.as_ref(), &mixin.as_ref()]);
+
+        self.num_hashes = 0;
 
         PohEntry {
             num_hashes,
@@ -49,23 +42,21 @@ impl Poh {
 
     // emissions of Ticks (i.e. PohEntries without a mixin) allows
     //  validators to parallelize the work of catching up
-    pub fn tick(&mut self) -> Option<PohEntry> {
-        if let Some(tick_duration) = self.tick_duration {
-            if self.last_tick.elapsed() >= tick_duration {
-                self.last_tick = Instant::now();
-                let entry = PohEntry {
-                    num_hashes: self.num_hashes,
-                    id: self.last_hash,
-                    mixin: None,
-                };
-                self.num_hashes = 0;
-                return Some(entry);
-            }
+    pub fn tick(&mut self) -> PohEntry {
+        self.hash();
+
+        let num_hashes = self.num_hashes;
+        self.num_hashes = 0;
+
+        PohEntry {
+            num_hashes,
+            id: self.last_hash,
+            mixin: None,
         }
-        None
     }
 }
 
+#[cfg(test)]
 pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
     let mut last_hash = initial;
 
