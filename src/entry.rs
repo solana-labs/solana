@@ -200,13 +200,17 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
         return *start_hash;
     }
 
-    let mut poh = Poh::new(*start_hash, None);
+    let mut poh = Poh::new(*start_hash);
 
     for _ in 1..num_hashes {
         poh.hash();
     }
 
-    poh.record(Transaction::hash(transactions)).id
+    if transactions.is_empty() {
+        poh.tick().id
+    } else {
+        poh.record(Transaction::hash(transactions)).id
+    }
 }
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.

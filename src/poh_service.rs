@@ -13,7 +13,6 @@ use poh::{Poh, PohEntry};
 use service::Service;
 use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
 use std::thread::{self, Builder, JoinHandle};
-use std::time::Duration;
 
 pub struct PohService {
     thread_hdl: JoinHandle<()>,
@@ -26,16 +25,16 @@ impl PohService {
     ///  `tick_duration`.
     pub fn new(
         start_hash: Hash,
-        hash_receiver: Receiver<Hash>,
-        tick_duration: Option<Duration>,
+        hash_receiver: Receiver<Option<Hash>>,
+        do_poh: bool,
     ) -> (Self, Receiver<PohEntry>) {
         let (poh_sender, poh_receiver) = channel();
 
         let thread_hdl = Builder::new()
             .name("solana-record-service".to_string())
             .spawn(move || {
-                let mut poh = Poh::new(start_hash, tick_duration);
-                if tick_duration.is_some() {
+                let mut poh = Poh::new(start_hash);
+                if do_poh {
                     loop {
                         if Self::try_process_hashes(&mut poh, &hash_receiver, &poh_sender).is_err()
                         {
@@ -51,15 +50,22 @@ impl PohService {
         (PohService { thread_hdl }, poh_receiver)
     }
 
-    fn process_hash(hash: Hash, poh: &mut Poh, sender: &Sender<PohEntry>) -> Result<(), ()> {
-        let resp = poh.record(hash);
+    fn process_hash(
+        mixin: Option<Hash>,
+        poh: &mut Poh,
+        sender: &Sender<PohEntry>,
+    ) -> Result<(), ()> {
+        let resp = match mixin {
+            Some(mixin) => poh.record(mixin),
+            None => poh.tick(),
+        };
         sender.send(resp).or(Err(()))?;
         Ok(())
     }
 
     fn process_hashes(
         poh: &mut Poh,
-        receiver: &Receiver<Hash>,
+        receiver: &Receiver<Option<Hash>>,
         sender: &Sender<PohEntry>,
     ) -> Result<(), ()> {
         loop {
@@ -72,13 +78,10 @@ impl PohService {
 
     fn try_process_hashes(
         poh: &mut Poh,
-        receiver: &Receiver<Hash>,
+        receiver: &Receiver<Option<Hash>>,
         sender: &Sender<PohEntry>,
     ) -> Result<(), ()> {
         loop {
-            if let Some(resp) = poh.tick() {
-                sender.send(resp).or(Err(()))?;
-            }
             match receiver.try_recv() {
                 Ok(hash) => Self::process_hash(hash, poh, sender)?,
                 Err(TryRecvError::Empty) => return Ok(()),
@@ -102,17 +105,20 @@ mod tests {
     use poh::verify;
     use std::sync::mpsc::channel;
     use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_poh() {
+        use logger;
+        logger::setup();
         let (hash_sender, hash_receiver) = channel();
-        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, None);
+        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, false);
 
-        hash_sender.send(Hash::default()).unwrap();
+        hash_sender.send(Some(Hash::default())).unwrap();
         sleep(Duration::from_millis(1));
-        hash_sender.send(Hash::default()).unwrap();
+        hash_sender.send(None).unwrap();
         sleep(Duration::from_millis(1));
-        hash_sender.send(Hash::default()).unwrap();
+        hash_sender.send(Some(Hash::default())).unwrap();
 
         let entry0 = poh_receiver.recv().unwrap();
         let entry1 = poh_receiver.recv().unwrap();
@@ -130,27 +136,28 @@ mod tests {
 
     #[test]
     fn test_poh_closed_sender() {
+        use logger;
+        logger::setup();
         let (hash_sender, hash_receiver) = channel();
-        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, None);
+        let (poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, false);
         drop(poh_receiver);
-        hash_sender.send(Hash::default()).unwrap();
+        hash_sender.send(Some(Hash::default())).unwrap();
         assert_eq!(poh_service.thread_hdl.join().unwrap(), ());
     }
 
     #[test]
-    fn test_poh_clock() {
+    fn test_do_poh() {
+        use logger;
+        logger::setup();
         let (hash_sender, hash_receiver) = channel();
-        let (_poh_service, poh_receiver) = PohService::new(
-            Hash::default(),
-            hash_receiver,
-            Some(Duration::from_millis(1)),
-        );
+        let (_poh_service, poh_receiver) = PohService::new(Hash::default(), hash_receiver, true);
 
         sleep(Duration::from_millis(50));
+        hash_sender.send(None).unwrap();
         drop(hash_sender);
         let pohs: Vec<_> = poh_receiver.iter().map(|x| x).collect();
-        assert!(pohs.len() > 1);
-
+        assert_eq!(pohs.len(), 1);
+        assert!(pohs[0].num_hashes > 1);
         assert!(verify(Hash::default(), &pohs));
     }
 }
