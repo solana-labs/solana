@@ -32,6 +32,7 @@ pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
 pub mod hash;
+pub mod leader_scheduler;
 pub mod ledger;
 pub mod logger;
 pub mod metrics;
