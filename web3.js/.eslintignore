@@ -1,4 +1,5 @@
+/coverage
+/deploy
 /doc
 /flow-typed
 /lib
-/coverage
