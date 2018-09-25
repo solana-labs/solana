@@ -102,7 +102,7 @@ impl ReplicateStage {
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
             .spawn(move || {
-                let _exit = Finalizer::new(exit);;
+                let _exit = Finalizer::new(exit);
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 loop {
