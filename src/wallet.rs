@@ -670,6 +670,7 @@ mod tests {
     use ledger::LedgerWriter;
     use mint::Mint;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
@@ -744,7 +745,6 @@ mod tests {
                         Arg::with_name("timestamp")
                             .long("after")
                             .value_name("DATETIME")
-                            .allow_hyphen_values(true)
                             .takes_value(true)
                             .help("A timestamp after which transaction will execute"),
                     ).arg(
@@ -763,10 +763,9 @@ mod tests {
                             .use_delimiter(true)
                             .help("Any third party signatures required to unlock the tokens"),
                     ).arg(
-                        Arg::with_name("cancellable")
-                            .long("cancellable")
-                            .takes_value(false)
-                            .requires("witness"),
+                        Arg::with_name("cancelable")
+                            .long("cancelable")
+                            .takes_value(false),
                     ),
             ).subcommand(
                 SubCommand::with_name("send-signature")
@@ -977,7 +976,7 @@ mod tests {
         assert!(parse_command(pubkey, &test_bad_timestamp).is_err());
     }
     #[test]
-    fn test_process_command() {
+    fn test_wallet_process_command() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -986,12 +985,12 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = tmp_ledger("wallet_process_command", &alice);
 
         let mut config = WalletConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
 
-        let _server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
@@ -1003,7 +1002,7 @@ mod tests {
             None,
             Some(rpc_port),
         );
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
@@ -1036,7 +1035,6 @@ mod tests {
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
         let sig_response = process_command(&config);
         assert!(sig_response.is_ok());
-        sleep(Duration::from_millis(100));
 
         let signatures = bs58::decode(sig_response.unwrap())
             .into_vec()
@@ -1050,9 +1048,12 @@ mod tests {
             process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens - 10)
         );
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_request_airdrop() {
+    fn test_wallet_request_airdrop() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1060,11 +1061,11 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = tmp_ledger("wallet_request_airdrop", &alice);
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
-        let _server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
@@ -1076,7 +1077,7 @@ mod tests {
             None,
             Some(rpc_port),
         );
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
@@ -1095,9 +1096,12 @@ mod tests {
             .as_bool()
             .unwrap();
         assert!(confirmation);
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_gen_keypair_file() {
+    fn test_wallet_gen_keypair_file() {
         let outfile = "test_gen_keypair_file.json";
         let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
@@ -1112,7 +1116,7 @@ mod tests {
         assert!(!Path::new(outfile).exists());
     }
     #[test]
-    fn test_timestamp_tx() {
+    fn test_wallet_timestamp_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1122,13 +1126,13 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = tmp_ledger("wallet_timestamp_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13579; // Needs to be distinct known number to not conflict with other tests
 
-        let _server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
@@ -1140,7 +1144,7 @@ mod tests {
             None,
             Some(rpc_port),
         );
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
@@ -1227,9 +1231,12 @@ mod tests {
             .as_i64()
             .unwrap();
         assert_eq!(recipient_balance, 10);
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_witness_tx() {
+    fn test_wallet_witness_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1239,13 +1246,13 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = tmp_ledger("wallet_witness_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
         let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
 
-        let _server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
@@ -1257,7 +1264,7 @@ mod tests {
             None,
             Some(rpc_port),
         );
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
@@ -1342,9 +1349,12 @@ mod tests {
             .as_i64()
             .unwrap();
         assert_eq!(recipient_balance, 10);
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
     #[test]
-    fn test_cancel_tx() {
+    fn test_wallet_cancel_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -1354,13 +1364,13 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = tmp_ledger("wallet_cancel_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13456; // Needs to be distinct known number to not conflict with other tests
 
-        let _server = Fullnode::new_with_bank(
+        let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
             0,
@@ -1372,7 +1382,7 @@ mod tests {
             None,
             Some(rpc_port),
         );
-        sleep(Duration::from_millis(200));
+        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
@@ -1457,5 +1467,8 @@ mod tests {
             .as_i64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
     }
 }
