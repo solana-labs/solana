@@ -6,10 +6,9 @@ use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use entry::Entry;
-use hash::{Hash, Hasher};
+use hash::Hasher;
 use log::Level;
 use packet::{Packets, SharedPackets};
-use poh::PohEntry;
 use poh_service::PohService;
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -43,9 +42,7 @@ impl BankingStage {
         let thread_hdl = Builder::new()
             .name("solana-banking-stage".to_string())
             .spawn(move || {
-                let (hash_sender, hash_receiver) = channel();
-                let (poh_service, poh_receiver) =
-                    PohService::new(bank.last_id(), hash_receiver, tick_duration.is_some());
+                let poh_service = PohService::new(bank.last_id(), tick_duration.is_some());
 
                 let mut last_tick = Instant::now();
 
@@ -56,8 +53,7 @@ impl BankingStage {
                     if let Err(e) = Self::process_packets(
                         timeout,
                         &bank,
-                        &hash_sender,
-                        &poh_receiver,
+                        &poh_service,
                         &verified_receiver,
                         &entry_sender,
                     ) {
@@ -73,13 +69,12 @@ impl BankingStage {
                         }
                     }
                     if tick_duration.is_some() && last_tick.elapsed() > tick_duration.unwrap() {
-                        if let Err(e) = Self::tick(&hash_sender, &poh_receiver, &entry_sender) {
+                        if let Err(e) = Self::tick(&poh_service, &entry_sender) {
                             error!("tick() {:?}", e);
                         }
                         last_tick = Instant::now();
                     }
                 }
-                drop(hash_sender);
                 poh_service.join().unwrap();
             }).unwrap();
         (BankingStage { thread_hdl }, entry_receiver)
@@ -97,13 +92,8 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick(
-        hash_sender: &Sender<Option<Hash>>,
-        poh_receiver: &Receiver<PohEntry>,
-        entry_sender: &Sender<Vec<Entry>>,
-    ) -> Result<()> {
-        hash_sender.send(None)?;
-        let poh = poh_receiver.recv()?;
+    fn tick(poh_service: &PohService, entry_sender: &Sender<Vec<Entry>>) -> Result<()> {
+        let poh = poh_service.tick();
         let entry = Entry {
             num_hashes: poh.num_hashes,
             id: poh.id,
@@ -116,8 +106,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        hash_sender: &Sender<Option<Hash>>,
-        poh_receiver: &Receiver<PohEntry>,
+        poh_service: &PohService,
     ) -> Result<Vec<Entry>> {
         let mut entries = Vec::new();
 
@@ -151,16 +140,13 @@ impl BankingStage {
             let hash = hasher.result();
 
             if !processed_transactions.is_empty() {
-                hash_sender.send(Some(hash))?;
+                let poh = poh_service.record(hash);
 
-                let poh = poh_receiver.recv()?;
-
-                assert_eq!(hash, poh.mixin.unwrap());
                 bank.register_entry_id(&poh.id);
                 entries.push(Entry {
                     num_hashes: poh.num_hashes,
                     id: poh.id,
-                    transactions: processed_transactions.clone(),
+                    transactions: processed_transactions,
                 });
             }
         }
@@ -175,8 +161,7 @@ impl BankingStage {
     pub fn process_packets(
         timeout: Option<Duration>,
         bank: &Arc<Bank>,
-        hash_sender: &Sender<Option<Hash>>,
-        poh_receiver: &Receiver<PohEntry>,
+        poh_service: &PohService,
         verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
         entry_sender: &Sender<Vec<Entry>>,
     ) -> Result<()> {
@@ -219,8 +204,7 @@ impl BankingStage {
                 }).collect();
             debug!("verified transactions {}", transactions.len());
 
-            let entries =
-                Self::process_transactions(bank, &transactions, hash_sender, poh_receiver)?;
+            let entries = Self::process_transactions(bank, &transactions, poh_service)?;
             entry_sender.send(entries)?;
         }
 

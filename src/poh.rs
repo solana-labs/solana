@@ -56,6 +56,7 @@ impl Poh {
     }
 }
 
+#[cfg(test)]
 pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
     let mut last_hash = initial;
 
