@@ -204,7 +204,7 @@ test('request airdrop', async () => {
     {
       error: null,
       result: {
-        contract_id: [
+        program_id: [
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ],
