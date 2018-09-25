@@ -8,14 +8,14 @@
 //!
 //! The resulting stream of Hashes represents ordered events in time.
 //!
-use hash::Hash;
-use poh::{Poh};
-use entry::Entry;
-use transaction::Transaction;
 use bank::Bank;
+use entry::Entry;
+use hash::Hash;
+use poh::Poh;
 use result::Result;
-use std::sync::mpsc::{Sender};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use transaction::Transaction;
 
 #[derive(Clone)]
 pub struct PohService {
@@ -31,11 +31,7 @@ impl PohService {
     ///  `tick_duration`.
     pub fn new(bank: Arc<Bank>, sender: Sender<Vec<Entry>>) -> Self {
         let poh = Arc::new(Mutex::new(Poh::new(bank.last_id())));
-        PohService {
-            poh,
-            bank,
-            sender,
-        }
+        PohService { poh, bank, sender }
     }
 
     pub fn hash(&self) {
@@ -44,7 +40,7 @@ impl PohService {
         let mut poh = self.poh.lock().unwrap();
         poh.hash()
     }
- 
+
     pub fn tick(&self) -> Result<()> {
         // Register and send the entry out while holding the lock.
         // This guarantees PoH order and Entry production and banks LastId queue is the same
@@ -55,8 +51,8 @@ impl PohService {
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: vec![],
-        };   
-        self.sender.send(vec![entry])?; 
+        };
+        self.sender.send(vec![entry])?;
         Ok(())
     }
 
@@ -70,8 +66,8 @@ impl PohService {
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: txs,
-        };   
-        self.sender.send(vec![entry])?; 
+        };
+        self.sender.send(vec![entry])?;
         Ok(())
     }
 }

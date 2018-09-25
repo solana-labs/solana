@@ -15,9 +15,9 @@ use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
-use std::thread::sleep;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -30,7 +30,7 @@ pub struct BankingStage {
     /// Handle to the stage's thread.
     thread_hdls: Vec<JoinHandle<()>>,
 }
- 
+
 pub enum Config {
     /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
     Tick(usize),
@@ -64,18 +64,18 @@ impl BankingStage {
         // Once an entry has been recorded, its last_id is registered with the bank.
         let tick_producer = Builder::new()
             .name("solana-banking-stage-tick_producer".to_string())
-            .spawn(move || 
-                if let Err(e) = Self::tick_producer(
-                   tick_poh,
-                   config,
-                ) {
+            .spawn(move || {
+                if let Err(e) = Self::tick_producer(tick_poh, config) {
                     match e {
                         Error::RecvError(_) => (),
                         Error::SendError => (),
-                        _ => error!("solana-banking-stage-tick_producer unexpected error {:?}", e),
+                        _ => error!(
+                            "solana-banking-stage-tick_producer unexpected error {:?}",
+                            e
+                        ),
                     }
                 }
-            ).unwrap();
+            }).unwrap();
 
         // Many banks that process transactions in parallel.
         let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
@@ -106,7 +106,6 @@ impl BankingStage {
         (BankingStage { thread_hdls }, entry_receiver)
     }
 
-
     /// Convert the transactions from a blob of binary data to a vector of transactions and
     /// an unused `SocketAddr` that could be used to send a response.
     fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
@@ -119,11 +118,8 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick_producer(
-        poh: PohService,
-        config: Config,
-    ) -> Result<()> {
-         loop {
+    fn tick_producer(poh: PohService, config: Config) -> Result<()> {
+        loop {
             match config {
                 Config::Tick(num) => {
                     for _ in 0..num {
@@ -135,7 +131,7 @@ impl BankingStage {
                 }
             }
             poh.tick()?;
-        } 
+        }
     }
 
     fn process_transactions(
