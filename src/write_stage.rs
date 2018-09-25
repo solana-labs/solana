@@ -127,9 +127,7 @@ impl WriteStage {
 
         info!("write_stage entries: {}", num_new_entries);
 
-        let to_blobs_total = 0;
-        let mut blob_send_total = 0;
-        let mut register_entry_total = 0;
+        let mut entries_send_total = 0;
         let mut crdt_votes_total = 0;
 
         let start = Instant::now();
@@ -148,9 +146,6 @@ impl WriteStage {
             // safely incement entry height
             *entry_height += entries.len() as u64;
 
-            let register_entry_start = Instant::now();
-            register_entry_total += duration_as_ms(&register_entry_start.elapsed());
-
             inc_new_counter_info!("write_stage-write_entries", entries.len());
 
             //TODO(anatoly): real stake based voting needs to change this
@@ -158,7 +153,7 @@ impl WriteStage {
             //on a valid last id
 
             trace!("New entries? {}", entries.len());
-            let blob_send_start = Instant::now();
+            let entries_send_start = Instant::now();
             if !entries.is_empty() {
                 inc_new_counter_info!("write_stage-recv_vote", votes.len());
                 inc_new_counter_info!("write_stage-entries_sent", entries.len());
@@ -166,18 +161,16 @@ impl WriteStage {
                 entry_sender.send(entries)?;
             }
 
-            blob_send_total += duration_as_ms(&blob_send_start.elapsed());
+            entries_send_total += duration_as_ms(&entries_send_start.elapsed());
         }
         inc_new_counter_info!(
             "write_stage-time_ms",
             duration_as_ms(&now.elapsed()) as usize
         );
-        info!("done write_stage txs: {} time {} ms txs/s: {} to_blobs_total: {} register_entry_total: {} blob_send_total: {} crdt_votes_total: {}",
+        info!("done write_stage txs: {} time {} ms txs/s: {} entries_send_total: {} crdt_votes_total: {}",
               num_txs, duration_as_ms(&start.elapsed()),
               num_txs as f32 / duration_as_s(&start.elapsed()),
-              to_blobs_total,
-              register_entry_total,
-              blob_send_total,
+              entries_send_total,
               crdt_votes_total);
 
         Ok(())
