@@ -2,6 +2,10 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
+#[cfg(test)]
+use hash::Hash;
+#[cfg(test)]
+use ledger::{next_entries_mut, Block};
 use log::Level;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use recycler;
@@ -427,6 +431,25 @@ impl Blob {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+pub fn make_consecutive_blobs(
+    me_id: Pubkey,
+    num_blobs_to_make: u64,
+    start_hash: Hash,
+    addr: &SocketAddr,
+    resp_recycler: &BlobRecycler,
+) -> SharedBlobs {
+    let mut last_hash = start_hash;
+    let mut num_hashes = 0;
+    let mut all_entries = Vec::with_capacity(num_blobs_to_make as usize);
+    for _ in 0..num_blobs_to_make {
+        all_entries.extend(next_entries_mut(&mut last_hash, &mut num_hashes, vec![]));
+    }
+    let mut new_blobs = all_entries.to_blobs_with_id(&resp_recycler, me_id, 0, addr);
+    new_blobs.truncate(num_blobs_to_make as usize);
+    new_blobs
 }
 
 #[cfg(test)]

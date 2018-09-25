@@ -27,6 +27,11 @@ fn recv_loop(
     loop {
         let msgs = re.allocate();
         loop {
+            // Check for exit signal, even if socket is busy
+            // (for instance the leader trasaction socket)
+            if exit.load(Ordering::Relaxed) {
+                return Ok(());
+            }
             let result = msgs.write().recv_from(sock);
             match result {
                 Ok(()) => {
@@ -39,11 +44,7 @@ fn recv_loop(
                     channel.send(msgs)?;
                     break;
                 }
-                Err(_) => {
-                    if exit.load(Ordering::Relaxed) {
-                        return Ok(());
-                    }
-                }
+                Err(_) => (),
             }
         }
     }

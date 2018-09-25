@@ -40,19 +40,25 @@ use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use crdt::Crdt;
 use replicate_stage::ReplicateStage;
-use retransmit_stage::RetransmitStage;
+use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
 use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use window::SharedWindow;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TvuReturnType {
+    LeaderRotation(u64),
+}
 
 pub struct Tvu {
     replicate_stage: ReplicateStage,
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
+    exit: Arc<AtomicBool>,
 }
 
 impl Tvu {
@@ -78,8 +84,9 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
-        exit: Arc<AtomicBool>,
     ) -> Self {
+        let exit = Arc::new(AtomicBool::new(false));
+
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             replicate_sockets.into_iter().map(Arc::new).collect();
@@ -104,30 +111,39 @@ impl Tvu {
             crdt,
             blob_window_receiver,
             ledger_path,
+            exit.clone(),
         );
 
         Tvu {
             replicate_stage,
             fetch_stage,
             retransmit_stage,
+            exit,
         }
     }
 
-    pub fn close(self) -> thread::Result<()> {
+    pub fn exit(&self) -> () {
+        self.exit.store(true, Ordering::Relaxed);
+    }
+
+    pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
         self.fetch_stage.close();
         self.join()
     }
 }
 
 impl Service for Tvu {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<TvuReturnType>;
 
-    fn join(self) -> thread::Result<()> {
+    fn join(self) -> thread::Result<Option<TvuReturnType>> {
         self.replicate_stage.join()?;
         self.fetch_stage.join()?;
-        self.retransmit_stage.join()?;
-
-        Ok(())
+        match self.retransmit_stage.join()? {
+            Some(RetransmitStageReturnType::LeaderRotation(entry_height)) => {
+                Ok(Some(TvuReturnType::LeaderRotation(entry_height)))
+            }
+            _ => Ok(None),
+        }
     }
 }
 
@@ -145,7 +161,7 @@ pub mod tests {
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::net::UdpSocket;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
@@ -233,7 +249,6 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
-            exit.clone(),
         );
 
         let mut alice_ref_balance = starting_balance;
@@ -297,6 +312,7 @@ pub mod tests {
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         tvu.close().expect("close");
+        exit.store(true, Ordering::Relaxed);
         dr_l.0.join().expect("join");
         dr_2.0.join().expect("join");
         dr_1.0.join().expect("join");

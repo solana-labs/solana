@@ -19,6 +19,7 @@ use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use transaction::Transaction;
 use window::WINDOW_SIZE;
@@ -402,6 +403,13 @@ pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob>;
+    fn to_blobs_with_id(
+        &self,
+        blob_recycler: &packet::BlobRecycler,
+        id: Pubkey,
+        start_id: u64,
+        addr: &SocketAddr,
+    ) -> Vec<SharedBlob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -422,10 +430,28 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob> {
+    fn to_blobs_with_id(
+        &self,
+        blob_recycler: &packet::BlobRecycler,
+        id: Pubkey,
+        start_idx: u64,
+        addr: &SocketAddr,
+    ) -> Vec<SharedBlob> {
         self.iter()
-            .map(|entry| entry.to_blob(blob_recycler, None, None, None))
-            .collect()
+            .enumerate()
+            .map(|(i, entry)| {
+                entry.to_blob(
+                    blob_recycler,
+                    Some(start_idx + i as u64),
+                    Some(id),
+                    Some(&addr),
+                )
+            }).collect()
+    }
+
+    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob> {
+        let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        self.to_blobs_with_id(blob_recycler, Pubkey::default(), 0, &default_addr)
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {

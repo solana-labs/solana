@@ -20,6 +20,11 @@ use window::{blob_idx_in_window, SharedWindow, WindowUtil};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WindowServiceReturnType {
+    LeaderRotation(u64),
+}
+
 fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     //exponential backoff
     if *last != consumed {
@@ -148,6 +153,7 @@ fn recv_window(
     s: &EntrySender,
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
+    leader_rotation_interval: u64,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
@@ -200,6 +206,7 @@ fn recv_window(
 
         window.write().unwrap().process_blob(
             id,
+            crdt,
             b,
             pix,
             &mut consume_queue,
@@ -207,6 +214,7 @@ fn recv_window(
             consumed,
             leader_unknown,
             pending_retransmits,
+            leader_rotation_interval,
         );
     }
     if log_enabled!(Level::Trace) {
@@ -236,7 +244,7 @@ pub fn window_service(
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
-) -> JoinHandle<()> {
+) -> JoinHandle<Option<WindowServiceReturnType>> {
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
@@ -244,11 +252,31 @@ pub fn window_service(
             let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
-            let id = crdt.read().unwrap().id;
+            let id;
+            let leader_rotation_interval;
+            {
+                let rcrdt = crdt.read().unwrap();
+                id = rcrdt.id;
+                leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+            }
             let mut pending_retransmits = false;
             let recycler = BlobRecycler::default();
             trace!("{}: RECV_WINDOW started", id);
             loop {
+                if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
+                    match crdt.read().unwrap().get_scheduled_leader(consumed) {
+                        // If we are the next leader, exit
+                        Some(next_leader_id) if id == next_leader_id => {
+                            return Some(WindowServiceReturnType::LeaderRotation(consumed));
+                        }
+                        // TODO: Figure out where to set the new leader in the crdt for 
+                        // validator -> validator transition (once we have real leader scheduling, 
+                        // this decision will be clearer). Also make sure new blobs to window actually 
+                        // originate from new leader
+                        _ => (),
+                    }
+                }
+
                 if let Err(e) = recv_window(
                     &window,
                     &id,
@@ -260,6 +288,7 @@ pub fn window_service(
                     &s,
                     &retransmit,
                     &mut pending_retransmits,
+                    leader_rotation_interval,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -297,6 +326,7 @@ pub fn window_service(
                     });
                 }
             }
+            None
         }).unwrap()
 }
 
@@ -305,47 +335,17 @@ mod test {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::Hash;
-    use ledger::next_entries_mut;
     use logger;
-    use packet::{BlobRecycler, SharedBlobs, PACKET_DATA_SIZE};
-    use signature::Pubkey;
-    use std::net::{SocketAddr, UdpSocket};
+    use packet::{make_consecutive_blobs, BlobRecycler, PACKET_DATA_SIZE};
+    use signature::{Keypair, KeypairUtil};
+    use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver};
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer::{blob_receiver, responder};
     use window::default_window;
-    use window_service::{repair_backoff, window_service};
-
-    fn make_consecutive_blobs(
-        me_id: Pubkey,
-        mut num_blobs_to_make: u64,
-        start_hash: Hash,
-        addr: &SocketAddr,
-        resp_recycler: &BlobRecycler,
-    ) -> SharedBlobs {
-        let mut msgs = Vec::new();
-        let mut last_hash = start_hash;
-        let mut num_hashes = 0;
-        while num_blobs_to_make != 0 {
-            let new_entries = next_entries_mut(&mut last_hash, &mut num_hashes, vec![]);
-            let mut new_blobs: SharedBlobs = new_entries
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let blob_index = num_blobs_to_make - i as u64 - 1;
-                    let new_blob =
-                        e.to_blob(&resp_recycler, Some(blob_index), Some(me_id), Some(addr));
-                    assert_eq!(blob_index, new_blob.read().get_index().unwrap());
-                    new_blob
-                }).collect();
-            new_blobs.truncate(num_blobs_to_make as usize);
-            num_blobs_to_make -= new_blobs.len() as u64;
-            msgs.extend(new_blobs);
-        }
-        msgs
-    }
+    use window_service::{repair_backoff, window_service, WindowServiceReturnType};
 
     fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {
@@ -401,7 +401,9 @@ mod test {
                 Hash::default(),
                 &gossip_address,
                 &resp_recycler,
-            );
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -576,5 +578,87 @@ mod test {
         let avg = res / num_tests;
         assert!(avg >= 3);
         assert!(avg <= 5);
+    }
+
+    #[test]
+    pub fn test_window_leader_rotation_exit() {
+        logger::setup();
+        let leader_rotation_interval = 10;
+        // Height at which this node becomes the leader =
+        // my_leader_begin_epoch * leader_rotation_interval
+        let my_leader_begin_epoch = 2;
+        let tn = Node::new_localhost();
+        let exit = Arc::new(AtomicBool::new(false));
+        let mut crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
+        let me_id = crdt_me.my_data().id;
+
+        // Set myself in an upcoming epoch, but set the old_leader_id as the
+        // leader for all epochs before that
+        let old_leader_id = Keypair::new().pubkey();
+        crdt_me.set_leader(me_id);
+        crdt_me.set_leader_rotation_interval(leader_rotation_interval);
+        for i in 0..my_leader_begin_epoch {
+            crdt_me.set_scheduled_leader(leader_rotation_interval * i, old_leader_id);
+        }
+        crdt_me.set_scheduled_leader(my_leader_begin_epoch * leader_rotation_interval, me_id);
+
+        let subs = Arc::new(RwLock::new(crdt_me));
+
+        let resp_recycler = BlobRecycler::default();
+        let (s_reader, r_reader) = channel();
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
+        let (s_window, _r_window) = channel();
+        let (s_retransmit, _r_retransmit) = channel();
+        let win = Arc::new(RwLock::new(default_window()));
+        let t_window = window_service(
+            subs,
+            win,
+            0,
+            r_reader,
+            s_window,
+            s_retransmit,
+            Arc::new(tn.sockets.repair),
+        );
+
+        let t_responder = {
+            let (s_responder, r_responder) = channel();
+            let blob_sockets: Vec<Arc<UdpSocket>> =
+                tn.sockets.replicate.into_iter().map(Arc::new).collect();
+
+            let t_responder = responder(
+                "test_window_leader_rotation_exit",
+                blob_sockets[0].clone(),
+                r_responder,
+            );
+
+            let ncp_address = &tn.info.contact_info.ncp;
+            // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
+            // number of blobs to make sure the window stops in the right place.
+            let extra_blobs = leader_rotation_interval;
+            let total_blobs_to_send =
+                my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
+            let msgs = make_consecutive_blobs(
+                me_id,
+                total_blobs_to_send,
+                Hash::default(),
+                &ncp_address,
+                &resp_recycler,
+            ).into_iter()
+            .rev()
+            .collect();;
+            s_responder.send(msgs).expect("send");
+            t_responder
+        };
+
+        assert_eq!(
+            Some(WindowServiceReturnType::LeaderRotation(
+                my_leader_begin_epoch * leader_rotation_interval
+            )),
+            t_window.join().expect("window service join")
+        );
+
+        t_responder.join().expect("responder thread join");
+        exit.store(true, Ordering::Relaxed);
+        t_receiver.join().expect("receiver thread join");
     }
 }

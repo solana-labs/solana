@@ -27,6 +27,8 @@ pub enum BroadcastStageReturnType {
 }
 
 fn broadcast(
+    crdt: &Arc<RwLock<Crdt>>,
+    leader_rotation_interval: u64,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -120,6 +122,8 @@ fn broadcast(
 
         // Send blobs out from the window
         Crdt::broadcast(
+            crdt,
+            leader_rotation_interval,
             &node_info,
             &broadcast_table,
             &window,
@@ -202,6 +206,8 @@ impl BroadcastStage {
 
             let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
+                crdt,
+                leader_rotation_interval,
                 &me,
                 &broadcast_table,
                 &window,
