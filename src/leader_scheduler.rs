@@ -83,7 +83,6 @@ pub struct LeaderSchedulerConfig {
 // Used to toggle leader rotation in fullnode so that tests that don't
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
-    #[allow(dead_code)]
     pub fn new(
         bootstrap_leader: Pubkey,
         bootstrap_height_option: Option<u64>,
