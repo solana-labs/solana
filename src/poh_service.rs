@@ -8,17 +8,20 @@
 //!
 //! The resulting stream of Hashes represents ordered events in time.
 //!
+use bank::Bank;
+use entry::Entry;
 use hash::Hash;
-use poh::{Poh, PohEntry};
-use service::Service;
-use std::sync::atomic::{AtomicBool, Ordering};
+use poh::Poh;
+use result::Result;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use std::thread::{self, Builder, JoinHandle};
+use transaction::Transaction;
 
+#[derive(Clone)]
 pub struct PohService {
     poh: Arc<Mutex<Poh>>,
-    thread_hdl: JoinHandle<()>,
-    run_poh: Arc<AtomicBool>,
+    bank: Arc<Bank>,
+    sender: Sender<Vec<Entry>>,
 }
 
 impl PohService {
@@ -26,84 +29,46 @@ impl PohService {
     /// sending back Entry messages until either the receiver or sender channel is closed.
     /// if tick_duration is some, service will automatically produce entries every
     ///  `tick_duration`.
-    pub fn new(start_hash: Hash, run_poh: bool) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(start_hash)));
-        let run_poh = Arc::new(AtomicBool::new(run_poh));
-
-        let thread_poh = poh.clone();
-        let thread_run_poh = run_poh.clone();
-        let thread_hdl = Builder::new()
-            .name("solana-record-service".to_string())
-            .spawn(move || {
-                while thread_run_poh.load(Ordering::Relaxed) {
-                    thread_poh.lock().unwrap().hash();
-                }
-            }).unwrap();
-
-        PohService {
-            poh,
-            run_poh,
-            thread_hdl,
-        }
+    pub fn new(bank: Arc<Bank>, sender: Sender<Vec<Entry>>) -> Self {
+        let poh = Arc::new(Mutex::new(Poh::new(bank.last_id())));
+        PohService { poh, bank, sender }
     }
 
-    pub fn tick(&self) -> PohEntry {
+    pub fn hash(&self) {
+        // TODO: amortize the cost of this lock by doing the loop in here for
+        // some min amount of hashes
         let mut poh = self.poh.lock().unwrap();
-        poh.tick()
+        poh.hash()
     }
 
-    pub fn record(&self, mixin: Hash) -> PohEntry {
+    pub fn tick(&self) -> Result<()> {
+        // Register and send the entry out while holding the lock.
+        // This guarantees PoH order and Entry production and banks LastId queue is the same
         let mut poh = self.poh.lock().unwrap();
-        poh.record(mixin)
+        let tick = poh.tick();
+        self.bank.register_entry_id(&tick.id);
+        let entry = Entry {
+            num_hashes: tick.num_hashes,
+            id: tick.id,
+            transactions: vec![],
+        };
+        self.sender.send(vec![entry])?;
+        Ok(())
     }
 
-    //    fn process_hash(
-    //        mixin: Option<Hash>,
-    //        poh: &mut Poh,
-    //        sender: &Sender<PohEntry>,
-    //    ) -> Result<(), ()> {
-    //        let resp = match mixin {
-    //            Some(mixin) => poh.record(mixin),
-    //            None => poh.tick(),
-    //        };
-    //        sender.send(resp).or(Err(()))?;
-    //        Ok(())
-    //    }
-    //
-    //    fn process_hashes(
-    //        poh: &mut Poh,
-    //        receiver: &Receiver<Option<Hash>>,
-    //        sender: &Sender<PohEntry>,
-    //    ) -> Result<(), ()> {
-    //        loop {
-    //            match receiver.recv() {
-    //                Ok(hash) => Self::process_hash(hash, poh, sender)?,
-    //                Err(RecvError) => return Err(()),
-    //            }
-    //        }
-    //    }
-    //
-    //    fn try_process_hashes(
-    //        poh: &mut Poh,
-    //        receiver: &Receiver<Option<Hash>>,
-    //        sender: &Sender<PohEntry>,
-    //    ) -> Result<(), ()> {
-    //        loop {
-    //            match receiver.try_recv() {
-    //                Ok(hash) => Self::process_hash(hash, poh, sender)?,
-    //                Err(TryRecvError::Empty) => return Ok(()),
-    //                Err(TryRecvError::Disconnected) => return Err(()),
-    //            };
-    //        }
-    //    }
-}
-
-impl Service for PohService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
-        self.run_poh.store(false, Ordering::Relaxed);
-        self.thread_hdl.join()
+    pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
+        // Register and send the entry out while holding the lock.
+        // This guarantees PoH order and Entry production and banks LastId queue is the same.
+        let mut poh = self.poh.lock().unwrap();
+        let tick = poh.record(mixin);
+        self.bank.register_entry_id(&tick.id);
+        let entry = Entry {
+            num_hashes: tick.num_hashes,
+            id: tick.id,
+            transactions: txs,
+        };
+        self.sender.send(vec![entry])?;
+        Ok(())
     }
 }
 

@@ -7,7 +7,6 @@ use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
 use counter::Counter;
-use dynamic_program::{DynamicProgram, KeyedAccount};
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -17,10 +16,10 @@ use mint::Mint;
 use payment_plan::Payment;
 use signature::{Keypair, Pubkey, Signature};
 use std;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
@@ -65,48 +64,55 @@ impl Default for Account {
 /// but requires clients to update its `last_id` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
-pub const MAX_ENTRY_IDS: usize = 1024 * 16;
+pub const MAX_ENTRY_IDS: usize = 1024 * 32;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankError {
+    /// This Pubkey is being processed in another transaction
+    AccountInProgress,
+
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound(Pubkey),
+    AccountNotFoundValidator,
+    AccountNotFoundLeader,
+    AccountNotFoundVote,
 
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
-    InsufficientFundsForFee(Pubkey),
+    InsufficientFundsForFee,
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `last_id`, or as a double-spend attack.
-    DuplicateSignature(Signature),
+    DuplicateSignature,
 
     /// The bank has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
-    LastIdNotFound(Hash),
+    LastIdNotFound,
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
-    /// Contract's transaction token balance does not equal the balance after the transaction
-    UnbalancedTransaction(Signature),
-    /// Contract's transactions resulted in an account with a negative balance
+
+    /// Programs's transactions resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
     /// contract
-    ResultWithNegativeTokens(Signature),
+    ResultWithNegativeTokens(u8),
 
-    /// Contract id is unknown
-    UnknownContractId(Pubkey),
+    /// Programs's transaction token balance does not equal the balance after the transaction
+    UnbalancedTransaction(u8),
+
+    /// Program id is unknown
+    UnknownProgramId(u8),
 
     /// Contract modified an accounts contract id
-    ModifiedContractId(Signature),
+    ModifiedContractId(u8),
 
     /// Contract spent the tokens of an account that doesn't belong to it
-    ExternalAccountTokenSpend(Signature),
+    ExternalAccountTokenSpend(u8),
 
     /// The program returned an error
-    ProgramRuntimeError,
+    ProgramRuntimeError(u8),
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -115,12 +121,17 @@ pub type Result<T> = result::Result<T, BankError>;
 struct ErrorCounters {
     account_not_found_validator: usize,
     account_not_found_leader: usize,
-    account_not_found_vote: usize,
+    account_in_progress: usize,
 }
+type LastIdSigTable = HashMap<Hash, (HashMap<Signature, Result<()>>, u64)>;
+
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
     accounts: RwLock<HashMap<Pubkey, Account>>,
+
+    /// set of accounts which are currently in the pipeline
+    account_locks: Mutex<HashSet<Pubkey>>,
 
     /// A FIFO queue of `last_id` items, where each item is a set of signatures
     /// that have been processed using that `last_id`. Rejected `last_id`
@@ -129,11 +140,13 @@ pub struct Bank {
 
     /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
     /// reject transactions with signatures its seen before
-    last_ids_sigs: RwLock<HashMap<Hash, (HashMap<Signature, Result<()>>, u64)>>,
+    last_ids_sigs: RwLock<LastIdSigTable>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
     transaction_count: AtomicUsize,
+    /// number of programs executed
+    program_count: AtomicUsize,
 
     /// This bool allows us to submit metrics that are specific for leaders or validators
     /// It is set to `true` by fullnode before creating the bank.
@@ -141,21 +154,26 @@ pub struct Bank {
 
     // The latest finality time for the network
     finality_time: AtomicUsize,
-
+    // TODO: see system_program TODO's on dynamic programs
+    // DynamicProgram should be stored inside an Account::userdata and those accounts should be assigned to the loader contract
+    // execute_transaction can then ask the loader to interpret the userdata and do the call
+    // there may be some hacks necessary for native dlopen libs, (or just do dlopen on every tx)
     // loaded contracts hashed by program_id
-    loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
+    // loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
 }
 
 impl Default for Bank {
     fn default() -> Self {
         Bank {
             accounts: RwLock::new(HashMap::new()),
+            account_locks: Mutex::new(HashSet::new()),
             last_ids: RwLock::new(VecDeque::new()),
             last_ids_sigs: RwLock::new(HashMap::new()),
             transaction_count: AtomicUsize::new(0),
+            program_count: AtomicUsize::new(0),
             is_leader: true,
             finality_time: AtomicUsize::new(std::usize::MAX),
-            loaded_contracts: RwLock::new(HashMap::new()),
+            // loaded_contracts: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -210,8 +228,8 @@ impl Bank {
         signatures: &mut HashMap<Signature, Result<()>>,
         signature: &Signature,
     ) -> Result<()> {
-        if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature(*signature));
+        if let Some(_) = signatures.get(signature) {
+            return Err(BankError::DuplicateSignature);
         }
         signatures.insert(*signature, Ok(()));
         Ok(())
@@ -224,16 +242,21 @@ impl Bank {
         }
     }
 
-    fn reserve_signature_with_last_id(&self, signature: &Signature, last_id: &Hash) -> Result<()> {
-        if let Some(entry) = self
-            .last_ids_sigs
-            .write()
-            .expect("'last_ids' read lock in reserve_signature_with_last_id")
-            .get_mut(last_id)
-        {
-            return Self::reserve_signature(&mut entry.0, signature);
+    fn reserve_signature_with_last_id(
+        last_ids_sigs: &mut LastIdSigTable,
+        last_id: &Hash,
+        sig: &Signature,
+    ) -> Result<()> {
+        if let Some(entry) = last_ids_sigs.get_mut(last_id) {
+            return Self::reserve_signature(&mut entry.0, sig);
         }
-        Err(BankError::LastIdNotFound(*last_id))
+        Err(BankError::LastIdNotFound)
+    }
+
+    #[cfg(test)]
+    fn reserve_signature_with_last_id_test(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
+        let mut last_ids_sigs = self.last_ids_sigs.write().unwrap();
+        Self::reserve_signature_with_last_id(&mut last_ids_sigs, last_id, sig)
     }
 
     fn update_signature_status(
@@ -246,19 +269,25 @@ impl Bank {
     }
 
     fn update_signature_status_with_last_id(
-        &self,
+        last_ids: &mut LastIdSigTable,
         signature: &Signature,
         result: &Result<()>,
         last_id: &Hash,
     ) {
-        if let Some(entry) = self.last_ids_sigs.write().unwrap().get_mut(last_id) {
+        if let Some(entry) = last_ids.get_mut(last_id) {
             Self::update_signature_status(&mut entry.0, signature, result);
         }
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
+        let mut last_ids = self.last_ids_sigs.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            self.update_signature_status_with_last_id(&tx.signature, &res[i], &tx.last_id);
+            Self::update_signature_status_with_last_id(
+                &mut last_ids,
+                &tx.signature,
+                &res[i],
+                &tx.last_id,
+            );
         }
     }
 
@@ -310,28 +339,57 @@ impl Bank {
         }
     }
 
+    fn lock_account(
+        keys: &[Pubkey],
+        account_locks: &mut HashSet<Pubkey>,
+        error_counters: &mut ErrorCounters,
+    ) -> Result<()> {
+        // Copy all the accounts
+        for k in keys {
+            if account_locks.contains(k) {
+                error_counters.account_in_progress += 1;
+                return Err(BankError::AccountInProgress);
+            }
+        }
+        for k in keys {
+            account_locks.insert(*k);
+        }
+        Ok(())
+    }
+
+    fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
+        let rv = match result {
+            Err(BankError::AccountInProgress) => (),
+            // keys were stored
+            _ => {
+                for k in &tx.keys {
+                    account_locks.remove(k);
+                }
+            }
+        };
+        rv
+    }
+
     fn load_account(
         &self,
         tx: &Transaction,
         accounts: &HashMap<Pubkey, Account>,
+        last_sigs: &mut LastIdSigTable,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
+        //TODO make this transaction configurable
+        let fee_key = 0;
         // Copy all the accounts
         if accounts.get(&tx.keys[0]).is_none() {
             if !self.is_leader {
-                error_counters.account_not_found_validator += 1;
-            } else {
                 error_counters.account_not_found_leader += 1;
+                return Err(BankError::AccountNotFoundValidator);
+            } else {
+                error_counters.account_not_found_validator += 1;
+                return Err(BankError::AccountNotFoundLeader);
             }
-            if BudgetState::check_id(&tx.program_id) {
-                use instruction::Instruction;
-                if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
-                    error_counters.account_not_found_vote += 1;
-                }
-            }
-            Err(BankError::AccountNotFound(*tx.from()))
-        } else if accounts.get(&tx.keys[0]).unwrap().tokens < tx.fee {
-            Err(BankError::InsufficientFundsForFee(*tx.from()))
+        } else if accounts.get(&tx.keys[fee_key]).unwrap().tokens < tx.fee {
+            Err(BankError::InsufficientFundsForFee)
         } else {
             let mut called_accounts: Vec<Account> = tx
                 .keys
@@ -340,24 +398,49 @@ impl Bank {
                 .collect();
             // There is no way to predict what contract will execute without an error
             // If a fee can pay for execution then the contract will be scheduled
-            self.reserve_signature_with_last_id(&tx.signature, &tx.last_id)?;
-            called_accounts[0].tokens -= tx.fee;
+            let err = Self::reserve_signature_with_last_id(last_sigs, &tx.last_id, &tx.signature);
+            if let Err(e) = err {
+                return Err(e);
+            }
+            // TODO should we check that this is the system account?
+            called_accounts[fee_key].tokens -= tx.fee;
             Ok(called_accounts)
         }
     }
-
+    fn lock_accounts(
+        &self,
+        txs: &[Transaction],
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<Result<()>> {
+        let mut account_locks = self.account_locks.lock().unwrap();
+        txs.iter()
+            .map(|tx| Self::lock_account(&tx.keys, &mut account_locks, error_counters))
+            .collect()
+    }
+    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+        let mut account_locks = self.account_locks.lock().unwrap();
+        txs.iter()
+            .zip(results.iter())
+            .for_each(|(tx, res)| Self::unlock_account(tx, res, &mut account_locks));
+    }
     fn load_accounts(
         &self,
         txs: &[Transaction],
-        accounts: &HashMap<Pubkey, Account>,
+        results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<Vec<Account>>> {
+    ) -> Vec<(Result<Vec<Account>>)> {
+        let accounts = self.accounts.read().unwrap();
+        let mut last_sigs = self.last_ids_sigs.write().unwrap();
         txs.iter()
-            .map(|tx| self.load_account(tx, accounts, error_counters))
-            .collect()
+            .zip(results.into_iter())
+            .map(|etx| match etx {
+                (tx, Ok(())) => self.load_account(tx, &accounts, &mut last_sigs, error_counters),
+                (_, Err(e)) => Err(e),
+            }).collect()
     }
 
     pub fn verify_transaction(
+        pix: usize,
         tx: &Transaction,
         pre_program_id: &Pubkey,
         pre_tokens: i64,
@@ -365,148 +448,214 @@ impl Bank {
     ) -> Result<()> {
         // Verify the transaction
         // make sure that program_id is still the same or this was just assigned by the system call contract
+        let tx_program_id = tx.program_id(pix);
         if !((*pre_program_id == account.program_id)
-            || (SystemProgram::check_id(&tx.program_id)
-                && SystemProgram::check_id(&pre_program_id)))
+            || (SystemProgram::check_id(tx_program_id) && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            return Err(BankError::ModifiedContractId(tx.signature));
+            return Err(BankError::ModifiedContractId(pix as u8));
         }
-        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if tx.program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(tx.signature));
+        //For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
+        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+            return Err(BankError::ExternalAccountTokenSpend(pix as u8));
         }
         if account.tokens < 0 {
-            return Err(BankError::ResultWithNegativeTokens(tx.signature));
+            return Err(BankError::ResultWithNegativeTokens(pix as u8));
         }
         Ok(())
     }
 
-    fn loaded_contract(&self, tx: &Transaction, accounts: &mut [Account]) -> bool {
-        let loaded_contracts = self.loaded_contracts.write().unwrap();
-        match loaded_contracts.get(&tx.program_id) {
-            Some(dc) => {
-                let mut infos: Vec<_> = (&tx.keys)
-                    .into_iter()
-                    .zip(accounts)
-                    .map(|(key, account)| KeyedAccount { key, account })
-                    .collect();
+    //TODO: see system_program TODOs on fixing loaded_contract
+    //fn loaded_contract(&self, tx: &Transaction, accounts: &mut [Account]) -> bool {
+    //    let loaded_contracts = self.loaded_contracts.write().unwrap();
+    //    match loaded_contracts.get(&tx.program_id) {
+    //        Some(dc) => {
+    //            let mut infos: Vec<_> = (&tx.keys)
+    //                .into_iter()
+    //                .zip(accounts)
+    //                .map(|(key, account)| KeyedAccount { key, account })
+    //                .collect();
 
-                dc.call(&mut infos, &tx.userdata);
-                true
-            }
-            None => false,
-        }
-    }
+    //            dc.call(&mut infos, &tx.userdata);
+    //            true
+    //        }
+    //        None => false,
+    //    }
+    //}
 
-    /// Execute a transaction.
-    /// This method calls the contract's process_transaction method and verifies that the result of
-    /// the contract does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if this function returns Ok(_).
-    fn execute_transaction(&self, tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
-        let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
-        let pre_data: Vec<_> = accounts
-            .iter_mut()
-            .map(|a| (a.program_id, a.tokens))
-            .collect();
-
-        // Call the contract method
-        // It's up to the contract to implement its own rules on moving funds
-        if SystemProgram::check_id(&tx.program_id) {
-            SystemProgram::process_transaction(&tx, accounts, &self.loaded_contracts)
-        } else if BudgetState::check_id(&tx.program_id) {
-            // TODO: the runtime should be checking read/write access to memory
-            // we are trusting the hard coded contracts not to clobber or allocate
-            if BudgetState::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
-            }
-        } else if StorageProgram::check_id(&tx.program_id) {
-            StorageProgram::process_transaction(&tx, accounts)
-        } else if TicTacToeProgram::check_id(&tx.program_id) {
-            if TicTacToeProgram::process_transaction(&tx, accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError);
-            }
-        } else if self.loaded_contract(&tx, accounts) {
-        } else {
-            return Err(BankError::UnknownContractId(tx.program_id));
-        }
-        // Verify the transaction
-        for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
-            Self::verify_transaction(&tx, pre_program_id, *pre_tokens, post_account)?;
-        }
-        // The total sum of all the tokens in all the pages cannot change.
-        let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
-        if pre_total != post_total {
-            Err(BankError::UnbalancedTransaction(tx.signature))
+    fn with_subset<F>(pix: usize, accounts: &mut [Account], ixes: &[u8], func: F) -> Result<()>
+    where
+        F: Fn(&mut [&mut Account]) -> bool,
+    {
+        let mut subset: Vec<&mut Account> = ixes
+            .iter()
+            .map(|ix| {
+                let ptr = &mut accounts[*ix as usize] as *mut Account;
+                // lifetime of this unsafe is only within the scope of the closure
+                // there is no way to reorder them without breaking borrow checker rules
+                unsafe { &mut *ptr }
+            }).collect();
+        let rv = func(&mut subset);
+        if rv {
+            Err(BankError::ProgramRuntimeError(pix as u8))
         } else {
             Ok(())
         }
     }
-
-    pub fn store_accounts(
-        txs: &[Transaction],
-        res: &[Result<()>],
-        loaded: &[Result<Vec<Account>>],
-        accounts: &mut HashMap<Pubkey, Account>,
-    ) {
-        for (i, racc) in loaded.iter().enumerate() {
-            if res[i].is_err() || racc.is_err() {
-                continue;
-            }
-
-            let tx = &txs[i];
-            let acc = racc.as_ref().unwrap();
-            for (key, account) in tx.keys.iter().zip(acc.iter()) {
-                //purge if 0
-                if account.tokens == 0 {
-                    accounts.remove(&key);
-                } else {
-                    *accounts.entry(*key).or_insert_with(Account::default) = account.clone();
-                    assert_eq!(accounts.get(key).unwrap().tokens, account.tokens);
+    /// Execute a transaction.
+    /// This method calls the contract's process_transaction method and verifies that the result of
+    /// the contract does not violate the bank's accounting rules.
+    /// The accounts are committed back to the bank only if this function returns Ok(_).
+    /// Programs are executed sequentially and the output of each one is verified.
+    /// If any of the programs fail, the whole transaction fails.
+    fn execute_transaction(tx: &Transaction, mut accounts: Vec<Account>) -> Result<Vec<Account>> {
+        // loop through all the programs and call them
+        for (pix, program) in tx.programs.iter().enumerate() {
+            let pre_total: i64 = accounts.iter().map(|a| a.tokens).sum();
+            let pre_data: Vec<_> = accounts
+                .iter_mut()
+                .map(|a| (a.program_id, a.tokens))
+                .collect();
+            let program_keys: Vec<&Pubkey> = program
+                .accounts
+                .iter()
+                .map(|ix| &tx.keys[(*ix) as usize])
+                .collect();
+            // Call the contract method
+            // It's up to the contract to implement its own rules on moving funds
+            let program_id = tx.program_id(pix);
+            let res = if SystemProgram::check_id(program_id) {
+                Self::with_subset(pix, &mut accounts, &program.accounts, |program_accounts| {
+                    SystemProgram::process_transaction(
+                        &program_keys,
+                        program_accounts,
+                        &program.userdata,
+                    ).is_err()
+                })
+            } else if BudgetState::check_id(&program_id) {
+                // TODO: the runtime should be checking read/write access to memory
+                // we are trusting the hard coded contracts not to clobber or allocate
+                Self::with_subset(pix, &mut accounts, &program.accounts, |program_accounts| {
+                    BudgetState::process_transaction(
+                        &program_keys,
+                        program_accounts,
+                        &program.userdata,
+                    ).is_err()
+                })
+            } else if StorageProgram::check_id(&program_id) {
+                Self::with_subset(pix, &mut accounts, &program.accounts, |program_accounts| {
+                    StorageProgram::process_transaction(
+                        &program_keys,
+                        program_accounts,
+                        &program.userdata,
+                    ).is_err()
+                })
+            } else if TicTacToeProgram::check_id(&program_id) {
+                Self::with_subset(pix, &mut accounts, &program.accounts, |program_accounts| {
+                    TicTacToeProgram::process_transaction(
+                        &program_keys,
+                        program_accounts,
+                        &program.userdata,
+                    ).is_err()
+                })
+            // TODO: see system_program TODO on fixing loaded_contract
+            //} else if Self::with_subset(&mut accounts, &program.accounts, |program_accounts| { Self::loaded_contract(&tx, program_accounts) }) {
+            } else {
+                Err(BankError::UnknownProgramId(pix as u8))
+            };
+            //TODO: Issue 1335, handle runtime errors in such a way that they pay a fee for the transaction
+            //this implementation will error out and drop the transaction, the fee, and the commit
+            res?;
+            // Verify program execution
+            for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter())
+            {
+                if let Err(e) =
+                    Self::verify_transaction(pix, tx, pre_program_id, *pre_tokens, post_account)
+                {
+                    return Err(e);
                 }
             }
+            // The total sum of all the tokens in all the pages cannot change.
+            let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
+            if pre_total != post_total {
+                return Err(BankError::UnbalancedTransaction(pix as u8));
+            }
         }
+        Ok(accounts)
+    }
+
+    pub fn store_accounts(
+        &self,
+        txs: &[Transaction],
+        results: Vec<Result<Vec<Account>>>,
+    ) -> Vec<Result<()>> {
+        let mut bank_accounts = self.accounts.write().unwrap();
+        txs.iter()
+            .zip(results.into_iter())
+            .map(|res| match res {
+                (_, Err(e)) => Err(e),
+                (tx, Ok(acc)) => {
+                    tx.keys.iter().zip(acc.iter()).for_each(|(key, account)| {
+                        //purge if 0
+                        if account.tokens == 0 {
+                            bank_accounts.remove(&key);
+                        } else {
+                            *bank_accounts.entry(*key).or_insert_with(Account::default) =
+                                account.clone();
+                            assert_eq!(bank_accounts.get(key).unwrap().tokens, account.tokens);
+                        }
+                    });
+                    Ok(())
+                }
+            }).collect()
     }
 
     /// Process a batch of transactions.
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         debug!("processing transactions: {}", txs.len());
-        // TODO right now a single write lock is held for the duration of processing all the
-        // transactions
-        // To break this lock each account needs to be locked to prevent concurrent access
-        let mut accounts = self.accounts.write().unwrap();
         let txs_len = txs.len();
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let mut loaded_accounts = self.load_accounts(&txs, &accounts, &mut error_counters);
+        let locked_accounts = self.lock_accounts(txs, &mut error_counters);
+        let lock_time = now.elapsed();
+        let now = Instant::now();
+        let loaded_accounts = self.load_accounts(txs, locked_accounts, &mut error_counters);
         let load_elapsed = now.elapsed();
         let now = Instant::now();
-
-        let res: Vec<_> = loaded_accounts
-            .iter_mut()
-            .zip(txs.iter())
-            .map(|(acc, tx)| match acc {
-                Err(e) => Err(e.clone()),
-                Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
+        let executed: Vec<Result<Vec<Account>>> = txs
+            .iter()
+            .zip(loaded_accounts.into_iter())
+            .map(|vals| match vals {
+                (_, Err(e)) => Err(e),
+                (tx, Ok(accounts)) => Self::execute_transaction(&tx, accounts),
             }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
-        Self::store_accounts(&txs, &res, &loaded_accounts, &mut accounts);
-        self.update_transaction_statuses(&txs, &res);
+        let committed = self.store_accounts(txs, executed);
+        // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
+        let now = Instant::now();
+        // all locked accounts get unlocked
+        self.unlock_accounts(txs, &committed);
+        let unlock_elapsed = now.elapsed();
+        self.update_transaction_statuses(txs, &committed);
         debug!(
-            "load: {}us execution: {}us write: {}us txs_len={}",
+            "lock: {}us load: {}us execution: {}us write: {}us unlock: {}us txs_len={}",
+            duration_as_us(&lock_time),
             duration_as_us(&load_elapsed),
             duration_as_us(&execution_elapsed),
             duration_as_us(&write_elapsed),
+            duration_as_us(&unlock_elapsed),
             txs_len
         );
         let mut tx_count = 0;
+        let mut prog_count = 0;
         let mut err_count = 0;
-        for r in &res {
+        for (r, tx) in committed.iter().zip(txs.iter()) {
             if r.is_ok() {
                 tx_count += 1;
+                prog_count += tx.programs.len();
             } else {
                 if err_count == 0 {
                     debug!("tx error: {:?}", r);
@@ -528,19 +677,19 @@ impl Bank {
                     "bank-appy_debits-account_not_found-leader",
                     error_counters.account_not_found_leader
                 );
-                inc_new_counter_info!(
-                    "bank-appy_debits-vote_account_not_found",
-                    error_counters.account_not_found_vote
-                );
             }
+            inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
-        let cur_tx_count = self.transaction_count.load(Ordering::Relaxed);
-        if ((cur_tx_count + tx_count) & !(262_144 - 1)) > cur_tx_count & !(262_144 - 1) {
-            info!("accounts.len: {}", accounts.len());
-        }
+        inc_new_counter_info!(
+            "bank-appy_debits-account_in_progress",
+            error_counters.account_in_progress
+        );
         self.transaction_count
             .fetch_add(tx_count, Ordering::Relaxed);
-        res
+        self.program_count.fetch_add(prog_count, Ordering::Relaxed);
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
+        inc_new_counter_info!("bank-process_transactions-programs", prog_count);
+        committed
     }
 
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
@@ -632,8 +781,10 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            assert!(SystemProgram::check_id(&tx.program_id), "Invalid ledger");
-            let instruction: SystemProgram = deserialize(&tx.userdata).unwrap();
+            assert_eq!(tx.programs.len(), 1, "Invalid ledger");
+            let program0 = tx.program_id(0);
+            assert!(SystemProgram::check_id(program0), "Invalid ledger");
+            let instruction: SystemProgram = deserialize(&tx.programs[0].userdata).unwrap();
             let deposit = if let SystemProgram::Move { tokens } = instruction {
                 Some(tokens)
             } else {
@@ -719,6 +870,13 @@ impl Bank {
         }
         false
     }
+    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
+        self.last_ids_sigs
+            .read()
+            .unwrap()
+            .get(last_id)
+            .and_then(|sigs| sigs.0.get(signature).cloned())
+    }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the ledger up to the `last_id`, to be sent back to the leader when voting.
@@ -753,6 +911,8 @@ mod tests {
     use std;
     use std::io::{BufReader, Cursor, Seek, SeekFrom};
 
+    use transaction::Program;
+
     #[test]
     fn test_bank_new() {
         let mint = Mint::new(10_000);
@@ -775,6 +935,109 @@ mod tests {
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
+    }
+
+    #[test]
+    fn test_one_source_two_tx_one_batch() {
+        let mint = Mint::new(1);
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.last_id(), mint.last_id());
+
+        let t1 = Transaction::new(&mint.keypair(), key1, 1, mint.last_id());
+        let t2 = Transaction::new(&mint.keypair(), key2, 1, mint.last_id());
+        let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
+        assert_eq!(res.len(), 2);
+        assert!(res[0].is_ok());
+        assert_eq!(res[1], Err(BankError::AccountInProgress));
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        assert_eq!(bank.get_balance(&key1), 1);
+        assert_eq!(bank.get_balance(&key2), 0);
+        assert_eq!(bank.get_signature(&t1.last_id, &t1.signature), Some(Ok(())));
+        // TODO: Transactions that fail to pay a fee could be dropped silently
+        assert_eq!(
+            bank.get_signature(&t2.last_id, &t2.signature),
+            Some(Err(BankError::AccountInProgress))
+        );
+    }
+
+    #[test]
+    fn test_one_tx_two_out_atomic_fail() {
+        let mint = Mint::new(1);
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
+        let bank = Bank::new(&mint);
+
+        let spend = SystemProgram::Move { tokens: 1 };
+        let programs = vec![
+            Program {
+                program_id: 0,
+                userdata: serialize(&spend).unwrap(),
+                accounts: vec![0, 1],
+            },
+            Program {
+                program_id: 0,
+                userdata: serialize(&spend).unwrap(),
+                accounts: vec![0, 2],
+            },
+        ];
+
+        let t1 = Transaction::new_with_programs(
+            &mint.keypair(),
+            &[key1, key2],
+            mint.last_id(),
+            0,
+            &[SystemProgram::id()],
+            programs,
+        );
+        let res = bank.process_transactions(&vec![t1.clone()]);
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0], Err(BankError::ResultWithNegativeTokens(1)));
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key1), 0);
+        assert_eq!(bank.get_balance(&key2), 0);
+        assert_eq!(
+            bank.get_signature(&t1.last_id, &t1.signature),
+            Some(Err(BankError::ResultWithNegativeTokens(1)))
+        );
+    }
+    #[test]
+    fn test_one_tx_two_out_atomic_pass() {
+        let mint = Mint::new(2);
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
+        let bank = Bank::new(&mint);
+
+        let spend = SystemProgram::Move { tokens: 1 };
+        let programs = vec![
+            Program {
+                program_id: 0,
+                userdata: serialize(&spend).unwrap(),
+                accounts: vec![0, 1],
+            },
+            Program {
+                program_id: 0,
+                userdata: serialize(&spend).unwrap(),
+                accounts: vec![0, 2],
+            },
+        ];
+
+        let t1 = Transaction::new_with_programs(
+            &mint.keypair(),
+            &[key1, key2],
+            mint.last_id(),
+            0,
+            &[SystemProgram::id()],
+            programs,
+        );
+        let res = bank.process_transactions(&vec![t1.clone()]);
+        assert_eq!(res.len(), 1);
+        assert!(res[0].is_ok());
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        assert_eq!(bank.get_balance(&key1), 1);
+        assert_eq!(bank.get_balance(&key2), 1);
+        assert_eq!(bank.get_signature(&t1.last_id, &t1.signature), Some(Ok(())));
     }
 
     #[test]
@@ -818,7 +1081,7 @@ mod tests {
         let keypair = Keypair::new();
         assert_eq!(
             bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
-            Err(BankError::AccountNotFound(keypair.pubkey()))
+            Err(BankError::AccountNotFoundLeader)
         );
         assert_eq!(bank.transaction_count(), 0);
     }
@@ -859,12 +1122,12 @@ mod tests {
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         assert!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
                 .is_ok()
         );
         assert_eq!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::DuplicateSignature(signature))
+            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
+            Err(BankError::DuplicateSignature)
         );
     }
 
@@ -873,11 +1136,11 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
-        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+        bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
             .unwrap();
         bank.clear_signatures();
         assert!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
                 .is_ok()
         );
     }
@@ -887,7 +1150,7 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
-        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+        bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
             .expect("reserve signature");
         assert!(bank.has_signature(&signature));
     }
@@ -903,8 +1166,8 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
-            bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::LastIdNotFound(mint.last_id()))
+            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
+            Err(BankError::LastIdNotFound)
         );
     }
 
@@ -951,7 +1214,7 @@ mod tests {
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound(entry.id))
+            Err(BankError::LastIdNotFound)
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
@@ -972,12 +1235,19 @@ mod tests {
         mint: &Mint,
         keypairs: &[Keypair],
     ) -> impl Iterator<Item = Entry> {
-        let hash = mint.last_id();
-        let transactions: Vec<_> = keypairs
-            .iter()
-            .map(|keypair| Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, hash))
-            .collect();
-        let entries = ledger::next_entries(&hash, 0, transactions);
+        let mut hash = mint.last_id();
+        let mut entries: Vec<Entry> = vec![];
+        for k in keypairs {
+            let txs = vec![Transaction::system_new(
+                &mint.keypair(),
+                k.pubkey(),
+                1,
+                hash,
+            )];
+            let mut e = ledger::next_entries(&hash, 0, txs);
+            entries.append(&mut e);
+            hash = entries.last().unwrap().id;
+        }
         entries.into_iter()
     }
 
@@ -1088,6 +1358,7 @@ mod tests {
     }
     #[test]
     fn test_hash_internal_state() {
+        logger::setup();
         let mint = Mint::new(2_000);
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
