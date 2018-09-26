@@ -301,7 +301,7 @@ mod test {
         let from = Keypair::new();
         let contract = Keypair::new();
 
-        let tx = Transaction::new_with_userdata(
+        let tx = Transaction::new(
             &from,
             &[contract.pubkey()],
             BudgetState::id(),

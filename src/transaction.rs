@@ -49,7 +49,7 @@ impl Transaction {
     /// * `userdata` - The input data that the program will execute with
     /// * `last_id` - The PoH hash.
     /// * `fee` - The transaction fee.
-    pub fn new_with_userdata(
+    pub fn new(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
         program_id: Pubkey,
@@ -202,7 +202,7 @@ impl BudgetTransaction for Transaction {
         let budget = Budget::Pay(payment);
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
+        Self::new(
             from_keypair,
             &[to],
             BudgetState::id(),
@@ -227,7 +227,7 @@ impl BudgetTransaction for Transaction {
     ) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
         let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
+        Self::new(
             from_keypair,
             &[contract, to],
             BudgetState::id(),
@@ -246,7 +246,7 @@ impl BudgetTransaction for Transaction {
     ) -> Self {
         let instruction = Instruction::ApplySignature;
         let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
+        Self::new(
             from_keypair,
             &[contract, to],
             BudgetState::id(),
@@ -259,7 +259,7 @@ impl BudgetTransaction for Transaction {
     fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+        Self::new(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -283,7 +283,7 @@ impl BudgetTransaction for Transaction {
         };
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(
+        Self::new(
             from_keypair,
             &[contract],
             BudgetState::id(),
@@ -312,7 +312,7 @@ impl BudgetTransaction for Transaction {
         };
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(
+        Self::new(
             from_keypair,
             &[contract],
             BudgetState::id(),
@@ -371,7 +371,7 @@ impl SystemTransaction for Transaction {
             space,
             program_id,
         };
-        Transaction::new_with_userdata(
+        Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
@@ -383,7 +383,7 @@ impl SystemTransaction for Transaction {
     /// Create and sign new SystemProgram::CreateAccount transaction
     fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
         let create = SystemProgram::Assign { program_id };
-        Transaction::new_with_userdata(
+        Transaction::new(
             from_keypair,
             &[],
             SystemProgram::id(),
@@ -405,7 +405,7 @@ impl SystemTransaction for Transaction {
         fee: i64,
     ) -> Self {
         let create = SystemProgram::Move { tokens };
-        Transaction::new_with_userdata(
+        Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
@@ -423,7 +423,7 @@ impl SystemTransaction for Transaction {
         name: String,
     ) -> Self {
         let load = SystemProgram::Load { program_id, name };
-        Transaction::new_with_userdata(
+        Transaction::new(
             from_keypair,
             &[],
             SystemProgram::id(),
@@ -624,7 +624,7 @@ mod tests {
             2, 2, 2,
         ]);
 
-        let tx = Transaction::new_with_userdata(
+        let tx = Transaction::new(
             keypair,
             &[keypair.pubkey(), to],
             program_id,
