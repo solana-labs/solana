@@ -26,7 +26,7 @@
 //! ```
 
 use bank::Bank;
-use banking_stage::BankingStage;
+use banking_stage::{BankingStage, Config};
 use crdt::Crdt;
 use entry::Entry;
 use fetch_stage::FetchStage;
@@ -38,7 +38,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::Duration;
 use write_stage::{WriteStage, WriteStageReturnType};
 
 pub enum TpuReturnType {
@@ -58,7 +57,7 @@ impl Tpu {
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
-        tick_duration: Option<Duration>,
+        tick_duration: Config,
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
         sigverify_disabled: bool,

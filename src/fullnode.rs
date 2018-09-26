@@ -316,14 +316,11 @@ impl Fullnode {
             }
             None => {
                 // Start in leader mode.
-                let tick_duration = None;
-                // TODO: To light up PoH, uncomment the following line:
-                //let tick_duration = Some(Duration::from_millis(1000));
                 let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                     keypair.clone(),
                     &bank,
                     &crdt,
-                    tick_duration,
+                    Default::default(),
                     node.sockets
                         .transaction
                         .iter()
@@ -430,14 +427,11 @@ impl Fullnode {
 
     fn validator_to_leader(&mut self, entry_height: u64) {
         self.crdt.write().unwrap().set_leader(self.keypair.pubkey());
-        let tick_duration = None;
-        // TODO: To light up PoH, uncomment the following line:
-        //let tick_duration = Some(Duration::from_millis(1000));
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             self.keypair.clone(),
             &self.bank,
             &self.crdt,
-            tick_duration,
+            Default::default(),
             self.transaction_sockets
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))

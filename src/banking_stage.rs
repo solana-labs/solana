@@ -10,26 +10,44 @@ use entry::Entry;
 use hash::Hasher;
 use log::Level;
 use packet::{Packets, SharedPackets};
-use poh_service::PohService;
+use poh_recorder::PohRecorder;
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
+// number of threads is 1 until mt bank is ready
+pub const NUM_THREADS: usize = 1;
+
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     /// Handle to the stage's thread.
-    thread_hdl: JoinHandle<()>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
+pub enum Config {
+    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
+    Tick(usize),
+    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 poh once and producing 1
+    /// tick.
+    Sleep(Duration),
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        // TODO: Change this to Tick to enable PoH
+        Config::Sleep(Duration::from_millis(500))
+    }
+}
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     /// Discard input packets using `packet_recycler` to minimize memory
@@ -37,48 +55,74 @@ impl BankingStage {
     pub fn new(
         bank: Arc<Bank>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        tick_duration: Option<Duration>,
+        config: Config,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
-        let thread_hdl = Builder::new()
-            .name("solana-banking-stage".to_string())
+        let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
+        let poh = PohRecorder::new(bank.clone(), entry_sender);
+        let tick_poh = poh.clone();
+        // Tick producer is a headless producer, so when it exits it should notify the banking stage.
+        // Since channel are not used to talk between these threads an AtomicBool is used as a
+        // signal.
+        let poh_exit = Arc::new(AtomicBool::new(false));
+        let banking_exit = poh_exit.clone();
+        // Single thread to generate entries from many banks.
+        // This thread talks to poh_service and broadcasts the entries once they have been recorded.
+        // Once an entry has been recorded, its last_id is registered with the bank.
+        let tick_producer = Builder::new()
+            .name("solana-banking-stage-tick_producer".to_string())
             .spawn(move || {
-                let poh_service = PohService::new(bank.last_id(), tick_duration.is_some());
+                if let Err(e) = Self::tick_producer(tick_poh, config, &poh_exit) {
+                    match e {
+                        Error::SendError => (),
+                        _ => error!(
+                            "solana-banking-stage-tick_producer unexpected error {:?}",
+                            e
+                        ),
+                    }
+                }
+                debug!("tick producer exiting");
+                poh_exit.store(true, Ordering::Relaxed);
+            }).unwrap();
 
-                let mut last_tick = Instant::now();
-
-                loop {
-                    let timeout =
-                        tick_duration.map(|duration| duration - (Instant::now() - last_tick));
-
-                    if let Err(e) = Self::process_packets(
-                        timeout,
-                        &bank,
-                        &poh_service,
-                        &verified_receiver,
-                        &entry_sender,
-                    ) {
-                        match e {
-                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            Error::RecvError(_) => break,
-                            Error::SendError => break,
-                            _ => {
-                                error!("process_packets() {:?}", e);
+        // Many banks that process transactions in parallel.
+        let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
+            .into_iter()
+            .map(|_| {
+                let thread_bank = bank.clone();
+                let thread_verified_receiver = shared_verified_receiver.clone();
+                let thread_poh = poh.clone();
+                let thread_banking_exit = banking_exit.clone();
+                Builder::new()
+                    .name("solana-banking-stage-tx".to_string())
+                    .spawn(move || {
+                        loop {
+                            if let Err(e) = Self::process_packets(
+                                &thread_bank,
+                                &thread_verified_receiver,
+                                &thread_poh,
+                            ) {
+                                debug!("got error {:?}", e);
+                                match e {
+                                    Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                                        break
+                                    }
+                                    Error::RecvError(_) => break,
+                                    Error::SendError => break,
+                                    _ => error!("solana-banking-stage-tx {:?}", e),
+                                }
+                            }
+                            if thread_banking_exit.load(Ordering::Relaxed) {
+                                debug!("tick service exited");
                                 break;
                             }
                         }
-                    }
-                    if tick_duration.is_some() && last_tick.elapsed() > tick_duration.unwrap() {
-                        if let Err(e) = Self::tick(&poh_service, &bank, &entry_sender) {
-                            error!("tick() {:?}", e);
-                        }
-                        last_tick = Instant::now();
-                    }
-                }
-                poh_service.join().unwrap();
-            }).unwrap();
-        (BankingStage { thread_hdl }, entry_receiver)
+                        thread_banking_exit.store(true, Ordering::Relaxed);
+                    }).unwrap()
+            }).collect();
+        thread_hdls.push(tick_producer);
+        (BankingStage { thread_hdls }, entry_receiver)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
@@ -93,32 +137,32 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick(
-        poh_service: &PohService,
-        bank: &Arc<Bank>,
-        entry_sender: &Sender<Vec<Entry>>,
-    ) -> Result<()> {
-        let poh = poh_service.tick();
-        bank.register_entry_id(&poh.id);
-
-        let entry = Entry {
-            num_hashes: poh.num_hashes,
-            id: poh.id,
-            transactions: vec![],
-        };
-        entry_sender.send(vec![entry])?;
-        Ok(())
+    fn tick_producer(poh: PohRecorder, config: Config, poh_exit: &AtomicBool) -> Result<()> {
+        loop {
+            match config {
+                Config::Tick(num) => {
+                    for _ in 0..num {
+                        poh.hash();
+                    }
+                }
+                Config::Sleep(duration) => {
+                    sleep(duration);
+                }
+            }
+            poh.tick()?;
+            if poh_exit.load(Ordering::Relaxed) {
+                debug!("tick service exited");
+                return Ok(());
+            }
+        }
     }
 
     fn process_transactions(
         bank: &Arc<Bank>,
-        transactions: &[Transaction],
-        poh_service: &PohService,
-    ) -> Result<Vec<Entry>> {
-        let mut entries = Vec::new();
-
-        debug!("processing: {}", transactions.len());
-
+        transactions: Vec<Transaction>,
+        poh: &PohRecorder,
+    ) -> Result<()> {
+        debug!("transactions: {}", transactions.len());
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
@@ -140,46 +184,29 @@ impl BankingStage {
                     }
                 }).collect();
 
-            debug!("processed: {}", processed_transactions.len());
-
-            chunk_start = chunk_end;
-
-            let hash = hasher.result();
-
             if !processed_transactions.is_empty() {
-                let poh = poh_service.record(hash);
-
-                bank.register_entry_id(&poh.id);
-                entries.push(Entry {
-                    num_hashes: poh.num_hashes,
-                    id: poh.id,
-                    transactions: processed_transactions,
-                });
+                let hash = hasher.result();
+                debug!("processed ok: {} {}", processed_transactions.len(), hash);
+                poh.record(hash, processed_transactions)?;
             }
+            chunk_start = chunk_end;
         }
-
-        debug!("done process_transactions, {} entries", entries.len());
-
-        Ok(entries)
+        debug!("done process_transactions");
+        Ok(())
     }
 
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
-        timeout: Option<Duration>,
         bank: &Arc<Bank>,
-        poh_service: &PohService,
-        verified_receiver: &Receiver<Vec<(SharedPackets, Vec<u8>)>>,
-        entry_sender: &Sender<Vec<Entry>>,
+        verified_receiver: &Arc<Mutex<Receiver<Vec<(SharedPackets, Vec<u8>)>>>>,
+        poh: &PohRecorder,
     ) -> Result<()> {
         let recv_start = Instant::now();
-        // TODO pass deadline to recv_deadline() when/if it becomes available?
-        let mms = if let Some(timeout) = timeout {
-            verified_receiver.recv_timeout(timeout)?
-        } else {
-            verified_receiver.recv()?
-        };
-        let now = Instant::now();
+        let mms = verified_receiver
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_millis(100))?;
         let mut reqs_len = 0;
         let mms_len = mms.len();
         info!(
@@ -210,14 +237,12 @@ impl BankingStage {
                     },
                 }).collect();
             debug!("verified transactions {}", transactions.len());
-
-            let entries = Self::process_transactions(bank, &transactions, poh_service)?;
-            entry_sender.send(entries)?;
+            Self::process_transactions(bank, transactions, poh)?;
         }
 
         inc_new_counter_info!(
             "banking_stage-time_ms",
-            timing::duration_as_ms(&now.elapsed()) as usize
+            timing::duration_as_ms(&proc_start.elapsed()) as usize
         );
         let total_time_s = timing::duration_as_s(&proc_start.elapsed());
         let total_time_ms = timing::duration_as_ms(&proc_start.elapsed());
@@ -242,7 +267,10 @@ impl Service for BankingStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.thread_hdl.join()
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
+        }
+        Ok(())
     }
 }
 
@@ -259,12 +287,22 @@ mod tests {
     use transaction::Transaction;
 
     #[test]
-    fn test_banking_stage_shutdown() {
+    fn test_banking_stage_shutdown1() {
         let bank = Bank::new(&Mint::new(2));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, None);
+            BankingStage::new(Arc::new(bank), verified_receiver, Default::default());
         drop(verified_sender);
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage_shutdown2() {
+        let bank = Bank::new(&Mint::new(2));
+        let (_verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) =
+            BankingStage::new(Arc::new(bank), verified_receiver, Default::default());
+        drop(entry_receiver);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
@@ -276,9 +314,9 @@ mod tests {
         let (banking_stage, entry_receiver) = BankingStage::new(
             bank.clone(),
             verified_receiver,
-            Some(Duration::from_millis(1)),
+            Config::Sleep(Duration::from_millis(1)),
         );
-        sleep(Duration::from_millis(50));
+        sleep(Duration::from_millis(500));
         drop(verified_sender);
 
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
@@ -289,26 +327,13 @@ mod tests {
     }
 
     #[test]
-    fn test_banking_stage_no_tick() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
-        let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(bank, verified_receiver, None);
-        sleep(Duration::from_millis(1000));
-        drop(verified_sender);
-
-        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
-        assert!(entries.len() == 0);
-        assert_eq!(banking_stage.join().unwrap(), ());
-    }
-
-    #[test]
     fn test_banking_stage_entries_only() {
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, None);
+            BankingStage::new(bank, verified_receiver, Default::default());
 
         // good tx
         let keypair = mint.keypair();
@@ -333,59 +358,19 @@ mod tests {
 
         drop(verified_sender);
 
-        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
-        assert_eq!(entries.len(), 1);
-        assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        //receive entries + ticks
+        let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
+        assert!(entries.len() >= 1);
+
+        let mut last_id = start_hash;
+        entries.iter().for_each(|entries| {
+            assert_eq!(entries.len(), 1);
+            assert!(entries.verify(&last_id));
+            last_id = entries.last().unwrap().id;
+        });
+        drop(entry_receiver);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
-
-    #[test]
-    fn test_banking_stage() {
-        let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
-        let start_hash = bank.last_id();
-        let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
-            bank.clone(),
-            verified_receiver,
-            Some(Duration::from_millis(1)),
-        );
-
-        // wait for some ticks
-        sleep(Duration::from_millis(50));
-
-        // good tx
-        let keypair = mint.keypair();
-        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
-
-        // good tx, but no verify
-        let tx_no_ver = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
-
-        // bad tx, AccountNotFound
-        let keypair = Keypair::new();
-        let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
-
-        // send 'em over
-        let recycler = PacketRecycler::default();
-        let packets = to_packets(&recycler, &[tx, tx_no_ver, tx_anf]);
-
-        // glad they all fit
-        assert_eq!(packets.len(), 1);
-        verified_sender                       // tx, no_ver, anf
-            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
-            .unwrap();
-
-        drop(verified_sender);
-
-        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
-        assert!(entries.len() > 1);
-        assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
-
-        assert_eq!(banking_stage.join().unwrap(), ());
-    }
-
     #[test]
     fn test_banking_stage_entryfication() {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
@@ -396,7 +381,7 @@ mod tests {
         let recycler = PacketRecycler::default();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, None);
+            BankingStage::new(bank.clone(), verified_receiver, Default::default());
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
@@ -419,7 +404,7 @@ mod tests {
         // Collect the ledger and feed it to a new bank.
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         // same assertion as running through the bank, really...
-        assert_eq!(entries.len(), 2);
+        assert!(entries.len() >= 2);
 
         // Assert the user holds one token, not two. If the stage only outputs one
         // entry, then the second transaction will be rejected, because it drives
@@ -434,5 +419,4 @@ mod tests {
         }
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
     }
-
 }
