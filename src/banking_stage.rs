@@ -4,6 +4,7 @@
 
 use bank::Bank;
 use bincode::deserialize;
+use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
 use hash::Hasher;

@@ -3,6 +3,7 @@
 //! access read to a persistent file-based ledger.
 
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
+use budget_transaction::BudgetTransaction;
 use entry::Entry;
 use hash::Hash;
 use instruction::Vote;
@@ -456,8 +457,12 @@ impl Block for [Entry] {
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
         self.iter()
-            .flat_map(|entry| entry.transactions.iter().filter_map(Transaction::vote))
-            .collect()
+            .flat_map(|entry| {
+                entry
+                    .transactions
+                    .iter()
+                    .filter_map(BudgetTransaction::vote)
+            }).collect()
     }
 }
 
@@ -576,6 +581,7 @@ pub fn genesis(name: &str, num: i64) -> (Mint, String) {
 mod tests {
     use super::*;
     use bincode::serialized_size;
+    use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
@@ -584,7 +590,7 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::{BudgetTransaction, Transaction};
+    use transaction::Transaction;
 
     #[test]
     fn test_verify_slice() {

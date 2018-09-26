@@ -2,6 +2,7 @@
 
 use bank::Bank;
 use bincode::serialize;
+use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use crdt::Crdt;
 use hash::Hash;
@@ -16,7 +17,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
 use timing;
-use transaction::{BudgetTransaction, Transaction};
+use transaction::Transaction;
 
 pub const VOTE_TIMEOUT_MS: u64 = 1000;
 
