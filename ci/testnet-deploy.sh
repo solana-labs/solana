@@ -9,6 +9,7 @@ validatorNodeCount=10
 publicNetwork=false
 snapChannel=edge
 delete=false
+enableGpu=false
 
 usage() {
   exitcode=0
@@ -30,6 +31,7 @@ Deploys a CD testnet
    -n [number]          - Number of validator nodes (default: $validatorNodeCount)
    -c [number]          - Number of client nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
+   -g                   - Enable GPU (default: $enableGpu)
    -a [address]         - Set the leader node's external IP address to this GCE address
    -d                   - Delete the network
 
@@ -45,7 +47,7 @@ zone=$2
 [[ -n $zone ]] || usage "Zone not specified"
 shift 2
 
-while getopts "h?p:Pn:c:s:a:d" opt; do
+while getopts "h?p:Pn:c:s:ga:d" opt; do
   case $opt in
   h | \?)
     usage
@@ -69,6 +71,9 @@ while getopts "h?p:Pn:c:s:a:d" opt; do
       ;;
     esac
     ;;
+  g)
+    enableGpu=true
+    ;;
   a)
     leaderAddress=$OPTARG
     ;;
@@ -86,10 +91,13 @@ gce_create_args=(
   -a "$leaderAddress"
   -c "$clientNodeCount"
   -n "$validatorNodeCount"
-  -g
   -p "$netName"
   -z "$zone"
 )
+
+if $enableGpu; then
+  gce_create_args+=(-g)
+fi
 
 if $publicNetwork; then
   gce_create_args+=(-P)
