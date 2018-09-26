@@ -13,10 +13,10 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use bincode::{deserialize, serialize};
+use budget_instruction::Vote;
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
-use instruction::Vote;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
@@ -1398,13 +1398,13 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 
 #[cfg(test)]
 mod tests {
+    use budget_instruction::Vote;
     use crdt::{
         Crdt, CrdtError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE, GOSSIP_PURGE_MILLIS,
         GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
     use entry::Entry;
     use hash::{hash, Hash};
-    use instruction::Vote;
     use ledger::{LedgerWindow, LedgerWriter};
     use logger;
     use packet::BlobRecycler;
