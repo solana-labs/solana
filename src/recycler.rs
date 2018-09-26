@@ -94,7 +94,7 @@ impl<T: Default + Reset> Recycler<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem;
+    #[cfg(feature = "recycler")]
     use std::sync::mpsc::channel;
 
     #[derive(Default)]
@@ -151,6 +151,7 @@ mod tests {
     #[test]
     #[cfg(feature = "recycler")]
     fn test_window() {
+        use std::mem;
         let recycler: Recycler<Foo> = Recycler::default();
         let mut window = vec![None];
         let (sender, receiver) = channel();
