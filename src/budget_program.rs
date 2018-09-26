@@ -5,7 +5,7 @@ use budget::Budget;
 use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
 use payment_plan::Witness;
-use signature::Pubkey;
+use pubkey::Pubkey;
 use std::io;
 use transaction::Transaction;
 
@@ -271,7 +271,8 @@ mod test {
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;
-    use signature::{GenKeys, Keypair, KeypairUtil, Pubkey};
+    use pubkey::Pubkey;
+    use signature::{GenKeys, Keypair, KeypairUtil};
     use transaction::Transaction;
 
     #[test]

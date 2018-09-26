@@ -4,7 +4,7 @@
 
 use account::Account;
 use bincode::deserialize;
-use signature::Pubkey;
+use pubkey::Pubkey;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

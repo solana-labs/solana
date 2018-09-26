@@ -2,8 +2,9 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
+use pubkey::Pubkey;
 use ring::rand::SystemRandom;
-use signature::{Keypair, KeypairUtil, Pubkey};
+use signature::{Keypair, KeypairUtil};
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 use untrusted::Input;

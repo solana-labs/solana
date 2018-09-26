@@ -2,7 +2,8 @@
 
 use bincode::serialize;
 use hash::Hash;
-use signature::{Keypair, KeypairUtil, Pubkey};
+use pubkey::Pubkey;
+use signature::{Keypair, KeypairUtil};
 use system_program::SystemProgram;
 use transaction::Transaction;
 

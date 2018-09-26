@@ -7,7 +7,8 @@ use budget_program::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::Payment;
-use signature::{Keypair, Pubkey};
+use pubkey::Pubkey;
+use signature::Keypair;
 use transaction::Transaction;
 
 pub trait BudgetTransaction {

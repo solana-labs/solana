@@ -8,8 +8,8 @@ use erasure;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::{BlobRecycler, SharedBlob};
+use pubkey::Pubkey;
 use result::Result;
-use signature::Pubkey;
 use std::cmp;
 use std::mem;
 use std::net::SocketAddr;
@@ -450,7 +450,7 @@ pub fn new_window_from_entries(
 #[cfg(test)]
 mod test {
     use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
-    use signature::Pubkey;
+    use pubkey::Pubkey;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;

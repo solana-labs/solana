@@ -1,4 +1,4 @@
-use signature::Pubkey;
+use pubkey::Pubkey;
 
 /// An Account with userdata that is stored on chain
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

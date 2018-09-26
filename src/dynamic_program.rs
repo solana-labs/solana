@@ -4,7 +4,7 @@ extern crate generic_array;
 use account::Account;
 use libc;
 use libloading;
-use signature::Pubkey;
+use pubkey::Pubkey;
 use std::path::PathBuf;
 
 #[cfg(debug_assertions)]
@@ -107,7 +107,7 @@ mod tests {
     use super::*;
     use account::Account;
     use bincode::serialize;
-    use signature::Pubkey;
+    use pubkey::Pubkey;
     use std::path::Path;
     use std::thread;
 
