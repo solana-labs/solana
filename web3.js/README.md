@@ -66,9 +66,11 @@ console.log(solanaWeb3);
 ```
 
 ## Examples
-See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory for small snippets
+See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory for small snippets.
 
-A more complete web-based wallet example can be found at https://github.com/solana-labs/example-webwallet
+Standalone examples:
+* Web wallet: https://github.com/solana-labs/example-webwallet
+* Tic-tac-toe: https://github.com/solana-labs/example-tictactoe
 
 ## Releases
 Releases are available on [Github](https://github.com/solana-labs/solana-web3.js/releases)
