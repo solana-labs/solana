@@ -22,6 +22,7 @@ impl<T: Default + Reset> Recyclable<T> {
     }
 }
 
+#[cfg(feature = "recycler")]
 impl<T: Default + Reset> Drop for Recyclable<T> {
     fn drop(&mut self) {
         if Arc::strong_count(&self.val) == 1 {
@@ -93,7 +94,7 @@ impl<T: Default + Reset> Recycler<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem;
+    #[cfg(feature = "recycler")]
     use std::sync::mpsc::channel;
 
     #[derive(Default)]
@@ -115,6 +116,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_recycle() {
         let recycler: Recycler<Foo> = Recycler::default();
 
@@ -129,6 +131,7 @@ mod tests {
         assert_eq!(recycler.landfill.lock().unwrap().len(), 0);
     }
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_channel() {
         let recycler: Recycler<Foo> = Recycler::default();
         let (sender, receiver) = channel();
@@ -146,7 +149,9 @@ mod tests {
         assert_eq!(recycler.landfill.lock().unwrap().len(), 1);
     }
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_window() {
+        use std::mem;
         let recycler: Recycler<Foo> = Recycler::default();
         let mut window = vec![None];
         let (sender, receiver) = channel();
