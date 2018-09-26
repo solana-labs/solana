@@ -163,8 +163,7 @@ export class BudgetProgram {
   }
 
   /**
-   * Generates a transaction that transfer tokens once a set of conditions are
-   * met
+   * Generates a transaction that transfers tokens once any of the conditions are met
    */
   static pay(
     from: PublicKey,
@@ -173,7 +172,6 @@ export class BudgetProgram {
     amount: number,
     ...conditions: Array<BudgetCondition>
   ): Transaction {
-
     const userdata = Buffer.alloc(1024);
     let pos = 0;
     userdata.writeUInt32LE(0, pos); // NewContract instruction
@@ -222,7 +220,7 @@ export class BudgetProgram {
       });
 
     case 2:
-      userdata.writeUInt32LE(2, pos); // Budget enum = Ok
+      userdata.writeUInt32LE(2, pos); // Budget enum = Or
       pos += 4;
 
       for (let condition of conditions) {
@@ -247,6 +245,51 @@ export class BudgetProgram {
     }
   }
 
+  /**
+   * Generates a transaction that transfers tokens once both conditions are met
+   */
+  static payOnBoth(
+    from: PublicKey,
+    program: PublicKey,
+    to: PublicKey,
+    amount: number,
+    condition1: BudgetCondition,
+    condition2: BudgetCondition,
+  ): Transaction {
+    const userdata = Buffer.alloc(1024);
+    let pos = 0;
+    userdata.writeUInt32LE(0, pos); // NewContract instruction
+    pos += 4;
+
+    userdata.writeUInt32LE(amount, pos); // Contract.tokens
+    pos += 8;
+
+    userdata.writeUInt32LE(3, pos); // Budget enum = And
+    pos += 4;
+
+    for (let condition of [condition1, condition2]) {
+      const conditionData = serializeCondition(condition);
+      conditionData.copy(userdata, pos);
+      pos += conditionData.length;
+    }
+
+    const paymentData = serializePayment({amount, to});
+    paymentData.copy(userdata, pos);
+    pos += paymentData.length;
+
+    return new Transaction({
+      fee: 0,
+      keys: [from, program, to],
+      programId: this.programId,
+      userdata: userdata.slice(0, pos),
+    });
+  }
+
+
+  /**
+   * Generates a transaction that applies a timestamp, which could enable a
+   * pending payment to proceed.
+   */
   static applyTimestamp(from: PublicKey, program: PublicKey, to: PublicKey, when: Date): Transaction {
     const whenData = serializeDate(when);
     const userdata = Buffer.alloc(4 + whenData.length);
@@ -262,6 +305,10 @@ export class BudgetProgram {
     });
   }
 
+  /**
+   * Generates a transaction that applies a signature, which could enable a
+   * pending payment to proceed.
+   */
   static applySignature(from: PublicKey, program: PublicKey, to: PublicKey): Transaction {
     const userdata = Buffer.alloc(4);
     userdata.writeUInt32LE(2, 0); // ApplySignature instruction

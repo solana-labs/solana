@@ -38,6 +38,17 @@ test('pay', () => {
   );
   expect(transaction.keys).toHaveLength(3);
   // TODO: Validate transaction contents more
+
+  transaction = BudgetProgram.payOnBoth(
+    from.publicKey,
+    program.publicKey,
+    to.publicKey,
+    123,
+    BudgetProgram.signatureCondition(from.publicKey),
+    BudgetProgram.timestampCondition(from.publicKey, new Date()),
+  );
+  expect(transaction.keys).toHaveLength(3);
+  // TODO: Validate transaction contents more
 });
 
 test('apply', () => {
