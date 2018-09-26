@@ -1,7 +1,7 @@
 extern crate bincode;
 extern crate generic_array;
 
-use bank::Account;
+use account::Account;
 use libc;
 use libloading;
 use signature::Pubkey;
@@ -105,7 +105,7 @@ impl DynamicProgram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Account;
+    use account::Account;
     use bincode::serialize;
     use signature::Pubkey;
     use std::path::Path;

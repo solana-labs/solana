@@ -2,7 +2,7 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use bank::Account;
+use account::Account;
 use bincode::deserialize;
 use signature::Pubkey;
 use transaction::Transaction;

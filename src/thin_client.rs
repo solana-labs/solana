@@ -3,7 +3,8 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use bank::{Account, Bank};
+use account::Account;
+use bank::Bank;
 use bincode::{deserialize, serialize};
 use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;

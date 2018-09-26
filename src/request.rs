@@ -1,6 +1,6 @@
 //! The `request` module defines the messages for the thin client.
 
-use bank::Account;
+use account::Account;
 use hash::Hash;
 use signature::{Pubkey, Signature};
 

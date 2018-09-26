@@ -1,6 +1,6 @@
 //! system program
 
-use bank::Account;
+use account::Account;
 use bincode::deserialize;
 use dynamic_program::DynamicProgram;
 use signature::Pubkey;
@@ -97,7 +97,7 @@ impl SystemProgram {
 }
 #[cfg(test)]
 mod test {
-    use bank::Account;
+    use account::Account;
     use bincode::serialize;
     use dynamic_program::KeyedAccount;
     use hash::Hash;
