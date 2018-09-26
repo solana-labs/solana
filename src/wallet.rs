@@ -1,6 +1,7 @@
 use bincode::{deserialize, serialize};
 use bs58;
 use budget_program::BudgetState;
+use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
 use crdt::NodeInfo;
@@ -23,7 +24,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
-use transaction::{BudgetTransaction, Transaction};
+use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {

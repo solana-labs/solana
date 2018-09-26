@@ -268,10 +268,12 @@ mod test {
     use bank::Account;
     use bincode::serialize;
     use budget_program::{BudgetError, BudgetState};
+    use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;
     use signature::{GenKeys, Keypair, KeypairUtil, Pubkey};
-    use transaction::{BudgetTransaction, Transaction};
+    use transaction::Transaction;
+
     #[test]
     fn test_serializer() {
         let mut a = Account::new(0, 512, BudgetState::id());

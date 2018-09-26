@@ -3,6 +3,7 @@
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use bincode::{serialize_into, serialized_size};
+use budget_transaction::BudgetTransaction;
 use hash::Hash;
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
@@ -226,12 +227,13 @@ pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transact
 #[cfg(test)]
 mod tests {
     use super::*;
+    use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::Entry;
     use hash::hash;
     use signature::{Keypair, KeypairUtil};
     use system_transaction::SystemTransaction;
-    use transaction::{BudgetTransaction, Transaction};
+    use transaction::Transaction;
 
     #[test]
     fn test_entry_verify() {

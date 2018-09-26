@@ -6,6 +6,7 @@
 use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
+use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use dynamic_program::{DynamicProgram, KeyedAccount};
 use entry::Entry;
