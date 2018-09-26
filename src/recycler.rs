@@ -22,9 +22,9 @@ impl<T: Default + Reset> Recyclable<T> {
     }
 }
 
+#[cfg(feature = "recycler")]
 impl<T: Default + Reset> Drop for Recyclable<T> {
     fn drop(&mut self) {
-        #[cfg(feature = "recycler")]
         if Arc::strong_count(&self.val) == 1 {
             // this isn't thread safe, it will allow some concurrent drops to leak and not recycle
             // if that happens the allocator will end up allocating from the heap
@@ -116,6 +116,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_recycle() {
         let recycler: Recycler<Foo> = Recycler::default();
 
@@ -130,6 +131,7 @@ mod tests {
         assert_eq!(recycler.landfill.lock().unwrap().len(), 0);
     }
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_channel() {
         let recycler: Recycler<Foo> = Recycler::default();
         let (sender, receiver) = channel();
@@ -147,6 +149,7 @@ mod tests {
         assert_eq!(recycler.landfill.lock().unwrap().len(), 1);
     }
     #[test]
+    #[cfg(feature = "recycler")]
     fn test_window() {
         let recycler: Recycler<Foo> = Recycler::default();
         let mut window = vec![None];
