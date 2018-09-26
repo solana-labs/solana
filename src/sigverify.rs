@@ -152,7 +152,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     let mut rvs = Vec::new();
 
     for packets in batches {
-        locks.push(packets.read());
+        locks.push(packets.read().unwrap());
     }
     let mut num = 0;
     for p in locks {
