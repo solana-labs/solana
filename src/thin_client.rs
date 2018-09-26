@@ -21,8 +21,9 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
+use system_transaction::SystemTransaction;
 use timing;
-use transaction::{SystemTransaction, Transaction};
+use transaction::Transaction;
 
 use influx_db_client as influxdb;
 use metrics;

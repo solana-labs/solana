@@ -4,7 +4,8 @@ use entry::Entry;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil, Pubkey};
-use transaction::{SystemTransaction, Transaction};
+use system_transaction::SystemTransaction;
+use transaction::Transaction;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
