@@ -798,7 +798,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
     }
 
-    // TODO: This test verifies potentially undesirable behavior
+    // TODO: This test demonstrates that fees are not paid when a program fails.
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
@@ -807,17 +807,32 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 contract context
-        let tx = Transaction::system_new(&mint.keypair(), dest.pubkey(), 2, mint.last_id());
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            dest.pubkey(),
+            mint.last_id(),
+            2,
+            0,
+            Pubkey::default(),
+            1,
+        );
         let signature = tx.signature;
         assert!(!bank.has_signature(&signature));
         let res = bank.process_transaction(&tx);
-        // This is the potentially wrong behavior
-        // result failed, but signature is registered
+
+        // Result failed, but signature is registered
         assert!(!res.is_ok());
         assert!(bank.has_signature(&signature));
-        // sanity check that tokens didn't move
+        assert_matches!(
+            bank.get_signature_status(&signature),
+            Err(BankError::ResultWithNegativeTokens(_))
+        );
+
+        // The tokens didn't move, but the from address paid the transaction fee.
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+
+        // BUG: This should be the original balance minus the transaction fee.
+        //assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
@@ -889,6 +904,16 @@ mod tests {
             bank.reserve_signature_with_last_id(&signature, &mint.last_id())
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn test_get_signature_status() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let signature = Signature::default();
+        bank.reserve_signature_with_last_id(&signature, &mint.last_id())
+            .expect("reserve signature");
+        assert!(bank.get_signature_status(&signature).is_ok());
     }
 
     #[test]
