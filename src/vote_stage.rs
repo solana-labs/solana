@@ -2,7 +2,6 @@
 
 use bank::Bank;
 use bincode::serialize;
-use budget_transaction::BudgetTransaction;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use hash::Hash;
@@ -19,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
 use timing;
 use transaction::Transaction;
+use vote_transaction::VoteTransaction;
 
 pub const VOTE_TIMEOUT_MS: u64 = 1000;
 
@@ -39,7 +39,7 @@ pub fn create_new_signed_vote_blob(
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
         wcluster_info.new_vote(*last_id)
     }?;
-    let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
+    let tx = Transaction::vote_new(&keypair, vote, *last_id, 0);
     {
         let mut blob = shared_blob.write().unwrap();
         let bytes = serialize(&tx)?;
@@ -164,7 +164,6 @@ pub mod tests {
     use super::*;
     use bank::Bank;
     use bincode::deserialize;
-    use budget_instruction::Vote;
     use cluster_info::{ClusterInfo, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
@@ -176,6 +175,7 @@ pub mod tests {
     use std::time::Duration;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
+    use vote_program::Vote;
 
     #[test]
     fn test_send_leader_vote() {

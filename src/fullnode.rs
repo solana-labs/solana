@@ -583,16 +583,14 @@ impl Fullnode {
 
     pub fn new_bank_from_ledger(
         ledger_path: &str,
-        leader_scheduler: &mut LeaderScheduler,
     ) -> (Bank, u64, u64, Vec<Entry>) {
         let bank = Bank::new_with_builtin_programs();
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
         info!("processing ledger...");
-        let (tick_height, entry_height, ledger_tail) = bank
-            .process_ledger(entries, leader_scheduler)
-            .expect("process_ledger");
+        let (tick_height, entry_height, ledger_tail) =
+            bank.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);

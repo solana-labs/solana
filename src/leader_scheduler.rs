@@ -4,8 +4,6 @@
 use bank::Bank;
 
 use bincode::serialize;
-use budget_instruction::Vote;
-use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use hash::{hash, Hash};
@@ -17,7 +15,9 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
+use vote_transaction::VoteTransaction;
 use transaction::Transaction;
+use vote_program::Vote;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -518,7 +518,7 @@ pub fn make_active_set_entries(
         version: 0,
         contact_info_version: 0,
     };
-    let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, *last_tick_id, 0);
+    let vote_tx = Transaction::vote_new(&active_keypair, vote, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 

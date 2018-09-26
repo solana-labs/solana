@@ -13,7 +13,6 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use bincode::{deserialize, serialize, serialized_size};
-use budget_instruction::Vote;
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
@@ -36,6 +35,7 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
 use timing::{duration_as_ms, timestamp};
+use vote_program::Vote;
 use window::{SharedWindow, WindowIndex};
 
 pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
@@ -1388,7 +1388,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use budget_instruction::Vote;
+    use vote_program::Vote;
     use cluster_info::{
         ClusterInfo, ClusterInfoError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE,
         GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,

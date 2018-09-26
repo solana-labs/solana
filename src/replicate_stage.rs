@@ -93,9 +93,7 @@ impl ReplicateStage {
                 };
 
                 res = bank.process_entry(
-                    &entry,
-                    tick_height,
-                    &mut *leader_scheduler.write().unwrap(),
+                    &entry
                 );
 
                 // Will run only if leader_scheduler.use_only_bootstrap_leader is false

@@ -172,11 +172,6 @@ impl BudgetState {
                     Err(BudgetError::UninitializedContract)
                 }
             }
-            Instruction::NewVote(_vote) => {
-                // TODO: move vote instruction into a different contract
-                trace!("GOT VOTE! last_id={}", tx.last_id);
-                Ok(())
-            }
         }
     }
     fn serialize(&self, output: &mut [u8]) -> Result<(), BudgetError> {
