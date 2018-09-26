@@ -168,7 +168,7 @@ export class BudgetProgram {
    */
   static pay(
     from: PublicKey,
-    contract: PublicKey,
+    program: PublicKey,
     to: PublicKey,
     amount: number,
     ...conditions: Array<BudgetCondition>
@@ -216,7 +216,7 @@ export class BudgetProgram {
 
       return new Transaction({
         fee: 0,
-        keys: [from, contract, to],
+        keys: [from, program, to],
         programId: this.programId,
         userdata: userdata.slice(0, pos),
       });
@@ -237,7 +237,7 @@ export class BudgetProgram {
 
       return new Transaction({
         fee: 0,
-        keys: [from, contract, to],
+        keys: [from, program, to],
         programId: this.programId,
         userdata: userdata.slice(0, pos),
       });
@@ -247,7 +247,7 @@ export class BudgetProgram {
     }
   }
 
-  static applyTimestamp(from: PublicKey, contract: PublicKey, to: PublicKey, when: Date): Transaction {
+  static applyTimestamp(from: PublicKey, program: PublicKey, to: PublicKey, when: Date): Transaction {
     const whenData = serializeDate(when);
     const userdata = Buffer.alloc(4 + whenData.length);
 
@@ -256,19 +256,19 @@ export class BudgetProgram {
 
     return new Transaction({
       fee: 0,
-      keys: [from, contract, to],
+      keys: [from, program, to],
       programId: this.programId,
       userdata,
     });
   }
 
-  static applySignature(from: PublicKey, contract: PublicKey, to: PublicKey): Transaction {
+  static applySignature(from: PublicKey, program: PublicKey, to: PublicKey): Transaction {
     const userdata = Buffer.alloc(4);
     userdata.writeUInt32LE(2, 0); // ApplySignature instruction
 
     return new Transaction({
       fee: 0,
-      keys: [from, contract, to],
+      keys: [from, program, to],
       programId: this.programId,
       userdata,
     });
