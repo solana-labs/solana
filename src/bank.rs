@@ -26,7 +26,7 @@ use storage_program::StorageProgram;
 use system_program::SystemProgram;
 use tictactoe_program::TicTacToeProgram;
 use timing::{duration_as_us, timestamp};
-use transaction::Transaction;
+use transaction::{SystemTransaction, Transaction};
 use window::WINDOW_SIZE;
 
 /// An Account with userdata that is stored on chain
@@ -673,7 +673,7 @@ impl Bank {
         to: Pubkey,
         last_id: Hash,
     ) -> Result<Signature> {
-        let tx = Transaction::new(keypair, to, n, last_id);
+        let tx = Transaction::system_new(keypair, to, n, last_id);
         let signature = tx.signature;
         self.process_transaction(&tx).map(|_| signature)
     }
@@ -798,7 +798,7 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 contract context
-        let tx = Transaction::new(&mint.keypair(), dest.pubkey(), 2, mint.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), dest.pubkey(), 2, mint.last_id());
         let signature = tx.signature;
         assert!(!bank.has_signature(&signature));
         let res = bank.process_transaction(&tx);
@@ -930,8 +930,8 @@ mod tests {
         let mint = Mint::new(2);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
-        let tx0 = Transaction::new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
-        let tx1 = Transaction::new(&keypair, mint.pubkey(), 1, mint.last_id());
+        let tx0 = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
+        let tx1 = Transaction::system_new(&keypair, mint.pubkey(), 1, mint.last_id());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -946,7 +946,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
         let entry = next_entry(&mint.last_id(), 1, vec![]);
-        let tx = Transaction::new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
+        let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(

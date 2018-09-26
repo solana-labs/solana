@@ -22,7 +22,7 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
-use transaction::Transaction;
+use transaction::{BudgetTransaction, SystemTransaction, Transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
@@ -367,7 +367,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let last_id = get_last_id(&config)?;
 
             if timestamp == None && *witnesses == None {
-                let tx = Transaction::new(&config.id, to, tokens, last_id);
+                let tx = Transaction::system_new(&config.id, to, tokens, last_id);
                 let signature_str = serialize_and_send_tx(&config, &tx)?;
                 Ok(signature_str.to_string())
             } else if *witnesses == None {

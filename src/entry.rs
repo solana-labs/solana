@@ -230,7 +230,7 @@ mod tests {
     use entry::Entry;
     use hash::hash;
     use signature::{Keypair, KeypairUtil};
-    use transaction::Transaction;
+    use transaction::{BudgetTransaction, SystemTransaction, Transaction};
 
     #[test]
     fn test_entry_verify() {
@@ -248,8 +248,8 @@ mod tests {
 
         // First, verify entries
         let keypair = Keypair::new();
-        let tx0 = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
-        let tx1 = Transaction::new(&keypair, keypair.pubkey(), 1, zero);
+        let tx0 = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
+        let tx1 = Transaction::system_new(&keypair, keypair.pubkey(), 1, zero);
         let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
@@ -312,7 +312,7 @@ mod tests {
     fn test_next_entry_panic() {
         let zero = Hash::default();
         let keypair = Keypair::new();
-        let tx = Transaction::new(&keypair, keypair.pubkey(), 0, zero);
+        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
     }
 }

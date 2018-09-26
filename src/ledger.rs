@@ -584,7 +584,7 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::Transaction;
+    use transaction::{BudgetTransaction, Transaction};
 
     #[test]
     fn test_verify_slice() {
