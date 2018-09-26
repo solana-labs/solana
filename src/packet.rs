@@ -8,7 +8,6 @@ use hash::Hash;
 use ledger::{next_entries_mut, Block};
 use log::Level;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
-use recycler;
 use result::{Error, Result};
 use serde::Serialize;
 use solana_program_interface::pubkey::Pubkey;
@@ -17,12 +16,11 @@ use std::io;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicUsize;
+use std::sync::{Arc, RwLock};
 
-pub type SharedPackets = recycler::Recyclable<Packets>;
-pub type SharedBlob = recycler::Recyclable<Blob>;
+pub type SharedPackets = Arc<RwLock<Packets>>;
+pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
-pub type PacketRecycler = recycler::Recycler<Packets>;
-pub type BlobRecycler = recycler::Recycler<Blob>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
@@ -64,12 +62,6 @@ impl Default for Packet {
             data: [0u8; PACKET_DATA_SIZE],
             meta: Meta::default(),
         }
-    }
-}
-
-impl recycler::Reset for Packet {
-    fn reset(&mut self) {
-        self.meta = Meta::default();
     }
 }
 
@@ -127,14 +119,6 @@ impl Default for Packets {
     }
 }
 
-impl recycler::Reset for Packets {
-    fn reset(&mut self) {
-        for i in 0..self.packets.len() {
-            self.packets[i].reset();
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Blob {
     pub data: [u8; BLOB_SIZE],
@@ -159,13 +143,6 @@ impl Default for Blob {
             data: [0u8; BLOB_SIZE],
             meta: Meta::default(),
         }
-    }
-}
-
-impl recycler::Reset for Blob {
-    fn reset(&mut self) {
-        self.meta = Meta::default();
-        self.data[..BLOB_HEADER_SIZE].copy_from_slice(&[0u8; BLOB_HEADER_SIZE]);
     }
 }
 
@@ -226,16 +203,15 @@ impl Packets {
     }
 }
 
-pub fn to_packets_chunked<T: Serialize>(
-    r: &PacketRecycler,
-    xs: &[T],
-    chunks: usize,
-) -> Vec<SharedPackets> {
+pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPackets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let mut p = r.allocate();
-        p.write().packets.resize(x.len(), Default::default());
-        for (i, o) in x.iter().zip(p.write().packets.iter_mut()) {
+        let mut p = SharedPackets::default();
+        p.write()
+            .unwrap()
+            .packets
+            .resize(x.len(), Default::default());
+        for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
             let v = serialize(&i).expect("serialize request");
             let len = v.len();
             o.data[..len].copy_from_slice(&v);
@@ -246,18 +222,14 @@ pub fn to_packets_chunked<T: Serialize>(
     out
 }
 
-pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: &[T]) -> Vec<SharedPackets> {
-    to_packets_chunked(r, xs, NUM_PACKETS)
+pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<SharedPackets> {
+    to_packets_chunked(xs, NUM_PACKETS)
 }
 
-pub fn to_blob<T: Serialize>(
-    resp: T,
-    rsp_addr: SocketAddr,
-    blob_recycler: &BlobRecycler,
-) -> Result<SharedBlob> {
-    let blob = blob_recycler.allocate();
+pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<SharedBlob> {
+    let blob = SharedBlob::default();
     {
-        let mut b = blob.write();
+        let mut b = blob.write().unwrap();
         let v = serialize(&resp)?;
         let len = v.len();
         assert!(len <= BLOB_SIZE);
@@ -268,13 +240,10 @@ pub fn to_blob<T: Serialize>(
     Ok(blob)
 }
 
-pub fn to_blobs<T: Serialize>(
-    rsps: Vec<(T, SocketAddr)>,
-    blob_recycler: &BlobRecycler,
-) -> Result<SharedBlobs> {
+pub fn to_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<SharedBlobs> {
     let mut blobs = Vec::new();
     for (resp, rsp_addr) in rsps {
-        blobs.push(to_blob(resp, rsp_addr, blob_recycler)?);
+        blobs.push(to_blob(resp, rsp_addr)?);
     }
     Ok(blobs)
 }
@@ -374,7 +343,7 @@ impl Blob {
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
-        let mut p = r.write();
+        let mut p = r.write().unwrap();
         trace!("receiving on {}", socket.local_addr().unwrap());
 
         let (nrecv, from) = socket.recv_from(&mut p.data)?;
@@ -384,7 +353,7 @@ impl Blob {
         Ok(())
     }
 
-    pub fn recv_from(re: &BlobRecycler, socket: &UdpSocket) -> Result<SharedBlobs> {
+    pub fn recv_from(socket: &UdpSocket) -> Result<SharedBlobs> {
         let mut v = Vec::new();
         //DOCUMENTED SIDE-EFFECT
         //Performance out of the IO without poll
@@ -394,7 +363,7 @@ impl Blob {
         //  * set it back to blocking before returning
         socket.set_nonblocking(false)?;
         for i in 0..NUM_BLOBS {
-            let r = re.allocate();
+            let r = SharedBlob::default();
 
             match Blob::recv_blob(socket, &r) {
                 Err(_) if i > 0 => {
@@ -418,7 +387,7 @@ impl Blob {
     pub fn send_to(socket: &UdpSocket, v: SharedBlobs) -> Result<()> {
         for r in v {
             {
-                let p = r.read();
+                let p = r.read().unwrap();
                 let a = p.meta.addr();
                 if let Err(e) = socket.send_to(&p.data[..p.meta.size], &a) {
                     warn!(
@@ -439,7 +408,6 @@ pub fn make_consecutive_blobs(
     num_blobs_to_make: u64,
     start_hash: Hash,
     addr: &SocketAddr,
-    resp_recycler: &BlobRecycler,
 ) -> SharedBlobs {
     let mut last_hash = start_hash;
     let mut num_hashes = 0;
@@ -447,7 +415,7 @@ pub fn make_consecutive_blobs(
     for _ in 0..num_blobs_to_make {
         all_entries.extend(next_entries_mut(&mut last_hash, &mut num_hashes, vec![]));
     }
-    let mut new_blobs = all_entries.to_blobs_with_id(&resp_recycler, me_id, 0, addr);
+    let mut new_blobs = all_entries.to_blobs_with_id(me_id, 0, addr);
     new_blobs.truncate(num_blobs_to_make as usize);
     new_blobs
 }
@@ -455,10 +423,9 @@ pub fn make_consecutive_blobs(
 #[cfg(test)]
 mod tests {
     use packet::{
-        to_packets, Blob, BlobRecycler, Meta, Packet, PacketRecycler, Packets, BLOB_HEADER_SIZE,
-        NUM_PACKETS, PACKET_DATA_SIZE,
+        to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
+        PACKET_DATA_SIZE,
     };
-    use recycler::Reset;
     use request::Request;
     use std::io;
     use std::io::Write;
@@ -470,16 +437,15 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = sender.local_addr().unwrap();
-        let r = PacketRecycler::default();
-        let p = r.allocate();
-        p.write().packets.resize(10, Packet::default());
-        for m in p.write().packets.iter_mut() {
+        let p = SharedPackets::default();
+        p.write().unwrap().packets.resize(10, Packet::default());
+        for m in p.write().unwrap().packets.iter_mut() {
             m.meta.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
-        p.read().send_to(&sender).unwrap();
-        p.write().recv_from(&reader).unwrap();
-        for m in p.write().packets.iter_mut() {
+        p.read().unwrap().send_to(&sender).unwrap();
+        p.write().unwrap().recv_from(&reader).unwrap();
+        for m in p.write().unwrap().packets.iter_mut() {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
@@ -488,19 +454,18 @@ mod tests {
     #[test]
     fn test_to_packets() {
         let tx = Request::GetTransactionCount;
-        let re = PacketRecycler::default();
-        let rv = to_packets(&re, &vec![tx.clone(); 1]);
+        let rv = to_packets(&vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().packets.len(), 1);
+        assert_eq!(rv[0].read().unwrap().packets.len(), 1);
 
-        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS]);
+        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
 
-        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS + 1]);
+        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
-        assert_eq!(rv[0].read().packets.len(), NUM_PACKETS);
-        assert_eq!(rv[1].read().packets.len(), 1);
+        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[1].read().unwrap().packets.len(), 1);
     }
 
     #[test]
@@ -509,17 +474,16 @@ mod tests {
         let reader = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
-        let r = BlobRecycler::default();
-        let p = r.allocate();
-        p.write().meta.set_addr(&addr);
-        p.write().meta.size = 1024;
+        let p = SharedBlob::default();
+        p.write().unwrap().meta.set_addr(&addr);
+        p.write().unwrap().meta.size = 1024;
         let v = vec![p];
         Blob::send_to(&sender, v).unwrap();
         trace!("send_to");
-        let rv = Blob::recv_from(&r, &reader).unwrap();
+        let rv = Blob::recv_from(&reader).unwrap();
         trace!("recv_from");
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().meta.size, 1024);
+        assert_eq!(rv[0].read().unwrap().meta.size, 1024);
     }
 
     #[cfg(all(feature = "ipv6", test))]
@@ -528,14 +492,13 @@ mod tests {
         let reader = UdpSocket::bind("[::1]:0").expect("bind");
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("[::1]:0").expect("bind");
-        let r = BlobRecycler::default();
-        let p = r.allocate();
-        p.as_mut().meta.set_addr(&addr);
-        p.as_mut().meta.size = 1024;
+        let p = SharedBlob::default();
+        p.as_mut().unwrap().meta.set_addr(&addr);
+        p.as_mut().unwrap().meta.size = 1024;
         let mut v = VecDeque::default();
         v.push_back(p);
         Blob::send_to(&r, &sender, &mut v).unwrap();
-        let mut rv = Blob::recv_from(&r, &reader).unwrap();
+        let mut rv = Blob::recv_from(&reader).unwrap();
         let rp = rv.pop_front().unwrap();
         assert_eq!(rp.as_mut().meta.size, 1024);
     }
@@ -554,8 +517,6 @@ mod tests {
         b.data_mut()[0] = 1;
         assert_eq!(b.data()[0], 1);
         assert_eq!(b.get_index().unwrap(), <u64>::max_value());
-        b.reset();
-        assert!(b.data[..BLOB_HEADER_SIZE].starts_with(&[0u8; BLOB_HEADER_SIZE]));
         assert_eq!(b.meta, Meta::default());
     }
 

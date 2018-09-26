@@ -7,7 +7,7 @@ use entry::Entry;
 use erasure;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
-use packet::{BlobRecycler, SharedBlob};
+use packet::SharedBlob;
 use result::Result;
 use solana_program_interface::pubkey::Pubkey;
 use std::cmp;
@@ -28,7 +28,7 @@ pub struct WindowSlot {
 impl WindowSlot {
     fn blob_index(&self) -> Option<u64> {
         match self.data {
-            Some(ref blob) => blob.read().get_index().ok(),
+            Some(ref blob) => blob.read().unwrap().get_index().ok(),
             None => None,
         }
     }
@@ -70,7 +70,6 @@ pub trait WindowUtil {
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
-        recycler: &BlobRecycler,
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
@@ -200,7 +199,6 @@ impl WindowUtil for Window {
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
-        recycler: &BlobRecycler,
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
@@ -208,7 +206,7 @@ impl WindowUtil for Window {
     ) {
         let w = (pix % WINDOW_SIZE) as usize;
 
-        let is_coding = blob.read().is_coding();
+        let is_coding = blob.read().unwrap().is_coding();
 
         // insert a newly received blob into a window slot, clearing out and recycling any previous
         //  blob unless the incoming blob is a duplicate (based on idx)
@@ -221,7 +219,7 @@ impl WindowUtil for Window {
             c_or_d: &str,
         ) -> bool {
             if let Some(old) = mem::replace(window_slot, Some(blob)) {
-                let is_dup = old.read().get_index().unwrap() == pix;
+                let is_dup = old.read().unwrap().get_index().unwrap() == pix;
                 trace!(
                     "{}: occupied {} window slot {:}, is_dup: {}",
                     id,
@@ -250,21 +248,9 @@ impl WindowUtil for Window {
         self[w].leader_unknown = leader_unknown;
         *pending_retransmits = true;
 
-        #[cfg(not(feature = "erasure"))]
-        {
-            // suppress warning: unused variable: `recycler`
-            let _ = recycler;
-        }
         #[cfg(feature = "erasure")]
         {
-            if erasure::recover(
-                id,
-                recycler,
-                self,
-                *consumed,
-                (*consumed % WINDOW_SIZE) as usize,
-            ).is_err()
-            {
+            if erasure::recover(id, self, *consumed, (*consumed % WINDOW_SIZE) as usize).is_err() {
                 trace!("{}: erasure::recover failed", id);
             }
         }
@@ -289,7 +275,7 @@ impl WindowUtil for Window {
             let k_data_blob;
             let k_data_slot = &mut self[k].data;
             if let Some(blob) = k_data_slot {
-                if blob.read().get_index().unwrap() < *consumed {
+                if blob.read().unwrap().get_index().unwrap() < *consumed {
                     // window wrap-around, end of received
                     break;
                 }
@@ -389,7 +375,7 @@ pub fn index_blobs(
     trace!("{}: INDEX_BLOBS {}", node_info.id, blobs.len());
     for (i, b) in blobs.iter().enumerate() {
         // only leader should be broadcasting
-        let mut blob = b.write();
+        let mut blob = b.write().unwrap();
         blob.set_id(node_info.id)
             .expect("set_id in pub fn broadcast");
         blob.set_index(*receive_index + i as u64)
@@ -426,7 +412,7 @@ pub fn initialized_window(
     // populate the window, offset by implied index
     let diff = cmp::max(blobs.len() as isize - window.len() as isize, 0) as usize;
     for b in blobs.into_iter().skip(diff) {
-        let ix = b.read().get_index().expect("blob index");
+        let ix = b.read().unwrap().get_index().expect("blob index");
         let pos = (ix % WINDOW_SIZE) as usize;
         trace!("{} caching {} at {}", id, ix, pos);
         assert!(window[pos].data.is_none());
@@ -442,14 +428,13 @@ pub fn new_window_from_entries(
     node_info: &NodeInfo,
 ) -> Window {
     // convert to blobs
-    let blob_recycler = BlobRecycler::default();
-    let blobs = ledger_tail.to_blobs(&blob_recycler);
+    let blobs = ledger_tail.to_blobs();
     initialized_window(&node_info, blobs, entry_height)
 }
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
+    use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use solana_program_interface::pubkey::Pubkey;
     use std::io;
     use std::io::Write;
@@ -465,7 +450,7 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().packets.len(),
+                Ok(m) => *num += m.read().unwrap().packets.len(),
                 e => info!("error {:?}", e),
             }
             if *num == 10 {
@@ -487,7 +472,6 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = receiver(
             Arc::new(read),
@@ -500,9 +484,9 @@ mod test {
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let mut b = resp_recycler.allocate();
+                let mut b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.data[0] = i as u8;
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);

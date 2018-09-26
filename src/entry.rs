@@ -5,7 +5,7 @@
 use bincode::{serialize_into, serialized_size};
 use budget_transaction::BudgetTransaction;
 use hash::Hash;
-use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
+use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
 use rayon::prelude::*;
 use solana_program_interface::pubkey::Pubkey;
@@ -70,14 +70,13 @@ impl Entry {
 
     pub fn to_blob(
         &self,
-        blob_recycler: &BlobRecycler,
         idx: Option<u64>,
         id: Option<Pubkey>,
         addr: Option<&SocketAddr>,
     ) -> SharedBlob {
-        let blob = blob_recycler.allocate();
+        let blob = SharedBlob::default();
         {
-            let mut blob_w = blob.write();
+            let mut blob_w = blob.write().unwrap();
             let pos = {
                 let mut out = Cursor::new(blob_w.data_mut());
                 serialize_into(&mut out, &self).expect("failed to serialize output");

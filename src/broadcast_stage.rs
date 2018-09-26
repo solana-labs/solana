@@ -7,7 +7,7 @@ use entry::Entry;
 use erasure;
 use ledger::Block;
 use log::Level;
-use packet::{BlobRecycler, SharedBlobs};
+use packet::SharedBlobs;
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
@@ -32,7 +32,6 @@ fn broadcast(
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
-    recycler: &BlobRecycler,
     receiver: &Receiver<Vec<Entry>>,
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
@@ -54,7 +53,7 @@ fn broadcast(
     let to_blobs_start = Instant::now();
     let dq: SharedBlobs = ventries
         .into_par_iter()
-        .flat_map(|p| p.to_blobs(recycler))
+        .flat_map(|p| p.to_blobs())
         .collect();
 
     let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
@@ -85,19 +84,29 @@ fn broadcast(
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
             for b in &blobs {
-                let ix = b.read().get_index().expect("blob index");
+                let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 if let Some(x) = win[pos].data.take() {
-                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
+                    trace!(
+                        "{} popped {} at {}",
+                        id,
+                        x.read().unwrap().get_index().unwrap(),
+                        pos
+                    );
                 }
                 if let Some(x) = win[pos].coding.take() {
-                    trace!("{} popped {} at {}", id, x.read().get_index().unwrap(), pos);
+                    trace!(
+                        "{} popped {} at {}",
+                        id,
+                        x.read().unwrap().get_index().unwrap(),
+                        pos
+                    );
                 }
 
                 trace!("{} null {}", id, pos);
             }
             for b in &blobs {
-                let ix = b.read().get_index().expect("blob index");
+                let ix = b.read().unwrap().get_index().expect("blob index");
                 let pos = (ix % WINDOW_SIZE) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
@@ -111,7 +120,6 @@ fn broadcast(
             erasure::generate_coding(
                 &id,
                 &mut window.write().unwrap(),
-                recycler,
                 *receive_index,
                 blobs_len,
                 &mut transmit_index.coding,
@@ -174,7 +182,6 @@ impl BroadcastStage {
         crdt: &Arc<RwLock<Crdt>>,
         window: &SharedWindow,
         entry_height: u64,
-        recycler: &BlobRecycler,
         receiver: &Receiver<Vec<Entry>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
@@ -211,7 +218,6 @@ impl BroadcastStage {
                 &me,
                 &broadcast_table,
                 &window,
-                &recycler,
                 &receiver,
                 &sock,
                 &mut transmit_index,
@@ -239,7 +245,6 @@ impl BroadcastStage {
     /// * `exit` - Boolean to signal system exit.
     /// * `crdt` - CRDT structure
     /// * `window` - Cache of blobs that we have broadcast
-    /// * `recycler` - Blob recycler.
     /// * `receiver` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
     /// * `exit_sender` - Set to true when this stage exits, allows rest of Tpu to exit cleanly. Otherwise,
     /// when a Tpu stage closes, it only closes the stages that come after it. The stages
@@ -256,12 +261,11 @@ impl BroadcastStage {
         receiver: Receiver<Vec<Entry>>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
-        let recycler = BlobRecycler::default();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(&sock, &crdt, &window, entry_height, &recycler, &receiver)
+                Self::run(&sock, &crdt, &window, entry_height, &receiver)
             }).unwrap();
 
         BroadcastStage { thread_hdl }
@@ -356,7 +360,7 @@ mod tests {
         let window = shared_window.read().unwrap();
         window.iter().fold(0, |m, w_slot| {
             if let Some(ref blob) = w_slot.data {
-                cmp::max(m, blob.read().get_index().unwrap())
+                cmp::max(m, blob.read().unwrap().get_index().unwrap())
             } else {
                 m
             }

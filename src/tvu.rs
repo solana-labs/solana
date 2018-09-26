@@ -157,7 +157,7 @@ pub mod tests {
     use logger;
     use mint::Mint;
     use ncp::Ncp;
-    use packet::BlobRecycler;
+    use packet::SharedBlob;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::net::UdpSocket;
@@ -209,7 +209,6 @@ pub mod tests {
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
         // simulate target peer
-        let recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let blob_sockets: Vec<Arc<UdpSocket>> = target2
             .sockets
@@ -279,9 +278,9 @@ pub mod tests {
             alice_ref_balance -= transfer_amount;
 
             for entry in vec![entry0, entry1] {
-                let mut b = recycler.allocate();
+                let mut b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.set_index(blob_id).unwrap();
                     blob_id += 1;
                     w.set_id(leader_id).unwrap();

@@ -20,7 +20,7 @@ use hash::Hash;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
-use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
+use packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -606,7 +606,7 @@ impl Crdt {
                 // only leader should be broadcasting
                 assert!(me.leader_id != v.id);
                 let bl = b.unwrap();
-                let blob = bl.read();
+                let blob = bl.read().unwrap();
                 //TODO profile this, may need multiple sockets for par_iter
                 trace!(
                     "{}: BROADCAST idx: {} sz: {} to {},{} coding: {}",
@@ -658,9 +658,10 @@ impl Crdt {
             (s.my_data().clone(), s.table.values().cloned().collect())
         };
         blob.write()
+            .unwrap()
             .set_id(me.id)
             .expect("set_id in pub fn retransmit");
-        let rblob = blob.read();
+        let rblob = blob.read().unwrap();
         let orders: Vec<_> = table
             .iter()
             .filter(|v| {
@@ -814,11 +815,7 @@ impl Crdt {
     }
 
     /// At random pick a node and try to get updated changes from them
-    fn run_gossip(
-        obj: &Arc<RwLock<Self>>,
-        blob_sender: &BlobSender,
-        blob_recycler: &BlobRecycler,
-    ) -> Result<()> {
+    fn run_gossip(obj: &Arc<RwLock<Self>>, blob_sender: &BlobSender) -> Result<()> {
         //TODO we need to keep track of stakes and weight the selection by stake size
         //TODO cache sockets
 
@@ -831,7 +828,7 @@ impl Crdt {
 
         // TODO this will get chatty, so we need to first ask for number of updates since
         // then only ask for specific data that we dont have
-        let blob = to_blob(req, remote_gossip_addr, blob_recycler)?;
+        let blob = to_blob(req, remote_gossip_addr)?;
         blob_sender.send(vec![blob])?;
         Ok(())
     }
@@ -918,12 +915,11 @@ impl Crdt {
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        let blob_recycler = BlobRecycler::default();
         Builder::new()
             .name("solana-gossip".to_string())
             .spawn(move || loop {
                 let start = timestamp();
-                let _ = Self::run_gossip(&obj, &blob_sender, &blob_recycler);
+                let _ = Self::run_gossip(&obj, &blob_sender);
                 if exit.load(Ordering::Relaxed) {
                     return;
                 }
@@ -945,11 +941,10 @@ impl Crdt {
         ledger_window: &mut Option<&mut LedgerWindow>,
         me: &NodeInfo,
         ix: u64,
-        blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         let pos = (ix as usize) % window.read().unwrap().len();
         if let Some(ref mut blob) = &mut window.write().unwrap()[pos].data {
-            let mut wblob = blob.write();
+            let mut wblob = blob.write().unwrap();
             let blob_ix = wblob.get_index().expect("run_window_request get_index");
             if blob_ix == ix {
                 let num_retransmits = wblob.meta.num_retransmits;
@@ -968,11 +963,11 @@ impl Crdt {
                     sender_id = me.id
                 }
 
-                let out = blob_recycler.allocate();
+                let out = SharedBlob::default();
 
                 // copy to avoid doing IO inside the lock
                 {
-                    let mut outblob = out.write();
+                    let mut outblob = out.write().unwrap();
                     let sz = wblob.meta.size;
                     outblob.meta.size = sz;
                     outblob.data[..sz].copy_from_slice(&wblob.data[..sz]);
@@ -998,7 +993,6 @@ impl Crdt {
                 inc_new_counter_info!("crdt-window-request-ledger", 1);
 
                 let out = entry.to_blob(
-                    blob_recycler,
                     Some(ix),
                     Some(me.id), // causes retransmission if I'm the leader
                     Some(from_addr),
@@ -1025,18 +1019,12 @@ impl Crdt {
         obj: &Arc<RwLock<Self>>,
         window: &SharedWindow,
         ledger_window: &mut Option<&mut LedgerWindow>,
-        blob_recycler: &BlobRecycler,
         blob: &Blob,
     ) -> Option<SharedBlob> {
         match deserialize(&blob.data[..blob.meta.size]) {
-            Ok(request) => Crdt::handle_protocol(
-                obj,
-                &blob.meta.addr(),
-                request,
-                window,
-                ledger_window,
-                blob_recycler,
-            ),
+            Ok(request) => {
+                Crdt::handle_protocol(obj, &blob.meta.addr(), request, window, ledger_window)
+            }
             Err(_) => {
                 warn!("deserialize crdt packet failed");
                 None
@@ -1050,7 +1038,6 @@ impl Crdt {
         request: Protocol,
         window: &SharedWindow,
         ledger_window: &mut Option<&mut LedgerWindow>,
-        blob_recycler: &BlobRecycler,
     ) -> Option<SharedBlob> {
         match request {
             // TODO sigverify these
@@ -1119,7 +1106,7 @@ impl Crdt {
                 } else {
                     let rsp = Protocol::ReceiveUpdates(from_id, ups, data, liveness);
 
-                    if let Ok(r) = to_blob(rsp, from.contact_info.ncp, &blob_recycler) {
+                    if let Ok(r) = to_blob(rsp, from.contact_info.ncp) {
                         trace!(
                             "sending updates me {} len {} to {} {}",
                             id,
@@ -1176,15 +1163,8 @@ impl Crdt {
                 let me = me.read().unwrap().my_data().clone();
                 inc_new_counter_info!("crdt-window-request-recv", 1);
                 trace!("{}: received RequestWindowIndex {} {} ", me.id, from.id, ix,);
-                let res = Self::run_window_request(
-                    &from,
-                    &from_addr,
-                    &window,
-                    ledger_window,
-                    &me,
-                    ix,
-                    blob_recycler,
-                );
+                let res =
+                    Self::run_window_request(&from, &from_addr, &window, ledger_window, &me, ix);
                 report_time_spent(
                     "RequestWindowIndex",
                     &now.elapsed(),
@@ -1200,7 +1180,6 @@ impl Crdt {
         obj: &Arc<RwLock<Self>>,
         window: &SharedWindow,
         ledger_window: &mut Option<&mut LedgerWindow>,
-        blob_recycler: &BlobRecycler,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
     ) -> Result<()> {
@@ -1212,8 +1191,7 @@ impl Crdt {
         }
         let mut resps = Vec::new();
         for req in reqs {
-            if let Some(resp) =
-                Self::handle_blob(obj, window, ledger_window, blob_recycler, &req.read())
+            if let Some(resp) = Self::handle_blob(obj, window, ledger_window, &req.read().unwrap())
             {
                 resps.push(resp);
             }
@@ -1230,7 +1208,6 @@ impl Crdt {
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         let mut ledger_window = ledger_path.map(|p| LedgerWindow::open(p).unwrap());
-        let blob_recycler = BlobRecycler::default();
 
         Builder::new()
             .name("solana-listen".to_string())
@@ -1239,7 +1216,6 @@ impl Crdt {
                     &me,
                     &window,
                     &mut ledger_window.as_mut(),
-                    &blob_recycler,
                     &requests_receiver,
                     &response_sender,
                 );
@@ -1408,7 +1384,7 @@ mod tests {
     use hash::{hash, Hash};
     use ledger::{LedgerWindow, LedgerWriter};
     use logger;
-    use packet::BlobRecycler;
+    use packet::SharedBlob;
     use result::Error;
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::pubkey::Pubkey;
@@ -1661,9 +1637,9 @@ mod tests {
             }
             assert!(rv.len() > 0);
             for i in rv.iter() {
-                if i.read().meta.addr() == nxt1.contact_info.ncp {
+                if i.read().unwrap().meta.addr() == nxt1.contact_info.ncp {
                     one = true;
-                } else if i.read().meta.addr() == nxt2.contact_info.ncp {
+                } else if i.read().unwrap().meta.addr() == nxt2.contact_info.ncp {
                     two = true;
                 } else {
                     //unexpected request
@@ -1760,43 +1736,18 @@ mod tests {
             socketaddr!("127.0.0.1:1237"),
             socketaddr!("127.0.0.1:1238"),
         );
-        let recycler = BlobRecycler::default();
-        let rv = Crdt::run_window_request(
-            &me,
-            &socketaddr_any!(),
-            &window,
-            &mut None,
-            &me,
-            0,
-            &recycler,
-        );
+        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
         assert!(rv.is_none());
-        let out = recycler.allocate();
-        out.write().meta.size = 200;
+        let out = SharedBlob::default();
+        out.write().unwrap().meta.size = 200;
         window.write().unwrap()[0].data = Some(out);
-        let rv = Crdt::run_window_request(
-            &me,
-            &socketaddr_any!(),
-            &window,
-            &mut None,
-            &me,
-            0,
-            &recycler,
-        );
+        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
         assert!(rv.is_some());
         let v = rv.unwrap();
         //test we copied the blob
-        assert_eq!(v.read().meta.size, 200);
+        assert_eq!(v.read().unwrap().meta.size, 200);
         let len = window.read().unwrap().len() as u64;
-        let rv = Crdt::run_window_request(
-            &me,
-            &socketaddr_any!(),
-            &window,
-            &mut None,
-            &me,
-            len,
-            &recycler,
-        );
+        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, len);
         assert!(rv.is_none());
 
         fn tmp_ledger(name: &str) -> String {
@@ -1825,7 +1776,6 @@ mod tests {
             &mut Some(&mut ledger_window),
             &me,
             1,
-            &recycler,
         );
         assert!(rv.is_some());
 
@@ -1842,22 +1792,13 @@ mod tests {
 
         let mock_peer = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
-        let recycler = BlobRecycler::default();
-
         // Simulate handling a repair request from mock_peer
-        let rv = Crdt::run_window_request(
-            &mock_peer,
-            &socketaddr_any!(),
-            &window,
-            &mut None,
-            &me,
-            0,
-            &recycler,
-        );
+        let rv =
+            Crdt::run_window_request(&mock_peer, &socketaddr_any!(), &window, &mut None, &me, 0);
         assert!(rv.is_none());
-        let blob = recycler.allocate();
+        let blob = SharedBlob::default();
         let blob_size = 200;
-        blob.write().meta.size = blob_size;
+        blob.write().unwrap().meta.size = blob_size;
         window.write().unwrap()[0].data = Some(blob);
 
         let num_requests: u32 = 64;
@@ -1869,9 +1810,8 @@ mod tests {
                 &mut None,
                 &me,
                 0,
-                &recycler,
             ).unwrap();
-            let blob = shared_blob.read();
+            let blob = shared_blob.read().unwrap();
             // Test we copied the blob
             assert_eq!(blob.meta.size, blob_size);
 
@@ -1944,7 +1884,6 @@ mod tests {
     fn protocol_requestupdate_alive() {
         logger::setup();
         let window = Arc::new(RwLock::new(default_window()));
-        let recycler = BlobRecycler::default();
 
         let node = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let node_with_same_addr = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
@@ -1958,37 +1897,18 @@ mod tests {
 
         let request = Protocol::RequestUpdates(1, node.clone());
         assert!(
-            Crdt::handle_protocol(
-                &obj,
-                &node.contact_info.ncp,
-                request,
-                &window,
-                &mut None,
-                &recycler
-            ).is_none()
+            Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
+                .is_none()
         );
 
         let request = Protocol::RequestUpdates(1, node_with_same_addr.clone());
         assert!(
-            Crdt::handle_protocol(
-                &obj,
-                &node.contact_info.ncp,
-                request,
-                &window,
-                &mut None,
-                &recycler
-            ).is_none()
+            Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
+                .is_none()
         );
 
         let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
-        Crdt::handle_protocol(
-            &obj,
-            &node.contact_info.ncp,
-            request,
-            &window,
-            &mut None,
-            &recycler,
-        );
+        Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None);
 
         let me = obj.write().unwrap();
 

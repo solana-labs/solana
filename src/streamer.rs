@@ -2,7 +2,7 @@
 //!
 use influx_db_client as influxdb;
 use metrics;
-use packet::{Blob, BlobRecycler, PacketRecycler, SharedBlobs, SharedPackets};
+use packet::{Blob, SharedBlobs, SharedPackets};
 use result::{Error, Result};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,22 +20,21 @@ pub type BlobReceiver = Receiver<SharedBlobs>;
 fn recv_loop(
     sock: &UdpSocket,
     exit: &Arc<AtomicBool>,
-    re: &PacketRecycler,
     channel: &PacketSender,
     channel_tag: &'static str,
 ) -> Result<()> {
     loop {
-        let msgs = re.allocate();
+        let msgs = SharedPackets::default();
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let result = msgs.write().recv_from(sock);
+            let result = msgs.write().unwrap().recv_from(sock);
             match result {
                 Ok(()) => {
-                    let len = msgs.read().packets.len();
+                    let len = msgs.read().unwrap().packets.len();
                     metrics::submit(
                         influxdb::Point::new(channel_tag)
                             .add_field("count", influxdb::Value::Integer(len as i64))
@@ -57,14 +56,13 @@ pub fn receiver(
     sender_tag: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
-    let recycler = PacketRecycler::default();
     if res.is_err() {
         panic!("streamer::receiver set_read_timeout error");
     }
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, &exit, &recycler, &packet_sender, sender_tag);
+            let _ = recv_loop(&sock, &exit, &packet_sender, sender_tag);
             ()
         }).unwrap()
 }
@@ -81,11 +79,11 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize, 
     let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
     trace!("got msgs");
-    let mut len = msgs.read().packets.len();
+    let mut len = msgs.read().unwrap().packets.len();
     let mut batch = vec![msgs];
     while let Ok(more) = recvr.try_recv() {
         trace!("got more msgs");
-        len += more.read().packets.len();
+        len += more.read().unwrap().packets.len();
         batch.push(more);
 
         if len > 100_000 {
@@ -112,9 +110,9 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> J
 
 //TODO, we would need to stick block authentication before we create the
 //window.
-fn recv_blobs(recycler: &BlobRecycler, sock: &UdpSocket, s: &BlobSender) -> Result<()> {
+fn recv_blobs(sock: &UdpSocket, s: &BlobSender) -> Result<()> {
     trace!("recv_blobs: receiving on {}", sock.local_addr().unwrap());
-    let dq = Blob::recv_from(recycler, sock)?;
+    let dq = Blob::recv_from(sock)?;
     if !dq.is_empty() {
         s.send(dq)?;
     }
@@ -127,20 +125,19 @@ pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender)
     let timer = Duration::new(1, 0);
     sock.set_read_timeout(Some(timer))
         .expect("set socket timeout");
-    let recycler = BlobRecycler::default();
     Builder::new()
         .name("solana-blob_receiver".to_string())
         .spawn(move || loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            let _ = recv_blobs(&recycler, &sock, &s);
+            let _ = recv_blobs(&sock, &s);
         }).unwrap()
 }
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, BlobRecycler, Packet, Packets, PACKET_DATA_SIZE};
+    use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -155,7 +152,7 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().packets.len(),
+                Ok(m) => *num += m.read().unwrap().packets.len(),
                 _ => info!("get_msgs error"),
             }
             if *num == 10 {
@@ -177,7 +174,6 @@ mod test {
         let addr = read.local_addr().unwrap();
         let send = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let exit = Arc::new(AtomicBool::new(false));
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = receiver(Arc::new(read), exit.clone(), s_reader, "streamer-test");
         let t_responder = {
@@ -185,9 +181,9 @@ mod test {
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let mut b = resp_recycler.allocate();
+                let mut b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.data[0] = i as u8;
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&addr);
