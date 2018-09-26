@@ -1,5 +1,5 @@
 // Support erasure coding
-use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
+use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
 use solana_program_interface::pubkey::Pubkey;
 use std::cmp;
 use std::mem;
@@ -217,7 +217,6 @@ pub fn decode_blocks(
 pub fn generate_coding(
     id: &Pubkey,
     window: &mut [WindowSlot],
-    recycler: &BlobRecycler,
     receive_index: u64,
     num_blobs: usize,
     transmit_index_coding: &mut u64,
@@ -285,7 +284,7 @@ pub fn generate_coding(
             let n = i % window.len();
             assert!(window[n].coding.is_none());
 
-            window[n].coding = Some(recycler.allocate());
+            window[n].coding = Some(SharedBlob::default());
 
             let coding = window[n].coding.clone().unwrap();
             let mut coding_wl = coding.write();
@@ -408,17 +407,10 @@ fn find_missing(
 
 // Recover a missing block into window
 //   missing blocks should be None or old...
-//   Use recycler to allocate new ones.
 //   If not enough coding or data blocks are present to restore
 //    any of the blocks, the block is skipped.
 //   Side effect: old blobs in a block are None'd
-pub fn recover(
-    id: &Pubkey,
-    recycler: &BlobRecycler,
-    window: &mut [WindowSlot],
-    start_idx: u64,
-    start: usize,
-) -> Result<()> {
+pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: usize) -> Result<()> {
     let block_start = start - (start % NUM_DATA);
     let block_start_idx = start_idx - (start_idx % NUM_DATA as u64);
 
@@ -478,7 +470,7 @@ pub fn recover(
             }
             blobs.push(b);
         } else {
-            let n = recycler.allocate();
+            let n = SharedBlob::default();
             window[j].data = Some(n.clone());
             // mark the missing memory
             blobs.push(n);
@@ -499,7 +491,7 @@ pub fn recover(
             }
             blobs.push(b);
         } else {
-            let n = recycler.allocate();
+            let n = SharedBlob::default();
             window[j].coding = Some(n.clone());
             //mark the missing memory
             blobs.push(n);
@@ -602,7 +594,7 @@ mod test {
     use crdt;
     use erasure;
     use logger;
-    use packet::{BlobRecycler, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
+    use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::pubkey::Pubkey;
@@ -698,11 +690,7 @@ mod test {
     }
 
     const WINDOW_SIZE: usize = 64;
-    fn generate_window(
-        blob_recycler: &BlobRecycler,
-        offset: usize,
-        num_blobs: usize,
-    ) -> Vec<WindowSlot> {
+    fn generate_window(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
         let mut window = vec![
             WindowSlot {
                 data: None,
@@ -713,7 +701,7 @@ mod test {
         ];
         let mut blobs = Vec::with_capacity(num_blobs);
         for i in 0..num_blobs {
-            let b = blob_recycler.allocate();
+            let b = SharedBlob::default();
             let b_ = b.clone();
             let mut w = b.write();
             // generate a random length, multiple of 4 between 8 and 32
@@ -764,36 +752,13 @@ mod test {
         }
     }
 
-    fn pollute_recycler(blob_recycler: &BlobRecycler) {
-        let mut blobs = Vec::with_capacity(WINDOW_SIZE * 2);
-        for _ in 0..WINDOW_SIZE * 10 {
-            let blob = blob_recycler.allocate();
-            {
-                let mut b_l = blob.write();
-
-                for i in 0..BLOB_SIZE {
-                    b_l.data[i] = thread_rng().gen();
-                }
-                // some of the blobs should previously been used for coding
-                if thread_rng().gen_bool(erasure::NUM_CODING as f64 / erasure::NUM_DATA as f64) {
-                    b_l.set_coding().unwrap();
-                }
-            }
-            blobs.push(blob);
-        }
-    }
-
     #[test]
     pub fn test_window_recover_basic() {
         logger::setup();
-        let blob_recycler = BlobRecycler::default();
-
-        pollute_recycler(&blob_recycler);
-
         // Generate a window
         let offset = 0;
         let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = generate_window(&blob_recycler, WINDOW_SIZE, num_blobs);
+        let mut window = generate_window(WINDOW_SIZE, num_blobs);
 
         for slot in &window {
             if let Some(blob) = &slot.data {
@@ -809,14 +774,8 @@ mod test {
         let mut index = (erasure::NUM_DATA + 2) as u64;
         let id = Pubkey::default();
         assert!(
-            erasure::generate_coding(
-                &id,
-                &mut window,
-                &blob_recycler,
-                offset as u64,
-                num_blobs,
-                &mut index
-            ).is_ok()
+            erasure::generate_coding(&id, &mut window, offset as u64, num_blobs, &mut index)
+                .is_ok()
         );
         assert_eq!(index, (erasure::NUM_DATA - erasure::NUM_CODING) as u64);
 
@@ -835,15 +794,7 @@ mod test {
         scramble_window_tails(&mut window, num_blobs);
 
         // Recover it from coding
-        assert!(
-            erasure::recover(
-                &id,
-                &blob_recycler,
-                &mut window,
-                (offset + WINDOW_SIZE) as u64,
-                offset,
-            ).is_ok()
-        );
+        assert!(erasure::recover(&id, &mut window, (offset + WINDOW_SIZE) as u64, offset,).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
@@ -880,15 +831,7 @@ mod test {
         print_window(&window);
 
         // Recover it from coding
-        assert!(
-            erasure::recover(
-                &id,
-                &blob_recycler,
-                &mut window,
-                (offset + WINDOW_SIZE) as u64,
-                offset,
-            ).is_ok()
-        );
+        assert!(erasure::recover(&id, &mut window, (offset + WINDOW_SIZE) as u64, offset,).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
@@ -923,15 +866,7 @@ mod test {
         print_window(&window);
 
         // Recover it from coding
-        assert!(
-            erasure::recover(
-                &id,
-                &blob_recycler,
-                &mut window,
-                (offset + WINDOW_SIZE) as u64,
-                offset,
-            ).is_ok()
-        );
+        assert!(erasure::recover(&id, &mut window, (offset + WINDOW_SIZE) as u64, offset,).is_ok());
         println!("** after-recover:");
         print_window(&window);
 
@@ -968,11 +903,10 @@ mod test {
     //    #[ignore]
     //    pub fn test_window_recover() {
     //        logger::setup();
-    //        let blob_recycler = BlobRecycler::default();
     //        let offset = 4;
     //        let data_len = 16;
     //        let num_blobs = erasure::NUM_DATA + 2;
-    //        let (mut window, blobs_len) = generate_window(data_len, &blob_recycler, offset, num_blobs);
+    //        let (mut window, blobs_len) = generate_window(data_len, offset, num_blobs);
     //        println!("** after-gen:");
     //        print_window(&window);
     //        assert!(erasure::generate_coding(&mut window, offset, blobs_len).is_ok());
@@ -989,7 +923,7 @@ mod test {
     //        window_l0.write().unwrap().data[0] = 55;
     //        println!("** after-nulling:");
     //        print_window(&window);
-    //        assert!(erasure::recover(&blob_recycler, &mut window, offset, offset + blobs_len).is_ok());
+    //        assert!(erasure::recover(&mut window, offset, offset + blobs_len).is_ok());
     //        println!("** after-restore:");
     //        print_window(&window);
     //        let window_l = window[offset + 1].clone().unwrap();

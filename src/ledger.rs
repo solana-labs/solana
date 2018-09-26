@@ -10,7 +10,7 @@ use hash::Hash;
 use log::Level::Trace;
 #[cfg(test)]
 use mint::Mint;
-use packet::{self, SharedBlob, BLOB_DATA_SIZE};
+use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
 #[cfg(test)]
@@ -403,14 +403,8 @@ pub fn read_ledger(
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob>;
-    fn to_blobs_with_id(
-        &self,
-        blob_recycler: &packet::BlobRecycler,
-        id: Pubkey,
-        start_id: u64,
-        addr: &SocketAddr,
-    ) -> Vec<SharedBlob>;
+    fn to_blobs(&self) -> Vec<SharedBlob>;
+    fn to_blobs_with_id(&self, id: Pubkey, start_id: u64, addr: &SocketAddr) -> Vec<SharedBlob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -431,28 +425,16 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs_with_id(
-        &self,
-        blob_recycler: &packet::BlobRecycler,
-        id: Pubkey,
-        start_idx: u64,
-        addr: &SocketAddr,
-    ) -> Vec<SharedBlob> {
+    fn to_blobs_with_id(&self, id: Pubkey, start_idx: u64, addr: &SocketAddr) -> Vec<SharedBlob> {
         self.iter()
             .enumerate()
-            .map(|(i, entry)| {
-                entry.to_blob(
-                    blob_recycler,
-                    Some(start_idx + i as u64),
-                    Some(id),
-                    Some(&addr),
-                )
-            }).collect()
+            .map(|(i, entry)| entry.to_blob(Some(start_idx + i as u64), Some(id), Some(&addr)))
+            .collect()
     }
 
-    fn to_blobs(&self, blob_recycler: &packet::BlobRecycler) -> Vec<SharedBlob> {
+    fn to_blobs(&self) -> Vec<SharedBlob> {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        self.to_blobs_with_id(blob_recycler, Pubkey::default(), 0, &default_addr)
+        self.to_blobs_with_id(Pubkey::default(), 0, &default_addr)
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
@@ -471,7 +453,7 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entr
 
     for blob in blobs {
         let entry = {
-            let msg = blob.read();
+            let msg = blob.read().unwrap();
             let msg_size = msg.get_size()?;
             deserialize(&msg.data()[..msg_size])
         };
@@ -586,7 +568,7 @@ mod tests {
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
-    use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
+    use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -672,8 +654,7 @@ mod tests {
         logger::setup();
         let entries = make_test_entries();
 
-        let blob_recycler = BlobRecycler::default();
-        let blob_q = entries.to_blobs(&blob_recycler);
+        let blob_q = entries.to_blobs();
 
         assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
     }
@@ -682,9 +663,8 @@ mod tests {
     fn test_bad_blobs_attack() {
         use logger;
         logger::setup();
-        let blob_recycler = BlobRecycler::default();
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
-        let blobs_q = packet::to_blobs(vec![(0, addr)], &blob_recycler).unwrap(); // <-- attack!
+        let blobs_q = to_blobs(vec![(0, addr)]).unwrap(); // <-- attack!
         assert!(reconstruct_entries_from_blobs(blobs_q).is_err());
     }
 

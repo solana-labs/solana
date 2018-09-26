@@ -4,7 +4,7 @@ use counter::Counter;
 use crdt::{Crdt, NodeInfo};
 use entry::EntrySender;
 use log::Level;
-use packet::{BlobRecycler, SharedBlob};
+use packet::SharedBlob;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use solana_program_interface::pubkey::Pubkey;
@@ -49,10 +49,9 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
 fn add_block_to_retransmit_queue(
     b: &SharedBlob,
     leader_id: Pubkey,
-    recycler: &BlobRecycler,
     retransmit_queue: &mut Vec<SharedBlob>,
 ) {
-    let p = b.read();
+    let p = b.read().unwrap();
     //TODO this check isn't safe against adverserial packets
     //we need to maintain a sequence window
     trace!(
@@ -73,11 +72,9 @@ fn add_block_to_retransmit_queue(
         //otherwise we get into races with which thread
         //should do the recycling
         //
-        //a better abstraction would be to recycle when the blob
-        //is dropped via a weakref to the recycler
-        let nv = recycler.allocate();
+        let nv = SharedBlob::default();
         {
-            let mut mnv = nv.write();
+            let mut mnv = nv.write().unwrap();
             let sz = p.meta.size;
             mnv.meta.size = sz;
             mnv.data[..sz].copy_from_slice(&p.data[..sz]);
@@ -91,7 +88,6 @@ fn retransmit_all_leader_blocks(
     maybe_leader: Option<NodeInfo>,
     dq: &[SharedBlob],
     id: &Pubkey,
-    recycler: &BlobRecycler,
     consumed: u64,
     received: u64,
     retransmit: &BlobSender,
@@ -101,7 +97,7 @@ fn retransmit_all_leader_blocks(
     if let Some(leader) = maybe_leader {
         let leader_id = leader.id;
         for b in dq {
-            add_block_to_retransmit_queue(b, leader_id, recycler, &mut retransmit_queue);
+            add_block_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
         }
 
         if *pending_retransmits {
@@ -113,12 +109,7 @@ fn retransmit_all_leader_blocks(
                 *pending_retransmits = false;
                 if w.leader_unknown {
                     if let Some(ref b) = w.data {
-                        add_block_to_retransmit_queue(
-                            b,
-                            leader_id,
-                            recycler,
-                            &mut retransmit_queue,
-                        );
+                        add_block_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
                         w.leader_unknown = false;
                     }
                 }
@@ -146,7 +137,6 @@ fn recv_window(
     window: &SharedWindow,
     id: &Pubkey,
     crdt: &Arc<RwLock<Crdt>>,
-    recycler: &BlobRecycler,
     consumed: &mut u64,
     received: &mut u64,
     max_ix: u64,
@@ -183,7 +173,6 @@ fn recv_window(
         maybe_leader,
         &dq,
         id,
-        recycler,
         *consumed,
         *received,
         retransmit,
@@ -195,7 +184,7 @@ fn recv_window(
     let mut consume_queue = Vec::new();
     for b in dq {
         let (pix, meta_size) = {
-            let p = b.read();
+            let p = b.read().unwrap();
             (p.get_index()?, p.meta.size)
         };
         pixs.push(pix);
@@ -219,7 +208,6 @@ fn recv_window(
             b,
             pix,
             &mut consume_queue,
-            recycler,
             consumed,
             leader_unknown,
             pending_retransmits,
@@ -276,7 +264,6 @@ pub fn window_service(
                 leader_rotation_interval = rcrdt.get_leader_rotation_interval();
             }
             let mut pending_retransmits = false;
-            let recycler = BlobRecycler::default();
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
@@ -297,7 +284,6 @@ pub fn window_service(
                     &window,
                     &id,
                     &crdt,
-                    &recycler,
                     &mut consumed,
                     &mut received,
                     max_entry_height,
@@ -354,7 +340,7 @@ mod test {
     use entry::Entry;
     use hash::Hash;
     use logger;
-    use packet::{make_consecutive_blobs, BlobRecycler, PACKET_DATA_SIZE};
+    use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -390,7 +376,6 @@ mod test {
         crdt_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(crdt_me));
 
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, r_window) = channel();
@@ -416,15 +401,11 @@ mod test {
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut num_blobs_to_make = 10;
             let gossip_address = &tn.info.contact_info.ncp;
-            let msgs = make_consecutive_blobs(
-                me_id,
-                num_blobs_to_make,
-                Hash::default(),
-                &gossip_address,
-                &resp_recycler,
-            ).into_iter()
-            .rev()
-            .collect();;
+            let msgs =
+                make_consecutive_blobs(me_id, num_blobs_to_make, Hash::default(), &gossip_address)
+                    .into_iter()
+                    .rev()
+                    .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -452,7 +433,6 @@ mod test {
         let me_id = crdt_me.my_data().id;
         let subs = Arc::new(RwLock::new(crdt_me));
 
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
@@ -478,9 +458,9 @@ mod test {
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
-                let b = resp_recycler.allocate();
+                let b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -509,7 +489,6 @@ mod test {
         let me_id = crdt_me.my_data().id;
         let subs = Arc::new(RwLock::new(crdt_me));
 
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
@@ -535,9 +514,9 @@ mod test {
             let mut msgs = Vec::new();
             for v in 0..10 {
                 let i = 9 - v;
-                let b = resp_recycler.allocate();
+                let b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -555,9 +534,9 @@ mod test {
             let mut msgs1 = Vec::new();
             for v in 1..5 {
                 let i = 9 + v;
-                let b = resp_recycler.allocate();
+                let b = SharedBlob::default();
                 {
-                    let mut w = b.write();
+                    let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
                     w.set_id(me_id).unwrap();
                     assert_eq!(i, w.get_index().unwrap());
@@ -631,7 +610,6 @@ mod test {
 
         let subs = Arc::new(RwLock::new(crdt_me));
 
-        let resp_recycler = BlobRecycler::default();
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
@@ -667,15 +645,11 @@ mod test {
             let extra_blobs = leader_rotation_interval;
             let total_blobs_to_send =
                 my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
-            let msgs = make_consecutive_blobs(
-                me_id,
-                total_blobs_to_send,
-                Hash::default(),
-                &ncp_address,
-                &resp_recycler,
-            ).into_iter()
-            .rev()
-            .collect();;
+            let msgs =
+                make_consecutive_blobs(me_id, total_blobs_to_send, Hash::default(), &ncp_address)
+                    .into_iter()
+                    .rev()
+                    .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };

@@ -7,7 +7,7 @@ use rayon::iter::*;
 use solana::crdt::{Crdt, Node};
 use solana::logger;
 use solana::ncp::Ncp;
-use solana::packet::{Blob, BlobRecycler};
+use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
 use std::net::UdpSocket;
@@ -159,9 +159,8 @@ pub fn crdt_retransmit() -> result::Result<()> {
         sleep(Duration::new(1, 0));
     }
     assert!(done);
-    let r = BlobRecycler::default();
-    let b = r.allocate();
-    b.write().meta.size = 10;
+    let b = SharedBlob::default();
+    b.write().unwrap().meta.size = 10;
     Crdt::retransmit(&c1, &b, &tn1)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()

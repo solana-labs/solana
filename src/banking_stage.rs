@@ -49,8 +49,6 @@ impl Default for Config {
 }
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
-    /// Discard input packets using `packet_recycler` to minimize memory
-    /// allocations in a previous stage such as the `fetch_stage`.
     pub fn new(
         bank: Arc<Bank>,
         verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
@@ -215,7 +213,7 @@ impl BankingStage {
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         for (msgs, vers) in mms {
-            let transactions = Self::deserialize_transactions(&msgs.read());
+            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
             reqs_len += transactions.len();
 
             debug!("transactions received {}", transactions.len());
@@ -275,7 +273,7 @@ mod tests {
     use bank::Bank;
     use ledger::Block;
     use mint::Mint;
-    use packet::{to_packets, PacketRecycler};
+    use packet::to_packets;
     use signature::{Keypair, KeypairUtil};
     use std::thread::sleep;
     use system_transaction::SystemTransaction;
@@ -342,8 +340,7 @@ mod tests {
         let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // send 'em over
-        let recycler = PacketRecycler::default();
-        let packets = to_packets(&recycler, &[tx, tx_no_ver, tx_anf]);
+        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
 
         // glad they all fit
         assert_eq!(packets.len(), 1);
@@ -373,7 +370,6 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
-        let recycler = PacketRecycler::default();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
             BankingStage::new(bank.clone(), verified_receiver, Default::default());
@@ -382,14 +378,14 @@ mod tests {
         let alice = Keypair::new();
         let tx = Transaction::system_new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 
-        let packets = to_packets(&recycler, &[tx]);
+        let packets = to_packets(&[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
         // Process a second batch that spends one of those tokens.
         let tx = Transaction::system_new(&alice, mint.pubkey(), 1, mint.last_id());
-        let packets = to_packets(&recycler, &[tx]);
+        let packets = to_packets(&[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();

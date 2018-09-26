@@ -73,7 +73,10 @@ fn verify_packet_disabled(_packet: &Packet) -> u8 {
 }
 
 fn batch_size(batches: &[SharedPackets]) -> usize {
-    batches.iter().map(|p| p.read().packets.len()).sum()
+    batches
+        .iter()
+        .map(|p| p.read().unwrap().packets.len())
+        .sum()
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -87,8 +90,14 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     info!("CPU ECDSA for {}", batch_size(batches));
     let rv = batches
         .into_par_iter()
-        .map(|p| p.read().packets.par_iter().map(verify_packet).collect())
-        .collect();
+        .map(|p| {
+            p.read()
+                .unwrap()
+                .packets
+                .par_iter()
+                .map(verify_packet)
+                .collect()
+        }).collect();
     inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
@@ -101,6 +110,7 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
         .into_par_iter()
         .map(|p| {
             p.read()
+                .unwrap()
                 .packets
                 .par_iter()
                 .map(verify_packet_disabled)
@@ -196,7 +206,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use packet::{Packet, PacketRecycler};
+    use packet::{Packet, SharedPackets};
     use sigverify;
     use system_transaction::{memfind, test_tx};
     use transaction::Transaction;
@@ -228,15 +238,18 @@ mod tests {
         }
 
         // generate packet vector
-        let packet_recycler = PacketRecycler::default();
         let batches: Vec<_> = (0..2)
             .map(|_| {
-                let packets = packet_recycler.allocate();
-                packets.write().packets.resize(0, Default::default());
+                let packets = SharedPackets::default();
+                packets
+                    .write()
+                    .unwrap()
+                    .packets
+                    .resize(0, Default::default());
                 for _ in 0..n {
-                    packets.write().packets.push(packet.clone());
+                    packets.write().unwrap().packets.push(packet.clone());
                 }
-                assert_eq!(packets.read().packets.len(), n);
+                assert_eq!(packets.read().unwrap().packets.len(), n);
                 packets
             }).collect();
         assert_eq!(batches.len(), 2);

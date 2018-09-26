@@ -8,7 +8,6 @@ use crdt::Crdt;
 use entry::Entry;
 use ledger::{Block, LedgerWriter};
 use log::Level;
-use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
@@ -207,7 +206,6 @@ impl WriteStage {
                     leader_rotation_interval = rcrdt.get_leader_rotation_interval();
                 }
                 let mut entry_height = entry_height;
-                let blob_recycler = BlobRecycler::default();
                 loop {
                     // Note that entry height is not zero indexed, it starts at 1, so the
                     // old leader is in power up to and including entry height
@@ -258,7 +256,6 @@ impl WriteStage {
                         &keypair,
                         &bank,
                         &crdt,
-                        &blob_recycler,
                         &vote_blob_sender,
                         &mut last_vote,
                         &mut last_valid_validator_timestamp,

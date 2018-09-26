@@ -6,7 +6,6 @@ use crdt::Crdt;
 use entry::EntryReceiver;
 use ledger::{Block, LedgerWriter};
 use log::Level;
-use packet::BlobRecycler;
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
@@ -48,7 +47,6 @@ impl ReplicateStage {
     fn replicate_requests(
         bank: &Arc<Bank>,
         crdt: &Arc<RwLock<Crdt>>,
-        blob_recycler: &BlobRecycler,
         window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
@@ -64,7 +62,7 @@ impl ReplicateStage {
         let res = bank.process_entries(&entries);
 
         if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, keypair, crdt, blob_recycler, sender)?;
+            send_validator_vote(bank, keypair, crdt, sender)?;
         }
 
         {
@@ -100,7 +98,6 @@ impl ReplicateStage {
 
         let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
         let keypair = Arc::new(keypair);
-        let blob_recycler = BlobRecycler::default();
 
         let t_replicate = Builder::new()
             .name("solana-replicate-stage".to_string())
@@ -120,7 +117,6 @@ impl ReplicateStage {
                     if let Err(e) = Self::replicate_requests(
                         &bank,
                         &crdt,
-                        &blob_recycler,
                         &window_receiver,
                         ledger_writer.as_mut(),
                         &keypair,

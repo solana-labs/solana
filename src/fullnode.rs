@@ -552,7 +552,7 @@ mod tests {
     use crdt::Node;
     use fullnode::{Fullnode, FullnodeReturnType};
     use ledger::genesis;
-    use packet::{make_consecutive_blobs, BlobRecycler};
+    use packet::make_consecutive_blobs;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::cmp;
@@ -658,7 +658,6 @@ mod tests {
         );
 
         // Send blobs to the validator from our mock leader
-        let resp_recycler = BlobRecycler::default();
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> = leader_node
@@ -685,15 +684,11 @@ mod tests {
                 .expect("expected at least one genesis entry")
                 .id;
             let tvu_address = &validator_info.contact_info.tvu;
-            let msgs = make_consecutive_blobs(
-                leader_id,
-                total_blobs_to_send,
-                last_id,
-                &tvu_address,
-                &resp_recycler,
-            ).into_iter()
-            .rev()
-            .collect();
+            let msgs =
+                make_consecutive_blobs(leader_id, total_blobs_to_send, last_id, &tvu_address)
+                    .into_iter()
+                    .rev()
+                    .collect();
             s_responder.send(msgs).expect("send");
             t_responder
         };

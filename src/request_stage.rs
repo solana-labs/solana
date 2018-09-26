@@ -3,7 +3,7 @@
 use bincode::deserialize;
 use counter::Counter;
 use log::Level;
-use packet::{to_blobs, BlobRecycler, Packets, SharedPackets};
+use packet::{to_blobs, Packets, SharedPackets};
 use rayon::prelude::*;
 use request::Request;
 use request_processor::RequestProcessor;
@@ -38,7 +38,6 @@ impl RequestStage {
         request_processor: &RequestProcessor,
         packet_receiver: &Receiver<SharedPackets>,
         blob_sender: &BlobSender,
-        blob_recycler: &BlobRecycler,
     ) -> Result<()> {
         let (batch, batch_len, _recv_time) = streamer::recv_batch(packet_receiver)?;
 
@@ -51,7 +50,7 @@ impl RequestStage {
         let mut reqs_len = 0;
         let proc_start = Instant::now();
         for msgs in batch {
-            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read())
+            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read().unwrap())
                 .into_iter()
                 .filter_map(|x| x)
                 .collect();
@@ -59,7 +58,7 @@ impl RequestStage {
 
             let rsps = request_processor.process_requests(reqs);
 
-            let blobs = to_blobs(rsps, blob_recycler)?;
+            let blobs = to_blobs(rsps)?;
             if !blobs.is_empty() {
                 info!("process: sending blobs: {}", blobs.len());
                 //don't wake up the other side if there is nothing
@@ -85,7 +84,6 @@ impl RequestStage {
     ) -> (Self, BlobReceiver) {
         let request_processor = Arc::new(request_processor);
         let request_processor_ = request_processor.clone();
-        let blob_recycler = BlobRecycler::default();
         let (blob_sender, blob_receiver) = channel();
         let thread_hdl = Builder::new()
             .name("solana-request-stage".to_string())
@@ -94,7 +92,6 @@ impl RequestStage {
                     &request_processor_,
                     &packet_receiver,
                     &blob_sender,
-                    &blob_recycler,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,

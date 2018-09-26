@@ -9,7 +9,7 @@ use hash::Hash;
 use influx_db_client as influxdb;
 use log::Level;
 use metrics;
-use packet::{BlobRecycler, SharedBlob};
+use packet::SharedBlob;
 use result::Result;
 use signature::Keypair;
 use solana_program_interface::pubkey::Pubkey;
@@ -31,9 +31,8 @@ pub fn create_new_signed_vote_blob(
     last_id: &Hash,
     keypair: &Keypair,
     crdt: &Arc<RwLock<Crdt>>,
-    blob_recycler: &BlobRecycler,
 ) -> Result<SharedBlob> {
-    let shared_blob = blob_recycler.allocate();
+    let shared_blob = SharedBlob::default();
     let (vote, addr) = {
         let mut wcrdt = crdt.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
@@ -42,7 +41,7 @@ pub fn create_new_signed_vote_blob(
     }?;
     let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
     {
-        let mut blob = shared_blob.write();
+        let mut blob = shared_blob.write().unwrap();
         let bytes = serialize(&tx)?;
         let len = bytes.len();
         blob.data[..len].copy_from_slice(&bytes);
@@ -109,7 +108,6 @@ pub fn send_leader_vote(
     keypair: &Keypair,
     bank: &Arc<Bank>,
     crdt: &Arc<RwLock<Crdt>>,
-    blob_recycler: &BlobRecycler,
     vote_blob_sender: &BlobSender,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
@@ -125,9 +123,7 @@ pub fn send_leader_vote(
             last_vote,
             last_valid_validator_timestamp,
         ) {
-            if let Ok(shared_blob) =
-                create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler)
-            {
+            if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
                 vote_blob_sender.send(vec![shared_blob])?;
                 let finality_ms = now - super_majority_timestamp;
 
@@ -152,11 +148,10 @@ pub fn send_validator_vote(
     bank: &Arc<Bank>,
     keypair: &Arc<Keypair>,
     crdt: &Arc<RwLock<Crdt>>,
-    blob_recycler: &BlobRecycler,
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt, blob_recycler) {
+    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(vec![shared_blob])?;
@@ -228,7 +223,6 @@ pub mod tests {
             leader_crdt.insert_vote(&validator.id, &vote, entry.id);
         }
         let leader = Arc::new(RwLock::new(leader_crdt));
-        let blob_recycler = BlobRecycler::default();
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
         let mut last_valid_validator_timestamp = 0;
@@ -237,7 +231,6 @@ pub mod tests {
             &mint.keypair(),
             &bank,
             &leader,
-            &blob_recycler,
             &vote_blob_sender,
             &mut last_vote,
             &mut last_valid_validator_timestamp,
@@ -277,7 +270,6 @@ pub mod tests {
             &mint.keypair(),
             &bank,
             &leader,
-            &blob_recycler,
             &vote_blob_sender,
             &mut last_vote,
             &mut last_valid_validator_timestamp,
@@ -292,7 +284,7 @@ pub mod tests {
 
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
-        let tx = deserialize(&(blob.read().data)).unwrap();
+        let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
         assert!(bank.process_transaction(&tx).is_ok());
     }
 
