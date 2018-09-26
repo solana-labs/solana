@@ -24,6 +24,7 @@ impl<T: Default + Reset> Recyclable<T> {
 
 impl<T: Default + Reset> Drop for Recyclable<T> {
     fn drop(&mut self) {
+        #[cfg(feature = "recycler")]
         if Arc::strong_count(&self.val) == 1 {
             // this isn't thread safe, it will allow some concurrent drops to leak and not recycle
             // if that happens the allocator will end up allocating from the heap
