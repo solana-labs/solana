@@ -423,7 +423,9 @@ impl Bank {
                 return Err(BankError::ProgramRuntimeError);
             }
         } else if StorageProgram::check_id(&tx.program_id) {
-            StorageProgram::process_transaction(&tx, accounts)
+            if StorageProgram::process_transaction(&tx, accounts).is_err() {
+                return Err(BankError::ProgramRuntimeError);
+            }
         } else if TicTacToeProgram::check_id(&tx.program_id) {
             if TicTacToeProgram::process_transaction(&tx, accounts).is_err() {
                 return Err(BankError::ProgramRuntimeError);
