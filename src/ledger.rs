@@ -3,10 +3,10 @@
 //! access read to a persistent file-based ledger.
 
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
+use budget_instruction::Vote;
 use budget_transaction::BudgetTransaction;
 use entry::Entry;
 use hash::Hash;
-use instruction::Vote;
 use log::Level::Trace;
 #[cfg(test)]
 use mint::Mint;
@@ -581,11 +581,11 @@ pub fn genesis(name: &str, num: i64) -> (Mint, String) {
 mod tests {
     use super::*;
     use bincode::serialized_size;
+    use budget_instruction::Vote;
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
-    use instruction::Vote;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
     use std;

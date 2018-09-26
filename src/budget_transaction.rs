@@ -2,10 +2,10 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
+use budget_instruction::{Contract, Instruction, Vote};
 use budget_program::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
-use instruction::{Contract, Instruction, Vote};
 use payment_plan::Payment;
 use signature::{Keypair, Pubkey};
 use transaction::Transaction;

@@ -2,8 +2,8 @@
 use bank::Account;
 use bincode::{self, deserialize, serialize_into, serialized_size};
 use budget::Budget;
+use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
-use instruction::Instruction;
 use payment_plan::Witness;
 use signature::Pubkey;
 use std::io;

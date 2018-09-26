@@ -326,7 +326,7 @@ impl Bank {
                 error_counters.account_not_found_leader += 1;
             }
             if BudgetState::check_id(&tx.program_id) {
-                use instruction::Instruction;
+                use budget_instruction::Instruction;
                 if let Some(Instruction::NewVote(_vote)) = tx.instruction() {
                     error_counters.account_not_found_vote += 1;
                 }

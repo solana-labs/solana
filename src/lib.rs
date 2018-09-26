@@ -14,10 +14,10 @@ pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod broadcast_stage;
 pub mod budget;
+pub mod budget_instruction;
 pub mod budget_transaction;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
-pub mod instruction;
 #[macro_use]
 pub mod crdt;
 pub mod budget_program;

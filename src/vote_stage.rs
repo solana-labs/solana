@@ -168,10 +168,10 @@ pub mod tests {
     use super::*;
     use bank::Bank;
     use bincode::deserialize;
+    use budget_instruction::Vote;
     use crdt::{Crdt, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
-    use instruction::Vote;
     use logger;
     use mint::Mint;
     use std::sync::mpsc::channel;
