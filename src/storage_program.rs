@@ -12,6 +12,10 @@ pub enum StorageProgram {
     SubmitMiningProof { sha_state: [u8; 32] },
 }
 
+pub enum StorageError {
+    InvalidUserData,
+}
+
 pub const STORAGE_PROGRAM_ID: [u8; 32] = [1u8; 32];
 
 impl StorageProgram {
@@ -27,13 +31,19 @@ impl StorageProgram {
         account.tokens
     }
 
-    pub fn process_transaction(tx: &Transaction, _accounts: &mut [Account]) {
-        let syscall: StorageProgram = deserialize(&tx.userdata).unwrap();
-        match syscall {
-            StorageProgram::SubmitMiningProof { sha_state } => {
-                info!("Mining proof submitted with state {}", sha_state[0]);
-                return;
+    pub fn process_transaction(
+        tx: &Transaction,
+        _accounts: &mut [Account],
+    ) -> Result<(), StorageError> {
+        if let Ok(syscall) = deserialize(&tx.userdata) {
+            match syscall {
+                StorageProgram::SubmitMiningProof { sha_state } => {
+                    info!("Mining proof submitted with state {}", sha_state[0]);
+                    return Ok(());
+                }
             }
+        } else {
+            return Err(StorageError::InvalidUserData);
         }
     }
 }
