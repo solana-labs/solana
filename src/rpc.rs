@@ -1,6 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use bank::{Account, Bank};
+use bank::{Account, Bank, BankError};
 use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
@@ -9,6 +9,7 @@ use service::Service;
 use signature::{Pubkey, Signature};
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
+use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -125,7 +126,9 @@ impl RpcSol for RpcSolImpl {
             return Err(Error::invalid_request());
         }
         let signature = Signature::new(&signature_vec);
-        meta.request_processor.get_signature_status(signature)
+        meta.request_processor
+            .get_signature_status(signature)
+            .map(|res| res.is_ok())
     }
     fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
         let pubkey_vec = bs58::decode(id)
@@ -174,7 +177,7 @@ impl RpcSol for RpcSolImpl {
                 .get_signature_status(signature)
                 .map_err(|_| Error::internal_error())?;
 
-            if signature_status {
+            if signature_status.is_ok() {
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
                 return Err(Error::internal_error());
@@ -224,8 +227,8 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    fn get_signature_status(&self, signature: Signature) -> Result<bool> {
-        Ok(self.bank.has_signature(&signature))
+    fn get_signature_status(&self, signature: Signature) -> Result<result::Result<(), BankError>> {
+        Ok(self.bank.get_signature_status(&signature))
     }
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)

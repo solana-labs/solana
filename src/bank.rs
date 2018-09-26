@@ -89,6 +89,10 @@ pub enum BankError {
     /// the `last_id` has been discarded.
     LastIdNotFound(Hash),
 
+    /// The bank has not seen a transaction with the given `Signature` or the transaction is
+    /// too old and has been discarded.
+    SignatureNotFound,
+
     /// Proof of History verification failed.
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
@@ -711,17 +715,18 @@ impl Bank {
         self.transaction_count.load(Ordering::Relaxed)
     }
 
-    pub fn has_signature(&self, signature: &Signature) -> bool {
-        let last_ids_sigs = self
-            .last_ids_sigs
-            .read()
-            .expect("'last_ids_sigs' read lock");
-        for (_hash, signatures) in last_ids_sigs.iter() {
-            if signatures.0.contains_key(signature) {
-                return true;
+    pub fn get_signature_status(&self, signature: &Signature) -> Result<()> {
+        let last_ids_sigs = self.last_ids_sigs.read().unwrap();
+        for (_hash, (signatures, _)) in last_ids_sigs.iter() {
+            if let Some(res) = signatures.get(signature) {
+                return res.clone();
             }
         }
-        false
+        Err(BankError::SignatureNotFound)
+    }
+
+    pub fn has_signature(&self, signature: &Signature) -> bool {
+        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
