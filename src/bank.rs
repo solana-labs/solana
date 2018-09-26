@@ -3,6 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
+use account::Account;
 use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
@@ -31,36 +32,6 @@ use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
 
-/// An Account with userdata that is stored on chain
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Account {
-    /// tokens in the account
-    pub tokens: i64,
-    /// user data
-    /// A transaction can write to its userdata
-    pub userdata: Vec<u8>,
-    /// contract id this contract belongs to
-    pub program_id: Pubkey,
-}
-impl Account {
-    pub fn new(tokens: i64, space: usize, program_id: Pubkey) -> Account {
-        Account {
-            tokens,
-            userdata: vec![0u8; space],
-            program_id,
-        }
-    }
-}
-
-impl Default for Account {
-    fn default() -> Self {
-        Account {
-            tokens: 0,
-            userdata: vec![],
-            program_id: SystemProgram::id(),
-        }
-    }
-}
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
 /// that `last_id` in a transaction. Lowering this value reduces memory consumption,

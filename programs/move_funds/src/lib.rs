@@ -22,7 +22,7 @@ pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, data: &[u8]) {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana::bank::Account;
+    use solana::account::Account;
     use solana::signature::Pubkey;
 
     #[test]

@@ -1,5 +1,5 @@
 //! budget program
-use bank::Account;
+use account::Account;
 use bincode::{self, deserialize, serialize_into, serialized_size};
 use budget::Budget;
 use budget_instruction::Instruction;
@@ -265,7 +265,7 @@ impl BudgetState {
 }
 #[cfg(test)]
 mod test {
-    use bank::Account;
+    use account::Account;
     use bincode::serialize;
     use budget_program::{BudgetError, BudgetState};
     use budget_transaction::BudgetTransaction;

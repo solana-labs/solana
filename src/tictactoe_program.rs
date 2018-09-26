@@ -1,6 +1,6 @@
 //! tic-tac-toe program
 
-use bank::Account;
+use account::Account;
 use serde_cbor;
 use signature::Pubkey;
 use std;
