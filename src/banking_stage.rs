@@ -70,7 +70,7 @@ impl BankingStage {
                         }
                     }
                     if tick_duration.is_some() && last_tick.elapsed() > tick_duration.unwrap() {
-                        if let Err(e) = Self::tick(&poh_service, &entry_sender) {
+                        if let Err(e) = Self::tick(&poh_service, &bank, &entry_sender) {
                             error!("tick() {:?}", e);
                         }
                         last_tick = Instant::now();
@@ -93,8 +93,14 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick(poh_service: &PohService, entry_sender: &Sender<Vec<Entry>>) -> Result<()> {
+    fn tick(
+        poh_service: &PohService,
+        bank: &Arc<Bank>,
+        entry_sender: &Sender<Vec<Entry>>,
+    ) -> Result<()> {
         let poh = poh_service.tick();
+        bank.register_entry_id(&poh.id);
+
         let entry = Entry {
             num_hashes: poh.num_hashes,
             id: poh.id,
@@ -264,11 +270,11 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let bank = Bank::new(&Mint::new(2));
+        let bank = Arc::new(Bank::new(&Mint::new(2)));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
-            Arc::new(bank),
+            bank.clone(),
             verified_receiver,
             Some(Duration::from_millis(1)),
         );
@@ -278,31 +284,31 @@ mod tests {
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
+        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
     #[test]
     fn test_banking_stage_no_tick() {
-        let bank = Bank::new(&Mint::new(2));
+        let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, None);
+        let (banking_stage, entry_receiver) = BankingStage::new(bank, verified_receiver, None);
         sleep(Duration::from_millis(1000));
         drop(verified_sender);
 
-        let entries: Vec<_> = entry_receiver.try_iter().map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() == 0);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
     #[test]
-    fn test_banking_stage() {
+    fn test_banking_stage_entries_only() {
         let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
+        let bank = Arc::new(Bank::new(&mint));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, None);
+            BankingStage::new(bank.clone(), verified_receiver, None);
 
         // good tx
         let keypair = mint.keypair();
@@ -327,14 +333,56 @@ mod tests {
 
         drop(verified_sender);
 
-        let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert_eq!(entries.len(), 1);
-        let mut last_id = start_hash;
-        entries.iter().for_each(|entries| {
-            assert_eq!(entries.len(), 1);
-            assert!(entries.verify(&last_id));
-            last_id = entries.last().unwrap().id;
-        });
+        assert!(entries.verify(&start_hash));
+        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        assert_eq!(banking_stage.join().unwrap(), ());
+    }
+
+    #[test]
+    fn test_banking_stage() {
+        let mint = Mint::new(2);
+        let bank = Arc::new(Bank::new(&mint));
+        let start_hash = bank.last_id();
+        let (verified_sender, verified_receiver) = channel();
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            bank.clone(),
+            verified_receiver,
+            Some(Duration::from_millis(1)),
+        );
+
+        // wait for some ticks
+        sleep(Duration::from_millis(50));
+
+        // good tx
+        let keypair = mint.keypair();
+        let tx = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // good tx, but no verify
+        let tx_no_ver = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // bad tx, AccountNotFound
+        let keypair = Keypair::new();
+        let tx_anf = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+
+        // send 'em over
+        let recycler = PacketRecycler::default();
+        let packets = to_packets(&recycler, &[tx, tx_no_ver, tx_anf]);
+
+        // glad they all fit
+        assert_eq!(packets.len(), 1);
+        verified_sender                       // tx, no_ver, anf
+            .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
+            .unwrap();
+
+        drop(verified_sender);
+
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
+        assert!(entries.len() > 1);
+        assert!(entries.verify(&start_hash));
+        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
@@ -344,11 +392,11 @@ mod tests {
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
+        let bank = Arc::new(Bank::new(&mint));
         let recycler = PacketRecycler::default();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, None);
+            BankingStage::new(bank.clone(), verified_receiver, None);
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
@@ -369,23 +417,20 @@ mod tests {
         assert_eq!(banking_stage.join().unwrap(), ());
 
         // Collect the ledger and feed it to a new bank.
-        let ventries: Vec<_> = entry_receiver.iter().collect();
-
-        // same assertion as below, really...
-        assert_eq!(ventries.len(), 2);
+        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
+        // same assertion as running through the bank, really...
+        assert_eq!(entries.len(), 2);
 
         // Assert the user holds one token, not two. If the stage only outputs one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
         let bank = Bank::new(&mint);
-        for entries in ventries {
-            for entry in entries {
-                assert!(
-                    bank.process_transactions(&entry.transactions)
-                        .into_iter()
-                        .all(|x| x.is_ok())
-                );
-            }
+        for entry in entries {
+            assert!(
+                bank.process_transactions(&entry.transactions)
+                    .into_iter()
+                    .all(|x| x.is_ok())
+            );
         }
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
     }
