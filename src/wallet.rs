@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_command() {
+    fn test_wallet_parse_command() {
         let test_commands = App::new("test")
             .subcommand(SubCommand::with_name("address").about("Get your public key"))
             .subcommand(
@@ -976,6 +976,7 @@ mod tests {
         assert!(parse_command(pubkey, &test_bad_timestamp).is_err());
     }
     #[test]
+    #[ignore]
     fn test_wallet_process_command() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -1116,6 +1117,7 @@ mod tests {
         assert!(!Path::new(outfile).exists());
     }
     #[test]
+    #[ignore]
     fn test_wallet_timestamp_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -1236,6 +1238,7 @@ mod tests {
         remove_dir_all(ledger_path).unwrap();
     }
     #[test]
+    #[ignore]
     fn test_wallet_witness_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -1354,6 +1357,7 @@ mod tests {
         remove_dir_all(ledger_path).unwrap();
     }
     #[test]
+    #[ignore]
     fn test_wallet_cancel_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
