@@ -194,21 +194,7 @@ impl RpcSol for RpcSolImpl {
                 debug!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let now = Instant::now();
-        let mut signature_status;
-        loop {
-            signature_status = meta
-                .request_processor
-                .get_signature_status(tx.signature)
-                .map_err(|_| Error::internal_error())?;
-
-            if signature_status {
-                return Ok(bs58::encode(tx.signature).into_string());
-            } else if now.elapsed().as_secs() > 5 {
-                return Err(Error::internal_error());
-            }
-            sleep(Duration::from_millis(100));
-        }
+        Ok(bs58::encode(tx.signature).into_string())
     }
 }
 #[derive(Clone)]
