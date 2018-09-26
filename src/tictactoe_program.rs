@@ -4,7 +4,6 @@ use bank::Account;
 use serde_cbor;
 use signature::Pubkey;
 use std;
-use transaction::Transaction;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -207,7 +206,11 @@ impl TicTacToeProgram {
         Pubkey::new(&TICTACTOE_PROGRAM_ID)
     }
 
-    pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
+    pub fn process_transaction(
+        keys: &[&Pubkey],
+        accounts: &mut [&mut Account],
+        userdata: &[u8],
+    ) -> Result<()> {
         // accounts[1] must always be the Tic-tac-toe game state account
         if accounts.len() < 2 || !Self::check_id(&accounts[1].program_id) {
             error!("accounts[1] is not assigned to the TICTACTOE_PROGRAM_ID");
@@ -220,7 +223,7 @@ impl TicTacToeProgram {
 
         let mut program_state = Self::deserialize(&accounts[1].userdata)?;
 
-        let command = serde_cbor::from_slice::<Command>(&tx.userdata).map_err(|err| {
+        let command = serde_cbor::from_slice::<Command>(&userdata).map_err(|err| {
             error!("{:?}", err);
             Error::InvalidUserdata
         })?;
@@ -236,8 +239,8 @@ impl TicTacToeProgram {
             }
             Command::Move(player, _, _) => {
                 // Move() must be signed by the player that is wanting to make the next move.
-                if player != tx.keys[0] {
-                    error!("keys[0]({})/player({}) mismatch", tx.keys[0], player);
+                if player != *keys[0] {
+                    error!("keys[0]({})/player({}) mismatch", keys[0], player);
                     return Err(Error::InvalidArguments);
                 }
             }
@@ -252,7 +255,6 @@ impl TicTacToeProgram {
 #[cfg(test)]
 mod test {
     use super::*;
-
     #[test]
     pub fn serde_no_game() {
         let account = TicTacToeProgram::default();

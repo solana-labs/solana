@@ -5,7 +5,6 @@
 use bank::Account;
 use bincode::deserialize;
 use signature::Pubkey;
-use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageProgram {
@@ -27,12 +26,16 @@ impl StorageProgram {
         account.tokens
     }
 
-    pub fn process_transaction(tx: &Transaction, _accounts: &mut [Account]) {
-        let syscall: StorageProgram = deserialize(&tx.userdata).unwrap();
+    pub fn process_transaction(
+        _keys: &[&Pubkey],
+        _accounts: &mut [&mut Account],
+        userdata: &[u8],
+    ) -> Result<(), ()> {
+        let syscall: StorageProgram = deserialize(&userdata).unwrap();
         match syscall {
             StorageProgram::SubmitMiningProof { sha_state } => {
                 info!("Mining proof submitted with state {}", sha_state[0]);
-                return;
+                return Ok(());
             }
         }
     }
