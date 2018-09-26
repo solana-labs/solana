@@ -336,6 +336,7 @@ mod test {
             dt,
             from.pubkey(),
             None,
+            None,
             1,
             Hash::default(),
         );
@@ -410,6 +411,7 @@ mod test {
             contract.pubkey(),
             dt,
             from.pubkey(),
+            None,
             Some(from.pubkey()),
             1,
             Hash::default(),
@@ -461,6 +463,134 @@ mod test {
     }
 
     #[test]
+    fn test_transfer_on_date_with_sig() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetState::id()),
+            Account::new(0, 512, BudgetState::id()),
+            Account::new(0, 0, BudgetState::id()),
+        ];
+        let from_account = 0;
+        let contract_account = 1;
+        let to_account = 2;
+        let from = Keypair::new();
+        let contract = Keypair::new();
+        let to = Keypair::new();
+        let witness = Keypair::new();
+        let dt = Utc::now();
+        let tx = Transaction::budget_new_on_date(
+            &from,
+            to.pubkey(),
+            contract.pubkey(),
+            dt,
+            from.pubkey(),
+            Some(witness.pubkey()),
+            None,
+            1,
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 1);
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(state.is_pending());
+
+        // First, acknowledge the time in the condition occurred but
+        // that pubkey's funds are still not available.
+        let tx = Transaction::budget_new_timestamp(
+            &from,
+            contract.pubkey(),
+            to.pubkey(),
+            dt,
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 1);
+        assert_eq!(accounts[to_account].tokens, 0);
+
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(state.is_pending());
+
+        // Now, provide the wtiness signature,
+        // and pubkey's funds become available.
+        let tx = Transaction::budget_new_signature(
+            &witness,
+            contract.pubkey(),
+            to.pubkey(),
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 0);
+        assert_eq!(accounts[to_account].tokens, 1);
+
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(!state.is_pending());
+    }
+    #[test]
+    fn test_transfer_with_multisig() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetState::id()),
+            Account::new(0, 512, BudgetState::id()),
+            Account::new(0, 0, BudgetState::id()),
+        ];
+        let from_account = 0;
+        let contract_account = 1;
+        let to_account = 2;
+        let from = Keypair::new();
+        let contract = Keypair::new();
+        let to = Keypair::new();
+        let witness0 = Keypair::new();
+        let witness1 = Keypair::new();
+        let witnesses = vec![witness0.pubkey(), witness1.pubkey()];
+        let tx = Transaction::budget_new_when_signed(
+            &from,
+            to.pubkey(),
+            contract.pubkey(),
+            &witnesses,
+            None,
+            1,
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 1);
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(state.is_pending());
+
+        // Provide one witness signature;
+        // Pubkey's funds are not yet available
+        let tx = Transaction::budget_new_signature(
+            &witness0,
+            contract.pubkey(),
+            to.pubkey(),
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 1);
+        assert_eq!(accounts[to_account].tokens, 0);
+
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(state.is_pending());
+
+        // Now, provide the second witness signature.
+        let tx = Transaction::budget_new_signature(
+            &witness1,
+            contract.pubkey(),
+            to.pubkey(),
+            Hash::default(),
+        );
+        BudgetState::process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[contract_account].tokens, 0);
+        assert_eq!(accounts[to_account].tokens, 1);
+
+        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(!state.is_pending());
+    }
+
+    #[test]
     fn test_userdata_too_small() {
         let mut accounts = vec![
             Account::new(1, 0, BudgetState::id()),
@@ -476,6 +606,7 @@ mod test {
             contract.pubkey(),
             Utc::now(),
             from.pubkey(),
+            None,
             None,
             1,
             Hash::default(),
@@ -530,6 +661,7 @@ mod test {
             contract,
             date,
             keypair.pubkey(),
+            None,
             Some(keypair.pubkey()),
             192,
             Hash::default(),

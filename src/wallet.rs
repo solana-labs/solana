@@ -372,63 +372,17 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 let tx = Transaction::system_new(&config.id, to, tokens, last_id);
                 let signature_str = serialize_and_send_tx(&config, &tx)?;
                 Ok(signature_str.to_string())
-            } else if *witnesses == None {
-                let dt = timestamp.unwrap();
-                let dt_pubkey = match timestamp_pubkey {
-                    Some(pubkey) => pubkey,
-                    None => config.id.pubkey(),
-                };
-
-                let contract_funds = Keypair::new();
-                let contract_state = Keypair::new();
-                let budget_program_id = BudgetState::id();
-
-                // Create account for contract funds
-                let tx = Transaction::system_create(
-                    &config.id,
-                    contract_funds.pubkey(),
-                    last_id,
-                    tokens,
-                    0,
-                    budget_program_id,
-                    0,
-                );
-                let _signature_str = serialize_and_send_tx(&config, &tx)?;
-
-                // Create account for contract state
-                let tx = Transaction::system_create(
-                    &config.id,
-                    contract_state.pubkey(),
-                    last_id,
-                    1,
-                    196,
-                    budget_program_id,
-                    0,
-                );
-                let _signature_str = serialize_and_send_tx(&config, &tx)?;
-
-                // Initializing contract
-                let tx = Transaction::budget_new_on_date(
-                    &contract_funds,
-                    to,
-                    contract_state.pubkey(),
-                    dt,
-                    dt_pubkey,
-                    cancelable,
-                    tokens,
-                    last_id,
-                );
-                let signature_str = serialize_and_send_tx(&config, &tx)?;
-
-                Ok(json!({
-                    "signature": signature_str,
-                    "processId": format!("{}", contract_state.pubkey()),
-                }).to_string())
             } else if timestamp == None {
                 let last_id = get_last_id(&config)?;
 
                 let witness = if let Some(ref witness_vec) = *witnesses {
-                    witness_vec[0]
+                    if cancelable.is_some() && witness_vec.len() > 1 {
+                        Err(WalletError::BadParameter(
+                            "Too many conditions. Pick 2: timestamp, signature(s), cancelable"
+                                .to_string(),
+                        ))?;
+                    }
+                    witness_vec
                 } else {
                     Err(WalletError::BadParameter(
                         "Could not parse required signature pubkey(s)".to_string(),
@@ -480,7 +434,72 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     "processId": format!("{}", contract_state.pubkey()),
                 }).to_string())
             } else {
-                Ok("Combo transactions not yet handled".to_string())
+                let last_id = get_last_id(&config)?;
+
+                let dt = timestamp.unwrap();
+                let dt_pubkey = match timestamp_pubkey {
+                    Some(pubkey) => pubkey,
+                    None => config.id.pubkey(),
+                };
+
+                let witness = if let Some(ref witness_vec) = *witnesses {
+                    if cancelable.is_some() || witness_vec.len() > 1 {
+                        Err(WalletError::BadParameter(
+                            "Too many conditions. Pick 2: timestamp, signature(s), cancelable"
+                                .to_string(),
+                        ))?;
+                    }
+                    Some(witness_vec[0])
+                } else {
+                    None
+                };
+
+                let contract_funds = Keypair::new();
+                let contract_state = Keypair::new();
+                let budget_program_id = BudgetState::id();
+
+                // Create account for contract funds
+                let tx = Transaction::system_create(
+                    &config.id,
+                    contract_funds.pubkey(),
+                    last_id,
+                    tokens,
+                    0,
+                    budget_program_id,
+                    0,
+                );
+                let _signature_str = serialize_and_send_tx(&config, &tx)?;
+
+                // Create account for contract state
+                let tx = Transaction::system_create(
+                    &config.id,
+                    contract_state.pubkey(),
+                    last_id,
+                    1,
+                    196,
+                    budget_program_id,
+                    0,
+                );
+                let _signature_str = serialize_and_send_tx(&config, &tx)?;
+
+                // Initializing contract
+                let tx = Transaction::budget_new_on_date(
+                    &contract_funds,
+                    to,
+                    contract_state.pubkey(),
+                    dt,
+                    dt_pubkey,
+                    witness,
+                    cancelable,
+                    tokens,
+                    last_id,
+                );
+                let signature_str = serialize_and_send_tx(&config, &tx)?;
+
+                Ok(json!({
+                    "signature": signature_str,
+                    "processId": format!("{}", contract_state.pubkey()),
+                }).to_string())
             }
         }
         // Apply time elapsed to contract
