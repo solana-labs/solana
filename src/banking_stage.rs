@@ -248,7 +248,8 @@ mod tests {
     use packet::{to_packets, PacketRecycler};
     use signature::{Keypair, KeypairUtil};
     use std::thread::sleep;
-    use transaction::{SystemTransaction, Transaction};
+    use system_transaction::SystemTransaction;
+    use transaction::Transaction;
 
     #[test]
     fn test_banking_stage_shutdown() {

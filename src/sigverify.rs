@@ -197,8 +197,8 @@ mod tests {
     use bincode::serialize;
     use packet::{Packet, PacketRecycler};
     use sigverify;
+    use system_transaction::{memfind, test_tx};
     use transaction::Transaction;
-    use transaction::{memfind, test_tx};
 
     #[test]
     fn test_layout() {

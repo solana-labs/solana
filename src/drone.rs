@@ -17,12 +17,13 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use system_transaction::SystemTransaction;
 use thin_client::{poll_gossip_for_leader, ThinClient};
 use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
-use transaction::{SystemTransaction, Transaction};
+use transaction::Transaction;
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 500_000_000;

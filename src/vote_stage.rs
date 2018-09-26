@@ -177,7 +177,8 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::{SystemTransaction, Transaction};
+    use system_transaction::SystemTransaction;
+    use transaction::Transaction;
 
     #[test]
     fn test_send_leader_vote() {

@@ -230,7 +230,8 @@ mod tests {
     use entry::Entry;
     use hash::hash;
     use signature::{Keypair, KeypairUtil};
-    use transaction::{BudgetTransaction, SystemTransaction, Transaction};
+    use system_transaction::SystemTransaction;
+    use transaction::{BudgetTransaction, Transaction};
 
     #[test]
     fn test_entry_verify() {

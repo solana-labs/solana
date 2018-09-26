@@ -22,7 +22,8 @@ use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
-use transaction::{BudgetTransaction, SystemTransaction, Transaction};
+use system_transaction::SystemTransaction;
+use transaction::{BudgetTransaction, Transaction};
 
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {

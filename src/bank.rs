@@ -24,9 +24,10 @@ use std::sync::RwLock;
 use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
+use system_transaction::SystemTransaction;
 use tictactoe_program::TicTacToeProgram;
 use timing::{duration_as_us, timestamp};
-use transaction::{SystemTransaction, Transaction};
+use transaction::Transaction;
 use window::WINDOW_SIZE;
 
 /// An Account with userdata that is stored on chain

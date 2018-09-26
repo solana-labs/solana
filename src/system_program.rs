@@ -106,7 +106,8 @@ mod test {
     use std::sync::RwLock;
     use std::thread;
     use system_program::SystemProgram;
-    use transaction::{SystemTransaction, Transaction};
+    use system_transaction::SystemTransaction;
+    use transaction::Transaction;
 
     #[test]
     fn test_create_noop() {
