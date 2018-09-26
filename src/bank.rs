@@ -1123,4 +1123,19 @@ mod tests {
         def_bank.set_finality(90);
         assert_eq!(def_bank.finality(), 90);
     }
+
+    #[test]
+    fn test_storage_tx() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let tx = Transaction::new(
+            &mint.keypair(),
+            &[],
+            StorageProgram::id(),
+            vec![], // <--- attack! Panic on bad userdata?
+            mint.last_id(),
+            0,
+        );
+        assert!(bank.process_transaction(&tx).is_err());
+    }
 }
