@@ -22,7 +22,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use timing;
-use transaction::Transaction;
+use transaction::{SystemTransaction, Transaction};
 
 use influx_db_client as influxdb;
 use metrics;
@@ -154,7 +154,7 @@ impl ThinClient {
         last_id: &Hash,
     ) -> io::Result<Signature> {
         let now = Instant::now();
-        let tx = Transaction::new(keypair, to, n, *last_id);
+        let tx = Transaction::system_new(keypair, to, n, *last_id);
         let result = self.transfer_signed(&tx);
         metrics::submit(
             influxdb::Point::new("thinclient")
@@ -530,13 +530,13 @@ mod tests {
         );
         let last_id = client.get_last_id();
 
-        let tx = Transaction::new(&alice.keypair(), bob_pubkey, 500, last_id);
+        let tx = Transaction::system_new(&alice.keypair(), bob_pubkey, 500, last_id);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
         let last_id = client.get_last_id();
 
-        let mut tr2 = Transaction::new(&alice.keypair(), bob_pubkey, 501, last_id);
+        let mut tr2 = Transaction::system_new(&alice.keypair(), bob_pubkey, 501, last_id);
         let mut instruction2 = deserialize(&tr2.userdata).unwrap();
         if let SystemProgram::Move { ref mut tokens } = instruction2 {
             *tokens = 502;

@@ -248,7 +248,7 @@ mod tests {
     use packet::{to_packets, PacketRecycler};
     use signature::{Keypair, KeypairUtil};
     use std::thread::sleep;
-    use transaction::Transaction;
+    use transaction::{SystemTransaction, Transaction};
 
     #[test]
     fn test_banking_stage_shutdown() {
@@ -304,14 +304,14 @@ mod tests {
 
         // good tx
         let keypair = mint.keypair();
-        let tx = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // good tx, but no verify
-        let tx_no_ver = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_no_ver = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // bad tx, AccountNotFound
         let keypair = Keypair::new();
-        let tx_anf = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // send 'em over
         let recycler = PacketRecycler::default();
@@ -350,7 +350,7 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
-        let tx = Transaction::new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 
         let packets = to_packets(&recycler, &[tx]);
         verified_sender
@@ -358,7 +358,7 @@ mod tests {
             .unwrap();
 
         // Process a second batch that spends one of those tokens.
-        let tx = Transaction::new(&alice, mint.pubkey(), 1, mint.last_id());
+        let tx = Transaction::system_new(&alice, mint.pubkey(), 1, mint.last_id());
         let packets = to_packets(&recycler, &[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])

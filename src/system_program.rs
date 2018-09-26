@@ -106,7 +106,7 @@ mod test {
     use std::sync::RwLock;
     use std::thread;
     use system_program::SystemProgram;
-    use transaction::Transaction;
+    use transaction::{SystemTransaction, Transaction};
 
     #[test]
     fn test_create_noop() {
@@ -336,7 +336,7 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
-        let tx = Transaction::new(&from, to.pubkey(), 1, Hash::default());
+        let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
         let hash = RwLock::new(HashMap::new());
         SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);

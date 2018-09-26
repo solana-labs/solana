@@ -241,7 +241,7 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::Arc;
-    use transaction::Transaction;
+    use transaction::{SystemTransaction, Transaction};
 
     #[test]
     fn test_rpc_request() {

@@ -71,225 +71,7 @@ impl Transaction {
         tx.sign(from_keypair);
         tx
     }
-    /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn budget_new_taxed(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        tokens: i64,
-        fee: i64,
-        last_id: Hash,
-    ) -> Self {
-        let payment = Payment {
-            tokens: tokens - fee,
-            to,
-        };
-        let budget = Budget::Pay(payment);
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
-        let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
-            from_keypair,
-            &[to],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            fee,
-        )
-    }
 
-    /// Create and sign a new Transaction. Used for unit-testing.
-    pub fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Self::budget_new_taxed(from_keypair, to, tokens, 0, last_id)
-    }
-
-    /// Create and sign a new Witness Timestamp. Used for unit-testing.
-    pub fn budget_new_timestamp(
-        from_keypair: &Keypair,
-        contract: Pubkey,
-        to: Pubkey,
-        dt: DateTime<Utc>,
-        last_id: Hash,
-    ) -> Self {
-        let instruction = Instruction::ApplyTimestamp(dt);
-        let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
-            from_keypair,
-            &[contract, to],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            0,
-        )
-    }
-
-    /// Create and sign a new Witness Signature. Used for unit-testing.
-    pub fn budget_new_signature(
-        from_keypair: &Keypair,
-        contract: Pubkey,
-        to: Pubkey,
-        last_id: Hash,
-    ) -> Self {
-        let instruction = Instruction::ApplySignature;
-        let userdata = serialize(&instruction).unwrap();
-        Self::new_with_userdata(
-            from_keypair,
-            &[contract, to],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            0,
-        )
-    }
-
-    pub fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
-        let instruction = Instruction::NewVote(vote);
-        let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
-    }
-
-    /// Create and sign a postdated Transaction. Used for unit-testing.
-    pub fn budget_new_on_date(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        contract: Pubkey,
-        dt: DateTime<Utc>,
-        dt_pubkey: Pubkey,
-        cancelable: Option<Pubkey>,
-        tokens: i64,
-        last_id: Hash,
-    ) -> Self {
-        let budget = if let Some(from) = cancelable {
-            Budget::Or(
-                (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
-                (Condition::Signature(from), Payment { tokens, to: from }),
-            )
-        } else {
-            Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
-        };
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
-        let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(
-            from_keypair,
-            &[contract],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            0,
-        )
-    }
-    /// Create and sign a multisig Transaction.
-    pub fn budget_new_when_signed(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        contract: Pubkey,
-        witness: Pubkey,
-        cancelable: Option<Pubkey>,
-        tokens: i64,
-        last_id: Hash,
-    ) -> Self {
-        let budget = if let Some(from) = cancelable {
-            Budget::Or(
-                (Condition::Signature(witness), Payment { tokens, to }),
-                (Condition::Signature(from), Payment { tokens, to: from }),
-            )
-        } else {
-            Budget::After(Condition::Signature(witness), Payment { tokens, to })
-        };
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
-        let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new_with_userdata(
-            from_keypair,
-            &[contract],
-            BudgetState::id(),
-            userdata,
-            last_id,
-            0,
-        )
-    }
-    /// Create and sign new SystemProgram::CreateAccount transaction
-    pub fn system_create(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        last_id: Hash,
-        tokens: i64,
-        space: u64,
-        program_id: Pubkey,
-        fee: i64,
-    ) -> Self {
-        let create = SystemProgram::CreateAccount {
-            tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
-            space,
-            program_id,
-        };
-        Transaction::new_with_userdata(
-            from_keypair,
-            &[to],
-            SystemProgram::id(),
-            serialize(&create).unwrap(),
-            last_id,
-            fee,
-        )
-    }
-    /// Create and sign new SystemProgram::CreateAccount transaction
-    pub fn system_assign(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        program_id: Pubkey,
-        fee: i64,
-    ) -> Self {
-        let create = SystemProgram::Assign { program_id };
-        Transaction::new_with_userdata(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            serialize(&create).unwrap(),
-            last_id,
-            fee,
-        )
-    }
-    /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
-    pub fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
-    }
-    /// Create and sign new SystemProgram::Move transaction
-    pub fn system_move(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        tokens: i64,
-        last_id: Hash,
-        fee: i64,
-    ) -> Self {
-        let create = SystemProgram::Move { tokens };
-        Transaction::new_with_userdata(
-            from_keypair,
-            &[to],
-            SystemProgram::id(),
-            serialize(&create).unwrap(),
-            last_id,
-            fee,
-        )
-    }
-    /// Create and sign new SystemProgram::Load transaction
-    pub fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self {
-        let load = SystemProgram::Load { program_id, name };
-        Transaction::new_with_userdata(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            serialize(&load).unwrap(),
-            last_id,
-            fee,
-        )
-    }
-    /// Create and sign new SystemProgram::Move transaction
-    pub fn new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
-        Transaction::system_move(from_keypair, to, tokens, last_id, 0)
-    }
     /// Get the transaction data to sign.
     fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&(&self.keys)).expect("serialize keys");
@@ -351,6 +133,304 @@ impl Transaction {
             .iter()
             .for_each(|tx| hasher.hash(&tx.signature.as_ref()));
         hasher.result()
+    }
+}
+
+pub trait BudgetTransaction {
+    fn budget_new_taxed(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: i64,
+        fee: i64,
+        last_id: Hash,
+    ) -> Self;
+
+    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self;
+
+    fn budget_new_timestamp(
+        from_keypair: &Keypair,
+        contract: Pubkey,
+        to: Pubkey,
+        dt: DateTime<Utc>,
+        last_id: Hash,
+    ) -> Self;
+
+    fn budget_new_signature(
+        from_keypair: &Keypair,
+        contract: Pubkey,
+        to: Pubkey,
+        last_id: Hash,
+    ) -> Self;
+
+    fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
+
+    fn budget_new_on_date(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        contract: Pubkey,
+        dt: DateTime<Utc>,
+        dt_pubkey: Pubkey,
+        cancelable: Option<Pubkey>,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self;
+
+    fn budget_new_when_signed(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        contract: Pubkey,
+        witness: Pubkey,
+        cancelable: Option<Pubkey>,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self;
+}
+
+impl BudgetTransaction for Transaction {
+    /// Create and sign a new Transaction. Used for unit-testing.
+    fn budget_new_taxed(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: i64,
+        fee: i64,
+        last_id: Hash,
+    ) -> Self {
+        let payment = Payment {
+            tokens: tokens - fee,
+            to,
+        };
+        let budget = Budget::Pay(payment);
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[to],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            fee,
+        )
+    }
+
+    /// Create and sign a new Transaction. Used for unit-testing.
+    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        Self::budget_new_taxed(from_keypair, to, tokens, 0, last_id)
+    }
+
+    /// Create and sign a new Witness Timestamp. Used for unit-testing.
+    fn budget_new_timestamp(
+        from_keypair: &Keypair,
+        contract: Pubkey,
+        to: Pubkey,
+        dt: DateTime<Utc>,
+        last_id: Hash,
+    ) -> Self {
+        let instruction = Instruction::ApplyTimestamp(dt);
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract, to],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            0,
+        )
+    }
+
+    /// Create and sign a new Witness Signature. Used for unit-testing.
+    fn budget_new_signature(
+        from_keypair: &Keypair,
+        contract: Pubkey,
+        to: Pubkey,
+        last_id: Hash,
+    ) -> Self {
+        let instruction = Instruction::ApplySignature;
+        let userdata = serialize(&instruction).unwrap();
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract, to],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            0,
+        )
+    }
+
+    fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+        let instruction = Instruction::NewVote(vote);
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+    }
+
+    /// Create and sign a postdated Transaction. Used for unit-testing.
+    fn budget_new_on_date(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        contract: Pubkey,
+        dt: DateTime<Utc>,
+        dt_pubkey: Pubkey,
+        cancelable: Option<Pubkey>,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self {
+        let budget = if let Some(from) = cancelable {
+            Budget::Or(
+                (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
+            )
+        } else {
+            Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
+        };
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            0,
+        )
+    }
+    /// Create and sign a multisig Transaction.
+    fn budget_new_when_signed(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        contract: Pubkey,
+        witness: Pubkey,
+        cancelable: Option<Pubkey>,
+        tokens: i64,
+        last_id: Hash,
+    ) -> Self {
+        let budget = if let Some(from) = cancelable {
+            Budget::Or(
+                (Condition::Signature(witness), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
+            )
+        } else {
+            Budget::After(Condition::Signature(witness), Payment { tokens, to })
+        };
+        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new_with_userdata(
+            from_keypair,
+            &[contract],
+            BudgetState::id(),
+            userdata,
+            last_id,
+            0,
+        )
+    }
+}
+
+pub trait SystemTransaction {
+    fn system_create(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        last_id: Hash,
+        tokens: i64,
+        space: u64,
+        program_id: Pubkey,
+        fee: i64,
+    ) -> Self;
+
+    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self;
+
+    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self;
+
+    fn system_move(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: i64,
+        last_id: Hash,
+        fee: i64,
+    ) -> Self;
+
+    fn system_load(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        fee: i64,
+        program_id: Pubkey,
+        name: String,
+    ) -> Self;
+}
+
+impl SystemTransaction for Transaction {
+    /// Create and sign new SystemProgram::CreateAccount transaction
+    fn system_create(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        last_id: Hash,
+        tokens: i64,
+        space: u64,
+        program_id: Pubkey,
+        fee: i64,
+    ) -> Self {
+        let create = SystemProgram::CreateAccount {
+            tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
+            space,
+            program_id,
+        };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[to],
+            SystemProgram::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemProgram::CreateAccount transaction
+    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
+        let create = SystemProgram::Assign { program_id };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[],
+            SystemProgram::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
+    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
+    }
+    /// Create and sign new SystemProgram::Move transaction
+    fn system_move(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: i64,
+        last_id: Hash,
+        fee: i64,
+    ) -> Self {
+        let create = SystemProgram::Move { tokens };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[to],
+            SystemProgram::id(),
+            serialize(&create).unwrap(),
+            last_id,
+            fee,
+        )
+    }
+    /// Create and sign new SystemProgram::Load transaction
+    fn system_load(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        fee: i64,
+        program_id: Pubkey,
+        name: String,
+    ) -> Self {
+        let load = SystemProgram::Load { program_id, name };
+        Transaction::new_with_userdata(
+            from_keypair,
+            &[],
+            SystemProgram::id(),
+            serialize(&load).unwrap(),
+            last_id,
+            fee,
+        )
     }
 }
 

@@ -21,7 +21,7 @@ use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::timing::{duration_as_ms, duration_as_s};
-use solana::transaction::Transaction;
+use solana::transaction::{SystemTransaction, Transaction};
 use solana::wallet::request_airdrop;
 use solana::window::default_window;
 use std::collections::VecDeque;
@@ -187,9 +187,9 @@ fn generate_txs(
         .par_iter()
         .map(|keypair| {
             if !reclaim {
-                Transaction::new(&id, keypair.pubkey(), 1, *last_id)
+                Transaction::system_new(&id, keypair.pubkey(), 1, *last_id)
             } else {
-                Transaction::new(keypair, id.pubkey(), 1, *last_id)
+                Transaction::system_new(keypair, id.pubkey(), 1, *last_id)
             }
         }).collect();
 

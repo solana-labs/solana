@@ -271,7 +271,7 @@ mod test {
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;
     use signature::{GenKeys, Keypair, KeypairUtil, Pubkey};
-    use transaction::Transaction;
+    use transaction::{BudgetTransaction, Transaction};
     #[test]
     fn test_serializer() {
         let mut a = Account::new(0, 512, BudgetState::id());

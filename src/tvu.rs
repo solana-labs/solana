@@ -166,7 +166,7 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
-    use transaction::Transaction;
+    use transaction::{SystemTransaction, Transaction};
     use tvu::Tvu;
     use window::{self, SharedWindow};
 

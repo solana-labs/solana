@@ -22,7 +22,7 @@ use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
-use transaction::Transaction;
+use transaction::{SystemTransaction, Transaction};
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 500_000_000;
@@ -127,7 +127,7 @@ impl Drone {
                     airdrop_request_amount, client_pubkey
                 );
                 request_amount = airdrop_request_amount;
-                Transaction::new(
+                Transaction::system_new(
                     &self.mint_keypair,
                     client_pubkey,
                     airdrop_request_amount as i64,

@@ -16,7 +16,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
 use timing;
-use transaction::Transaction;
+use transaction::{BudgetTransaction, Transaction};
 
 pub const VOTE_TIMEOUT_MS: u64 = 1000;
 
@@ -177,7 +177,7 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::Transaction;
+    use transaction::{SystemTransaction, Transaction};
 
     #[test]
     fn test_send_leader_vote() {
