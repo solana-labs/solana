@@ -357,14 +357,14 @@ mod tests {
 
         // good tx
         let keypair = mint.keypair();
-        let tx = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // good tx, but no verify
-        let tx_no_ver = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_no_ver = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // bad tx, AccountNotFound
         let keypair = Keypair::new();
-        let tx_anf = Transaction::new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // send 'em over
         let recycler = PacketRecycler::default();
