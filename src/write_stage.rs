@@ -299,8 +299,9 @@ mod tests {
     use entry::Entry;
     use hash::Hash;
     use ledger::{genesis, next_entries_mut, read_ledger};
+    use pubkey::Pubkey;
     use service::Service;
-    use signature::{Keypair, KeypairUtil, Pubkey};
+    use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::sync::{Arc, RwLock};

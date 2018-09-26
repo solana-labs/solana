@@ -3,7 +3,7 @@
 use account::Account;
 use bincode::deserialize;
 use dynamic_program::DynamicProgram;
-use signature::Pubkey;
+use pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use transaction::Transaction;
@@ -101,7 +101,8 @@ mod test {
     use bincode::serialize;
     use dynamic_program::KeyedAccount;
     use hash::Hash;
-    use signature::{Keypair, KeypairUtil, Pubkey};
+    use pubkey::Pubkey;
+    use signature::{Keypair, KeypairUtil};
     use std::collections::HashMap;
     use std::sync::RwLock;
     use std::thread;

@@ -1,8 +1,9 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use bs58;
-use generic_array::typenum::{U32, U64};
+use generic_array::typenum::U64;
 use generic_array::GenericArray;
+use pubkey::Pubkey;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use ring::signature::Ed25519KeyPair;
@@ -14,32 +15,6 @@ use std::fs::File;
 use untrusted::Input;
 
 pub type Keypair = Ed25519KeyPair;
-#[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Pubkey(GenericArray<u8, U32>);
-
-impl Pubkey {
-    pub fn new(pubkey_vec: &[u8]) -> Self {
-        Pubkey(GenericArray::clone_from_slice(&pubkey_vec))
-    }
-}
-
-impl AsRef<[u8]> for Pubkey {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl fmt::Debug for Pubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
-    }
-}
-
-impl fmt::Display for Pubkey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.0).into_string())
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
@@ -89,7 +64,7 @@ impl KeypairUtil for Ed25519KeyPair {
 
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
-        Pubkey(GenericArray::clone_from_slice(self.public_key_bytes()))
+        Pubkey::new(self.public_key_bytes())
     }
 }
 

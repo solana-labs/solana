@@ -2,7 +2,8 @@
 
 use bincode::serialize;
 use hash::{Hash, Hasher};
-use signature::{Keypair, KeypairUtil, Pubkey, Signature};
+use pubkey::Pubkey;
+use signature::{Keypair, KeypairUtil, Signature};
 use std::mem::size_of;
 
 pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();

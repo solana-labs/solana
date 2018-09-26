@@ -43,8 +43,9 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
+    use pubkey::Pubkey;
     use ring::signature;
-    use signature::{Pubkey, Signature};
+    use signature::Signature;
     use untrusted;
 
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;

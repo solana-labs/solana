@@ -41,6 +41,7 @@ pub mod packet;
 pub mod payment_plan;
 pub mod poh;
 pub mod poh_recorder;
+pub mod pubkey;
 pub mod recvmmsg;
 pub mod recycler;
 pub mod replicate_stage;

@@ -1,6 +1,6 @@
 // Support erasure coding
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
-use signature::Pubkey;
+use pubkey::Pubkey;
 use std::cmp;
 use std::mem;
 use std::result;
@@ -603,8 +603,9 @@ mod test {
     use erasure;
     use logger;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
+    use pubkey::Pubkey;
     use rand::{thread_rng, Rng};
-    use signature::{Keypair, KeypairUtil, Pubkey};
+    use signature::{Keypair, KeypairUtil};
     //    use std::sync::{Arc, RwLock};
     use window::{index_blobs, WindowSlot};
 

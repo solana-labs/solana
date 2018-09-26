@@ -23,7 +23,7 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana::account::Account;
-    use solana::signature::Pubkey;
+    use solana::pubkey::Pubkey;
 
     #[test]
     fn test_move_funds() {

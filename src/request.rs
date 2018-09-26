@@ -2,7 +2,8 @@
 
 use account::Account;
 use hash::Hash;
-use signature::{Pubkey, Signature};
+use pubkey::Pubkey;
+use signature::Signature;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]

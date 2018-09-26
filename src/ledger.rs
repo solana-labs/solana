@@ -11,9 +11,9 @@ use log::Level::Trace;
 #[cfg(test)]
 use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
+use pubkey::Pubkey;
 use rayon::prelude::*;
 use result::{Error, Result};
-use signature::Pubkey;
 #[cfg(test)]
 use signature::{Keypair, KeypairUtil};
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
