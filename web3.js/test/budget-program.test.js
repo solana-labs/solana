@@ -16,7 +16,8 @@ test('pay', () => {
     123,
   );
   console.log('Pay:', transaction);
-  // TODO: Validate transaction contents
+  expect(transaction.keys).toHaveLength(2);
+  // TODO: Validate transaction contents more
 
   transaction = BudgetProgram.pay(
     from.publicKey,
@@ -26,7 +27,8 @@ test('pay', () => {
     BudgetProgram.signatureCondition(from.publicKey),
   );
   console.log('After:', transaction);
-  // TODO: Validate transaction contents
+  expect(transaction.keys).toHaveLength(3);
+  // TODO: Validate transaction contents more
 
   transaction = BudgetProgram.pay(
     from.publicKey,
@@ -37,6 +39,33 @@ test('pay', () => {
     BudgetProgram.timestampCondition(from.publicKey, new Date()),
   );
   console.log('Or:', transaction);
-  // TODO: Validate transaction contents
+  expect(transaction.keys).toHaveLength(3);
+  // TODO: Validate transaction contents more
+});
+
+test('apply', () => {
+  const from = new Account();
+  const program = new Account();
+  const to = new Account();
+  let transaction;
+
+  transaction = BudgetProgram.applyTimestamp(
+    from.publicKey,
+    program.publicKey,
+    to.publicKey,
+    new Date(),
+  );
+  console.log('applyTimestamp:', transaction);
+  expect(transaction.keys).toHaveLength(3);
+  // TODO: Validate transaction contents more
+
+  transaction = BudgetProgram.applySignature(
+    from.publicKey,
+    program.publicKey,
+    to.publicKey,
+  );
+  console.log('applySignature:', transaction);
+  expect(transaction.keys).toHaveLength(3);
+  // TODO: Validate transaction contents more
 });
 
