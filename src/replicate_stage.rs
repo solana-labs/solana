@@ -17,6 +17,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
+use std::time::Instant;
 use streamer::{responder, BlobSender};
 use vote_stage::send_validator_vote;
 
@@ -51,7 +52,7 @@ impl ReplicateStage {
         window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
-        vote_blob_sender: &BlobSender,
+        vote_blob_sender: Option<&BlobSender>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -61,7 +62,10 @@ impl ReplicateStage {
         }
 
         let res = bank.process_entries(&entries);
-        send_validator_vote(bank, keypair, crdt, blob_recycler, vote_blob_sender)?;
+
+        if let Some(sender) = vote_blob_sender {
+            send_validator_vote(bank, keypair, crdt, blob_recycler, sender)?;
+        }
 
         {
             let mut wcrdt = crdt.write().unwrap();
@@ -102,7 +106,17 @@ impl ReplicateStage {
             .name("solana-replicate-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);;
+                let now = Instant::now();
+                let mut next_vote_secs = 1;
                 loop {
+                    // Only vote once a second.
+                    let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
+                        next_vote_secs += 1;
+                        Some(&vote_blob_sender)
+                    } else {
+                        None
+                    };
+
                     if let Err(e) = Self::replicate_requests(
                         &bank,
                         &crdt,
@@ -110,7 +124,7 @@ impl ReplicateStage {
                         &window_receiver,
                         ledger_writer.as_mut(),
                         &keypair,
-                        &vote_blob_sender,
+                        vote_sender,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
