@@ -2,8 +2,8 @@
 
 use bincode::serialize;
 use hash::{Hash, Hasher};
-use pubkey::Pubkey;
 use signature::{Keypair, KeypairUtil, Signature};
+use solana_program_interface::pubkey::Pubkey;
 use std::mem::size_of;
 
 pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();

@@ -283,9 +283,9 @@ mod tests {
     use entry::Entry;
     use ledger::next_entries_mut;
     use mint::Mint;
-    use pubkey::Pubkey;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use solana_program_interface::pubkey::Pubkey;
     use std::cmp;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::{channel, Sender};

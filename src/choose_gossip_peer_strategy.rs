@@ -1,8 +1,8 @@
 use crdt::{CrdtError, NodeInfo};
-use pubkey::Pubkey;
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::Result;
+use solana_program_interface::pubkey::Pubkey;
 use std;
 use std::collections::HashMap;
 
@@ -192,8 +192,8 @@ impl<'a> ChooseGossipPeerStrategy for ChooseWeightedPeerStrategy<'a> {
 mod tests {
     use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
     use logger;
-    use pubkey::Pubkey;
     use signature::{Keypair, KeypairUtil};
+    use solana_program_interface::pubkey::Pubkey;
     use std;
     use std::collections::HashMap;
 

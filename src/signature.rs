@@ -3,12 +3,12 @@
 use bs58;
 use generic_array::typenum::U64;
 use generic_array::GenericArray;
-use pubkey::Pubkey;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rayon::prelude::*;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use serde_json;
+use solana_program_interface::pubkey::Pubkey;
 use std::error;
 use std::fmt;
 use std::fs::File;

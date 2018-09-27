@@ -2,9 +2,9 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use account::Account;
 use bincode::deserialize;
-use pubkey::Pubkey;
+use solana_program_interface::account::Account;
+use solana_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

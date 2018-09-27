@@ -11,11 +11,11 @@ use log::Level::Trace;
 #[cfg(test)]
 use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
-use pubkey::Pubkey;
 use rayon::prelude::*;
 use result::{Error, Result};
 #[cfg(test)]
 use signature::{Keypair, KeypairUtil};
+use solana_program_interface::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};

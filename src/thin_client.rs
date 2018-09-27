@@ -3,17 +3,17 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use account::Account;
 use bank::Bank;
 use bincode::{deserialize, serialize};
 use crdt::{Crdt, CrdtError, NodeInfo};
 use hash::Hash;
 use log::Level;
 use ncp::Ncp;
-use pubkey::Pubkey;
 use request::{Request, Response};
 use result::{Error, Result};
 use signature::{Keypair, Signature};
+use solana_program_interface::account::Account;
+use solana_program_interface::pubkey::Pubkey;
 use std;
 use std::collections::HashMap;
 use std::io;

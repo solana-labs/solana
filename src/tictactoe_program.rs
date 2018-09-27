@@ -1,8 +1,8 @@
 //! tic-tac-toe program
 
-use account::Account;
-use pubkey::Pubkey;
 use serde_cbor;
+use solana_program_interface::account::Account;
+use solana_program_interface::pubkey::Pubkey;
 use std;
 use transaction::Transaction;
 

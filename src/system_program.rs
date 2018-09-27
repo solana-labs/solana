@@ -1,9 +1,9 @@
 //! system program
 
-use account::Account;
 use bincode::deserialize;
 use dynamic_program::DynamicProgram;
-use pubkey::Pubkey;
+use solana_program_interface::account::Account;
+use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use transaction::Transaction;
@@ -97,11 +97,11 @@ impl SystemProgram {
 }
 #[cfg(test)]
 mod test {
-    use account::{Account, KeyedAccount};
     use bincode::serialize;
     use hash::Hash;
-    use pubkey::Pubkey;
     use signature::{Keypair, KeypairUtil};
+    use solana_program_interface::account::{Account, KeyedAccount};
+    use solana_program_interface::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::sync::RwLock;
     use std::thread;

@@ -43,9 +43,9 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
-    use pubkey::Pubkey;
     use ring::signature;
     use signature::Signature;
+    use solana_program_interface::pubkey::Pubkey;
     use untrusted;
 
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;

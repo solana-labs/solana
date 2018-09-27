@@ -2,8 +2,8 @@
 
 use bincode::serialize;
 use hash::Hash;
-use pubkey::Pubkey;
 use signature::{Keypair, KeypairUtil};
+use solana_program_interface::pubkey::Pubkey;
 use system_program::SystemProgram;
 use transaction::Transaction;
 
