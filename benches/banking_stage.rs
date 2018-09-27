@@ -12,7 +12,11 @@ use solana::bank::Bank;
 use solana::banking_stage::{BankingStage, NUM_THREADS};
 use solana::entry::Entry;
 use solana::mint::Mint;
+<<<<<<< HEAD
 use solana::packet::to_packets_chunked;
+=======
+use solana::packet::{to_packets_chunked, PacketRecycler};
+>>>>>>> cargo fmt
 use solana::signature::{KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
