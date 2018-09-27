@@ -47,19 +47,19 @@ pub const VERIFY_BLOCK_SIZE: usize = 16;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankError {
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound(Pubkey),
+    AccountNotFound,
 
     /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
-    InsufficientFundsForFee(Pubkey),
+    InsufficientFundsForFee,
 
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `last_id`, or as a double-spend attack.
-    DuplicateSignature(Signature),
+    DuplicateSignature,
 
     /// The bank has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
-    LastIdNotFound(Hash),
+    LastIdNotFound,
 
     /// The bank has not seen a transaction with the given `Signature` or the transaction is
     /// too old and has been discarded.
@@ -68,20 +68,20 @@ pub enum BankError {
     /// Proof of History verification failed.
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
-    UnbalancedTransaction(Signature),
+    UnbalancedTransaction,
     /// Contract's transactions resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
     /// contract
-    ResultWithNegativeTokens(Signature),
+    ResultWithNegativeTokens,
 
     /// Contract id is unknown
-    UnknownContractId(Pubkey),
+    UnknownContractId,
 
     /// Contract modified an accounts contract id
-    ModifiedContractId(Signature),
+    ModifiedContractId,
 
     /// Contract spent the tokens of an account that doesn't belong to it
-    ExternalAccountTokenSpend(Signature),
+    ExternalAccountTokenSpend,
 
     /// The program returned an error
     ProgramRuntimeError,
@@ -189,7 +189,7 @@ impl Bank {
         signature: &Signature,
     ) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature(*signature));
+            return Err(BankError::DuplicateSignature);
         }
         signatures.insert(*signature, Ok(()));
         Ok(())
@@ -211,7 +211,7 @@ impl Bank {
         {
             return Self::reserve_signature(&mut entry.0, signature);
         }
-        Err(BankError::LastIdNotFound(*last_id))
+        Err(BankError::LastIdNotFound)
     }
 
     fn update_signature_status(
@@ -307,9 +307,9 @@ impl Bank {
                     error_counters.account_not_found_vote += 1;
                 }
             }
-            Err(BankError::AccountNotFound(*tx.from()))
+            Err(BankError::AccountNotFound)
         } else if accounts.get(&tx.keys[0]).unwrap().tokens < tx.fee {
-            Err(BankError::InsufficientFundsForFee(*tx.from()))
+            Err(BankError::InsufficientFundsForFee)
         } else {
             let mut called_accounts: Vec<Account> = tx
                 .keys
@@ -348,14 +348,14 @@ impl Bank {
                 && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            return Err(BankError::ModifiedContractId(tx.signature));
+            return Err(BankError::ModifiedContractId);
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if tx.program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(tx.signature));
+            return Err(BankError::ExternalAccountTokenSpend);
         }
         if account.tokens < 0 {
-            return Err(BankError::ResultWithNegativeTokens(tx.signature));
+            return Err(BankError::ResultWithNegativeTokens);
         }
         Ok(())
     }
@@ -408,7 +408,7 @@ impl Bank {
             }
         } else if self.loaded_contract(&tx, accounts) {
         } else {
-            return Err(BankError::UnknownContractId(tx.program_id));
+            return Err(BankError::UnknownContractId);
         }
         // Verify the transaction
         for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(accounts.iter()) {
@@ -417,7 +417,7 @@ impl Bank {
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
-            Err(BankError::UnbalancedTransaction(tx.signature))
+            Err(BankError::UnbalancedTransaction)
         } else {
             Ok(())
         }
@@ -766,7 +766,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let res = bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
         println!("{:?}", bank.get_account(&pubkey));
-        assert_matches!(res, Err(BankError::ResultWithNegativeTokens(_)));
+        assert_matches!(res, Err(BankError::ResultWithNegativeTokens));
         assert_eq!(bank.transaction_count(), 0);
     }
 
@@ -797,7 +797,7 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Err(BankError::ResultWithNegativeTokens(_))
+            Err(BankError::ResultWithNegativeTokens)
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
@@ -814,7 +814,7 @@ mod tests {
         let keypair = Keypair::new();
         assert_eq!(
             bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
-            Err(BankError::AccountNotFound(keypair.pubkey()))
+            Err(BankError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
     }
@@ -830,7 +830,7 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_matches!(
             bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::ResultWithNegativeTokens(_))
+            Err(BankError::ResultWithNegativeTokens)
         );
         assert_eq!(bank.transaction_count(), 1);
 
@@ -860,7 +860,7 @@ mod tests {
         );
         assert_eq!(
             bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::DuplicateSignature(signature))
+            Err(BankError::DuplicateSignature)
         );
     }
 
@@ -910,7 +910,7 @@ mod tests {
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
             bank.reserve_signature_with_last_id(&signature, &mint.last_id()),
-            Err(BankError::LastIdNotFound(mint.last_id()))
+            Err(BankError::LastIdNotFound)
         );
     }
 
@@ -957,7 +957,7 @@ mod tests {
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound(entry.id))
+            Err(BankError::LastIdNotFound)
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
