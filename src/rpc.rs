@@ -173,7 +173,10 @@ impl RpcSol for RpcSolImpl {
                 Ok(_) => RpcSignatureStatus::Confirmed,
                 Err(BankError::ProgramRuntimeError) => RpcSignatureStatus::ProgramRuntimeError,
                 Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
-                Err(_) => RpcSignatureStatus::GenericFailure,
+                Err(err) => {
+                    trace!("mapping {:?} to GenericFailure", err);
+                    RpcSignatureStatus::GenericFailure
+                }
             },
         )
     }
