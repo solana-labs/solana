@@ -21,3 +21,9 @@ impl Account {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct KeyedAccount<'a> {
+    pub key: &'a Pubkey,
+    pub account: &'a mut Account,
+}

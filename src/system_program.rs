@@ -97,9 +97,8 @@ impl SystemProgram {
 }
 #[cfg(test)]
 mod test {
-    use account::Account;
+    use account::{Account, KeyedAccount};
     use bincode::serialize;
-    use dynamic_program::KeyedAccount;
     use hash::Hash;
     use pubkey::Pubkey;
     use signature::{Keypair, KeypairUtil};
