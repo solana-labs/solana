@@ -71,7 +71,7 @@ impl Tpu {
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
         let (banking_stage, entry_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, tick_duration);
+            BankingStage::new(&bank, verified_receiver, tick_duration);
 
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,

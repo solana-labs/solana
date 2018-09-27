@@ -31,19 +31,15 @@ fn recv_loop(
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            let result = msgs.write().unwrap().recv_from(sock);
-            match result {
-                Ok(()) => {
-                    let len = msgs.read().unwrap().packets.len();
-                    metrics::submit(
-                        influxdb::Point::new(channel_tag)
-                            .add_field("count", influxdb::Value::Integer(len as i64))
-                            .to_owned(),
-                    );
-                    channel.send(msgs)?;
-                    break;
-                }
-                Err(_) => (),
+            if msgs.write().unwrap().recv_from(sock).is_ok() {
+                let len = msgs.read().unwrap().packets.len();
+                metrics::submit(
+                    influxdb::Point::new(channel_tag)
+                        .add_field("count", influxdb::Value::Integer(len as i64))
+                        .to_owned(),
+                );
+                channel.send(msgs)?;
+                break;
             }
         }
     }

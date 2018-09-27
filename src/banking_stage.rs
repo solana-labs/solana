@@ -8,11 +8,12 @@ use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
 use log::Level;
-use packet::{Packets, SharedPackets};
+use packet::Packets;
 use poh_recorder::PohRecorder;
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
+use sigverify_stage::VerifiedPackets;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -50,8 +51,8 @@ impl Default for Config {
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     pub fn new(
-        bank: Arc<Bank>,
-        verified_receiver: Receiver<Vec<(SharedPackets, Vec<u8>)>>,
+        bank: &Arc<Bank>,
+        verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
@@ -69,7 +70,7 @@ impl BankingStage {
         let tick_producer = Builder::new()
             .name("solana-banking-stage-tick_producer".to_string())
             .spawn(move || {
-                if let Err(e) = Self::tick_producer(tick_poh, config, &poh_exit) {
+                if let Err(e) = Self::tick_producer(&tick_poh, &config, &poh_exit) {
                     match e {
                         Error::SendError => (),
                         _ => error!(
@@ -134,9 +135,9 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick_producer(poh: PohRecorder, config: Config, poh_exit: &AtomicBool) -> Result<()> {
+    fn tick_producer(poh: &PohRecorder, config: &Config, poh_exit: &AtomicBool) -> Result<()> {
         loop {
-            match config {
+            match *config {
                 Config::Tick(num) => {
                     for _ in 0..num {
                         poh.hash();
@@ -156,7 +157,7 @@ impl BankingStage {
 
     fn process_transactions(
         bank: &Arc<Bank>,
-        transactions: Vec<Transaction>,
+        transactions: &[Transaction],
         poh: &PohRecorder,
     ) -> Result<()> {
         debug!("transactions: {}", transactions.len());
@@ -192,7 +193,7 @@ impl BankingStage {
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
         bank: &Arc<Bank>,
-        verified_receiver: &Arc<Mutex<Receiver<Vec<(SharedPackets, Vec<u8>)>>>>,
+        verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &PohRecorder,
     ) -> Result<()> {
         let recv_start = Instant::now();
@@ -230,7 +231,7 @@ impl BankingStage {
                     },
                 }).collect();
             debug!("verified transactions {}", transactions.len());
-            Self::process_transactions(bank, transactions, poh)?;
+            Self::process_transactions(bank, &transactions, poh)?;
         }
 
         inc_new_counter_info!(
@@ -284,7 +285,7 @@ mod tests {
         let bank = Bank::new(&Mint::new(2));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, Default::default());
+            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
         drop(verified_sender);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
@@ -294,7 +295,7 @@ mod tests {
         let bank = Bank::new(&Mint::new(2));
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(Arc::new(bank), verified_receiver, Default::default());
+            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
         drop(entry_receiver);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
@@ -305,7 +306,7 @@ mod tests {
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
-            bank.clone(),
+            &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
         );
@@ -326,7 +327,7 @@ mod tests {
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(bank, verified_receiver, Default::default());
+            BankingStage::new(&bank, verified_receiver, Default::default());
 
         // good tx
         let keypair = mint.keypair();
@@ -372,7 +373,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) =
-            BankingStage::new(bank.clone(), verified_receiver, Default::default());
+            BankingStage::new(&bank, verified_receiver, Default::default());
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();

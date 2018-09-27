@@ -88,6 +88,7 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
+type SignatureStatusMap = HashMap<Signature, Result<()>>;
 
 #[derive(Default)]
 struct ErrorCounters {
@@ -95,6 +96,7 @@ struct ErrorCounters {
     account_not_found_leader: usize,
     account_not_found_vote: usize,
 }
+
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
@@ -107,7 +109,7 @@ pub struct Bank {
 
     /// Mapping of hashes to signature sets along with timestamp. The bank uses this data to
     /// reject transactions with signatures its seen before
-    last_ids_sigs: RwLock<HashMap<Hash, (HashMap<Signature, Result<()>>, u64)>>,
+    last_ids_sigs: RwLock<HashMap<Hash, (SignatureStatusMap, u64)>>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -184,10 +186,7 @@ impl Bank {
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(
-        signatures: &mut HashMap<Signature, Result<()>>,
-        signature: &Signature,
-    ) -> Result<()> {
+    fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
             return Err(BankError::DuplicateSignature);
         }
@@ -215,7 +214,7 @@ impl Bank {
     }
 
     fn update_signature_status(
-        signatures: &mut HashMap<Signature, Result<()>>,
+        signatures: &mut SignatureStatusMap,
         signature: &Signature,
         result: &Result<()>,
     ) {

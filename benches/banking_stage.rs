@@ -97,8 +97,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             let len = x.read().unwrap().packets.len();
             (x, iter::repeat(1).take(len).collect())
         }).collect();
-    let (_stage, signal_receiver) =
-        BankingStage::new(bank.clone(), verified_receiver, Default::default());
+    let (_stage, signal_receiver) = BankingStage::new(&bank, verified_receiver, Default::default());
     bencher.iter(move || {
         for v in verified.chunks(verified.len() / NUM_THREADS) {
             verified_sender.send(v.to_vec()).unwrap();
