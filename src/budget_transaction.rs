@@ -45,6 +45,7 @@ pub trait BudgetTransaction {
         contract: Pubkey,
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
+        witness: Option<Pubkey>,
         cancelable: Option<Pubkey>,
         tokens: i64,
         last_id: Hash,
@@ -54,7 +55,7 @@ pub trait BudgetTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         contract: Pubkey,
-        witness: Pubkey,
+        witness: &Vec<Pubkey>,
         cancelable: Option<Pubkey>,
         tokens: i64,
         last_id: Hash,
@@ -150,6 +151,7 @@ impl BudgetTransaction for Transaction {
         contract: Pubkey,
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
+        witness: Option<Pubkey>,
         cancelable: Option<Pubkey>,
         tokens: i64,
         last_id: Hash,
@@ -158,6 +160,12 @@ impl BudgetTransaction for Transaction {
             Budget::Or(
                 (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
+            )
+        } else if let Some(pubkey) = witness {
+            Budget::And(
+                Condition::Timestamp(dt, dt_pubkey),
+                Condition::Signature(pubkey),
+                Payment { tokens, to },
             )
         } else {
             Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
@@ -178,18 +186,24 @@ impl BudgetTransaction for Transaction {
         from_keypair: &Keypair,
         to: Pubkey,
         contract: Pubkey,
-        witness: Pubkey,
+        witness: &Vec<Pubkey>,
         cancelable: Option<Pubkey>,
         tokens: i64,
         last_id: Hash,
     ) -> Self {
         let budget = if let Some(from) = cancelable {
             Budget::Or(
-                (Condition::Signature(witness), Payment { tokens, to }),
+                (Condition::Signature(witness[0]), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
             )
+        } else if witness.len() > 1 {
+            Budget::And(
+                Condition::Signature(witness[0]),
+                Condition::Signature(witness[1]),
+                Payment { tokens, to },
+            )
         } else {
-            Budget::After(Condition::Signature(witness), Payment { tokens, to })
+            Budget::After(Condition::Signature(witness[0]), Payment { tokens, to })
         };
         let instruction = Instruction::NewContract(Contract { budget, tokens });
         let userdata = serialize(&instruction).expect("serialize instruction");
