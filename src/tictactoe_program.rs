@@ -41,6 +41,8 @@ impl Default for GridItem {
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 enum State {
+    WaitingForO,
+    ORequestPending,
     XMove,
     OMove,
     XWon,
@@ -49,22 +51,63 @@ enum State {
 }
 impl Default for State {
     fn default() -> State {
-        State::XMove
+        State::WaitingForO
     }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 struct Game {
-    players: [Pubkey; 2],
+    player_x: Pubkey,
+    player_o: Option<Pubkey>,
     state: State,
     grid: [GridItem; 9],
 }
 
 impl Game {
-    pub fn new(player1: Pubkey, player2: Pubkey) -> Game {
+    pub fn create(player_x: &Pubkey) -> Game {
         let mut game = Game::default();
-        game.players = [player1, player2];
+        game.player_x = *player_x;
+        assert_eq!(game.state, State::WaitingForO);
         game
+    }
+
+    #[cfg(test)]
+    pub fn new(player_x: Pubkey, player_o: Pubkey) -> Game {
+        let mut game = Game::create(&player_x);
+        game.join(&player_o).unwrap();
+        game.accept().unwrap();
+        game
+    }
+
+    pub fn join(self: &mut Game, player_o: &Pubkey) -> Result<()> {
+        if self.state == State::WaitingForO {
+            self.player_o = Some(*player_o);
+            self.state = State::ORequestPending;
+            Ok(())
+        } else {
+            Err(Error::NotYourTurn)
+        }
+    }
+
+    pub fn accept(self: &mut Game) -> Result<()> {
+        if self.state == State::ORequestPending {
+            assert!(self.player_o.is_some());
+            self.state = State::XMove;
+            Ok(())
+        } else {
+            Err(Error::NotYourTurn)
+        }
+    }
+
+    pub fn reject(self: &mut Game) -> Result<()> {
+        if self.state == State::ORequestPending {
+            assert!(self.player_o.is_some());
+            self.player_o = None;
+            self.state = State::WaitingForO;
+            Ok(())
+        } else {
+            Err(Error::NotYourTurn)
+        }
     }
 
     fn same(x_or_o: GridItem, triple: &[GridItem]) -> bool {
@@ -72,12 +115,6 @@ impl Game {
     }
 
     pub fn next_move(self: &mut Game, player: Pubkey, x: usize, y: usize) -> Result<()> {
-        let index = self
-            .players
-            .iter()
-            .position(|&p| p == player)
-            .ok_or(Error::PlayerNotFound)?;
-
         let grid_index = y * 3 + x;
         if grid_index >= self.grid.len() || self.grid[grid_index] != GridItem::Free {
             return Err(Error::InvalidMove);
@@ -85,15 +122,15 @@ impl Game {
 
         let (x_or_o, won_state) = match self.state {
             State::XMove => {
-                if index != 0 {
-                    return Err(Error::NotYourTurn)?;
+                if player != self.player_x {
+                    return Err(Error::PlayerNotFound)?;
                 }
                 self.state = State::OMove;
                 (GridItem::X, State::XWon)
             }
             State::OMove => {
-                if index != 1 {
-                    return Err(Error::NotYourTurn)?;
+                if player != self.player_o.unwrap() {
+                    return Err(Error::PlayerNotFound)?;
                 }
                 self.state = State::XMove;
                 (GridItem::O, State::OWon)
@@ -129,8 +166,11 @@ impl Game {
 
 #[derive(Debug, Serialize, Deserialize)]
 enum Command {
-    Init(Pubkey, Pubkey), // player1, player2
-    Move(Pubkey, u8, u8), // player, x, y
+    Init,         // player X initializes a new game
+    Join,         // player O wants to join
+    Accept,       // player X accepts the Join request
+    Reject,       // player X rejects the Join request
+    Move(u8, u8), // player X/O mark board position (x, y)
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -151,33 +191,49 @@ impl TicTacToeProgram {
         } else if input.len() < len + 1 {
             Err(Error::InvalidUserdata)
         } else {
-            serde_cbor::from_slice(&input[1..len + 1]).map_err(|err| {
+            serde_cbor::from_slice(&input[1..=len]).map_err(|err| {
                 error!("Unable to deserialize game: {:?}", err);
                 Error::InvalidUserdata
             })
         }
     }
 
-    fn dispatch_command(self: &mut TicTacToeProgram, cmd: &Command) -> Result<()> {
-        info!("dispatch_command: cmd={:?}", cmd);
+    fn dispatch_command(self: &mut TicTacToeProgram, cmd: &Command, player: &Pubkey) -> Result<()> {
+        info!("dispatch_command: cmd={:?} player={}", cmd, player);
         info!("dispatch_command: account={:?}", self);
-        match cmd {
-            Command::Init(player_1, player_2) => {
-                if let Some(_) = self.game {
-                    Err(Error::GameInProgress)
-                } else {
-                    let game = Game::new(*player_1, *player_2);
-                    self.game = Some(game);
-                    Ok(())
+
+        if let Command::Init = cmd {
+            return if self.game.is_some() {
+                Err(Error::GameInProgress)
+            } else {
+                let game = Game::create(player);
+                self.game = Some(game);
+                Ok(())
+            };
+        }
+
+        if let Some(ref mut game) = self.game {
+            match cmd {
+                Command::Join => game.join(player),
+                Command::Accept => {
+                    if *player == game.player_x {
+                        game.accept()
+                    } else {
+                        Err(Error::PlayerNotFound)
+                    }
                 }
-            }
-            Command::Move(player, x, y) => {
-                if let Some(ref mut game) = self.game {
-                    game.next_move(*player, *x as usize, *y as usize)
-                } else {
-                    Err(Error::NoGame)
+                Command::Reject => {
+                    if *player == game.player_x {
+                        game.reject()
+                    } else {
+                        Err(Error::PlayerNotFound)
+                    }
                 }
+                Command::Move(x, y) => game.next_move(*player, *x as usize, *y as usize),
+                Command::Init => panic!("Unreachable"),
             }
+        } else {
+            Err(Error::NoGame)
         }
     }
 
@@ -195,7 +251,7 @@ impl TicTacToeProgram {
 
         assert!(self_serialized.len() <= 255);
         output[0] = self_serialized.len() as u8;
-        output[1..self_serialized.len() + 1].clone_from_slice(&self_serialized);
+        output[1..=self_serialized.len()].clone_from_slice(&self_serialized);
         Ok(())
     }
 
@@ -211,11 +267,11 @@ impl TicTacToeProgram {
         // accounts[1] must always be the Tic-tac-toe game state account
         if accounts.len() < 2 || !Self::check_id(&accounts[1].program_id) {
             error!("accounts[1] is not assigned to the TICTACTOE_PROGRAM_ID");
-            return Err(Error::InvalidArguments);
+            Err(Error::InvalidArguments)?;
         }
         if accounts[1].userdata.is_empty() {
             error!("accounts[1] userdata is empty");
-            return Err(Error::InvalidArguments);
+            Err(Error::InvalidArguments)?;
         }
 
         let mut program_state = Self::deserialize(&accounts[1].userdata)?;
@@ -225,25 +281,22 @@ impl TicTacToeProgram {
             Error::InvalidUserdata
         })?;
 
-        match command {
-            Command::Init(_, _) => {
-                // Init() must be signed by the game state account itself, who's private key is
-                // known only to one of the players.
-                if !Self::check_id(&accounts[0].program_id) {
-                    error!("accounts[0] is not assigned to the TICTACTOE_PROGRAM_ID");
-                    return Err(Error::InvalidArguments);
-                }
+        if let Command::Init = command {
+            // Init must be signed by the game state account itself, who's private key is
+            // known only to player X
+            if !Self::check_id(&accounts[0].program_id) {
+                error!("accounts[0] is not assigned to the TICTACTOE_PROGRAM_ID");
+                return Err(Error::InvalidArguments);
             }
-            Command::Move(player, _, _) => {
-                // Move() must be signed by the player that is wanting to make the next move.
-                if player != tx.keys[0] {
-                    error!("keys[0]({})/player({}) mismatch", tx.keys[0], player);
-                    return Err(Error::InvalidArguments);
-                }
-            }
-        }
 
-        program_state.dispatch_command(&command)?;
+            // player X public key is in keys[2]
+            if accounts.len() < 3 {
+                Err(Error::InvalidArguments)?;
+            }
+            program_state.dispatch_command(&command, &tx.keys[2])?;
+        } else {
+            program_state.dispatch_command(&command, &tx.keys[0])?;
+        }
         program_state.serialize(&mut accounts[1].userdata)?;
         Ok(())
     }
@@ -273,11 +326,8 @@ mod test {
         let mut account = TicTacToeProgram::default();
         assert!(account.game.is_none());
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
-        account
-            .dispatch_command(&Command::Init(player_1, player_2))
-            .unwrap();
+        let player_x = Pubkey::new(&[1; 32]);
+        account.dispatch_command(&Command::Init, &player_x).unwrap();
 
         let mut userdata = vec![0xff; 256];
         account.serialize(&mut userdata).unwrap();
@@ -311,21 +361,21 @@ mod test {
             X| |
         */
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
+        let player_x = Pubkey::new(&[1; 32]);
+        let player_o = Pubkey::new(&[2; 32]);
 
-        let mut g = Game::new(player_1, player_2);
+        let mut g = Game::new(player_x, player_o);
         assert_eq!(g.state, State::XMove);
 
-        g.next_move(player_1, 0, 0).unwrap();
+        g.next_move(player_x, 0, 0).unwrap();
         assert_eq!(g.state, State::OMove);
-        g.next_move(player_2, 1, 0).unwrap();
+        g.next_move(player_o, 1, 0).unwrap();
         assert_eq!(g.state, State::XMove);
-        g.next_move(player_1, 0, 1).unwrap();
+        g.next_move(player_x, 0, 1).unwrap();
         assert_eq!(g.state, State::OMove);
-        g.next_move(player_2, 1, 1).unwrap();
+        g.next_move(player_o, 1, 1).unwrap();
         assert_eq!(g.state, State::XMove);
-        g.next_move(player_1, 0, 2).unwrap();
+        g.next_move(player_x, 0, 2).unwrap();
         assert_eq!(g.state, State::XWon);
     }
 
@@ -339,20 +389,20 @@ mod test {
             X| |
         */
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
-        let mut g = Game::new(player_1, player_2);
+        let player_x = Pubkey::new(&[1; 32]);
+        let player_o = Pubkey::new(&[2; 32]);
+        let mut g = Game::new(player_x, player_o);
 
-        g.next_move(player_1, 0, 0).unwrap();
-        g.next_move(player_2, 1, 0).unwrap();
-        g.next_move(player_1, 2, 0).unwrap();
-        g.next_move(player_2, 0, 1).unwrap();
-        g.next_move(player_1, 1, 1).unwrap();
-        g.next_move(player_2, 2, 1).unwrap();
-        g.next_move(player_1, 0, 2).unwrap();
+        g.next_move(player_x, 0, 0).unwrap();
+        g.next_move(player_o, 1, 0).unwrap();
+        g.next_move(player_x, 2, 0).unwrap();
+        g.next_move(player_o, 0, 1).unwrap();
+        g.next_move(player_x, 1, 1).unwrap();
+        g.next_move(player_o, 2, 1).unwrap();
+        g.next_move(player_x, 0, 2).unwrap();
         assert_eq!(g.state, State::XWon);
 
-        assert_eq!(g.next_move(player_2, 1, 2), Err(Error::NotYourTurn));
+        assert_eq!(g.next_move(player_o, 1, 2), Err(Error::NotYourTurn));
     }
 
     #[test]
@@ -365,19 +415,19 @@ mod test {
             O|O|O
         */
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
-        let mut g = Game::new(player_1, player_2);
+        let player_x = Pubkey::new(&[1; 32]);
+        let player_o = Pubkey::new(&[2; 32]);
+        let mut g = Game::new(player_x, player_o);
 
-        g.next_move(player_1, 0, 0).unwrap();
-        g.next_move(player_2, 0, 2).unwrap();
-        g.next_move(player_1, 1, 0).unwrap();
-        g.next_move(player_2, 1, 2).unwrap();
-        g.next_move(player_1, 0, 1).unwrap();
-        g.next_move(player_2, 2, 2).unwrap();
+        g.next_move(player_x, 0, 0).unwrap();
+        g.next_move(player_o, 0, 2).unwrap();
+        g.next_move(player_x, 1, 0).unwrap();
+        g.next_move(player_o, 1, 2).unwrap();
+        g.next_move(player_x, 0, 1).unwrap();
+        g.next_move(player_o, 2, 2).unwrap();
         assert_eq!(g.state, State::OWon);
 
-        assert!(g.next_move(player_1, 1, 2).is_err());
+        assert!(g.next_move(player_x, 1, 2).is_err());
     }
 
     #[test]
@@ -390,19 +440,19 @@ mod test {
             O|X|X
         */
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
-        let mut g = Game::new(player_1, player_2);
+        let player_x = Pubkey::new(&[1; 32]);
+        let player_o = Pubkey::new(&[2; 32]);
+        let mut g = Game::new(player_x, player_o);
 
-        g.next_move(player_1, 0, 0).unwrap();
-        g.next_move(player_2, 1, 0).unwrap();
-        g.next_move(player_1, 2, 0).unwrap();
-        g.next_move(player_2, 0, 1).unwrap();
-        g.next_move(player_1, 1, 1).unwrap();
-        g.next_move(player_2, 2, 1).unwrap();
-        g.next_move(player_1, 1, 2).unwrap();
-        g.next_move(player_2, 0, 2).unwrap();
-        g.next_move(player_1, 2, 2).unwrap();
+        g.next_move(player_x, 0, 0).unwrap();
+        g.next_move(player_o, 1, 0).unwrap();
+        g.next_move(player_x, 2, 0).unwrap();
+        g.next_move(player_o, 0, 1).unwrap();
+        g.next_move(player_x, 1, 1).unwrap();
+        g.next_move(player_o, 2, 1).unwrap();
+        g.next_move(player_x, 1, 2).unwrap();
+        g.next_move(player_o, 0, 2).unwrap();
+        g.next_move(player_x, 2, 2).unwrap();
         assert_eq!(g.state, State::XWon);
     }
 
@@ -416,20 +466,40 @@ mod test {
             X|X|O
         */
 
-        let player_1 = Pubkey::new(&[1; 32]);
-        let player_2 = Pubkey::new(&[2; 32]);
-        let mut g = Game::new(player_1, player_2);
+        let player_x = Pubkey::new(&[1; 32]);
+        let player_o = Pubkey::new(&[2; 32]);
+        let mut g = Game::new(player_x, player_o);
 
-        g.next_move(player_1, 0, 0).unwrap();
-        g.next_move(player_2, 1, 1).unwrap();
-        g.next_move(player_1, 0, 2).unwrap();
-        g.next_move(player_2, 0, 1).unwrap();
-        g.next_move(player_1, 2, 1).unwrap();
-        g.next_move(player_2, 1, 0).unwrap();
-        g.next_move(player_1, 1, 2).unwrap();
-        g.next_move(player_2, 2, 2).unwrap();
-        g.next_move(player_1, 2, 0).unwrap();
+        g.next_move(player_x, 0, 0).unwrap();
+        g.next_move(player_o, 1, 1).unwrap();
+        g.next_move(player_x, 0, 2).unwrap();
+        g.next_move(player_o, 0, 1).unwrap();
+        g.next_move(player_x, 2, 1).unwrap();
+        g.next_move(player_o, 1, 0).unwrap();
+        g.next_move(player_x, 1, 2).unwrap();
+        g.next_move(player_o, 2, 2).unwrap();
+        g.next_move(player_x, 2, 0).unwrap();
 
         assert_eq!(g.state, State::Draw);
+    }
+
+    #[test]
+    pub fn solo() {
+        /*
+            X|O|
+            -+-+-
+             | |
+            -+-+-
+             | |
+        */
+
+        let player_x = Pubkey::new(&[1; 32]);
+
+        let mut g = Game::new(player_x, player_x);
+        assert_eq!(g.state, State::XMove);
+        g.next_move(player_x, 0, 0).unwrap();
+        assert_eq!(g.state, State::OMove);
+        g.next_move(player_x, 1, 0).unwrap();
+        assert_eq!(g.state, State::XMove);
     }
 }
