@@ -24,7 +24,7 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 enum BoardItem {
@@ -55,7 +55,7 @@ impl Default for State {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
-struct Game {
+pub struct Game {
     player_x: Pubkey,
     player_o: Option<Pubkey>,
     pub state: State,
@@ -164,7 +164,7 @@ enum Command {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TicTacToeProgram {
-    game: Option<Game>,
+    pub game: Option<Game>,
 }
 
 pub const TICTACTOE_PROGRAM_ID: [u8; 32] = [
@@ -172,7 +172,7 @@ pub const TICTACTOE_PROGRAM_ID: [u8; 32] = [
 ];
 
 impl TicTacToeProgram {
-    fn deserialize(input: &[u8]) -> Result<TicTacToeProgram> {
+    pub fn deserialize(input: &[u8]) -> Result<TicTacToeProgram> {
         let len = input[0] as usize;
 
         if len == 0 {
