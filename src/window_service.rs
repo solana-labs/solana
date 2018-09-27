@@ -145,7 +145,7 @@ fn recv_window(
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
     leader_rotation_interval: u64,
-    done: Arc<AtomicBool>,
+    done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
@@ -292,7 +292,7 @@ pub fn window_service(
                     &retransmit,
                     &mut pending_retransmits,
                     leader_rotation_interval,
-                    done.clone(),
+                    &done,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,

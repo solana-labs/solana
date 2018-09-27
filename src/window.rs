@@ -63,6 +63,7 @@ pub trait WindowUtil {
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
 
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn process_blob(
         &mut self,
         id: &Pubkey,
