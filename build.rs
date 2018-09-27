@@ -16,8 +16,9 @@ fn main() {
 
     let cuda = !env::var("CARGO_FEATURE_CUDA").is_err();
     let erasure = !env::var("CARGO_FEATURE_ERASURE").is_err();
+    let chacha = !env::var("CARGO_FEATURE_CHACHA").is_err();
 
-    if cuda || erasure {
+    if cuda || erasure || chacha {
         println!("cargo:rustc-link-search=native=target/perf-libs");
     }
     if cuda {

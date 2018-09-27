@@ -34,6 +34,7 @@ name = "solana-drone"
 path = "src/bin/drone.rs"
 
 [[bin]]
+required-features = ["chacha"]
 name = "solana-replicator"
 path = "src/bin/replicator.rs"
 
@@ -70,6 +71,7 @@ ipv6 = []
 cuda = []
 erasure = []
 test = []
+chacha = []
 
 [dependencies]
 atty = "0.2"
@@ -130,6 +132,10 @@ name = "signature"
 
 [[bench]]
 name = "sigverify"
+
+[[bench]]
+required-features = ["chacha"]
+name = "chacha"
 
 [workspace]
 members = [

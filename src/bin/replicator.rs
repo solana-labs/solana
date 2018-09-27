@@ -6,6 +6,7 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
+use solana::chacha::chacha_cbc_encrypt_files;
 use solana::crdt::Node;
 use solana::fullnode::Config;
 use solana::logger;
@@ -13,6 +14,7 @@ use solana::replicator::Replicator;
 use solana::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -21,6 +23,7 @@ use std::time::Duration;
 
 fn main() {
     logger::setup();
+
     let matches = App::new("replicator")
         .version(crate_version!())
         .arg(
@@ -101,6 +104,22 @@ fn main() {
     }
 
     println!("Done downloading ledger");
+
+    let ledger_path = Path::new(ledger_path.unwrap());
+    let ledger_data_file = ledger_path.join("data");
+    let ledger_data_file_encrypted = ledger_path.join("data.enc");
+    let key = "abc123";
+
+    if let Err(e) = chacha_cbc_encrypt_files(
+        &ledger_data_file,
+        &ledger_data_file_encrypted,
+        key.to_string(),
+    ) {
+        println!("Error while encrypting ledger: {:?}", e);
+        return;
+    }
+
+    println!("Done encrypting the ledger");
 
     replicator.join();
 }
