@@ -1,10 +1,10 @@
 //! budget program
-use solana_program_interface::account::Account;
 use bincode::{self, deserialize, serialize_into, serialized_size};
 use budget::Budget;
 use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
 use payment_plan::Witness;
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::io;
 use transaction::Transaction;
@@ -265,14 +265,14 @@ impl BudgetState {
 }
 #[cfg(test)]
 mod test {
-    use solana_program_interface::account::Account;
     use bincode::serialize;
     use budget_program::{BudgetError, BudgetState};
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;
-    use solana_program_interface::pubkey::Pubkey;
     use signature::{GenKeys, Keypair, KeypairUtil};
+    use solana_program_interface::account::Account;
+    use solana_program_interface::pubkey::Pubkey;
     use transaction::Transaction;
 
     #[test]

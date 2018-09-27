@@ -2,8 +2,8 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-use solana_program_interface::account::Account;
 use bincode::deserialize;
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 

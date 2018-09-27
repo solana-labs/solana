@@ -3,8 +3,6 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use solana_program_interface::account::{Account, KeyedAccount};
-use solana_program_interface::pubkey::Pubkey;
 use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
@@ -19,6 +17,8 @@ use log::Level;
 use mint::Mint;
 use payment_plan::Payment;
 use signature::{Keypair, Signature};
+use solana_program_interface::account::{Account, KeyedAccount};
+use solana_program_interface::pubkey::Pubkey;
 use std;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::result;

@@ -603,9 +603,9 @@ mod test {
     use erasure;
     use logger;
     use packet::{BlobRecycler, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
-    use solana_program_interface::pubkey::Pubkey;
     use rand::{thread_rng, Rng};
     use signature::{Keypair, KeypairUtil};
+    use solana_program_interface::pubkey::Pubkey;
     //    use std::sync::{Arc, RwLock};
     use window::{index_blobs, WindowSlot};
 

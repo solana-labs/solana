@@ -71,7 +71,6 @@ pub mod wallet;
 pub mod window;
 pub mod window_service;
 pub mod write_stage;
-extern crate solana_program_interface;
 extern crate bincode;
 extern crate bs58;
 extern crate byteorder;
@@ -83,6 +82,7 @@ extern crate generic_array;
 extern crate ipnetwork;
 extern crate itertools;
 extern crate jsonrpc_core;
+extern crate solana_program_interface;
 #[macro_use]
 extern crate jsonrpc_macros;
 extern crate jsonrpc_http_server;
