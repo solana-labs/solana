@@ -35,7 +35,7 @@
     "flow": "flow-typed install jest@22 && flow",
     "flow:watch": "watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "lint": "eslint .",
-    "lint:fix": "npm run lint --fix",
+    "lint:fix": "npm run lint -- --fix",
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "prepare": "npm run clean && npm run ok && npm run build"
