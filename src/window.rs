@@ -5,6 +5,7 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use leader_scheduler::LeaderScheduler;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::SharedBlob;
@@ -67,14 +68,14 @@ pub trait WindowUtil {
     fn process_blob(
         &mut self,
         id: &Pubkey,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
-        leader_rotation_interval: u64,
+        leader_rotation_interval_option: Option<u64>,
+        leader_scheduler_option: &Option<&Arc<RwLock<LeaderScheduler>>>,
     );
 }
 
@@ -196,14 +197,14 @@ impl WindowUtil for Window {
     fn process_blob(
         &mut self,
         id: &Pubkey,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
-        leader_rotation_interval: u64,
+        leader_rotation_interval_option: Option<u64>,
+        leader_scheduler_option: &Option<&Arc<RwLock<LeaderScheduler>>>,
     ) {
         let w = (pix % WINDOW_SIZE) as usize;
 
@@ -258,15 +259,24 @@ impl WindowUtil for Window {
 
         // push all contiguous blobs into consumed queue, increment consumed
         loop {
-            if *consumed != 0 && *consumed % (leader_rotation_interval as u64) == 0 {
-                let rcluster_info = cluster_info.read().unwrap();
-                let my_id = rcluster_info.my_data().id;
-                match rcluster_info.get_scheduled_leader(*consumed) {
-                    // If we are the next leader, exit
-                    Some(id) if id == my_id => {
-                        break;
+            if let Some(leader_rotation_interval) = leader_rotation_interval_option {
+                if *consumed != 0 && *consumed % (leader_rotation_interval as u64) == 0 {
+                    let scheduled_leader = leader_scheduler_option
+                        .as_ref()
+                        .unwrap()
+                        .read()
+                        .unwrap()
+                        .get_scheduled_leader(*consumed);
+                    match scheduled_leader {
+                        // If we are the next leader, exit
+                        Some(leader_id) if leader_id == *id => {
+                            break;
+                        }
+
+                        // If it's unknown then we have to wait for the seed to be
+                        // calculated, so block
+                        _ => (),
                     }
-                    _ => (),
                 }
             }
 

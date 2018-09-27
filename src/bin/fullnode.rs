@@ -12,6 +12,7 @@ use solana::client::mk_client;
 use solana::cluster_info::Node;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
+use solana::leader_scheduler::LeaderSchedulerConfig;
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::{Keypair, KeypairUtil};
@@ -83,7 +84,29 @@ fn main() -> () {
     let node_info = node.info.clone();
     let pubkey = keypair.pubkey();
 
-    let mut fullnode = Fullnode::new(node, ledger_path, keypair, network, false, None);
+    //TODO
+    let bootstrap_leader_id = pubkey;
+    let bootstrap_height = 500;
+    let leader_rotation_interval = 100;
+    let seed_rotation_interval = 1000;
+    let active_window_length = 5000;
+
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        bootstrap_leader_id,
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(seed_rotation_interval),
+        Some(active_window_length),
+    );
+
+    let mut fullnode = Fullnode::new(
+        node,
+        ledger_path,
+        keypair,
+        network,
+        false,
+        Some(leader_scheduler_config),
+    );
 
     // airdrop stuff, probably goes away at some point
     let leader = match network {

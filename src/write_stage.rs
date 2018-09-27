@@ -135,7 +135,7 @@ impl WriteStage {
                 num_txs += e.transactions.len();
             }
             let cluster_info_votes_start = Instant::now();
-            let votes = &entries.votes();
+            let votes = &entries.votes(*entry_height);
             cluster_info.write().unwrap().insert_votes(&votes);
             cluster_info_votes_total += duration_as_ms(&cluster_info_votes_start.elapsed());
 
@@ -322,7 +322,7 @@ mod tests {
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
 
         info!("processing ledger...");
-        bank.process_ledger(entries).expect("process_ledger")
+        bank.process_ledger(entries, None).expect("process_ledger")
     }
 
     fn setup_dummy_write_stage(leader_rotation_interval: u64) -> DummyWriteStage {

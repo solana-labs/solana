@@ -117,7 +117,7 @@ fn main() {
 
                 let genesis = genesis.take(2).map(|e| e.unwrap());
 
-                if let Err(e) = bank.process_ledger(genesis) {
+                if let Err(e) = bank.process_ledger(genesis, None) {
                     eprintln!("verify failed at genesis err: {:?}", e);
                     if !matches.is_present("continue") {
                         exit(1);

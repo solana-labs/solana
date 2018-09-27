@@ -39,6 +39,7 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
+use leader_scheduler::LeaderScheduler;
 use replicate_stage::ReplicateStage;
 use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
 use service::Service;
@@ -84,6 +85,7 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
+        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -103,6 +105,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
+            leader_scheduler_option.as_ref().map(|ls| ls.clone()),
         );
 
         let replicate_stage = ReplicateStage::new(
@@ -112,6 +115,8 @@ impl Tvu {
             blob_window_receiver,
             ledger_path,
             exit.clone(),
+            entry_height,
+            leader_scheduler_option,
         );
 
         Tvu {
@@ -248,6 +253,7 @@ pub mod tests {
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
+            None,
             None,
         );
 

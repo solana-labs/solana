@@ -35,7 +35,8 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = Node::new_localhost();
     let me = spy.info.id.clone();
-    spy.info.contact_info.tvu = spy.sockets.replicate[0].local_addr().unwrap();
+    let daddr = "0.0.0.0:0".parse().unwrap();
+    spy.info.contact_info.tvu = daddr;
     spy.info.contact_info.rpu = spy.sockets.transaction[0].local_addr().unwrap();
     let mut spy_cluster_info = ClusterInfo::new(spy.info).expect("ClusterInfo::new");
     spy_cluster_info.insert(&leader);
@@ -803,6 +804,9 @@ fn test_leader_to_validator_transition() {
         None,
         false,
         Some(leader_rotation_interval),
+        None,
+        None,
+        None,
     );
 
     // Set the next leader to be Bob
@@ -885,7 +889,6 @@ fn test_leader_to_validator_transition() {
 }
 
 #[test]
-#[ignore]
 fn test_leader_validator_basic() {
     logger::setup();
     let leader_rotation_interval = 10;
@@ -914,6 +917,9 @@ fn test_leader_validator_basic() {
         None,
         false,
         Some(leader_rotation_interval),
+        None,
+        None,
+        None,
     );
 
     // Send leader some tokens to vote
@@ -931,6 +937,9 @@ fn test_leader_validator_basic() {
         Some(leader_info.contact_info.ncp),
         false,
         Some(leader_rotation_interval),
+        None,
+        None,
+        None,
     );
 
     ledger_paths.push(validator_ledger_path.clone());
@@ -971,13 +980,6 @@ fn test_leader_validator_basic() {
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
-    // TODO: We ignore this test for now b/c there's a chance here that the cluster_info
-    // in the new leader calls the dummy sequence of update_leader -> top_leader()
-    // (see the TODOs in those functions) during gossip and sets the leader back
-    // to the old leader, which causes a panic from an assertion failure in cluster_info broadcast(),
-    // specifically: assert!(me.leader_id != v.id). We can enable this test once we have real
-    // leader scheduling
-
     // Wait for the leader to shut down tpu and restart tvu
     match leader.handle_role_transition().unwrap() {
         Some(FullnodeReturnType::LeaderRotation) => (),
@@ -996,12 +998,16 @@ fn test_leader_validator_basic() {
     let leader_entries =
         read_ledger(&validator_ledger_path, true).expect("Expected parsing of leader ledger");
 
+    let mut min_len = 0;
     for (v, l) in validator_entries.zip(leader_entries) {
+        min_len += 1;
         assert_eq!(
             v.expect("expected valid validator entry"),
             l.expect("expected valid leader entry")
         );
     }
+
+    assert!(min_len >= bootstrap_height);
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();

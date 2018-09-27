@@ -616,6 +616,7 @@ mod tests {
     use cluster_info::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
+    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use mint::Mint;
     use serde_json::Value;
