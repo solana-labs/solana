@@ -1,6 +1,6 @@
-# Note: when the rust version (1.28) is changed also modify
+# Note: when the rust version is changed also modify
 # ci/buildkite.yml to pick up the new image tag
-FROM rust:1.29.0
+FROM rust:1.29.1
 
 RUN set -x && \
     apt update && \
@@ -18,6 +18,7 @@ RUN set -x && \
       sudo \
       && \
     rustup component add rustfmt-preview && \
+    rustup component add clippy-preview && \
     rm -rf /var/lib/apt/lists/* && \
     rustc --version && \
     cargo --version
