@@ -59,94 +59,75 @@ const GetBalanceRpcResult = struct({
 
 
 /**
+ * @private
+ */
+function jsonRpcResult(resultDescription: any) {
+  const jsonRpcVersion = struct.literal('2.0');
+  return struct.union([
+    struct({
+      jsonrpc: jsonRpcVersion,
+      id: 'string',
+      error: 'any'
+    }),
+    struct({
+      jsonrpc: jsonRpcVersion,
+      id: 'string',
+      error: 'null?',
+      result: resultDescription,
+    }),
+  ]);
+}
+
+
+/**
  * Expected JSON RPC response for the "getAccountInfo" message
  */
-const GetAccountInfoRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: struct.optional({
-    program_id: 'array',
-    tokens: 'number',
-    userdata: 'array',
-  }),
+const GetAccountInfoRpcResult = jsonRpcResult({
+  program_id: 'array',
+  tokens: 'number',
+  userdata: 'array',
 });
 
 
 /**
  * Expected JSON RPC response for the "confirmTransaction" message
  */
-const ConfirmTransactionRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'boolean?',
-});
+const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
 
 /**
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
-const GetSignatureStatusRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: struct.optional(struct.enum([
-    'Confirmed',
-    'SignatureNotFound',
-    'ProgramRuntimeError',
-    'GenericFailure',
-  ])),
-});
+const GetSignatureStatusRpcResult = jsonRpcResult(struct.enum([
+  'Confirmed',
+  'SignatureNotFound',
+  'ProgramRuntimeError',
+  'GenericFailure',
+]));
 
 /**
  * Expected JSON RPC response for the "getTransactionCount" message
  */
-const GetTransactionCountRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'number?',
-});
+const GetTransactionCountRpcResult = jsonRpcResult('number');
 
 /**
  * Expected JSON RPC response for the "getLastId" message
  */
-const GetLastId = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'string?',
-});
+const GetLastId = jsonRpcResult('string');
 
 /**
  * Expected JSON RPC response for the "getFinality" message
  */
-const GetFinalityRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'number?',
-});
+const GetFinalityRpcResult = jsonRpcResult('number');
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
  */
-const RequestAirdropRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'string?',
-});
+const RequestAirdropRpcResult = jsonRpcResult('string');
 
 /**
  * Expected JSON RPC response for the "sendTransaction" message
  */
-const SendTokensRpcResult = struct({
-  jsonrpc: struct.literal('2.0'),
-  id: 'string',
-  error: 'any?',
-  result: 'string?',
-});
+const SendTokensRpcResult = jsonRpcResult('string');
 
 /**
  * Information describing an account

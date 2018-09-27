@@ -5,9 +5,9 @@ import {Connection} from '../src/connection';
 import {SystemProgram} from '../src/system-program';
 import {mockRpc} from './__mocks__/node-fetch';
 
-let url = 'http://testnet.solana.com:8899';
+let url = 'http://localhost:8899';
+//url = 'http://testnet.solana.com:8899';
 //url = 'http://master.testnet.solana.com:8899';
-//url = 'http://localhost:8899';
 
 const errorMessage = 'Invalid request';
 const errorResponse = {
