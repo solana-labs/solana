@@ -13,6 +13,7 @@ use solana::entry::Entry;
 use solana::mint::Mint;
 use solana::packet::{to_packets_chunked, PacketRecycler};
 use solana::signature::{KeypairUtil, Pubkey, Signature};
+use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
@@ -47,7 +48,13 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (verified_sender, verified_receiver) = channel();
     let packet_recycler = PacketRecycler::default();
     let bank = Arc::new(Bank::new(&mint));
-    let dummy = Transaction::new(&mint.keypair(), mint.keypair().pubkey(), 1, mint.last_id());
+    let dummy = Transaction::system_move(
+        &mint.keypair(),
+        mint.keypair().pubkey(),
+        1,
+        mint.last_id(),
+        0,
+    );
     let transactions: Vec<_> = (0..txes)
         .into_par_iter()
         .map(|_| {
@@ -62,11 +69,12 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         }).collect();
     // fund all the accounts
     transactions.iter().for_each(|tx| {
-        let fund = Transaction::new(
+        let fund = Transaction::system_move(
             &mint.keypair(),
             tx.keys[0],
             mint_total / txes as i64,
             mint.last_id(),
+            0,
         );
         assert!(bank.process_transaction(&fund).is_ok());
     });

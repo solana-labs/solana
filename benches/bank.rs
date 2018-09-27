@@ -10,6 +10,7 @@ use solana::bank::*;
 use solana::hash::hash;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
+use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use test::Bencher;
 
@@ -24,7 +25,13 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .map(|i| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
-            let tx = Transaction::new(&mint.keypair(), rando0.pubkey(), 10_000, mint.last_id());
+            let tx = Transaction::system_move(
+                &mint.keypair(),
+                rando0.pubkey(),
+                10_000,
+                mint.last_id(),
+                0,
+            );
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Seed the 'to' account and a cell for its signature.
@@ -32,7 +39,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
             bank.register_entry_id(&last_id);
 
             let rando1 = Keypair::new();
-            let tx = Transaction::new(&rando0, rando1.pubkey(), 1, last_id);
+            let tx = Transaction::system_move(&rando0, rando1.pubkey(), 1, last_id, 0);
             assert!(bank.process_transaction(&tx).is_ok());
 
             // Finally, return the transaction to the benchmark.
