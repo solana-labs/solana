@@ -80,11 +80,6 @@ extern crate dirs;
 extern crate generic_array;
 extern crate ipnetwork;
 extern crate itertools;
-extern crate jsonrpc_core;
-extern crate solana_program_interface;
-#[macro_use]
-extern crate jsonrpc_macros;
-extern crate jsonrpc_http_server;
 extern crate libc;
 extern crate libloading;
 #[macro_use]
@@ -102,6 +97,11 @@ extern crate serde_json;
 extern crate serde_cbor;
 extern crate sha2;
 extern crate socket2;
+extern crate solana_jsonrpc_core as jsonrpc_core;
+extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
+#[macro_use]
+extern crate solana_jsonrpc_macros as jsonrpc_macros;
+extern crate solana_program_interface;
 extern crate sys_info;
 extern crate tokio;
 extern crate tokio_codec;

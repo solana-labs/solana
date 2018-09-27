@@ -84,9 +84,9 @@ env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 influx_db_client = "0.3.4"
-jsonrpc-core = { git = "https://github.com/solana-labs/jsonrpc", rev = "4b6060b" }
-jsonrpc-http-server = { git = "https://github.com/solana-labs/jsonrpc", rev = "4b6060b" }
-jsonrpc-macros = { git = "https://github.com/solana-labs/jsonrpc", rev = "4b6060b" }
+solana-jsonrpc-core = "0.1"
+solana-jsonrpc-http-server = "0.1"
+solana-jsonrpc-macros = "0.1"
 ipnetwork = "0.12.7"
 itertools = "0.7.8"
 libc = "0.2.43"
@@ -146,4 +146,3 @@ default-members = [
     "programs/print",
     "programs/move_funds",
 ]
-
