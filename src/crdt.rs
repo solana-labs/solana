@@ -391,7 +391,7 @@ impl Crdt {
             self.insert(&data);
         }
     }
-    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
+    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash, u64)]) {
         inc_new_counter_info!("crdt-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{}: INSERTING VOTES {}", self.id, votes.len());
