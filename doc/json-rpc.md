@@ -19,6 +19,7 @@ Methods
 * [getBalance](#getbalance)
 * [getAccountInfo](#getaccountinfo)
 * [getLastId](#getlastid)
+* [getSignatureStatus](#getsignaturestatus)
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
@@ -141,6 +142,31 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
+### getSignatureStatus
+Returns the status of a given signature.  This method is similar to
+[confirmTransaction](#confirmtransaction) but provides more resolution for error
+events.
+
+##### Parameters:
+* `string` - Signature of Transaction to confirm, as base-58 encoded string
+
+##### Results:
+* `string` - Transaction status:
+    * `Confirmed` - Transaction was successful
+    * `SignatureNotFound` - Unknown transaction
+    * `ProgramRuntimeError` - An error occurred in the program that processed this Transaction
+    * `GenericFailure` - Some other error occurred.  **Note**: In the future new Transaction statuses may be added to this list.  It's safe to assume that all new statuses will be more specific error conditions that previously presented as `GenericFailure`
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatus", "params":["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"]}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}
+```
+
+---
 ### getTransactionCount
 Returns the current Transaction count from the ledger
 
