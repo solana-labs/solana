@@ -7,7 +7,6 @@ use bincode::deserialize;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
-use hash::Hasher;
 use log::Level;
 use packet::{Packets, SharedPackets};
 use poh_recorder::PohRecorder;
@@ -169,15 +168,11 @@ impl BankingStage {
 
             let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
 
-            let mut hasher = Hasher::default();
             let processed_transactions: Vec<_> = transactions[chunk_start..chunk_end]
                 .into_iter()
                 .enumerate()
                 .filter_map(|(i, x)| match results[i] {
-                    Ok(_) => {
-                        hasher.hash(&x.signature.as_ref());
-                        Some(x.clone())
-                    }
+                    Ok(_) => Some(x.clone()),
                     Err(ref e) => {
                         debug!("process transaction failed {:?}", e);
                         None
@@ -185,7 +180,7 @@ impl BankingStage {
                 }).collect();
 
             if !processed_transactions.is_empty() {
-                let hash = hasher.result();
+                let hash = Transaction::hash(&processed_transactions);
                 debug!("processed ok: {} {}", processed_transactions.len(), hash);
                 poh.record(hash, processed_transactions)?;
             }

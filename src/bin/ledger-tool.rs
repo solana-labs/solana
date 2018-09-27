@@ -37,6 +37,12 @@ fn main() {
                 .long("precheck")
                 .help("Use ledger_verify() to check internal ledger consistency before proceeding"),
         )
+        .arg(
+            Arg::with_name("continue")
+                .short("c")
+                .long("continue")
+                .help("Continue verify even if verification fails"),
+        )
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
@@ -50,6 +56,7 @@ fn main() {
             exit(1);
         }
     }
+
     let entries = match read_ledger(ledger_path, true) {
         Ok(entries) => entries,
         Err(err) => {
@@ -112,7 +119,9 @@ fn main() {
 
                 if let Err(e) = bank.process_ledger(genesis) {
                     eprintln!("verify failed at genesis err: {:?}", e);
-                    exit(1);
+                    if !matches.is_present("continue") {
+                        exit(1);
+                    }
                 }
             }
             let entries = entries.map(|e| e.unwrap());
@@ -122,9 +131,17 @@ fn main() {
                 if i >= head {
                     break;
                 }
+                if !entry.verify(&bank.last_id()) {
+                    eprintln!("entry.verify() failed at entry[{}]", i + 2);
+                    if !matches.is_present("continue") {
+                        exit(1);
+                    }
+                }
                 if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
-                    exit(1);
+                    if !matches.is_present("continue") {
+                        exit(1);
+                    }
                 }
             }
         }
