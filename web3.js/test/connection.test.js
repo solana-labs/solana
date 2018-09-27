@@ -90,7 +90,21 @@ test('confirm transaction - error', () => {
 
   expect(connection.confirmTransaction(badTransactionSignature))
   .rejects.toThrow(errorMessage);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [badTransactionSignature],
+    },
+    errorResponse,
+  ]
+  );
+
+  expect(connection.getSignatureStatus(badTransactionSignature))
+  .rejects.toThrow(errorMessage);
 });
+
 
 test('get transaction count', async () => {
   const connection = new Connection(url);
@@ -340,6 +354,22 @@ test('transaction', async () => {
   ]
   );
   expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+
+  mockRpc.push([
+    url,
+    {
+      method: 'getSignatureStatus',
+      params: [
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk'
+      ],
+    },
+    {
+      error: null,
+      result: 'Confirmed',
+    }
+  ]
+  );
+  expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
 
   mockRpc.push([
     url,

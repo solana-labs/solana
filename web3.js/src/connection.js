@@ -84,6 +84,21 @@ const ConfirmTransactionRpcResult = struct({
 });
 
 /**
+ * Expected JSON RPC response for the "getSignatureStatus" message
+ */
+const GetSignatureStatusRpcResult = struct({
+  jsonrpc: struct.literal('2.0'),
+  id: 'string',
+  error: 'any?',
+  result: struct.optional(struct.enum([
+    'Confirmed',
+    'SignatureNotFound',
+    'ProgramRuntimeError',
+    'GenericFailure',
+  ])),
+});
+
+/**
  * Expected JSON RPC response for the "getTransactionCount" message
  */
 const GetTransactionCountRpcResult = struct({
@@ -146,6 +161,13 @@ type AccountInfo = {
   programId: PublicKey,
   userdata: Buffer | null,
 }
+
+/**
+ * Possible signature status values
+ *
+ * @typedef {string} SignatureStatus
+ */
+type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
 
 /**
  * A connection to a fullnode JSON RPC endpoint
@@ -223,6 +245,20 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
+
+  /**
+   * Fetch the current transaction count of the network
+   */
+  async getSignatureStatus(signature: TransactionSignature): Promise<SignatureStatus> {
+    const unsafeRes = await this._rpcRequest('getSignatureStatus', [signature]);
+    const res = GetSignatureStatusRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    assert(typeof res.result !== 'undefined');
+    return res.result;
+  }
+
 
   /**
    * Fetch the current transaction count of the network
