@@ -27,6 +27,7 @@ use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
 use system_transaction::SystemTransaction;
+use tictactoe_dashboard_program::TicTacToeDashboardProgram;
 use tictactoe_program::TicTacToeProgram;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
@@ -430,6 +431,12 @@ impl Bank {
             }
         } else if TicTacToeProgram::check_id(&tx_program_id) {
             if TicTacToeProgram::process_transaction(&tx, program_index, program_accounts).is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(program_index as u8));
+            }
+        } else if TicTacToeDashboardProgram::check_id(&tx_program_id) {
+            if TicTacToeDashboardProgram::process_transaction(&tx, program_index, program_accounts)
+                .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(program_index as u8));
             }

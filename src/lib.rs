@@ -62,6 +62,7 @@ pub mod streamer;
 pub mod system_program;
 pub mod system_transaction;
 pub mod thin_client;
+pub mod tictactoe_dashboard_program;
 pub mod tictactoe_program;
 pub mod timing;
 pub mod tpu;
