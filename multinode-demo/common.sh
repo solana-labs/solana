@@ -8,9 +8,9 @@
 #
 
 rsync=rsync
-leader_logger="cat"
-validator_logger="cat"
-drone_logger="cat"
+leader_logger="tee leader.log"
+validator_logger="tee validator.log"
+drone_logger="tee drone.log"
 
 if [[ $(uname) != Linux ]]; then
   # Protect against unsupported configurations to prevent non-obvious errors
