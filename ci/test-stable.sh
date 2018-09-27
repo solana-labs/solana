@@ -15,6 +15,10 @@ _ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose
 
+# TODO: Re-enable warnings-as-errors after clippy offers a way to not warn on unscoped lint names.
+#_ cargo clippy -- --deny=warnings
+_ cargo clippy
+
 echo --- ci/localnet-sanity.sh
 (
   set -x

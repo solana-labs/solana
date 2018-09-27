@@ -13,10 +13,6 @@ _() {
 _ cargo build --verbose --features unstable
 _ cargo test --verbose --features=unstable
 
-# TODO: Re-enable warnings-as-errors after clippy offers a way to not warn on unscoped lint names.
-#_ cargo clippy -- --deny=warnings
-_ cargo clippy
-
 exit 0
 
 # Coverage disabled (see issue #433)
