@@ -1,12 +1,12 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use account::Account;
+use solana_program_interface::account::Account;
 use bank::{Bank, BankError};
 use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use service::Service;
 use signature::Signature;
 use std::mem;

@@ -283,7 +283,7 @@ mod tests {
     use entry::Entry;
     use ledger::next_entries_mut;
     use mint::Mint;
-    use pubkey::Pubkey;
+    use solana_program_interface::pubkey::Pubkey;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::cmp;

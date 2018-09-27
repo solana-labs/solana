@@ -5,7 +5,7 @@
 
 use chrono::prelude::*;
 use payment_plan::{Payment, Witness};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use std::mem;
 
 /// A data type representing a `Witness` that the payment plan is waiting on.

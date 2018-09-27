@@ -2,7 +2,7 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
 use system_transaction::SystemTransaction;

@@ -1,8 +1,8 @@
 extern crate bincode;
-extern crate solana;
+extern crate solana_program_interface;
 
 use bincode::deserialize;
-use solana::account::KeyedAccount;
+use solana_program_interface::account::KeyedAccount;
 
 #[no_mangle]
 pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, data: &[u8]) {
@@ -22,8 +22,8 @@ pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, data: &[u8]) {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use solana::account::Account;
-    use solana::pubkey::Pubkey;
+    use solana_program_interface::account::Account;
+    use solana_program_interface::pubkey::Pubkey;
 
     #[test]
     fn test_move_funds() {

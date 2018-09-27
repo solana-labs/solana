@@ -7,7 +7,7 @@ use budget_transaction::BudgetTransaction;
 use hash::Hash;
 use packet::{BlobRecycler, SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use rayon::prelude::*;
 use std::io::Cursor;
 use std::net::SocketAddr;

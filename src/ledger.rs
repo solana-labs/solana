@@ -11,7 +11,7 @@ use log::Level::Trace;
 #[cfg(test)]
 use mint::Mint;
 use packet::{self, SharedBlob, BLOB_DATA_SIZE};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use rayon::prelude::*;
 use result::{Error, Result};
 #[cfg(test)]

@@ -8,7 +8,7 @@ use bincode::{deserialize, serialize};
 use bytes::Bytes;
 use influx_db_client as influxdb;
 use metrics;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use signature::{Keypair, Signature};
 use std::io;
 use std::io::{Error, ErrorKind};

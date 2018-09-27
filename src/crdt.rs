@@ -21,7 +21,7 @@ use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
 use packet::{to_blob, Blob, BlobRecycler, SharedBlob, BLOB_SIZE};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -1409,7 +1409,7 @@ mod tests {
     use ledger::{LedgerWindow, LedgerWriter};
     use logger;
     use packet::BlobRecycler;
-    use pubkey::Pubkey;
+    use solana_program_interface::pubkey::Pubkey;
     use result::Error;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;

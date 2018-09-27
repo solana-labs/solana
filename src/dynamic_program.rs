@@ -1,7 +1,7 @@
 extern crate bincode;
 extern crate generic_array;
 
-use account::KeyedAccount;
+use solana_program_interface::account::KeyedAccount;
 use libc;
 use libloading;
 use std::path::PathBuf;
@@ -98,9 +98,9 @@ impl DynamicProgram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account::Account;
+    use solana_program_interface::account::Account;
     use bincode::serialize;
-    use pubkey::Pubkey;
+    use solana_program_interface::pubkey::Pubkey;
     use std::path::Path;
     use std::thread;
 

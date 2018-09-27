@@ -2,7 +2,7 @@
 
 use bincode::serialize;
 use hash::{Hash, Hasher};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use signature::{Keypair, KeypairUtil, Signature};
 use std::mem::size_of;
 

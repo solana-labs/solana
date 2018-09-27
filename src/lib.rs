@@ -9,7 +9,6 @@
 #![cfg_attr(feature = "unstable", feature(test))]
 #[macro_use]
 pub mod counter;
-pub mod account;
 pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
@@ -41,7 +40,6 @@ pub mod packet;
 pub mod payment_plan;
 pub mod poh;
 pub mod poh_recorder;
-pub mod pubkey;
 pub mod recvmmsg;
 pub mod recycler;
 pub mod replicate_stage;
@@ -73,6 +71,7 @@ pub mod wallet;
 pub mod window;
 pub mod window_service;
 pub mod write_stage;
+extern crate solana_program_interface;
 extern crate bincode;
 extern crate bs58;
 extern crate byteorder;

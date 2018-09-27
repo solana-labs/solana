@@ -1,8 +1,8 @@
 //! The `request` module defines the messages for the thin client.
 
-use account::Account;
+use solana_program_interface::account::Account;
 use hash::Hash;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use signature::Signature;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]

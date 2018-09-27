@@ -8,7 +8,7 @@ use crdt::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
 use hash::Hash;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use ring::rand::SystemRandom;

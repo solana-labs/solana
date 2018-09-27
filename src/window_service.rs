@@ -5,7 +5,7 @@ use crdt::{Crdt, NodeInfo};
 use entry::EntrySender;
 use log::Level;
 use packet::{BlobRecycler, SharedBlob};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use std::net::UdpSocket;

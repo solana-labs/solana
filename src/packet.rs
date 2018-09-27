@@ -7,7 +7,7 @@ use hash::Hash;
 #[cfg(test)]
 use ledger::{next_entries_mut, Block};
 use log::Level;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use recycler;
 use result::{Error, Result};

@@ -7,7 +7,7 @@ use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
 use ncp::Ncp;
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use rpc::{JsonRpcService, RPC_PORT};
 use rpu::Rpu;
 use service::Service;

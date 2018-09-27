@@ -10,7 +10,7 @@ use influx_db_client as influxdb;
 use log::Level;
 use metrics;
 use packet::{BlobRecycler, SharedBlob};
-use pubkey::Pubkey;
+use solana_program_interface::pubkey::Pubkey;
 use result::Result;
 use signature::Keypair;
 use std::result;
