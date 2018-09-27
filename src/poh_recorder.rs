@@ -48,11 +48,12 @@ impl PohRecorder {
         Ok(())
     }
 
-    pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
+    pub fn record_and_unlock_transactions(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
         // Register and send the entry out while holding the lock.
         // This guarantees PoH order and Entry production and banks LastId queue is the same.
         let mut poh = self.poh.lock().unwrap();
         let tick = poh.record(mixin);
+        self.bank.unlock_accounts(&txs);
         self.bank.register_entry_id(&tick.id);
         let entry = Entry {
             num_hashes: tick.num_hashes,
@@ -81,7 +82,11 @@ mod tests {
 
         //send some data
         let h1 = hash(b"hello world!");
-        assert!(poh_recorder.record(h1, vec![]).is_ok());
+        assert!(
+            poh_recorder
+                .record_and_unlock_transactions(h1, vec![])
+                .is_ok()
+        );
         assert!(poh_recorder.tick().is_ok());
 
         //get some events
