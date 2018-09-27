@@ -16,6 +16,8 @@ pub mod broadcast_stage;
 pub mod budget;
 pub mod budget_instruction;
 pub mod budget_transaction;
+#[cfg(feature = "chacha")]
+pub mod chacha;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
 #[macro_use]
