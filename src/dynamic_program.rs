@@ -1,10 +1,9 @@
 extern crate bincode;
 extern crate generic_array;
 
-use account::Account;
+use account::KeyedAccount;
 use libc;
 use libloading;
-use pubkey::Pubkey;
 use std::path::PathBuf;
 
 #[cfg(debug_assertions)]
@@ -38,12 +37,6 @@ fn create_library_path(name: &str) -> PathBuf {
     path.push(PLATFORM_FILE_PREFIX.to_string() + name);
     path.set_extension(PLATFORM_FILE_EXTENSION);
     path
-}
-
-#[derive(Debug)]
-pub struct KeyedAccount<'a> {
-    pub key: &'a Pubkey,
-    pub account: &'a mut Account,
 }
 
 // All programs export a symbol named process()

@@ -3,13 +3,13 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use account::Account;
+use account::{Account, KeyedAccount};
 use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
-use dynamic_program::{DynamicProgram, KeyedAccount};
+use dynamic_program::DynamicProgram;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;

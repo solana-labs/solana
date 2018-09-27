@@ -2,7 +2,7 @@ extern crate bincode;
 extern crate solana;
 
 use bincode::deserialize;
-use solana::dynamic_program::KeyedAccount;
+use solana::account::KeyedAccount;
 
 #[no_mangle]
 pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, data: &[u8]) {

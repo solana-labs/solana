@@ -1,6 +1,6 @@
 extern crate solana;
 
-use solana::dynamic_program::KeyedAccount;
+use solana::account::KeyedAccount;
 
 #[no_mangle]
 pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, _data: &[u8]) {
