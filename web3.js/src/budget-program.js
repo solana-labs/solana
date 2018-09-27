@@ -20,12 +20,12 @@ export type SignatureCondition = {
  * Represents a condition that is met by executing a `applyTimestamp()`
  * transaction
  *
- * @typedef {Object} TimeStampCondition
+ * @typedef {Object} TimestampCondition
  * @property {string} type Must equal the string 'timestamp'
  * @property {PublicKey} from Public key from which `applyTimestamp()` will be accepted from
  * @property {Date} when The timestamp that was observed
  */
-export type TimeStampCondition = {
+export type TimestampCondition = {
   type: 'timestamp';
   from: PublicKey;
   when: Date;
@@ -46,9 +46,9 @@ export type Payment = {
 /**
  * A condition that can unlock a payment
  *
- * @typedef {SignatureCondition|TimeStampCondition} BudgetCondition
+ * @typedef {SignatureCondition|TimestampCondition} BudgetCondition
  */
-export type BudgetCondition = SignatureCondition | TimeStampCondition;
+export type BudgetCondition = SignatureCondition | TimestampCondition;
 
 /**
  * @private
@@ -144,7 +144,7 @@ export class BudgetProgram {
   /**
    * Creates a timestamp condition
    */
-  static timestampCondition(from: PublicKey, when: Date) : TimeStampCondition {
+  static timestampCondition(from: PublicKey, when: Date) : TimestampCondition {
     return {
       type: 'timestamp',
       from,
