@@ -71,7 +71,7 @@ Manage testnet instances
    -P               - Use public network IP addresses (default: $publicNetwork)
    -z [zone]        - Zone for the nodes (default: $zone)
    -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use (e.g count=4,type=nvidia-tesla-k80)
+   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
    -a [address]     - Set the leader node's external IP address to this value.
                       For GCE, [address] is the "name" of the desired External
                       IP Address.
@@ -122,7 +122,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     ;;
   G)
     enableGpu=true
-    leaderMachineType="$cpuLeaderMachineType --accelerator $OPTARG"
+    leaderMachineType="$OPTARG"
     ;;
   a)
     leaderAddress=$OPTARG
