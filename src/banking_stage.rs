@@ -224,7 +224,7 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
+                    Some((tx, _addr)) => if tx.verify_refs() && tx.verify_plan() && ver != 0 {
                         Some(tx)
                     } else {
                         None

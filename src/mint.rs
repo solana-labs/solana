@@ -76,8 +76,9 @@ mod tests {
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
-        assert!(SystemProgram::check_id(&tx.program_id));
-        let instruction: SystemProgram = deserialize(&tx.userdata).unwrap();
+        assert_eq!(tx.instructions.len(), 1);
+        assert!(SystemProgram::check_id(tx.program_id(0)));
+        let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
         if let SystemProgram::Move { tokens } = instruction {
             assert_eq!(tokens, 100);
         }

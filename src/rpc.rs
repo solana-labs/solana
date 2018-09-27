@@ -173,7 +173,7 @@ impl RpcSol for RpcSolImpl {
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::ProgramRuntimeError) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
                 Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
                 Err(err) => {
                     trace!("mapping {:?} to GenericFailure", err);

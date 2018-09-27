@@ -55,23 +55,25 @@ impl SystemTransaction for Transaction {
             space,
             program_id,
         };
+        let userdata = serialize(&create).unwrap();
         Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
-            serialize(&create).unwrap(),
+            userdata,
             last_id,
             fee,
         )
     }
     /// Create and sign new SystemProgram::CreateAccount transaction
     fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
-        let create = SystemProgram::Assign { program_id };
+        let assign = SystemProgram::Assign { program_id };
+        let userdata = serialize(&assign).unwrap();
         Transaction::new(
             from_keypair,
             &[],
             SystemProgram::id(),
-            serialize(&create).unwrap(),
+            userdata,
             last_id,
             fee,
         )
@@ -88,12 +90,13 @@ impl SystemTransaction for Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let create = SystemProgram::Move { tokens };
+        let move_tokens = SystemProgram::Move { tokens };
+        let userdata = serialize(&move_tokens).unwrap();
         Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
-            serialize(&create).unwrap(),
+            userdata,
             last_id,
             fee,
         )
@@ -107,11 +110,12 @@ impl SystemTransaction for Transaction {
         name: String,
     ) -> Self {
         let load = SystemProgram::Load { program_id, name };
+        let userdata = serialize(&load).unwrap();
         Transaction::new(
             from_keypair,
             &[],
             SystemProgram::id(),
-            serialize(&load).unwrap(),
+            userdata,
             last_id,
             fee,
         )
@@ -152,7 +156,7 @@ mod tests {
         assert_eq!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
         assert_eq!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
         assert_eq!(
-            memfind(&tx_bytes, &tx.from().as_ref()),
+            memfind(&tx_bytes, &tx.account_keys[0].as_ref()),
             Some(PUB_KEY_OFFSET)
         );
         assert!(tx.verify_signature());
@@ -161,7 +165,7 @@ mod tests {
     #[test]
     fn test_userdata_layout() {
         let mut tx0 = test_tx();
-        tx0.userdata = vec![1, 2, 3];
+        tx0.instructions[0].userdata = vec![1, 2, 3];
         let sign_data0a = tx0.get_sign_data();
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() < PACKET_DATA_SIZE);
@@ -171,14 +175,14 @@ mod tests {
             Some(SIG_OFFSET)
         );
         assert_eq!(
-            memfind(&tx_bytes, &tx0.from().as_ref()),
+            memfind(&tx_bytes, &tx0.account_keys[0].as_ref()),
             Some(PUB_KEY_OFFSET)
         );
         let tx1 = deserialize(&tx_bytes).unwrap();
         assert_eq!(tx0, tx1);
-        assert_eq!(tx1.userdata, vec![1, 2, 3]);
+        assert_eq!(tx1.instructions[0].userdata, vec![1, 2, 3]);
 
-        tx0.userdata = vec![1, 2, 4];
+        tx0.instructions[0].userdata = vec![1, 2, 4];
         let sign_data0b = tx0.get_sign_data();
         assert_ne!(sign_data0a, sign_data0b);
     }
