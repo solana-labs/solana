@@ -14,7 +14,6 @@ _() {
 _ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose
-_ cargo clippy -- --deny=warnings
 
 echo --- ci/localnet-sanity.sh
 (
