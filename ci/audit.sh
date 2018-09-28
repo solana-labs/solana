@@ -29,4 +29,4 @@ maybe_cargo_install() {
 maybe_cargo_install audit tree
 
 _ cargo tree
-_ cargo audit || true
+_ cargo audit
