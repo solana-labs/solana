@@ -97,14 +97,12 @@ impl SystemProgram {
 }
 #[cfg(test)]
 mod test {
-    use bincode::serialize;
     use hash::Hash;
     use signature::{Keypair, KeypairUtil};
-    use solana_program_interface::account::{Account, KeyedAccount};
+    use solana_program_interface::account::Account;
     use solana_program_interface::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::sync::RwLock;
-    use std::thread;
     use system_program::SystemProgram;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
@@ -214,112 +212,6 @@ mod test {
         let hash = RwLock::new(HashMap::new());
         SystemProgram::process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[1].userdata.len(), 3);
-    }
-    #[test]
-    fn test_load_call() {
-        // first load the program
-        let loaded_programs = RwLock::new(HashMap::new());
-        {
-            let from = Keypair::new();
-            let mut accounts = vec![Account::default(), Account::default()];
-            let program_id = Pubkey::default(); // same program id for both
-            let tx = Transaction::system_load(
-                &from,
-                Hash::default(),
-                0,
-                program_id,
-                "move_funds".to_string(),
-            );
-
-            SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
-        }
-        // then call the program
-        {
-            let program_id = Pubkey::default(); // same program id for both
-            let keys = vec![Pubkey::default(), Pubkey::default()];
-            let mut accounts = vec![Account::default(), Account::default()];
-            accounts[0].tokens = 100;
-            accounts[1].tokens = 1;
-            let tokens: i64 = 100;
-            let data: Vec<u8> = serialize(&tokens).unwrap();
-            {
-                let hash = loaded_programs.write().unwrap();
-                match hash.get(&program_id) {
-                    Some(dp) => {
-                        let mut infos: Vec<_> = (&keys)
-                            .into_iter()
-                            .zip(&mut accounts)
-                            .map(|(key, account)| KeyedAccount { key, account })
-                            .collect();
-
-                        dp.call(&mut infos, &data);
-                    }
-                    None => panic!("failed to find program in hash"),
-                }
-            }
-            assert_eq!(0, accounts[0].tokens);
-            assert_eq!(101, accounts[1].tokens);
-        }
-    }
-    #[test]
-    fn test_load_call_many_threads() {
-        let num_threads = 42;
-        let num_iters = 100;
-        let mut threads = Vec::new();
-        for _t in 0..num_threads {
-            threads.push(thread::spawn(move || {
-                let _tid = thread::current().id();
-                for _i in 0..num_iters {
-                    // first load the program
-                    let loaded_programs = RwLock::new(HashMap::new());
-                    {
-                        let from = Keypair::new();
-                        let mut accounts = vec![Account::default(), Account::default()];
-                        let program_id = Pubkey::default(); // same program id for both
-                        let tx = Transaction::system_load(
-                            &from,
-                            Hash::default(),
-                            0,
-                            program_id,
-                            "move_funds".to_string(),
-                        );
-
-                        SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
-                    }
-                    // then call the program
-                    {
-                        let program_id = Pubkey::default(); // same program id for both
-                        let keys = vec![Pubkey::default(), Pubkey::default()];
-                        let mut accounts = vec![Account::default(), Account::default()];
-                        accounts[0].tokens = 100;
-                        accounts[1].tokens = 1;
-                        let tokens: i64 = 100;
-                        let data: Vec<u8> = serialize(&tokens).unwrap();
-                        {
-                            let hash = loaded_programs.write().unwrap();
-                            match hash.get(&program_id) {
-                                Some(dp) => {
-                                    let mut infos: Vec<_> = (&keys)
-                                        .into_iter()
-                                        .zip(&mut accounts)
-                                        .map(|(key, account)| KeyedAccount { key, account })
-                                        .collect();
-
-                                    dp.call(&mut infos, &data);
-                                }
-                                None => panic!("failed to find program in hash"),
-                            }
-                        }
-                        assert_eq!(0, accounts[0].tokens);
-                        assert_eq!(101, accounts[1].tokens);
-                    }
-                }
-            }));
-        }
-
-        for thread in threads {
-            thread.join().unwrap();
-        }
     }
     #[test]
     fn test_create_assign() {

@@ -139,10 +139,4 @@ members = [
     "programs/print",
     "programs/move_funds",
 ]
-default-members = [
-    ".",
-    "common",
-    "programs/noop",
-    "programs/print",
-    "programs/move_funds",
-]
+
