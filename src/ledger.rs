@@ -71,6 +71,9 @@ pub struct LedgerWindow {
     data: BufReader<File>,
 }
 
+pub const LEDGER_DATA_FILE: &str = "data";
+const LEDGER_INDEX_FILE: &str = "index";
+
 // use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
@@ -104,9 +107,9 @@ impl LedgerWindow {
     pub fn open(ledger_path: &str) -> io::Result<Self> {
         let ledger_path = Path::new(&ledger_path);
 
-        let index = File::open(ledger_path.join("index"))?;
+        let index = File::open(ledger_path.join(LEDGER_INDEX_FILE))?;
         let index = BufReader::with_capacity((WINDOW_SIZE * SIZEOF_U64) as usize, index);
-        let data = File::open(ledger_path.join("data"))?;
+        let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
         let data = BufReader::with_capacity(WINDOW_SIZE as usize * BLOB_DATA_SIZE, data);
 
         Ok(LedgerWindow { index, data })
@@ -121,7 +124,7 @@ impl LedgerWindow {
 pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
     let ledger_path = Path::new(&ledger_path);
 
-    let index = File::open(ledger_path.join("index"))?;
+    let index = File::open(ledger_path.join(LEDGER_INDEX_FILE))?;
 
     let index_len = index.metadata()?.len();
 
@@ -133,7 +136,7 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
     }
     let mut index = BufReader::with_capacity((WINDOW_SIZE * SIZEOF_U64) as usize, index);
 
-    let data = File::open(ledger_path.join("data"))?;
+    let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
     let mut data = BufReader::with_capacity(WINDOW_SIZE as usize * BLOB_DATA_SIZE, data);
 
     let mut last_data_offset = 0;
@@ -190,12 +193,12 @@ fn recover_ledger(ledger_path: &str) -> io::Result<()> {
     let mut index = OpenOptions::new()
         .write(true)
         .read(true)
-        .open(ledger_path.join("index"))?;
+        .open(ledger_path.join(LEDGER_INDEX_FILE))?;
 
     let mut data = OpenOptions::new()
         .write(true)
         .read(true)
-        .open(ledger_path.join("data"))?;
+        .open(ledger_path.join(LEDGER_DATA_FILE))?;
 
     // first, truncate to a multiple of SIZEOF_U64
     let len = index.metadata()?.len();
@@ -298,7 +301,7 @@ impl LedgerWriter {
         let index = OpenOptions::new()
             .create(create)
             .append(true)
-            .open(ledger_path.join("index"))?;
+            .open(ledger_path.join(LEDGER_INDEX_FILE))?;
 
         if log_enabled!(Trace) {
             let len = index.metadata()?.len();
@@ -309,7 +312,7 @@ impl LedgerWriter {
         let data = OpenOptions::new()
             .create(create)
             .append(true)
-            .open(ledger_path.join("data"))?;
+            .open(ledger_path.join(LEDGER_DATA_FILE))?;
 
         if log_enabled!(Trace) {
             let len = data.metadata()?.len();
@@ -393,7 +396,7 @@ pub fn read_ledger(
     }
 
     let ledger_path = Path::new(&ledger_path);
-    let data = File::open(ledger_path.join("data"))?;
+    let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
     let data = BufReader::new(data);
 
     Ok(LedgerReader { data })
@@ -752,7 +755,7 @@ mod tests {
         }
         assert!(window.get_entry(100).is_err());
 
-        std::fs::remove_file(Path::new(&ledger_path).join("data")).unwrap();
+        std::fs::remove_file(Path::new(&ledger_path).join(LEDGER_DATA_FILE)).unwrap();
         // empty data file should fall over
         assert!(LedgerWindow::open(&ledger_path).is_err());
         assert!(read_ledger(&ledger_path, false).is_err());
@@ -770,7 +773,7 @@ mod tests {
 
         let data = OpenOptions::new()
             .write(true)
-            .open(Path::new(&ledger_path).join("data"))
+            .open(Path::new(&ledger_path).join(LEDGER_DATA_FILE))
             .unwrap();
         data.set_len(len - 4).unwrap();
     }
