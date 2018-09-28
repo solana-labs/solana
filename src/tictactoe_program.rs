@@ -27,15 +27,15 @@ impl std::error::Error for Error {}
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
-enum GridItem {
+enum BoardItem {
     F, // Free
     X,
     O,
 }
 
-impl Default for GridItem {
-    fn default() -> GridItem {
-        GridItem::F
+impl Default for BoardItem {
+    fn default() -> BoardItem {
+        BoardItem::F
     }
 }
 
@@ -58,8 +58,8 @@ impl Default for State {
 struct Game {
     player_x: Pubkey,
     player_o: Option<Pubkey>,
-    state: State,
-    grid: [GridItem; 9],
+    pub state: State,
+    board: [BoardItem; 9],
     keep_alive: [i64; 2],
 }
 
@@ -89,13 +89,13 @@ impl Game {
         }
     }
 
-    fn same(x_or_o: GridItem, triple: &[GridItem]) -> bool {
+    fn same(x_or_o: BoardItem, triple: &[BoardItem]) -> bool {
         triple.iter().all(|&i| i == x_or_o)
     }
 
     pub fn next_move(self: &mut Game, player: Pubkey, x: usize, y: usize) -> Result<()> {
-        let grid_index = y * 3 + x;
-        if grid_index >= self.grid.len() || self.grid[grid_index] != GridItem::F {
+        let board_index = y * 3 + x;
+        if board_index >= self.board.len() || self.board[board_index] != BoardItem::F {
             Err(Error::InvalidMove)?;
         }
 
@@ -105,37 +105,37 @@ impl Game {
                     return Err(Error::PlayerNotFound);
                 }
                 self.state = State::OMove;
-                (GridItem::X, State::XWon)
+                (BoardItem::X, State::XWon)
             }
             State::OMove => {
                 if player != self.player_o.unwrap() {
                     return Err(Error::PlayerNotFound);
                 }
                 self.state = State::XMove;
-                (GridItem::O, State::OWon)
+                (BoardItem::O, State::OWon)
             }
             _ => {
                 return Err(Error::NotYourTurn);
             }
         };
-        self.grid[grid_index] = x_or_o;
+        self.board[board_index] = x_or_o;
 
         let winner =
             // Check rows
-            Game::same(x_or_o, &self.grid[0..3])
-            || Game::same(x_or_o, &self.grid[3..6])
-            || Game::same(x_or_o, &self.grid[6..9])
+            Game::same(x_or_o, &self.board[0..3])
+            || Game::same(x_or_o, &self.board[3..6])
+            || Game::same(x_or_o, &self.board[6..9])
             // Check columns
-            || Game::same(x_or_o, &[self.grid[0], self.grid[3], self.grid[6]])
-            || Game::same(x_or_o, &[self.grid[1], self.grid[4], self.grid[7]])
-            || Game::same(x_or_o, &[self.grid[2], self.grid[5], self.grid[8]])
+            || Game::same(x_or_o, &[self.board[0], self.board[3], self.board[6]])
+            || Game::same(x_or_o, &[self.board[1], self.board[4], self.board[7]])
+            || Game::same(x_or_o, &[self.board[2], self.board[5], self.board[8]])
             // Check both diagonals
-            || Game::same(x_or_o, &[self.grid[0], self.grid[4], self.grid[8]])
-            || Game::same(x_or_o, &[self.grid[2], self.grid[4], self.grid[6]]);
+            || Game::same(x_or_o, &[self.board[0], self.board[4], self.board[8]])
+            || Game::same(x_or_o, &[self.board[2], self.board[4], self.board[6]]);
 
         if winner {
             self.state = won_state;
-        } else if self.grid.iter().all(|&p| p != GridItem::F) {
+        } else if self.board.iter().all(|&p| p != BoardItem::F) {
             self.state = State::Draw;
         }
 
