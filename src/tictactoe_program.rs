@@ -61,6 +61,8 @@ struct Game {
     player_o: Option<Pubkey>,
     state: State,
     grid: [GridItem; 9],
+    keep_alive_x: i64,
+    keep_alive_o: i64,
 }
 
 impl Game {
@@ -114,29 +116,29 @@ impl Game {
         triple.iter().all(|&i| i == x_or_o)
     }
 
-    pub fn next_move(self: &mut Game, player: Pubkey, x: usize, y: usize) -> Result<()> {
+    pub fn next_move(self: &mut Game, player: &Pubkey, x: usize, y: usize) -> Result<()> {
         let grid_index = y * 3 + x;
         if grid_index >= self.grid.len() || self.grid[grid_index] != GridItem::Free {
-            return Err(Error::InvalidMove);
+            Err(Error::InvalidMove)?;
         }
 
         let (x_or_o, won_state) = match self.state {
             State::XMove => {
-                if player != self.player_x {
-                    return Err(Error::PlayerNotFound)?;
+                if *player != self.player_x {
+                    return Err(Error::PlayerNotFound);
                 }
                 self.state = State::OMove;
                 (GridItem::X, State::XWon)
             }
             State::OMove => {
-                if player != self.player_o.unwrap() {
-                    return Err(Error::PlayerNotFound)?;
+                if *player != self.player_o.unwrap() {
+                    return Err(Error::PlayerNotFound);
                 }
                 self.state = State::XMove;
                 (GridItem::O, State::OWon)
             }
             _ => {
-                return Err(Error::NotYourTurn)?;
+                return Err(Error::NotYourTurn);
             }
         };
         self.grid[grid_index] = x_or_o;
@@ -162,15 +164,27 @@ impl Game {
 
         Ok(())
     }
+
+    pub fn keep_alive(self: &mut Game, player: &Pubkey, timestamp: i64) -> Result<()> {
+        if *player == self.player_x {
+            self.keep_alive_x = timestamp;
+        } else if Some(*player) == self.player_o {
+            self.keep_alive_o = timestamp;
+        } else {
+            Err(Error::PlayerNotFound)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 enum Command {
-    Init,         // player X initializes a new game
-    Join,         // player O wants to join
-    Accept,       // player X accepts the Join request
-    Reject,       // player X rejects the Join request
-    Move(u8, u8), // player X/O mark board position (x, y)
+    Init,           // player X initializes a new game
+    Join,           // player O wants to join
+    Accept,         // player X accepts the Join request
+    Reject,         // player X rejects the Join request
+    KeepAlive(i64), // player X/O keep alive (seconds since UNIX epoch)
+    Move(u8, u8),   // player X/O mark board position (x, y)
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -229,7 +243,8 @@ impl TicTacToeProgram {
                         Err(Error::PlayerNotFound)
                     }
                 }
-                Command::Move(x, y) => game.next_move(*player, *x as usize, *y as usize),
+                Command::Move(x, y) => game.next_move(player, *x as usize, *y as usize),
+                Command::KeepAlive(timestamp) => game.keep_alive(player, *timestamp),
                 Command::Init => panic!("Unreachable"),
             }
         } else {
