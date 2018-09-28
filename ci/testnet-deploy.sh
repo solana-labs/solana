@@ -116,7 +116,7 @@ fi
 set -x
 
 echo --- gce.sh delete
-time net/gce.sh delete -p "$netName"
+time net/gce.sh delete -z "$zone" -p "$netName"
 if $delete; then
   exit 0
 fi
