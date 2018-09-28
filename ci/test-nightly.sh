@@ -29,15 +29,13 @@ maybe_cargo_install cov
 
 _ cargo cov clean
 _ cargo cov test --lib
+_ cargo cov report
 
-# TODO: Fix `cargo cov report` in Docker.
-#_ cargo cov report
-#
-#echo --- Coverage report:
-#ls -l target/cov/report/index.html
-#
-#if [[ -z "$CODECOV_TOKEN" ]]; then
-#  echo CODECOV_TOKEN undefined
-#else
-#  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
-#fi
+echo --- Coverage report:
+ls -l target/cov/report/index.html
+
+if [[ -z "$CODECOV_TOKEN" ]]; then
+  echo CODECOV_TOKEN undefined
+else
+  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
+fi
