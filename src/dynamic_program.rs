@@ -98,11 +98,7 @@ impl DynamicProgram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
-    use solana_program_interface::account::Account;
-    use solana_program_interface::pubkey::Pubkey;
     use std::path::Path;
-    use std::thread;
 
     #[test]
     fn test_create_library_path() {
@@ -112,131 +108,6 @@ mod tests {
         assert_eq!(true, Path::new(&path).exists());
         let path = create_library_path("move_funds");
         assert_eq!(true, Path::new(&path).exists());
-    }
-
-    #[test]
-    fn test_program_noop() {
-        let data: Vec<u8> = vec![0];
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
-
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
-
-            let dp = DynamicProgram::new("noop".to_string());
-            dp.call(&mut infos, &data);
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn test_program_print() {
-        let data: Vec<u8> = vec![0];
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
-
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
-
-            let dp = DynamicProgram::new("print".to_string());
-            dp.call(&mut infos, &data);
-        }
-    }
-
-    #[test]
-    fn test_program_move_funds_success() {
-        let tokens: i64 = 100;
-        let data: Vec<u8> = serialize(&tokens).unwrap();
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
-
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
-
-            let dp = DynamicProgram::new("move_funds".to_string());
-            dp.call(&mut infos, &data);
-        }
-        assert_eq!(0, accounts[0].tokens);
-        assert_eq!(101, accounts[1].tokens);
-    }
-
-    #[test]
-    fn test_program_move_funds_insufficient_funds() {
-        let tokens: i64 = 100;
-        let data: Vec<u8> = serialize(&tokens).unwrap();
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 10;
-        accounts[1].tokens = 1;
-
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
-
-            let dp = DynamicProgram::new("move_funds".to_string());
-            dp.call(&mut infos, &data);
-        }
-        assert_eq!(10, accounts[0].tokens);
-        assert_eq!(1, accounts[1].tokens);
-    }
-
-    #[test]
-    fn test_program_move_funds_succes_many_threads() {
-        let num_threads = 42; // number of threads to spawn
-        let num_iters = 100; // number of iterations of test in each thread
-        let mut threads = Vec::new();
-        for _t in 0..num_threads {
-            threads.push(thread::spawn(move || {
-                for _i in 0..num_iters {
-                    {
-                        let tokens: i64 = 100;
-                        let data: Vec<u8> = serialize(&tokens).unwrap();
-                        let keys = vec![Pubkey::default(); 2];
-                        let mut accounts = vec![Account::default(), Account::default()];
-                        accounts[0].tokens = 100;
-                        accounts[1].tokens = 1;
-
-                        {
-                            let mut infos: Vec<_> = (&keys)
-                                .into_iter()
-                                .zip(&mut accounts)
-                                .map(|(key, account)| KeyedAccount { key, account })
-                                .collect();
-
-                            let dp = DynamicProgram::new("move_funds".to_string());
-                            dp.call(&mut infos, &data);
-                        }
-                        assert_eq!(0, accounts[0].tokens);
-                        assert_eq!(101, accounts[1].tokens);
-                    }
-                }
-            }));
-        }
-
-        for thread in threads {
-            thread.join().unwrap();
-        }
     }
 
     // TODO add more tests to validate the Userdata and Account data is
