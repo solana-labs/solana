@@ -28,21 +28,20 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
 enum GridItem {
-    Free,
+    F, // Free
     X,
     O,
 }
 
 impl Default for GridItem {
     fn default() -> GridItem {
-        GridItem::Free
+        GridItem::F
     }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
-enum State {
-    WaitingForO,
-    ORequestPending,
+pub enum State {
+    Waiting,
     XMove,
     OMove,
     XWon,
@@ -51,7 +50,7 @@ enum State {
 }
 impl Default for State {
     fn default() -> State {
-        State::WaitingForO
+        State::Waiting
     }
 }
 
@@ -61,54 +60,32 @@ struct Game {
     player_o: Option<Pubkey>,
     state: State,
     grid: [GridItem; 9],
-    keep_alive_x: i64,
-    keep_alive_o: i64,
+    keep_alive: [i64; 2],
 }
 
 impl Game {
     pub fn create(player_x: &Pubkey) -> Game {
         let mut game = Game::default();
         game.player_x = *player_x;
-        assert_eq!(game.state, State::WaitingForO);
+        assert_eq!(game.state, State::Waiting);
         game
     }
 
     #[cfg(test)]
     pub fn new(player_x: Pubkey, player_o: Pubkey) -> Game {
         let mut game = Game::create(&player_x);
-        game.join(&player_o).unwrap();
-        game.accept().unwrap();
+        game.join(player_o, 0).unwrap();
         game
     }
 
-    pub fn join(self: &mut Game, player_o: &Pubkey) -> Result<()> {
-        if self.state == State::WaitingForO {
-            self.player_o = Some(*player_o);
-            self.state = State::ORequestPending;
-            Ok(())
-        } else {
-            Err(Error::NotYourTurn)
-        }
-    }
-
-    pub fn accept(self: &mut Game) -> Result<()> {
-        if self.state == State::ORequestPending {
-            assert!(self.player_o.is_some());
+    pub fn join(self: &mut Game, player_o: Pubkey, timestamp: i64) -> Result<()> {
+        if self.state == State::Waiting {
+            self.player_o = Some(player_o);
             self.state = State::XMove;
+            self.keep_alive[1] = timestamp;
             Ok(())
         } else {
-            Err(Error::NotYourTurn)
-        }
-    }
-
-    pub fn reject(self: &mut Game) -> Result<()> {
-        if self.state == State::ORequestPending {
-            assert!(self.player_o.is_some());
-            self.player_o = None;
-            self.state = State::WaitingForO;
-            Ok(())
-        } else {
-            Err(Error::NotYourTurn)
+            Err(Error::GameInProgress)
         }
     }
 
@@ -116,22 +93,22 @@ impl Game {
         triple.iter().all(|&i| i == x_or_o)
     }
 
-    pub fn next_move(self: &mut Game, player: &Pubkey, x: usize, y: usize) -> Result<()> {
+    pub fn next_move(self: &mut Game, player: Pubkey, x: usize, y: usize) -> Result<()> {
         let grid_index = y * 3 + x;
-        if grid_index >= self.grid.len() || self.grid[grid_index] != GridItem::Free {
+        if grid_index >= self.grid.len() || self.grid[grid_index] != GridItem::F {
             Err(Error::InvalidMove)?;
         }
 
         let (x_or_o, won_state) = match self.state {
             State::XMove => {
-                if *player != self.player_x {
+                if player != self.player_x {
                     return Err(Error::PlayerNotFound);
                 }
                 self.state = State::OMove;
                 (GridItem::X, State::XWon)
             }
             State::OMove => {
-                if *player != self.player_o.unwrap() {
+                if player != self.player_o.unwrap() {
                     return Err(Error::PlayerNotFound);
                 }
                 self.state = State::XMove;
@@ -158,18 +135,18 @@ impl Game {
 
         if winner {
             self.state = won_state;
-        } else if self.grid.iter().all(|&p| p != GridItem::Free) {
+        } else if self.grid.iter().all(|&p| p != GridItem::F) {
             self.state = State::Draw;
         }
 
         Ok(())
     }
 
-    pub fn keep_alive(self: &mut Game, player: &Pubkey, timestamp: i64) -> Result<()> {
-        if *player == self.player_x {
-            self.keep_alive_x = timestamp;
-        } else if Some(*player) == self.player_o {
-            self.keep_alive_o = timestamp;
+    pub fn keep_alive(self: &mut Game, player: Pubkey, timestamp: i64) -> Result<()> {
+        if player == self.player_x {
+            self.keep_alive[0] = timestamp;
+        } else if Some(player) == self.player_o {
+            self.keep_alive[1] = timestamp;
         } else {
             Err(Error::PlayerNotFound)?;
         }
@@ -180,9 +157,7 @@ impl Game {
 #[derive(Debug, Serialize, Deserialize)]
 enum Command {
     Init,           // player X initializes a new game
-    Join,           // player O wants to join
-    Accept,         // player X accepts the Join request
-    Reject,         // player X rejects the Join request
+    Join(i64),      // player O wants to join (seconds since UNIX epoch)
     KeepAlive(i64), // player X/O keep alive (seconds since UNIX epoch)
     Move(u8, u8),   // player X/O mark board position (x, y)
 }
@@ -228,23 +203,9 @@ impl TicTacToeProgram {
 
         if let Some(ref mut game) = self.game {
             match cmd {
-                Command::Join => game.join(player),
-                Command::Accept => {
-                    if *player == game.player_x {
-                        game.accept()
-                    } else {
-                        Err(Error::PlayerNotFound)
-                    }
-                }
-                Command::Reject => {
-                    if *player == game.player_x {
-                        game.reject()
-                    } else {
-                        Err(Error::PlayerNotFound)
-                    }
-                }
-                Command::Move(x, y) => game.next_move(player, *x as usize, *y as usize),
-                Command::KeepAlive(timestamp) => game.keep_alive(player, *timestamp),
+                Command::Join(timestamp) => game.join(*player, *timestamp),
+                Command::Move(x, y) => game.next_move(*player, *x as usize, *y as usize),
+                Command::KeepAlive(timestamp) => game.keep_alive(*player, *timestamp),
                 Command::Init => panic!("Unreachable"),
             }
         } else {
