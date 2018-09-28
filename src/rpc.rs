@@ -43,7 +43,7 @@ impl JsonRpcService {
                 io.extend_with(rpc.to_delegate());
 
                 let server =
-                    ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request| Meta {
+                    ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
                         transactions_addr,
                         drone_addr,
