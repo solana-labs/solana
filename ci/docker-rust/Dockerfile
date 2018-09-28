@@ -14,6 +14,7 @@ RUN set -x && \
       buildkite-agent \
       cmake \
       libclang-common-7-dev \
+      llvm-7 \
       rsync \
       sudo \
       && \
