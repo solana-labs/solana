@@ -9,6 +9,7 @@ use clap::{App, Arg};
 use solana::chacha::chacha_cbc_encrypt_files;
 use solana::crdt::Node;
 use solana::fullnode::Config;
+use solana::ledger::LEDGER_DATA_FILE;
 use solana::logger;
 use solana::replicator::Replicator;
 use solana::signature::{Keypair, KeypairUtil};
@@ -106,8 +107,8 @@ fn main() {
     println!("Done downloading ledger");
 
     let ledger_path = Path::new(ledger_path.unwrap());
-    let ledger_data_file = ledger_path.join("data");
-    let ledger_data_file_encrypted = ledger_path.join("data.enc");
+    let ledger_data_file = ledger_path.join(LEDGER_DATA_FILE);
+    let ledger_data_file_encrypted = ledger_path.join(format!("{}.enc", LEDGER_DATA_FILE));
     let key = "abc123";
 
     if let Err(e) = chacha_cbc_encrypt_files(
