@@ -6,12 +6,6 @@ use libloading;
 use solana_program_interface::account::KeyedAccount;
 use std::path::PathBuf;
 
-#[cfg(debug_assertions)]
-const CARGO_PROFILE: &str = "debug";
-
-#[cfg(not(debug_assertions))]
-const CARGO_PROFILE: &str = "release";
-
 /// Dynamic link library prefix
 #[cfg(unix)]
 const PLATFORM_FILE_PREFIX: &str = "lib";
@@ -30,9 +24,10 @@ const PLATFORM_FILE_EXTENSION: &str = "dll";
 
 /// Creates a platform-specific file path
 fn create_library_path(name: &str) -> PathBuf {
-    let mut path = PathBuf::new();
-    path.push("target");
-    path.push(CARGO_PROFILE);
+    let mut path = PathBuf::from(env!("OUT_DIR"));
+    path.pop();
+    path.pop();
+    path.pop();
     path.push("deps");
     path.push(PLATFORM_FILE_PREFIX.to_string() + name);
     path.set_extension(PLATFORM_FILE_EXTENSION);
