@@ -19,6 +19,15 @@ RUN set -x && \
       && \
     rustup component add rustfmt-preview && \
     rustup component add clippy-preview && \
+    apt install -y \
+      binutils-dev \
+      libcurl4-openssl-dev \
+      zlib1g-dev \
+      libdw-dev \
+      libiberty-dev \
+      && \
+    cargo install cargo-kcov && \
+    cargo kcov --print-install-kcov-sh | VERBOSE=1 bash && \
     rm -rf /var/lib/apt/lists/* && \
     rustc --version && \
     cargo --version
