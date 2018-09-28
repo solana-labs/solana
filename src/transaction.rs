@@ -10,7 +10,20 @@ pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
 pub const SIG_OFFSET: usize = 0;
 pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
 
-/// An instruction signed by a client with `Pubkey`.
+/// An instruction to execute a program under `program_id` with the
+/// specified accounts and userdata
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Instruction {
+    /// The program code that executes this transaction is identified by the program_id.
+    /// this is an offset into the Transaction::program_keys field
+    pub program_id: u8,
+    /// Indices into the keys array of which accounts to load
+    pub accounts: Vec<u8>,
+    /// Userdata to be stored in the account
+    pub userdata: Vec<u8>,
+}
+
+/// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     /// A digital signature of `keys`, `program_id`, `last_id`, `fee` and `userdata`, signed by `Pubkey`.
@@ -18,13 +31,10 @@ pub struct Transaction {
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
     /// program-specific.
-    /// * keys[0] - Typically this is the `caller` public key.  `signature` is verified with keys[0].
+    /// * account_keys[0] - Typically this is the `caller` public key.  `signature` is verified with account_keys[0].
     /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * keys[1] - Typically this is the program context or the recipient of the tokens
-    pub keys: Vec<Pubkey>,
-
-    /// The program code that executes this transaction is identified by the program_id.
-    pub program_id: Pubkey,
+    /// * account_keys[1] - Typically this is the program context or the recipient of the tokens
+    pub account_keys: Vec<Pubkey>,
 
     /// The ID of a recent ledger entry.
     pub last_id: Hash,
@@ -32,18 +42,14 @@ pub struct Transaction {
     /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
 
-    /// Userdata to be stored in the account
-    pub userdata: Vec<u8>,
+    /// Keys indentifying programs in the instructions vector.
+    pub program_keys: Vec<Pubkey>,
+    /// Programs that will be executed in sequence and commited in one atomic transaction if all
+    /// succeed.
+    pub instructions: Vec<Instruction>,
 }
 
 impl Transaction {
-    /// Create a signed transaction from the given `Instruction`.
-    /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
-    /// * `transaction_keys` - The keys for the transaction.  These are the program state
-    ///    instances or token recipient keys.
-    /// * `userdata` - The input data that the program will execute with
-    /// * `last_id` - The PoH hash.
-    /// * `fee` - The transaction fee.
     pub fn new(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
@@ -52,36 +58,80 @@ impl Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let from = from_keypair.pubkey();
-        let mut keys = vec![from];
-        keys.extend_from_slice(transaction_keys);
-        let mut tx = Transaction {
-            signature: Signature::default(),
-            keys,
-            program_id,
+        let program_keys = vec![program_id];
+        let instructions = vec![Instruction {
+            program_id: 0,
+            userdata,
+            accounts: (0..(transaction_keys.len() as u8 + 1))
+                .into_iter()
+                .collect(),
+        }];
+        Self::new_with_instructions(
+            from_keypair,
+            transaction_keys,
             last_id,
             fee,
-            userdata,
+            program_keys,
+            instructions,
+        )
+    }
+    /// Create a signed transaction
+    /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
+    /// * `account_keys` - The keys for the transaction.  These are the program state
+    ///    instances or token recipient keys.
+    /// * `last_id` - The PoH hash.
+    /// * `fee` - The transaction fee.
+    /// * `program_keys` - The keys that identify programs used in the `instruction` vector.
+    /// * `instructions` - The programs and their arguments that the transaction will execute atomically
+    pub fn new_with_instructions(
+        from_keypair: &Keypair,
+        keys: &[Pubkey],
+        last_id: Hash,
+        fee: i64,
+        program_keys: Vec<Pubkey>,
+        instructions: Vec<Instruction>,
+    ) -> Self {
+        let from = from_keypair.pubkey();
+        let mut account_keys = vec![from];
+        account_keys.extend_from_slice(keys);
+        let mut tx = Transaction {
+            signature: Signature::default(),
+            account_keys,
+            last_id,
+            fee,
+            program_keys,
+            instructions,
         };
         tx.sign(from_keypair);
         tx
     }
-
+    pub fn userdata(&self, program_index: usize) -> &[u8] {
+        &self.instructions[program_index].userdata
+    }
+    pub fn key(&self, program_index: usize, kix: usize) -> Option<&Pubkey> {
+        self.instructions
+            .get(program_index)
+            .and_then(|p| p.accounts.get(kix))
+            .and_then(|ai| self.account_keys.get(*ai as usize))
+    }
+    pub fn program_id(&self, program_index: usize) -> &Pubkey {
+        &self.program_keys[self.instructions[program_index].program_id as usize]
+    }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&(&self.keys)).expect("serialize keys");
+        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
 
-        let program_id = serialize(&(&self.program_id)).expect("serialize program_id");
-        data.extend_from_slice(&program_id);
-
-        let last_id_data = serialize(&(&self.last_id)).expect("serialize last_id");
+        let last_id_data = serialize(&self.last_id).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
 
-        let fee_data = serialize(&(&self.fee)).expect("serialize last_id");
+        let fee_data = serialize(&self.fee).expect("serialize last_id");
         data.extend_from_slice(&fee_data);
 
-        let userdata = serialize(&(&self.userdata)).expect("serialize userdata");
-        data.extend_from_slice(&userdata);
+        let program_keys = serialize(&self.program_keys).expect("serialize program_keys");
+        data.extend_from_slice(&program_keys);
+
+        let instructions = serialize(&self.instructions).expect("serialize instructions");
+        data.extend_from_slice(&instructions);
         data
     }
 
@@ -98,8 +148,23 @@ impl Transaction {
             .verify(&self.from().as_ref(), &self.get_sign_data())
     }
 
-    pub fn from(&self) -> &Pubkey {
-        &self.keys[0]
+    /// Verify that references in the instructions are valid
+    pub fn verify_refs(&self) -> bool {
+        for instruction in &self.instructions {
+            if (instruction.program_id as usize) >= self.program_keys.len() {
+                return false;
+            }
+            for account_index in &instruction.accounts {
+                if (*account_index as usize) >= self.account_keys.len() {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn from(&self) -> &Pubkey {
+        &self.account_keys[0]
     }
 
     // a hash of a slice of transactions only needs to hash the signatures
@@ -117,6 +182,81 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use signature::GenKeys;
+
+    #[test]
+    fn test_refs() {
+        let key = Keypair::new();
+        let key1 = Keypair::new().pubkey();
+        let key2 = Keypair::new().pubkey();
+        let prog1 = Keypair::new().pubkey();
+        let prog2 = Keypair::new().pubkey();
+        let instructions = vec![
+            Instruction {
+                program_id: 0,
+                userdata: vec![],
+                accounts: vec![0, 1],
+            },
+            Instruction {
+                program_id: 1,
+                userdata: vec![],
+                accounts: vec![0, 2],
+            },
+        ];
+        let tx = Transaction::new_with_instructions(
+            &key,
+            &[key1, key2],
+            Default::default(),
+            0,
+            vec![prog1, prog2],
+            instructions,
+        );
+        assert!(tx.verify_refs());
+        assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
+        assert_eq!(tx.key(1, 0), Some(&key.pubkey()));
+        assert_eq!(tx.key(0, 1), Some(&key1));
+        assert_eq!(tx.key(1, 1), Some(&key2));
+        assert_eq!(tx.key(2, 0), None);
+        assert_eq!(tx.key(0, 2), None);
+        assert_eq!(*tx.program_id(0), prog1);
+        assert_eq!(*tx.program_id(1), prog2);
+    }
+    #[test]
+    fn test_refs_invalid_program_id() {
+        let key = Keypair::new();
+        let instructions = vec![Instruction {
+            program_id: 1,
+            userdata: vec![],
+            accounts: vec![],
+        }];
+        let tx = Transaction::new_with_instructions(
+            &key,
+            &[],
+            Default::default(),
+            0,
+            vec![],
+            instructions,
+        );
+        assert!(!tx.verify_refs());
+    }
+    #[test]
+    fn test_refs_invalid_account() {
+        let key = Keypair::new();
+        let instructions = vec![Instruction {
+            program_id: 0,
+            userdata: vec![],
+            accounts: vec![1],
+        }];
+        let tx = Transaction::new_with_instructions(
+            &key,
+            &[],
+            Default::default(),
+            0,
+            vec![Default::default()],
+            instructions,
+        );
+        assert_eq!(*tx.program_id(0), Default::default());
+        assert!(!tx.verify_refs());
+    }
 
     /// Detect binary changes in the serialized contract userdata, which could have a downstream
     /// affect on SDKs and DApps
@@ -144,18 +284,19 @@ mod tests {
         assert_eq!(
             serialize(&tx).unwrap(),
             vec![
-                88, 1, 212, 176, 31, 197, 35, 156, 135, 24, 30, 57, 204, 253, 224, 28, 89, 189, 53,
-                64, 27, 148, 42, 199, 43, 236, 85, 182, 150, 64, 96, 53, 255, 235, 90, 197, 228, 6,
-                105, 22, 140, 209, 206, 221, 85, 117, 125, 126, 11, 1, 176, 130, 57, 236, 7, 155,
-                127, 58, 130, 92, 230, 219, 254, 0, 3, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177,
-                11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76,
-                16, 252, 180, 72, 134, 137, 247, 161, 68, 32, 253, 186, 201, 177, 11, 117, 135,
-                187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180,
-                72, 134, 137, 247, 161, 68, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0,
-                0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
+                234, 139, 34, 5, 120, 28, 107, 203, 69, 25, 236, 200, 164, 1, 12, 47, 147, 53, 41,
+                143, 23, 116, 230, 203, 59, 228, 153, 14, 22, 241, 103, 226, 186, 169, 181, 65, 49,
+                215, 44, 2, 61, 214, 113, 216, 184, 206, 147, 104, 140, 225, 138, 21, 172, 135,
+                211, 80, 103, 80, 216, 106, 249, 86, 194, 1, 3, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186,
+                201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30,
+                78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 32, 253, 186, 201, 177, 11,
+                117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16,
+                252, 180, 72, 134, 137, 247, 161, 68, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0,
+                0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0,
+                0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
             ],
         );
     }

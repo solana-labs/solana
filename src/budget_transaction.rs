@@ -62,7 +62,7 @@ pub trait BudgetTransaction {
 
     fn vote(&self) -> Option<(Pubkey, Vote, Hash)>;
 
-    fn instruction(&self) -> Option<Instruction>;
+    fn instruction(&self, program_index: usize) -> Option<Instruction>;
 
     fn verify_plan(&self) -> bool;
 }
@@ -204,26 +204,33 @@ impl BudgetTransaction for Transaction {
     }
 
     fn vote(&self) -> Option<(Pubkey, Vote, Hash)> {
-        if let Some(Instruction::NewVote(vote)) = self.instruction() {
-            Some((*self.from(), vote, self.last_id))
+        if self.instructions.len() > 1 {
+            error!("expecting only 1 Instruction per vote");
+            None
+        } else if let Some(Instruction::NewVote(vote)) = self.instruction(0) {
+            Some((self.account_keys[0], vote, self.last_id))
         } else {
             None
         }
     }
 
-    fn instruction(&self) -> Option<Instruction> {
-        deserialize(&self.userdata).ok()
+    fn instruction(&self, program_index: usize) -> Option<Instruction> {
+        deserialize(&self.userdata(program_index)).ok()
     }
 
     /// Verify only the payment plan.
     fn verify_plan(&self) -> bool {
-        if let Some(Instruction::NewContract(contract)) = self.instruction() {
-            self.fee >= 0
-                && self.fee <= contract.tokens
-                && contract.budget.verify(contract.tokens - self.fee)
-        } else {
-            true
+        for pix in 0..self.instructions.len() {
+            if let Some(Instruction::NewContract(contract)) = self.instruction(pix) {
+                if !(self.fee >= 0
+                    && self.fee <= contract.tokens
+                    && contract.budget.verify(contract.tokens - self.fee))
+                {
+                    return false;
+                }
+            }
         }
+        true
     }
 }
 
@@ -232,6 +239,7 @@ mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
     use signature::KeypairUtil;
+    use transaction;
 
     #[test]
     fn test_claim() {
@@ -269,13 +277,18 @@ mod tests {
         });
         let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
         let userdata = serialize(&instruction).unwrap();
+        let instructions = vec![transaction::Instruction {
+            program_id: 0,
+            userdata,
+            accounts: vec![],
+        }];
         let claim0 = Transaction {
-            keys: vec![],
+            account_keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
-            program_id: Default::default(),
+            program_keys: vec![],
+            instructions,
             fee: 0,
-            userdata,
         };
         let buf = serialize(&claim0).unwrap();
         let claim1: Transaction = deserialize(&buf).unwrap();
@@ -288,14 +301,14 @@ mod tests {
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::budget_new(&keypair, pubkey, 42, zero);
-        let mut instruction = tx.instruction().unwrap();
+        let mut instruction = tx.instruction(0).unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             contract.tokens = 1_000_000; // <-- attack, part 1!
             if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = contract.tokens; // <-- attack, part 2!
             }
         }
-        tx.userdata = serialize(&instruction).unwrap();
+        tx.instructions[0].userdata = serialize(&instruction).unwrap();
         assert!(tx.verify_plan());
         assert!(!tx.verify_signature());
     }
@@ -308,13 +321,13 @@ mod tests {
         let pubkey1 = keypair1.pubkey();
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
-        let mut instruction = tx.instruction();
+        let mut instruction = tx.instruction(0);
         if let Some(Instruction::NewContract(ref mut contract)) = instruction {
             if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
-        tx.userdata = serialize(&instruction).unwrap();
+        tx.instructions[0].userdata = serialize(&instruction).unwrap();
         assert!(tx.verify_plan());
         assert!(!tx.verify_signature());
     }
@@ -325,23 +338,23 @@ mod tests {
         let keypair1 = Keypair::new();
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, keypair1.pubkey(), 1, zero);
-        let mut instruction = tx.instruction().unwrap();
+        let mut instruction = tx.instruction(0).unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = 2; // <-- attack!
             }
         }
-        tx.userdata = serialize(&instruction).unwrap();
+        tx.instructions[0].userdata = serialize(&instruction).unwrap();
         assert!(!tx.verify_plan());
 
         // Also, ensure all branchs of the plan spend all tokens
-        let mut instruction = tx.instruction().unwrap();
+        let mut instruction = tx.instruction(0).unwrap();
         if let Instruction::NewContract(ref mut contract) = instruction {
             if let Budget::Pay(ref mut payment) = contract.budget {
                 payment.tokens = 0; // <-- whoops!
             }
         }
-        tx.userdata = serialize(&instruction).unwrap();
+        tx.instructions[0].userdata = serialize(&instruction).unwrap();
         assert!(!tx.verify_plan());
     }
 }

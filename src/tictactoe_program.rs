@@ -263,7 +263,11 @@ impl TicTacToeProgram {
         Pubkey::new(&TICTACTOE_PROGRAM_ID)
     }
 
-    pub fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
+    pub fn process_transaction(
+        tx: &Transaction,
+        pix: usize,
+        accounts: &mut [&mut Account],
+    ) -> Result<()> {
         // accounts[1] must always be the Tic-tac-toe game state account
         if accounts.len() < 2 || !Self::check_id(&accounts[1].program_id) {
             error!("accounts[1] is not assigned to the TICTACTOE_PROGRAM_ID");
@@ -276,7 +280,7 @@ impl TicTacToeProgram {
 
         let mut program_state = Self::deserialize(&accounts[1].userdata)?;
 
-        let command = serde_cbor::from_slice::<Command>(&tx.userdata).map_err(|err| {
+        let command = serde_cbor::from_slice::<Command>(tx.userdata(pix)).map_err(|err| {
             error!("{:?}", err);
             Error::InvalidUserdata
         })?;
@@ -288,14 +292,13 @@ impl TicTacToeProgram {
                 error!("accounts[0] is not assigned to the TICTACTOE_PROGRAM_ID");
                 return Err(Error::InvalidArguments);
             }
-
             // player X public key is in keys[2]
-            if accounts.len() < 3 {
+            if tx.key(pix, 2).is_none() {
                 Err(Error::InvalidArguments)?;
             }
-            program_state.dispatch_command(&command, &tx.keys[2])?;
+            program_state.dispatch_command(&command, tx.key(pix, 2).unwrap())?;
         } else {
-            program_state.dispatch_command(&command, &tx.keys[0])?;
+            program_state.dispatch_command(&command, tx.key(pix, 0).unwrap())?;
         }
         program_state.serialize(&mut accounts[1].userdata)?;
         Ok(())

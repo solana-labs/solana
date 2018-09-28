@@ -33,9 +33,10 @@ impl StorageProgram {
 
     pub fn process_transaction(
         tx: &Transaction,
-        _accounts: &mut [Account],
+        pix: usize,
+        _accounts: &mut [&mut Account],
     ) -> Result<(), StorageError> {
-        if let Ok(syscall) = deserialize(&tx.userdata) {
+        if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             match syscall {
                 StorageProgram::SubmitMiningProof { sha_state } => {
                     info!("Mining proof submitted with state {}", sha_state[0]);
@@ -49,4 +50,22 @@ impl StorageProgram {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+    use signature::Keypair;
+    use signature::KeypairUtil;
+
+    #[test]
+    fn test_storage_tx() {
+        let keypair = Keypair::new();
+        let tx = Transaction::new(
+            &keypair,
+            &[],
+            StorageProgram::id(),
+            vec![],
+            Default::default(),
+            0,
+        );
+        assert!(StorageProgram::process_transaction(&tx, 0, &mut []).is_err());
+    }
+}

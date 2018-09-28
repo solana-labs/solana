@@ -540,11 +540,11 @@ mod tests {
         let last_id = client.get_last_id();
 
         let mut tr2 = Transaction::system_new(&alice.keypair(), bob_pubkey, 501, last_id);
-        let mut instruction2 = deserialize(&tr2.userdata).unwrap();
+        let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemProgram::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
         }
-        tr2.userdata = serialize(&instruction2).unwrap();
+        tr2.instructions[0].userdata = serialize(&instruction2).unwrap();
         let signature = client.transfer_signed(&tr2).unwrap();
         client.poll_for_signature(&signature).unwrap();
 

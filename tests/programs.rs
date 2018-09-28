@@ -141,6 +141,14 @@ fn test_native_move_funds_succes_many_threads() {
         thread.join().unwrap();
     }
 }
+fn process_transaction(
+    tx: &Transaction,
+    accounts: &mut [Account],
+    loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+) {
+    let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
+    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs)
+}
 
 #[test]
 fn test_system_program_load_call() {
@@ -158,7 +166,7 @@ fn test_system_program_load_call() {
             "move_funds".to_string(),
         );
 
-        SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
+        process_transaction(&tx, &mut accounts, &loaded_programs);
     }
     // then call the program
     {
@@ -211,7 +219,7 @@ fn test_system_program_load_call_many_threads() {
                         "move_funds".to_string(),
                     );
 
-                    SystemProgram::process_transaction(&tx, &mut accounts, &loaded_programs);
+                    process_transaction(&tx, &mut accounts, &loaded_programs);
                 }
                 // then call the program
                 {

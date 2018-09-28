@@ -49,10 +49,11 @@ impl SystemProgram {
     }
     pub fn process_transaction(
         tx: &Transaction,
-        accounts: &mut [Account],
+        pix: usize,
+        accounts: &mut [&mut Account],
         loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
     ) {
-        if let Ok(syscall) = deserialize(&tx.userdata) {
+        if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             trace!("process_transaction: {:?}", syscall);
             match syscall {
                 SystemProgram::CreateAccount {
@@ -91,12 +92,13 @@ impl SystemProgram {
                 }
             }
         } else {
-            info!("Invalid transaction userdata: {:?}", tx.userdata);
+            info!("Invalid transaction userdata: {:?}", tx.userdata(pix));
         }
     }
 }
 #[cfg(test)]
 mod test {
+    use super::*;
     use hash::Hash;
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::account::Account;
@@ -107,6 +109,14 @@ mod test {
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
+    fn process_transaction(
+        tx: &Transaction,
+        accounts: &mut [Account],
+        loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+    ) {
+        let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
+        SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs)
+    }
     #[test]
     fn test_create_noop() {
         let from = Keypair::new();
@@ -114,7 +124,7 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         let tx = Transaction::system_new(&from, to.pubkey(), 0, Hash::default());
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -126,7 +136,7 @@ mod test {
         accounts[0].tokens = 1;
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
@@ -139,7 +149,7 @@ mod test {
         accounts[0].program_id = from.pubkey();
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 1);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -151,7 +161,7 @@ mod test {
         let tx =
             Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, to.pubkey(), 0);
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
         assert_eq!(accounts[1].program_id, to.pubkey());
@@ -172,7 +182,7 @@ mod test {
             0,
         );
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -191,7 +201,7 @@ mod test {
             0,
         );
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -210,7 +220,7 @@ mod test {
             0,
         );
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[1].userdata.len(), 3);
     }
     #[test]
@@ -220,7 +230,7 @@ mod test {
         let mut accounts = vec![Account::default()];
         let tx = Transaction::system_assign(&from, Hash::default(), program.pubkey(), 0);
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].program_id, program.pubkey());
     }
     #[test]
@@ -231,7 +241,7 @@ mod test {
         accounts[0].tokens = 1;
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
         let hash = RwLock::new(HashMap::new());
-        SystemProgram::process_transaction(&tx, &mut accounts, &hash);
+        process_transaction(&tx, &mut accounts, &hash);
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
@@ -254,7 +264,7 @@ mod test {
         );
 
         assert_eq!(
-            tx.userdata,
+            tx.userdata(0).to_vec(),
             vec![
                 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -273,7 +283,7 @@ mod test {
         );
 
         assert_eq!(
-            tx.userdata,
+            tx.userdata(0).to_vec(),
             vec![
                 0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -288,7 +298,7 @@ mod test {
             0,
         );
         assert_eq!(
-            tx.userdata,
+            tx.userdata(0).to_vec(),
             vec![
                 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0
@@ -297,6 +307,9 @@ mod test {
 
         // Move
         let tx = Transaction::system_move(&keypair, keypair.pubkey(), 123, Hash::default(), 0);
-        assert_eq!(tx.userdata, vec![2, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(
+            tx.userdata(0).to_vec(),
+            vec![2, 0, 0, 0, 123, 0, 0, 0, 0, 0, 0, 0]
+        );
     }
 }
