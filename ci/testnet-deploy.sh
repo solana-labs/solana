@@ -24,7 +24,7 @@ usage: $0 [name] [zone] [options...]
 Deploys a CD testnet
 
   name  - name of the network
-  zone   - GCE to deploy the network into
+  zone  - zone to deploy the network into
 
   options:
    -s edge|beta|stable  - Deploy the specified Snap release channel
