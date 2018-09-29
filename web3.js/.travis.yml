@@ -3,12 +3,18 @@ node_js:
   - "lts/*"
   - "node"
 
+cache:
+  directories:
+    - ~/.npm
+
+notifications:
+  email: false
+
 script:
   - npm run doc
   - npm run flow
   - npm run lint
   - for example in examples/*.js; do node $example; done
-after_success:
   - npm run codecov
 
 before_deploy:
@@ -26,6 +32,13 @@ deploy:
     on:
       branch: master
       node_js: "lts/*"
+  - provider: script
+    skip_cleanup: true
+    script:
+      - npx semantic-release
+    on:
+      branch: master
+      node_js: "lts/*"
   - provider: releases
     skip-cleanup: true
     file:
@@ -35,11 +48,11 @@ deploy:
     on:
       tags: true
       node_js: "lts/*"
-  - provider: npm
-    skip-cleanup: true
-    email: $NPM_EMAIL_ADDRESS
-    api_key: $NPM_AUTH_TOKEN
-    on:
-      tags: true
-      node_js: "lts/*"
-
+#  - provider: npm
+#    skip-cleanup: true
+#    email: $NPM_EMAIL_ADDRESS
+#    api_key: $NPM_AUTH_TOKEN
+#    on:
+#      tags: true
+#      node_js: "lts/*"
+#
