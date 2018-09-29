@@ -140,7 +140,7 @@ const SendTokensRpcResult = jsonRpcResult('string');
 type AccountInfo = {
   tokens: number,
   programId: PublicKey,
-  userdata: Buffer | null,
+  userdata: Buffer,
 }
 
 /**
@@ -200,14 +200,10 @@ export class Connection {
     const {result} = res;
     assert(typeof result !== 'undefined');
 
-    let userdata = null;
-    if (result.userdata.length > 0) {
-      userdata = Buffer.from(result.userdata);
-    }
     return {
       tokens: result.tokens,
       programId: bs58.encode(result.program_id),
-      userdata,
+      userdata: Buffer.from(result.userdata),
     };
   }
 
