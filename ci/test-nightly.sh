@@ -37,5 +37,5 @@ ls -l target/cov/report/index.html
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
 else
-  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-6.0 gcov'
+  bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-7 gcov'
 fi
