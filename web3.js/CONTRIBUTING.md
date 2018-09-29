@@ -1,5 +1,5 @@
 
-✨ Thanks for contributing to **solana-web3.js*! ✨
+✨ Thanks for contributing to **solana-web3.js**! ✨
 
 As a contributor, here are the guidelines we would like you to follow:
 * Ensure `npm run ok` passes before submitting a Pull Request
