@@ -1,0 +1,11 @@
+{
+  "scope": true,
+  "body": true,
+  "emoji": false,
+  "lowercaseTypes": true,
+  "rules": {
+    "maxChar": 72,
+    "minChar": 10,
+    "endWithDot": false
+  }
+}
