@@ -11,7 +11,7 @@
  */
 
 declare module '@solana/web3.js' {
-  declare type PublicKey = string;
+  declare export type PublicKey = string;
 
   // === src/account.js ===
   declare export class Account {
@@ -24,13 +24,13 @@ declare module '@solana/web3.js' {
   /* TODO */
 
   // === src/connection.js ===
-  declare type AccountInfo = {
+  declare export type AccountInfo = {
     tokens: number,
     programId: PublicKey,
     userdata: Buffer | null,
   }
 
-  declare type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
+  declare export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
 
   declare export class Connection {
     constructor(endpoint: string): Connection;
@@ -61,8 +61,8 @@ declare module '@solana/web3.js' {
   }
 
   // === src/transaction.js ===
-  declare type TransactionSignature = string;
-  declare type TransactionId = string;
+  declare export type TransactionSignature = string;
+  declare export type TransactionId = string;
 
   declare type TransactionCtorFields = {|
     signature?: Buffer;
