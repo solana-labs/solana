@@ -65,6 +65,18 @@ console.log(solanaWeb3);
 console.log(solanaWeb3);
 ```
 
+## Flow
+
+A Flow library definition file is provided at
+[module.flow.js](https://github.com/solana-labs/solana-web3.js/tree/master/module.flow.js).
+Add the following line under the [libs] section of your project's .flowconfig to
+activate it:
+```ini
+[libs]
+node_modules/@solana/web3.js/module.flow.js
+```
+
+
 ## Examples
 See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory for small snippets.
 
