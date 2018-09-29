@@ -232,7 +232,7 @@ test('request airdrop', async () => {
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
   expect(accountInfo.tokens).toBe(42);
-  expect(accountInfo.userdata).toBe(null);
+  expect(accountInfo.userdata).toHaveLength(0);
   expect(accountInfo.programId).toBe(SystemProgram.programId);
 });
 
