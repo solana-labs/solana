@@ -262,7 +262,6 @@ impl WindowUtil for Window {
             if let Some(leader_rotation_interval) = leader_rotation_interval_option {
                 if *consumed != 0 && *consumed % (leader_rotation_interval as u64) == 0 {
                     let scheduled_leader = leader_scheduler_option
-                        .as_ref()
                         .unwrap()
                         .read()
                         .unwrap()
