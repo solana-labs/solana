@@ -27,7 +27,7 @@ declare module '@solana/web3.js' {
   declare export type AccountInfo = {
     tokens: number,
     programId: PublicKey,
-    userdata: Buffer | null,
+    userdata: Buffer,
   }
 
   declare export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
