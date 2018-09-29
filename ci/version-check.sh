@@ -20,7 +20,7 @@ require() {
 case ${1:-stable} in
 nightly)
   require rustc 1.30.[0-9]+-nightly
-  require cargo 1.29.[0-9]+-nightly
+  require cargo 1.31.[0-9]+-nightly
   ;;
 stable)
   require rustc 1.29.[0-9]+
