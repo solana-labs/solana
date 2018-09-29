@@ -48,11 +48,3 @@ deploy:
     on:
       tags: true
       node_js: "lts/*"
-#  - provider: npm
-#    skip-cleanup: true
-#    email: $NPM_EMAIL_ADDRESS
-#    api_key: $NPM_AUTH_TOKEN
-#    on:
-#      tags: true
-#      node_js: "lts/*"
-#
