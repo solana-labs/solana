@@ -49,7 +49,7 @@ impl TicTacToeDashboardProgram {
             }
             State::XWon | State::OWon | State::Draw => {
                 if !self.completed.iter().any(|pubkey| pubkey == game_pubkey) {
-                    // TODO: Once the PoH high is exposed to programs, it could be used to ensure
+                    // TODO: Once the PoH height is exposed to programs, it could be used to ensure
                     //       that old games are not being re-added and causing |total| to increment
                     //       incorrectly.
                     self.total += 1;
