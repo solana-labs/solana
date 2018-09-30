@@ -10,6 +10,7 @@ use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
+use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
 use solana::ledger::{read_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
@@ -776,41 +777,57 @@ fn test_multi_node_dynamic_network() {
 }
 
 #[test]
-#[ignore]
 fn test_leader_to_validator_transition() {
     logger::setup();
     let leader_rotation_interval = 20;
 
-    // Make a dummy address to be the sink for this test's mock transactions
-    let bob_pubkey = Keypair::new().pubkey();
+    // Make a dummy validator id to be the next leader and
+    // sink for this test's mock transactions
+    let validator_keypair = Keypair::new();
+    let validator_id = validator_keypair.pubkey();
 
-    // Initialize the leader ledger. Make a mint and a genesis entry
-    // in the leader ledger
-    let (mint, leader_ledger_path, entries) = genesis(
-        "test_leader_to_validator_transition",
-        (3 * leader_rotation_interval) as i64,
-    );
-
-    let genesis_height = entries.len() as u64;
-
-    // Start the leader node
+    // Create the leader node information
     let leader_keypair = Keypair::new();
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
+
+    // Initialize the leader ledger. Make a mint and a genesis entry
+    // in the leader ledger
+    let (mint, leader_ledger_path, genesis_entries) =
+        genesis("test_leader_to_validator_transition", 10_000);
+
+    let mut last_id = genesis_entries
+        .last()
+        .expect("expected at least one genesis entry")
+        .id;
+
+    // Write the bootstrap entries to the ledger that will cause leader rotation
+    // after the bootstrap height
+    let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
+    let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+    let bootstrap_entries_len = bootstrap_entries.len();
+    last_id = bootstrap_entries.last().unwrap().id;
+    ledger_writer.write_entries(bootstrap_entries).unwrap();
+    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
+
+    // Start the leader node
+    let bootstrap_height = leader_rotation_interval;
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_info.id,
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(leader_rotation_interval * 2),
+        Some(bootstrap_height),
+    );
+
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
         leader_keypair,
         None,
         false,
-        Some(leader_rotation_interval),
-        None,
-        None,
-        None,
+        Some(&leader_scheduler_config),
     );
-
-    // Set the next leader to be Bob
-    leader.set_scheduled_leader(bob_pubkey, leader_rotation_interval);
 
     // Make an extra node for our leader to broadcast to,
     // who won't vote and mess with our leader's entry count
@@ -832,34 +849,38 @@ fn test_leader_to_validator_transition() {
 
     assert!(converged);
 
-    let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
+    let extra_transactions = std::cmp::max(bootstrap_height / 3, 1);
 
-    // Push leader "extra_transactions" past leader_rotation_interval entry height,
+    // Push leader "extra_transactions" past bootstrap_height,
     // make sure the leader stops.
-    assert!(genesis_height < leader_rotation_interval);
-    for i in genesis_height..(leader_rotation_interval + extra_transactions) {
-        if i < leader_rotation_interval {
+    assert!(ledger_initial_len < bootstrap_height);
+    for i in ledger_initial_len..(bootstrap_height + extra_transactions) {
+        if i < bootstrap_height {
             // Poll to see that the bank state is updated after every transaction
             // to ensure that each transaction is packaged as a single entry,
             // so that we can be sure leader rotation is triggered
             let expected_balance = std::cmp::min(
-                leader_rotation_interval - genesis_height,
-                i - genesis_height + 1,
+                bootstrap_height - ledger_initial_len,
+                i - ledger_initial_len + 1,
             );
             let result = send_tx_and_retry_get_balance(
                 &leader_info,
                 &mint,
-                &bob_pubkey,
+                &validator_id,
                 1,
                 Some(expected_balance as i64),
             );
 
-            assert_eq!(result, Some(expected_balance as i64))
+            // If the transaction wasn't reflected in the node, then we assume
+            // the node has transitioned already
+            if result != Some(expected_balance as i64) {
+                break;
+            }
         } else {
-            // After leader_rotation_interval entries, we don't care about the
+            // After bootstrap entries, we don't care about the
             // number of entries generated by these transactions. These are just
             // here for testing to make sure the leader stopped at the correct point.
-            send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+            send_tx_and_retry_get_balance(&leader_info, &mint, &validator_id, 1, None);
         }
     }
 
@@ -870,17 +891,23 @@ fn test_leader_to_validator_transition() {
     }
 
     // Query now validator to make sure that he has the proper balances in his bank
-    // after the transition, even though we submitted "extra_transactions"
+    // after the transitions, even though we submitted "extra_transactions"
     // transactions earlier
     let mut leader_client = mk_client(&leader_info);
 
-    let expected_bal = leader_rotation_interval - genesis_height;
+    let maximum_bal = bootstrap_height - ledger_initial_len;
     let bal = leader_client
-        .poll_get_balance(&bob_pubkey)
+        .poll_get_balance(&validator_id)
         .expect("Expected success when polling newly transitioned validator for balance")
         as u64;
 
-    assert_eq!(bal, expected_bal);
+    assert!(bal <= maximum_bal);
+
+    // Check the ledger to make sure it's the right height, we should've
+    // transitioned after the bootstrap_height entry
+    let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&leader_ledger_path, None);
+
+    assert_eq!(entry_height, bootstrap_height);
 
     // Shut down
     ncp.close().unwrap();
@@ -896,67 +923,71 @@ fn test_leader_validator_basic() {
     // Account that will be the sink for all the test's transactions
     let bob_pubkey = Keypair::new().pubkey();
 
-    // Make a mint and a genesis entry in the leader ledger
-    let (mint, leader_ledger_path, genesis_entries) =
-        genesis("test_leader_validator_basic", 10_000);
-    let genesis_height = genesis_entries.len();
-
-    // Initialize the leader ledger
-    let mut ledger_paths = Vec::new();
-    ledger_paths.push(leader_ledger_path.clone());
-
-    // Create the leader fullnode
+    // Create the leader node information
     let leader_keypair = Keypair::new();
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
+    // Create the validator node information
+    let validator_keypair = Keypair::new();
+    let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+    let validator_info = validator_node.info.clone();
+
+    // Make a common mint and a genesis entry for both leader + validator ledgers
+    let (mint, leader_ledger_path, genesis_entries) =
+        genesis("test_leader_validator_basic", 10_000);
+
+    let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
+
+    let mut last_id = genesis_entries
+        .last()
+        .expect("expected at least one genesis entry")
+        .id;
+    let genesis_height = genesis_entries.len();
+
+    // Initialize both leader + validqtor ledger
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+    ledger_paths.push(validator_ledger_path.clone());
+
+    // Write the bootstrap entries to the ledger that will cause leader rotation
+    // after the bootstrap height
+    let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
+    let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+    let bootstrap_entries_len = bootstrap_entries.len();
+    last_id = bootstrap_entries.last().unwrap().id;
+    ledger_writer.write_entries(bootstrap_entries).unwrap();
+    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
+
+    // Create the leader scheduler config
+    let num_bootstrap_epochs = 2;
+    let bootstrap_height = num_bootstrap_epochs * leader_rotation_interval;
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_info.id,
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(leader_rotation_interval * 2),
+        Some(bootstrap_height),
+    );
+
+    // Start the leader fullnode
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
         leader_keypair,
         None,
         false,
-        Some(leader_rotation_interval),
-        None,
-        None,
-        None,
+        Some(&leader_scheduler_config),
     );
 
-    // Send leader some tokens to vote
-    send_tx_and_retry_get_balance(&leader_info, &mint, &leader_info.id, 500, None).unwrap();
-
     // Start the validator node
-    let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
-    let validator_keypair = Keypair::new();
-    let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-    let validator_info = validator_node.info.clone();
     let mut validator = Fullnode::new(
         validator_node,
         &validator_ledger_path,
         validator_keypair,
         Some(leader_info.contact_info.ncp),
         false,
-        Some(leader_rotation_interval),
-        None,
-        None,
-        None,
-    );
-
-    ledger_paths.push(validator_ledger_path.clone());
-
-    // Set the leader schedule for the validator and leader
-    let my_leader_begin_epoch = 2;
-    for i in 0..my_leader_begin_epoch {
-        validator.set_scheduled_leader(leader_info.id, leader_rotation_interval * i);
-        leader.set_scheduled_leader(leader_info.id, leader_rotation_interval * i);
-    }
-    validator.set_scheduled_leader(
-        validator_info.id,
-        my_leader_begin_epoch * leader_rotation_interval,
-    );
-    leader.set_scheduled_leader(
-        validator_info.id,
-        my_leader_begin_epoch * leader_rotation_interval,
+        Some(&leader_scheduler_config),
     );
 
     // Wait for convergence
@@ -965,8 +996,7 @@ fn test_leader_validator_basic() {
 
     // Send transactions to the leader
     let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
-    let total_transactions_to_send =
-        my_leader_begin_epoch * leader_rotation_interval + extra_transactions;
+    let total_transactions_to_send = bootstrap_height + extra_transactions;
 
     // Push "extra_transactions" past leader_rotation_interval entry height,
     // make sure the validator stops.

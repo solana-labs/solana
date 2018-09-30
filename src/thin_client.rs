@@ -434,7 +434,6 @@ mod tests {
     use bank::Bank;
     use cluster_info::Node;
     use fullnode::Fullnode;
-    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use logger;
     use mint::Mint;

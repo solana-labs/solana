@@ -3,11 +3,17 @@
 
 use bank::Bank;
 use bincode::serialize;
+use budget_instruction::Vote;
+use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
-use hash::hash;
+use entry::Entry;
+use hash::{hash, Hash};
+use signature::{Keypair, KeypairUtil};
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
+use system_transaction::SystemTransaction;
+use transaction::Transaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -319,6 +325,31 @@ impl LeaderScheduler {
 
         chosen_account
     }
+}
+
+// Create two entries so that the node with keypair == active_keypair
+// is in the active set for leader selection:
+// 1) A vote from the validator,
+// 2) Give him nonzero number of tokens.
+pub fn make_active_set_entries(
+    active_keypair: &Keypair,
+    token_source: &Keypair,
+    last_id: &Hash,
+) -> Vec<Entry> {
+    // 1) Create vote entry
+    let vote = Vote {
+        version: 0,
+        contact_info_version: 0,
+    };
+    let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, *last_id, 0);
+    let vote_entry = Entry::new(last_id, 0, vec![vote_tx]);
+    let last_id = vote_entry.id;
+
+    // 2) Create transfer token entry
+    let transfer_tx = Transaction::system_new(&token_source, active_keypair.pubkey(), 1, last_id);
+    let transfer_entry = Entry::new(&vote_entry.id, 0, vec![transfer_tx]);
+
+    vec![vote_entry, transfer_entry]
 }
 
 #[cfg(test)]

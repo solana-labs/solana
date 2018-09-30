@@ -124,7 +124,7 @@ impl Fullnode {
         keypair: Keypair,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
-        leader_scheduler_config: Option<LeaderSchedulerConfig>,
+        leader_scheduler_config: Option<&LeaderSchedulerConfig>,
     ) -> Self {
         let mut leader_scheduler_option = None;
         if let Some(config) = leader_scheduler_config {
@@ -544,7 +544,7 @@ impl Fullnode {
             .set_scheduled_leader(entry_height, leader_id);
     }
 
-    fn new_bank_from_ledger(
+    pub fn new_bank_from_ledger(
         ledger_path: &str,
         leader_scheduler: Option<&mut LeaderScheduler>,
     ) -> (Bank, u64, Vec<Entry>) {
@@ -596,8 +596,8 @@ mod tests {
     use bank::Bank;
     use cluster_info::Node;
     use fullnode::{Fullnode, NodeRole, TvuReturnType};
-    use leader_scheduler::LeaderScheduler;
-    use ledger::genesis;
+    use leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
+    use ledger::{genesis, LedgerWriter};
     use packet::make_consecutive_blobs;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -633,7 +633,6 @@ mod tests {
 
     #[test]
     fn validator_parallel_exit() {
-        let dummy_keypair = Keypair::new();
         let mut ledger_paths = vec![];
         let vals: Vec<Fullnode> = (0..2)
             .map(|i| {
@@ -679,34 +678,51 @@ mod tests {
         let leader_id = leader_node.info.id;
         let leader_ncp = leader_node.info.contact_info.ncp;
 
-        // Start the validator node
-        let leader_rotation_interval = 10;
+        // Create validator identity
         let (mint, validator_ledger_path) = genesis("test_validator_to_leader_transition", 10_000);
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
+
+        let genesis_entries = mint.create_entries();
+        let mut last_id = genesis_entries
+            .last()
+            .expect("expected at least one genesis entry")
+            .id;
+
+        // Write two entries so that the validator is in the active set:
+        // 1) A vote from the validator and 2) Give him nonzero number of tokens
+        // Write the bootstrap entries to the ledger that will cause leader rotation
+        // after the bootstrap height
+        let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
+        let bootstrap_entries =
+            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+        let bootstrap_entries_len = bootstrap_entries.len();
+        last_id = bootstrap_entries.last().unwrap().id;
+        ledger_writer.write_entries(bootstrap_entries).unwrap();
+        let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
+
+        // Set the leader scheduler for the validator
+        let leader_rotation_interval = 10;
+        let num_bootstrap_epochs = 2;
+        let bootstrap_height = num_bootstrap_epochs * leader_rotation_interval;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(leader_rotation_interval * 2),
+            Some(bootstrap_height),
+        );
+
+        // Start the validator
         let mut validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
             validator_keypair,
             Some(leader_ncp),
             false,
-            Some(leader_rotation_interval),
-            None,
-            None,
-            None,
-            None,
-            Some(5000),
-        );
-
-        // Set the leader schedule for the validator
-        let my_leader_begin_epoch = 2;
-        for i in 0..my_leader_begin_epoch {
-            validator.set_scheduled_leader(leader_id, leader_rotation_interval * i);
-        }
-        validator.set_scheduled_leader(
-            validator_info.id,
-            my_leader_begin_epoch * leader_rotation_interval,
+            Some(&leader_scheduler_config),
         );
 
         // Send blobs to the validator from our mock leader
@@ -728,19 +744,17 @@ mod tests {
             // Send the blobs out of order, in reverse. Also send an extra
             // "extra_blobs" number of blobs to make sure the window stops in the right place.
             let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
-            let total_blobs_to_send =
-                my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
-            let genesis_entries = mint.create_entries();
-            let last_id = genesis_entries
-                .last()
-                .expect("expected at least one genesis entry")
-                .id;
+            let total_blobs_to_send = bootstrap_height + extra_blobs;
             let tvu_address = &validator_info.contact_info.tvu;
-            let msgs =
-                make_consecutive_blobs(leader_id, total_blobs_to_send, last_id, &tvu_address)
-                    .into_iter()
-                    .rev()
-                    .collect();
+            let msgs = make_consecutive_blobs(
+                leader_id,
+                total_blobs_to_send,
+                ledger_initial_len,
+                last_id,
+                &tvu_address,
+            ).into_iter()
+            .rev()
+            .collect();
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -762,13 +776,11 @@ mod tests {
             _ => panic!("Role should not be leader"),
         }
 
-        // Check the validator ledger to make sure it's the right height
+        // Check the validator ledger to make sure it's the right height, we should've
+        // transitioned after the bootstrap_height entry
         let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
 
-        assert_eq!(
-            entry_height,
-            my_leader_begin_epoch * leader_rotation_interval
-        );
+        assert_eq!(entry_height, bootstrap_height,);
 
         // Shut down
         t_responder.join().expect("responder thread join");

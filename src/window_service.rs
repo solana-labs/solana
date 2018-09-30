@@ -407,11 +407,15 @@ mod test {
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut num_blobs_to_make = 10;
             let gossip_address = &tn.info.contact_info.ncp;
-            let msgs =
-                make_consecutive_blobs(me_id, num_blobs_to_make, Hash::default(), &gossip_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
+            let msgs = make_consecutive_blobs(
+                me_id,
+                num_blobs_to_make,
+                0,
+                Hash::default(),
+                &gossip_address,
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -655,11 +659,15 @@ mod test {
             let extra_blobs = leader_rotation_interval;
             let total_blobs_to_send =
                 my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
-            let msgs =
-                make_consecutive_blobs(me_id, total_blobs_to_send, Hash::default(), &ncp_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
+            let msgs = make_consecutive_blobs(
+                me_id,
+                total_blobs_to_send,
+                0,
+                Hash::default(),
+                &ncp_address,
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };

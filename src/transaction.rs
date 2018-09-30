@@ -164,7 +164,7 @@ impl Transaction {
         true
     }
 
-    fn from(&self) -> &Pubkey {
+    pub fn from(&self) -> &Pubkey {
         &self.account_keys[0]
     }
 

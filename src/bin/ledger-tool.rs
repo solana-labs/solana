@@ -137,7 +137,7 @@ fn main() {
                         exit(1);
                     }
                 }
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = bank.process_entry(&entry, None, &mut None) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

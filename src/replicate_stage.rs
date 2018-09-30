@@ -53,7 +53,7 @@ impl ReplicateStage {
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
         entry_height: &mut u64,
-        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler_option: &mut Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -62,21 +62,28 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        let res = bank.process_entries(&entries);
+        let res;
+        {
+            let mut leader_scheduler_lock_option = None;
+            if let Some(leader_scheduler_lock) = leader_scheduler_option {
+                let wlock = leader_scheduler_lock.write().unwrap();
+                leader_scheduler_lock_option = Some(wlock);
+            }
+
+            res = bank.process_entries(
+                &entries,
+                Some(*entry_height),
+                &mut leader_scheduler_lock_option
+                    .as_mut()
+                    .map(|wlock| &mut (**wlock)),
+            );
+        }
+
         if let Some(sender) = vote_blob_sender {
             send_validator_vote(bank, keypair, cluster_info, sender)?;
         }
         let votes = &entries.votes(*entry_height);
         wcluster_info.write().unwrap().insert_votes(votes);
-
-        if let Some(leader_scheduler) = leader_scheduler_option {
-            for (pk, _, _, entry_height) in votes {
-                leader_scheduler
-                    .write()
-                    .unwrap()
-                    .push_vote(*pk, *entry_height);
-            }
-        }
 
         *entry_height += entries.len() as u64;
 
@@ -119,7 +126,7 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
-                let leader_scheduler_option_ = leader_scheduler_option;
+                let mut leader_scheduler_option_ = leader_scheduler_option;
                 loop {
                     // Only vote once a second.
                     let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
@@ -137,7 +144,7 @@ impl ReplicateStage {
                         &keypair,
                         vote_sender,
                         &mut entry_height_,
-                        &leader_scheduler_option_,
+                        &mut leader_scheduler_option_,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
