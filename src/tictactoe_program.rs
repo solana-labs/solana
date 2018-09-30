@@ -12,6 +12,7 @@ pub enum Error {
     InvalidArguments,
     InvalidMove,
     InvalidUserdata,
+    InvalidTimestamp,
     NoGame,
     NotYourTurn,
     PlayerNotFound,
@@ -74,7 +75,7 @@ impl Game {
     #[cfg(test)]
     pub fn new(player_x: Pubkey, player_o: Pubkey) -> Game {
         let mut game = Game::create(&player_x);
-        game.join(player_o, 0).unwrap();
+        game.join(player_o, 1).unwrap();
         game
     }
 
@@ -82,8 +83,13 @@ impl Game {
         if self.state == State::Waiting {
             self.player_o = Some(player_o);
             self.state = State::XMove;
-            self.keep_alive[1] = timestamp;
-            Ok(())
+
+            if timestamp <= self.keep_alive[1] {
+                Err(Error::InvalidTimestamp)
+            } else {
+                self.keep_alive[1] = timestamp;
+                Ok(())
+            }
         } else {
             Err(Error::GameInProgress)
         }
@@ -143,13 +149,25 @@ impl Game {
     }
 
     pub fn keep_alive(self: &mut Game, player: Pubkey, timestamp: i64) -> Result<()> {
-        if player == self.player_x {
-            self.keep_alive[0] = timestamp;
-        } else if Some(player) == self.player_o {
-            self.keep_alive[1] = timestamp;
-        } else {
-            Err(Error::PlayerNotFound)?;
-        }
+        match self.state {
+            State::Waiting | State::XMove | State::OMove => {
+                if player == self.player_x {
+                    if timestamp <= self.keep_alive[0] {
+                        Err(Error::InvalidTimestamp)?;
+                    }
+                    self.keep_alive[0] = timestamp;
+                } else if Some(player) == self.player_o {
+                    if timestamp <= self.keep_alive[1] {
+                        Err(Error::InvalidTimestamp)?;
+                    }
+                    self.keep_alive[1] = timestamp;
+                } else {
+                    Err(Error::PlayerNotFound)?;
+                }
+            }
+            // Ignore keep_alive when game is no longer in progress
+            State::XWon | State::OWon | State::Draw => {}
+        };
         Ok(())
     }
 }
