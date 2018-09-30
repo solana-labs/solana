@@ -105,7 +105,7 @@ fn main() -> () {
         keypair,
         network,
         false,
-        Some(leader_scheduler_config),
+        Some(&leader_scheduler_config),
     );
 
     // airdrop stuff, probably goes away at some point

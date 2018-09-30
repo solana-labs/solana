@@ -670,7 +670,6 @@ mod tests {
     use crdt::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
-    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use mint::Mint;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
