@@ -22,14 +22,14 @@ impl TicTacToeDashboardProgram {
         if input.len() < 2 {
             Err(Error::InvalidUserdata)?;
         }
-        let len = input[0] as usize + (0xFF * input[1] as usize);
+        let len = input[0] as usize + (0x100 * input[1] as usize);
         if len == 0 {
             Ok(TicTacToeDashboardProgram::default())
         } else if input.len() < len + 2 {
             Err(Error::InvalidUserdata)
         } else {
             serde_cbor::from_slice(&input[2..(2 + len)]).map_err(|err| {
-                error!("Unable to deserialize game: {:?}", err);
+                error!("Unable to deserialize: {:?}", err);
                 Error::InvalidUserdata
             })
         }
@@ -141,13 +141,16 @@ mod test {
     #[test]
     pub fn serde() {
         let mut dashboard1 = TicTacToeDashboardProgram::default();
-        dashboard1.total = 123;
+        dashboard1.total = 1234567890;
+        dashboard1.pending = Pubkey::new(&[100; 32]);
+        for i in 1..5 {
+            dashboard1.completed.push(Pubkey::new(&[100 + i; 32]));
+        }
 
-        let mut userdata = vec![0xff; 256];
+        let mut userdata = vec![0xff; 512];
         dashboard1.serialize(&mut userdata).unwrap();
 
         let dashboard2 = TicTacToeDashboardProgram::deserialize(&userdata).unwrap();
-
         assert_eq!(dashboard1, dashboard2);
     }
 
