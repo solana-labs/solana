@@ -40,7 +40,7 @@ export class SystemProgram {
 
     const programIdBytes = programId.toBuffer();
     programIdBytes.copy(userdata, pos);
-    pos += 32;
+    pos += programIdBytes.length;
 
     assert(pos <= userdata.length);
 
