@@ -4,10 +4,10 @@ import assert from 'assert';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
-import bs58 from 'bs58';
 
 import {Transaction} from './transaction';
-import type {Account, PublicKey} from './account';
+import {PublicKey} from './publickey';
+import type {Account} from './account';
 import type {TransactionSignature, TransactionId} from './transaction';
 
 type RpcRequest = (methodName: string, args: Array<any>) => any;
@@ -174,7 +174,7 @@ export class Connection {
   async getBalance(publicKey: PublicKey): Promise<number> {
     const unsafeRes = await this._rpcRequest(
       'getBalance',
-      [publicKey]
+      [publicKey.toBase58()]
     );
     const res = GetBalanceRpcResult(unsafeRes);
     if (res.error) {
@@ -190,7 +190,7 @@ export class Connection {
   async getAccountInfo(publicKey: PublicKey): Promise<AccountInfo> {
     const unsafeRes = await this._rpcRequest(
       'getAccountInfo',
-      [publicKey]
+      [publicKey.toBase58()]
     );
     const res = GetAccountInfoRpcResult(unsafeRes);
     if (res.error) {
@@ -202,7 +202,7 @@ export class Connection {
 
     return {
       tokens: result.tokens,
-      programId: bs58.encode(result.program_id),
+      programId: new PublicKey(result.program_id),
       userdata: Buffer.from(result.userdata),
     };
   }
@@ -280,7 +280,7 @@ export class Connection {
    * Request an allocation of tokens to the specified account
    */
   async requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature> {
-    const unsafeRes = await this._rpcRequest('requestAirdrop', [to, amount]);
+    const unsafeRes = await this._rpcRequest('requestAirdrop', [to.toBase58(), amount]);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);

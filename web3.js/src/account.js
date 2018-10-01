@@ -1,14 +1,8 @@
 // @flow
 import nacl from 'tweetnacl';
-import bs58 from 'bs58';
 import type {KeyPair} from 'tweetnacl';
 
-/**
- * Base 58 encoded public key
- *
- * @typedef {string} PublicKey
- */
-export type PublicKey = string;
+import {PublicKey} from './publickey';
 
 /**
  * An account key pair (public and secret keys).
@@ -36,7 +30,7 @@ export class Account {
    * The public key for this account
    */
   get publicKey(): PublicKey {
-    return bs58.encode(this._keypair.publicKey);
+    return new PublicKey(this._keypair.publicKey);
   }
 
   /**

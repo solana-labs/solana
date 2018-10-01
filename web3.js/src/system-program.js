@@ -3,7 +3,7 @@
 import assert from 'assert';
 
 import {Transaction} from './transaction';
-import type {PublicKey} from './account';
+import {PublicKey} from './publickey';
 
 /**
  * Factory class for transactions to interact with the System program
@@ -13,7 +13,7 @@ export class SystemProgram {
    * Public key that identifies the System program
    */
   static get programId(): PublicKey {
-    return '11111111111111111111111111111111';
+    return new PublicKey('0x000000000000000000000000000000000000000000000000000000000000000');
   }
 
   /**
@@ -38,7 +38,7 @@ export class SystemProgram {
     userdata.writeUInt32LE(space, pos); // space as u64
     pos += 8;
 
-    const programIdBytes = Transaction.serializePublicKey(programId);
+    const programIdBytes = programId.toBuffer();
     programIdBytes.copy(userdata, pos);
     pos += 32;
 
@@ -84,7 +84,7 @@ export class SystemProgram {
     userdata.writeUInt32LE(1, pos); // Assign instruction
     pos += 4;
 
-    const programIdBytes = Transaction.serializePublicKey(programId);
+    const programIdBytes = programId.toBuffer();
     programIdBytes.copy(userdata, pos);
     pos += programIdBytes.length;
 

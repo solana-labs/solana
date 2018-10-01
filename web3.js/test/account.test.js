@@ -1,10 +1,10 @@
 // @flow
 import {Account} from '../src/account';
+import {PublicKey} from '../src/publickey';
 
 test('generate new account', () => {
   const account = new Account();
-  expect(account.publicKey.length).toBeGreaterThanOrEqual(43);
-  expect(account.publicKey.length).toBeLessThanOrEqual(44);
+  expect(PublicKey.isPublicKey(account.publicKey)).toBeTruthy();
   expect(account.secretKey).toHaveLength(64);
 });
 
@@ -17,5 +17,5 @@ test('account from secret key', () => {
     74, 101, 217, 139, 135, 139, 153, 34
   ]);
   const account = new Account(secretKey);
-  expect(account.publicKey).toBe('2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
+  expect(account.publicKey.toBase58()).toBe('2q7pyhPwAwZ3QMfZrnAbDhnh9mDUqycszcpf86VgQxhF');
 });
