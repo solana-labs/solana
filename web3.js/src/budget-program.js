@@ -1,7 +1,7 @@
 // @flow
 
 import {Transaction} from './transaction';
-import type {PublicKey} from './account';
+import {PublicKey} from './publickey';
 
 /**
  * Represents a condition that is met by executing a `applySignature()`
@@ -54,7 +54,7 @@ export type BudgetCondition = SignatureCondition | TimestampCondition;
  * @private
  */
 function serializePayment(payment: Payment): Buffer {
-  const toData = Transaction.serializePublicKey(payment.to);
+  const toData = payment.to.toBuffer();
   const userdata = Buffer.alloc(8 + toData.length);
   userdata.writeUInt32LE(payment.amount, 0);
   toData.copy(userdata, 8);
@@ -98,7 +98,7 @@ function serializeCondition(condition: BudgetCondition) {
   case 'timestamp':
   {
     const date = serializeDate(condition.when);
-    const from = Transaction.serializePublicKey(condition.from);
+    const from = condition.from.toBuffer();
 
     const userdata = Buffer.alloc(4 + date.length + from.length);
     userdata.writeUInt32LE(0, 0); // Condition enum = Timestamp
@@ -108,7 +108,7 @@ function serializeCondition(condition: BudgetCondition) {
   }
   case 'signature':
   {
-    const from = Transaction.serializePublicKey(condition.from);
+    const from = condition.from.toBuffer();
 
     const userdata = Buffer.alloc(4 + from.length);
     userdata.writeUInt32LE(1, 0); // Condition enum = Signature
@@ -130,7 +130,7 @@ export class BudgetProgram {
    * Public key that identifies the Budget program
    */
   static get programId(): PublicKey {
-    return '4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM';
+    return new PublicKey('0x100000000000000000000000000000000000000000000000000000000000000');
   }
 
   /**

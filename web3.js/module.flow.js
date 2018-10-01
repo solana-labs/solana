@@ -13,11 +13,20 @@
 declare module '@solana/web3.js' {
   declare export type PublicKey = string;
 
+  // === src/publickey.js ===
+  declare export class PublicKey {
+    constructor(number: string | Buffer | Array<number>): PublicKey;
+    static isPublicKey(o: Object): boolean;
+    equals(publickey: PublicKey): boolean;
+    toBase58(): string;
+    toBuffer(): Buffer;
+  }
+
   // === src/account.js ===
   declare export class Account {
     constructor(secretKey: ?Buffer): Account;
     publicKey: PublicKey;
-    secretKey: PublicKey;
+    secretKey: Buffer;
   }
 
   // === src/budget-program.js ===
@@ -84,6 +93,5 @@ declare module '@solana/web3.js' {
     constructor(opts?: TransactionCtorFields): Transaction;
     sign(from: Account): void;
     serialize(): Buffer;
-    static serializePublicKey(key: PublicKey): Buffer;
   }
 }

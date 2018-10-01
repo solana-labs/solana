@@ -26,7 +26,7 @@ test('get account info - error', () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey],
+      params: [account.publicKey.toBase58()],
     },
     errorResponse,
   ]);
@@ -44,7 +44,7 @@ test('get balance', async () => {
     url,
     {
       method: 'getBalance',
-      params: [account.publicKey],
+      params: [account.publicKey.toBase58()],
     },
     {
       error: null,
@@ -54,23 +54,6 @@ test('get balance', async () => {
 
   const balance = await connection.getBalance(account.publicKey);
   expect(balance).toBeGreaterThanOrEqual(0);
-});
-
-test('get balance - error', () => {
-  const connection = new Connection(url);
-
-  const invalidPublicKey = 'not a public key';
-  mockRpc.push([
-    url,
-    {
-      method: 'getBalance',
-      params: [invalidPublicKey],
-    },
-    errorResponse,
-  ]);
-
-  expect(connection.getBalance(invalidPublicKey))
-  .rejects.toThrow(errorMessage);
 });
 
 test('confirm transaction - error', () => {
@@ -174,7 +157,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account.publicKey, 40],
+      params: [account.publicKey.toBase58(), 40],
     },
     {
       error: null,
@@ -185,7 +168,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [account.publicKey, 2],
+      params: [account.publicKey.toBase58(), 2],
     },
     {
       error: null,
@@ -196,7 +179,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getBalance',
-      params: [account.publicKey],
+      params: [account.publicKey.toBase58()],
     },
     {
       error: null,
@@ -214,7 +197,7 @@ test('request airdrop', async () => {
     url,
     {
       method: 'getAccountInfo',
-      params: [account.publicKey],
+      params: [account.publicKey.toBase58()],
     },
     {
       error: null,
@@ -226,31 +209,13 @@ test('request airdrop', async () => {
         tokens: 42,
         userdata: [],
       }
-
     }
   ]);
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
   expect(accountInfo.tokens).toBe(42);
   expect(accountInfo.userdata).toHaveLength(0);
-  expect(accountInfo.programId).toBe(SystemProgram.programId);
-});
-
-test('request airdrop - error', () => {
-  const invalidPublicKey = 'not a public key';
-  const connection = new Connection(url);
-
-  mockRpc.push([
-    url,
-    {
-      method: 'requestAirdrop',
-      params: [invalidPublicKey, 1],
-    },
-    errorResponse
-  ]);
-
-  expect(connection.requestAirdrop(invalidPublicKey, 1))
-  .rejects.toThrow(errorMessage);
+  expect(accountInfo.programId).toEqual(SystemProgram.programId);
 });
 
 test('transaction', async () => {
@@ -262,7 +227,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountFrom.publicKey, 12],
+      params: [accountFrom.publicKey.toBase58(), 12],
     },
     {
       error: null,
@@ -273,7 +238,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountFrom.publicKey],
+      params: [accountFrom.publicKey.toBase58()],
     },
     {
       error: null,
@@ -287,7 +252,7 @@ test('transaction', async () => {
     url,
     {
       method: 'requestAirdrop',
-      params: [accountTo.publicKey, 21],
+      params: [accountTo.publicKey.toBase58(), 21],
     },
     {
       error: null,
@@ -298,7 +263,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountTo.publicKey],
+      params: [accountTo.publicKey.toBase58()],
     },
     {
       error: null,
@@ -375,7 +340,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountFrom.publicKey],
+      params: [accountFrom.publicKey.toBase58()],
     },
     {
       error: null,
@@ -388,7 +353,7 @@ test('transaction', async () => {
     url,
     {
       method: 'getBalance',
-      params: [accountTo.publicKey],
+      params: [accountTo.publicKey.toBase58()],
     },
     {
       error: null,

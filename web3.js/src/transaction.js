@@ -4,7 +4,8 @@ import assert from 'assert';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
-import type {Account, PublicKey} from './account';
+import type {Account} from './account';
+import type {PublicKey} from './publickey';
 
 /**
  * @typedef {string} TransactionSignature
@@ -92,14 +93,14 @@ export class Transaction {
     transactionData.writeUInt32LE(this.keys.length, pos);  // u64
     pos += 8;
     for (let key of this.keys) {
-      const keyBytes = Transaction.serializePublicKey(key);
+      const keyBytes = key.toBuffer();
       keyBytes.copy(transactionData, pos);
       pos += 32;
     }
 
     // serialize `this.programId`
     if (this.programId) {
-      const keyBytes = Transaction.serializePublicKey(this.programId);
+      const keyBytes = this.programId.toBuffer();
       keyBytes.copy(transactionData, pos);
     }
     pos += 32;
@@ -157,15 +158,6 @@ export class Transaction {
     Buffer.from(signature).copy(wireTransaction, 0);
     transactionData.copy(wireTransaction, signature.length);
     return wireTransaction;
-  }
-
-  /**
-   * Serializes a public key into the wire format
-   */
-  static serializePublicKey(key: PublicKey): Buffer {
-    const data = Buffer.from(bs58.decode(key));
-    assert(data.length === 32);
-    return data;
   }
 }
 
