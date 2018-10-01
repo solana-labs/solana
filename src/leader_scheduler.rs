@@ -410,7 +410,7 @@ mod tests {
         leader_scheduler.generate_schedule(bootstrap_height, &bank);
 
         // The leader outside of the newly generated schedule window:
-        // [bootstrap_height, bootstrap_height + seed_rotation_interval]
+        // [bootstrap_height, bootstrap_height + seed_rotation_interval)
         // should be undefined
         assert_eq!(
             leader_scheduler.get_scheduled_leader(bootstrap_height - 1),
