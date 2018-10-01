@@ -13,13 +13,26 @@ export class PublicKey {
    * Create a new PublicKey object
    */
   constructor(number: string | Buffer | Array<number>) {
-    let radix = 10;
 
-    if (typeof number === 'string' && number.startsWith('0x')) {
-      this._bn = new BN(number.substring(2), 16);
-    } else {
-      this._bn = new BN(number, radix);
+    for (;;) {
+      if (typeof number === 'string') {
+        // base 58 encoded?
+        if (/^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(number)) {
+          this._bn = new BN(bs58.decode(number));
+          break;
+        }
+
+        // hexadecimal number
+        if (number.startsWith('0x')) {
+          this._bn = new BN(number.substring(2), 16);
+          break;
+        }
+      }
+
+      this._bn = new BN(number);
+      break;
     }
+
     if (this._bn.byteLength() > 32) {
       throw new Error(`Invalid public key input`);
     }
