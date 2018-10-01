@@ -550,7 +550,7 @@ impl Service for Fullnode {
 mod tests {
     use bank::Bank;
     use crdt::Node;
-    use fullnode::{Fullnode, FullnodeReturnType};
+    use fullnode::{Fullnode, NodeRole, TvuReturnType};
     use ledger::genesis;
     use packet::make_consecutive_blobs;
     use service::Service;
@@ -693,10 +693,21 @@ mod tests {
             t_responder
         };
 
-        // Wait for validator to shut down tvu and restart tpu
-        match validator.handle_role_transition().unwrap() {
-            Some(FullnodeReturnType::LeaderRotation) => (),
-            _ => panic!("Expected reason for exit to be leader rotation"),
+        // Wait for validator to shut down tvu
+        let node_role = validator.node_role.take();
+        match node_role {
+            Some(NodeRole::Validator(validator_services)) => {
+                let join_result = validator_services
+                    .join()
+                    .expect("Expected successful validator join");
+                assert_eq!(
+                    join_result,
+                    Some(TvuReturnType::LeaderRotation(
+                        my_leader_begin_epoch * leader_rotation_interval
+                    ))
+                );
+            }
+            _ => panic!("Role should not be leader"),
         }
 
         // Check the validator ledger to make sure it's the right height
