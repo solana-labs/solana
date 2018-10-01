@@ -50,7 +50,7 @@ export class PublicKey {
    * Return the base-58 representation of the public key
    */
   toBuffer(): Buffer {
-    const b = this._bn.toBuffer();
+    const b = this._bn.toArrayLike(Buffer);
     if (b.length === 32) {
       return b;
     }
