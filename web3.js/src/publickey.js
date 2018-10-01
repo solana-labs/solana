@@ -56,7 +56,7 @@ export class PublicKey {
     }
 
     const zeroPad = new Buffer(32);
-    b.copy(zeroPad, 32 - b.length);
+    b.copy(zeroPad);
     return zeroPad;
   }
 
