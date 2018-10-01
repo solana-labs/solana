@@ -6,6 +6,7 @@
 [![npm-downloads][npm-downloads-image]][npm-url]
 [![david][david-deps-image]][david-deps-url]
 [![david][david-dev-deps-image]][david-dev-deps-url]
+[![semantic-release][semantic-release-image]][semantic-release-url]
 
 [travis-image]: https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master
 [travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
@@ -20,6 +21,8 @@
 [david-deps-url]: https://david-dm.org/solana-labs/solana-web3.js
 [david-dev-deps-image]: https://david-dm.org/solana-labs/solana-web3.js/dev-status.svg
 [david-dev-deps-url]: https://david-dm.org/solana-labs/solana-web3.js?type=dev
+[semantic-release-image]: https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg
+[semantic-release-url]: https://github.com/semantic-release/semantic-release
 
 # Solana JavaScript API
 
