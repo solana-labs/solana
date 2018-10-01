@@ -5,7 +5,6 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
-use leader_scheduler::LeaderScheduler;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::SharedBlob;
@@ -74,8 +73,6 @@ pub trait WindowUtil {
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
-        leader_rotation_interval_option: Option<u64>,
-        leader_scheduler_option: &Option<&Arc<RwLock<LeaderScheduler>>>,
     );
 }
 
@@ -203,8 +200,6 @@ impl WindowUtil for Window {
         consumed: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
-        leader_rotation_interval_option: Option<u64>,
-        leader_scheduler_option: &Option<&Arc<RwLock<LeaderScheduler>>>,
     ) {
         let w = (pix % WINDOW_SIZE) as usize;
 
@@ -259,26 +254,6 @@ impl WindowUtil for Window {
 
         // push all contiguous blobs into consumed queue, increment consumed
         loop {
-            if let Some(leader_rotation_interval) = leader_rotation_interval_option {
-                if *consumed != 0 && *consumed % (leader_rotation_interval as u64) == 0 {
-                    let scheduled_leader = leader_scheduler_option
-                        .unwrap()
-                        .read()
-                        .unwrap()
-                        .get_scheduled_leader(*consumed);
-                    match scheduled_leader {
-                        // If we are the next leader, exit
-                        Some(leader_id) if leader_id == *id => {
-                            break;
-                        }
-
-                        // If it's unknown then we have to wait for the seed to be
-                        // calculated, so block
-                        _ => (),
-                    }
-                }
-            }
-
             let k = (*consumed % WINDOW_SIZE) as usize;
             trace!("{}: k: {} consumed: {}", id, k, *consumed,);
 

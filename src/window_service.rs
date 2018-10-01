@@ -3,7 +3,6 @@
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
 use entry::EntrySender;
-use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
@@ -145,8 +144,6 @@ fn recv_window(
     s: &EntrySender,
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
-    leader_rotation_interval_option: Option<u64>,
-    leader_scheduler_option: Option<&Arc<RwLock<LeaderScheduler>>>,
     done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
@@ -212,8 +209,6 @@ fn recv_window(
             consumed,
             leader_unknown,
             pending_retransmits,
-            leader_rotation_interval_option,
-            &leader_scheduler_option,
         );
 
         // Send a signal when we hit the max entry_height
@@ -249,9 +244,8 @@ pub fn window_service(
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
-    leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     done: Arc<AtomicBool>,
-) -> JoinHandle<Option<WindowServiceReturnType>> {
+) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
@@ -260,30 +254,10 @@ pub fn window_service(
             let mut last = entry_height;
             let mut times = 0;
             let id = crdt.read().unwrap().id;
-            let mut leader_rotation_interval_option = None;
-            if let Some(leader_scheduler) = leader_scheduler_option.as_ref() {
-                leader_rotation_interval_option = Some(leader_scheduler.read().unwrap().leader_rotation_interval);
-            }
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 // Check if leader rotation was configured
-                if let Some(leader_rotation_interval) = leader_rotation_interval_option {
-                    if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
-                        match cluster_info.read().unwrap().get_scheduled_leader(consumed) {
-                            // If we are the next leader, exit
-                            Some(next_leader_id) if id == next_leader_id => {
-                                return Some(WindowServiceReturnType::LeaderRotation(consumed));
-                            }
-                            // TODO: Figure out where to set the new leader in the crdt for 
-                            // validator -> validator transition (once we have real leader scheduling, 
-                            // this decision will be clearer). Also make sure new blobs to window actually 
-                            // originate from new leader
-                            _ => (),
-                        }
-                    }
-                }
-
                 if let Err(e) = recv_window(
                     &window,
                     &id,
@@ -295,8 +269,6 @@ pub fn window_service(
                     &s,
                     &retransmit,
                     &mut pending_retransmits,
-                    leader_rotation_interval_option,
-                    leader_scheduler_option.as_ref(),
                     &done,
                 ) {
                     match e {
@@ -335,7 +307,6 @@ pub fn window_service(
                     });
                 }
             }
-            None
         }).unwrap()
 }
 
@@ -395,7 +366,6 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
             done,
         );
         let t_responder = {
@@ -457,7 +427,6 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
             done,
         );
         let t_responder = {
@@ -514,7 +483,6 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
             done,
         );
         let t_responder = {

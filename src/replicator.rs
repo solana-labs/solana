@@ -22,13 +22,13 @@ use std::time::Duration;
 use store_ledger_stage::StoreLedgerStage;
 use streamer::BlobReceiver;
 use window;
-use window_service::{window_service, WindowServiceReturnType};
+use window_service::window_service;
 
 pub struct Replicator {
     ncp: Ncp,
     fetch_stage: BlobFetchStage,
     store_ledger_stage: StoreLedgerStage,
-    t_window: JoinHandle<Option<WindowServiceReturnType>>,
+    t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
 }
 
@@ -108,7 +108,6 @@ impl Replicator {
             entry_window_sender,
             retransmit_sender,
             repair_socket,
-            None,
             done,
         );
 
