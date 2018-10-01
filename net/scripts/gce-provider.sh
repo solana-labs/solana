@@ -31,11 +31,7 @@ __cloud_FindInstances() {
 
   declare name zone publicIp privateIp status
   while read -r name publicIp privateIp status; do
-    if [[ $status != RUNNING ]]; then
-      echo "Warning: $name is not RUNNING, ignoring it."
-      continue
-    fi
-    printf "%-30s | publicIp=%-16s privateIp=%s\n" "$name" "$publicIp" "$privateIp"
+    printf "%-30s | publicIp=%-16s privateIp=%s staus=%s\n" "$name" "$publicIp" "$privateIp" "$status"
 
     instances+=("$name:$publicIp:$privateIp")
   done < <(gcloud compute instances list \
