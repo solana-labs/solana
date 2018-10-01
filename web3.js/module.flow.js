@@ -11,8 +11,6 @@
  */
 
 declare module '@solana/web3.js' {
-  declare export type PublicKey = string;
-
   // === src/publickey.js ===
   declare export class PublicKey {
     constructor(number: string | Buffer | Array<number>): PublicKey;
