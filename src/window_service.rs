@@ -346,7 +346,6 @@ mod test {
     use hash::Hash;
     use logger;
     use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
-    use signature::{Keypair, KeypairUtil};
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver};
@@ -354,7 +353,7 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, responder};
     use window::default_window;
-    use window_service::{repair_backoff, window_service, WindowServiceReturnType};
+    use window_service::{repair_backoff, window_service};
 
     fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {
@@ -596,91 +595,5 @@ mod test {
         let avg = res / num_tests;
         assert!(avg >= 3);
         assert!(avg <= 5);
-    }
-
-    #[test]
-    pub fn test_window_leader_rotation_exit() {
-        logger::setup();
-        let leader_rotation_interval = 10;
-        // Height at which this node becomes the leader =
-        // my_leader_begin_epoch * leader_rotation_interval
-        let my_leader_begin_epoch = 2;
-        let tn = Node::new_localhost();
-        let exit = Arc::new(AtomicBool::new(false));
-        let mut cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
-        let me_id = cluster_info_me.my_data().id;
-
-        // Set myself in an upcoming epoch, but set the old_leader_id as the
-        // leader for all epochs before that
-        let old_leader_id = Keypair::new().pubkey();
-        cluster_info_me.set_leader(me_id);
-        cluster_info_me.set_leader_rotation_interval(leader_rotation_interval);
-        for i in 0..my_leader_begin_epoch {
-            cluster_info_me.set_scheduled_leader(leader_rotation_interval * i, old_leader_id);
-        }
-        cluster_info_me
-            .set_scheduled_leader(my_leader_begin_epoch * leader_rotation_interval, me_id);
-
-        let subs = Arc::new(RwLock::new(cluster_info_me));
-
-        let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
-        let (s_window, _r_window) = channel();
-        let (s_retransmit, _r_retransmit) = channel();
-        let win = Arc::new(RwLock::new(default_window()));
-        let done = Arc::new(AtomicBool::new(false));
-        let t_window = window_service(
-            subs,
-            win,
-            0,
-            0,
-            r_reader,
-            s_window,
-            s_retransmit,
-            Arc::new(tn.sockets.repair),
-            None,
-            done,
-        );
-
-        let t_responder = {
-            let (s_responder, r_responder) = channel();
-            let blob_sockets: Vec<Arc<UdpSocket>> =
-                tn.sockets.replicate.into_iter().map(Arc::new).collect();
-
-            let t_responder = responder(
-                "test_window_leader_rotation_exit",
-                blob_sockets[0].clone(),
-                r_responder,
-            );
-
-            let ncp_address = &tn.info.contact_info.ncp;
-            // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
-            // number of blobs to make sure the window stops in the right place.
-            let extra_blobs = leader_rotation_interval;
-            let total_blobs_to_send =
-                my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
-            let msgs = make_consecutive_blobs(
-                me_id,
-                total_blobs_to_send,
-                0,
-                Hash::default(),
-                &ncp_address,
-            ).into_iter()
-            .rev()
-            .collect();;
-            s_responder.send(msgs).expect("send");
-            t_responder
-        };
-
-        assert_eq!(
-            Some(WindowServiceReturnType::LeaderRotation(
-                my_leader_begin_epoch * leader_rotation_interval
-            )),
-            t_window.join().expect("window service join")
-        );
-
-        t_responder.join().expect("responder thread join");
-        exit.store(true, Ordering::Relaxed);
-        t_receiver.join().expect("receiver thread join");
     }
 }

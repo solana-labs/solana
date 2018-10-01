@@ -796,7 +796,7 @@ fn test_leader_to_validator_transition() {
     let (mint, leader_ledger_path, genesis_entries) =
         genesis("test_leader_to_validator_transition", 10_000);
 
-    let mut last_id = genesis_entries
+    let last_id = genesis_entries
         .last()
         .expect("expected at least one genesis entry")
         .id;
@@ -806,7 +806,6 @@ fn test_leader_to_validator_transition() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
     let bootstrap_entries_len = bootstrap_entries.len();
-    last_id = bootstrap_entries.last().unwrap().id;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
     let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
 
@@ -931,7 +930,6 @@ fn test_leader_validator_basic() {
     // Create the validator node information
     let validator_keypair = Keypair::new();
     let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-    let validator_info = validator_node.info.clone();
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (mint, leader_ledger_path, genesis_entries) =
@@ -939,7 +937,7 @@ fn test_leader_validator_basic() {
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
-    let mut last_id = genesis_entries
+    let last_id = genesis_entries
         .last()
         .expect("expected at least one genesis entry")
         .id;
@@ -954,10 +952,7 @@ fn test_leader_validator_basic() {
     // after the bootstrap height
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
-    let bootstrap_entries_len = bootstrap_entries.len();
-    last_id = bootstrap_entries.last().unwrap().id;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
-    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
 
     // Create the leader scheduler config
     let num_bootstrap_epochs = 2;

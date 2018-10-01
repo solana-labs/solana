@@ -691,9 +691,12 @@ mod tests {
             .id;
 
         // Write two entries so that the validator is in the active set:
-        // 1) A vote from the validator and 2) Give him nonzero number of tokens
+        //
+        // 1) Give him nonzero number of tokens
         // Write the bootstrap entries to the ledger that will cause leader rotation
         // after the bootstrap height
+        //
+        // 2) A vote from the validator
         let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
         let bootstrap_entries =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
