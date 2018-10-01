@@ -9,7 +9,7 @@ use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
 use service::Service;
-use signature::Keypair;
+use signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -20,6 +20,11 @@ use std::time::Duration;
 use std::time::Instant;
 use streamer::{responder, BlobSender};
 use vote_stage::send_validator_vote;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ReplicateStageReturnType {
+    LeaderRotation(u64),
+}
 
 // Implement a destructor for the ReplicateStage thread to signal it exited
 // even on panics
@@ -40,7 +45,8 @@ impl Drop for Finalizer {
 }
 
 pub struct ReplicateStage {
-    thread_hdls: Vec<JoinHandle<()>>,
+    t_responder: JoinHandle<()>,
+    t_replicate: JoinHandle<Option<ReplicateStageReturnType>>,
 }
 
 impl ReplicateStage {
@@ -62,7 +68,8 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        let res;
+        let errs = vec![];
+        let mut leader_rotation_occurred = false;
         {
             let mut leader_scheduler_lock_option = None;
             if let Some(leader_scheduler_lock) = leader_scheduler_option {
@@ -70,13 +77,38 @@ impl ReplicateStage {
                 leader_scheduler_lock_option = Some(wlock);
             }
 
-            res = bank.process_entries(
-                &entries,
-                Some(*entry_height),
-                &mut leader_scheduler_lock_option
-                    .as_mut()
-                    .map(|wlock| &mut (**wlock)),
-            );
+            let mut num_entries_to_write = entries.len();
+            for (i, entry) in entries.iter().enumerate() {
+                let res = bank.process_entry(
+                    &entry,
+                    Some(*entry_height + i as u64 + 1),
+                    &mut leader_scheduler_lock_option
+                        .as_mut()
+                        .map(|wlock| &mut (**wlock)),
+                );
+
+                if let Some(leader_scheduler) = leader_scheduler_lock_option {
+                    let my_id = keypair.pubkey();
+                    match leader_scheduler.get_scheduled_leader(*entry_height + i as u64) {
+                        // If we are the next leader, exit
+                        Some(next_leader_id) if my_id == next_leader_id => {
+                            leader_rotation_occurred = true;
+                            num_entries_to_write = i + 1;
+                            break;
+                        }
+                        // TODO: Figure out where to set the new leader in the crdt for
+                        // validator -> validator transition (once we have real leader scheduling,
+                        // this decision will be clearer). Also make sure new blobs to window actually
+                        // originate from new leader
+                        _ => (),
+                    }
+                }
+
+                if res.is_err() {
+                    errs.push(res);
+                }
+            }
+            entries.truncate(num_entries_to_write);
         }
 
         if let Some(sender) = vote_blob_sender {
@@ -85,20 +117,22 @@ impl ReplicateStage {
         let votes = &entries.votes(*entry_height);
         wcluster_info.write().unwrap().insert_votes(votes);
 
-        *entry_height += entries.len() as u64;
-
         inc_new_counter_info!(
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
 
-        // TODO: move this to another stage? Also handle failure here b/c bank will be
-        // in inconsistent state
+        // TODO: move this to another stage?
         if let Some(ledger_writer) = ledger_writer {
             ledger_writer.write_entries(entries)?;
         }
 
-        res?;
+        *entry_height += entries.len() as u64;
+
+        if errs.len() > 0 {
+            errs[0]?;
+        }
+
         Ok(())
     }
 
@@ -128,6 +162,16 @@ impl ReplicateStage {
                 let mut entry_height_ = entry_height;
                 let mut leader_scheduler_option_ = leader_scheduler_option;
                 loop {
+                    if let Some(leader_scheduler_lock) = leader_scheduler_option {
+                        let leader_id = leader_scheduler_lock
+                            .read()
+                            .unwrap()
+                            .get_scheduled_leader(entry_height_)
+                            .expect("Scheduled leader id should never be unknown at this point");
+                        if leader_id != keypair.pubkey() {
+                            return Some(ReplicateStageReturnType::LeaderRotation(entry_height));
+                        }
+                    }
                     // Only vote once a second.
                     let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
                         next_vote_secs += 1;
@@ -153,21 +197,22 @@ impl ReplicateStage {
                         }
                     }
                 }
+
+                return None;
             }).unwrap();
 
-        let thread_hdls = vec![t_responder, t_replicate];
-
-        ReplicateStage { thread_hdls }
+        ReplicateStage {
+            t_responder,
+            t_replicate,
+        }
     }
 }
 
 impl Service for ReplicateStage {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<ReplicateStageReturnType>;
 
-    fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
-        }
-        Ok(())
+    fn join(self) -> thread::Result<Option<ReplicateStageReturnType>> {
+        self.t_responder.join()?;
+        self.t_replicate.join()
     }
 }
