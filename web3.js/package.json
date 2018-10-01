@@ -39,6 +39,7 @@
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "prepare": "npm run clean && npm run ok && npm run build",
+    "examples": "set -ex; for example in examples/*.js; do node $example; done",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git"
   },
   "dependencies": {
