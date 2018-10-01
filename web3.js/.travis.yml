@@ -14,7 +14,7 @@ script:
   - npm run doc
   - npm run flow
   - npm run lint
-  - for example in examples/*.js; do node $example; done
+  - npm run examples
   - npm run codecov
 
 before_deploy:
