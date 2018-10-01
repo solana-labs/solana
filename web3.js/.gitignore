@@ -21,3 +21,6 @@ lib
 
 # Generated docs
 doc
+
+# VIM swap files
+*.sw[po]
