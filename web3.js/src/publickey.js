@@ -60,7 +60,7 @@ export class PublicKey {
   }
 
   /**
-   * Return the base-58 representation of the public key
+   * Return the Buffer representation of the public key
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
