@@ -339,7 +339,7 @@ mod tests {
     use crdt::{Crdt, Node};
     use entry::Entry;
     use hash::Hash;
-    use leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+    use leader_scheduler::{set_new_leader, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{genesis, next_entries_mut, read_ledger};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -372,6 +372,7 @@ mod tests {
     fn setup_dummy_write_stage(
         leader_keypair: Arc<Keypair>,
         leader_scheduler_config: &LeaderSchedulerConfig,
+        test_name: &str,
     ) -> DummyWriteStage {
         // Setup leader info
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -380,7 +381,7 @@ mod tests {
         let bank = Arc::new(Bank::new_default(true));
 
         // Make a ledger
-        let (_, leader_ledger_path) = genesis("test_leader_rotation_exit", 10_000);
+        let (_, leader_ledger_path) = genesis(test_name, 10_000);
 
         let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &bank);
 
@@ -414,20 +415,6 @@ mod tests {
         }
     }
 
-    fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
-        // Set the scheduled next leader to some other node
-        let new_leader_keypair = Keypair::new();
-        let new_leader_id = new_leader_keypair.pubkey();
-        leader_scheduler.push_vote(new_leader_id, vote_height);
-        let dummy_id = Keypair::new().pubkey();
-        let new_account = Account::new(1, 10, dummy_id.clone());
-
-        // Remove the previous acounts from the active set
-        let mut accounts = bank.accounts().write().unwrap();
-        accounts.clear();
-        accounts.insert(new_leader_id, new_account);
-    }
-
     #[test]
     fn test_write_stage_leader_rotation_exit() {
         let leader_keypair = Keypair::new();
@@ -437,16 +424,20 @@ mod tests {
         let bootstrap_height = 20;
         let leader_rotation_interval = 10;
         let seed_rotation_interval = 2 * leader_rotation_interval;
+        let active_window = bootstrap_height + 3 * seed_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             leader_keypair.pubkey(),
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
-            Some(bootstrap_height + 2 * leader_rotation_interval),
+            Some(active_window),
         );
 
-        let write_stage_info =
-            setup_dummy_write_stage(Arc::new(leader_keypair), &leader_scheduler_config);
+        let write_stage_info = setup_dummy_write_stage(
+            Arc::new(leader_keypair),
+            &leader_scheduler_config,
+            "test_write_stage_leader_rotation_exit",
+        );
 
         let mut last_id = write_stage_info
             .ledger_tail
@@ -519,16 +510,16 @@ mod tests {
         let new_account = Account::new(1, 10, dummy_id.clone());
         accounts.write().unwrap().insert(my_id, new_account.clone());
 
-        let max_seed_rounds = 3;
         let leader_rotation_interval = 10;
         let bootstrap_height = 20;
         let seed_rotation_interval = 3 * leader_rotation_interval;
+        let active_window = bootstrap_height + 3 * seed_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             my_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
-            Some(bootstrap_height + max_seed_rounds * seed_rotation_interval),
+            Some(active_window),
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -536,10 +527,10 @@ mod tests {
 
         let entry = Entry::new(&Hash::default(), 0, vec![]);
 
-        // Note: An epoch is the period of leader_rotation_interval entries
+        // Note: An slot is the period of leader_rotation_interval entries
         // time during which a leader is in power
 
-        // A vector that is completely within a certain epoch should return that
+        // A vector that is completely within a certain slot should return that
         // entire vector
         let mut entry_height = 0;
         let mut len = (bootstrap_height - 1) as usize;
@@ -555,8 +546,8 @@ mod tests {
         entry_height += len as u64;
         assert_eq!(result, (input, false));
 
-        // A vector of new entries that spans multiple epochs should return the
-        // entire vector, assuming that the same leader is in power for all the epochs.
+        // A vector of new entries that spans multiple slots should return the
+        // entire vector, assuming that the same leader is in power for all the slots.
         len = 2 * seed_rotation_interval as usize;
         input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
@@ -572,7 +563,7 @@ mod tests {
 
         // A vector that triggers a check for leader rotation should return
         // the entire vector and signal leader_rotation == false, if the
-        // same leader is in power for the next epoch as well.
+        // same leader is in power for the next slot as well.
         len = 1;
         let mut input = vec![entry.clone(); len];
         result = WriteStage::find_leader_rotation_index(
@@ -586,12 +577,12 @@ mod tests {
         entry_height += len as u64;
         assert_eq!(result, (input, false));
 
-        // Set new leader for next seed rotation
-        set_new_leader(&bank, &mut leader_scheduler, 1);
         // The entry height at which the next, different leader will be scheduled
         let swap_entry_height = entry_height + seed_rotation_interval;
+        // Set new leader for next seed rotation
+        set_new_leader(&bank, &mut leader_scheduler, swap_entry_height);
 
-        // A vector that spans two different epochs for different leaders
+        // A vector that spans two different slots for different leaders
         // should get truncated
         len = leader_rotation_interval as usize;
         input = vec![entry.clone(); len];
@@ -602,7 +593,6 @@ mod tests {
             swap_entry_height - 1,
             input.clone(),
         );
-
         input.truncate(1);
         assert_eq!(result, (input, true));
 

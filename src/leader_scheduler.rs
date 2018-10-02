@@ -2,6 +2,7 @@
 //! managing the schedule for leader rotation
 
 use bank::Bank;
+
 use bincode::serialize;
 use budget_instruction::Vote;
 use budget_transaction::BudgetTransaction;
@@ -9,6 +10,8 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use hash::{hash, Hash};
 use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -326,6 +329,24 @@ impl LeaderScheduler {
 
         chosen_account
     }
+}
+
+// Remove all candiates for leader selection from the active set by clearing the bank,
+// and then set a single new candidate who will be eligible starting at height = vote_height
+// by adding one new account to the bank
+#[cfg(test)]
+pub fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
+    // Set the scheduled next leader to some other node
+    let new_leader_keypair = Keypair::new();
+    let new_leader_id = new_leader_keypair.pubkey();
+    leader_scheduler.push_vote(new_leader_id, vote_height);
+    let dummy_id = Keypair::new().pubkey();
+    let new_account = Account::new(1, 10, dummy_id.clone());
+
+    // Remove the previous acounts from the active set
+    let mut accounts = bank.accounts().write().unwrap();
+    accounts.clear();
+    accounts.insert(new_leader_id, new_account);
 }
 
 // Create two entries so that the node with keypair == active_keypair
