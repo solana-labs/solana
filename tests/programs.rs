@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate byteorder;
 extern crate solana;
 extern crate solana_program_interface;
 
@@ -7,6 +8,7 @@ use std::sync::RwLock;
 use std::thread;
 
 use bincode::serialize;
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 
 use solana::dynamic_program::DynamicProgram;
 use solana::hash::Hash;
@@ -16,6 +18,9 @@ use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
+
+// TODO remove
+use solana::tictactoe_program::Command;
 
 #[test]
 fn test_bpf_file_noop_rust() {
@@ -76,6 +81,54 @@ fn test_bpf_file_move_funds_c() {
         let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
         dp.call(&mut infos, &data);
     }
+}
+
+fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubkey) {
+    let p = &command as *const Command as *const u8;
+    let data: &[u8] = unsafe { std::slice::from_raw_parts(p, std::mem::size_of::<Command>()) };
+
+    // Init
+    // player_x pub key in keys[2]
+    // accounts[0].program_id must be tictactoe
+    // accounts[1].userdata must be tictactoe game state
+
+    let keys = vec![player, Pubkey::default(), player];
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut *accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("tictactoe_c".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[test]
+fn test_bpf_file_tictactoe_c() {
+    let game_size = 0x78; // corresponds to the C structure size
+    let mut accounts = vec![
+        Account::new(0, 0, Pubkey::default()),
+        Account::new(0, game_size, Pubkey::default()),
+        Account::new(0, 0, Pubkey::default()),
+    ];
+
+    tictactoe_command(Command::Init, &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(
+        Command::Join(0xAABBCCDD),
+        &mut accounts,
+        Pubkey::new(&[0xA; 32]),
+    );
+    tictactoe_command(Command::Move(1, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(2, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(2, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
+
+    // validate test
 }
 
 #[test]

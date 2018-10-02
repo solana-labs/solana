@@ -55,6 +55,7 @@ impl Default for State {
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Game {
     player_x: Pubkey,
@@ -173,7 +174,8 @@ impl Game {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum Command {
+#[repr(C)]
+pub enum Command {
     Init,           // player X initializes a new game
     Join(i64),      // player O wants to join (seconds since UNIX epoch)
     KeepAlive(i64), // player X/O keep alive (seconds since UNIX epoch)

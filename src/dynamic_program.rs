@@ -2,11 +2,10 @@ extern crate elf;
 extern crate libloading;
 extern crate rbpf;
 
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt};
 use libc;
 use std::io::prelude::*;
 use std::mem;
-use std::mem::transmute;
 use std::path::PathBuf;
 
 use solana_program_interface::account::KeyedAccount;
@@ -128,6 +127,7 @@ impl DynamicProgram {
         DynamicProgram::Bpf { prog }
     }
 
+    #[allow(dead_code)]
     fn dump_prog(prog: &[u8]) {
         let mut eight_bytes: Vec<u8> = Vec::new();;
         for i in prog.iter() {
@@ -144,21 +144,38 @@ impl DynamicProgram {
         assert_eq!(32, mem::size_of::<Pubkey>());
 
         let mut v: Vec<u8> = Vec::new();
-        v.write_u64::<LittleEndian>(infos.len() as u64);
-        for i in 0..infos.len() {
-            v.write(infos[i].key.as_ref()).unwrap();
-            v.write_i64::<LittleEndian>(infos[i].account.tokens)
+        v.write_u64::<LittleEndian>(infos.len() as u64).unwrap();
+        for info in infos.iter_mut() {
+            v.write_all(info.key.as_ref()).unwrap();
+            v.write_i64::<LittleEndian>(info.account.tokens).unwrap();
+            v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
                 .unwrap();
-            v.write_u64::<LittleEndian>(infos[i].account.userdata.len() as u64)
-                .unwrap();
-            v.write(&infos[i].account.userdata).unwrap();
-            v.write(infos[i].account.program_id.as_ref()).unwrap();
+            v.write_all(&info.account.userdata).unwrap();
+            v.write_all(info.account.program_id.as_ref()).unwrap();
+            //println!("userdata: {:?}", infos[i].account.userdata);
         }
         v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
-        v.write(data).unwrap();
-
-        println!("v: {:x?}", v);
+        v.write_all(data).unwrap();
         v
+    }
+
+    fn deserialize(infos: &mut Vec<KeyedAccount>, buffer: &[u8]) {
+        assert_eq!(32, mem::size_of::<Pubkey>());
+
+        let mut start = mem::size_of::<u64>();
+        for info in infos.iter_mut() {
+            start += mem::size_of::<Pubkey>() // pubkey
+                  + mem::size_of::<u64>() // tokens
+                  + mem::size_of::<u64>(); // length tag
+
+            let end = start + info.account.userdata.len();
+
+            info.account.userdata.clone_from_slice(&buffer[start..end]);
+
+            start += info.account.userdata.len() // userdata
+                  + mem::size_of::<Pubkey>(); // program_id
+                                              //println!("userdata: {:?}", infos[i].account.userdata);
+        }
     }
 
     pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) {
@@ -175,11 +192,12 @@ impl DynamicProgram {
                 entrypoint(infos, data);
             },
             DynamicProgram::Bpf { prog } => {
-                println!("{} BPF instructions", prog.len() / 8);
-                dump_prog(prog);
+                println!("Instructions: {}", prog.len() / 8);
+                //DynamicProgram::dump_prog(prog);
 
                 let mut vm = rbpf::EbpfVmRaw::new(prog);
 
+                // TODO register more handlers (memcpy for example)
                 vm.register_helper(
                     rbpf::helpers::BPF_TRACE_PRINTK_IDX,
                     rbpf::helpers::bpf_trace_printf,
@@ -187,19 +205,8 @@ impl DynamicProgram {
 
                 let mut v = DynamicProgram::serialize(infos, data);
                 vm.prog_exec(v.as_mut_slice());
+                DynamicProgram::deserialize(infos, &v);
             }
-        }
-    }
-}
-
-fn dump_prog(prog: &[u8]) {
-    let mut eight_bytes: Vec<u8> = Vec::new();;
-    for i in prog.iter() {
-        if eight_bytes.len() >= 7 {
-            println!("{:02X?}", eight_bytes);
-            eight_bytes.clear();
-        } else {
-            eight_bytes.push(i.clone());
         }
     }
 }
@@ -221,8 +228,8 @@ mod tests {
         assert_eq!(true, Path::new(&path).exists());
         let path = ProgramPath::Native {}.create("move_funds");
         assert_eq!(true, Path::new(&path).exists());
-        let path = ProgramPath::Bpf {}.create("move_funds_rust");
-        assert_eq!(true, Path::new(&path).exists());
+        // let path = ProgramPath::Bpf {}.create("move_funds_rust");
+        // assert_eq!(true, Path::new(&path).exists());
     }
 
     #[test]

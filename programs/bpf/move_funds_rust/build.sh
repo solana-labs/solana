@@ -4,6 +4,7 @@ set -e
 set -x
 
 #-C llvm-args='-fno-builtin'
+mkdir -p ../../../target/release/
 rm -f ../../../target/release/deps/*.ll
 rm -f ../../../target/release/deps/*.bc
 cargo +nightly rustc --release -- -C panic=abort -C opt-level=0 --emit=llvm-ir
