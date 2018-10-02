@@ -5,8 +5,9 @@ use bincode::deserialize;
 use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
+use pubsub::{PubSubService, SubscriptionResponse};
 use service::Service;
-use signature::Signature;
+use signature::{Keypair, KeypairUtil, Signature};
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::mem;
@@ -35,6 +36,7 @@ impl JsonRpcService {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let request_processor = JsonRpcRequestProcessor::new(bank.clone());
+        let exit_pubsub = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
@@ -47,6 +49,8 @@ impl JsonRpcService {
                         request_processor: request_processor.clone(),
                         transactions_addr,
                         drone_addr,
+                        rpc_addr,
+                        exit: exit_pubsub.clone(),
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -83,10 +87,12 @@ pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
     pub transactions_addr: SocketAddr,
     pub drone_addr: SocketAddr,
+    pub rpc_addr: SocketAddr,
+    pub exit: Arc<AtomicBool>,
 }
 impl Metadata for Meta {}
 
-#[derive(PartialEq, Serialize)]
+#[derive(PartialEq, Serialize, Debug)]
 pub enum RpcSignatureStatus {
     Confirmed,
     SignatureNotFound,
@@ -124,6 +130,9 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
+
+        #[rpc(meta, name = "subscriptionChannel")]
+        fn launch_subscription_channel(&self, Self::Metadata, u16) -> Result<SubscriptionResponse>;
     }
 }
 
@@ -222,6 +231,21 @@ impl RpcSol for RpcSolImpl {
             })?;
         Ok(bs58::encode(tx.signature).into_string())
     }
+    fn launch_subscription_channel(
+        &self,
+        meta: Self::Metadata,
+        port: u16,
+    ) -> Result<SubscriptionResponse> {
+        let mut pubsub_addr = meta.rpc_addr;
+        pubsub_addr.set_port(port);
+        let pubkey = Keypair::new().pubkey();
+        let _pubsub_service =
+            PubSubService::new(&meta.request_processor.bank, pubsub_addr, pubkey, meta.exit);
+        Ok(SubscriptionResponse {
+            addr: pubsub_addr,
+            path: pubkey.to_string(),
+        })
+    }
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
@@ -234,7 +258,7 @@ impl JsonRpcRequestProcessor {
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
-    fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
+    pub fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
@@ -250,7 +274,7 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    fn get_signature_status(&self, signature: Signature) -> result::Result<(), BankError> {
+    pub fn get_signature_status(&self, signature: Signature) -> result::Result<(), BankError> {
         self.bank.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {
@@ -283,6 +307,8 @@ mod tests {
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
         let transactions_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let exit = Arc::new(AtomicBool::new(false));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -291,6 +317,8 @@ mod tests {
             request_processor,
             transactions_addr,
             drone_addr,
+            rpc_addr,
+            exit,
         };
 
         let req = format!(
@@ -351,6 +379,8 @@ mod tests {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            exit: Arc::new(AtomicBool::new(false)),
         };
 
         let res = io.handle_request_sync(req, meta);
@@ -376,6 +406,8 @@ mod tests {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             transactions_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            exit: Arc::new(AtomicBool::new(false)),
         };
 
         let res = io.handle_request_sync(req, meta);
