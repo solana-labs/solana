@@ -1,9 +1,19 @@
 use blob_fetch_stage::BlobFetchStage;
 use crdt::{Crdt, Node, NodeInfo};
+use hash::{Hash, Hasher};
 use ncp::Ncp;
 use service::Service;
+use std::fs::File;
+use std::io;
+use std::io::BufReader;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::{Error, ErrorKind};
+use std::mem::size_of;
 use std::net::SocketAddr;
 use std::net::UdpSocket;
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -20,6 +30,38 @@ pub struct Replicator {
     store_ledger_stage: StoreLedgerStage,
     t_window: JoinHandle<Option<WindowServiceReturnType>>,
     pub retransmit_receiver: BlobReceiver,
+}
+
+pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
+    let in_file = File::open(in_path)?;
+    let metadata = in_file.metadata()?;
+    let mut buffer_file = BufReader::new(in_file);
+
+    let mut hasher = Hasher::default();
+    let sample_size = size_of::<Hash>();
+    let sample_size64 = sample_size as u64;
+    let mut buf = vec![0; sample_size];
+
+    let file_len = metadata.len();
+    for offset in sample_offsets {
+        if *offset > (file_len - sample_size64) / sample_size64 {
+            return Err(Error::new(ErrorKind::Other, "offset too large"));
+        }
+        buffer_file.seek(SeekFrom::Start(*offset * sample_size64))?;
+        info!("sampling @ {} ", *offset);
+        match buffer_file.read(&mut buf) {
+            Ok(size) => {
+                assert_eq!(size, buf.len());
+                hasher.hash(&buf);
+            }
+            Err(e) => {
+                warn!("Error sampling file");
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(hasher.result())
 }
 
 impl Replicator {
@@ -107,11 +149,17 @@ mod tests {
     use client::mk_client;
     use crdt::Node;
     use fullnode::Fullnode;
+    use hash::Hash;
     use ledger::{genesis, read_ledger};
     use logger;
+    use replicator::sample_file;
     use replicator::Replicator;
     use signature::{Keypair, KeypairUtil};
-    use std::fs::remove_dir_all;
+    use std::fs::File;
+    use std::fs::{remove_dir_all, remove_file};
+    use std::io::Write;
+    use std::mem::size_of;
+    use std::path::Path;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread::sleep;
@@ -198,4 +246,56 @@ mod tests {
         let _ignored = remove_dir_all(&leader_ledger_path);
         let _ignored = remove_dir_all(&replicator_ledger_path);
     }
+
+    #[test]
+    fn test_sample_file() {
+        logger::setup();
+        let in_path = Path::new("test_sample_file_input.txt");
+        let num_strings = 4096;
+        let string = "12foobar";
+        {
+            let mut in_file = File::create(in_path).unwrap();
+            for _ in 0..num_strings {
+                in_file.write(string.as_bytes()).unwrap();
+            }
+        }
+        let num_samples = (string.len() * num_strings / size_of::<Hash>()) as u64;
+        let samples: Vec<_> = (0..num_samples).collect();
+        let res = sample_file(in_path, samples.as_slice());
+        assert!(res.is_ok());
+        let ref_hash: Hash = Hash::new(&[
+            173, 251, 182, 165, 10, 54, 33, 150, 133, 226, 106, 150, 99, 192, 179, 1, 230, 144,
+            151, 126, 18, 191, 54, 67, 249, 140, 230, 160, 56, 30, 170, 52,
+        ]);
+        let res = res.unwrap();
+        assert_eq!(res, ref_hash);
+
+        // Sample just past the end
+        assert!(sample_file(in_path, &[num_samples]).is_err());
+        remove_file(in_path).unwrap();
+    }
+
+    #[test]
+    fn test_sample_file_invalid_offset() {
+        let in_path = Path::new("test_sample_file_invalid_offset_input.txt");
+        {
+            let mut in_file = File::create(in_path).unwrap();
+            for _ in 0..4096 {
+                in_file.write("123456foobar".as_bytes()).unwrap();
+            }
+        }
+        let samples = [0, 200000];
+        let res = sample_file(in_path, &samples);
+        assert!(res.is_err());
+        remove_file(in_path).unwrap();
+    }
+
+    #[test]
+    fn test_sample_file_missing_file() {
+        let in_path = Path::new("test_sample_file_that_doesnt_exist.txt");
+        let samples = [0, 5];
+        let res = sample_file(in_path, &samples);
+        assert!(res.is_err());
+    }
+
 }

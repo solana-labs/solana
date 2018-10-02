@@ -11,7 +11,7 @@ use solana::crdt::Node;
 use solana::fullnode::Config;
 use solana::ledger::LEDGER_DATA_FILE;
 use solana::logger;
-use solana::replicator::Replicator;
+use solana::replicator::{sample_file, Replicator};
 use solana::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -121,6 +121,13 @@ fn main() {
     }
 
     println!("Done encrypting the ledger");
+
+    let sampling_offsets = [0, 1, 2, 3];
+
+    match sample_file(&ledger_data_file_encrypted, &sampling_offsets) {
+        Ok(hash) => println!("sampled hash: {}", hash),
+        Err(e) => println!("Error occurred while sampling: {:?}", e),
+    }
 
     replicator.join();
 }
