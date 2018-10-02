@@ -24,3 +24,13 @@ echo --- ci/localnet-sanity.sh
 )
 
 _ ci/audit.sh || true
+
+# Store binary tarball as a buildkite artifact
+_ cargo install --path . --root farf
+(
+  cd farf
+  tar zcvf ../solana-bin.tar.gz bin
+)
+ls -l solana-bin.tar.gz
+source ci/upload_ci_artifact.sh
+upload_ci_artifact solana-bin.tar.gz
