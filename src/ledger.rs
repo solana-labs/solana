@@ -408,7 +408,7 @@ pub trait Block {
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_blobs(&self) -> Vec<SharedBlob>;
     fn to_blobs_with_id(&self, id: Pubkey, start_id: u64, addr: &SocketAddr) -> Vec<SharedBlob>;
-    fn votes(&self, start_entry_height: u64) -> Vec<(Pubkey, Vote, Hash, u64)>;
+    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl Block for [Entry] {
@@ -440,14 +440,13 @@ impl Block for [Entry] {
         self.to_blobs_with_id(Pubkey::default(), 0, &default_addr)
     }
 
-    fn votes(&self, start_entry_height: u64) -> Vec<(Pubkey, Vote, Hash, u64)> {
+    fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
         self.iter()
-            .enumerate()
-            .flat_map(|(i, entry)| {
-                entry.transactions.iter().filter_map(move |t| {
-                    t.vote()
-                        .map(|(pk, vote, hash)| (pk, vote, hash, start_entry_height + i as u64))
-                })
+            .flat_map(|entry| {
+                entry
+                    .transactions
+                    .iter()
+                    .filter_map(BudgetTransaction::vote)
             }).collect()
     }
 }

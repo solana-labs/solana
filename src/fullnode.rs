@@ -341,6 +341,9 @@ impl Fullnode {
                     ledger_path,
                     sigverify_disabled,
                     entry_height,
+                    leader_scheduler_option
+                        .as_ref()
+                        .map(|arc_ls| arc_ls.clone()),
                 );
 
                 let broadcast_stage = BroadcastStage::new(
@@ -479,6 +482,7 @@ impl Fullnode {
             &self.ledger_path,
             self.sigverify_disabled,
             entry_height,
+            self.leader_scheduler_option.as_ref().map(|ls| ls.clone()),
         );
 
         let broadcast_stage = BroadcastStage::new(

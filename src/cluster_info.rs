@@ -391,8 +391,7 @@ impl ClusterInfo {
             self.insert(&data);
         }
     }
-
-    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash, u64)]) {
+    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
         inc_new_counter_info!("cluster_info-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{}: INSERTING VOTES {}", self.id, votes.len());

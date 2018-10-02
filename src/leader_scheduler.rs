@@ -49,13 +49,22 @@ impl ActiveValidators {
 
         // Note: height == 0 will only be included for all
         // height < self.active_window_length
+        let upper_bound = height;
         if height >= self.active_window_length {
             let lower_bound = height - self.active_window_length;
             self.active_validators
                 .retain(|_, height| *height > lower_bound);
         }
 
-        self.active_validators.keys().cloned().collect()
+        self.active_validators
+            .iter()
+            .filter_map(|(k, v)| {
+                if *v <= upper_bound {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            }).collect()
     }
 
     // Push a vote for a validator with id == "id" who voted at PoH height == "height"
@@ -243,6 +252,7 @@ impl LeaderScheduler {
         // non-zero stake. In this case, use the bootstrap leader for
         // the upcoming rounds
         if ranked_active_set.is_empty() {
+            self.last_seed_height = Some(height);
             self.leader_schedule = vec![self.bootstrap_leader];
             self.last_seed_height = Some(height);
             return;
