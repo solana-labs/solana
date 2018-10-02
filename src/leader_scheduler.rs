@@ -188,9 +188,7 @@ impl LeaderScheduler {
             return;
         }
 
-        if height == self.bootstrap_height
-            || (height - self.bootstrap_height) % self.seed_rotation_interval == 0
-        {
+        if (height - self.bootstrap_height) % self.seed_rotation_interval == 0 {
             self.generate_schedule(height, bank);
         }
     }
