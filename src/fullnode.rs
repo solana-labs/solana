@@ -355,6 +355,9 @@ impl Fullnode {
                     shared_window.clone(),
                     entry_height,
                     entry_receiver,
+                    leader_scheduler_option
+                        .as_ref()
+                        .map(|arc_ls| arc_ls.clone()),
                     tpu_exit,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -493,6 +496,7 @@ impl Fullnode {
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
+            self.leader_scheduler_option.as_ref().map(|ls| ls.clone()),
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -710,8 +714,8 @@ mod tests {
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 10;
-        let num_bootstrap_epochs = 2;
-        let bootstrap_height = num_bootstrap_epochs * leader_rotation_interval;
+        let num_bootstrap_slots = 2;
+        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             leader_id,

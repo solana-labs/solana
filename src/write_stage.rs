@@ -7,7 +7,7 @@ use cluster_info::ClusterInfo;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
-use leader_scheduler::LeaderScheduler;
+use leader_scheduler::{entries_until_next_leader_rotation, LeaderScheduler};
 use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
@@ -53,7 +53,7 @@ impl WriteStage {
         let mut i = 0;
         let mut is_leader_rotation = false;
 
-        let bootstrap_rotation_interval = leader_scheduler.bootstrap_height;
+        let bootstrap_height = leader_scheduler.bootstrap_height;
         let leader_rotation_interval = leader_scheduler.leader_rotation_interval;
         loop {
             let next_leader = leader_scheduler.get_scheduled_leader(entry_height + i as u64);
@@ -69,15 +69,11 @@ impl WriteStage {
 
             // Find out how many more entries we can squeeze in until the next leader
             // rotation
-            let entries_until_leader_rotation;
-            if entry_height + (i as u64) < bootstrap_rotation_interval {
-                entries_until_leader_rotation =
-                    bootstrap_rotation_interval - entry_height - i as u64;
-            } else {
-                entries_until_leader_rotation = leader_rotation_interval
-                    - (((entry_height + i as u64) - bootstrap_rotation_interval)
-                        % leader_rotation_interval);
-            }
+            let entries_until_leader_rotation = entries_until_next_leader_rotation(
+                entry_height + (i as u64),
+                bootstrap_height,
+                leader_rotation_interval,
+            );
 
             // Check the next leader rotation height entries in new_entries, or
             // if the new_entries doesnt have that many entries remaining,
@@ -346,7 +342,7 @@ mod tests {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::Hash;
-    use leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+    use leader_scheduler::{set_new_leader, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{genesis, next_entries_mut, read_ledger};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -380,6 +376,7 @@ mod tests {
     fn setup_dummy_write_stage(
         leader_keypair: Arc<Keypair>,
         leader_scheduler_config: &LeaderSchedulerConfig,
+        test_name: &str,
     ) -> DummyWriteStage {
         // Setup leader info
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -388,7 +385,7 @@ mod tests {
         let bank = Arc::new(Bank::new_default(true));
 
         // Make a ledger
-        let (_, leader_ledger_path) = genesis("test_leader_rotation_exit", 10_000);
+        let (_, leader_ledger_path) = genesis(test_name, 10_000);
 
         let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &bank);
 
@@ -422,20 +419,6 @@ mod tests {
         }
     }
 
-    fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
-        // Set the scheduled next leader to some other node
-        let new_leader_keypair = Keypair::new();
-        let new_leader_id = new_leader_keypair.pubkey();
-        leader_scheduler.push_vote(new_leader_id, vote_height);
-        let dummy_id = Keypair::new().pubkey();
-        let new_account = Account::new(1, 10, dummy_id.clone());
-
-        // Remove the previous acounts from the active set
-        let mut accounts = bank.accounts().write().unwrap();
-        accounts.clear();
-        accounts.insert(new_leader_id, new_account);
-    }
-
     #[test]
     fn test_write_stage_leader_rotation_exit() {
         let leader_keypair = Keypair::new();
@@ -445,16 +428,20 @@ mod tests {
         let bootstrap_height = 20;
         let leader_rotation_interval = 10;
         let seed_rotation_interval = 2 * leader_rotation_interval;
+        let active_window = bootstrap_height + 3 * seed_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             leader_keypair.pubkey(),
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
-            Some(bootstrap_height + 2 * leader_rotation_interval),
+            Some(active_window),
         );
 
-        let write_stage_info =
-            setup_dummy_write_stage(Arc::new(leader_keypair), &leader_scheduler_config);
+        let write_stage_info = setup_dummy_write_stage(
+            Arc::new(leader_keypair),
+            &leader_scheduler_config,
+            "test_write_stage_leader_rotation_exit",
+        );
 
         let mut last_id = write_stage_info
             .ledger_tail

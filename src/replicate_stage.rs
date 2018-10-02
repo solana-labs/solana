@@ -68,6 +68,7 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
+        let mut res = Ok(());
         {
             let mut leader_scheduler_lock_option = None;
             if let Some(leader_scheduler_lock) = leader_scheduler_option {
@@ -77,7 +78,7 @@ impl ReplicateStage {
 
             let mut num_entries_to_write = entries.len();
             for (i, entry) in entries.iter().enumerate() {
-                let res = bank.process_entry(
+                res = bank.process_entry(
                     &entry,
                     Some(*entry_height + i as u64 + 1),
                     &mut leader_scheduler_lock_option
@@ -100,18 +101,25 @@ impl ReplicateStage {
                     }
                 }
 
-                if let Err(e) = res {
-                    error!("{:?}", e)
+                if res.is_err() {
+                    // TODO: This will return early from the first entry that has an erroneous
+                    // transaction, instad of processing the rest of the entries in the vector
+                    // of received entries. This is in line with previous behavior when
+                    // bank.process_entries() was used to process the entries, but may not necessarily
+                    // be correct if the leader permits entries with erroneous transactions.
+                    break;
                 }
             }
+
+            // If leader rotation happened, only write the entries up to leader rotation.
             entries.truncate(num_entries_to_write);
         }
 
         if let Some(sender) = vote_blob_sender {
             send_validator_vote(bank, keypair, cluster_info, sender)?;
         }
-        let votes = &entries.votes();
-        wcluster_info.write().unwrap().insert_votes(votes);
+
+        cluster_info.write().unwrap().insert_votes(&entries.votes());
 
         inc_new_counter_info!(
             "replicate-transactions",
@@ -125,7 +133,7 @@ impl ReplicateStage {
         }
 
         *entry_height += entries_len;
-
+        res?;
         Ok(())
     }
 
@@ -252,11 +260,11 @@ mod test {
         ledger_writer.write_entries(bootstrap_entries).unwrap();
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
-        // bootstrap_height = num_bootstrap_epochs * leader_rotation_interval
+        // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
         let old_leader_id = Keypair::new().pubkey();
         let leader_rotation_interval = 10;
-        let num_bootstrap_epochs = 2;
-        let bootstrap_height = num_bootstrap_epochs * leader_rotation_interval;
+        let num_bootstrap_slots = 2;
+        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             old_leader_id,
             Some(bootstrap_height),

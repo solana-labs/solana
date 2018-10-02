@@ -258,10 +258,14 @@ pub fn window_service(
             let id = crdt.read().unwrap().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
+            let mut bootstrap_height_option = None;
             let mut leader_rotation_interval_option = None;
             if let Some(ref leader_scheduler) = leader_scheduler_option {
-                leader_rotation_interval_option =
-                    Some(leader_scheduler.read().unwrap().leader_rotation_interval);
+                // Keep track of the leader_rotation_interval, so we don't have to
+                // grab the leader_scheduler lock every iteration of the loop.
+                let ls_lock = leader_scheduler.read().unwrap();
+                leader_rotation_interval_option = Some(ls_lock.leader_rotation_interval);
+                bootstrap_height_option = Some(ls_lock.bootstrap_height);
             }
             loop {
                 // Check if leader rotation was configured
@@ -313,6 +317,7 @@ pub fn window_service(
                     consumed,
                     received,
                     max_entry_height,
+                    &bootstrap_height_option,
                     &leader_rotation_interval_option,
                     &leader_scheduler_option,
                 );

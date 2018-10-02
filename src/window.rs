@@ -5,7 +5,7 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
-use leader_scheduler::LeaderScheduler;
+use leader_scheduler::{entries_until_next_leader_rotation, LeaderScheduler};
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::SharedBlob;
@@ -52,6 +52,7 @@ pub trait WindowUtil {
     /// Finds available slots, clears them, and returns their indices.
     fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64>;
 
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn repair(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -60,6 +61,7 @@ pub trait WindowUtil {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
+        bootstrap_height_option: &Option<u64>,
         leader_rotation_interval_option: &Option<u64>,
         leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
@@ -102,6 +104,7 @@ impl WindowUtil for Window {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
+        bootstrap_height_option: &Option<u64>,
         leader_rotation_interval_option: &Option<u64>,
         leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
@@ -109,8 +112,15 @@ impl WindowUtil for Window {
         let mut is_next_leader = false;
         if let Some(leader_rotation_interval) = leader_rotation_interval_option {
             // Calculate the next leader rotation height and check if we are the leader
-            let next_leader_rotation =
-                consumed + leader_rotation_interval - (consumed % leader_rotation_interval);
+            let bootstrap_height = bootstrap_height_option.expect(
+                "bootstrap_height_option cannot be None if 
+                leader_rotation_interval_option is not None",
+            );
+            let next_leader_rotation = consumed + entries_until_next_leader_rotation(
+                consumed,
+                bootstrap_height,
+                *leader_rotation_interval,
+            );
             let leader_scheduler = leader_scheduler_option.as_ref().expect(
                 "leader_scheduler_option cannot be None if 
                 leader_rotation_interval_option is not None",

@@ -2,6 +2,7 @@
 //! managing the schedule for leader rotation
 
 use bank::Bank;
+
 use bincode::serialize;
 use budget_instruction::Vote;
 use budget_transaction::BudgetTransaction;
@@ -9,6 +10,8 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use hash::{hash, Hash};
 use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
@@ -58,13 +61,8 @@ impl ActiveValidators {
 
         self.active_validators
             .iter()
-            .filter_map(|(k, v)| {
-                if *v <= upper_bound {
-                    Some(k.clone())
-                } else {
-                    None
-                }
-            }).collect()
+            .filter_map(|(k, v)| if *v <= upper_bound { Some(*k) } else { None })
+            .collect()
     }
 
     // Push a vote for a validator with id == "id" who voted at PoH height == "height"
@@ -337,6 +335,52 @@ impl LeaderScheduler {
     }
 }
 
+pub fn is_leader_rotation_height(
+    height: u64,
+    bootstrap_height: u64,
+    leader_rotation_interval: u64,
+) -> bool {
+    if height < bootstrap_height {
+        return false;
+    }
+
+    if (height - bootstrap_height) % leader_rotation_interval == 0 {
+        return true;
+    }
+
+    false
+}
+
+pub fn entries_until_next_leader_rotation(
+    height: u64,
+    bootstrap_height: u64,
+    leader_rotation_interval: u64,
+) -> u64 {
+    if height < bootstrap_height {
+        bootstrap_height - height
+    } else {
+        leader_rotation_interval - ((height - bootstrap_height) % leader_rotation_interval)
+    }
+}
+
+// Remove all candiates for leader selection from the active set by clearing the bank,
+// and then set a single new candidate who will be eligible starting at height = vote_height
+// by adding one new account to the bank
+#[cfg(test)]
+pub fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
+    // Set the scheduled next leader to some other node
+    let new_leader_keypair = Keypair::new();
+    let new_leader_id = new_leader_keypair.pubkey();
+    leader_scheduler.push_vote(new_leader_id, vote_height);
+    let dummy_id = Keypair::new().pubkey();
+    let new_account = Account::new(1, 10, dummy_id.clone());
+
+    // Remove the previous acounts from the active set
+    let mut accounts = bank.accounts().write().unwrap();
+    accounts.clear();
+    accounts.insert(new_leader_id, new_account);
+}
+
 // Create two entries so that the node with keypair == active_keypair
 // is in the active set for leader selection:
 // 1) Give him nonzero number of tokens,
@@ -375,13 +419,6 @@ mod tests {
     use std::collections::HashSet;
     use std::hash::Hash;
     use std::iter::FromIterator;
-
-    fn to_hashset<T>(slice: &[T]) -> HashSet<&T>
-    where
-        T: Eq + Hash,
-    {
-        HashSet::from_iter(slice.iter())
-    }
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where
@@ -535,13 +572,11 @@ mod tests {
             leader_scheduler.push_vote(pk, start_height + active_window_length);
         }
 
-        let all_ids = old_ids.union(&new_ids).collect();
-
         // Queries for the active set
         let result = leader_scheduler.get_active_set(active_window_length + start_height - 1);
-        assert_eq!(result.len(), num_old_ids + num_new_ids);
-        let result_set = to_hashset(&result);
-        assert_eq!(result_set, all_ids);
+        assert_eq!(result.len(), num_old_ids);
+        let result_set = to_hashset_owned(&result);
+        assert_eq!(result_set, old_ids);
 
         let result = leader_scheduler.get_active_set(active_window_length + start_height);
         assert_eq!(result.len(), num_new_ids);
@@ -809,18 +844,15 @@ mod tests {
         for i in 0..=num_validators {
             leader_scheduler.generate_schedule(i * active_window_length, &bank);
             let result = &leader_scheduler.leader_schedule;
-            let mut expected_set;
+            let mut expected;
             if i == num_validators {
                 // When there are no active validators remaining, should default back to the
                 // bootstrap leader
-                expected_set = HashSet::new();
-                expected_set.insert(&bootstrap_leader_id);
+                expected = vec![bootstrap_leader_id];
             } else {
-                assert_eq!(num_validators - i, result.len() as u64);
-                expected_set = to_hashset(&validators[i as usize..]);
+                expected = vec![validators[i as usize]];
             }
-            let result_set = to_hashset(&result[..]);
-            assert_eq!(expected_set, result_set);
+            assert_eq!(expected, *result);
         }
     }
 
