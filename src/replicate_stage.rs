@@ -110,7 +110,7 @@ impl ReplicateStage {
         if let Some(sender) = vote_blob_sender {
             send_validator_vote(bank, keypair, crdt, sender)?;
         }
-        let votes = &entries.votes(*entry_height);
+        let votes = &entries.votes();
         crdt.write().unwrap().insert_votes(votes);
 
         inc_new_counter_info!(

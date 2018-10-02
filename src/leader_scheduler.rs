@@ -243,6 +243,7 @@ impl LeaderScheduler {
         // non-zero stake. In this case, use the bootstrap leader for
         // the upcoming rounds
         if ranked_active_set.is_empty() {
+            self.last_seed_height = Some(height);
             self.leader_schedule = vec![self.bootstrap_leader];
             self.last_seed_height = Some(height);
             return;

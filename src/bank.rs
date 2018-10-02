@@ -109,7 +109,7 @@ struct ErrorCounters {
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    pub accounts: RwLock<HashMap<Pubkey, Account>>,
+    accounts: RwLock<HashMap<Pubkey, Account>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -991,6 +991,11 @@ impl Bank {
 
     pub fn set_finality(&self, finality: usize) {
         self.finality_time.store(finality, Ordering::Relaxed);
+    }
+
+    #[cfg(test)]
+    pub fn accounts(&self) -> &RwLock<HashMap<Pubkey, Account>> {
+        &self.accounts
     }
 }
 
