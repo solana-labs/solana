@@ -3,13 +3,14 @@
 //!  and give reward for good proofs.
 
 use bincode::deserialize;
+use hash::Hash;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageProgram {
-    SubmitMiningProof { sha_state: [u8; 32] },
+    SubmitMiningProof { sha_state: Hash },
 }
 
 pub enum StorageError {
@@ -39,7 +40,7 @@ impl StorageProgram {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             match syscall {
                 StorageProgram::SubmitMiningProof { sha_state } => {
-                    info!("Mining proof submitted with state {}", sha_state[0]);
+                    info!("Mining proof submitted with state {:?}", sha_state);
                     return Ok(());
                 }
             }
