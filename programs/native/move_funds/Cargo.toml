@@ -1,5 +1,5 @@
 [package]
-name = "print"
+name = "move_funds"
 version = "0.1.0"
 authors = [
     "Anatoly Yakovenko <anatoly@solana.com>",
@@ -13,9 +13,11 @@ authors = [
 ]
 
 [dependencies]
-solana_program_interface = { path = "../../common" }
+bincode = "1.0.0"
+generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
+solana_program_interface = { path = "../../../common" }
 
 [lib]
-name = "print"
+name = "move_funds"
 crate-type = ["dylib"]
 

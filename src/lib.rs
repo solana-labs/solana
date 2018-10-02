@@ -84,7 +84,6 @@ extern crate generic_array;
 extern crate ipnetwork;
 extern crate itertools;
 extern crate libc;
-extern crate libloading;
 #[macro_use]
 extern crate log;
 extern crate nix;

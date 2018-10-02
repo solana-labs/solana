@@ -1,5 +1,5 @@
 [package]
-name = "noop"
+name = "print"
 version = "0.1.0"
 authors = [
     "Anatoly Yakovenko <anatoly@solana.com>",
@@ -13,9 +13,9 @@ authors = [
 ]
 
 [dependencies]
-solana_program_interface = { path = "../../common" }
+solana_program_interface = { path = "../../../common" }
 
 [lib]
-name = "noop"
+name = "print"
 crate-type = ["dylib"]
 

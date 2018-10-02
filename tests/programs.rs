@@ -18,7 +18,7 @@ use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
 
 #[test]
-fn test_native_noop() {
+fn test_bpf_file_noop_rust() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
     let mut accounts = vec![Account::default(), Account::default()];
@@ -32,14 +32,95 @@ fn test_native_noop() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("noop".to_string());
+        let dp = DynamicProgram::new_bpf_from_file("noop".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[test]
+fn test_bpf_file_move_funds_rust() {
+    let data: Vec<u8> = vec![0];
+    let keys = vec![Pubkey::default(); 2];
+    let mut accounts = vec![Account::default(), Account::default()];
+    accounts[0].tokens = 100;
+    accounts[1].tokens = 1;
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("move_funds_rust".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[test]
+fn test_bpf_file_move_funds_c() {
+    let data: Vec<u8> = vec![0xa, 0xb, 0xc, 0xd, 0xe, 0xf];
+    let keys = vec![Pubkey::new(&[0xAA; 32]), Pubkey::new(&[0xBB; 32])];
+    let mut accounts = vec![
+        Account::new(0x0123456789abcdef, 4, Pubkey::default()),
+        Account::new(1, 8, Pubkey::default()),
+    ];
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[test]
+fn test_bpf_file_print_rust() {
+    let data: Vec<u8> = vec![0];
+    let keys = vec![Pubkey::default(); 2];
+    let mut accounts = vec![Account::default(), Account::default()];
+    accounts[0].tokens = 100;
+    accounts[1].tokens = 1;
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("print_rust".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[test]
+fn test_native_file_noop() {
+    let data: Vec<u8> = vec![0];
+    let keys = vec![Pubkey::default(); 2];
+    let mut accounts = vec![Account::default(), Account::default()];
+    accounts[0].tokens = 100;
+    accounts[1].tokens = 1;
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_native("noop".to_string());
         dp.call(&mut infos, &data);
     }
 }
 
 #[test]
 #[ignore]
-fn test_native_print() {
+fn test_native_file_print() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
     let mut accounts = vec![Account::default(), Account::default()];
@@ -53,13 +134,13 @@ fn test_native_print() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("print".to_string());
+        let dp = DynamicProgram::new_native("print".to_string());
         dp.call(&mut infos, &data);
     }
 }
 
 #[test]
-fn test_native_move_funds_success() {
+fn test_native_file_move_funds_success() {
     let tokens: i64 = 100;
     let data: Vec<u8> = serialize(&tokens).unwrap();
     let keys = vec![Pubkey::default(); 2];
@@ -74,7 +155,7 @@ fn test_native_move_funds_success() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(0, accounts[0].tokens);
@@ -82,7 +163,7 @@ fn test_native_move_funds_success() {
 }
 
 #[test]
-fn test_native_move_funds_insufficient_funds() {
+fn test_native_file_move_funds_insufficient_funds() {
     let tokens: i64 = 100;
     let data: Vec<u8> = serialize(&tokens).unwrap();
     let keys = vec![Pubkey::default(); 2];
@@ -97,7 +178,7 @@ fn test_native_move_funds_insufficient_funds() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(10, accounts[0].tokens);
@@ -105,7 +186,7 @@ fn test_native_move_funds_insufficient_funds() {
 }
 
 #[test]
-fn test_native_move_funds_succes_many_threads() {
+fn test_program_native_move_funds_succes_many_threads() {
     let num_threads = 42; // number of threads to spawn
     let num_iters = 100; // number of iterations of test in each thread
     let mut threads = Vec::new();
@@ -127,7 +208,7 @@ fn test_native_move_funds_succes_many_threads() {
                             .map(|(key, account)| KeyedAccount { key, account })
                             .collect();
 
-                        let dp = DynamicProgram::new("move_funds".to_string());
+                        let dp = DynamicProgram::new_native("move_funds".to_string());
                         dp.call(&mut infos, &data);
                     }
                     assert_eq!(0, accounts[0].tokens);

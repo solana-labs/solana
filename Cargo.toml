@@ -82,6 +82,7 @@ bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
+elf = "0.0.10"
 env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
@@ -99,6 +100,7 @@ nix = "0.11.0"
 pnet_datalink = "0.21.0"
 rand = "0.5.1"
 rayon = "1.0.0"
+rbpf = { path = "../rbpf" }
 reqwest = "0.9.0"
 ring = "0.13.2"
 sha2 = "0.7.0"
@@ -114,9 +116,9 @@ tokio-codec = "0.1"
 untrusted = "0.6.2"
 
 [dev-dependencies]
-noop = { path = "programs/noop" }
-print = { path = "programs/print" }
-move_funds = { path = "programs/move_funds" }
+noop = { path = "programs/native/noop" }
+print = { path = "programs/native/print" }
+move_funds = { path = "programs/native/move_funds" }
 
 [[bench]]
 name = "bank"
@@ -141,8 +143,10 @@ name = "chacha"
 members = [
     ".",
     "common",
-    "programs/noop",
-    "programs/print",
-    "programs/move_funds",
+    "programs/native/noop",
+    "programs/native/print",
+    "programs/native/move_funds",
+    "programs/bpf/move_funds_rust",
+    "programs/bpf/noop_rust",
+    "programs/bpf/print_rust",
 ]
-
