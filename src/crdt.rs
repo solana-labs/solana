@@ -526,7 +526,7 @@ impl Crdt {
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.is_empty() {
-            warn!("{}:not enough peers in crdt table", me.id);
+            debug!("{}:not enough peers in crdt table", me.id);
             inc_new_counter_info!("crdt-broadcast-not_enough_peers_error", 1);
             Err(CrdtError::NoPeers)?;
         }
