@@ -3,6 +3,7 @@
 use counter::Counter;
 use crdt::Crdt;
 use entry::Entry;
+use leader_scheduler::LeaderScheduler;
 use log::Level;
 use result::{Error, Result};
 use service::Service;
@@ -69,6 +70,7 @@ impl RetransmitStage {
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
+        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -84,6 +86,7 @@ impl RetransmitStage {
             entry_sender,
             retransmit_sender,
             repair_socket,
+            leader_scheduler_option,
             done,
         );
 
