@@ -403,7 +403,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     loop {
         trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
 
-        if let Some(l) = cluster_info.read().unwrap().leader_data() {
+        if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
             leader = Some(l.clone());
             break;
         }

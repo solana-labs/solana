@@ -137,12 +137,10 @@ impl WindowUtil for Window {
                 // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
                 // in which case it will eventually catch up
                 //
-                // 2) The replicate stage is waiting on an "nth" entry that is a multiple of
-                // seed_rotation_interval, in which case the next leader is unknown. In this case,
-                // on the rare occasion that the validator in avalanche responsible for this "nth" entry
-                // drops that entry, then we could get a slow down if everybody is blocking waiting
-                // for that "nth" entry instead of repairing, until we hit "times" >= the max times
-                // in calculate_max_repair()
+                // 2) drops that entry, then everybody will blocking waiting for that "nth"
+                // entry instead of repairing, until we hit "times" >= the max times in
+                // calculate_max_repair(). If max times is not large, this shouldn't be a
+                // big issue.
                 None => (),
                 _ => (),
             }

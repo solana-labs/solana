@@ -542,15 +542,6 @@ impl Fullnode {
         self.join()
     }
 
-    // TODO: only used for testing, get rid of this once we have actual
-    // leader scheduling
-    pub fn set_scheduled_leader(&self, leader_id: Pubkey, entry_height: u64) {
-        self.cluster_info
-            .write()
-            .unwrap()
-            .set_scheduled_leader(entry_height, leader_id);
-    }
-
     pub fn new_bank_from_ledger(
         ledger_path: &str,
         leader_scheduler: Option<&mut LeaderScheduler>,
