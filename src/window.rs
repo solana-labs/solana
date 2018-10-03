@@ -5,6 +5,7 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use leader_scheduler::LeaderScheduler;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::SharedBlob;
@@ -59,6 +60,8 @@ pub trait WindowUtil {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
+        leader_rotation_interval_option: &Option<u64>,
+        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
@@ -99,13 +102,42 @@ impl WindowUtil for Window {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
+        leader_rotation_interval_option: &Option<u64>,
+        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
         let rcluster_info = cluster_info.read().unwrap();
-        let leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
-        // Calculate the next leader rotation height and check if we are the leader
-        let next_leader_rotation =
-            consumed + leader_rotation_interval - (consumed % leader_rotation_interval);
-        let is_next_leader = rcluster_info.get_scheduled_leader(next_leader_rotation) == Some(*id);
+        let mut is_next_leader = false;
+        if let Some(leader_rotation_interval) = leader_rotation_interval_option {
+            // Calculate the next leader rotation height and check if we are the leader
+            let next_leader_rotation =
+                consumed + leader_rotation_interval - (consumed % leader_rotation_interval);
+            let leader_scheduler = leader_scheduler_option.as_ref().expect(
+                "leader_scheduler_option cannot be None if 
+                leader_rotation_interval_option is not None",
+            );
+            match leader_scheduler
+                .read()
+                .unwrap()
+                .get_scheduled_leader(next_leader_rotation)
+            {
+                Some(leader_id) if leader_id == *id => is_next_leader = true,
+                // In the case that we are not in the current scope of the leader schedule
+                // window then either:
+                //
+                // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
+                // in which case it will eventually catch up
+                //
+                // 2) The replicate stage is waiting on an "nth" entry that is a multiple of
+                // seed_rotation_interval, in which case the next leader is unknown. In this case,
+                // on the rare occasion that the validator in avalanche responsible for this "nth" entry
+                // drops that entry, then we could get a slow down if everybody is blocking waiting
+                // for that "nth" entry instead of repairing, until we hit "times" >= the max times
+                // in calculate_max_repair()
+                None => (),
+                _ => (),
+            }
+        }
+
         let num_peers = rcluster_info.table.len() as u64;
 
         let max_repair = if max_entry_height == 0 {

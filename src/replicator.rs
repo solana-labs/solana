@@ -108,6 +108,7 @@ impl Replicator {
             entry_window_sender,
             retransmit_sender,
             repair_socket,
+            None,
             done,
         );
 

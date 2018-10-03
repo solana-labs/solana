@@ -3,6 +3,7 @@
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
 use entry::EntrySender;
+use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
@@ -244,6 +245,7 @@ pub fn window_service(
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
+    leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     done: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     Builder::new()
@@ -256,6 +258,11 @@ pub fn window_service(
             let id = crdt.read().unwrap().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
+            let mut leader_rotation_interval_option = None;
+            if let Some(ref leader_scheduler) = leader_scheduler_option {
+                leader_rotation_interval_option =
+                    Some(leader_scheduler.read().unwrap().leader_rotation_interval);
+            }
             loop {
                 // Check if leader rotation was configured
                 if let Err(e) = recv_window(
@@ -299,7 +306,16 @@ pub fn window_service(
                 trace!("{} let's repair! times = {}", id, times);
 
                 let mut window = window.write().unwrap();
-                let reqs = window.repair(&cluster_info, &id, times, consumed, received, max_entry_height);
+                let reqs = window.repair(
+                    &cluster_info,
+                    &id,
+                    times,
+                    consumed,
+                    received,
+                    max_entry_height,
+                    &leader_rotation_interval_option,
+                    &leader_scheduler_option,
+                );
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -366,6 +382,7 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            None,
             done,
         );
         let t_responder = {
@@ -427,6 +444,7 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            None,
             done,
         );
         let t_responder = {
@@ -483,6 +501,7 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            None,
             done,
         );
         let t_responder = {
