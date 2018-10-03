@@ -1,7 +1,11 @@
+sudo: required
 language: node_js
 node_js:
   - "lts/*"
   - "node"
+
+services:
+  - docker
 
 cache:
   directories:
@@ -14,8 +18,12 @@ script:
   - npm run doc
   - npm run flow
   - npm run lint
-  - npm run examples
   - npm run codecov
+  - npm run localnet:update
+  - npm run localnet:up
+  - npm run examples
+  - npm run test:live
+  - npm run localnet:down
 
 before_deploy:
   - rm -rf deploy

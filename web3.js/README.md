@@ -68,6 +68,31 @@ console.log(solanaWeb3);
 console.log(solanaWeb3);
 ```
 
+## Local Network
+The `solana-localnet` program is provide to easily start a test Solana network
+locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
+the local network is `http://localhost:8899`.
+
+To start, first fetch the latest Docker image by running:
+```bash
+$ npx solana-localnet update
+```
+
+Then run the following command to start the network
+```bash
+$ npx solana-localnet up
+```
+
+While the network is running logs are available with:
+```bash
+$ npx solana-localnet logs -f
+```
+
+Stop the network with:
+```bash
+$ npx solana-localnet up
+```
+
 ## Flow
 
 A [Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
@@ -78,7 +103,6 @@ activate it:
 [libs]
 node_modules/@solana/web3.js/module.flow.js
 ```
-
 
 ## Examples
 See the [examples/](https://github.com/solana-labs/solana-web3.js/tree/master/examples) directory for small snippets.
