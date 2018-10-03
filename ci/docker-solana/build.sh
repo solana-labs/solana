@@ -16,9 +16,10 @@ if [[ -z $CHANNEL ]]; then
   exit 0
 fi
 
-rm -rf cargo-install/
+rm -rf usr/
 ../docker-run.sh solanalabs/rust:1.29.1 \
-  cargo install --path . --root ci/docker-solana/cargo-install
+  cargo install --path . --root ci/docker-solana/usr
+cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
 
 docker build -t solanalabs/solana:$CHANNEL .
 
