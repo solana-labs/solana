@@ -35,14 +35,15 @@ EOF
 
 [[ -n $1 ]] || usage
 cmd="$1"
+shift
 
 channel=beta
 
 docker --version || usage "It appears that docker is not installed"
 case $cmd in
 update)
-  if [[ -n $2 ]]; then
-    channel="$2"
+  if [[ -n $1 ]]; then
+    channel="$1"
   fi
   [[ $channel = edge || $channel = beta ]] || usage "Invalid channel: $channel"
 
@@ -52,8 +53,8 @@ update)
   )
   ;;
 up)
-  if [[ -n $2 ]]; then
-    channel="$2"
+  if [[ -n $1 ]]; then
+    channel="$1"
   fi
   [[ $channel = edge || $channel = beta ]] || usage "Invalid channel: $channel"
 
