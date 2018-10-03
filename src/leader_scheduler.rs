@@ -9,6 +9,11 @@ use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
 
+pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
+pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
+pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = 1000;
+pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = 1000;
+
 pub struct ActiveValidators {
     // Map from validator id to the last PoH height at which they voted,
     pub active_validators: HashMap<Pubkey, u64>,
@@ -17,7 +22,7 @@ pub struct ActiveValidators {
 
 impl ActiveValidators {
     pub fn new(active_window_length_option: Option<u64>) -> Self {
-        let mut active_window_length = 1000;
+        let mut active_window_length = DEFAULT_ACTIVE_WINDOW_LENGTH;
         if let Some(input) = active_window_length_option {
             active_window_length = input;
         }
@@ -143,17 +148,17 @@ pub struct LeaderScheduler {
 // calculate the leader schedule for the upcoming seed_rotation_interval PoH counts.
 impl LeaderScheduler {
     pub fn new(config: &LeaderSchedulerConfig) -> Self {
-        let mut bootstrap_height = 1000;
+        let mut bootstrap_height = DEFAULT_BOOTSTRAP_HEIGHT;
         if let Some(input) = config.bootstrap_height_option {
             bootstrap_height = input;
         }
 
-        let mut leader_rotation_interval = 100;
+        let mut leader_rotation_interval = DEFAULT_LEADER_ROTATION_INTERVAL;
         if let Some(input) = config.leader_rotation_interval_option {
             leader_rotation_interval = input;
         }
 
-        let mut seed_rotation_interval = 1000;
+        let mut seed_rotation_interval = DEFAULT_SEED_ROTATION_INTERVAL;
         if let Some(input) = config.seed_rotation_interval_option {
             seed_rotation_interval = input;
         }
@@ -320,7 +325,10 @@ impl LeaderScheduler {
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+    use leader_scheduler::{
+        ActiveValidators, LeaderScheduler, LeaderSchedulerConfig, DEFAULT_ACTIVE_WINDOW_LENGTH,
+        DEFAULT_BOOTSTRAP_HEIGHT, DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
+    };
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::pubkey::Pubkey;
@@ -348,10 +356,6 @@ mod tests {
         leader_rotation_interval: u64,
         seed_rotation_interval: u64,
     ) {
-        if num_validators == 0 {
-            return;
-        }
-
         // Allow the validators to be in the active window for the entire test
         let active_window_length = seed_rotation_interval + bootstrap_height;
 
@@ -762,13 +766,146 @@ mod tests {
         // Generate schedule every active_window_length entries and check that
         // validators are falling out of the rotation as they fall out of the
         // active set
-        for i in 0..num_validators {
+        for i in 0..=num_validators {
             leader_scheduler.generate_schedule(i * active_window_length, &bank);
             let result = &leader_scheduler.leader_schedule;
-            assert_eq!(num_validators - i, result.len() as u64);
-            let expected_set = to_hashset(&validators[i as usize..]);
+            let mut expected_set;
+            if i == num_validators {
+                // When there are no active validators remaining, should default back to the
+                // bootstrap leader
+                expected_set = HashSet::new();
+                expected_set.insert(&bootstrap_leader_id);
+            } else {
+                assert_eq!(num_validators - i, result.len() as u64);
+                expected_set = to_hashset(&validators[i as usize..]);
+            }
             let result_set = to_hashset(&result[..]);
             assert_eq!(expected_set, result_set);
         }
+    }
+
+    #[test]
+    fn test_multiple_vote() {
+        let leader_id = Keypair::new().pubkey();
+        let active_window_length = 1000;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            leader_id,
+            Some(100),
+            Some(100),
+            Some(100),
+            Some(active_window_length),
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Check that a validator that votes twice in a row will get included in the active
+        // window
+        let initial_vote_height = 1;
+
+        // Vote twice
+        leader_scheduler.push_vote(leader_id, initial_vote_height);
+        leader_scheduler.push_vote(leader_id, initial_vote_height + 1);
+        let result = leader_scheduler.get_active_set(initial_vote_height + active_window_length);
+        assert_eq!(result, vec![leader_id]);
+        let result =
+            leader_scheduler.get_active_set(initial_vote_height + active_window_length + 1);
+        assert_eq!(result, vec![]);
+    }
+
+    #[test]
+    fn test_update_height() {
+        let bootstrap_leader_id = Keypair::new().pubkey();
+        let bootstrap_height = 500;
+        let leader_rotation_interval = 100;
+        // Make sure seed_rotation_interval is big enough so we select all the
+        // validators as part of the schedule each time (we need to check the active window
+        // is the cause of validators being truncated later)
+        let seed_rotation_interval = leader_rotation_interval;
+        let active_window_length = 1;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(active_window_length),
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Check that the generate_schedule() function is being called by the
+        // update_height() function at the correct entry heights.
+        let bank = Bank::new_default(false);
+        leader_scheduler.update_height(bootstrap_height - 1, &bank);
+        assert_eq!(leader_scheduler.last_seed_height, None);
+        leader_scheduler.update_height(bootstrap_height, &bank);
+        assert_eq!(leader_scheduler.last_seed_height, Some(bootstrap_height));
+        leader_scheduler.update_height(bootstrap_height + seed_rotation_interval - 1, &bank);
+        assert_eq!(leader_scheduler.last_seed_height, Some(bootstrap_height));
+        leader_scheduler.update_height(bootstrap_height + seed_rotation_interval, &bank);
+        assert_eq!(
+            leader_scheduler.last_seed_height,
+            Some(bootstrap_height + seed_rotation_interval)
+        );
+    }
+
+    #[test]
+    fn test_constructors() {
+        let bootstrap_leader_id = Keypair::new().pubkey();
+
+        // Check defaults for LeaderScheduler
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(bootstrap_leader_id, None, None, None, None);
+
+        let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        assert_eq!(leader_scheduler.bootstrap_height, DEFAULT_BOOTSTRAP_HEIGHT);
+
+        assert_eq!(
+            leader_scheduler.leader_rotation_interval,
+            DEFAULT_LEADER_ROTATION_INTERVAL
+        );
+        assert_eq!(
+            leader_scheduler.seed_rotation_interval,
+            DEFAULT_SEED_ROTATION_INTERVAL
+        );
+
+        // Check defaults for ActiveValidators
+        let active_validators = ActiveValidators::new(None);
+        assert_eq!(
+            active_validators.active_window_length,
+            DEFAULT_ACTIVE_WINDOW_LENGTH
+        );
+
+        // Check actual arguments for LeaderScheduler
+        let bootstrap_height = 500;
+        let leader_rotation_interval = 100;
+        let seed_rotation_interval = 200;
+        let active_window_length = 1;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(active_window_length),
+        );
+
+        let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        assert_eq!(leader_scheduler.bootstrap_height, bootstrap_height);
+
+        assert_eq!(
+            leader_scheduler.leader_rotation_interval,
+            leader_rotation_interval
+        );
+        assert_eq!(
+            leader_scheduler.seed_rotation_interval,
+            seed_rotation_interval
+        );
+
+        // Check actual arguments for ActiveValidators
+        let active_validators = ActiveValidators::new(Some(active_window_length));
+        assert_eq!(active_validators.active_window_length, active_window_length);
     }
 }
