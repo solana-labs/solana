@@ -69,7 +69,7 @@ console.log(solanaWeb3);
 ```
 
 ## Local Network
-The `solana-localnet` program is provide to easily start a test Solana network
+The `solana-localnet` program is provided to easily start a test Solana network
 locally on your machine.  Docker must be installed.  The JSON RPC endpoint of
 the local network is `http://localhost:8899`.
 
