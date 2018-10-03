@@ -27,17 +27,23 @@ maybe_cargo_install() {
 
 maybe_cargo_install cov
 
+if [[ ! -f ./grcov ]]; then
+  uname=$(uname | tr '[:upper:]' '[:lower:]')
+  uname_m=$(uname -m | tr '[:upper:]' '[:lower:]')
+  name=grcov-${uname}-${uname_m}.tar.bz2
+  _ wget "https://github.com/mozilla/grcov/releases/download/v0.2.3/${name}"
+  _ tar -xjf "${name}"
+fi
+
 _ cargo cov clean
 _ cargo cov test --lib
-_ cargo cov report
-
-echo --- Coverage report:
-ls -l target/cov/report/index.html
+_ ./grcov . -t lcov > lcov.info
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
+  genhtml -o target/cov/report --show-details --highlight --ignore-errors source --legend lcov.info
+  echo --- Coverage report:
+  ls -l target/cov/report/index.html
 else
-  # TODO: Fix this.
-  true
-  #bash <(curl -s https://codecov.io/bash) -x 'llvm-cov-7 gcov'
+  bash <(curl -s https://codecov.io/bash) -X gcov
 fi
