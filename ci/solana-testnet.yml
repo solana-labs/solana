@@ -1,0 +1,10 @@
+steps:
+  - command: "ci/snap.sh"
+    label: "create snap"
+
+  - wait
+
+  - command: "ci/testnet-automation.sh"
+    label: "run testnet"
+    agents:
+      - "queue=metrics"

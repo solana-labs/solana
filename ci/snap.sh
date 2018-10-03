@@ -16,6 +16,7 @@ elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
 elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
   CHANNEL=beta
 fi
+SNAP_CHANNEL=edge
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
