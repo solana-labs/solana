@@ -58,4 +58,4 @@ source ci/upload_ci_artifact.sh
 upload_ci_artifact solana_*.snap
 
 echo --- publish: $CHANNEL channel
-$DRYRUN snapcraft push solana_*.snap --release $CHANNEL
+#$DRYRUN snapcraft push solana_*.snap --release $CHANNEL
