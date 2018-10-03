@@ -21,6 +21,9 @@
   },
   "main": "lib/index.cjs.js",
   "module": "lib/index.esm.js",
+  "bin": {
+    "solana-localnet": "bin/localnet.sh"
+  },
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
     "dev": "cross-env NODE_ENV=development rollup -c",
@@ -37,6 +40,10 @@
     "lint": "eslint .",
     "lint:fix": "npm run lint -- --fix",
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
+    "localnet:up": "bin/localnet.sh up",
+    "localnet:down": "bin/localnet.sh down",
+    "localnet:update": "bin/localnet.sh update",
+    "localnet:logs": "bin/localnet.sh logs",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "prepare": "npm run clean && npm run ok && npm run build",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
