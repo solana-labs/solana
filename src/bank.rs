@@ -412,7 +412,7 @@ impl Bank {
     }
 
     pub fn verify_transaction(
-        program_index: usize,
+        instruction_index: usize,
         tx_program_id: &Pubkey,
         pre_program_id: &Pubkey,
         pre_tokens: i64,
@@ -425,14 +425,16 @@ impl Bank {
                 && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            return Err(BankError::ModifiedContractId(program_index as u8));
+            return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if *tx_program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(program_index as u8));
+            return Err(BankError::ExternalAccountTokenSpend(
+                instruction_index as u8,
+            ));
         }
         if account.tokens < 0 {
-            return Err(BankError::ResultWithNegativeTokens(program_index as u8));
+            return Err(BankError::ResultWithNegativeTokens(instruction_index as u8));
         }
         Ok(())
     }
@@ -484,10 +486,10 @@ impl Bank {
     fn execute_instruction(
         &self,
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         program_accounts: &mut [&mut Account],
     ) -> Result<()> {
-        let tx_program_id = tx.program_id(program_index);
+        let tx_program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
         let pre_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
@@ -501,39 +503,45 @@ impl Bank {
         if SystemProgram::check_id(&tx_program_id) {
             SystemProgram::process_transaction(
                 &tx,
-                program_index,
+                instruction_index,
                 program_accounts,
                 &self.loaded_contracts,
             )
         } else if BudgetState::check_id(&tx_program_id) {
-            if BudgetState::process_transaction(&tx, program_index, program_accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError(program_index as u8));
+            if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else if StorageProgram::check_id(&tx_program_id) {
-            if StorageProgram::process_transaction(&tx, program_index, program_accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError(program_index as u8));
-            }
-        } else if TicTacToeProgram::check_id(&tx_program_id) {
-            if TicTacToeProgram::process_transaction(&tx, program_index, program_accounts).is_err()
-            {
-                return Err(BankError::ProgramRuntimeError(program_index as u8));
-            }
-        } else if TicTacToeDashboardProgram::check_id(&tx_program_id) {
-            if TicTacToeDashboardProgram::process_transaction(&tx, program_index, program_accounts)
+            if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(program_index as u8));
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if self.loaded_contract(tx_program_id, tx, program_index, program_accounts) {
+        } else if TicTacToeProgram::check_id(&tx_program_id) {
+            if TicTacToeProgram::process_transaction(&tx, instruction_index, program_accounts)
+                .is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
+        } else if TicTacToeDashboardProgram::check_id(&tx_program_id) {
+            if TicTacToeDashboardProgram::process_transaction(
+                &tx,
+                instruction_index,
+                program_accounts,
+            ).is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
+        } else if self.loaded_contract(tx_program_id, tx, instruction_index, program_accounts) {
         } else {
-            return Err(BankError::UnknownContractId(program_index as u8));
+            return Err(BankError::UnknownContractId(instruction_index as u8));
         }
         // Verify the transaction
         for ((pre_program_id, pre_tokens), post_account) in
             pre_data.iter().zip(program_accounts.iter())
         {
             Self::verify_transaction(
-                program_index,
+                instruction_index,
                 &tx_program_id,
                 pre_program_id,
                 *pre_tokens,
@@ -543,7 +551,7 @@ impl Bank {
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
-            Err(BankError::UnbalancedTransaction(program_index as u8))
+            Err(BankError::UnbalancedTransaction(instruction_index as u8))
         } else {
             Ok(())
         }
@@ -552,9 +560,9 @@ impl Bank {
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     fn execute_transaction(&self, tx: &Transaction, tx_accounts: &mut [Account]) -> Result<()> {
-        for (program_index, prog) in tx.instructions.iter().enumerate() {
+        for (instruction_index, prog) in tx.instructions.iter().enumerate() {
             Self::with_subset(tx_accounts, &prog.accounts, |program_accounts| {
-                self.execute_instruction(tx, program_index, program_accounts)
+                self.execute_instruction(tx, instruction_index, program_accounts)
             })?;
         }
         Ok(())
@@ -1005,12 +1013,12 @@ mod tests {
         let spend = SystemProgram::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
-                program_id: 0,
+                program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
-                program_id: 0,
+                program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],
             },
@@ -1045,12 +1053,12 @@ mod tests {
         let spend = SystemProgram::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
-                program_id: 0,
+                program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
-                program_id: 0,
+                program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],
             },
