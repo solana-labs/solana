@@ -3,6 +3,7 @@ use generic_array::typenum::U32;
 use generic_array::GenericArray;
 use std::fmt;
 
+#[repr(C)]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pubkey(GenericArray<u8, U32>);
 

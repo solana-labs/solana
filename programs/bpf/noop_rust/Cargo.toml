@@ -1,0 +1,8 @@
+[package]
+name = "noop_rust"
+version = "0.1.0"
+authors = ["Jack May <jack@solana.com>"]
+
+[dependencies]
+rbpf = { git = "https://github.com/solana-labs/rbpf" }
+solana = { path = "../../.." }

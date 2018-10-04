@@ -22,6 +22,7 @@ pub mod choose_gossip_peer_strategy;
 pub mod client;
 #[macro_use]
 pub mod crdt;
+pub mod bpf_verifier;
 pub mod budget_program;
 pub mod drone;
 pub mod dynamic_program;
@@ -91,6 +92,7 @@ extern crate log;
 extern crate nix;
 extern crate pnet_datalink;
 extern crate rayon;
+extern crate rbpf;
 extern crate reqwest;
 extern crate ring;
 extern crate serde;

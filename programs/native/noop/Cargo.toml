@@ -1,5 +1,5 @@
 [package]
-name = "move_funds"
+name = "noop"
 version = "0.1.0"
 authors = [
     "Anatoly Yakovenko <anatoly@solana.com>",
@@ -13,11 +13,9 @@ authors = [
 ]
 
 [dependencies]
-bincode = "1.0.0"
-generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
-solana_program_interface = { path = "../../common" }
+solana_program_interface = { path = "../../../common" }
 
 [lib]
-name = "move_funds"
+name = "noop"
 crate-type = ["dylib"]
 

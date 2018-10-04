@@ -88,7 +88,7 @@ impl SystemProgram {
                 }
                 SystemProgram::Load { program_id, name } => {
                     let mut hashmap = loaded_programs.write().unwrap();
-                    hashmap.insert(program_id, DynamicProgram::new(name));
+                    hashmap.insert(program_id, DynamicProgram::new_native(name));
                 }
             }
         } else {

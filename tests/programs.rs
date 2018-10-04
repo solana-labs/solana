@@ -3,12 +3,16 @@ extern crate solana;
 extern crate solana_program_interface;
 
 use std::collections::HashMap;
+#[cfg(feature = "bpf_c")]
+use std::path::Path;
 use std::sync::RwLock;
 use std::thread;
 
 use bincode::serialize;
 
 use solana::dynamic_program::DynamicProgram;
+#[cfg(feature = "bpf_c")]
+use solana::dynamic_program::ProgramPath;
 use solana::hash::Hash;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_program::SystemProgram;
@@ -17,29 +21,22 @@ use solana::transaction::Transaction;
 use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
 
+#[cfg(feature = "bpf_c")]
+use solana::tictactoe_program::Command;
+
+#[cfg(feature = "bpf_c")]
 #[test]
-fn test_native_noop() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new("noop".to_string());
-        dp.call(&mut infos, &data);
-    }
+fn test_path_create_bpf() {
+    let path = ProgramPath::Bpf {}.create("move_funds_c");
+    assert_eq!(true, Path::new(&path).exists());
+    let path = ProgramPath::Bpf {}.create("tictactoe_c");
+    assert_eq!(true, Path::new(&path).exists());
 }
 
+#[cfg(feature = "bpf_c")]
 #[test]
 #[ignore]
-fn test_native_print() {
+fn test_bpf_file_noop_rust() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
     let mut accounts = vec![Account::default(), Account::default()];
@@ -53,13 +50,105 @@ fn test_native_print() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("print".to_string());
+        let dp = DynamicProgram::new_bpf_from_file("noop_rust".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+#[test]
+fn test_bpf_file_move_funds_c() {
+    let data: Vec<u8> = vec![0xa, 0xb, 0xc, 0xd, 0xe, 0xf];
+    let keys = vec![Pubkey::new(&[0xAA; 32]), Pubkey::new(&[0xBB; 32])];
+    let mut accounts = vec![
+        Account::new(0x0123456789abcdef, 4, Pubkey::default()),
+        Account::new(1, 8, Pubkey::default()),
+    ];
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubkey) {
+    let p = &command as *const Command as *const u8;
+    let data: &[u8] = unsafe { std::slice::from_raw_parts(p, std::mem::size_of::<Command>()) };
+
+    // Init
+    // player_x pub key in keys[2]
+    // accounts[0].program_id must be tictactoe
+    // accounts[1].userdata must be tictactoe game state
+
+    let keys = vec![player, Pubkey::default(), player];
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut *accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_bpf_from_file("tictactoe_c".to_string());
+        dp.call(&mut infos, &data);
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+#[test]
+fn test_bpf_file_tictactoe_c() {
+    let game_size = 0x78; // corresponds to the C structure size
+    let mut accounts = vec![
+        Account::new(0, 0, Pubkey::default()),
+        Account::new(0, game_size, Pubkey::default()),
+        Account::new(0, 0, Pubkey::default()),
+    ];
+
+    tictactoe_command(Command::Init, &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(
+        Command::Join(0xAABBCCDD),
+        &mut accounts,
+        Pubkey::new(&[0xA; 32]),
+    );
+    tictactoe_command(Command::Move(1, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(2, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(2, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
+    tictactoe_command(Command::Move(0, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
+
+    // validate test
+}
+
+#[test]
+fn test_native_file_noop() {
+    let data: Vec<u8> = vec![0];
+    let keys = vec![Pubkey::default(); 2];
+    let mut accounts = vec![Account::default(), Account::default()];
+    accounts[0].tokens = 100;
+    accounts[1].tokens = 1;
+
+    {
+        let mut infos: Vec<_> = (&keys)
+            .into_iter()
+            .zip(&mut accounts)
+            .map(|(key, account)| KeyedAccount { key, account })
+            .collect();
+
+        let dp = DynamicProgram::new_native("noop".to_string());
         dp.call(&mut infos, &data);
     }
 }
 
 #[test]
-fn test_native_move_funds_success() {
+fn test_native_file_move_funds_success() {
     let tokens: i64 = 100;
     let data: Vec<u8> = serialize(&tokens).unwrap();
     let keys = vec![Pubkey::default(); 2];
@@ -74,7 +163,7 @@ fn test_native_move_funds_success() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(0, accounts[0].tokens);
@@ -82,7 +171,7 @@ fn test_native_move_funds_success() {
 }
 
 #[test]
-fn test_native_move_funds_insufficient_funds() {
+fn test_native_file_move_funds_insufficient_funds() {
     let tokens: i64 = 100;
     let data: Vec<u8> = serialize(&tokens).unwrap();
     let keys = vec![Pubkey::default(); 2];
@@ -97,7 +186,7 @@ fn test_native_move_funds_insufficient_funds() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(10, accounts[0].tokens);
@@ -105,7 +194,7 @@ fn test_native_move_funds_insufficient_funds() {
 }
 
 #[test]
-fn test_native_move_funds_succes_many_threads() {
+fn test_program_native_move_funds_succes_many_threads() {
     let num_threads = 42; // number of threads to spawn
     let num_iters = 100; // number of iterations of test in each thread
     let mut threads = Vec::new();
@@ -127,7 +216,7 @@ fn test_native_move_funds_succes_many_threads() {
                             .map(|(key, account)| KeyedAccount { key, account })
                             .collect();
 
-                        let dp = DynamicProgram::new("move_funds".to_string());
+                        let dp = DynamicProgram::new_native("move_funds".to_string());
                         dp.call(&mut infos, &data);
                     }
                     assert_eq!(0, accounts[0].tokens);

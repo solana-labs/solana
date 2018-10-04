@@ -1,6 +1,7 @@
 use pubkey::Pubkey;
 
 /// An Account with userdata that is stored on chain
+#[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Account {
     /// tokens in the account
@@ -22,6 +23,7 @@ impl Account {
     }
 }
 
+#[repr(C)]
 #[derive(Debug)]
 pub struct KeyedAccount<'a> {
     pub key: &'a Pubkey,
