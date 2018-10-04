@@ -48,18 +48,18 @@ impl BudgetState {
     fn apply_signature(
         &mut self,
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         account: &mut [&mut Account],
     ) -> Result<(), BudgetError> {
         let mut final_payment = None;
         if let Some(ref mut budget) = self.pending_budget {
-            let key = tx.key(program_index, 0).unwrap();
+            let key = tx.key(instruction_index, 0).unwrap();
             budget.apply_witness(&Witness::Signature, key);
             final_payment = budget.final_payment();
         }
 
         if let Some(payment) = final_payment {
-            if Some(&payment.to) != tx.key(program_index, 2) {
+            if Some(&payment.to) != tx.key(instruction_index, 2) {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing);
             }
@@ -75,7 +75,7 @@ impl BudgetState {
     fn apply_timestamp(
         &mut self,
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         accounts: &mut [&mut Account],
         dt: DateTime<Utc>,
     ) -> Result<(), BudgetError> {
@@ -83,13 +83,13 @@ impl BudgetState {
         let mut final_payment = None;
 
         if let Some(ref mut budget) = self.pending_budget {
-            let key = tx.key(program_index, 0).unwrap();
+            let key = tx.key(instruction_index, 0).unwrap();
             budget.apply_witness(&Witness::Timestamp(dt), key);
             final_payment = budget.final_payment();
         }
 
         if let Some(payment) = final_payment {
-            if Some(&payment.to) != tx.key(program_index, 2) {
+            if Some(&payment.to) != tx.key(instruction_index, 2) {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing);
             }
@@ -133,7 +133,7 @@ impl BudgetState {
     /// Note: It is safe to apply credits from multiple transactions in parallel.
     fn apply_credits_to_budget_state(
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         accounts: &mut [&mut Account],
         instruction: &Instruction,
     ) -> Result<(), BudgetError> {
@@ -166,7 +166,7 @@ impl BudgetState {
                         Err(BudgetError::UninitializedContract)
                     } else {
                         trace!("apply timestamp");
-                        state.apply_timestamp(tx, program_index, accounts, *dt)?;
+                        state.apply_timestamp(tx, instruction_index, accounts, *dt)?;
                         trace!("apply timestamp committed");
                         state.serialize(&mut accounts[1].userdata)
                     }
@@ -183,7 +183,7 @@ impl BudgetState {
                         Err(BudgetError::UninitializedContract)
                     } else {
                         trace!("apply signature");
-                        state.apply_signature(tx, program_index, accounts)?;
+                        state.apply_signature(tx, instruction_index, accounts)?;
                         trace!("apply signature committed");
                         state.serialize(&mut accounts[1].userdata)
                     }
@@ -241,18 +241,18 @@ impl BudgetState {
     /// be spent from this account .
     pub fn process_transaction(
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         accounts: &mut [&mut Account],
     ) -> Result<(), BudgetError> {
-        if let Ok(instruction) = deserialize(tx.userdata(program_index)) {
+        if let Ok(instruction) = deserialize(tx.userdata(instruction_index)) {
             trace!("process_transaction: {:?}", instruction);
             Self::apply_debits_to_budget_state(accounts, &instruction).and_then(|_| {
-                Self::apply_credits_to_budget_state(tx, program_index, accounts, &instruction)
+                Self::apply_credits_to_budget_state(tx, instruction_index, accounts, &instruction)
             })
         } else {
             info!(
                 "Invalid transaction userdata: {:?}",
-                tx.userdata(program_index)
+                tx.userdata(instruction_index)
             );
             Err(BudgetError::UserdataDeserializeFailure)
         }

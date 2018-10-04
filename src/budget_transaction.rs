@@ -278,7 +278,7 @@ mod tests {
         let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
         let userdata = serialize(&instruction).unwrap();
         let instructions = vec![transaction::Instruction {
-            program_id: 0,
+            program_ids_index: 0,
             userdata,
             accounts: vec![],
         }];
@@ -286,7 +286,7 @@ mod tests {
             account_keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
-            program_keys: vec![],
+            program_ids: vec![],
             instructions,
             fee: 0,
         };
