@@ -3,12 +3,16 @@ extern crate solana;
 extern crate solana_program_interface;
 
 use std::collections::HashMap;
+#[cfg(feature = "bpf_c")]
+use std::path::Path;
 use std::sync::RwLock;
 use std::thread;
 
 use bincode::serialize;
 
 use solana::dynamic_program::DynamicProgram;
+#[cfg(feature = "bpf_c")]
+use solana::dynamic_program::ProgramPath;
 use solana::hash::Hash;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_program::SystemProgram;
@@ -19,6 +23,15 @@ use solana_program_interface::pubkey::Pubkey;
 
 #[cfg(feature = "bpf_c")]
 use solana::tictactoe_program::Command;
+
+#[cfg(feature = "bpf_c")]
+#[test]
+fn test_path_create_bpf() {
+    let path = ProgramPath::Bpf {}.create("move_funds_c");
+    assert_eq!(true, Path::new(&path).exists());
+    let path = ProgramPath::Bpf {}.create("tictactoe_c");
+    assert_eq!(true, Path::new(&path).exists());
+}
 
 #[cfg(feature = "bpf_c")]
 #[test]

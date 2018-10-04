@@ -3,8 +3,9 @@
 //#include <stddef.h>
 
 #if 1
-// one way to define a helper function is with idex as a fixed value
-static int (*sol_print)(int, int, int, int, int) = (void *)6;
+// one way to define a helper function is with index as a fixed value
+#define BPF_TRACE_PRINTK_IDX 6
+static int (*sol_print)(int, int, int, int, int) = (void *)BPF_TRACE_PRINTK_IDX;
 #else
 // relocation is another option
 extern int sol_print(int, int, int, int, int);

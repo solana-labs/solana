@@ -1,6 +1,9 @@
 extern crate elf;
-
 extern crate rbpf;
+
+use std::io::prelude::*;
+use std::mem;
+use std::path::PathBuf;
 
 use bpf_verifier;
 use byteorder::{LittleEndian, WriteBytesExt};
@@ -9,17 +12,9 @@ use libc;
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use std::io::prelude::*;
-use std::mem;
-use std::path::PathBuf;
 
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::pubkey::Pubkey;
-
-#[cfg(debug_assertions)]
-const CARGO_PROFILE: &str = "debug";
-#[cfg(not(debug_assertions))]
-const CARGO_PROFILE: &str = "release";
 
 /// Dynamic link library prefixs
 const PLATFORM_FILE_PREFIX_BPF: &str = "";
@@ -43,7 +38,7 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 
-enum ProgramPath {
+pub enum ProgramPath {
     Bpf,
     Native,
 }
@@ -51,19 +46,21 @@ enum ProgramPath {
 impl ProgramPath {
     /// Creates a platform-specific file path
     pub fn create(&self, name: &str) -> PathBuf {
-        let mut path = PathBuf::new();
+        let mut path = PathBuf::from(env!("OUT_DIR"));
         match self {
             ProgramPath::Bpf => {
                 //println!("Bpf");
-                path.push("target");
-                path.push(CARGO_PROFILE);
+                path.pop();
+                path.pop();
+                path.pop();
                 path.push(PLATFORM_FILE_PREFIX_BPF.to_string() + name);
                 path.set_extension(PLATFORM_FILE_EXTENSION_BPF);
             }
             ProgramPath::Native => {
                 //println!("Native");
-                path.push("target");
-                path.push(CARGO_PROFILE);
+                path.pop();
+                path.pop();
+                path.pop();
                 path.push("deps");
                 path.push(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
                 path.set_extension(PLATFORM_FILE_EXTENSION_NATIVE);
@@ -214,15 +211,14 @@ impl DynamicProgram {
 
 #[cfg(test)]
 mod tests {
-    use solana_program_interface::account::Account;
-    use solana_program_interface::pubkey::Pubkey;
-    // TODO consolidate boilerplate as much as possible
-
     use super::*;
     use std::path::Path;
 
+    use solana_program_interface::account::Account;
+    use solana_program_interface::pubkey::Pubkey;
+
     #[test]
-    fn test_path_create() {
+    fn test_path_create_native() {
         let path = ProgramPath::Native {}.create("noop");
         assert_eq!(true, Path::new(&path).exists());
         let path = ProgramPath::Native {}.create("move_funds");
