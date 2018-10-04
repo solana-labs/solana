@@ -1,31 +1,39 @@
+#!/bin/bash -e
+
 echo --- downloading snap from build artifacts
 buildkite-agent artifact download "solana_*.snap" .
 
-echo --- setup 10 node test
-net/gce.sh create -n 10 -c 2 -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" -p testnet-automation -z us-west1-b
+# shellcheck disable=SC1091
+source ci/upload_ci_artifact.sh
 
-echo --- configure database
-net/init-metrics.sh -e
+launchTestnet() {
+  echo --- setup "$1" node test
+  net/gce.sh create -n "$1" -c 2 -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" -p testnet-automation -z us-west1-b
 
-echo --- start 10 node test
-net/net.sh start -o noValidatorSanity -S solana_*.snap
+  echo --- configure database
+  net/init-metrics.sh -e
 
-sleep 600
+  echo --- start "$1" node test
+  net/net.sh start -o noValidatorSanity -S solana_*.snap
 
-MEAN_TPS_QUERY="SELECT round(mean(\"sum_count\")) from (SELECT sum(\"count\") AS \"sum_count\" FROM \"testnet-automation\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE time > now() - 1h GROUP BY time(1s))"
-MAX_TPS_QUERY="SELECT max(\"sum_count\") from (SELECT sum(\"count\") AS \"sum_count\" FROM \"testnet-automation\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE time > now() - 1h GROUP BY time(1s))"
-MEAN_FINALITY_QUERY="SELECT mean(\"duration_ms\") FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 1h"
-MAX_FINALITY_QUERY="SELECT max(\"duration_ms\") FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 1h"
-FINALITY_99TH_QUERY="SELECT percentile(\"duration_ms\", 99) FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 1h"
+  echo --- wait 600 seconds to complete test
+  sleep 600
 
-curl -G "$METRICS_URL" --data-urlencode "db=$INFLUX_DATABASE" --data-urlencode "q=$MEAN_TPS_QUERY" >> TPS.log
-#curl -G \"$METRICS_URL\" --data-urlencode \"db=$INFLUX_DATABASE\" --data-urlencode \"q=$MAX_TPS_QUERY\"
-#curl -G \"$METRICS_URL\" --data-urlencode \"db=$INFLUX_DATABASE\" --data-urlencode \"q=$MEAN_FINALITY_QUERY\"
-#curl -G \"$METRICS_URL\" --data-urlencode \"db=$INFLUX_DATABASE\" --data-urlencode \"q=$MAX_FINALITY_QUERY\"
-#curl -G \"$METRICS_URL\" --data-urlencode \"db=$INFLUX_DATABASE\" --data-urlencode \"q=$FINALITY_99TH_QUERY\"
+  MEAN_TPS_QUERY="SELECT round(mean(\"sum_count\")) from (SELECT sum(\"count\") AS \"sum_count\" FROM \"testnet-automation\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE time > now() - 10m GROUP BY time(1s))"
+  MAX_TPS_QUERY="SELECT max(\"sum_count\") from (SELECT sum(\"count\") AS \"sum_count\" FROM \"testnet-automation\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE time > now() - 10m GROUP BY time(1s))"
+  MEAN_FINALITY_QUERY="SELECT mean(\"duration_ms\") FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 10m"
+  MAX_FINALITY_QUERY="SELECT max(\"duration_ms\") FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 10m"
+  FINALITY_99TH_QUERY="SELECT percentile(\"duration_ms\", 99) FROM \"testnet-automation\".\"autogen\".\"leader-finality\" WHERE time > now() - 10m"
 
-source upload_ci_artifacts.sh
-upload_ci_artifacts TPS.log
+  curl -G "$METRICS_URL" --data-urlencode "db=$INFLUX_DATABASE" --data-urlencode "q=$MEAN_TPS_QUERY;$MAX_TPS_QUERY;$MEAN_FINALITY_QUERY;$MAX_FINALITY_QUERY;$FINALITY_99TH_QUERY" >>TPS"$1".log
+
+  upload_ci_artifact TPS"$1".log
+}
+
+launchTestnet 10
+launchTestnet 25
+launchTestnet 50
+launchTestnet 100
 
 echo --- delete testnet
 net/gce.sh delete -p testnet-automation
