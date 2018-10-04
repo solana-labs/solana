@@ -22,7 +22,7 @@ use solana::tictactoe_program::Command;
 
 #[cfg(feature = "bpf_c")]
 #[test]
-//#[ignore]
+#[ignore]
 fn test_bpf_file_noop_rust() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
