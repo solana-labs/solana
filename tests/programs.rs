@@ -1,5 +1,4 @@
 extern crate bincode;
-extern crate byteorder;
 extern crate solana;
 extern crate solana_program_interface;
 
@@ -8,7 +7,6 @@ use std::sync::RwLock;
 use std::thread;
 
 use bincode::serialize;
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 
 use solana::dynamic_program::DynamicProgram;
 use solana::hash::Hash;
@@ -19,10 +17,12 @@ use solana::transaction::Transaction;
 use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
 
-// TODO remove
+#[cfg(feature = "bpf_c")]
 use solana::tictactoe_program::Command;
 
+#[cfg(feature = "bpf_c")]
 #[test]
+//#[ignore]
 fn test_bpf_file_noop_rust() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
@@ -37,31 +37,12 @@ fn test_bpf_file_noop_rust() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_bpf_from_file("noop".to_string());
+        let dp = DynamicProgram::new_bpf_from_file("noop_rust".to_string());
         dp.call(&mut infos, &data);
     }
 }
 
-#[test]
-fn test_bpf_file_move_funds_rust() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new_bpf_from_file("move_funds_rust".to_string());
-        dp.call(&mut infos, &data);
-    }
-}
-
+#[cfg(feature = "bpf_c")]
 #[test]
 fn test_bpf_file_move_funds_c() {
     let data: Vec<u8> = vec![0xa, 0xb, 0xc, 0xd, 0xe, 0xf];
@@ -83,6 +64,7 @@ fn test_bpf_file_move_funds_c() {
     }
 }
 
+#[cfg(feature = "bpf_c")]
 fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubkey) {
     let p = &command as *const Command as *const u8;
     let data: &[u8] = unsafe { std::slice::from_raw_parts(p, std::mem::size_of::<Command>()) };
@@ -106,6 +88,7 @@ fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubk
     }
 }
 
+#[cfg(feature = "bpf_c")]
 #[test]
 fn test_bpf_file_tictactoe_c() {
     let game_size = 0x78; // corresponds to the C structure size
@@ -132,26 +115,6 @@ fn test_bpf_file_tictactoe_c() {
 }
 
 #[test]
-fn test_bpf_file_print_rust() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new_bpf_from_file("print_rust".to_string());
-        dp.call(&mut infos, &data);
-    }
-}
-
-#[test]
 fn test_native_file_noop() {
     let data: Vec<u8> = vec![0];
     let keys = vec![Pubkey::default(); 2];
@@ -167,27 +130,6 @@ fn test_native_file_noop() {
             .collect();
 
         let dp = DynamicProgram::new_native("noop".to_string());
-        dp.call(&mut infos, &data);
-    }
-}
-
-#[test]
-#[ignore]
-fn test_native_file_print() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new_native("print".to_string());
         dp.call(&mut infos, &data);
     }
 }

@@ -47,7 +47,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
 }
 
 SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccounts *ka,
-                              uint64_t *userdata_len, uint8_t **userdata) {
+                              uint8_t **userdata, uint64_t *userdata_len) {
     if (num_ka != *(uint64_t *)src) {
         return -1;
     }
@@ -285,7 +285,7 @@ void entrypoint(uint8_t *buf) {
     uint8_t *userdata;
     int err = 0;
 
-    if (0 != sol_deserialize(buf, 3, ka, &userdata_len, &userdata)) {
+    if (0 != sol_deserialize(buf, 3, ka, &userdata, &userdata_len)) {
         sol_panic();
     }
 
@@ -366,5 +366,5 @@ void entrypoint(uint8_t *buf) {
 //         return;
 //     }
 
-//     print_params(3, ka, userdata_len, userdata);
+//     print_params(3, ka, userdata, userdata_len);
 // }

@@ -1,10 +1,12 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 set -x
 
-mkdir -p ../../../target/release/
-/usr/local/opt/llvm/bin/clang -target bpf -O2 -emit-llvm -fno-builtin -o ../../../target/release/move_funds_c.bc -c src/move_funds.c
-/usr/local/opt/llvm/bin/llc -march=bpf -filetype=obj -function-sections -o ../../../target/release/move_funds_c.o ../../../target/release/move_funds_c.bc
+OUTDIR="${1:-../../../target/release/}"
+THISDIR=$(dirname "$0")
+mkdir -p $OUTDIR
+/usr/local/opt/llvm/bin/clang -Werror -target bpf -O2 -emit-llvm -fno-builtin -o $OUTDIR/move_funds_c.bc -c $THISDIR/src/move_funds.c
+/usr/local/opt/llvm/bin/llc -march=bpf -filetype=obj -function-sections -o $OUTDIR/move_funds_c.o $OUTDIR/move_funds_c.bc
 
-/usr/local/opt/llvm/bin/llvm-objdump -color -source -disassemble ../../../target/release/move_funds_c.o
+#/usr/local/opt/llvm/bin/llvm-objdump -color -source -disassemble $OUTDIR/move_funds_c.o

@@ -1,9 +1,14 @@
 extern crate elf;
-extern crate libloading;
+
 extern crate rbpf;
 
+use bpf_verifier;
 use byteorder::{LittleEndian, WriteBytesExt};
 use libc;
+#[cfg(unix)]
+use libloading::os::unix::*;
+#[cfg(windows)]
+use libloading::os::windows::*;
 use std::io::prelude::*;
 use std::mem;
 use std::path::PathBuf;
@@ -11,11 +16,10 @@ use std::path::PathBuf;
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::pubkey::Pubkey;
 
-const CARGO_PROFILE_BPF: &str = "release";
 #[cfg(debug_assertions)]
-const CARGO_PROFILE_NATIVE: &str = "debug";
+const CARGO_PROFILE: &str = "debug";
 #[cfg(not(debug_assertions))]
-const CARGO_PROFILE_NATIVE: &str = "release";
+const CARGO_PROFILE: &str = "release";
 
 /// Dynamic link library prefixs
 const PLATFORM_FILE_PREFIX_BPF: &str = "";
@@ -50,22 +54,22 @@ impl ProgramPath {
         let mut path = PathBuf::new();
         match self {
             ProgramPath::Bpf => {
-                println!("Bpf");
+                //println!("Bpf");
                 path.push("target");
-                path.push(CARGO_PROFILE_BPF);
+                path.push(CARGO_PROFILE);
                 path.push(PLATFORM_FILE_PREFIX_BPF.to_string() + name);
                 path.set_extension(PLATFORM_FILE_EXTENSION_BPF);
             }
             ProgramPath::Native => {
-                println!("Native");
+                //println!("Native");
                 path.push("target");
-                path.push(CARGO_PROFILE_NATIVE);
+                path.push(CARGO_PROFILE);
                 path.push("deps");
                 path.push(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
                 path.set_extension(PLATFORM_FILE_EXTENSION_NATIVE);
             }
         }
-        println!("Path: {:?}", path);
+        //println!("Path: {:?}", path);
         path
     }
 }
@@ -80,15 +84,12 @@ pub enum DynamicProgram {
     /// * Transaction::keys[0..] - program dependent
     /// * name - name of the program, translated to a file path of the program module
     /// * userdata - program specific user data
-    Native {
-        name: String,
-        library: libloading::Library,
-    },
+    Native { name: String, library: Library },
     /// Bpf program
     /// * Transaction::keys[0..] - program dependent
     /// * TODO BPF specific stuff
     /// * userdata - program specific user data
-    Bpf { prog: Vec<u8> },
+    Bpf { name: String, prog: Vec<u8> },
 }
 
 impl DynamicProgram {
@@ -96,10 +97,7 @@ impl DynamicProgram {
         // create native program
         let path = ProgramPath::Native {}.create(&name);
         // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
-        let os_lib =
-            libloading::os::unix::Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
-                .unwrap();
-        let library = libloading::Library::from(os_lib);
+        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
         DynamicProgram::Native { name, library }
     }
 
@@ -108,7 +106,7 @@ impl DynamicProgram {
         let path = ProgramPath::Bpf {}.create(&name);
         let file = match elf::File::open_path(&path) {
             Ok(f) => f,
-            Err(e) => panic!("Error opening ELF: {:?}", e),
+            Err(e) => panic!("Error opening ELF {:?}: {:?}", path, e),
         };
 
         let text_section = match file.get_section(PLATFORM_SECTION_RS) {
@@ -120,16 +118,20 @@ impl DynamicProgram {
         };
         let prog = text_section.data.clone();
 
-        DynamicProgram::Bpf { prog }
+        DynamicProgram::Bpf { name, prog }
     }
 
     pub fn new_bpf_from_buffer(prog: Vec<u8>) -> Self {
-        DynamicProgram::Bpf { prog }
+        DynamicProgram::Bpf {
+            name: "from_buffer".to_string(),
+            prog,
+        }
     }
 
     #[allow(dead_code)]
-    fn dump_prog(prog: &[u8]) {
-        let mut eight_bytes: Vec<u8> = Vec::new();;
+    fn dump_prog(name: &str, prog: &[u8]) {
+        let mut eight_bytes: Vec<u8> = Vec::new();
+        println!("BPF Program: {}", name);
         for i in prog.iter() {
             if eight_bytes.len() >= 7 {
                 println!("{:02X?}", eight_bytes);
@@ -181,21 +183,20 @@ impl DynamicProgram {
     pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) {
         match self {
             DynamicProgram::Native { name, library } => unsafe {
-                let entrypoint: libloading::Symbol<Entrypoint> =
-                    match library.get(ENTRYPOINT.as_bytes()) {
-                        Ok(s) => s,
-                        Err(e) => panic!(
-                            "{:?} Unable to find {:?} in program {}",
-                            e, ENTRYPOINT, name
-                        ),
-                    };
+                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
+                    Ok(s) => s,
+                    Err(e) => panic!(
+                        "Unable to find {:?} in program {}: {:?} ",
+                        e, ENTRYPOINT, name
+                    ),
+                };
                 entrypoint(infos, data);
             },
-            DynamicProgram::Bpf { prog } => {
+            DynamicProgram::Bpf { prog, .. } => {
                 println!("Instructions: {}", prog.len() / 8);
-                //DynamicProgram::dump_prog(prog);
+                //DynamicProgram::dump_prog(name, prog);
 
-                let mut vm = rbpf::EbpfVmRaw::new(prog);
+                let mut vm = rbpf::EbpfVmRaw::new(prog, Some(bpf_verifier::verifier));
 
                 // TODO register more handlers (memcpy for example)
                 vm.register_helper(
@@ -224,12 +225,8 @@ mod tests {
     fn test_path_create() {
         let path = ProgramPath::Native {}.create("noop");
         assert_eq!(true, Path::new(&path).exists());
-        let path = ProgramPath::Native {}.create("print");
-        assert_eq!(true, Path::new(&path).exists());
         let path = ProgramPath::Native {}.create("move_funds");
         assert_eq!(true, Path::new(&path).exists());
-        // let path = ProgramPath::Bpf {}.create("move_funds_rust");
-        // assert_eq!(true, Path::new(&path).exists());
     }
 
     #[test]

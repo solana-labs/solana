@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=target/perf-libs");
@@ -14,11 +15,33 @@ fn main() {
         }
     });
 
+    let bpf_c = !env::var("CARGO_FEATURE_BPF_C").is_err();
+    let chacha = !env::var("CARGO_FEATURE_CHACHA").is_err();
     let cuda = !env::var("CARGO_FEATURE_CUDA").is_err();
     let erasure = !env::var("CARGO_FEATURE_ERASURE").is_err();
-    let chacha = !env::var("CARGO_FEATURE_CHACHA").is_err();
 
-    if cuda || erasure || chacha {
+    if bpf_c {
+        let out_dir = "target/".to_string() + &env::var("PROFILE").unwrap();
+
+        println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/build.sh");
+        println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/src/move_funds.c");
+        println!("cargo:warning=(not a warning) Compiling move_funds_c");
+        let status = Command::new("programs/bpf/move_funds_c/build.sh")
+            .arg(&out_dir)
+            .status()
+            .expect("Failed to call move_funds_c build script");
+        assert!(status.success());
+
+        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_c/build.sh");
+        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_c/src/tictactoe.c");
+        println!("cargo:warning=(not a warning) Compiling tictactoe_c");
+        let status = Command::new("programs/bpf/tictactoe_c/build.sh")
+            .arg(&out_dir)
+            .status()
+            .expect("Failed to call tictactoe_c build script");
+        assert!(status.success());
+    }
+    if chacha || cuda || erasure {
         println!("cargo:rustc-link-search=native=target/perf-libs");
     }
     if cuda {

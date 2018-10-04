@@ -1,7 +1,0 @@
-[package]
-name = "print_rust"
-version = "0.1.0"
-authors = ["Jack May <jack@solana.com>"]
-
-[dependencies]
-solana = { path = "../../.." }
