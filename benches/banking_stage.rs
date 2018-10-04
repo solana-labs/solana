@@ -111,8 +111,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
-    //use solana::logger;
-    //logger::setup();
     let progs = 5;
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;

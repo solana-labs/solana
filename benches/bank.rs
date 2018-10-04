@@ -5,7 +5,6 @@ extern crate solana;
 extern crate test;
 
 use bincode::serialize;
-use rayon::prelude::*;
 use solana::bank::*;
 use solana::hash::hash;
 use solana::mint::Mint;
@@ -21,7 +20,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
     // Create transactions between unrelated parties.
     let transactions: Vec<_> = (0..4096)
-        .into_par_iter()
+        .into_iter()
         .map(|i| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
@@ -32,7 +31,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
                 mint.last_id(),
                 0,
             );
-            assert!(bank.process_transaction(&tx).is_ok());
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Seed the 'to' account and a cell for its signature.
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
@@ -40,7 +39,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             let rando1 = Keypair::new();
             let tx = Transaction::system_move(&rando0, rando1.pubkey(), 1, last_id, 0);
-            assert!(bank.process_transaction(&tx).is_ok());
+            assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.
             tx

@@ -26,7 +26,7 @@ use timing;
 use transaction::Transaction;
 
 // number of threads is 1 until mt bank is ready
-pub const NUM_THREADS: usize = 1;
+pub const NUM_THREADS: usize = 10;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -165,24 +165,8 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            let results = bank.process_transactions(&transactions[chunk_start..chunk_end]);
+            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
 
-            let processed_transactions: Vec<_> = transactions[chunk_start..chunk_end]
-                .into_iter()
-                .enumerate()
-                .filter_map(|(i, x)| match results[i] {
-                    Ok(_) => Some(x.clone()),
-                    Err(ref e) => {
-                        debug!("process transaction failed {:?}", e);
-                        None
-                    }
-                }).collect();
-
-            if !processed_transactions.is_empty() {
-                let hash = Transaction::hash(&processed_transactions);
-                debug!("processed ok: {} {}", processed_transactions.len(), hash);
-                poh.record(hash, processed_transactions)?;
-            }
             chunk_start = chunk_end;
         }
         debug!("done process_transactions");
@@ -403,11 +387,9 @@ mod tests {
         // the account balance below zero before the credit is added.
         let bank = Bank::new(&mint);
         for entry in entries {
-            assert!(
-                bank.process_transactions(&entry.transactions)
-                    .into_iter()
-                    .all(|x| x.is_ok())
-            );
+            bank.process_transactions(&entry.transactions)
+                .iter()
+                .for_each(|x| assert_eq!(*x, Ok(())));
         }
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
     }

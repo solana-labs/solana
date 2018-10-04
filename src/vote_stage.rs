@@ -285,7 +285,7 @@ pub mod tests {
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
-        assert!(bank.process_transaction(&tx).is_ok());
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
     #[test]
