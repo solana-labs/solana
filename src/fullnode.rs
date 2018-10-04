@@ -45,6 +45,10 @@ impl LeaderServices {
         self.tpu.join()
     }
 
+    pub fn is_exited(&self) -> bool {
+        self.tpu.is_exited()
+    }
+
     pub fn exit(&self) -> () {
         self.tpu.exit();
     }
@@ -63,17 +67,23 @@ impl ValidatorServices {
         self.tvu.join()
     }
 
+    pub fn is_exited(&self) -> bool {
+        self.tvu.is_exited()
+    }
+
     pub fn exit(&self) -> () {
         self.tvu.exit()
     }
 }
 
 pub enum FullnodeReturnType {
-    LeaderRotation,
+    LeaderToValidatorRotation,
+    ValidatorToLeaderRotation,
 }
 
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
+    pub leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
@@ -84,7 +94,6 @@ pub struct Fullnode {
     ledger_path: String,
     sigverify_disabled: bool,
     shared_window: window::SharedWindow,
-    leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
     replicate_socket: Vec<UdpSocket>,
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
@@ -503,20 +512,28 @@ impl Fullnode {
         self.node_role = Some(NodeRole::Leader(leader_state));
     }
 
+    pub fn check_role_exited(&self) -> bool {
+        match self.node_role {
+            Some(NodeRole::Leader(ref leader_services)) => leader_services.is_exited(),
+            Some(NodeRole::Validator(ref validator_services)) => validator_services.is_exited(),
+            None => false,
+        }
+    }
+
     pub fn handle_role_transition(&mut self) -> Result<Option<FullnodeReturnType>> {
         let node_role = self.node_role.take();
         match node_role {
             Some(NodeRole::Leader(leader_services)) => match leader_services.join()? {
                 Some(TpuReturnType::LeaderRotation) => {
                     self.leader_to_validator()?;
-                    Ok(Some(FullnodeReturnType::LeaderRotation))
+                    Ok(Some(FullnodeReturnType::LeaderToValidatorRotation))
                 }
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
                 Some(TvuReturnType::LeaderRotation(entry_height)) => {
                     self.validator_to_leader(entry_height);
-                    Ok(Some(FullnodeReturnType::LeaderRotation))
+                    Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation))
                 }
                 _ => Ok(None),
             },
@@ -574,12 +591,12 @@ impl Service for Fullnode {
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
                 if let Some(TvuReturnType::LeaderRotation(_)) = validator_service.join()? {
-                    return Ok(Some(FullnodeReturnType::LeaderRotation));
+                    return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
                 }
             }
             Some(NodeRole::Leader(leader_service)) => {
                 if let Some(TpuReturnType::LeaderRotation) = leader_service.join()? {
-                    return Ok(Some(FullnodeReturnType::LeaderRotation));
+                    return Ok(Some(FullnodeReturnType::LeaderToValidatorRotation));
                 }
             }
             _ => (),
@@ -769,9 +786,7 @@ mod tests {
                     .expect("Expected successful validator join");
                 assert_eq!(
                     join_result,
-                    Some(TvuReturnType::LeaderRotation(
-                        my_leader_begin_epoch * leader_rotation_interval
-                    ))
+                    Some(TvuReturnType::LeaderRotation(bootstrap_height))
                 );
             }
             _ => panic!("Role should not be leader"),

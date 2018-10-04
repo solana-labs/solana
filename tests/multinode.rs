@@ -22,14 +22,14 @@ use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::window::{default_window, WINDOW_SIZE};
 use solana_program_interface::pubkey::Pubkey;
+use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::{copy, create_dir_all, remove_dir_all};
 use std::net::UdpSocket;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::Builder;
+use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
 fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
@@ -885,7 +885,7 @@ fn test_leader_to_validator_transition() {
 
     // Wait for leader to shut down tpu and restart tvu
     match leader.handle_role_transition().unwrap() {
-        Some(FullnodeReturnType::LeaderRotation) => (),
+        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
@@ -943,7 +943,7 @@ fn test_leader_validator_basic() {
         .id;
     let genesis_height = genesis_entries.len();
 
-    // Initialize both leader + validqtor ledger
+    // Initialize both leader + validator ledger
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
     ledger_paths.push(validator_ledger_path.clone());
@@ -955,8 +955,8 @@ fn test_leader_validator_basic() {
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Create the leader scheduler config
-    let num_bootstrap_epochs = 2;
-    let bootstrap_height = num_bootstrap_epochs * leader_rotation_interval;
+    let num_bootstrap_slots = 2;
+    let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
         leader_info.id,
         Some(bootstrap_height),
@@ -1001,13 +1001,13 @@ fn test_leader_validator_basic() {
 
     // Wait for validator to shut down tvu and restart tpu
     match validator.handle_role_transition().unwrap() {
-        Some(FullnodeReturnType::LeaderRotation) => (),
+        Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
     // Wait for the leader to shut down tpu and restart tvu
     match leader.handle_role_transition().unwrap() {
-        Some(FullnodeReturnType::LeaderRotation) => (),
+        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
@@ -1021,7 +1021,7 @@ fn test_leader_validator_basic() {
     let validator_entries =
         read_ledger(&validator_ledger_path, true).expect("Expected parsing of validator ledger");
     let leader_entries =
-        read_ledger(&validator_ledger_path, true).expect("Expected parsing of leader ledger");
+        read_ledger(&leader_ledger_path, true).expect("Expected parsing of leader ledger");
 
     let mut min_len = 0;
     for (v, l) in validator_entries.zip(leader_entries) {
@@ -1034,6 +1034,237 @@ fn test_leader_validator_basic() {
 
     assert!(min_len >= bootstrap_height);
 
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
+}
+
+fn run_node(
+    id: Pubkey,
+    fullnode: Arc<RwLock<Fullnode>>,
+    should_exit: Arc<AtomicBool>,
+) -> JoinHandle<()> {
+    Builder::new()
+        .name(format!("run_node-{:?}", id).to_string())
+        .spawn(move || loop {
+            if should_exit.load(Ordering::Relaxed) {
+                return;
+            }
+            if fullnode.read().unwrap().check_role_exited() {
+                match fullnode.write().unwrap().handle_role_transition().unwrap() {
+                    Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
+                    Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
+                    _ => {
+                        panic!("Expected reason for exit to be leader rotation");
+                    }
+                };
+            }
+            sleep(Duration::new(1, 0));
+        }).unwrap()
+}
+
+#[test]
+fn test_full_leader_validator_network() {
+    logger::setup();
+    // The number of validators
+    const N: usize = 5;
+    logger::setup();
+
+    // Create the leader node information
+    let leader_keypair = Keypair::new();
+    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_info = leader_node.info.clone();
+
+    let mut node_keypairs = VecDeque::new();
+    node_keypairs.push_back(leader_keypair);
+
+    // Create the validator keypairs
+    for _ in 0..N {
+        let validator_keypair = Keypair::new();
+        node_keypairs.push_back(validator_keypair);
+    }
+
+    // Make a common mint and a genesis entry for both leader + validator's ledgers
+    let (mint, leader_ledger_path, genesis_entries) =
+        genesis("test_full_leader_validator_network", 10_000);
+
+    let mut last_id = genesis_entries
+        .last()
+        .expect("expected at least one genesis entry")
+        .id;
+
+    // Create a common ledger with entries in the beginnging that will add all the validators
+    // to the active set for leader election. TODO: Leader rotation does not support dynamic
+    // stakes for safe leader -> validator transitions due to the unpredictability of
+    // bank state due to transactions being in-flight during leader seed calculation in
+    // write stage.
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+
+    for node_keypair in node_keypairs.iter() {
+        // Make entries to give the validator some stake so that he will be in
+        // leader election active set
+        let bootstrap_entries = make_active_set_entries(node_keypair, &mint.keypair(), &last_id);
+
+        // Write the entries
+        let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
+        last_id = bootstrap_entries
+            .last()
+            .expect("expected at least one genesis entry")
+            .id;
+        ledger_writer.write_entries(bootstrap_entries).unwrap();
+    }
+
+    // Create the common leader scheduling configuration
+    let num_slots_per_epoch = (N + 1) as u64;
+    let num_bootstrap_slots = 2;
+    let leader_rotation_interval = 5;
+    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+    let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_info.id,
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(seed_rotation_interval),
+        Some(leader_rotation_interval),
+    );
+
+    let exit = Arc::new(AtomicBool::new(false));
+    // Start the leader fullnode
+    let leader = Arc::new(RwLock::new(Fullnode::new(
+        leader_node,
+        &leader_ledger_path,
+        node_keypairs.pop_front().unwrap(),
+        None,
+        false,
+        Some(&leader_scheduler_config),
+    )));
+
+    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![leader.clone()];
+    let mut t_nodes = vec![run_node(leader_info.id, leader, exit.clone())];
+
+    // Start up the validators
+    for kp in node_keypairs.into_iter() {
+        let validator_ledger_path =
+            tmp_copy_ledger(&leader_ledger_path, "test_full_leader_validator_network");
+        ledger_paths.push(validator_ledger_path.clone());
+        let validator_id = kp.pubkey();
+        let validator_node = Node::new_localhost_with_pubkey(validator_id);
+        let validator = Arc::new(RwLock::new(Fullnode::new(
+            validator_node,
+            &validator_ledger_path,
+            kp,
+            Some(leader_info.contact_info.ncp),
+            false,
+            Some(&leader_scheduler_config),
+        )));
+
+        nodes.push(validator.clone());
+        t_nodes.push(run_node(validator_id, validator, exit.clone()));
+    }
+
+    // Wait for convergence
+    let num_converged = converge(&leader_info, N + 1).len();
+    assert_eq!(num_converged, N + 1);
+
+    // Wait for each node to hit a specific target height in the leader schedule.
+    // Once all the nodes hit that height, exit them all together. They must
+    // only quit once they've all confirmed to reach that specific target height.
+    // Otherwise, some nodes may never reach the target height if a critical
+    // next leader node exits first, and stops generating entries. (We don't
+    // have a timeout mechanism).
+    let target_height = bootstrap_height + seed_rotation_interval;
+    let mut num_reached_target_height = 0;
+
+    while num_reached_target_height != N + 1 {
+        num_reached_target_height = 0;
+        for n in nodes.iter() {
+            let node_lock = n.read().unwrap();
+            let ls_lock = node_lock.leader_scheduler_option.as_ref().unwrap();
+            if let Some(sh) = ls_lock.read().unwrap().last_seed_height {
+                if sh >= target_height {
+                    num_reached_target_height += 1;
+                }
+            }
+            drop(ls_lock);
+        }
+
+        sleep(Duration::new(1, 0));
+    }
+
+    exit.store(true, Ordering::Relaxed);
+
+    // Wait for threads running the nodes to exit
+    for t in t_nodes {
+        t.join().unwrap();
+    }
+
+    // Exit all fullnodes
+    for n in nodes {
+        let result = Arc::try_unwrap(n);
+        match result {
+            Ok(lock) => {
+                let f = lock
+                    .into_inner()
+                    .expect("RwLock for fullnode is still locked");
+                f.close().unwrap();
+            }
+            Err(_) => panic!("Multiple references to RwLock<FullNode> still exist"),
+        }
+    }
+
+    let mut node_entries = vec![];
+    // Check that all the ledgers match
+    for ledger_path in ledger_paths.iter() {
+        let entries = read_ledger(ledger_path, true).expect("Expected parsing of node ledger");
+        node_entries.push(entries);
+    }
+
+    let mut shortest = None;
+    let mut length = 0;
+    loop {
+        let mut expected_entry_option = None;
+        let mut empty_iterators = HashSet::new();
+        for (i, entries_for_specific_node) in node_entries.iter_mut().enumerate() {
+            if let Some(next_entry_option) = entries_for_specific_node.next() {
+                // If this ledger iterator has another entry, make sure that the
+                // ledger reader parsed it correctly
+                let next_entry = next_entry_option.expect("expected valid ledger entry");
+
+                // Check if another earlier ledger iterator had another entry. If so, make
+                // sure they match
+                if let Some(ref expected_entry) = expected_entry_option {
+                    assert_eq!(*expected_entry, next_entry);
+                } else {
+                    expected_entry_option = Some(next_entry);
+                }
+            } else {
+                // The shortest iterator is the first one to return a None when
+                // calling next()
+                if shortest.is_none() {
+                    shortest = Some(length);
+                }
+                empty_iterators.insert(i);
+            }
+        }
+
+        // Remove the empty iterators
+        node_entries = node_entries
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, x)| match empty_iterators.get(&i) {
+                None => Some(x),
+                _ => None,
+            }).collect();
+
+        if node_entries.len() == 0 {
+            break;
+        }
+
+        length += 1;
+    }
+
+    assert!(shortest.unwrap() >= target_height);
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
     }

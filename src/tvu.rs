@@ -129,6 +129,10 @@ impl Tvu {
         }
     }
 
+    pub fn is_exited(&self) -> bool {
+        self.exit.load(Ordering::Relaxed)
+    }
+
     pub fn exit(&self) -> () {
         self.exit.store(true, Ordering::Relaxed);
     }

@@ -131,11 +131,11 @@ pub struct LeaderScheduler {
     // Maintain the set of active validators
     pub active_validators: ActiveValidators,
 
+    // The last height at which the seed + schedule was generated
+    pub last_seed_height: Option<u64>,
+
     // Round-robin ordering for the validators
     leader_schedule: Vec<Pubkey>,
-
-    // The last height at which the seed + schedule was generated
-    last_seed_height: Option<u64>,
 
     // The seed used to determine the round robin order of leaders
     seed: u64,

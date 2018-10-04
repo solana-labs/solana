@@ -99,6 +99,10 @@ impl Tpu {
         self.exit.store(true, Ordering::Relaxed);
     }
 
+    pub fn is_exited(&self) -> bool {
+        self.exit.load(Ordering::Relaxed)
+    }
+
     pub fn close(self) -> thread::Result<Option<TpuReturnType>> {
         self.fetch_stage.close();
         self.join()
