@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 cd "$(dirname "$0")/.."
+source ci/upload_ci_artifact.sh
 
 ci/version-check.sh nightly
 export RUST_BACKTRACE=1
@@ -38,12 +39,13 @@ fi
 _ cargo cov clean
 _ cargo cov test --lib
 _ ./grcov . -t lcov > lcov.info
+_ genhtml -o target/cov/report --show-details --highlight --ignore-errors source --legend lcov.info
+upload_ci_artifact target/cov/report/*
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
-  genhtml -o target/cov/report --show-details --highlight --ignore-errors source --legend lcov.info
-  echo --- Coverage report:
-  ls -l target/cov/report/index.html
 else
-  bash <(curl -s https://codecov.io/bash) -X gcov
+  true
+  # TODO: Why doesn't codecov grok our lcov files?
+  #bash <(curl -s https://codecov.io/bash) -X gcov
 fi
