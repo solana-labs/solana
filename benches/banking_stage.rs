@@ -90,7 +90,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.unlock_accounts(&transactions);
     bank.clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 192)
         .into_iter()
@@ -176,7 +175,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.unlock_accounts(&transactions);
     bank.clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 96)
         .into_iter()

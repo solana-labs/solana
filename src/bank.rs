@@ -327,26 +327,12 @@ impl Bank {
         Ok(())
     }
 
-    fn unlock_account(tx: &Transaction, account_locks: &mut HashSet<Pubkey>) {
-        for k in &tx.account_keys {
-            account_locks.remove(k);
-        }
-    }
-
-    fn unlock_account_for_error(
-        account_locks: &mut HashSet<Pubkey>,
-        tx: &Transaction,
-        result: &Result<()>,
-    ) {
+    fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
         match result {
-            Ok(_) => (),
             Err(BankError::AccountInUse) => (),
-            // keys were stored
-            _ => {
-                for k in &tx.account_keys {
-                    account_locks.remove(k);
-                }
-            }
+            _ => for k in &tx.account_keys {
+                account_locks.remove(k);
+            },
         }
     }
 
@@ -382,6 +368,10 @@ impl Bank {
             Ok(called_accounts)
         }
     }
+
+    /// This function will prevent multiple threads from modifying the same account state at the
+    /// same time
+    #[must_use]
     fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let mut account_locks = self.account_locks.lock().unwrap();
         let mut error_counters = ErrorCounters::default();
@@ -396,19 +386,13 @@ impl Bank {
         rv
     }
 
-    fn unlock_accounts_for_errors(&self, txs: &[Transaction], results: &[Result<()>]) {
-        let mut account_locks = self.account_locks.lock().unwrap();
-        txs.iter()
-            .zip(results.iter())
-            .for_each(|(tx, res)| Self::unlock_account_for_error(&mut account_locks, tx, res));
-    }
-
-    /// This function is used to tell the bank pipeline that the accounts should be unlocked
-    pub fn unlock_accounts(&self, txs: &[Transaction]) {
+    /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
+    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         debug!("bank unlock accounts");
         let mut account_locks = self.account_locks.lock().unwrap();
         txs.iter()
-            .for_each(|tx| Self::unlock_account(tx, &mut account_locks));
+            .zip(results.iter())
+            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
     }
 
     fn load_accounts(
@@ -602,41 +586,45 @@ impl Bank {
         }
     }
 
-    #[must_use]
     pub fn process_and_record_transactions(
         &self,
         txs: &[Transaction],
         poh: &PohRecorder,
     ) -> Result<()> {
         let now = Instant::now();
+        // Once accounts are locked, other threads cannot encode transactions that will modify the
+        // same account state
         let locked_accounts = self.lock_accounts(txs);
         let lock_time = now.elapsed();
         let now = Instant::now();
         let results = self.execute_and_commit_transactions(txs, locked_accounts);
         let process_time = now.elapsed();
         let now = Instant::now();
-        self.record_transactions(txs, results, poh)?;
+        self.record_transactions(txs, &results, poh)?;
         let record_time = now.elapsed();
+        let now = Instant::now();
+        // Once the accounts are unlocked new transactions can enter the pipeline to process them
+        self.unlock_accounts(&txs, &results);
+        let unlock_time = now.elapsed();
         debug!(
-            "lock: {}us process: {}us record: {}us txs_len={}",
+            "lock: {}us process: {}us record: {}us unlock: {}us txs_len={}",
             duration_as_us(&lock_time),
             duration_as_us(&process_time),
             duration_as_us(&record_time),
+            duration_as_us(&unlock_time),
             txs.len(),
         );
         Ok(())
     }
 
-    #[must_use]
-    pub fn record_transactions(
+    fn record_transactions(
         &self,
         txs: &[Transaction],
-        results: Vec<Result<()>>,
+        results: &[Result<()>],
         poh: &PohRecorder,
     ) -> Result<()> {
-        self.unlock_accounts_for_errors(txs, &results);
         let processed_transactions: Vec<_> = results
-            .into_iter()
+            .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
                 Ok(_) => Some(x.clone()),
@@ -650,11 +638,10 @@ impl Bank {
             let hash = Transaction::hash(&processed_transactions);
             debug!("processed ok: {} {}", processed_transactions.len(), hash);
             // record and unlock will unlock all the successfull transactions
-            poh.record_and_unlock_transactions(hash, processed_transactions)
-                .map_err(|e| {
-                    warn!("record failure: {:?}", e);
-                    BankError::RecordFailure
-                })?;
+            poh.record(hash, processed_transactions).map_err(|e| {
+                warn!("record failure: {:?}", e);
+                BankError::RecordFailure
+            })?;
         }
         Ok(())
     }
@@ -732,7 +719,7 @@ impl Bank {
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let locked_accounts = self.lock_accounts(txs);
         let results = self.execute_and_commit_transactions(txs, locked_accounts);
-        self.unlock_accounts(txs);
+        self.unlock_accounts(txs, &results);
         results
     }
 
@@ -1461,5 +1448,38 @@ mod tests {
         assert_eq!(def_bank.finality(), std::usize::MAX);
         def_bank.set_finality(90);
         assert_eq!(def_bank.finality(), 90);
+    }
+    #[test]
+    fn test_interleaving_locks() {
+        let mint = Mint::new(3);
+        let bank = Bank::new(&mint);
+        let alice = Keypair::new();
+        let bob = Keypair::new();
+
+        let tx1 = Transaction::system_new(&mint.keypair(), alice.pubkey(), 1, mint.last_id());
+        let pay_alice = vec![tx1];
+
+        let locked_alice = bank.lock_accounts(&pay_alice);
+        let results_alice = bank.execute_and_commit_transactions(&pay_alice, locked_alice);
+        assert_eq!(results_alice[0], Ok(()));
+
+        // try executing an interleaved transfer twice
+        assert_eq!(
+            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            Err(BankError::AccountInUse)
+        );
+        // the second time shoudl fail as well
+        // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
+        assert_eq!(
+            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            Err(BankError::AccountInUse)
+        );
+
+        bank.unlock_accounts(&pay_alice, &results_alice);
+
+        assert_matches!(
+            bank.transfer(2, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            Ok(_)
+        );
     }
 }

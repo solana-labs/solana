@@ -49,7 +49,6 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         // Since benchmarker runs this multiple times, we need to clear the signatures.
         bank.clear_signatures();
         let results = bank.process_transactions(&transactions);
-        bank.unlock_accounts(&transactions);
         assert!(results.iter().all(Result::is_ok));
     })
 }
