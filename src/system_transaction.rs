@@ -65,7 +65,7 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::CreateAccount transaction
+    /// Create and sign new SystemProgram::Assign transaction
     fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
         let assign = SystemProgram::Assign { program_id };
         let userdata = serialize(&assign).unwrap();
