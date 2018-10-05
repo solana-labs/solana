@@ -40,7 +40,7 @@ _ cargo cov clean
 _ cargo cov test --lib
 _ ./grcov . -t lcov > lcov.info
 _ genhtml -o target/cov/report --show-details --highlight --ignore-errors source --legend lcov.info
-upload_ci_artifact 'target/cov/report/*'
+upload_ci_artifact "target/cov/report/*"
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
