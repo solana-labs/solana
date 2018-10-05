@@ -16,7 +16,6 @@ elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
 elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
   CHANNEL=beta
 fi
-SNAP_CHANNEL=edge
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
@@ -58,5 +57,5 @@ snapcraft
 source ci/upload_ci_artifact.sh
 upload_ci_artifact solana_*.snap
 
-echo --- publish: $CHANNEL channel
-#$DRYRUN snapcraft push solana_*.snap --release $CHANNEL
+[[ -n $DO_NOT_PUBLISH_SNAP ]] || echo --- publish: $CHANNEL channel
+[[ -n $DO_NOT_PUBLISH_SNAP ]] || $DRYRUN snapcraft push solana_*.snap --release $CHANNEL
