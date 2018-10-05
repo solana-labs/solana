@@ -184,7 +184,7 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -193,7 +193,9 @@ impl BroadcastStage {
         let mut receive_index = entry_height;
         let me = crdt.read().unwrap().my_data().clone();
         let mut leader_rotation_interval_option = None;
-        if let Some(ref leader_scheduler) = leader_scheduler_option {
+        if let Some(leader_scheduler) = leader_scheduler_option {
+            // Keep track of the leader_rotation_interval, so we don't have to
+            // grab the leader_scheduler lock every iteration of the loop.
             leader_rotation_interval_option =
                 Some(leader_scheduler.read().unwrap().leader_rotation_interval);
         }
@@ -201,7 +203,7 @@ impl BroadcastStage {
             let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
                 &leader_rotation_interval_option,
-                &leader_scheduler_option,
+                leader_scheduler_option,
                 &me,
                 &broadcast_table,
                 &window,
@@ -252,6 +254,7 @@ impl BroadcastStage {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
+                let leader_scheduler_option_ = leader_scheduler_option;
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
                     &sock,
@@ -259,7 +262,7 @@ impl BroadcastStage {
                     &window,
                     entry_height,
                     &receiver,
-                    leader_scheduler_option,
+                    &leader_scheduler_option_,
                 )
             }).unwrap();
 
