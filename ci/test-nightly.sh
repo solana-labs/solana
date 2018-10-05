@@ -46,10 +46,10 @@ _ genhtml -o target/cov/report-lcov --show-details --highlight --ignore-errors s
 
 # Upload to tarballs to buildkite.
 _ cd target/cov && tar -cjf cov-report.tar.bz2 report/* && cd -
-_ upload_ci_artifact "target/cov/report/cov-report.tar.bz2"
+_ upload_ci_artifact "target/cov/cov-report.tar.bz2"
 
 _ cd target/cov && tar -cjf lcov-report.tar.bz2 report-lcov/* && cd -
-_ upload_ci_artifact "target/cov/report/lcov-report.tar.bz2"
+_ upload_ci_artifact "target/cov/lcov-report.tar.bz2"
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
