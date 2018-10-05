@@ -38,11 +38,11 @@ fi
 _ cargo cov clean
 _ cargo cov test --lib
 _ cargo cov report
-_ buildkite-agent artifact upload "target/cov/report/*"
+_ buildkite-agent artifact upload "target/cov/report/**/*"
 
 _ ./grcov . -t lcov > lcov.info
 _ genhtml -o target/cov/report-lcov --show-details --highlight --ignore-errors source --legend lcov.info
-_ buildkite-agent artifact upload "target/cov/report-lcov/*"
+_ buildkite-agent artifact upload "target/cov/report-lcov/**/*"
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
