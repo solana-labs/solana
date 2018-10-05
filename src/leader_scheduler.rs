@@ -2,12 +2,21 @@
 //! managing the schedule for leader rotation
 
 use bank::Bank;
+
 use bincode::serialize;
+use budget_instruction::Vote;
+use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
-use hash::hash;
+use entry::Entry;
+use hash::{hash, Hash};
+use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
+use system_transaction::SystemTransaction;
+use transaction::Transaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -83,7 +92,6 @@ pub struct LeaderSchedulerConfig {
 // Used to toggle leader rotation in fullnode so that tests that don't
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
-    #[allow(dead_code)]
     pub fn new(
         bootstrap_leader: Pubkey,
         bootstrap_height_option: Option<u64>,
@@ -119,11 +127,11 @@ pub struct LeaderScheduler {
     // Maintain the set of active validators
     pub active_validators: ActiveValidators,
 
+    // The last height at which the seed + schedule was generated
+    pub last_seed_height: Option<u64>,
+
     // Round-robin ordering for the validators
     leader_schedule: Vec<Pubkey>,
-
-    // The last height at which the seed + schedule was generated
-    last_seed_height: Option<u64>,
 
     // The seed used to determine the round robin order of leaders
     seed: u64,
@@ -238,6 +246,7 @@ impl LeaderScheduler {
         // non-zero stake. In this case, use the bootstrap leader for
         // the upcoming rounds
         if ranked_active_set.is_empty() {
+            self.last_seed_height = Some(height);
             self.leader_schedule = vec![self.bootstrap_leader];
             self.last_seed_height = Some(height);
             return;
@@ -320,6 +329,49 @@ impl LeaderScheduler {
 
         chosen_account
     }
+}
+
+// Remove all candiates for leader selection from the active set by clearing the bank,
+// and then set a single new candidate who will be eligible starting at height = vote_height
+// by adding one new account to the bank
+#[cfg(test)]
+pub fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
+    // Set the scheduled next leader to some other node
+    let new_leader_keypair = Keypair::new();
+    let new_leader_id = new_leader_keypair.pubkey();
+    leader_scheduler.push_vote(new_leader_id, vote_height);
+    let dummy_id = Keypair::new().pubkey();
+    let new_account = Account::new(1, 10, dummy_id.clone());
+
+    // Remove the previous acounts from the active set
+    let mut accounts = bank.accounts().write().unwrap();
+    accounts.clear();
+    accounts.insert(new_leader_id, new_account);
+}
+
+// Create two entries so that the node with keypair == active_keypair
+// is in the active set for leader selection:
+// 1) Give him nonzero number of tokens,
+// 2) A vote from the validator
+pub fn make_active_set_entries(
+    active_keypair: &Keypair,
+    token_source: &Keypair,
+    last_id: &Hash,
+) -> Vec<Entry> {
+    // 1) Create transfer token entry
+    let transfer_tx = Transaction::system_new(&token_source, active_keypair.pubkey(), 1, *last_id);
+    let transfer_entry = Entry::new(last_id, 0, vec![transfer_tx]);
+    let last_id = transfer_entry.id;
+
+    // 2) Create vote entry
+    let vote = Vote {
+        version: 0,
+        contact_info_version: 0,
+    };
+    let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, last_id, 0);
+    let vote_entry = Entry::new(&last_id, 0, vec![vote_tx]);
+
+    vec![transfer_entry, vote_entry]
 }
 
 #[cfg(test)]

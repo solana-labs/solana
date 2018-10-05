@@ -126,7 +126,8 @@ fn main() -> () {
     loop {
         let status = fullnode.handle_role_transition();
         match status {
-            Ok(Some(FullnodeReturnType::LeaderRotation)) => (),
+            Ok(Some(FullnodeReturnType::LeaderToValidatorRotation)) => (),
+            Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation)) => (),
             _ => {
                 // Fullnode tpu/tvu exited for some unexpected
                 // reason, so exit

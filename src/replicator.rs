@@ -22,13 +22,13 @@ use std::time::Duration;
 use store_ledger_stage::StoreLedgerStage;
 use streamer::BlobReceiver;
 use window;
-use window_service::{window_service, WindowServiceReturnType};
+use window_service::window_service;
 
 pub struct Replicator {
     ncp: Ncp,
     fetch_stage: BlobFetchStage,
     store_ledger_stage: StoreLedgerStage,
-    t_window: JoinHandle<Option<WindowServiceReturnType>>,
+    t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
 }
 
@@ -106,6 +106,7 @@ impl Replicator {
             entry_window_sender,
             retransmit_sender,
             repair_socket,
+            None,
             done,
         );
 
@@ -183,14 +184,13 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let network_addr = leader_node.sockets.gossip.local_addr().unwrap();
         let leader_info = leader_node.info.clone();
-        let leader_rotation_interval = 20;
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
             None,
             false,
-            Some(leader_rotation_interval),
+            None,
         );
 
         let mut leader_client = mk_client(&leader_info);
