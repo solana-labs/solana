@@ -1,16 +1,7 @@
 [package]
 name = "solana_program_interface"
 version = "0.1.0"
-authors = [
-    "Anatoly Yakovenko <anatoly@solana.com>",
-    "Greg Fitzgerald <greg@solana.com>",
-    "Stephen Akridge <stephen@solana.com>",
-    "Michael Vines <mvines@solana.com>",
-    "Rob Walker <rob@solana.com>",
-    "Pankaj Garg <pankaj@solana.com>",
-    "Tyera Eulberg <tyera@solana.com>",
-    "Jack May <jack@solana.com>",
-]
+authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
 bincode = "1.0.0"
