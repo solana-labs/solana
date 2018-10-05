@@ -57,7 +57,7 @@ launchTestnet() {
       FROM "testnet-automation"."autogen"."leader-finality"
       WHERE time > now() - 300s'
 
-  curl -G "$METRICS_URL" \
+  curl -G "https://metrics.solana.com:8086/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" \
     >>TPS"$nodeCount".log
