@@ -5,7 +5,7 @@ use hash::Hash;
 use signature::{Keypair, KeypairUtil};
 use solana_program_interface::pubkey::Pubkey;
 use system_program::SystemProgram;
-use transaction::Transaction;
+use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
     fn system_create(
@@ -36,6 +36,12 @@ pub trait SystemTransaction {
         fee: i64,
         program_id: Pubkey,
         name: String,
+    ) -> Self;
+    fn system_move_many(
+        from_keypair: &Keypair,
+        moves: &[(Pubkey, i64)],
+        last_id: Hash,
+        fee: i64,
     ) -> Self;
 }
 
@@ -118,6 +124,29 @@ impl SystemTransaction for Transaction {
             userdata,
             last_id,
             fee,
+        )
+    }
+    fn system_move_many(from: &Keypair, moves: &[(Pubkey, i64)], last_id: Hash, fee: i64) -> Self {
+        let instructions: Vec<_> = moves
+            .iter()
+            .enumerate()
+            .map(|(i, (_, amount))| {
+                let spend = SystemProgram::Move { tokens: *amount };
+                Instruction {
+                    program_ids_index: 0,
+                    userdata: serialize(&spend).unwrap(),
+                    accounts: vec![0, i as u8],
+                }
+            }).collect();
+        let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
+
+        Transaction::new_with_instructions(
+            from,
+            &to_keys,
+            last_id,
+            fee,
+            vec![SystemProgram::id()],
+            instructions,
         )
     }
 }
