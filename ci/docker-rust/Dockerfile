@@ -13,6 +13,7 @@ RUN set -x && \
     apt install -y \
       buildkite-agent \
       cmake \
+      lcov \
       libclang-common-7-dev \
       llvm-7 \
       rsync \
