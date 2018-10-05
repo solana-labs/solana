@@ -84,7 +84,7 @@ fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubk
 
     // Init
     // player_x pub key in keys[2]
-    // accounts[0].program_id must be tictactoe
+    // accounts[0].interpreter_id must be tictactoe
     // accounts[1].userdata must be tictactoe game state
 
     let keys = vec![player, Pubkey::default(), player];
@@ -233,33 +233,33 @@ fn test_program_native_move_funds_succes_many_threads() {
 fn process_transaction(
     tx: &Transaction,
     accounts: &mut [Account],
-    loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+    loaded_interpreters: &RwLock<HashMap<Pubkey, DynamicProgram>>,
 ) {
     let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs)
+    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
 }
 
 #[test]
 fn test_system_program_load_call() {
     // first load the program
-    let loaded_programs = RwLock::new(HashMap::new());
+    let loaded_interpreters = RwLock::new(HashMap::new());
     {
         let from = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
-        let program_id = Pubkey::default(); // same program id for both
+        let interpreter_id = Pubkey::default(); // same interpreter id for both
         let tx = Transaction::system_load(
             &from,
             Hash::default(),
             0,
-            program_id,
+            interpreter_id,
             "move_funds".to_string(),
         );
 
-        process_transaction(&tx, &mut accounts, &loaded_programs);
+        process_transaction(&tx, &mut accounts, &loaded_interpreters);
     }
     // then call the program
     {
-        let program_id = Pubkey::default(); // same program id for both
+        let interpreter_id = Pubkey::default(); // same interpreter id for both
         let keys = vec![Pubkey::default(), Pubkey::default()];
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 100;
@@ -267,8 +267,8 @@ fn test_system_program_load_call() {
         let tokens: i64 = 100;
         let data: Vec<u8> = serialize(&tokens).unwrap();
         {
-            let hash = loaded_programs.write().unwrap();
-            match hash.get(&program_id) {
+            let hash = loaded_interpreters.write().unwrap();
+            match hash.get(&interpreter_id) {
                 Some(dp) => {
                     let mut infos: Vec<_> = (&keys)
                         .into_iter()
@@ -295,24 +295,24 @@ fn test_system_program_load_call_many_threads() {
             let _tid = thread::current().id();
             for _i in 0..num_iters {
                 // first load the program
-                let loaded_programs = RwLock::new(HashMap::new());
+                let loaded_interpreters = RwLock::new(HashMap::new());
                 {
                     let from = Keypair::new();
                     let mut accounts = vec![Account::default(), Account::default()];
-                    let program_id = Pubkey::default(); // same program id for both
+                    let interpreter_id = Pubkey::default(); // same interpreter id for both
                     let tx = Transaction::system_load(
                         &from,
                         Hash::default(),
                         0,
-                        program_id,
+                        interpreter_id,
                         "move_funds".to_string(),
                     );
 
-                    process_transaction(&tx, &mut accounts, &loaded_programs);
+                    process_transaction(&tx, &mut accounts, &loaded_interpreters);
                 }
                 // then call the program
                 {
-                    let program_id = Pubkey::default(); // same program id for both
+                    let interpreter_id = Pubkey::default(); // same interpreter id for both
                     let keys = vec![Pubkey::default(), Pubkey::default()];
                     let mut accounts = vec![Account::default(), Account::default()];
                     accounts[0].tokens = 100;
@@ -320,8 +320,8 @@ fn test_system_program_load_call_many_threads() {
                     let tokens: i64 = 100;
                     let data: Vec<u8> = serialize(&tokens).unwrap();
                     {
-                        let hash = loaded_programs.write().unwrap();
-                        match hash.get(&program_id) {
+                        let hash = loaded_interpreters.write().unwrap();
+                        match hash.get(&interpreter_id) {
                             Some(dp) => {
                                 let mut infos: Vec<_> = (&keys)
                                     .into_iter()

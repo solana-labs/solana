@@ -1,4 +1,4 @@
-//! tic-tac-toe program
+//! tic-tac-toe interpreter
 
 use serde_cbor;
 use solana_program_interface::account::Account;
@@ -187,7 +187,7 @@ pub struct TicTacToeProgram {
     pub game: Option<Game>,
 }
 
-pub const TICTACTOE_PROGRAM_ID: [u8; 32] = [
+pub const TICTACTOE_INTERPRETER_ID: [u8; 32] = [
     3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
@@ -251,12 +251,12 @@ impl TicTacToeProgram {
         Ok(())
     }
 
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == TICTACTOE_PROGRAM_ID
+    pub fn check_id(interpreter_id: &Pubkey) -> bool {
+        interpreter_id.as_ref() == TICTACTOE_INTERPRETER_ID
     }
 
     pub fn id() -> Pubkey {
-        Pubkey::new(&TICTACTOE_PROGRAM_ID)
+        Pubkey::new(&TICTACTOE_INTERPRETER_ID)
     }
 
     pub fn process_transaction(
@@ -265,8 +265,8 @@ impl TicTacToeProgram {
         accounts: &mut [&mut Account],
     ) -> Result<()> {
         // accounts[1] must always be the Tic-tac-toe game state account
-        if accounts.len() < 2 || !Self::check_id(&accounts[1].program_id) {
-            error!("accounts[1] is not assigned to the TICTACTOE_PROGRAM_ID");
+        if accounts.len() < 2 || !Self::check_id(&accounts[1].interpreter_id) {
+            error!("accounts[1] is not assigned to the TICTACTOE_INTERPRETER_ID");
             Err(Error::InvalidArguments)?;
         }
         if accounts[1].userdata.is_empty() {
@@ -274,7 +274,7 @@ impl TicTacToeProgram {
             Err(Error::InvalidArguments)?;
         }
 
-        let mut program_state = Self::deserialize(&accounts[1].userdata)?;
+        let mut interpreter_state = Self::deserialize(&accounts[1].userdata)?;
 
         let command = serde_cbor::from_slice::<Command>(tx.userdata(pix)).map_err(|err| {
             error!("{:?}", err);
@@ -284,19 +284,19 @@ impl TicTacToeProgram {
         if let Command::Init = command {
             // Init must be signed by the game state account itself, who's private key is
             // known only to player X
-            if !Self::check_id(&accounts[0].program_id) {
-                error!("accounts[0] is not assigned to the TICTACTOE_PROGRAM_ID");
+            if !Self::check_id(&accounts[0].interpreter_id) {
+                error!("accounts[0] is not assigned to the TICTACTOE_INTERPRETER_ID");
                 return Err(Error::InvalidArguments);
             }
             // player X public key is in keys[2]
             if tx.key(pix, 2).is_none() {
                 Err(Error::InvalidArguments)?;
             }
-            program_state.dispatch_command(&command, tx.key(pix, 2).unwrap())?;
+            interpreter_state.dispatch_command(&command, tx.key(pix, 2).unwrap())?;
         } else {
-            program_state.dispatch_command(&command, tx.key(pix, 0).unwrap())?;
+            interpreter_state.dispatch_command(&command, tx.key(pix, 0).unwrap())?;
         }
-        program_state.serialize(&mut accounts[1].userdata)?;
+        interpreter_state.serialize(&mut accounts[1].userdata)?;
         Ok(())
     }
 }

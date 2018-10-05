@@ -1,4 +1,4 @@
-//! budget program
+//! budget interpreter
 use bincode::{self, deserialize, serialize_into, serialized_size};
 use budget::Budget;
 use budget_instruction::Instruction;
@@ -29,7 +29,7 @@ pub struct BudgetState {
     pub pending_budget: Option<Budget>,
 }
 
-pub const BUDGET_PROGRAM_ID: [u8; 32] = [
+pub const BUDGET_INTERPRETER_ID: [u8; 32] = [
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 impl BudgetState {
@@ -37,10 +37,10 @@ impl BudgetState {
         self.pending_budget != None
     }
     pub fn id() -> Pubkey {
-        Pubkey::new(&BUDGET_PROGRAM_ID)
+        Pubkey::new(&BUDGET_INTERPRETER_ID)
     }
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == BUDGET_PROGRAM_ID
+    pub fn check_id(interpreter_id: &Pubkey) -> bool {
+        interpreter_id.as_ref() == BUDGET_INTERPRETER_ID
     }
 
     /// Process a Witness Signature. Any payment plans waiting on this signature

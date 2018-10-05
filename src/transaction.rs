@@ -10,13 +10,13 @@ pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
 pub const SIG_OFFSET: usize = 0;
 pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
 
-/// An instruction to execute a program under the `program_id` of `program_ids_index` with the
-/// specified accounts and userdata
+/// An instruction to execute an interpreter under the `interpreter_id` of
+/// `interpreter_ids_index` with the specified accounts and userdata
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
-    /// The program code that executes this transaction is identified by the program_id.
-    /// this is an offset into the Transaction::program_ids field
-    pub program_ids_index: u8,
+    /// The interpreter code that executes this transaction is identified by the interpreter_id.
+    /// this is an offset into the Transaction::interpreter_ids field
+    pub interpreter_ids_index: u8,
     /// Indices into the keys array of which accounts to load
     pub accounts: Vec<u8>,
     /// Userdata to be stored in the account
@@ -26,14 +26,14 @@ pub struct Instruction {
 /// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by `Pubkey`.
+    /// A digital signature of `account_keys`, `interpreter_ids`, `last_id`, `fee` and `instructions`, signed by `Pubkey`.
     pub signature: Signature,
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
-    /// program-specific.
+    /// interpreter-specific.
     /// * account_keys[0] - Typically this is the `caller` public key.  `signature` is verified with account_keys[0].
     /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * account_keys[1] - Typically this is the program context or the recipient of the tokens
+    /// * account_keys[1] - Typically this is the interpreter state or the recipient of the tokens
     pub account_keys: Vec<Pubkey>,
 
     /// The ID of a recent ledger entry.
@@ -42,10 +42,10 @@ pub struct Transaction {
     /// The number of tokens paid for processing and storage of this transaction.
     pub fee: i64,
 
-    /// Keys identifying programs in the instructions vector.
-    pub program_ids: Vec<Pubkey>,
-    /// Programs that will be executed in sequence and commited in one atomic transaction if all
-    /// succeed.
+    /// Keys identifying interpreters in the instructions vector.
+    pub interpreter_ids: Vec<Pubkey>,
+    /// Instructions that will be interpreted in sequence and commited in one atomic transaction
+    /// if all succeed.
     pub instructions: Vec<Instruction>,
 }
 
@@ -53,14 +53,14 @@ impl Transaction {
     pub fn new(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
-        program_id: Pubkey,
+        interpreter_id: Pubkey,
         userdata: Vec<u8>,
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let program_ids = vec![program_id];
+        let interpreter_ids = vec![interpreter_id];
         let instructions = vec![Instruction {
-            program_ids_index: 0,
+            interpreter_ids_index: 0,
             userdata,
             accounts: (0..(transaction_keys.len() as u8 + 1))
                 .into_iter()
@@ -71,24 +71,24 @@ impl Transaction {
             transaction_keys,
             last_id,
             fee,
-            program_ids,
+            interpreter_ids,
             instructions,
         )
     }
     /// Create a signed transaction
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
-    /// * `account_keys` - The keys for the transaction.  These are the program state
+    /// * `account_keys` - The keys for the transaction.  These are the interpreter state
     ///    instances or token recipient keys.
     /// * `last_id` - The PoH hash.
     /// * `fee` - The transaction fee.
-    /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
-    /// * `instructions` - The programs and their arguments that the transaction will execute atomically
+    /// * `interpreter_ids` - The keys that identify interpreters used in the `instruction` vector.
+    /// * `instructions` - The instructions to be interpreted atomically.
     pub fn new_with_instructions(
         from_keypair: &Keypair,
         keys: &[Pubkey],
         last_id: Hash,
         fee: i64,
-        program_ids: Vec<Pubkey>,
+        interpreter_ids: Vec<Pubkey>,
         instructions: Vec<Instruction>,
     ) -> Self {
         let from = from_keypair.pubkey();
@@ -99,7 +99,7 @@ impl Transaction {
             account_keys,
             last_id,
             fee,
-            program_ids,
+            interpreter_ids,
             instructions,
         };
         tx.sign(from_keypair);
@@ -114,9 +114,9 @@ impl Transaction {
             .and_then(|instruction| instruction.accounts.get(accounts_index))
             .and_then(|ai| self.account_keys.get(*ai as usize))
     }
-    pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
-        let program_ids_index = self.instructions[instruction_index].program_ids_index;
-        &self.program_ids[program_ids_index as usize]
+    pub fn interpreter_id(&self, instruction_index: usize) -> &Pubkey {
+        let interpreter_ids_index = self.instructions[instruction_index].interpreter_ids_index;
+        &self.interpreter_ids[interpreter_ids_index as usize]
     }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
@@ -128,8 +128,8 @@ impl Transaction {
         let fee_data = serialize(&self.fee).expect("serialize fee");
         data.extend_from_slice(&fee_data);
 
-        let program_ids = serialize(&self.program_ids).expect("serialize program_ids");
-        data.extend_from_slice(&program_ids);
+        let interpreter_ids = serialize(&self.interpreter_ids).expect("serialize interpreter_ids");
+        data.extend_from_slice(&interpreter_ids);
 
         let instructions = serialize(&self.instructions).expect("serialize instructions");
         data.extend_from_slice(&instructions);
@@ -152,7 +152,7 @@ impl Transaction {
     /// Verify that references in the instructions are valid
     pub fn verify_refs(&self) -> bool {
         for instruction in &self.instructions {
-            if (instruction.program_ids_index as usize) >= self.program_ids.len() {
+            if (instruction.interpreter_ids_index as usize) >= self.interpreter_ids.len() {
                 return false;
             }
             for account_index in &instruction.accounts {
@@ -193,12 +193,12 @@ mod tests {
         let prog2 = Keypair::new().pubkey();
         let instructions = vec![
             Instruction {
-                program_ids_index: 0,
+                interpreter_ids_index: 0,
                 userdata: vec![],
                 accounts: vec![0, 1],
             },
             Instruction {
-                program_ids_index: 1,
+                interpreter_ids_index: 1,
                 userdata: vec![],
                 accounts: vec![0, 2],
             },
@@ -218,14 +218,14 @@ mod tests {
         assert_eq!(tx.key(1, 1), Some(&key2));
         assert_eq!(tx.key(2, 0), None);
         assert_eq!(tx.key(0, 2), None);
-        assert_eq!(*tx.program_id(0), prog1);
-        assert_eq!(*tx.program_id(1), prog2);
+        assert_eq!(*tx.interpreter_id(0), prog1);
+        assert_eq!(*tx.interpreter_id(1), prog2);
     }
     #[test]
-    fn test_refs_invalid_program_id() {
+    fn test_refs_invalid_interpreter_id() {
         let key = Keypair::new();
         let instructions = vec![Instruction {
-            program_ids_index: 1,
+            interpreter_ids_index: 1,
             userdata: vec![],
             accounts: vec![],
         }];
@@ -243,7 +243,7 @@ mod tests {
     fn test_refs_invalid_account() {
         let key = Keypair::new();
         let instructions = vec![Instruction {
-            program_ids_index: 0,
+            interpreter_ids_index: 0,
             userdata: vec![],
             accounts: vec![1],
         }];
@@ -255,7 +255,7 @@ mod tests {
             vec![Default::default()],
             instructions,
         );
-        assert_eq!(*tx.program_id(0), Default::default());
+        assert_eq!(*tx.interpreter_id(0), Default::default());
         assert!(!tx.verify_refs());
     }
 
@@ -269,7 +269,7 @@ mod tests {
             1, 1, 1,
         ]);
 
-        let program_id = Pubkey::new(&[
+        let interpreter_id = Pubkey::new(&[
             2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
             2, 2, 2,
         ]);
@@ -277,7 +277,7 @@ mod tests {
         let tx = Transaction::new(
             keypair,
             &[keypair.pubkey(), to],
-            program_id,
+            interpreter_id,
             vec![1, 2, 3],
             Hash::default(),
             99,

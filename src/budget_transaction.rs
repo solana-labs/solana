@@ -62,7 +62,7 @@ pub trait BudgetTransaction {
 
     fn vote(&self) -> Option<(Pubkey, Vote, Hash)>;
 
-    fn instruction(&self, program_index: usize) -> Option<Instruction>;
+    fn instruction(&self, interpreter_index: usize) -> Option<Instruction>;
 
     fn verify_plan(&self) -> bool;
 }
@@ -214,8 +214,8 @@ impl BudgetTransaction for Transaction {
         }
     }
 
-    fn instruction(&self, program_index: usize) -> Option<Instruction> {
-        deserialize(&self.userdata(program_index)).ok()
+    fn instruction(&self, interpreter_index: usize) -> Option<Instruction> {
+        deserialize(&self.userdata(interpreter_index)).ok()
     }
 
     /// Verify only the payment plan.
@@ -278,7 +278,7 @@ mod tests {
         let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
         let userdata = serialize(&instruction).unwrap();
         let instructions = vec![transaction::Instruction {
-            program_ids_index: 0,
+            interpreter_ids_index: 0,
             userdata,
             accounts: vec![],
         }];
@@ -286,7 +286,7 @@ mod tests {
             account_keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
-            program_ids: vec![],
+            interpreter_ids: vec![],
             instructions,
             fee: 0,
         };

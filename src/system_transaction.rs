@@ -14,11 +14,16 @@ pub trait SystemTransaction {
         last_id: Hash,
         tokens: i64,
         space: u64,
-        program_id: Pubkey,
+        interpreter_id: Pubkey,
         fee: i64,
     ) -> Self;
 
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self;
+    fn system_assign(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        interpreter_id: Pubkey,
+        fee: i64,
+    ) -> Self;
 
     fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self;
 
@@ -34,7 +39,7 @@ pub trait SystemTransaction {
         from_keypair: &Keypair,
         last_id: Hash,
         fee: i64,
-        program_id: Pubkey,
+        interpreter_id: Pubkey,
         name: String,
     ) -> Self;
     fn system_move_many(
@@ -53,13 +58,13 @@ impl SystemTransaction for Transaction {
         last_id: Hash,
         tokens: i64,
         space: u64,
-        program_id: Pubkey,
+        interpreter_id: Pubkey,
         fee: i64,
     ) -> Self {
         let create = SystemProgram::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
-            program_id,
+            interpreter_id,
         };
         let userdata = serialize(&create).unwrap();
         Transaction::new(
@@ -72,8 +77,13 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemProgram::Assign transaction
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
-        let assign = SystemProgram::Assign { program_id };
+    fn system_assign(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        interpreter_id: Pubkey,
+        fee: i64,
+    ) -> Self {
+        let assign = SystemProgram::Assign { interpreter_id };
         let userdata = serialize(&assign).unwrap();
         Transaction::new(
             from_keypair,
@@ -112,10 +122,13 @@ impl SystemTransaction for Transaction {
         from_keypair: &Keypair,
         last_id: Hash,
         fee: i64,
-        program_id: Pubkey,
+        interpreter_id: Pubkey,
         name: String,
     ) -> Self {
-        let load = SystemProgram::Load { program_id, name };
+        let load = SystemProgram::Load {
+            interpreter_id,
+            name,
+        };
         let userdata = serialize(&load).unwrap();
         Transaction::new(
             from_keypair,

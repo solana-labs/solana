@@ -1,4 +1,4 @@
-//! storage program
+//! storage interpreter
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
@@ -16,15 +16,15 @@ pub enum StorageError {
     InvalidUserData,
 }
 
-pub const STORAGE_PROGRAM_ID: [u8; 32] = [1u8; 32];
+pub const STORAGE_INTERPRETER_ID: [u8; 32] = [1u8; 32];
 
 impl StorageProgram {
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == STORAGE_PROGRAM_ID
+    pub fn check_id(interpreter_id: &Pubkey) -> bool {
+        interpreter_id.as_ref() == STORAGE_INTERPRETER_ID
     }
 
     pub fn id() -> Pubkey {
-        Pubkey::new(&STORAGE_PROGRAM_ID)
+        Pubkey::new(&STORAGE_INTERPRETER_ID)
     }
 
     pub fn get_balance(account: &Account) -> i64 {

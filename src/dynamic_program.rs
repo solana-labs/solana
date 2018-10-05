@@ -150,7 +150,7 @@ impl DynamicProgram {
             v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
                 .unwrap();
             v.write_all(&info.account.userdata).unwrap();
-            v.write_all(info.account.program_id.as_ref()).unwrap();
+            v.write_all(info.account.interpreter_id.as_ref()).unwrap();
             //println!("userdata: {:?}", infos[i].account.userdata);
         }
         v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
@@ -172,7 +172,7 @@ impl DynamicProgram {
             info.account.userdata.clone_from_slice(&buffer[start..end]);
 
             start += info.account.userdata.len() // userdata
-                  + mem::size_of::<Pubkey>(); // program_id
+                  + mem::size_of::<Pubkey>(); // interpreter_id
                                               //println!("userdata: {:?}", infos[i].account.userdata);
         }
     }

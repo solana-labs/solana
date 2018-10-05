@@ -382,7 +382,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_program_id = BudgetState::id();
+                let budget_interpreter_id = BudgetState::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -391,7 +391,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     last_id,
                     tokens,
                     0,
-                    budget_program_id,
+                    budget_interpreter_id,
                     0,
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
@@ -403,7 +403,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     last_id,
                     1,
                     196,
-                    budget_program_id,
+                    budget_interpreter_id,
                     0,
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
@@ -438,7 +438,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_program_id = BudgetState::id();
+                let budget_interpreter_id = BudgetState::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -447,7 +447,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     last_id,
                     tokens,
                     0,
-                    budget_program_id,
+                    budget_interpreter_id,
                     0,
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
@@ -459,7 +459,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     last_id,
                     1,
                     196,
-                    budget_program_id,
+                    budget_interpreter_id,
                     0,
                 );
                 let _signature_str = serialize_and_send_tx(&config, &tx)?;
