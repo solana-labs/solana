@@ -57,5 +57,7 @@ snapcraft
 source ci/upload_ci_artifact.sh
 upload_ci_artifact solana_*.snap
 
-[[ -n $DO_NOT_PUBLISH_SNAP ]] || echo --- publish: $CHANNEL channel
-[[ -n $DO_NOT_PUBLISH_SNAP ]] || $DRYRUN snapcraft push solana_*.snap --release $CHANNEL
+if [[ -z $DO_NOT_PUBLISH_SNAP ]]; then
+  echo --- publish: $CHANNEL channel
+  $DRYRUN snapcraft push solana_*.snap --release $CHANNEL
+fi
