@@ -199,7 +199,7 @@ impl ReplicateStage {
                     }
                 }
 
-                return None;
+                None
             }).unwrap();
 
         ReplicateStage {

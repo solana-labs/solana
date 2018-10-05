@@ -321,7 +321,6 @@ impl ClusterInfo {
         let me = self.my_data().id;
         self.table
             .values()
-            .into_iter()
             .filter(|x| x.id != me)
             .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
             .cloned()
@@ -562,9 +561,16 @@ impl ClusterInfo {
                         .unwrap()
                         .get_scheduled_leader(entry_height);
                     // In the case the next scheduled leader is None, then the write_stage moved
-                    // the schedule too far ahead and we no longer are in the known window. But that's
-                    // fine because that means we're still in power, in which case, just continue
-                    // broadcasting until we catch up.
+                    // the schedule too far ahead and we no longer are in the known window
+                    // (will happen during calculation of the next set of slots every epoch or
+                    // seed_rotation_interval heights when we move the window forward in the
+                    // LeaderScheduler). For correctness, this is fine write_stage will never send
+                    // blobs past the point of when this node should stop being leader, so we just
+                    // continue broadcasting until we catch up to write_stage. The downside is we
+                    // can't guarantee the current leader will broadcast the last entry to the next
+                    // scheduled leader, so the next leader will have to rely on avalanche/repairs
+                    // to get this last blob, which could cause slowdowns during leader handoffs.
+                    // See corresponding issue for repairs in repair() function in window.rs.
                     if next_leader_id.is_some() && next_leader_id != Some(me.id) {
                         let info_result = broadcast_table
                             .iter()

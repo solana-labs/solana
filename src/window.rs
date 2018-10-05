@@ -137,10 +137,16 @@ impl WindowUtil for Window {
                 // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
                 // in which case it will eventually catch up
                 //
-                // 2) drops that entry, then everybody will blocking waiting for that "nth"
-                // entry instead of repairing, until we hit "times" >= the max times in
-                // calculate_max_repair(). If max times is not large, this shouldn't be a
-                // big issue.
+                // 2) We are on the border between seed_rotation_intervals, so the
+                // schedule won't be known until the entry on that cusp is received
+                // by the replicate stage (which comes after this stage). Hence, the next
+                // leader at the beginning of that next epoch will not know he is the
+                // leader until he receives that last "cusp" entry. He also won't ask for repairs
+                // for that entry because "is_next_leader" won't be set here. In this case,
+                // everybody will be blocking waiting for that "cusp" entry instead of repairing,
+                // until the leader hits "times" >= the max times in calculate_max_repair().
+                // The impact of this, along with the similar problem from broadcast for the transitioning
+                // leader, can be observed in the multinode test, test_full_leader_validator_network(),
                 None => (),
                 _ => (),
             }

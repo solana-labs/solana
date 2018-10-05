@@ -88,8 +88,7 @@ impl WriteStage {
             // next unprocessed entry. Hence this loop checks all entries between indexes:
             // [entry_height + i, entry_height + i + step - 1], which is equivalent to the
             // entry heights: [entry_height + i + 1, entry_height + i + step]
-            for new_entries_index in i..(i + step) {
-                let entry = &new_entries[new_entries_index];
+            for (entry, new_entries_index) in new_entries[i..(i + step)].iter().zip(i..(i + step)) {
                 let votes = entry
                     .transactions
                     .iter()

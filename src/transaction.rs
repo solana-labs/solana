@@ -62,9 +62,7 @@ impl Transaction {
         let instructions = vec![Instruction {
             program_ids_index: 0,
             userdata,
-            accounts: (0..(transaction_keys.len() as u8 + 1))
-                .into_iter()
-                .collect(),
+            accounts: (0..=transaction_keys.len() as u8).collect(),
         }];
         Self::new_with_instructions(
             from_keypair,

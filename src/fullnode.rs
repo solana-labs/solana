@@ -328,9 +328,7 @@ impl Fullnode {
                         .try_clone()
                         .expect("Failed to clone retransmit socket"),
                     Some(ledger_path),
-                    leader_scheduler_option
-                        .as_ref()
-                        .map(|arc_ls| arc_ls.clone()),
+                    leader_scheduler_option.as_ref().cloned(),
                 );
                 let validator_state = ValidatorServices::new(tvu);
                 node_role = Some(NodeRole::Validator(validator_state));
@@ -350,9 +348,7 @@ impl Fullnode {
                     ledger_path,
                     sigverify_disabled,
                     entry_height,
-                    leader_scheduler_option
-                        .as_ref()
-                        .map(|arc_ls| arc_ls.clone()),
+                    leader_scheduler_option.as_ref().cloned(),
                 );
 
                 let broadcast_stage = BroadcastStage::new(
@@ -364,9 +360,7 @@ impl Fullnode {
                     shared_window.clone(),
                     entry_height,
                     entry_receiver,
-                    leader_scheduler_option
-                        .as_ref()
-                        .map(|arc_ls| arc_ls.clone()),
+                    leader_scheduler_option.as_ref().cloned(),
                     tpu_exit,
                 );
                 let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -470,7 +464,7 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone retransmit socket"),
             Some(&self.ledger_path),
-            self.leader_scheduler_option.as_ref().map(|ls| ls.clone()),
+            self.leader_scheduler_option.as_ref().cloned(),
         );
         let validator_state = ValidatorServices::new(tvu);
         self.node_role = Some(NodeRole::Validator(validator_state));
@@ -494,7 +488,7 @@ impl Fullnode {
             &self.ledger_path,
             self.sigverify_disabled,
             entry_height,
-            self.leader_scheduler_option.as_ref().map(|ls| ls.clone()),
+            self.leader_scheduler_option.as_ref().cloned(),
         );
 
         let broadcast_stage = BroadcastStage::new(
@@ -505,7 +499,7 @@ impl Fullnode {
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
-            self.leader_scheduler_option.as_ref().map(|ls| ls.clone()),
+            self.leader_scheduler_option.as_ref().cloned(),
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);

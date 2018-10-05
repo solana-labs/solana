@@ -105,9 +105,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            leader_scheduler_option
-                .as_ref()
-                .map(|arc_ls| arc_ls.clone()),
+            leader_scheduler_option.as_ref().cloned(),
         );
 
         let replicate_stage = ReplicateStage::new(

@@ -799,6 +799,7 @@ impl Bank {
                     if result.is_ok() {
                         let tx = &entry.transactions[i];
                         if tx.vote().is_some() {
+                            // Update the active set in the leader scheduler
                             leader_scheduler.push_vote(*tx.from(), entry_height_option.expect("entry_height_option can't be None if leader_scheduler_option isn't None"));
                         }
                     }
@@ -808,6 +809,7 @@ impl Bank {
         }
 
         if let Some(ref mut leader_scheduler) = leader_scheduler_option {
+            // Update the leader schedule based on entry height
             leader_scheduler.update_height(entry_height_option.unwrap(), self);
         }
 
@@ -1127,6 +1129,8 @@ impl Bank {
     }
 
     #[cfg(test)]
+    // Used to access accounts for things like controlling stake to control
+    // the eligible set of nodes for leader selection
     pub fn accounts(&self) -> &RwLock<HashMap<Pubkey, Account>> {
         &self.accounts
     }

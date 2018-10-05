@@ -236,6 +236,7 @@ fn recv_window(
     Ok(())
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 pub fn window_service(
     cluster_info: Arc<RwLock<ClusterInfo>>,
     window: SharedWindow,

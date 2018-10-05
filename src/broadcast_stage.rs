@@ -187,7 +187,7 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -209,7 +209,7 @@ impl BroadcastStage {
             if let Err(e) = broadcast(
                 &bootstrap_height_option,
                 &leader_rotation_interval_option,
-                &leader_scheduler_option,
+                leader_scheduler_option,
                 &me,
                 &broadcast_table,
                 &window,
@@ -260,6 +260,7 @@ impl BroadcastStage {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
+                let leader_scheduler_option_ = leader_scheduler_option;
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
                     &sock,
@@ -267,7 +268,7 @@ impl BroadcastStage {
                     &window,
                     entry_height,
                     &receiver,
-                    leader_scheduler_option,
+                    &leader_scheduler_option_,
                 )
             }).unwrap();
 
