@@ -7,7 +7,7 @@ buildkite-agent artifact download "solana_*.snap" .
 source ci/upload_ci_artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
-[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES=(10)
+[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10"
 
 launchTestnet() {
   echo --- setup "$1" node test
@@ -33,10 +33,11 @@ launchTestnet() {
   upload_ci_artifact TPS"$1".log
 }
 
-for n in "${NUMBER_OF_NODES[@]}"; do
+# This is needed, because buildkite doesn't let us define an array of numbers.
+# The array is defined as a space separated string of numbers
+# shellcheck disable=SC2206
+nodes_count_array=($NUMBER_OF_NODES)
+
+for n in "${nodes_count_array[@]}"; do
   launchTestnet "$n"
 done
-#launchTestnet 10
-#launchTestnet 25
-#launchTestnet 50
-#launchTestnet 100
