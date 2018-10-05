@@ -25,6 +25,7 @@ use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use solana::wallet::request_airdrop;
 use solana::window::default_window;
+use std::cmp;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::process::exit;
@@ -174,21 +175,22 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
 
 fn generate_txs(
     shared_txs: &Arc<RwLock<VecDeque<Vec<Transaction>>>>,
-    id: &Keypair,
-    keypairs: &[Keypair],
+    source: &[Keypair],
+    dest: &[Keypair],
     last_id: &Hash,
     threads: usize,
     reclaim: bool,
 ) {
-    let tx_count = keypairs.len();
+    let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
 
-    let transactions: Vec<_> = keypairs
+    let pairs: Vec<_> = source.iter().zip(dest.iter()).collect();
+    let transactions: Vec<_> = pairs
         .par_iter()
-        .map(|keypair| {
+        .map(|(id, keypair)| {
             if !reclaim {
-                Transaction::system_new(&id, keypair.pubkey(), 1, *last_id)
+                Transaction::system_new(id, keypair.pubkey(), 1, *last_id)
             } else {
                 Transaction::system_new(keypair, id.pubkey(), 1, *last_id)
             }
@@ -269,6 +271,61 @@ fn do_tx_transfers(
         if exit_signal.load(Ordering::Relaxed) {
             break;
         }
+    }
+}
+
+fn split_tokens(tokens: i64, per_unit: i64, max_units: usize) -> (usize, i64) {
+    let total_blocks = tokens / per_unit;
+    let max_keys_to_fund = cmp::min(total_blocks - 1, max_units as i64);
+    let blocks_per_unit = total_blocks / (max_keys_to_fund + 1);
+    (max_keys_to_fund as usize, blocks_per_unit * per_unit)
+}
+
+fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: i64) {
+    let max_per_move = 5;
+    let total = tokens * (dests.len() as i64 + 1);
+    let mut funded: Vec<(&Keypair, i64)> = vec![(source, total)];
+    let mut notfunded: Vec<&Keypair> = dests.iter().collect();
+    println!("funding keys {}", dests.len());
+    while !notfunded.is_empty() {
+        let last_id = client.get_last_id();
+        let mut new_funded: Vec<(&Keypair, i64)> = vec![];
+        let mut to_fund = vec![];
+        println!("creating from... {}", funded.len());
+        for f in &mut funded {
+            let max_units = cmp::min(notfunded.len(), max_per_move);
+            let (num, per_unit) = split_tokens(f.1, tokens, max_units);
+            let start = notfunded.len() - num;
+            let moves: Vec<_> = notfunded[start..]
+                .iter()
+                .map(|k| (k.pubkey(), per_unit))
+                .collect();
+            notfunded[start..]
+                .iter()
+                .for_each(|k| new_funded.push((k, per_unit)));
+            notfunded.truncate(start);
+            if !moves.is_empty() {
+                to_fund.push((f.0, moves));
+            }
+            f.1 -= per_unit * (num as i64);
+            assert!(f.1 >= per_unit);
+        }
+        println!("generating... {}", to_fund.len());
+        let to_fund_txs: Vec<_> = to_fund
+            .par_iter()
+            .map(|(k, m)| Transaction::system_move_many(k, &m, last_id, 0))
+            .collect();
+        println!("transfering... {}", to_fund.len());
+        to_fund_txs.iter().for_each(|tx| {
+            let _ = client.transfer_signed(&tx).expect("transfer");
+        });
+        println!(
+            "funded {} total: {} left: {}",
+            new_funded.len(),
+            funded.len() + new_funded.len(),
+            notfunded.len()
+        );
+        funded.append(&mut new_funded);
     }
 }
 
@@ -542,8 +599,8 @@ fn main() {
     seed.copy_from_slice(&id.public_key_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
-    println!("Creating {} keypairs...", tx_count / 2);
-    let keypairs = rnd.gen_n_keypairs(tx_count / 2);
+    println!("Creating {} keypairs...", tx_count * 2);
+    let keypairs = rnd.gen_n_keypairs(tx_count * 2);
     let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
 
     println!("Get tokens...");
@@ -554,12 +611,9 @@ fn main() {
     let keypair0_balance = client.poll_get_balance(&keypairs[0].pubkey()).unwrap_or(0);
 
     if num_tokens_per_account > keypair0_balance {
-        airdrop_tokens(
-            &mut client,
-            &leader,
-            &id,
-            (num_tokens_per_account - keypair0_balance) * tx_count,
-        );
+        let extra = (num_tokens_per_account - keypair0_balance) * (keypairs.len() as i64);
+        airdrop_tokens(&mut client, &leader, &id, extra);
+        fund_keys(&mut client, &id, &keypairs, num_tokens_per_account);
     }
     airdrop_tokens(&mut barrier_client, &leader, &barrier_id, 1);
 
@@ -624,10 +678,11 @@ fn main() {
         // ping-pong between source and destination accounts for each loop iteration
         // this seems to be faster than trying to determine the balance of individual
         // accounts
+        let len = tx_count as usize;
         generate_txs(
             &shared_txs,
-            &id,
-            &keypairs,
+            &keypairs[..len],
+            &keypairs[len..],
             &last_id,
             threads,
             reclaim_tokens_back_to_source_account,
@@ -733,6 +788,15 @@ fn converge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_split_tokens() {
+        assert_eq!(split_tokens(3, 2, 5), (0, 2));
+        assert_eq!(split_tokens(4, 2, 5), (1, 2));
+        assert_eq!(split_tokens(5, 2, 5), (1, 2));
+        assert_eq!(split_tokens(6, 2, 5), (2, 2));
+        assert_eq!(split_tokens(20, 2, 5), (5, 2));
+        assert_eq!(split_tokens(30, 2, 5), (5, 4));
+    }
 
     #[test]
     fn test_switch_directions() {
