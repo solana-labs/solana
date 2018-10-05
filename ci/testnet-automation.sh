@@ -34,6 +34,3 @@ launchTestnet 10
 launchTestnet 25
 launchTestnet 50
 launchTestnet 100
-
-echo --- delete testnet
-net/gce.sh delete -p testnet-automation
