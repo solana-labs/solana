@@ -274,52 +274,57 @@ fn do_tx_transfers(
     }
 }
 
-fn split_tokens(tokens: i64, per_unit: i64, max_units: i64) -> (usize, i64) {
+fn split_tokens(tokens: i64, per_unit: i64, max_units: usize) -> (usize, i64) {
     let total_blocks = tokens / per_unit;
-    let max_keys_to_fund = cmp::min(total_blocks - 1, max_units);
+    let max_keys_to_fund = cmp::min(total_blocks - 1, max_units as i64);
     let blocks_per_unit = total_blocks / (max_keys_to_fund + 1);
     (max_keys_to_fund as usize, blocks_per_unit * per_unit)
 }
 
 fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: i64) {
     let max_per_move = 5;
-    let total = tokens * (dests.len() as i64);
+    let total = tokens * (dests.len() as i64 + 1);
     let mut funded: Vec<(&Keypair, i64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
+    println!("funding keys {}", dests.len());
     while !notfunded.is_empty() {
         let last_id = client.get_last_id();
         let mut new_funded: Vec<(&Keypair, i64)> = vec![];
         let mut to_fund = vec![];
+        println!("creating from... {}", funded.len());
         for f in &mut funded {
-            let (num, per_unit) = split_tokens(f.1, tokens, max_per_move);
-            let moves: Vec<_> = notfunded[..num]
+            let max_units = cmp::min(notfunded.len(), max_per_move);
+            let (num, per_unit) = split_tokens(f.1, tokens, max_units);
+            let start = notfunded.len() - num;
+            let moves: Vec<_> = notfunded[start..]
                 .iter()
                 .map(|k| (k.pubkey(), per_unit))
                 .collect();
-            notfunded[..num]
+            notfunded[start..]
                 .iter()
                 .for_each(|k| new_funded.push((k, per_unit)));
-            notfunded = notfunded[num..].to_vec();
+            notfunded.truncate(start);
             if !moves.is_empty() {
                 to_fund.push((f.0, moves));
             }
             f.1 -= per_unit * (num as i64);
             assert!(f.1 >= per_unit);
         }
+        println!("generating... {}", to_fund.len());
         let to_fund_txs: Vec<_> = to_fund
             .par_iter()
             .map(|(k, m)| Transaction::system_move_many(k, &m, last_id, 0))
             .collect();
+        println!("transfering... {}", to_fund.len());
         to_fund_txs.iter().for_each(|tx| {
             let _ = client.transfer_signed(&tx).expect("transfer");
         });
-        to_fund_txs.iter().for_each(|tx| {
-            if client.poll_for_signature(&tx.signature).is_err() {
-                client
-                    .retry_transfer_signed(&tx, 5)
-                    .expect("funding account");
-            }
-        });
+        println!(
+            "funded {} total: {} left: {}",
+            new_funded.len(),
+            funded.len() + new_funded.len(),
+            notfunded.len()
+        );
         funded.append(&mut new_funded);
     }
 }
