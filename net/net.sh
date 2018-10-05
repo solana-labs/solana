@@ -159,7 +159,7 @@ startValidator() {
   declare ipAddress=$1
   declare logFile="$netLogDir/validator-$ipAddress.log"
 
-  echo "--- Starting validator: $leaderIp"
+  echo "--- Starting validator: $ipAddress"
   echo "start log: $logFile"
   (
     set -x

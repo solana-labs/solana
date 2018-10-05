@@ -1,0 +1,18 @@
+steps:
+  - command: "ci/snap.sh"
+    label: "create snap"
+
+  - wait
+
+  - command: "ci/testnet-automation.sh"
+    label: "run testnet"
+    agents:
+      - "queue=metrics"
+
+  - wait: ~
+    continue_on_failure: true
+
+  - command: "ci/testnet-automation-cleanup.sh"
+    label: "delete testnet"
+    agents:
+      - "queue=metrics"
