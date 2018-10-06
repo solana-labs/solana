@@ -26,7 +26,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
-use storage_interpreter::StorageProgram;
+use storage_interpreter::StorageInterpreter;
 use system_interpreter::SystemProgram;
 use system_transaction::SystemTransaction;
 use tictactoe_dashboard_interpreter::TicTacToeDashboardProgram;
@@ -513,8 +513,8 @@ impl Bank {
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if StorageProgram::check_id(&tx_interpreter_id) {
-            if StorageProgram::process_transaction(&tx, instruction_index, interpreter_accounts)
+        } else if StorageInterpreter::check_id(&tx_interpreter_id) {
+            if StorageInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));

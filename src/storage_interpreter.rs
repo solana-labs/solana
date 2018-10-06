@@ -8,7 +8,7 @@ use solana_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum StorageProgram {
+pub enum StorageInterpreter {
     SubmitMiningProof { sha_state: [u8; 32] },
 }
 
@@ -18,7 +18,7 @@ pub enum StorageError {
 
 pub const STORAGE_INTERPRETER_ID: [u8; 32] = [1u8; 32];
 
-impl StorageProgram {
+impl StorageInterpreter {
     pub fn check_id(interpreter_id: &Pubkey) -> bool {
         interpreter_id.as_ref() == STORAGE_INTERPRETER_ID
     }
@@ -38,7 +38,7 @@ impl StorageProgram {
     ) -> Result<(), StorageError> {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             match syscall {
-                StorageProgram::SubmitMiningProof { sha_state } => {
+                StorageInterpreter::SubmitMiningProof { sha_state } => {
                     info!("Mining proof submitted with state {}", sha_state[0]);
                     return Ok(());
                 }
@@ -61,11 +61,11 @@ mod test {
         let tx = Transaction::new(
             &keypair,
             &[],
-            StorageProgram::id(),
+            StorageInterpreter::id(),
             vec![],
             Default::default(),
             0,
         );
-        assert!(StorageProgram::process_transaction(&tx, 0, &mut []).is_err());
+        assert!(StorageInterpreter::process_transaction(&tx, 0, &mut []).is_err());
     }
 }
