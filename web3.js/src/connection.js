@@ -148,7 +148,7 @@ type AccountInfo = {
  *
  * @typedef {string} SignatureStatus
  */
-type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
+export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
 
 /**
  * A connection to a fullnode JSON RPC endpoint

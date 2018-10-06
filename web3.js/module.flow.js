@@ -92,4 +92,8 @@ declare module '@solana/web3.js' {
     sign(from: Account): void;
     serialize(): Buffer;
   }
+
+  // === src/token-program.js ===
+  /* TODO */
+
 }
