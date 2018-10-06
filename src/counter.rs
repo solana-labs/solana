@@ -72,7 +72,6 @@ impl Counter {
             self.lograte.store(lograte, Ordering::Relaxed);
         }
         if times % lograte == 0 && times > 0 {
-            let lastlog = self.lastlog.load(Ordering::Relaxed);
             info!(
                 "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
                 self.name,
@@ -81,15 +80,20 @@ impl Counter {
                 timing::timestamp(),
                 events,
             );
-            metrics::submit(
-                influxdb::Point::new(&format!("counter-{}", self.name))
-                    .add_field(
-                        "count",
-                        influxdb::Value::Integer(counts as i64 - lastlog as i64),
-                    ).to_owned(),
-            );
-            self.lastlog
+
+            let lastlog = self.lastlog.load(Ordering::Relaxed);
+            let prev = self
+                .lastlog
                 .compare_and_swap(lastlog, counts, Ordering::Relaxed);
+            if prev == lastlog {
+                metrics::submit(
+                    influxdb::Point::new(&format!("counter-{}", self.name))
+                        .add_field(
+                            "count",
+                            influxdb::Value::Integer(counts as i64 - lastlog as i64),
+                        ).to_owned(),
+                );
+            }
         }
     }
 }
