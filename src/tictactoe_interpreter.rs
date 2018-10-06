@@ -183,7 +183,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct TicTacToeProgram {
+pub struct TicTacToeInterpreter {
     pub game: Option<Game>,
 }
 
@@ -191,12 +191,12 @@ pub const TICTACTOE_INTERPRETER_ID: [u8; 32] = [
     3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-impl TicTacToeProgram {
-    pub fn deserialize(input: &[u8]) -> Result<TicTacToeProgram> {
+impl TicTacToeInterpreter {
+    pub fn deserialize(input: &[u8]) -> Result<TicTacToeInterpreter> {
         let len = input[0] as usize;
 
         if len == 0 {
-            Ok(TicTacToeProgram::default())
+            Ok(TicTacToeInterpreter::default())
         } else if input.len() < len + 1 {
             Err(Error::InvalidUserdata)
         } else {
@@ -207,7 +207,11 @@ impl TicTacToeProgram {
         }
     }
 
-    fn dispatch_command(self: &mut TicTacToeProgram, cmd: &Command, player: &Pubkey) -> Result<()> {
+    fn dispatch_command(
+        self: &mut TicTacToeInterpreter,
+        cmd: &Command,
+        player: &Pubkey,
+    ) -> Result<()> {
         info!("dispatch_command: cmd={:?} player={}", cmd, player);
         info!("dispatch_command: account={:?}", self);
 
@@ -233,7 +237,7 @@ impl TicTacToeProgram {
         }
     }
 
-    fn serialize(self: &TicTacToeProgram, output: &mut [u8]) -> Result<()> {
+    fn serialize(self: &TicTacToeInterpreter, output: &mut [u8]) -> Result<()> {
         let self_serialized = serde_cbor::to_vec(self).unwrap();
 
         if output.len() + 1 < self_serialized.len() {
@@ -307,22 +311,22 @@ mod test {
 
     #[test]
     pub fn serde_no_game() {
-        let account = TicTacToeProgram::default();
+        let account = TicTacToeInterpreter::default();
         assert!(account.game.is_none());
 
         let mut userdata = vec![0xff; 256];
         account.serialize(&mut userdata).unwrap();
 
-        let account = TicTacToeProgram::deserialize(&userdata).unwrap();
+        let account = TicTacToeInterpreter::deserialize(&userdata).unwrap();
         assert!(account.game.is_none());
 
-        let account = TicTacToeProgram::deserialize(&[0]).unwrap();
+        let account = TicTacToeInterpreter::deserialize(&[0]).unwrap();
         assert!(account.game.is_none());
     }
 
     #[test]
     pub fn serde_with_game() {
-        let mut account = TicTacToeProgram::default();
+        let mut account = TicTacToeInterpreter::default();
         assert!(account.game.is_none());
 
         let player_x = Pubkey::new(&[1; 32]);
@@ -331,21 +335,21 @@ mod test {
         let mut userdata = vec![0xff; 256];
         account.serialize(&mut userdata).unwrap();
 
-        let account2 = TicTacToeProgram::deserialize(&userdata).unwrap();
+        let account2 = TicTacToeInterpreter::deserialize(&userdata).unwrap();
 
         assert_eq!(account.game.unwrap(), account2.game.unwrap());
     }
 
     #[test]
     pub fn serde_no_room() {
-        let account = TicTacToeProgram::default();
+        let account = TicTacToeInterpreter::default();
         let mut userdata = vec![0xff; 1];
         assert_eq!(
             account.serialize(&mut userdata),
             Err(Error::UserdataTooSmall)
         );
 
-        let err = TicTacToeProgram::deserialize(&userdata);
+        let err = TicTacToeInterpreter::deserialize(&userdata);
         assert!(err.is_err());
         assert_eq!(err.err().unwrap(), Error::InvalidUserdata);
     }

@@ -29,8 +29,8 @@ use std::time::Instant;
 use storage_interpreter::StorageInterpreter;
 use system_interpreter::SystemInterpreter;
 use system_transaction::SystemTransaction;
-use tictactoe_dashboard_interpreter::TicTacToeDashboardProgram;
-use tictactoe_interpreter::TicTacToeProgram;
+use tictactoe_dashboard_interpreter::TicTacToeDashboardInterpreter;
+use tictactoe_interpreter::TicTacToeInterpreter;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
@@ -519,14 +519,17 @@ impl Bank {
             {
                 return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
-        } else if TicTacToeProgram::check_id(&tx_interpreter_id) {
-            if TicTacToeProgram::process_transaction(&tx, instruction_index, interpreter_accounts)
-                .is_err()
+        } else if TicTacToeInterpreter::check_id(&tx_interpreter_id) {
+            if TicTacToeInterpreter::process_transaction(
+                &tx,
+                instruction_index,
+                interpreter_accounts,
+            ).is_err()
             {
                 return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
-        } else if TicTacToeDashboardProgram::check_id(&tx_interpreter_id) {
-            if TicTacToeDashboardProgram::process_transaction(
+        } else if TicTacToeDashboardInterpreter::check_id(&tx_interpreter_id) {
+            if TicTacToeDashboardInterpreter::process_transaction(
                 &tx,
                 instruction_index,
                 interpreter_accounts,
