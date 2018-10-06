@@ -3,7 +3,7 @@
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
 use budget_instruction::{Contract, Instruction, Vote};
-use budget_interpreter::BudgetState;
+use budget_interpreter::BudgetInterpreter;
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::Payment;
@@ -86,7 +86,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             fee,
@@ -111,7 +111,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -130,7 +130,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -140,7 +140,14 @@ impl BudgetTransaction for Transaction {
     fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+        Self::new(
+            from_keypair,
+            &[],
+            BudgetInterpreter::id(),
+            userdata,
+            last_id,
+            fee,
+        )
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -167,7 +174,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -196,7 +203,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,

@@ -5,7 +5,7 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_interpreter::BudgetState;
+use budget_interpreter::BudgetInterpreter;
 use counter::Counter;
 use dynamic_program::DynamicProgram;
 use entry::Entry;
@@ -507,8 +507,8 @@ impl Bank {
                 interpreter_accounts,
                 &self.loaded_contracts,
             )
-        } else if BudgetState::check_id(&tx_interpreter_id) {
-            if BudgetState::process_transaction(&tx, instruction_index, interpreter_accounts)
+        } else if BudgetInterpreter::check_id(&tx_interpreter_id) {
+            if BudgetInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
@@ -881,8 +881,8 @@ impl Bank {
     pub fn read_balance(account: &Account) -> i64 {
         if SystemProgram::check_id(&account.interpreter_id) {
             SystemProgram::get_balance(account)
-        } else if BudgetState::check_id(&account.interpreter_id) {
-            BudgetState::get_balance(account)
+        } else if BudgetInterpreter::check_id(&account.interpreter_id) {
+            BudgetInterpreter::get_balance(account)
         } else {
             account.tokens
         }

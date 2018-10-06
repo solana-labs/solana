@@ -1,6 +1,6 @@
 use bincode::{deserialize, serialize};
 use bs58;
-use budget_interpreter::BudgetState;
+use budget_interpreter::BudgetInterpreter;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
@@ -382,7 +382,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_interpreter_id = BudgetState::id();
+                let budget_interpreter_id = BudgetInterpreter::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -438,7 +438,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_interpreter_id = BudgetState::id();
+                let budget_interpreter_id = BudgetInterpreter::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
