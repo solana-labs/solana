@@ -65,7 +65,7 @@ pub struct CallData {
     /// last PoH hash observed by the sender
     pub last_id: Hash,
 
-    /// Program
+    /// Interpreter
     /// The address of the interpreter we want to call.  ContractId is just a Pubkey that is the address of the loaded code that will execute this Call.
     pub contract_id: ContractId,
     /// OS scheduling fee

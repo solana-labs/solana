@@ -38,17 +38,17 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 
-pub enum ProgramPath {
+pub enum InterpreterPath {
     Bpf,
     Native,
 }
 
-impl ProgramPath {
+impl InterpreterPath {
     /// Creates a platform-specific file path
     pub fn create(&self, name: &str) -> PathBuf {
         let mut path = PathBuf::from(env!("OUT_DIR"));
         match self {
-            ProgramPath::Bpf => {
+            InterpreterPath::Bpf => {
                 //println!("Bpf");
                 path.pop();
                 path.pop();
@@ -56,7 +56,7 @@ impl ProgramPath {
                 path.push(PLATFORM_FILE_PREFIX_BPF.to_string() + name);
                 path.set_extension(PLATFORM_FILE_EXTENSION_BPF);
             }
-            ProgramPath::Native => {
+            InterpreterPath::Native => {
                 //println!("Native");
                 path.pop();
                 path.pop();
@@ -92,7 +92,7 @@ pub enum BytecodeInterpreter {
 impl BytecodeInterpreter {
     pub fn new_native(name: String) -> Self {
         // create native program
-        let path = ProgramPath::Native {}.create(&name);
+        let path = InterpreterPath::Native {}.create(&name);
         // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
         let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
         BytecodeInterpreter::Native { name, library }
@@ -100,7 +100,7 @@ impl BytecodeInterpreter {
 
     pub fn new_bpf_from_file(name: String) -> Self {
         // create native program
-        let path = ProgramPath::Bpf {}.create(&name);
+        let path = InterpreterPath::Bpf {}.create(&name);
         let file = match elf::File::open_path(&path) {
             Ok(f) => f,
             Err(e) => panic!("Error opening ELF {:?}: {:?}", path, e),
@@ -128,7 +128,7 @@ impl BytecodeInterpreter {
     #[allow(dead_code)]
     fn dump_prog(name: &str, prog: &[u8]) {
         let mut eight_bytes: Vec<u8> = Vec::new();
-        println!("BPF Program: {}", name);
+        println!("BPF Interpreter: {}", name);
         for i in prog.iter() {
             if eight_bytes.len() >= 7 {
                 println!("{:02X?}", eight_bytes);
@@ -219,9 +219,9 @@ mod tests {
 
     #[test]
     fn test_path_create_native() {
-        let path = ProgramPath::Native {}.create("noop");
+        let path = InterpreterPath::Native {}.create("noop");
         assert_eq!(true, Path::new(&path).exists());
-        let path = ProgramPath::Native {}.create("move_funds");
+        let path = InterpreterPath::Native {}.create("move_funds");
         assert_eq!(true, Path::new(&path).exists());
     }
 

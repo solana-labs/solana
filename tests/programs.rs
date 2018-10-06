@@ -12,7 +12,7 @@ use bincode::serialize;
 
 use solana::bytecode_interpreter::BytecodeInterpreter;
 #[cfg(feature = "bpf_c")]
-use solana::bytecode_interpreter::ProgramPath;
+use solana::bytecode_interpreter::InterpreterPath;
 use solana::hash::Hash;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_interpreter::SystemInterpreter;
@@ -27,9 +27,9 @@ use solana::tictactoe_interpreter::Command;
 #[cfg(feature = "bpf_c")]
 #[test]
 fn test_path_create_bpf() {
-    let path = ProgramPath::Bpf {}.create("move_funds_c");
+    let path = InterpreterPath::Bpf {}.create("move_funds_c");
     assert_eq!(true, Path::new(&path).exists());
-    let path = ProgramPath::Bpf {}.create("tictactoe_c");
+    let path = InterpreterPath::Bpf {}.create("tictactoe_c");
     assert_eq!(true, Path::new(&path).exists());
 }
 
