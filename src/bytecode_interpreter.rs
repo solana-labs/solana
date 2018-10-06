@@ -76,7 +76,7 @@ const ENTRYPOINT: &str = "process";
 type Entrypoint = unsafe extern "C" fn(infos: &mut Vec<KeyedAccount>, data: &[u8]);
 
 #[derive(Debug)]
-pub enum DynamicProgram {
+pub enum BytecodeInterpreter {
     /// Native program
     /// * Transaction::keys[0..] - program dependent
     /// * name - name of the program, translated to a file path of the program module
@@ -89,13 +89,13 @@ pub enum DynamicProgram {
     Bpf { name: String, prog: Vec<u8> },
 }
 
-impl DynamicProgram {
+impl BytecodeInterpreter {
     pub fn new_native(name: String) -> Self {
         // create native program
         let path = ProgramPath::Native {}.create(&name);
         // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
         let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
-        DynamicProgram::Native { name, library }
+        BytecodeInterpreter::Native { name, library }
     }
 
     pub fn new_bpf_from_file(name: String) -> Self {
@@ -115,11 +115,11 @@ impl DynamicProgram {
         };
         let prog = text_section.data.clone();
 
-        DynamicProgram::Bpf { name, prog }
+        BytecodeInterpreter::Bpf { name, prog }
     }
 
     pub fn new_bpf_from_buffer(prog: Vec<u8>) -> Self {
-        DynamicProgram::Bpf {
+        BytecodeInterpreter::Bpf {
             name: "from_buffer".to_string(),
             prog,
         }
@@ -179,7 +179,7 @@ impl DynamicProgram {
 
     pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) {
         match self {
-            DynamicProgram::Native { name, library } => unsafe {
+            BytecodeInterpreter::Native { name, library } => unsafe {
                 let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
                     Ok(s) => s,
                     Err(e) => panic!(
@@ -189,9 +189,9 @@ impl DynamicProgram {
                 };
                 entrypoint(infos, data);
             },
-            DynamicProgram::Bpf { prog, .. } => {
+            BytecodeInterpreter::Bpf { prog, .. } => {
                 println!("Instructions: {}", prog.len() / 8);
-                //DynamicProgram::dump_prog(name, prog);
+                //BytecodeInterpreter::dump_prog(name, prog);
 
                 let mut vm = rbpf::EbpfVmRaw::new(prog, Some(bpf_verifier::verifier));
 
@@ -201,9 +201,9 @@ impl DynamicProgram {
                     rbpf::helpers::bpf_trace_printf,
                 );
 
-                let mut v = DynamicProgram::serialize(infos, data);
+                let mut v = BytecodeInterpreter::serialize(infos, data);
                 vm.prog_exec(v.as_mut_slice());
-                DynamicProgram::deserialize(infos, &v);
+                BytecodeInterpreter::deserialize(infos, &v);
             }
         }
     }
@@ -244,7 +244,7 @@ mod tests {
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
 
-            let dp = DynamicProgram::new_bpf_from_buffer(prog);
+            let dp = BytecodeInterpreter::new_bpf_from_buffer(prog);
             dp.call(&mut infos, &data);
         }
     }
@@ -274,7 +274,7 @@ mod tests {
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
 
-            let dp = DynamicProgram::new_bpf_from_buffer(prog);
+            let dp = BytecodeInterpreter::new_bpf_from_buffer(prog);
             dp.call(&mut infos, &data);
         }
     }

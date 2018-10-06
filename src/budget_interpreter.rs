@@ -275,7 +275,7 @@ impl BudgetInterpreter {
 #[cfg(test)]
 mod test {
     use bincode::serialize;
-    use budget_program::{BudgetError, BudgetInterpreter};
+    use budget_interpreter::{BudgetError, BudgetInterpreter};
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use hash::Hash;

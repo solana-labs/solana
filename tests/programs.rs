@@ -10,19 +10,19 @@ use std::thread;
 
 use bincode::serialize;
 
-use solana::dynamic_program::DynamicProgram;
+use solana::bytecode_interpreter::BytecodeInterpreter;
 #[cfg(feature = "bpf_c")]
-use solana::dynamic_program::ProgramPath;
+use solana::bytecode_interpreter::ProgramPath;
 use solana::hash::Hash;
 use solana::signature::{Keypair, KeypairUtil};
-use solana::system_program::SystemProgram;
+use solana::system_interpreter::SystemInterpreter;
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
 
 #[cfg(feature = "bpf_c")]
-use solana::tictactoe_program::Command;
+use solana::tictactoe_interpreter::Command;
 
 #[cfg(feature = "bpf_c")]
 #[test]
@@ -50,7 +50,7 @@ fn test_bpf_file_noop_rust() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_bpf_from_file("noop_rust".to_string());
+        let dp = BytecodeInterpreter::new_bpf_from_file("noop_rust".to_string());
         dp.call(&mut infos, &data);
     }
 }
@@ -72,7 +72,7 @@ fn test_bpf_file_move_funds_c() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
+        let dp = BytecodeInterpreter::new_bpf_from_file("move_funds_c".to_string());
         dp.call(&mut infos, &data);
     }
 }
@@ -96,7 +96,7 @@ fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubk
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_bpf_from_file("tictactoe_c".to_string());
+        let dp = BytecodeInterpreter::new_bpf_from_file("tictactoe_c".to_string());
         dp.call(&mut infos, &data);
     }
 }
@@ -142,7 +142,7 @@ fn test_native_file_noop() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("noop".to_string());
+        let dp = BytecodeInterpreter::new_native("noop".to_string());
         dp.call(&mut infos, &data);
     }
 }
@@ -163,7 +163,7 @@ fn test_native_file_move_funds_success() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("move_funds".to_string());
+        let dp = BytecodeInterpreter::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(0, accounts[0].tokens);
@@ -186,7 +186,7 @@ fn test_native_file_move_funds_insufficient_funds() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("move_funds".to_string());
+        let dp = BytecodeInterpreter::new_native("move_funds".to_string());
         dp.call(&mut infos, &data);
     }
     assert_eq!(10, accounts[0].tokens);
@@ -194,7 +194,7 @@ fn test_native_file_move_funds_insufficient_funds() {
 }
 
 #[test]
-fn test_program_native_move_funds_succes_many_threads() {
+fn test_interpreter_native_move_funds_succes_many_threads() {
     let num_threads = 42; // number of threads to spawn
     let num_iters = 100; // number of iterations of test in each thread
     let mut threads = Vec::new();
@@ -216,7 +216,7 @@ fn test_program_native_move_funds_succes_many_threads() {
                             .map(|(key, account)| KeyedAccount { key, account })
                             .collect();
 
-                        let dp = DynamicProgram::new_native("move_funds".to_string());
+                        let dp = BytecodeInterpreter::new_native("move_funds".to_string());
                         dp.call(&mut infos, &data);
                     }
                     assert_eq!(0, accounts[0].tokens);
@@ -233,15 +233,15 @@ fn test_program_native_move_funds_succes_many_threads() {
 fn process_transaction(
     tx: &Transaction,
     accounts: &mut [Account],
-    loaded_interpreters: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+    loaded_interpreters: &RwLock<HashMap<Pubkey, BytecodeInterpreter>>,
 ) {
     let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
+    SystemInterpreter::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
 }
 
 #[test]
-fn test_system_program_load_call() {
-    // first load the program
+fn test_system_interpreter_load_call() {
+    // first load the interpreter
     let loaded_interpreters = RwLock::new(HashMap::new());
     {
         let from = Keypair::new();
@@ -257,7 +257,7 @@ fn test_system_program_load_call() {
 
         process_transaction(&tx, &mut accounts, &loaded_interpreters);
     }
-    // then call the program
+    // then call the interpreter
     {
         let interpreter_id = Pubkey::default(); // same interpreter id for both
         let keys = vec![Pubkey::default(), Pubkey::default()];
@@ -278,7 +278,7 @@ fn test_system_program_load_call() {
 
                     dp.call(&mut infos, &data);
                 }
-                None => panic!("failed to find program in hash"),
+                None => panic!("failed to find interpreter in hash"),
             }
         }
         assert_eq!(0, accounts[0].tokens);
@@ -286,7 +286,7 @@ fn test_system_program_load_call() {
     }
 }
 #[test]
-fn test_system_program_load_call_many_threads() {
+fn test_system_interpreter_load_call_many_threads() {
     let num_threads = 42;
     let num_iters = 100;
     let mut threads = Vec::new();
@@ -294,7 +294,7 @@ fn test_system_program_load_call_many_threads() {
         threads.push(thread::spawn(move || {
             let _tid = thread::current().id();
             for _i in 0..num_iters {
-                // first load the program
+                // first load the interpreter
                 let loaded_interpreters = RwLock::new(HashMap::new());
                 {
                     let from = Keypair::new();
@@ -310,7 +310,7 @@ fn test_system_program_load_call_many_threads() {
 
                     process_transaction(&tx, &mut accounts, &loaded_interpreters);
                 }
-                // then call the program
+                // then call the interpreter
                 {
                     let interpreter_id = Pubkey::default(); // same interpreter id for both
                     let keys = vec![Pubkey::default(), Pubkey::default()];
@@ -331,7 +331,7 @@ fn test_system_program_load_call_many_threads() {
 
                                 dp.call(&mut infos, &data);
                             }
-                            None => panic!("failed to find program in hash"),
+                            None => panic!("failed to find interpreter in hash"),
                         }
                     }
                     assert_eq!(0, accounts[0].tokens);

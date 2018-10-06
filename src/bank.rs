@@ -6,8 +6,8 @@
 use bincode::deserialize;
 use bincode::serialize;
 use budget_interpreter::BudgetInterpreter;
+use bytecode_interpreter::BytecodeInterpreter;
 use counter::Counter;
-use dynamic_program::DynamicProgram;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -133,7 +133,7 @@ pub struct Bank {
     finality_time: AtomicUsize,
 
     // loaded contracts hashed by interpreter_id
-    loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
+    loaded_contracts: RwLock<HashMap<Pubkey, BytecodeInterpreter>>,
 }
 
 impl Default for Bank {

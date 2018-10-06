@@ -35,7 +35,7 @@ version 0.2
 
                 [Figure 1. Smart Contracts Stack]
 
-In Figure 1 an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
+In Figure 1 an untrusted client, creates an interpreter in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
 ## Runtime
 
@@ -66,7 +66,7 @@ pub struct CallData {
     pub last_id: Hash,
 
     /// Program
-    /// The address of the program we want to call.  ContractId is just a Pubkey that is the address of the loaded code that will execute this Call.
+    /// The address of the interpreter we want to call.  ContractId is just a Pubkey that is the address of the loaded code that will execute this Call.
     pub contract_id: ContractId,
     /// OS scheduling fee
     pub fee: i64,

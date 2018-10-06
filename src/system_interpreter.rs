@@ -1,7 +1,7 @@
 //! system interpreter
 
 use bincode::deserialize;
-use dynamic_program::DynamicProgram;
+use bytecode_interpreter::BytecodeInterpreter;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
@@ -54,7 +54,7 @@ impl SystemInterpreter {
         tx: &Transaction,
         pix: usize,
         accounts: &mut [&mut Account],
-        loaded_interpreters: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+        loaded_interpreters: &RwLock<HashMap<Pubkey, BytecodeInterpreter>>,
     ) {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             trace!("process_transaction: {:?}", syscall);
@@ -94,7 +94,7 @@ impl SystemInterpreter {
                     name,
                 } => {
                     let mut hashmap = loaded_interpreters.write().unwrap();
-                    hashmap.insert(interpreter_id, DynamicProgram::new_native(name));
+                    hashmap.insert(interpreter_id, BytecodeInterpreter::new_native(name));
                 }
             }
         } else {
@@ -118,7 +118,7 @@ mod test {
     fn process_transaction(
         tx: &Transaction,
         accounts: &mut [Account],
-        loaded_interpreters: &RwLock<HashMap<Pubkey, DynamicProgram>>,
+        loaded_interpreters: &RwLock<HashMap<Pubkey, BytecodeInterpreter>>,
     ) {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
         SystemInterpreter::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
@@ -256,7 +256,7 @@ mod test {
     #[test]
     fn test_sdk_serialize() {
         let keypair = Keypair::new();
-        use budget_program::BUDGET_INTERPRETER_ID;
+        use budget_interpreter::BUDGET_INTERPRETER_ID;
 
         // CreateAccount
         let tx = Transaction::system_create(

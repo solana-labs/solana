@@ -24,8 +24,8 @@ pub mod client;
 pub mod crdt;
 pub mod bpf_verifier;
 pub mod budget_interpreter;
+pub mod bytecode_interpreter;
 pub mod drone;
-pub mod dynamic_program;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
