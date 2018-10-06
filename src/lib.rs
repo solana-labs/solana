@@ -58,7 +58,7 @@ pub mod service;
 pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
-pub mod storage_program;
+pub mod storage_interpreter;
 pub mod store_ledger_stage;
 pub mod streamer;
 pub mod system_interpreter;
