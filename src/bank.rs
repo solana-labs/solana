@@ -88,8 +88,8 @@ pub enum BankError {
     /// Contract spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend(u8),
 
-    /// The program returned an error
-    ProgramRuntimeError(u8),
+    /// The interpreter returned an error
+    InterpreterRuntimeError(u8),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -511,19 +511,19 @@ impl Bank {
             if BudgetInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
         } else if StorageInterpreter::check_id(&tx_interpreter_id) {
             if StorageInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
         } else if TicTacToeProgram::check_id(&tx_interpreter_id) {
             if TicTacToeProgram::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
         } else if TicTacToeDashboardProgram::check_id(&tx_interpreter_id) {
             if TicTacToeDashboardProgram::process_transaction(
@@ -532,7 +532,7 @@ impl Bank {
                 interpreter_accounts,
             ).is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
         } else if self.loaded_contract(
             tx_interpreter_id,
