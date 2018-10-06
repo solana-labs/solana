@@ -1,30 +1,30 @@
-//! tic-tac-toe dashboard program
+//! tic-tac-toe dashboard interpreter
 
 use serde_cbor;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
-use tictactoe_program::{Error, Game, Result, State, TicTacToeProgram};
+use tictactoe_interpreter::{Error, Game, Result, State, TicTacToeInterpreter};
 use transaction::Transaction;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
-pub struct TicTacToeDashboardProgram {
+pub struct TicTacToeDashboardInterpreter {
     pending: Pubkey,        // Latest pending game
     completed: Vec<Pubkey>, // Last N completed games (0 is the latest)
     total: usize,           // Total number of completed games
 }
 
-pub const TICTACTOE_DASHBOARD_PROGRAM_ID: [u8; 32] = [
+pub const TICTACTOE_DASHBOARD_INTERPRETER_ID: [u8; 32] = [
     4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-impl TicTacToeDashboardProgram {
-    fn deserialize(input: &[u8]) -> Result<TicTacToeDashboardProgram> {
+impl TicTacToeDashboardInterpreter {
+    fn deserialize(input: &[u8]) -> Result<TicTacToeDashboardInterpreter> {
         if input.len() < 2 {
             Err(Error::InvalidUserdata)?;
         }
         let len = input[0] as usize + (0x100 * input[1] as usize);
         if len == 0 {
-            Ok(TicTacToeDashboardProgram::default())
+            Ok(TicTacToeDashboardInterpreter::default())
         } else if input.len() < len + 2 {
             Err(Error::InvalidUserdata)
         } else {
@@ -36,7 +36,7 @@ impl TicTacToeDashboardProgram {
     }
 
     fn update(
-        self: &mut TicTacToeDashboardProgram,
+        self: &mut TicTacToeDashboardInterpreter,
         game_pubkey: &Pubkey,
         game: &Game,
     ) -> Result<()> {
@@ -49,7 +49,7 @@ impl TicTacToeDashboardProgram {
             }
             State::XWon | State::OWon | State::Draw => {
                 if !self.completed.iter().any(|pubkey| pubkey == game_pubkey) {
-                    // TODO: Once the PoH height is exposed to programs, it could be used to ensure
+                    // TODO: Once the PoH height is exposed to interpreters, it could be used to ensure
                     //       that old games are not being re-added and causing |total| to increment
                     //       incorrectly.
                     self.total += 1;
@@ -67,7 +67,7 @@ impl TicTacToeDashboardProgram {
         Ok(())
     }
 
-    fn serialize(self: &TicTacToeDashboardProgram, output: &mut [u8]) -> Result<()> {
+    fn serialize(self: &TicTacToeDashboardInterpreter, output: &mut [u8]) -> Result<()> {
         let self_serialized = serde_cbor::to_vec(self).unwrap();
 
         if output.len() < 2 + self_serialized.len() {
@@ -86,12 +86,12 @@ impl TicTacToeDashboardProgram {
         Ok(())
     }
 
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == TICTACTOE_DASHBOARD_PROGRAM_ID
+    pub fn check_id(interpreter_id: &Pubkey) -> bool {
+        interpreter_id.as_ref() == TICTACTOE_DASHBOARD_INTERPRETER_ID
     }
 
     pub fn id() -> Pubkey {
-        Pubkey::new(&TICTACTOE_DASHBOARD_PROGRAM_ID)
+        Pubkey::new(&TICTACTOE_DASHBOARD_INTERPRETER_ID)
     }
 
     pub fn process_transaction(
@@ -107,8 +107,8 @@ impl TicTacToeDashboardProgram {
             error!("Expected 3 accounts");
             Err(Error::InvalidArguments)?;
         }
-        if !Self::check_id(&accounts[1].program_id) {
-            error!("accounts[1] is not a TICTACTOE_DASHBOARD_PROGRAM_ID");
+        if !Self::check_id(&accounts[1].interpreter_id) {
+            error!("accounts[1] is not a TICTACTOE_DASHBOARD_INTERPRETER_ID");
             Err(Error::InvalidArguments)?;
         }
         if accounts[1].userdata.is_empty() {
@@ -118,11 +118,11 @@ impl TicTacToeDashboardProgram {
 
         let mut dashboard = Self::deserialize(&accounts[1].userdata)?;
 
-        if !TicTacToeProgram::check_id(&accounts[2].program_id) {
-            error!("accounts[2] is not a TICTACTOE_PROGRAM_ID");
+        if !TicTacToeInterpreter::check_id(&accounts[2].interpreter_id) {
+            error!("accounts[2] is not a TICTACTOE_INTERPRETER_ID");
             Err(Error::InvalidArguments)?;
         }
-        let ttt = TicTacToeProgram::deserialize(&accounts[2].userdata)?;
+        let ttt = TicTacToeInterpreter::deserialize(&accounts[2].userdata)?;
 
         match ttt.game {
             None => Err(Error::NoGame),
@@ -140,7 +140,7 @@ mod test {
 
     #[test]
     pub fn serde() {
-        let mut dashboard1 = TicTacToeDashboardProgram::default();
+        let mut dashboard1 = TicTacToeDashboardInterpreter::default();
         dashboard1.total = 1234567890;
         dashboard1.pending = Pubkey::new(&[100; 32]);
         for i in 1..5 {
@@ -150,20 +150,20 @@ mod test {
         let mut userdata = vec![0xff; 512];
         dashboard1.serialize(&mut userdata).unwrap();
 
-        let dashboard2 = TicTacToeDashboardProgram::deserialize(&userdata).unwrap();
+        let dashboard2 = TicTacToeDashboardInterpreter::deserialize(&userdata).unwrap();
         assert_eq!(dashboard1, dashboard2);
     }
 
     #[test]
     pub fn serde_userdata_too_small() {
-        let dashboard = TicTacToeDashboardProgram::default();
+        let dashboard = TicTacToeDashboardInterpreter::default();
         let mut userdata = vec![0xff; 1];
         assert_eq!(
             dashboard.serialize(&mut userdata),
             Err(Error::UserdataTooSmall)
         );
 
-        let err = TicTacToeDashboardProgram::deserialize(&userdata);
+        let err = TicTacToeDashboardInterpreter::deserialize(&userdata);
         assert!(err.is_err());
         assert_eq!(err.err().unwrap(), Error::InvalidUserdata);
     }

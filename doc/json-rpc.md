@@ -108,7 +108,7 @@ Returns all information associated with the account of provided Pubkey
 The result field will be a JSON object with the following sub fields:
 
 * `tokens`, number of tokens assigned to this account, as a signed 64-bit integer
-* `program_id`, array of 32 bytes representing the program this account has been assigned to
+* `interpreter_id`, array of 32 bytes representing the interpreter this account has been assigned to
 * `userdata`, array of bytes representing any userdata associated with the account
 
 ##### Example:
@@ -117,7 +117,7 @@ The result field will be a JSON object with the following sub fields:
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getAccountInfo", "params":["FVxxngPx368XvMCoeskdd6U8cZJFsfa1BEtGWqyAxRj4"]}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
+{"jsonrpc":"2.0","result":{"interpreter_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"id":1}
 ```
 
 ---
@@ -154,7 +154,7 @@ events.
 * `string` - Transaction status:
     * `Confirmed` - Transaction was successful
     * `SignatureNotFound` - Unknown transaction
-    * `ProgramRuntimeError` - An error occurred in the program that processed this Transaction
+    * `InterpreterRuntimeError` - An error occurred in the interpreter that processed this Transaction
     * `GenericFailure` - Some other error occurred.  **Note**: In the future new Transaction statuses may be added to this list.  It's safe to assume that all new statuses will be more specific error conditions that previously presented as `GenericFailure`
 
 ##### Example:

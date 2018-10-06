@@ -5,9 +5,9 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_program::BudgetState;
+use budget_interpreter::BudgetInterpreter;
+use bytecode_interpreter::BytecodeInterpreter;
 use counter::Counter;
-use dynamic_program::DynamicProgram;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -26,11 +26,11 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
-use storage_program::StorageProgram;
-use system_program::SystemProgram;
+use storage_interpreter::StorageInterpreter;
+use system_interpreter::SystemInterpreter;
 use system_transaction::SystemTransaction;
-use tictactoe_dashboard_program::TicTacToeDashboardProgram;
-use tictactoe_program::TicTacToeProgram;
+use tictactoe_dashboard_interpreter::TicTacToeDashboardInterpreter;
+use tictactoe_interpreter::TicTacToeInterpreter;
 use timing::{duration_as_us, timestamp};
 use transaction::Transaction;
 use window::WINDOW_SIZE;
@@ -88,8 +88,8 @@ pub enum BankError {
     /// Contract spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend(u8),
 
-    /// The program returned an error
-    ProgramRuntimeError(u8),
+    /// The interpreter returned an error
+    InterpreterRuntimeError(u8),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -132,8 +132,8 @@ pub struct Bank {
     // The latest finality time for the network
     finality_time: AtomicUsize,
 
-    // loaded contracts hashed by program_id
-    loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
+    // loaded contracts hashed by interpreter_id
+    loaded_contracts: RwLock<HashMap<Pubkey, BytecodeInterpreter>>,
 }
 
 impl Default for Bank {
@@ -413,22 +413,22 @@ impl Bank {
 
     pub fn verify_transaction(
         instruction_index: usize,
-        tx_program_id: &Pubkey,
-        pre_program_id: &Pubkey,
+        tx_interpreter_id: &Pubkey,
+        pre_interpreter_id: &Pubkey,
         pre_tokens: i64,
         account: &Account,
     ) -> Result<()> {
         // Verify the transaction
-        // make sure that program_id is still the same or this was just assigned by the system call contract
-        if !((*pre_program_id == account.program_id)
-            || (SystemProgram::check_id(&tx_program_id)
-                && SystemProgram::check_id(&pre_program_id)))
+        // make sure that interpreter_id is still the same or this was just assigned by the system call contract
+        if !((*pre_interpreter_id == account.interpreter_id)
+            || (SystemInterpreter::check_id(&tx_interpreter_id)
+                && SystemInterpreter::check_id(&pre_interpreter_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+        if *tx_interpreter_id != account.interpreter_id && pre_tokens > account.tokens {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
             ));
@@ -441,13 +441,13 @@ impl Bank {
 
     fn loaded_contract(
         &self,
-        tx_program_id: &Pubkey,
+        tx_interpreter_id: &Pubkey,
         tx: &Transaction,
-        program_index: usize,
+        instructions_index: usize,
         accounts: &mut [&mut Account],
     ) -> bool {
         let loaded_contracts = self.loaded_contracts.write().unwrap();
-        match loaded_contracts.get(&tx_program_id) {
+        match loaded_contracts.get(&tx_interpreter_id) {
             Some(dc) => {
                 let mut infos: Vec<_> = (&tx.account_keys)
                     .into_iter()
@@ -455,7 +455,7 @@ impl Bank {
                     .map(|(key, account)| KeyedAccount { key, account })
                     .collect();
 
-                dc.call(&mut infos, tx.userdata(program_index));
+                dc.call(&mut infos, tx.userdata(instructions_index));
                 true
             }
             None => false,
@@ -480,76 +480,86 @@ impl Bank {
         func(&mut subset)
     }
     /// Execute an instruction
-    /// This method calls the instruction's program entry pont method and verifies that the result of
+    /// This method calls the instruction's entrypoint method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
     fn execute_instruction(
         &self,
         tx: &Transaction,
         instruction_index: usize,
-        program_accounts: &mut [&mut Account],
+        interpreter_accounts: &mut [&mut Account],
     ) -> Result<()> {
-        let tx_program_id = tx.program_id(instruction_index);
+        let tx_interpreter_id = tx.interpreter_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
-        let pre_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
-        let pre_data: Vec<_> = program_accounts
+        let pre_total: i64 = interpreter_accounts.iter().map(|a| a.tokens).sum();
+        let pre_data: Vec<_> = interpreter_accounts
             .iter_mut()
-            .map(|a| (a.program_id, a.tokens))
+            .map(|a| (a.interpreter_id, a.tokens))
             .collect();
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if SystemProgram::check_id(&tx_program_id) {
-            SystemProgram::process_transaction(
+        if SystemInterpreter::check_id(&tx_interpreter_id) {
+            SystemInterpreter::process_transaction(
                 &tx,
                 instruction_index,
-                program_accounts,
+                interpreter_accounts,
                 &self.loaded_contracts,
             )
-        } else if BudgetState::check_id(&tx_program_id) {
-            if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
-            }
-        } else if StorageProgram::check_id(&tx_program_id) {
-            if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
+        } else if BudgetInterpreter::check_id(&tx_interpreter_id) {
+            if BudgetInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
-        } else if TicTacToeProgram::check_id(&tx_program_id) {
-            if TicTacToeProgram::process_transaction(&tx, instruction_index, program_accounts)
+        } else if StorageInterpreter::check_id(&tx_interpreter_id) {
+            if StorageInterpreter::process_transaction(&tx, instruction_index, interpreter_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
-        } else if TicTacToeDashboardProgram::check_id(&tx_program_id) {
-            if TicTacToeDashboardProgram::process_transaction(
+        } else if TicTacToeInterpreter::check_id(&tx_interpreter_id) {
+            if TicTacToeInterpreter::process_transaction(
                 &tx,
                 instruction_index,
-                program_accounts,
+                interpreter_accounts,
             ).is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
             }
-        } else if self.loaded_contract(tx_program_id, tx, instruction_index, program_accounts) {
+        } else if TicTacToeDashboardInterpreter::check_id(&tx_interpreter_id) {
+            if TicTacToeDashboardInterpreter::process_transaction(
+                &tx,
+                instruction_index,
+                interpreter_accounts,
+            ).is_err()
+            {
+                return Err(BankError::InterpreterRuntimeError(instruction_index as u8));
+            }
+        } else if self.loaded_contract(
+            tx_interpreter_id,
+            tx,
+            instruction_index,
+            interpreter_accounts,
+        ) {
         } else {
             return Err(BankError::UnknownContractId(instruction_index as u8));
         }
         // Verify the transaction
-        for ((pre_program_id, pre_tokens), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
+        for ((pre_interpreter_id, pre_tokens), post_account) in
+            pre_data.iter().zip(interpreter_accounts.iter())
         {
             Self::verify_transaction(
                 instruction_index,
-                &tx_program_id,
-                pre_program_id,
+                &tx_interpreter_id,
+                pre_interpreter_id,
                 *pre_tokens,
                 post_account,
             )?;
         }
         // The total sum of all the tokens in all the pages cannot change.
-        let post_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
+        let post_total: i64 = interpreter_accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
             Err(BankError::UnbalancedTransaction(instruction_index as u8))
         } else {
@@ -560,9 +570,9 @@ impl Bank {
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     fn execute_transaction(&self, tx: &Transaction, tx_accounts: &mut [Account]) -> Result<()> {
-        for (instruction_index, prog) in tx.instructions.iter().enumerate() {
-            Self::with_subset(tx_accounts, &prog.accounts, |program_accounts| {
-                self.execute_instruction(tx, instruction_index, program_accounts)
+        for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+            Self::with_subset(tx_accounts, &instruction.accounts, |interpreter_accounts| {
+                self.execute_instruction(tx, instruction_index, interpreter_accounts)
             })?;
         }
         Ok(())
@@ -645,7 +655,7 @@ impl Bank {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             debug!("processed ok: {} {}", processed_transactions.len(), hash);
-            // record and unlock will unlock all the successfull transactions
+            // record and unlock will unlock all the successful transactions
             poh.record(hash, processed_transactions).map_err(|e| {
                 warn!("record failure: {:?}", e);
                 BankError::RecordFailure
@@ -820,9 +830,12 @@ impl Bank {
             .expect("invalid ledger: need at least 2 entries");
         {
             let tx = &entry1.transactions[0];
-            assert!(SystemProgram::check_id(tx.program_id(0)), "Invalid ledger");
-            let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-            let deposit = if let SystemProgram::Move { tokens } = instruction {
+            assert!(
+                SystemInterpreter::check_id(tx.interpreter_id(0)),
+                "Invalid ledger"
+            );
+            let interpreter: SystemInterpreter = deserialize(tx.userdata(0)).unwrap();
+            let deposit = if let SystemInterpreter::Move { tokens } = interpreter {
                 Some(tokens)
             } else {
                 None
@@ -869,10 +882,10 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> i64 {
-        if SystemProgram::check_id(&account.program_id) {
-            SystemProgram::get_balance(account)
-        } else if BudgetState::check_id(&account.program_id) {
-            BudgetState::get_balance(account)
+        if SystemInterpreter::check_id(&account.interpreter_id) {
+            SystemInterpreter::get_balance(account)
+        } else if BudgetInterpreter::check_id(&account.interpreter_id) {
+            BudgetInterpreter::get_balance(account)
         } else {
             account.tokens
         }
@@ -1010,15 +1023,15 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
-        let spend = SystemProgram::Move { tokens: 1 };
+        let spend = SystemInterpreter::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
-                program_ids_index: 0,
+                interpreter_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
-                program_ids_index: 0,
+                interpreter_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],
             },
@@ -1029,7 +1042,7 @@ mod tests {
             &[key1, key2],
             mint.last_id(),
             0,
-            vec![SystemProgram::id()],
+            vec![SystemInterpreter::id()],
             instructions,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
@@ -1050,15 +1063,15 @@ mod tests {
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
 
-        let spend = SystemProgram::Move { tokens: 1 };
+        let spend = SystemInterpreter::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
-                program_ids_index: 0,
+                interpreter_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
-                program_ids_index: 0,
+                interpreter_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],
             },
@@ -1069,7 +1082,7 @@ mod tests {
             &[key1, key2],
             mint.last_id(),
             0,
-            vec![SystemProgram::id()],
+            vec![SystemInterpreter::id()],
             instructions,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
@@ -1093,7 +1106,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 0);
     }
 
-    // TODO: This test demonstrates that fees are not paid when a program fails.
+    // TODO: This test demonstrates that fees are not paid when an interpreter fails.
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
@@ -1476,7 +1489,7 @@ mod tests {
             bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
             Err(BankError::AccountInUse)
         );
-        // the second time shoudl fail as well
+        // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
             bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),

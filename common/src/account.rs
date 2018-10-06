@@ -9,16 +9,16 @@ pub struct Account {
     /// user data
     /// A transaction can write to its userdata
     pub userdata: Vec<u8>,
-    /// contract id this contract belongs to
-    pub program_id: Pubkey,
+    /// interpreter that owns this account
+    pub interpreter_id: Pubkey,
 }
 
 impl Account {
-    pub fn new(tokens: i64, space: usize, program_id: Pubkey) -> Account {
+    pub fn new(tokens: i64, space: usize, interpreter_id: Pubkey) -> Account {
         Account {
             tokens,
             userdata: vec![0u8; space],
-            program_id,
+            interpreter_id,
         }
     }
 }

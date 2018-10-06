@@ -110,7 +110,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
+fn bench_banking_stage_multi_instructions(bencher: &mut Bencher) {
     let progs = 5;
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
@@ -136,7 +136,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             new.account_keys[1] = Pubkey::new(&to[0..32]);
             let prog = new.instructions[0].clone();
             for i in 1..progs {
-                //generate programs that spend to random keys
+                //generate instructions that spend to random keys
                 let to: Vec<u8> = (0..32).map(|_| thread_rng().gen()).collect();
                 let to_key = Pubkey::new(&to[0..32]);
                 new.account_keys.push(to_key);

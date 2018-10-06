@@ -3,7 +3,7 @@
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
 use budget_instruction::{Contract, Instruction, Vote};
-use budget_program::BudgetState;
+use budget_interpreter::BudgetInterpreter;
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::Payment;
@@ -62,7 +62,7 @@ pub trait BudgetTransaction {
 
     fn vote(&self) -> Option<(Pubkey, Vote, Hash)>;
 
-    fn instruction(&self, program_index: usize) -> Option<Instruction>;
+    fn instruction(&self, interpreter_index: usize) -> Option<Instruction>;
 
     fn verify_plan(&self) -> bool;
 }
@@ -86,7 +86,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             fee,
@@ -111,7 +111,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -130,7 +130,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -140,7 +140,14 @@ impl BudgetTransaction for Transaction {
     fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = Instruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
-        Self::new(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+        Self::new(
+            from_keypair,
+            &[],
+            BudgetInterpreter::id(),
+            userdata,
+            last_id,
+            fee,
+        )
     }
 
     /// Create and sign a postdated Transaction. Used for unit-testing.
@@ -167,7 +174,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -196,7 +203,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetState::id(),
+            BudgetInterpreter::id(),
             userdata,
             last_id,
             0,
@@ -214,8 +221,8 @@ impl BudgetTransaction for Transaction {
         }
     }
 
-    fn instruction(&self, program_index: usize) -> Option<Instruction> {
-        deserialize(&self.userdata(program_index)).ok()
+    fn instruction(&self, interpreter_index: usize) -> Option<Instruction> {
+        deserialize(&self.userdata(interpreter_index)).ok()
     }
 
     /// Verify only the payment plan.
@@ -278,7 +285,7 @@ mod tests {
         let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
         let userdata = serialize(&instruction).unwrap();
         let instructions = vec![transaction::Instruction {
-            program_ids_index: 0,
+            interpreter_ids_index: 0,
             userdata,
             accounts: vec![],
         }];
@@ -286,7 +293,7 @@ mod tests {
             account_keys: vec![],
             last_id: Default::default(),
             signature: Default::default(),
-            program_ids: vec![],
+            interpreter_ids: vec![],
             instructions,
             fee: 0,
         };

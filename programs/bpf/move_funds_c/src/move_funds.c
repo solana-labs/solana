@@ -27,7 +27,7 @@ typedef struct {
     int64_t tokens;
     uint64_t userdata_len;
     uint8_t *userdata;
-    SolPubkey *program_id;
+    SolPubkey *interpreter_id;
 } SolKeyedAccounts;
 
 // TODO support BPF function calls rather then forcing everything to be inlined
@@ -70,8 +70,8 @@ SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccount
         ka[i].userdata = src;
         src += ka[i].userdata_len;
 
-        // program_id
-        ka[i].program_id = (SolPubkey *)src;
+        // interpreter_id
+        ka[i].interpreter_id = (SolPubkey *)src;
         src += SIZE_PUBKEY;
     }
     // tx userdata
@@ -110,8 +110,8 @@ SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
         // account userdata
         print_userdata(ka[i].userdata, ka[i].userdata_len);
 
-        // program_id
-        print_key(ka[i].program_id);
+        // interpreter_id
+        print_key(ka[i].interpreter_id);
     }
     // tx userdata
     print_userdata(userdata, userdata_len);

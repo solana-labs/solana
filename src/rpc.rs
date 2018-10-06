@@ -90,7 +90,7 @@ impl Metadata for Meta {}
 pub enum RpcSignatureStatus {
     Confirmed,
     SignatureNotFound,
-    ProgramRuntimeError,
+    InterpreterRuntimeError,
     GenericFailure,
 }
 
@@ -173,7 +173,9 @@ impl RpcSol for RpcSolImpl {
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(BankError::InterpreterRuntimeError(_)) => {
+                    RpcSignatureStatus::InterpreterRuntimeError
+                }
                 Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
                 Err(err) => {
                     trace!("mapping {:?} to GenericFailure", err);
@@ -325,7 +327,7 @@ mod tests {
         let expected = r#"{
             "jsonrpc":"2.0",
             "result":{
-                "program_id": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                "interpreter_id": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
                 "tokens": 20,
                 "userdata": []
             },
