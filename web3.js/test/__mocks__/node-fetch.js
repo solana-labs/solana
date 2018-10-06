@@ -18,13 +18,15 @@ type RpcResponse = {
 
 export const mockRpc: Array<[string, RpcRequest, RpcResponse]> = [];
 
+// Define DOITLIVE in the environment to test against the real full node
+// identified by `url` instead of using the mock
+export const mockRpcEnabled = !process.env.DOITLIVE;
+
 // Suppress lint: 'JestMockFn' is not defined
 // eslint-disable-next-line no-undef
 const mock: JestMockFn<any, any> = jest.fn(
   (fetchUrl, fetchOptions) => {
-    // Define DOITLIVE in the environment to test against the real full node
-    // identified by `url` instead of using the mock
-    if (process.env.DOITLIVE) {
+    if (!mockRpcEnabled) {
       console.log(`Note: node-fetch mock is disabled, testing live against ${fetchUrl}`);
       return fetch(fetchUrl, fetchOptions);
     }

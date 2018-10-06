@@ -12,7 +12,7 @@ export class PublicKey {
   /**
    * Create a new PublicKey object
    */
-  constructor(number: string | Buffer | Array<number>) {
+  constructor(number: number | string | Buffer | Array<number>) {
 
     for (;;) {
       if (typeof number === 'string') {
