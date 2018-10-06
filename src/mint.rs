@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use bincode::deserialize;
     use ledger::Block;
-    use system_program::SystemProgram;
+    use system_interpreter::SystemProgram;
 
     #[test]
     fn test_create_transactions() {

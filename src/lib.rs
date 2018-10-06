@@ -61,7 +61,7 @@ pub mod sigverify_stage;
 pub mod storage_program;
 pub mod store_ledger_stage;
 pub mod streamer;
-pub mod system_program;
+pub mod system_interpreter;
 pub mod system_transaction;
 pub mod thin_client;
 pub mod tictactoe_dashboard_program;

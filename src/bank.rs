@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 use storage_program::StorageProgram;
-use system_program::SystemProgram;
+use system_interpreter::SystemProgram;
 use system_transaction::SystemTransaction;
 use tictactoe_dashboard_program::TicTacToeDashboardProgram;
 use tictactoe_program::TicTacToeProgram;

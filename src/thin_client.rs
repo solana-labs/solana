@@ -431,7 +431,7 @@ mod tests {
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use system_program::SystemProgram;
+    use system_interpreter::SystemProgram;
 
     fn tmp_ledger(name: &str, mint: &Mint) -> String {
         use std::env;

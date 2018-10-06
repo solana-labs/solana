@@ -4,7 +4,7 @@ use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
 use solana_program_interface::pubkey::Pubkey;
-use system_program::SystemProgram;
+use system_interpreter::SystemProgram;
 use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
@@ -146,7 +146,7 @@ impl SystemTransaction for Transaction {
             .map(|(i, (_, amount))| {
                 let spend = SystemProgram::Move { tokens: *amount };
                 Instruction {
-                    program_ids_index: 0,
+                    interpreter_ids_index: 0,
                     userdata: serialize(&spend).unwrap(),
                     accounts: vec![0, i as u8],
                 }

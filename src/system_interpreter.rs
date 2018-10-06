@@ -111,7 +111,7 @@ mod test {
     use solana_program_interface::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::sync::RwLock;
-    use system_program::SystemProgram;
+    use system_interpreter::SystemProgram;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
