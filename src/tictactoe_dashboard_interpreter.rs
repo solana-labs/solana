@@ -3,7 +3,7 @@
 use serde_cbor;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
-use tictactoe_program::{Error, Game, Result, State, TicTacToeProgram};
+use tictactoe_interpreter::{Error, Game, Result, State, TicTacToeProgram};
 use transaction::Transaction;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
