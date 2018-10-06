@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 use storage_interpreter::StorageInterpreter;
-use system_interpreter::SystemProgram;
+use system_interpreter::SystemInterpreter;
 use system_transaction::SystemTransaction;
 use tictactoe_dashboard_interpreter::TicTacToeDashboardProgram;
 use tictactoe_interpreter::TicTacToeProgram;
@@ -421,8 +421,8 @@ impl Bank {
         // Verify the transaction
         // make sure that interpreter_id is still the same or this was just assigned by the system call contract
         if !((*pre_interpreter_id == account.interpreter_id)
-            || (SystemProgram::check_id(&tx_interpreter_id)
-                && SystemProgram::check_id(&pre_interpreter_id)))
+            || (SystemInterpreter::check_id(&tx_interpreter_id)
+                && SystemInterpreter::check_id(&pre_interpreter_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(BankError::ModifiedContractId(instruction_index as u8));
@@ -500,8 +500,8 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if SystemProgram::check_id(&tx_interpreter_id) {
-            SystemProgram::process_transaction(
+        if SystemInterpreter::check_id(&tx_interpreter_id) {
+            SystemInterpreter::process_transaction(
                 &tx,
                 instruction_index,
                 interpreter_accounts,
@@ -828,11 +828,11 @@ impl Bank {
         {
             let tx = &entry1.transactions[0];
             assert!(
-                SystemProgram::check_id(tx.interpreter_id(0)),
+                SystemInterpreter::check_id(tx.interpreter_id(0)),
                 "Invalid ledger"
             );
-            let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-            let deposit = if let SystemProgram::Move { tokens } = instruction {
+            let interpreter: SystemInterpreter = deserialize(tx.userdata(0)).unwrap();
+            let deposit = if let SystemInterpreter::Move { tokens } = interpreter {
                 Some(tokens)
             } else {
                 None
@@ -879,8 +879,8 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> i64 {
-        if SystemProgram::check_id(&account.interpreter_id) {
-            SystemProgram::get_balance(account)
+        if SystemInterpreter::check_id(&account.interpreter_id) {
+            SystemInterpreter::get_balance(account)
         } else if BudgetInterpreter::check_id(&account.interpreter_id) {
             BudgetInterpreter::get_balance(account)
         } else {
@@ -1020,7 +1020,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
-        let spend = SystemProgram::Move { tokens: 1 };
+        let spend = SystemInterpreter::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
                 interpreter_ids_index: 0,
@@ -1039,7 +1039,7 @@ mod tests {
             &[key1, key2],
             mint.last_id(),
             0,
-            vec![SystemProgram::id()],
+            vec![SystemInterpreter::id()],
             instructions,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
@@ -1060,7 +1060,7 @@ mod tests {
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
 
-        let spend = SystemProgram::Move { tokens: 1 };
+        let spend = SystemInterpreter::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
                 interpreter_ids_index: 0,
@@ -1079,7 +1079,7 @@ mod tests {
             &[key1, key2],
             mint.last_id(),
             0,
-            vec![SystemProgram::id()],
+            vec![SystemInterpreter::id()],
             instructions,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);

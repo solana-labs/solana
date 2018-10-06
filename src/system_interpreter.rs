@@ -9,7 +9,7 @@ use std::sync::RwLock;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum SystemProgram {
+pub enum SystemInterpreter {
     /// Create a new account
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - new account key
@@ -39,7 +39,7 @@ pub enum SystemProgram {
 
 pub const SYSTEM_INTERPRETER_ID: [u8; 32] = [0u8; 32];
 
-impl SystemProgram {
+impl SystemInterpreter {
     pub fn check_id(interpreter_id: &Pubkey) -> bool {
         interpreter_id.as_ref() == SYSTEM_INTERPRETER_ID
     }
@@ -59,7 +59,7 @@ impl SystemProgram {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             trace!("process_transaction: {:?}", syscall);
             match syscall {
-                SystemProgram::CreateAccount {
+                SystemInterpreter::CreateAccount {
                     tokens,
                     space,
                     interpreter_id,
@@ -78,18 +78,18 @@ impl SystemProgram {
                     accounts[1].interpreter_id = interpreter_id;
                     accounts[1].userdata = vec![0; space as usize];
                 }
-                SystemProgram::Assign { interpreter_id } => {
+                SystemInterpreter::Assign { interpreter_id } => {
                     if !Self::check_id(&accounts[0].interpreter_id) {
                         return;
                     }
                     accounts[0].interpreter_id = interpreter_id;
                 }
-                SystemProgram::Move { tokens } => {
+                SystemInterpreter::Move { tokens } => {
                     //bank should be verifying correctness
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }
-                SystemProgram::Load {
+                SystemInterpreter::Load {
                     interpreter_id,
                     name,
                 } => {
@@ -111,7 +111,7 @@ mod test {
     use solana_program_interface::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::sync::RwLock;
-    use system_interpreter::SystemProgram;
+    use system_interpreter::SystemInterpreter;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
@@ -121,7 +121,7 @@ mod test {
         loaded_interpreters: &RwLock<HashMap<Pubkey, DynamicProgram>>,
     ) {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
+        SystemInterpreter::process_transaction(&tx, 0, &mut refs[..], loaded_interpreters)
     }
     #[test]
     fn test_create_noop() {

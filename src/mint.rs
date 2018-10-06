@@ -70,16 +70,16 @@ mod tests {
     use super::*;
     use bincode::deserialize;
     use ledger::Block;
-    use system_interpreter::SystemProgram;
+    use system_interpreter::SystemInterpreter;
 
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transactions().into_iter();
         let tx = transactions.next().unwrap();
         assert_eq!(tx.instructions.len(), 1);
-        assert!(SystemProgram::check_id(tx.interpreter_id(0)));
-        let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-        if let SystemProgram::Move { tokens } = instruction {
+        assert!(SystemInterpreter::check_id(tx.interpreter_id(0)));
+        let interpreter: SystemInterpreter = deserialize(tx.userdata(0)).unwrap();
+        if let SystemInterpreter::Move { tokens } = interpreter {
             assert_eq!(tokens, 100);
         }
         assert_eq!(transactions.next(), None);

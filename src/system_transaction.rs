@@ -4,7 +4,7 @@ use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
 use solana_program_interface::pubkey::Pubkey;
-use system_interpreter::SystemProgram;
+use system_interpreter::SystemInterpreter;
 use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
@@ -51,7 +51,7 @@ pub trait SystemTransaction {
 }
 
 impl SystemTransaction for Transaction {
-    /// Create and sign new SystemProgram::CreateAccount transaction
+    /// Create and sign new SystemInterpreter::CreateAccount transaction
     fn system_create(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -61,7 +61,7 @@ impl SystemTransaction for Transaction {
         interpreter_id: Pubkey,
         fee: i64,
     ) -> Self {
-        let create = SystemProgram::CreateAccount {
+        let create = SystemInterpreter::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
             interpreter_id,
@@ -70,35 +70,35 @@ impl SystemTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[to],
-            SystemProgram::id(),
+            SystemInterpreter::id(),
             userdata,
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Assign transaction
+    /// Create and sign new SystemInterpreter::Assign transaction
     fn system_assign(
         from_keypair: &Keypair,
         last_id: Hash,
         interpreter_id: Pubkey,
         fee: i64,
     ) -> Self {
-        let assign = SystemProgram::Assign { interpreter_id };
+        let assign = SystemInterpreter::Assign { interpreter_id };
         let userdata = serialize(&assign).unwrap();
         Transaction::new(
             from_keypair,
             &[],
-            SystemProgram::id(),
+            SystemInterpreter::id(),
             userdata,
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
+    /// Create and sign new SystemInterpreter::CreateAccount transaction with some defaults
     fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
         Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
-    /// Create and sign new SystemProgram::Move transaction
+    /// Create and sign new SystemInterpreter::Move transaction
     fn system_move(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -106,18 +106,18 @@ impl SystemTransaction for Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        let move_tokens = SystemProgram::Move { tokens };
+        let move_tokens = SystemInterpreter::Move { tokens };
         let userdata = serialize(&move_tokens).unwrap();
         Transaction::new(
             from_keypair,
             &[to],
-            SystemProgram::id(),
+            SystemInterpreter::id(),
             userdata,
             last_id,
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Load transaction
+    /// Create and sign new SystemInterpreter::Load transaction
     fn system_load(
         from_keypair: &Keypair,
         last_id: Hash,
@@ -125,7 +125,7 @@ impl SystemTransaction for Transaction {
         interpreter_id: Pubkey,
         name: String,
     ) -> Self {
-        let load = SystemProgram::Load {
+        let load = SystemInterpreter::Load {
             interpreter_id,
             name,
         };
@@ -133,7 +133,7 @@ impl SystemTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[],
-            SystemProgram::id(),
+            SystemInterpreter::id(),
             userdata,
             last_id,
             fee,
@@ -144,7 +144,7 @@ impl SystemTransaction for Transaction {
             .iter()
             .enumerate()
             .map(|(i, (_, amount))| {
-                let spend = SystemProgram::Move { tokens: *amount };
+                let spend = SystemInterpreter::Move { tokens: *amount };
                 Instruction {
                     interpreter_ids_index: 0,
                     userdata: serialize(&spend).unwrap(),
@@ -158,7 +158,7 @@ impl SystemTransaction for Transaction {
             &to_keys,
             last_id,
             fee,
-            vec![SystemProgram::id()],
+            vec![SystemInterpreter::id()],
             instructions,
         )
     }
