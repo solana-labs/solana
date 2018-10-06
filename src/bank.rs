@@ -5,7 +5,7 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_program::BudgetState;
+use budget_interpreter::BudgetState;
 use counter::Counter;
 use dynamic_program::DynamicProgram;
 use entry::Entry;

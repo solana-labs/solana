@@ -1,6 +1,6 @@
 use bincode::{deserialize, serialize};
 use bs58;
-use budget_program::BudgetState;
+use budget_interpreter::BudgetState;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;

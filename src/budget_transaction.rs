@@ -3,7 +3,7 @@
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
 use budget_instruction::{Contract, Instruction, Vote};
-use budget_program::BudgetState;
+use budget_interpreter::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::Payment;

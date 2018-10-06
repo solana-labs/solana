@@ -23,7 +23,7 @@ pub mod client;
 #[macro_use]
 pub mod crdt;
 pub mod bpf_verifier;
-pub mod budget_program;
+pub mod budget_interpreter;
 pub mod drone;
 pub mod dynamic_program;
 pub mod entry;
