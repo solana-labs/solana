@@ -1,7 +1,10 @@
 // @flow
 
+import * as BufferLayout from 'buffer-layout';
+
 import {Transaction} from './transaction';
 import {PublicKey} from './publickey';
+import * as Layout from './layout';
 
 /**
  * Represents a condition that is met by executing a `applySignature()`
@@ -108,11 +111,20 @@ function serializeCondition(condition: BudgetCondition) {
   }
   case 'signature':
   {
-    const from = condition.from.toBuffer();
+    const userdataLayout = BufferLayout.struct([
+      BufferLayout.u32('condition'),
+      Layout.publicKey('from'),
+    ]);
 
+    const from = condition.from.toBuffer();
     const userdata = Buffer.alloc(4 + from.length);
-    userdata.writeUInt32LE(1, 0); // Condition enum = Signature
-    from.copy(userdata, 4);
+    userdataLayout.encode(
+      {
+        instruction: 1, // Signature
+        from
+      },
+      userdata,
+    );
     return userdata;
   }
   default:
@@ -310,8 +322,17 @@ export class BudgetProgram {
    * pending payment to proceed.
    */
   static applySignature(from: PublicKey, program: PublicKey, to: PublicKey): Transaction {
-    const userdata = Buffer.alloc(4);
-    userdata.writeUInt32LE(2, 0); // ApplySignature instruction
+    const userdataLayout = BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+    ]);
+
+    const userdata = Buffer.alloc(userdataLayout.span);
+    userdataLayout.encode(
+      {
+        instruction: 2, // ApplySignature instruction
+      },
+      userdata,
+    );
 
     return new Transaction({
       fee: 0,
