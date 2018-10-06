@@ -823,7 +823,7 @@ fn test_leader_to_validator_transition() {
         leader_node,
         &leader_ledger_path,
         leader_keypair,
-        None,
+        Some(leader_info.contact_info.ncp),
         false,
         Some(&leader_scheduler_config),
     );
@@ -970,7 +970,7 @@ fn test_leader_validator_basic() {
         leader_node,
         &leader_ledger_path,
         leader_keypair,
-        None,
+        Some(leader_info.contact_info.ncp),
         false,
         Some(&leader_scheduler_config),
     );
@@ -1070,13 +1070,13 @@ fn test_full_leader_validator_network() {
     const N: usize = 5;
     logger::setup();
 
-    // Create the leader node information
-    let leader_keypair = Keypair::new();
-    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_info = leader_node.info.clone();
+    // Create the bootstrap leader node information
+    let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
+    let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     let mut node_keypairs = VecDeque::new();
-    node_keypairs.push_back(leader_keypair);
+    node_keypairs.push_back(bootstrap_leader_keypair);
 
     // Create the validator keypairs
     for _ in 0..N {
@@ -1085,7 +1085,7 @@ fn test_full_leader_validator_network() {
     }
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (mint, leader_ledger_path, genesis_entries) =
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
         genesis("test_full_leader_validator_network", 10_000);
 
     let mut last_id = genesis_entries
@@ -1099,7 +1099,7 @@ fn test_full_leader_validator_network() {
     // bank state due to transactions being in-flight during leader seed calculation in
     // write stage.
     let mut ledger_paths = Vec::new();
-    ledger_paths.push(leader_ledger_path.clone());
+    ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
     for node_keypair in node_keypairs.iter() {
         // Make entries to give the validator some stake so that he will be in
@@ -1107,7 +1107,7 @@ fn test_full_leader_validator_network() {
         let bootstrap_entries = make_active_set_entries(node_keypair, &mint.keypair(), &last_id);
 
         // Write the entries
-        let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
+        let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
         last_id = bootstrap_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -1122,7 +1122,7 @@ fn test_full_leader_validator_network() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
+        bootstrap_leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
@@ -1131,22 +1131,28 @@ fn test_full_leader_validator_network() {
 
     let exit = Arc::new(AtomicBool::new(false));
     // Start the leader fullnode
-    let leader = Arc::new(RwLock::new(Fullnode::new(
-        leader_node,
-        &leader_ledger_path,
+    let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
+        bootstrap_leader_node,
+        &bootstrap_leader_ledger_path,
         node_keypairs.pop_front().unwrap(),
-        None,
+        Some(bootstrap_leader_info.contact_info.ncp),
         false,
         Some(&leader_scheduler_config),
     )));
 
-    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![leader.clone()];
-    let mut t_nodes = vec![run_node(leader_info.id, leader, exit.clone())];
+    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
+    let mut t_nodes = vec![run_node(
+        bootstrap_leader_info.id,
+        bootstrap_leader,
+        exit.clone(),
+    )];
 
     // Start up the validators
     for kp in node_keypairs.into_iter() {
-        let validator_ledger_path =
-            tmp_copy_ledger(&leader_ledger_path, "test_full_leader_validator_network");
+        let validator_ledger_path = tmp_copy_ledger(
+            &bootstrap_leader_ledger_path,
+            "test_full_leader_validator_network",
+        );
         ledger_paths.push(validator_ledger_path.clone());
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
@@ -1154,7 +1160,7 @@ fn test_full_leader_validator_network() {
             validator_node,
             &validator_ledger_path,
             kp,
-            Some(leader_info.contact_info.ncp),
+            Some(bootstrap_leader_info.contact_info.ncp),
             false,
             Some(&leader_scheduler_config),
         )));
@@ -1164,7 +1170,7 @@ fn test_full_leader_validator_network() {
     }
 
     // Wait for convergence
-    let num_converged = converge(&leader_info, N + 1).len();
+    let num_converged = converge(&bootstrap_leader_info, N + 1).len();
     assert_eq!(num_converged, N + 1);
 
     // Wait for each node to hit a specific target height in the leader schedule.

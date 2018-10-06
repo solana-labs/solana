@@ -241,16 +241,14 @@ impl Fullnode {
         bank: Bank,
         entry_height: u64,
         ledger_tail: &[Entry],
-        mut node: Node,
-        leader_info: Option<&NodeInfo>,
+        node: Node,
+        bootstrap_leader_info_option: Option<&NodeInfo>,
         ledger_path: &str,
         sigverify_disabled: bool,
         leader_scheduler_option: Option<LeaderScheduler>,
         rpc_port: Option<u16>,
     ) -> Self {
-        if leader_info.is_none() {
-            node.info.leader_id = node.info.id;
-        }
+        let my_id = node.info.id;
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
 
@@ -303,69 +301,92 @@ impl Fullnode {
         let leader_scheduler_option = leader_scheduler_option.map(|ls| Arc::new(RwLock::new(ls)));
         let keypair = Arc::new(keypair);
         let node_role;
-        match leader_info {
-            Some(leader_info) => {
-                // Start in validator mode.
-                // TODO: let ClusterInfo get that data from the network?
-                cluster_info.write().unwrap().insert(leader_info);
-                let tvu = Tvu::new(
-                    keypair.clone(),
-                    &bank,
-                    entry_height,
-                    cluster_info.clone(),
-                    shared_window.clone(),
-                    node.sockets
-                        .replicate
-                        .iter()
-                        .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
-                        .collect(),
-                    node.sockets
-                        .repair
-                        .try_clone()
-                        .expect("Failed to clone repair socket"),
-                    node.sockets
-                        .retransmit
-                        .try_clone()
-                        .expect("Failed to clone retransmit socket"),
-                    Some(ledger_path),
-                    leader_scheduler_option.as_ref().cloned(),
-                );
-                let validator_state = ValidatorServices::new(tvu);
-                node_role = Some(NodeRole::Validator(validator_state));
-            }
-            None => {
-                // Start in leader mode.
-                let (tpu, entry_receiver, tpu_exit) = Tpu::new(
-                    keypair.clone(),
-                    &bank,
-                    &cluster_info,
-                    Default::default(),
-                    node.sockets
-                        .transaction
-                        .iter()
-                        .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
-                        .collect(),
-                    ledger_path,
-                    sigverify_disabled,
-                    entry_height,
-                    leader_scheduler_option.as_ref().cloned(),
-                );
 
-                let broadcast_stage = BroadcastStage::new(
-                    node.sockets
-                        .broadcast
-                        .try_clone()
-                        .expect("Failed to clone broadcast socket"),
-                    cluster_info.clone(),
-                    shared_window.clone(),
-                    entry_height,
-                    entry_receiver,
-                    leader_scheduler_option.as_ref().cloned(),
-                    tpu_exit,
-                );
-                let leader_state = LeaderServices::new(tpu, broadcast_stage);
-                node_role = Some(NodeRole::Leader(leader_state));
+        let mut is_leader = false;
+        // Insert the bootstrap leader info, should only be None if this node
+        // is the bootstrap leader
+        if let Some(bootstrap_leader_info) = bootstrap_leader_info_option {
+            cluster_info.write().unwrap().insert(bootstrap_leader_info);
+        }
+
+        // If there's a schedule, follow that
+        if let Some(ref leader_scheduler) = leader_scheduler_option {
+            let scheduled_leader = leader_scheduler
+                .read()
+                .unwrap()
+                .get_scheduled_leader(entry_height)
+                .expect("Leader not known after processing bank");
+
+            cluster_info.write().unwrap().set_leader(scheduled_leader);
+            if scheduled_leader == keypair.pubkey() {
+                is_leader = true;
             }
+        } else if bootstrap_leader_info_option.is_none() {
+            // If there's no schedule, default to original behavior of checking the
+            // provided bootstrap_leader_info_option. If the bootstrap_leader_info_option
+            // is None, then this node is the bootstrap leader.
+            is_leader = true;
+            cluster_info.write().unwrap().set_leader(my_id);
+        }
+
+        if !is_leader {
+            // Start in validator mode.
+            let tvu = Tvu::new(
+                keypair.clone(),
+                &bank,
+                entry_height,
+                cluster_info.clone(),
+                shared_window.clone(),
+                node.sockets
+                    .replicate
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                    .collect(),
+                node.sockets
+                    .repair
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                node.sockets
+                    .retransmit
+                    .try_clone()
+                    .expect("Failed to clone retransmit socket"),
+                Some(ledger_path),
+                leader_scheduler_option.as_ref().cloned(),
+            );
+            let validator_state = ValidatorServices::new(tvu);
+            node_role = Some(NodeRole::Validator(validator_state));
+        } else {
+            // Start in leader mode.
+            let (tpu, entry_receiver, tpu_exit) = Tpu::new(
+                keypair.clone(),
+                &bank,
+                &cluster_info,
+                Default::default(),
+                node.sockets
+                    .transaction
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .collect(),
+                ledger_path,
+                sigverify_disabled,
+                entry_height,
+                leader_scheduler_option.as_ref().cloned(),
+            );
+
+            let broadcast_stage = BroadcastStage::new(
+                node.sockets
+                    .broadcast
+                    .try_clone()
+                    .expect("Failed to clone broadcast socket"),
+                cluster_info.clone(),
+                shared_window.clone(),
+                entry_height,
+                entry_receiver,
+                leader_scheduler_option.as_ref().cloned(),
+                tpu_exit,
+            );
+            let leader_state = LeaderServices::new(tpu, broadcast_stage);
+            node_role = Some(NodeRole::Leader(leader_state));
         }
 
         Fullnode {
@@ -676,6 +697,87 @@ mod tests {
 
         for path in ledger_paths {
             remove_dir_all(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_wrong_role_transition() {
+        // Create the leader node information
+        let bootstrap_leader_keypair = Keypair::new();
+        let bootstrap_leader_node =
+            Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
+        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
+
+        // Create the validator node information
+        let validator_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+
+        // Make a common mint and a genesis entry for both leader + validator's ledgers
+        let (mint, bootstrap_leader_ledger_path) = genesis("test_wrong_role_transition", 10_000);
+
+        let genesis_entries = mint.create_entries();
+        let last_id = genesis_entries
+            .last()
+            .expect("expected at least one genesis entry")
+            .id;
+
+        // Write the entries to the ledger that will cause leader rotation
+        // after the bootstrap height
+        let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
+        let first_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+
+        let ledger_initial_len = (genesis_entries.len() + first_entries.len()) as u64;
+        ledger_writer.write_entries(first_entries).unwrap();
+
+        // Create the common leader scheduling configuration
+        let num_slots_per_epoch = 3;
+        let leader_rotation_interval = 5;
+        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+
+        // Set the bootstrap height exactly the current ledger length, so that we can
+        // test if the bootstrap leader knows to immediately transition to a validator
+        // after parsing the ledger during startup
+        let bootstrap_height = ledger_initial_len;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_info.id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(ledger_initial_len),
+        );
+
+        // Test that a node knows to transition to a validator based on parsing the ledger
+        let bootstrap_leader = Fullnode::new(
+            bootstrap_leader_node,
+            &bootstrap_leader_ledger_path,
+            bootstrap_leader_keypair,
+            Some(bootstrap_leader_info.contact_info.ncp),
+            false,
+            Some(&leader_scheduler_config),
+        );
+
+        match bootstrap_leader.node_role {
+            Some(NodeRole::Validator(_)) => (),
+            _ => {
+                panic!("Expected bootstrap leader to be a validator");
+            }
+        }
+
+        // Test that a node knows to transition to a leader based on parsing the ledger
+        let validator = Fullnode::new(
+            validator_node,
+            &bootstrap_leader_ledger_path,
+            validator_keypair,
+            Some(bootstrap_leader_info.contact_info.ncp),
+            false,
+            Some(&leader_scheduler_config),
+        );
+
+        match validator.node_role {
+            Some(NodeRole::Leader(_)) => (),
+            _ => {
+                panic!("Expected node to be the leader");
+            }
         }
     }
 
