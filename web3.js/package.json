@@ -53,6 +53,7 @@
     "babel-runtime": "^6.26.0",
     "bn.js": "^4.11.8",
     "bs58": "^4.0.1",
+    "buffer-layout": "^1.2.0",
     "jayson": "^2.0.6",
     "node-fetch": "^2.2.0",
     "superstruct": "^0.6.0",
