@@ -4,7 +4,7 @@ use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::EntryReceiver;
-use leader_scheduler::LeaderScheduler;
+use leader_scheduler::{is_leader_rotation_height, LeaderScheduler};
 use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
@@ -87,17 +87,23 @@ impl ReplicateStage {
                 );
 
                 if let Some(ref leader_scheduler) = leader_scheduler_lock_option {
-                    let my_id = keypair.pubkey();
-                    match leader_scheduler.get_scheduled_leader(*entry_height + i as u64 + 1) {
-                        // If we are the next leader, exit
-                        Some(next_leader_id) if my_id == next_leader_id => {
+                    let leader_rotation_interval = leader_scheduler.leader_rotation_interval;
+                    let bootstrap_height = leader_scheduler.bootstrap_height;
+                    if is_leader_rotation_height(
+                        // i is zero indexed, so current entry height for this entry is actually the
+                        // old entry height + i + 1
+                        *entry_height + i as u64 + 1,
+                        bootstrap_height,
+                        leader_rotation_interval,
+                    ) {
+                        let my_id = keypair.pubkey();
+                        let scheduled_leader =
+                            leader_scheduler.get_scheduled_leader(*entry_height + i as u64 + 1).expect("Scheduled leader id should never be unknown while processing entries");
+                        crdt.write().unwrap().set_leader(scheduled_leader);
+                        if my_id == scheduled_leader {
                             num_entries_to_write = i + 1;
                             break;
                         }
-                        None => panic!(
-                            "Scheduled leader id should never be unknown while processing entries"
-                        ),
-                        _ => (),
                     }
                 }
 
