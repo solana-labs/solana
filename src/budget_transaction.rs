@@ -205,7 +205,6 @@ impl BudgetTransaction for Transaction {
 
     fn vote(&self) -> Option<(Pubkey, Vote, Hash)> {
         if self.instructions.len() > 1 {
-            error!("expecting only 1 Instruction per vote");
             None
         } else if let Some(Instruction::NewVote(vote)) = self.instruction(0) {
             Some((self.account_keys[0], vote, self.last_id))
