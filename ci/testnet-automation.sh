@@ -9,7 +9,7 @@ buildkite-agent artifact download "solana_*.snap" .
 source ci/upload_ci_artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
-[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25"
+[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
 
 launchTestnet() {
   declare nodeCount=$1
