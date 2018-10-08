@@ -3,11 +3,9 @@
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use bincode::{serialize_into, serialized_size};
-use budget_transaction::BudgetTransaction;
 use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
-use rayon::prelude::*;
 use solana_program_interface::pubkey::Pubkey;
 use std::io::Cursor;
 use std::net::SocketAddr;
@@ -169,16 +167,6 @@ impl Entry {
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the transaction is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
-        let tx_plans_verified = self.transactions.par_iter().all(|tx| {
-            let r = tx.verify_plan();
-            if !r {
-                warn!("tx plan invalid: {:?}", tx);
-            }
-            r
-        });
-        if !tx_plans_verified {
-            return false;
-        }
         let ref_hash = next_hash(start_hash, self.num_hashes, &self.transactions);
         if self.id != ref_hash {
             warn!(
