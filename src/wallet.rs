@@ -8,11 +8,10 @@ use crdt::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
 use hash::Hash;
-use reqwest;
-use reqwest::header::CONTENT_TYPE;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
-use serde_json::{self, Value};
+use rpc_request::RpcRequest;
+use serde_json;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_program_interface::pubkey::Pubkey;
 use std::fs::{self, File};
@@ -289,7 +288,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 tokens, config.drone_addr
             );
             let params = json!(format!("{}", config.id.pubkey()));
-            let previous_balance = match WalletRpcRequest::GetBalance
+            let previous_balance = match RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64()
             {
@@ -306,7 +305,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             for _ in 0..20 {
                 sleep(Duration::from_millis(500));
                 let params = json!(format!("{}", config.id.pubkey()));
-                current_balance = WalletRpcRequest::GetBalance
+                current_balance = RpcRequest::GetBalance
                     .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                     .as_i64()
                     .unwrap_or(previous_balance);
@@ -325,7 +324,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         WalletCommand::Balance => {
             println!("Balance requested...");
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             match balance {
@@ -349,7 +348,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             let params = json!(format!("{}", signature));
-            let confirmation = WalletRpcRequest::ConfirmTransaction
+            let confirmation = RpcRequest::ConfirmTransaction
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_bool();
             match confirmation {
@@ -487,7 +486,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
@@ -506,7 +505,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let last_id = get_last_id(&config)?;
 
             let params = json!(format!("{}", config.id.pubkey()));
-            let balance = WalletRpcRequest::GetBalance
+            let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(0) = balance {
@@ -579,61 +578,8 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
-pub enum WalletRpcRequest {
-    ConfirmTransaction,
-    GetAccountInfo,
-    GetBalance,
-    GetFinality,
-    GetLastId,
-    GetTransactionCount,
-    RequestAirdrop,
-    SendTransaction,
-}
-impl WalletRpcRequest {
-    fn make_rpc_request(
-        &self,
-        rpc_addr: &str,
-        id: u64,
-        params: Option<Value>,
-    ) -> Result<Value, Box<error::Error>> {
-        let jsonrpc = "2.0";
-        let method = match self {
-            WalletRpcRequest::ConfirmTransaction => "confirmTransaction",
-            WalletRpcRequest::GetAccountInfo => "getAccountInfo",
-            WalletRpcRequest::GetBalance => "getBalance",
-            WalletRpcRequest::GetFinality => "getFinality",
-            WalletRpcRequest::GetLastId => "getLastId",
-            WalletRpcRequest::GetTransactionCount => "getTransactionCount",
-            WalletRpcRequest::RequestAirdrop => "requestAirdrop",
-            WalletRpcRequest::SendTransaction => "sendTransaction",
-        };
-        let client = reqwest::Client::new();
-        let mut request = json!({
-           "jsonrpc": jsonrpc,
-           "id": id,
-           "method": method,
-        });
-        if let Some(param_string) = params {
-            request["params"] = json!(vec![param_string]);
-        }
-        let mut response = client
-            .post(rpc_addr)
-            .header(CONTENT_TYPE, "application/json")
-            .body(request.to_string())
-            .send()?;
-        let json: Value = serde_json::from_str(&response.text()?)?;
-        if json["error"].is_object() {
-            Err(WalletError::RpcRequestError(format!(
-                "RPC Error response: {}",
-                serde_json::to_string(&json["error"]).unwrap()
-            )))?
-        }
-        Ok(json["result"].clone())
-    }
-}
-
 fn get_last_id(config: &WalletConfig) -> Result<Hash, Box<error::Error>> {
-    let result = WalletRpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
+    let result = RpcRequest::GetLastId.make_rpc_request(&config.rpc_addr, 1, None)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad last_id".to_string(),
@@ -653,7 +599,7 @@ fn serialize_and_send_tx(
     let serialized = serialize(tx).unwrap();
     let params = json!(serialized);
     let signature =
-        WalletRpcRequest::SendTransaction.make_rpc_request(&config.rpc_addr, 2, Some(params))?;
+        RpcRequest::SendTransaction.make_rpc_request(&config.rpc_addr, 2, Some(params))?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -672,6 +618,7 @@ mod tests {
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use mint::Mint;
+    use serde_json::Value;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
@@ -1094,7 +1041,7 @@ mod tests {
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
         let params = json!(format!("{}", signature.unwrap()));
-        let confirmation = WalletRpcRequest::ConfirmTransaction
+        let confirmation = RpcRequest::ConfirmTransaction
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_bool()
@@ -1189,21 +1136,21 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1216,21 +1163,21 @@ mod tests {
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1308,21 +1255,21 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1335,21 +1282,21 @@ mod tests {
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1427,21 +1374,21 @@ mod tests {
         let process_id = Pubkey::new(&process_id_vec);
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
@@ -1454,21 +1401,21 @@ mod tests {
         assert!(sig_response.is_ok());
 
         let params = json!(format!("{}", config_payer.id.pubkey()));
-        let config_payer_balance = WalletRpcRequest::GetBalance
+        let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(config_payer_balance, 49);
         let params = json!(format!("{}", process_id));
-        let contract_balance = WalletRpcRequest::GetBalance
+        let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
-        let recipient_balance = WalletRpcRequest::GetBalance
+        let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
             .as_i64()

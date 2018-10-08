@@ -53,6 +53,7 @@ pub mod request_stage;
 pub mod result;
 pub mod retransmit_stage;
 pub mod rpc;
+pub mod rpc_request;
 pub mod rpu;
 pub mod service;
 pub mod signature;
