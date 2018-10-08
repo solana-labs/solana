@@ -9,7 +9,7 @@ buildkite-agent artifact download "solana_*.snap" .
 source ci/upload_ci_artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
-[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
+[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25"
 
 launchTestnet() {
   declare nodeCount=$1
@@ -29,38 +29,40 @@ launchTestnet() {
   sleep "$ITERATION_WAIT"
 
   declare q_mean_tps='
-    SELECT round(mean("sum_count")) FROM (
+    SELECT round(mean("sum_count")) AS "mean_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM "testnet-automation"."autogen"."counter-banking_stage-process_transactions"
         WHERE time > now() - 300s GROUP BY time(1s)
     )'
 
   declare q_max_tps='
-    SELECT round(max("sum_count")) FROM (
+    SELECT round(max("sum_count")) AS "max_tps" FROM (
       SELECT sum("count") AS "sum_count"
         FROM "testnet-automation"."autogen"."counter-banking_stage-process_transactions"
         WHERE time > now() - 300s GROUP BY time(1s)
     )'
 
   declare q_mean_finality='
-    SELECT round(mean("duration_ms"))
+    SELECT round(mean("duration_ms")) as "mean_finality"
       FROM "testnet-automation"."autogen"."leader-finality"
       WHERE time > now() - 300s'
 
   declare q_max_finality='
-    SELECT round(max("duration_ms"))
+    SELECT round(max("duration_ms")) as "max_finality"
       FROM "testnet-automation"."autogen"."leader-finality"
       WHERE time > now() - 300s'
 
   declare q_99th_finality='
-    SELECT round(percentile("duration_ms", 99))
+    SELECT round(percentile("duration_ms", 99)) as "99th_finality"
       FROM "testnet-automation"."autogen"."leader-finality"
       WHERE time > now() - 300s'
 
+  declare testnet_json_parser='import sys, json; data=json.load(sys.stdin); print[([result["series"][0]["columns"][1].encode(), result["series"][0]["values"][0][1]]) for result in data["results"]]'
+
   curl -G "https://metrics.solana.com:8086/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
-    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" \
-    >>TPS"$nodeCount".log
+    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" |
+    python -c "$testnet_json_parser" >>TPS"$nodeCount".log
 
   upload_ci_artifact TPS"$nodeCount".log
 }
