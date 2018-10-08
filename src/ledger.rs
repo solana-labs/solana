@@ -5,7 +5,11 @@
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
 use budget_instruction::Vote;
 use budget_transaction::BudgetTransaction;
+#[cfg(test)]
+use chrono::prelude::Utc;
 use entry::Entry;
+#[cfg(test)]
+use hash::hash;
 use hash::Hash;
 use log::Level::Trace;
 use mint::Mint;
@@ -639,12 +643,35 @@ pub fn create_tmp_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entr
 }
 
 #[cfg(test)]
+pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
+    let zero = Hash::default();
+    let one = hash(&zero.as_ref());
+    let keypair = Keypair::new();
+
+    let mut id = one;
+    let mut num_hashes = 0;
+    (0..num)
+        .map(|_| {
+            Entry::new_mut(
+                &mut id,
+                &mut num_hashes,
+                vec![Transaction::budget_new_timestamp(
+                    &keypair,
+                    keypair.pubkey(),
+                    keypair.pubkey(),
+                    Utc::now(),
+                    one,
+                )],
+            )
+        }).collect()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use bincode::serialized_size;
     use budget_instruction::Vote;
     use budget_transaction::BudgetTransaction;
-    use chrono::prelude::*;
     use entry::{next_entry, Entry};
     use hash::hash;
     use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
@@ -667,29 +694,6 @@ mod tests {
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
-    }
-
-    fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
-        let zero = Hash::default();
-        let one = hash(&zero.as_ref());
-        let keypair = Keypair::new();
-
-        let mut id = one;
-        let mut num_hashes = 0;
-        (0..num)
-            .map(|_| {
-                Entry::new_mut(
-                    &mut id,
-                    &mut num_hashes,
-                    vec![Transaction::budget_new_timestamp(
-                        &keypair,
-                        keypair.pubkey(),
-                        keypair.pubkey(),
-                        Utc::now(),
-                        one,
-                    )],
-                )
-            }).collect()
     }
 
     fn make_test_entries() -> Vec<Entry> {
