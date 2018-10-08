@@ -1755,7 +1755,7 @@ mod tests {
             let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
             let keypair = Keypair::new();
 
-            let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
+            let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
 
             let mut writer = LedgerWriter::open(&path, true).unwrap();
             let zero = Hash::default();
