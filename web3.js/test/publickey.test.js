@@ -39,9 +39,11 @@ test('isPublicKey', () => {
 test('toBase58', () => {
   const key = new PublicKey('0x300000000000000000000000000000000000000000000000000000000000000');
   expect(key.toBase58()).toBe('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
+  expect(key.toString()).toBe('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
 
   const key2 = new PublicKey('123456789');
   expect(key2.toBase58()).toBe('Vj3WURvtMv1mii1vhTqLhcSwVWDRs2E135KtTYUXtTq');
+  expect(key2.toString()).toBe('Vj3WURvtMv1mii1vhTqLhcSwVWDRs2E135KtTYUXtTq');
 });
 
 test('toBuffer', () => {
