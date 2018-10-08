@@ -82,18 +82,19 @@ fn err_bincode_to_io(e: Box<bincode::ErrorKind>) -> io::Error {
     io::Error::new(io::ErrorKind::Other, e.to_string())
 }
 
-fn entry_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<Entry> {
-    file.seek(SeekFrom::Start(at))?;
-
-    let len = deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)?;
-    trace!("entry_at({}) len: {}", at, len);
-
+fn read_entry<A: Read>(file: &mut A, len: u64) -> io::Result<Entry> {
     deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+}
+
+fn entry_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<Entry> {
+    let len = u64_at(file, at)?;
+
+    read_entry(file, len)
 }
 
 fn next_entry<A: Read>(file: &mut A) -> io::Result<Entry> {
     let len = deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)?;
-    deserialize_from(file.take(len)).map_err(err_bincode_to_io)
+    read_entry(file, len)
 }
 
 fn u64_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<u64> {
@@ -116,8 +117,54 @@ impl LedgerWindow {
     }
 
     pub fn get_entry(&mut self, index: u64) -> io::Result<Entry> {
-        let offset = u64_at(&mut self.index, index * SIZEOF_U64)?;
+        let offset = self.get_entry_offset(index)?;
         entry_at(&mut self.data, offset)
+    }
+
+    // Fill 'buf' with num_entries or most number of whole entries that fit into buf.len()
+    //
+    // Return tuple of (number of entries read, total size of entries read)
+    pub fn get_entries_bytes(
+        &mut self,
+        start_index: u64,
+        num_entries: u64,
+        buf: &mut [u8],
+    ) -> io::Result<(u64, u64)> {
+        let start_offset = self.get_entry_offset(start_index)?;
+        let mut total_entries = 0;
+        let mut end_offset = 0;
+        for i in 0..num_entries {
+            let offset = self.get_entry_offset(start_index + i)?;
+            let len = u64_at(&mut self.data, offset)?;
+            let cur_end_offset = offset + len + SIZEOF_U64;
+            if (cur_end_offset - start_offset) > buf.len() as u64 {
+                break;
+            }
+            end_offset = cur_end_offset;
+            total_entries += 1;
+        }
+
+        if total_entries == 0 {
+            return Ok((0, 0));
+        }
+
+        let read_len = end_offset - start_offset;
+        self.data.seek(SeekFrom::Start(start_offset))?;
+        let fread_len = self.data.read(&mut buf[..read_len as usize])? as u64;
+        if fread_len != read_len {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "entry read_len({}) doesn't match expected ({})",
+                    fread_len, read_len
+                ),
+            ));
+        }
+        Ok((total_entries, read_len))
+    }
+
+    fn get_entry_offset(&mut self, index: u64) -> io::Result<u64> {
+        u64_at(&mut self.index, index * SIZEOF_U64)
     }
 }
 
@@ -872,6 +919,68 @@ mod tests {
 
         assert!(verify_ledger(&ledger_path).is_ok());
         let _ignored = remove_dir_all(&ledger_path);
+    }
+
+    #[test]
+    fn test_get_entries_bytes() {
+        use logger;
+        logger::setup();
+        let entries = make_tiny_test_entries(10);
+        let ledger_path = tmp_ledger_path("test_raw_entries");
+        {
+            let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
+            writer.write_entries(entries.clone()).unwrap();
+        }
+
+        let mut window = LedgerWindow::open(&ledger_path).unwrap();
+        let mut buf = [0; 1024];
+        let (num_entries, bytes) = window.get_entries_bytes(0, 1, &mut buf).unwrap();
+        let bytes = bytes as usize;
+        assert_eq!(num_entries, 1);
+        let entry: Entry = deserialize(&buf[size_of::<u64>()..bytes]).unwrap();
+        assert_eq!(entry, entries[0]);
+
+        let (num_entries, bytes2) = window.get_entries_bytes(0, 2, &mut buf).unwrap();
+        let bytes2 = bytes2 as usize;
+        assert_eq!(num_entries, 2);
+        assert!(bytes2 > bytes);
+        for (i, ref entry) in entries.iter().enumerate() {
+            info!("entry[{}] = {:?}", i, entry.id);
+        }
+
+        let entry: Entry = deserialize(&buf[size_of::<u64>()..bytes]).unwrap();
+        assert_eq!(entry, entries[0]);
+
+        let entry: Entry = deserialize(&buf[bytes + size_of::<u64>()..bytes2]).unwrap();
+        assert_eq!(entry, entries[1]);
+
+        // buf size part-way into entry[1], should just return entry[0]
+        let mut buf = vec![0; bytes + size_of::<u64>() + 1];
+        let (num_entries, bytes3) = window.get_entries_bytes(0, 2, &mut buf).unwrap();
+        assert_eq!(num_entries, 1);
+        let bytes3 = bytes3 as usize;
+        assert_eq!(bytes3, bytes);
+
+        let mut buf = vec![0; bytes2 - 1];
+        let (num_entries, bytes4) = window.get_entries_bytes(0, 2, &mut buf).unwrap();
+        assert_eq!(num_entries, 1);
+        let bytes4 = bytes4 as usize;
+        assert_eq!(bytes4, bytes);
+
+        let mut buf = vec![0; bytes + size_of::<u64>() - 1];
+        let (num_entries, bytes5) = window.get_entries_bytes(0, 2, &mut buf).unwrap();
+        assert_eq!(num_entries, 1);
+        let bytes5 = bytes5 as usize;
+        assert_eq!(bytes5, bytes);
+
+        let mut buf = vec![0; bytes * 2];
+        let (num_entries, bytes6) = window.get_entries_bytes(9, 1, &mut buf).unwrap();
+        assert_eq!(num_entries, 1);
+        let bytes6 = bytes6 as usize;
+        assert_eq!(bytes6, bytes);
+
+        // Read out of range
+        assert!(window.get_entries_bytes(20, 2, &mut buf).is_err());
     }
 
 }
