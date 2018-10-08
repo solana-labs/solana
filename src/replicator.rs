@@ -150,16 +150,16 @@ mod tests {
     use crdt::Node;
     use fullnode::Fullnode;
     use hash::Hash;
-    use ledger::{genesis, read_ledger};
+    use ledger::{genesis, read_ledger, tmp_ledger_path};
     use logger;
     use replicator::sample_file;
     use replicator::Replicator;
     use signature::{Keypair, KeypairUtil};
     use std::fs::File;
-    use std::fs::{remove_dir_all, remove_file};
+    use std::fs::{create_dir_all, remove_dir_all, remove_file};
     use std::io::Write;
     use std::mem::size_of;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread::sleep;
@@ -170,7 +170,7 @@ mod tests {
         logger::setup();
         info!("starting replicator test");
         let entry_height = 0;
-        let replicator_ledger_path = "replicator_test_replicator_ledger";
+        let replicator_ledger_path = &tmp_ledger_path("replicator_test_replicator_ledger");
 
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
@@ -247,21 +247,35 @@ mod tests {
         let _ignored = remove_dir_all(&replicator_ledger_path);
     }
 
+    fn tmp_file_path(name: &str) -> PathBuf {
+        use std::env;
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let keypair = Keypair::new();
+
+        let mut path = PathBuf::new();
+        path.push(out_dir);
+        path.push("tmp");
+        create_dir_all(&path).unwrap();
+
+        path.push(format!("{}-{}", name, keypair.pubkey()));
+        path
+    }
+
     #[test]
     fn test_sample_file() {
         logger::setup();
-        let in_path = Path::new("test_sample_file_input.txt");
+        let in_path = tmp_file_path("test_sample_file_input.txt");
         let num_strings = 4096;
         let string = "12foobar";
         {
-            let mut in_file = File::create(in_path).unwrap();
+            let mut in_file = File::create(&in_path).unwrap();
             for _ in 0..num_strings {
                 in_file.write(string.as_bytes()).unwrap();
             }
         }
         let num_samples = (string.len() * num_strings / size_of::<Hash>()) as u64;
         let samples: Vec<_> = (0..num_samples).collect();
-        let res = sample_file(in_path, samples.as_slice());
+        let res = sample_file(&in_path, samples.as_slice());
         assert!(res.is_ok());
         let ref_hash: Hash = Hash::new(&[
             173, 251, 182, 165, 10, 54, 33, 150, 133, 226, 106, 150, 99, 192, 179, 1, 230, 144,
@@ -271,30 +285,30 @@ mod tests {
         assert_eq!(res, ref_hash);
 
         // Sample just past the end
-        assert!(sample_file(in_path, &[num_samples]).is_err());
-        remove_file(in_path).unwrap();
+        assert!(sample_file(&in_path, &[num_samples]).is_err());
+        remove_file(&in_path).unwrap();
     }
 
     #[test]
     fn test_sample_file_invalid_offset() {
-        let in_path = Path::new("test_sample_file_invalid_offset_input.txt");
+        let in_path = tmp_file_path("test_sample_file_invalid_offset_input.txt");
         {
-            let mut in_file = File::create(in_path).unwrap();
+            let mut in_file = File::create(&in_path).unwrap();
             for _ in 0..4096 {
                 in_file.write("123456foobar".as_bytes()).unwrap();
             }
         }
         let samples = [0, 200000];
-        let res = sample_file(in_path, &samples);
+        let res = sample_file(&in_path, &samples);
         assert!(res.is_err());
         remove_file(in_path).unwrap();
     }
 
     #[test]
     fn test_sample_file_missing_file() {
-        let in_path = Path::new("test_sample_file_that_doesnt_exist.txt");
+        let in_path = tmp_file_path("test_sample_file_that_doesnt_exist.txt");
         let samples = [0, 5];
-        let res = sample_file(in_path, &samples);
+        let res = sample_file(&in_path, &samples);
         assert!(res.is_err());
     }
 
