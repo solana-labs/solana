@@ -47,8 +47,10 @@ use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use storage_stage::{StorageStage, StorageState};
 use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -61,6 +63,7 @@ pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     ledger_write_stage: LedgerWriteStage,
+    storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
 }
 
@@ -69,13 +72,15 @@ impl Tvu {
     /// on the bank state.
     /// # Arguments
     /// * `bank` - The bank state.
-    /// * `entry_height` - Initial ledger height, passed to replicate stage
+    /// * `keypair` - Node's key pair for signing
+    /// * `vote_account_keypair` - Vote key pair
+    /// * `entry_height` - Initial ledger height
     /// * `cluster_info` - The cluster_info state.
     /// * `window` - The window state.
     /// * `replicate_socket` - my replicate socket
     /// * `repair_socket` - my repair socket
     /// * `retransmit_socket` - my retransmit socket
-    /// * `exit` - The exit signal.
+    /// * `ledger_path` - path to the ledger file
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
@@ -111,6 +116,17 @@ impl Tvu {
             bank.leader_scheduler.clone(),
         );
 
+        let (storage_entry_sender, storage_entry_receiver) = channel();
+        let storage_state = StorageState::new();
+        let storage_stage = StorageStage::new(
+            &storage_state,
+            storage_entry_receiver,
+            ledger_path,
+            keypair.clone(),
+            exit.clone(),
+            entry_height,
+        );
+
         let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
             keypair,
             vote_account_keypair,
@@ -121,13 +137,18 @@ impl Tvu {
             entry_height,
         );
 
-        let ledger_write_stage = LedgerWriteStage::new(ledger_path, ledger_entry_receiver, None);
+        let ledger_write_stage = LedgerWriteStage::new(
+            ledger_path,
+            ledger_entry_receiver,
+            Some(storage_entry_sender),
+        );
 
         Tvu {
             replicate_stage,
             fetch_stage,
             retransmit_stage,
             ledger_write_stage,
+            storage_stage,
             exit,
         }
     }
@@ -153,6 +174,7 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.ledger_write_stage.join()?;
+        self.storage_stage.join()?;
         match self.replicate_stage.join()? {
             Some(ReplicateStageReturnType::LeaderRotation(
                 tick_height,

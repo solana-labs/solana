@@ -83,7 +83,6 @@ fn main() {
         keypair.pubkey(),
         ncp
     );
-    println!("my node: {:?}", node);
 
     let exit = Arc::new(AtomicBool::new(false));
     let done = Arc::new(AtomicBool::new(false));

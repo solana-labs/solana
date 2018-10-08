@@ -5,7 +5,7 @@ use sigverify::{chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_ini
 use std::io;
 use std::mem::size_of;
 
-const ENTRIES_PER_SLICE: u64 = 16;
+use storage_stage::ENTRIES_PER_SLICE;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -89,7 +89,6 @@ pub fn chacha_cbc_encrypt_file_many_keys(
             num_keys as u32,
         );
     }
-    info!("num_keys: {}", num_keys);
     let mut res = Vec::new();
     for x in 0..num_keys {
         let start = x * size_of::<Hash>();
