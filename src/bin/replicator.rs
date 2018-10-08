@@ -7,8 +7,8 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::chacha::chacha_cbc_encrypt_files;
-use solana::cluster_info::Node;
 use solana::client::mk_client;
+use solana::cluster_info::Node;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::Config;
 use solana::ledger::LEDGER_DATA_FILE;

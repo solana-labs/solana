@@ -45,6 +45,9 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
     let mut buf = vec![0; sample_size];
 
     let file_len = metadata.len();
+    if file_len < sample_size64 {
+        return Err(Error::new(ErrorKind::Other, "file too short!"));
+    }
     for offset in sample_offsets {
         if *offset > (file_len - sample_size64) / sample_size64 {
             return Err(Error::new(ErrorKind::Other, "offset too large"));

@@ -39,7 +39,7 @@ pub fn chacha_cbc_encrypt_files(in_path: &Path, out_path: &Path, key: String) ->
     let mut ivec = [0; CHACHA_IVEC_SIZE];
 
     while let Ok(size) = in_file.read(&mut buffer) {
-        info!("read {} bytes", size);
+        debug!("read {} bytes", size);
         if size == 0 {
             break;
         }

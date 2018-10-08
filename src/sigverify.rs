@@ -21,7 +21,7 @@ struct Elems {
 }
 
 #[cfg(feature = "cuda")]
-#[link(name = "cuda_verify_ed25519")]
+#[link(name = "cuda-crypt")]
 extern "C" {
     fn ed25519_init() -> bool;
     fn ed25519_set_verbose(val: bool);
@@ -35,6 +35,19 @@ extern "C" {
         signed_message_len_offset: u32,
         out: *mut u8, //combined length of all the items in vecs
     ) -> u32;
+
+    pub fn chacha_cbc_encrypt_many_sample(
+        input: *const u8,
+        output: *mut u8,
+        in_len: usize,
+        keys: *const u8,
+        ivec: *mut u8,
+        num_keys: u32,
+        samples: *const u64,
+        num_samples: u32,
+        starting_block: u64,
+        time_us: *mut f32,
+    );
 }
 
 #[cfg(not(feature = "cuda"))]
