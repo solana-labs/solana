@@ -4,7 +4,6 @@
 
 use bank::Bank;
 use bincode::deserialize;
-use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
 use log::Level;
@@ -224,7 +223,7 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_plan() && ver != 0 {
+                    Some((tx, _addr)) => if ver != 0 {
                         Some(tx)
                     } else {
                         None
