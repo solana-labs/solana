@@ -1136,6 +1136,30 @@ mod tests {
         //assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
+    // Test how fees are dealt in contracts that error out.
+    // This test verifies current incorrect behavior. Contracts that cause
+    // execution on chain should pay the fee.
+    #[test]
+    fn test_failed_with_fee() {
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
+        let dest = Keypair::new();
+
+        // source with 0 contract context
+        let tx = Transaction::system_move(&mint.keypair(), dest.pubkey(), 1, mint.last_id(), 1);
+        let signature = tx.signature;
+        assert!(!bank.has_signature(&signature));
+        let res = bank.process_transaction(&tx);
+        // This is the potentially wrong behavior
+        // result failed, but signature is registered
+        assert!(bank.has_signature(&signature));
+        // sanity check that tokens didn't move
+        assert_eq!(bank.get_balance(&dest.pubkey()), 0);
+        // TODO: contracts that fail should spend the fee
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert!(!res.is_ok());
+    }
+
     #[test]
     fn test_account_not_found() {
         let mint = Mint::new(1);
