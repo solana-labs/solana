@@ -1,6 +1,7 @@
 extern crate elf;
 extern crate rbpf;
 
+use std::env;
 use std::io::prelude::*;
 use std::mem;
 use std::path::PathBuf;
@@ -46,28 +47,17 @@ pub enum ProgramPath {
 impl ProgramPath {
     /// Creates a platform-specific file path
     pub fn create(&self, name: &str) -> PathBuf {
-        let mut path = PathBuf::from(env!("OUT_DIR"));
-        match self {
-            ProgramPath::Bpf => {
-                //println!("Bpf");
-                path.pop();
-                path.pop();
-                path.pop();
-                path.push(PLATFORM_FILE_PREFIX_BPF.to_string() + name);
-                path.set_extension(PLATFORM_FILE_EXTENSION_BPF);
-            }
-            ProgramPath::Native => {
-                //println!("Native");
-                path.pop();
-                path.pop();
-                path.pop();
-                path.push("deps");
-                path.push(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name);
-                path.set_extension(PLATFORM_FILE_EXTENSION_NATIVE);
-            }
-        }
-        //println!("Path: {:?}", path);
-        path
+        let pathbuf = {
+            let current_exe = env::current_exe().unwrap();
+            PathBuf::from(current_exe.parent().unwrap())
+        };
+
+        pathbuf.join(match self {
+            ProgramPath::Bpf => PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
+                .with_extension(PLATFORM_FILE_EXTENSION_BPF),
+            ProgramPath::Native => PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
+                .with_extension(PLATFORM_FILE_EXTENSION_NATIVE),
+        })
     }
 }
 
