@@ -7,7 +7,7 @@ steps:
   - command: "ci/testnet-automation.sh"
     label: "run testnet"
     agents:
-      - "queue=metrics"
+      - "queue=testnet-deploy"
 
   - wait: ~
     continue_on_failure: true
@@ -15,4 +15,4 @@ steps:
   - command: "ci/testnet-automation-cleanup.sh"
     label: "delete testnet"
     agents:
-      - "queue=metrics"
+      - "queue=testnet-deploy"
