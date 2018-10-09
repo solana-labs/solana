@@ -10,14 +10,19 @@ source ci/upload_ci_artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
 [[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
+[[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
+  LEADER_CPU_MACHINE_TYPE="n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
+[[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
+[[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
+[[ -n $TESTNET_ZONE ]] || TESTNET_ZONE=us-west1-b
 
 launchTestnet() {
   declare nodeCount=$1
   echo --- setup "$nodeCount" node test
   net/gce.sh create \
-    -n "$nodeCount" -c 2 \
-    -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-    -p testnet-automation -z us-west1-b
+    -n "$nodeCount" -c "$CLIENT_COUNT" \
+    -G "$LEADER_CPU_MACHINE_TYPE" \
+    -p "$TESTNET_TAG" -z "$TESTNET_ZONE"
 
   echo --- configure database
   net/init-metrics.sh -e
