@@ -115,21 +115,21 @@ build_rpc_trait! {
         #[pubsub(name = "signature_notification")] {
             // Get notification when signature is verified
             // Accepts signature parameter as base-58 encoded string
-            #[rpc(name = "signatureSubscribe", alias = ["sigSub", ])]
+            #[rpc(name = "signatureSubscribe")]
             fn signature_subscribe(&self, Self::Metadata, pubsub::Subscriber<RpcSignatureStatus>, String);
 
             // Unsubscribe from signature notification subscription.
-            #[rpc(name = "signatureUnsubscribe", alias = ["sigUnsub", ])]
+            #[rpc(name = "signatureUnsubscribe")]
             fn signature_unsubscribe(&self, SubscriptionId) -> Result<bool>;
         }
         #[pubsub(name = "account_notification")] {
             // Get notification every time account userdata is changed
             // Accepts pubkey parameter as base-58 encoded string
-            #[rpc(name = "accountSubscribe", alias = ["accountSub", ])]
+            #[rpc(name = "accountSubscribe")]
             fn account_subscribe(&self, Self::Metadata, pubsub::Subscriber<Account>, String);
 
             // Unsubscribe from account notification subscription.
-            #[rpc(name = "accountUnsubscribe", alias = ["accountUnsub", ])]
+            #[rpc(name = "accountUnsubscribe")]
             fn account_unsubscribe(&self, SubscriptionId) -> Result<bool>;
         }
     }
