@@ -10,5 +10,5 @@ solana_program_interface = { path = "../../../common" }
 
 [lib]
 name = "move_funds"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 

@@ -12,5 +12,5 @@ bincode = "1.0.0"
 
 [lib]
 name = "solua"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
