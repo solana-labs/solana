@@ -57,12 +57,10 @@ launchTestnet() {
       FROM "testnet-automation"."autogen"."leader-finality"
       WHERE time > now() - 300s'
 
-  declare testnet_json_parser='import sys, json; data=json.load(sys.stdin); print[([result["series"][0]["columns"][1].encode(), result["series"][0]["values"][0][1]]) for result in data["results"]]'
-
   curl -G "https://metrics.solana.com:8086/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" |
-    python -c "$testnet_json_parser" >>TPS"$nodeCount".log
+    python -c ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
 
   upload_ci_artifact TPS"$nodeCount".log
 }
