@@ -1,0 +1,14 @@
+[package]
+name = "solua"
+version = "0.1.0"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+
+[dependencies]
+bincode = "1.0.0"
+rlua = "0.15.2"
+solana_program_interface = { path = "../../../common" }
+
+[lib]
+name = "solua"
+crate-type = ["dylib"]
+

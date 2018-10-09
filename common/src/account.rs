@@ -29,3 +29,19 @@ pub struct KeyedAccount<'a> {
     pub key: &'a Pubkey,
     pub account: &'a mut Account,
 }
+
+impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
+    fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
+        KeyedAccount { key, account }
+    }
+}
+
+impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
+    fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
+        KeyedAccount { key, account }
+    }
+}
+
+pub fn create_keyed_accounts(accounts: &mut [(Pubkey, Account)]) -> Vec<KeyedAccount> {
+    accounts.iter_mut().map(Into::into).collect()
+}
