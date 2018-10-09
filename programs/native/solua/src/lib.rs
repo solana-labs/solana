@@ -59,6 +59,9 @@ mod tests {
     use super::*;
     use solana_program_interface::account::{create_keyed_accounts, Account};
     use solana_program_interface::pubkey::Pubkey;
+    use std::fs::File;
+    use std::io::prelude::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_update_accounts() -> Result<()> {
@@ -190,5 +193,106 @@ mod tests {
         process(&mut create_keyed_accounts(&mut accounts), &data);
         assert_eq!(accounts[0].1.tokens, 100);
         assert_eq!(accounts[0].1.userdata, vec![]);
+    }
+
+    fn read_test_file(name: &str) -> Vec<u8> {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push(name);
+        let mut file = File::open(path).unwrap();
+        let mut contents = vec![];
+        file.read_to_end(&mut contents).unwrap();
+        contents
+    }
+
+    #[test]
+    fn test_load_lua_library() {
+        let userdata = r#"
+            local serialize = load(accounts[2].userdata)().serialize
+            accounts[3].userdata = serialize({a=1, b=2, c=3}, nil, "s")
+        "#.as_bytes()
+        .to_vec();
+
+        let program_id = Pubkey::default();
+
+        let alice_account = Account {
+            tokens: 100,
+            userdata,
+            program_id,
+        };
+
+        let serialize_account = Account {
+            tokens: 100,
+            userdata: read_test_file("serialize.lua"),
+            program_id,
+        };
+
+        let mut accounts = [
+            (Pubkey::default(), alice_account),
+            (Pubkey::default(), serialize_account),
+            (Pubkey::default(), Account::new(1, 0, program_id)),
+        ];
+        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+
+        process(&mut keyed_accounts, &[]);
+
+        // Verify deterministic ordering of a serialized Lua table.
+        assert_eq!(
+            str::from_utf8(&keyed_accounts[2].account.userdata).unwrap(),
+            "{a=1,b=2,c=3}"
+        );
+    }
+
+    #[test]
+    fn test_lua_multisig() {
+        let program_id = Pubkey::default();
+
+        let alice_pubkey = Pubkey::new(&[0; 32]);
+        let serialize_pubkey = Pubkey::new(&[1; 32]);
+        let state_pubkey = Pubkey::new(&[2; 32]);
+        let bob_pubkey = Pubkey::new(&[3; 32]);
+        let carol_pubkey = Pubkey::new(&[4; 32]);
+        let dan_pubkey = Pubkey::new(&[5; 32]);
+        let erin_pubkey = Pubkey::new(&[6; 32]);
+
+        let alice_account = Account {
+            tokens: 100,
+            userdata: read_test_file("multisig.lua"),
+            program_id,
+        };
+
+        let serialize_account = Account {
+            tokens: 100,
+            userdata: read_test_file("serialize.lua"),
+            program_id,
+        };
+
+        let mut accounts = [
+            (alice_pubkey, alice_account), // The payer and where the program is stored.
+            (serialize_pubkey, serialize_account), // Where the serialize library is stored.
+            (state_pubkey, Account::new(1, 0, program_id)), // Where program state is stored.
+            (bob_pubkey, Account::new(1, 0, program_id)), // The payee once M signatures are collected.
+        ];
+        let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+
+        let data = format!(
+            r#"{{m=2, n={{"{}","{}","{}"}}, tokens=100}}"#,
+            carol_pubkey, dan_pubkey, erin_pubkey
+        ).as_bytes()
+        .to_vec();
+
+        process(&mut keyed_accounts, &data);
+        assert_eq!(keyed_accounts[3].account.tokens, 1);
+
+        let data = format!(r#""{}""#, carol_pubkey).into_bytes();
+        process(&mut keyed_accounts, &data);
+        assert_eq!(keyed_accounts[3].account.tokens, 1);
+
+        let data = format!(r#""{}""#, dan_pubkey).into_bytes();
+        process(&mut keyed_accounts, &data);
+        assert_eq!(keyed_accounts[3].account.tokens, 101); // Pay day!
+
+        let data = format!(r#""{}""#, erin_pubkey).into_bytes();
+        process(&mut keyed_accounts, &data);
+        assert_eq!(keyed_accounts[3].account.tokens, 101); // No change!
     }
 }
