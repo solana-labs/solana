@@ -25,11 +25,11 @@ Methods
 * [sendTransaction](#sendtransaction)
 * [subscriptionChannel](#subscriptionChannel)
 
-* [Subscription Websocket](#Subscription Websocket)
-  * [accountSubscribe](#accountSubscribe)
-  * [accountUnsubscribe](#accountUnsubscribe)
-  * [signatureSubscribe](#signatureSubscribe)
-  * [signatureUnsubscribe](#signatureUnsubscribe)
+* [Subscription Websocket](#subscription-websocket)
+  * [accountSubscribe](#accountsubscribe)
+  * [accountUnsubscribe](#accountunsubscribe)
+  * [signatureSubscribe](#signaturesubscribe)
+  * [signatureUnsubscribe](#signatureunsubscribe)
 
 Request Formatting
 ---
@@ -239,19 +239,19 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 Open a socket on the node for JSON-RPC subscription requests
 
 ##### Parameters:
-* `integer` - port to open for websocket subscription requests
+None
 
 ##### Results:
-* `string` - "addr", open websocket address
+* `string` - "port", open websocket port
 * `string` - "path", unique key to use as websocket path
 
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"subscriptionChannel", "params":[3030]}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"subscriptionChannel"}' http://localhost:8899
 
 // Result
-{"jsonrpc":"2.0","result":{"addr":"127.0.0.1:3030","path":"BRbmMXn71cKfzXjFsmrTsWsXuQwbjXbwKdoRwVw1FRA3"},"id":1}
+{"jsonrpc":"2.0","result":{"port":9876,"path":"BRbmMXn71cKfzXjFsmrTsWsXuQwbjXbwKdoRwVw1FRA3"},"id":1}
 ```
 
 ---
@@ -261,12 +261,11 @@ After opening a subscription socket with the `subscriptionChannel` JSON-RPC requ
 Connect to the websocket at `ws://<ADDRESS>/<PATH>` returned from the request
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
-- The subscription-channel socket will close when client closes websocket. To create new subscriptions, send a new `subscriptionChannel` JSON-RPC reqest.
+- The subscription-channel socket will close when client closes websocket. To create new subscriptions, send a new `subscriptionChannel` JSON-RPC request.
 
 ---
 
 ### accountSubscribe
-*alias: accountSub*
 Subscribe to an account to receive notifications when the userdata for a given account public key changes
 
 ##### Parameters:
@@ -284,10 +283,14 @@ Subscribe to an account to receive notifications when the userdata for a given a
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
+##### Notification Format:
+```bash
+{"jsonrpc": "2.0","method": "account_notification", "params": {"result": {"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
+```
+
 ---
 
 ### accountUnsubscribe
-*alias: accountUnsub*
 Unsubscribe from account userdata change notifications
 
 ##### Parameters:
@@ -308,7 +311,6 @@ Unsubscribe from account userdata change notifications
 ---
 
 ### signatureSubscribe
-*alias: sigSub*
 Subscribe to a transaction signature to receive notification when the transaction is confirmed
 
 ##### Parameters:
@@ -326,10 +328,14 @@ Subscribe to a transaction signature to receive notification when the transactio
 {"jsonrpc": "2.0","result": 0,"id": 1}
 ```
 
+##### Notification Format:
+```bash
+{"jsonrpc": "2.0","method": "signature_notification", "params": {"result": "Confirmed","subscription":0}}
+```
+
 ---
 
 ### signatureUnsubscribe
-*alias: sigUnsub*
 Unsubscribe from account userdata change notifications
 
 ##### Parameters:
