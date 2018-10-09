@@ -783,36 +783,28 @@ impl Bank {
         results
     }
 
-    pub fn process_entry(
-        &self,
+    pub fn process_entry_votes(
+        bank: &Bank,
         entry: &Entry,
-        entry_height_option: Option<u64>,
-        leader_scheduler_option: &mut Option<&mut LeaderScheduler>,
-    ) -> Result<()> {
-        if !entry.transactions.is_empty() {
-            for (i, result) in self
-                .process_transactions(&entry.transactions)
-                .into_iter()
-                .enumerate()
-            {
-                if let Some(ref mut leader_scheduler) = leader_scheduler_option {
-                    if result.is_ok() {
-                        let tx = &entry.transactions[i];
-                        if tx.vote().is_some() {
-                            // Update the active set in the leader scheduler
-                            leader_scheduler.push_vote(*tx.from(), entry_height_option.expect("entry_height_option can't be None if leader_scheduler_option isn't None"));
-                        }
-                    }
-                }
-                result?;
+        entry_height: u64,
+        leader_scheduler: &mut LeaderScheduler,
+    ) {
+        for tx in &entry.transactions {
+            if tx.vote().is_some() {
+                // Update the active set in the leader scheduler
+                leader_scheduler.push_vote(*tx.from(), entry_height);
             }
         }
 
-        if let Some(ref mut leader_scheduler) = leader_scheduler_option {
-            // Update the leader schedule based on entry height
-            leader_scheduler.update_height(entry_height_option.unwrap(), self);
-        }
+        leader_scheduler.update_height(entry_height, bank);
+    }
 
+    pub fn process_entry(&self, entry: &Entry) -> Result<()> {
+        if !entry.transactions.is_empty() {
+            for result in self.process_transactions(&entry.transactions) {
+                result?;
+            }
+        }
         self.register_entry_id(&entry.id);
         Ok(())
     }
@@ -821,11 +813,9 @@ impl Bank {
     ///   as we go.
     fn process_entries_tail(
         &self,
-        entries: Vec<Entry>,
+        entries: &[Entry],
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
-        leader_scheduler_option: &mut Option<&mut LeaderScheduler>,
-        entry_height: u64,
     ) -> Result<u64> {
         let mut entry_count = 0;
 
@@ -838,29 +828,16 @@ impl Bank {
             *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
             entry_count += 1;
-            self.process_entry(
-                &entry,
-                Some(entry_count + entry_height),
-                leader_scheduler_option,
-            )?;
+            self.process_entry(entry)?;
         }
 
         Ok(entry_count)
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries(
-        &self,
-        entries: &[Entry],
-        start_entry_height: Option<u64>,
-        leader_scheduler_option: &mut Option<&mut LeaderScheduler>,
-    ) -> Result<()> {
-        for (i, entry) in entries.iter().enumerate() {
-            self.process_entry(
-                &entry,
-                start_entry_height.map(|x| x + i as u64 + 1),
-                leader_scheduler_option,
-            )?;
+    pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
+        for entry in entries {
+            self.process_entry(&entry)?;
         }
         Ok(())
     }
@@ -888,13 +865,20 @@ impl Bank {
                 return Err(BankError::LedgerVerificationFailed);
             }
             id = block.last().unwrap().id;
-            entry_count += self.process_entries_tail(
-                block,
-                tail,
-                tail_idx,
-                &mut leader_scheduler_option,
-                entry_count,
-            )?;
+            let tail_count = self.process_entries_tail(&block, tail, tail_idx)?;
+
+            for (i, entry) in block.iter().enumerate() {
+                if let Some(ref mut leader_scheduler) = leader_scheduler_option {
+                    Self::process_entry_votes(
+                        self,
+                        &entry,
+                        entry_count + i as u64 + 1,
+                        leader_scheduler,
+                    );
+                }
+            }
+
+            entry_count += tail_count;
         }
         Ok(entry_count)
     }
@@ -1485,7 +1469,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.process_entries(&[entry], None, &mut None).unwrap();
+        bank.process_entries(&[entry]).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 

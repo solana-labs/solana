@@ -803,7 +803,7 @@ mod tests {
 
         // Write two entries so that the validator is in the active set:
         //
-        // 1) Give him nonzero number of tokens
+        // 1) Give the validator a nonzero number of tokens
         // Write the bootstrap entries to the ledger that will cause leader rotation
         // after the bootstrap height
         //
@@ -892,7 +892,7 @@ mod tests {
         // transitioned after the bootstrap_height entry
         let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
 
-        assert_eq!(entry_height, bootstrap_height,);
+        assert_eq!(entry_height, bootstrap_height);
 
         // Shut down
         t_responder.join().expect("responder thread join");

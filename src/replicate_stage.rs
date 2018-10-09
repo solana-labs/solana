@@ -71,20 +71,22 @@ impl ReplicateStage {
         let mut res = Ok(());
         {
             let mut leader_scheduler_lock_option = None;
-            if let Some(leader_scheduler_lock) = leader_scheduler_option {
+            if let Some(ref leader_scheduler_lock) = leader_scheduler_option {
                 let wlock = leader_scheduler_lock.write().unwrap();
                 leader_scheduler_lock_option = Some(wlock);
             }
 
             let mut num_entries_to_write = entries.len();
             for (i, entry) in entries.iter().enumerate() {
-                res = bank.process_entry(
-                    &entry,
-                    Some(*entry_height + i as u64 + 1),
-                    &mut leader_scheduler_lock_option
-                        .as_mut()
-                        .map(|wlock| &mut (**wlock)),
-                );
+                res = bank.process_entry(&entry);
+                if let Some(ref mut wlock) = leader_scheduler_lock_option {
+                    Bank::process_entry_votes(
+                        &bank,
+                        &entry,
+                        *entry_height + i as u64 + 1,
+                        &mut **wlock,
+                    );
+                }
 
                 if let Some(ref leader_scheduler) = leader_scheduler_lock_option {
                     let leader_rotation_interval = leader_scheduler.leader_rotation_interval;
@@ -111,8 +113,9 @@ impl ReplicateStage {
                     // TODO: This will return early from the first entry that has an erroneous
                     // transaction, instad of processing the rest of the entries in the vector
                     // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but may not necessarily
-                    // be correct if the leader permits entries with erroneous transactions.
+                    // bank.process_entries() was used to process the entries, but doesn't solve the
+                    // issue that the bank state was still changed, leading to inconsistencies with the
+                    // leader as the leader currently should not be publishing erroneous transactions
                     break;
                 }
             }
@@ -134,6 +137,9 @@ impl ReplicateStage {
 
         let entries_len = entries.len() as u64;
         // TODO: move this to another stage?
+        // TODO: In line with previous behavior, this will write all the entries even if
+        // an error occurred processing one of the entries (causing the rest of the entries to
+        // not be processed).
         if let Some(ledger_writer) = ledger_writer {
             ledger_writer.write_entries(entries)?;
         }
@@ -257,7 +263,7 @@ mod test {
             .id;
 
         // Write two entries to the ledger so that the validator is in the active set:
-        // 1) Give him nonzero number of tokens 2) A vote from the validator .
+        // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
         let bootstrap_entries = make_active_set_entries(&my_keypair, &mint.keypair(), &last_id);

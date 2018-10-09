@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct Hash(pub GenericArray<u8, U32>);
+pub struct Hash(GenericArray<u8, U32>);
 
 #[derive(Clone, Default)]
 pub struct Hasher {

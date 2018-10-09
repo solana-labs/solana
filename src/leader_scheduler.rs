@@ -344,11 +344,7 @@ pub fn is_leader_rotation_height(
         return false;
     }
 
-    if (height - bootstrap_height) % leader_rotation_interval == 0 {
-        return true;
-    }
-
-    false
+    (height - bootstrap_height) % leader_rotation_interval == 0
 }
 
 pub fn entries_until_next_leader_rotation(
@@ -383,7 +379,7 @@ pub fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_
 
 // Create two entries so that the node with keypair == active_keypair
 // is in the active set for leader selection:
-// 1) Give him nonzero number of tokens,
+// 1) Give the node a nonzero number of tokens,
 // 2) A vote from the validator
 pub fn make_active_set_entries(
     active_keypair: &Keypair,
@@ -844,15 +840,13 @@ mod tests {
         for i in 0..=num_validators {
             leader_scheduler.generate_schedule(i * active_window_length, &bank);
             let result = &leader_scheduler.leader_schedule;
-            let mut expected;
-            if i == num_validators {
-                // When there are no active validators remaining, should default back to the
-                // bootstrap leader
-                expected = vec![bootstrap_leader_id];
+            let expected = if i == num_validators {
+                bootstrap_leader_id
             } else {
-                expected = vec![validators[i as usize]];
-            }
-            assert_eq!(expected, *result);
+                validators[i as usize]
+            };
+
+            assert_eq!(vec![expected], *result);
         }
     }
 
