@@ -591,7 +591,7 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
 
 #[cfg(test)]
 mod test {
-    use crdt;
+    use cluster_info;
     use erasure;
     use logger;
     use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
@@ -726,7 +726,7 @@ mod test {
             blobs.push(b_);
         }
 
-        let d = crdt::NodeInfo::new_localhost(Keypair::new().pubkey());
+        let d = cluster_info::NodeInfo::new_localhost(Keypair::new().pubkey());
         assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
         for b in blobs {
             let idx = b.read().unwrap().get_index().unwrap() as usize % WINDOW_SIZE;

@@ -1,4 +1,4 @@
-use crdt::{NodeInfo, FULLNODE_PORT_RANGE};
+use cluster_info::{NodeInfo, FULLNODE_PORT_RANGE};
 use netutil::bind_in_range;
 use std::time::Duration;
 use thin_client::ThinClient;

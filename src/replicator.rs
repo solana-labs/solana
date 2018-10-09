@@ -1,5 +1,5 @@
 use blob_fetch_stage::BlobFetchStage;
-use crdt::{Crdt, Node, NodeInfo};
+use cluster_info::{ClusterInfo, Node, NodeInfo};
 use hash::{Hash, Hasher};
 use ncp::Ncp;
 use service::Service;
@@ -77,12 +77,14 @@ impl Replicator {
         let window = window::new_window_from_entries(&[], entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
 
-        let crdt = Arc::new(RwLock::new(Crdt::new(node.info).expect("Crdt::new")));
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(node.info).expect("ClusterInfo::new"),
+        ));
 
         let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
 
         if let Some(leader_info) = leader_info.as_ref() {
-            crdt.write().unwrap().insert(leader_info);
+            cluster_info.write().unwrap().insert(leader_info);
         } else {
             panic!("No leader info!");
         }
@@ -98,7 +100,7 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
         let t_window = window_service(
-            crdt.clone(),
+            cluster_info.clone(),
             shared_window.clone(),
             entry_height,
             max_entry_height,
@@ -112,7 +114,7 @@ impl Replicator {
         let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
 
         let ncp = Ncp::new(
-            &crdt,
+            &cluster_info,
             shared_window.clone(),
             ledger_path,
             node.sockets.gossip,
@@ -147,7 +149,7 @@ impl Replicator {
 #[cfg(test)]
 mod tests {
     use client::mk_client;
-    use crdt::Node;
+    use cluster_info::Node;
     use fullnode::Fullnode;
     use hash::Hash;
     use ledger::{genesis, read_ledger, tmp_ledger_path};

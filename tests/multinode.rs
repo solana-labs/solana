@@ -6,7 +6,7 @@ extern crate serde_json;
 extern crate solana;
 extern crate solana_program_interface;
 
-use solana::crdt::{Crdt, Node, NodeInfo};
+use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
@@ -31,26 +31,26 @@ use std::thread::sleep;
 use std::thread::Builder;
 use std::time::{Duration, Instant};
 
-fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<Crdt>>, Pubkey) {
+fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = Node::new_localhost();
     let me = spy.info.id.clone();
     spy.info.contact_info.tvu = spy.sockets.replicate[0].local_addr().unwrap();
     spy.info.contact_info.rpu = spy.sockets.transaction[0].local_addr().unwrap();
-    let mut spy_crdt = Crdt::new(spy.info).expect("Crdt::new");
-    spy_crdt.insert(&leader);
-    spy_crdt.set_leader(leader.id);
-    let spy_crdt_ref = Arc::new(RwLock::new(spy_crdt));
+    let mut spy_cluster_info = ClusterInfo::new(spy.info).expect("ClusterInfo::new");
+    spy_cluster_info.insert(&leader);
+    spy_cluster_info.set_leader(leader.id);
+    let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
     let spy_window = Arc::new(RwLock::new(default_window()));
     let ncp = Ncp::new(
-        &spy_crdt_ref,
+        &spy_cluster_info_ref,
         spy_window,
         None,
         spy.sockets.gossip,
         exit.clone(),
     );
 
-    (ncp, spy_crdt_ref, me)
+    (ncp, spy_cluster_info_ref, me)
 }
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
@@ -971,10 +971,10 @@ fn test_leader_validator_basic() {
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
-    // TODO: We ignore this test for now b/c there's a chance here that the crdt
+    // TODO: We ignore this test for now b/c there's a chance here that the cluster_info
     // in the new leader calls the dummy sequence of update_leader -> top_leader()
     // (see the TODOs in those functions) during gossip and sets the leader back
-    // to the old leader, which causes a panic from an assertion failure in crdt broadcast(),
+    // to the old leader, which causes a panic from an assertion failure in cluster_info broadcast(),
     // specifically: assert!(me.leader_id != v.id). We can enable this test once we have real
     // leader scheduling
 
@@ -1014,8 +1014,8 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
         .set_read_timeout(Some(Duration::new(1, 0)))
         .unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    assert!(Crdt::is_valid_address(&leader.contact_info.rpu));
-    assert!(Crdt::is_valid_address(&leader.contact_info.tpu));
+    assert!(ClusterInfo::is_valid_address(&leader.contact_info.rpu));
+    assert!(ClusterInfo::is_valid_address(&leader.contact_info.tpu));
     ThinClient::new(
         leader.contact_info.rpu,
         requests_socket,

@@ -4,7 +4,7 @@ use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use crdt::NodeInfo;
+use cluster_info::NodeInfo;
 use drone::DroneRequest;
 use fullnode::Config;
 use hash::Hash;
@@ -613,7 +613,7 @@ mod tests {
     use super::*;
     use bank::Bank;
     use clap::{App, Arg, SubCommand};
-    use crdt::Node;
+    use cluster_info::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;

@@ -38,7 +38,7 @@
 
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
-use crdt::Crdt;
+use cluster_info::ClusterInfo;
 use replicate_stage::ReplicateStage;
 use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
 use service::Service;
@@ -67,7 +67,7 @@ impl Tvu {
     /// # Arguments
     /// * `bank` - The bank state.
     /// * `entry_height` - Initial ledger height, passed to replicate stage
-    /// * `crdt` - The crdt state.
+    /// * `cluster_info` - The cluster_info state.
     /// * `window` - The window state.
     /// * `replicate_socket` - my replicate socket
     /// * `repair_socket` - my repair socket
@@ -78,7 +78,7 @@ impl Tvu {
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         entry_height: u64,
-        crdt: Arc<RwLock<Crdt>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
@@ -97,7 +97,7 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
-            &crdt,
+            &cluster_info,
             window,
             entry_height,
             Arc::new(retransmit_socket),
@@ -108,7 +108,7 @@ impl Tvu {
         let replicate_stage = ReplicateStage::new(
             keypair,
             bank.clone(),
-            crdt,
+            cluster_info,
             blob_window_receiver,
             ledger_path,
             exit.clone(),
@@ -151,7 +151,7 @@ impl Service for Tvu {
 pub mod tests {
     use bank::Bank;
     use bincode::serialize;
-    use crdt::{Crdt, Node};
+    use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::{hash, Hash};
     use logger;
@@ -172,12 +172,12 @@ pub mod tests {
     use window::{self, SharedWindow};
 
     fn new_ncp(
-        crdt: Arc<RwLock<Crdt>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> (Ncp, SharedWindow) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let ncp = Ncp::new(&crdt, window.clone(), None, gossip, exit);
+        let ncp = Ncp::new(&cluster_info, window.clone(), None, gossip, exit);
         (ncp, window)
     }
 
@@ -191,19 +191,19 @@ pub mod tests {
         let target2 = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
-        //start crdt_leader
-        let mut crdt_l = Crdt::new(leader.info.clone()).expect("Crdt::new");
-        crdt_l.set_leader(leader.info.id);
+        //start cluster_info_l
+        let mut cluster_info_l = ClusterInfo::new(leader.info.clone()).expect("ClusterInfo::new");
+        cluster_info_l.set_leader(leader.info.id);
 
-        let cref_l = Arc::new(RwLock::new(crdt_l));
+        let cref_l = Arc::new(RwLock::new(cluster_info_l));
         let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
 
-        //start crdt2
-        let mut crdt2 = Crdt::new(target2.info.clone()).expect("Crdt::new");
-        crdt2.insert(&leader.info);
-        crdt2.set_leader(leader.info.id);
+        //start cluster_info2
+        let mut cluster_info2 = ClusterInfo::new(target2.info.clone()).expect("ClusterInfo::new");
+        cluster_info2.insert(&leader.info);
+        cluster_info2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
-        let cref2 = Arc::new(RwLock::new(crdt2));
+        let cref2 = Arc::new(RwLock::new(cluster_info2));
         let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
@@ -232,11 +232,11 @@ pub mod tests {
         let replicate_addr = target1.info.contact_info.tvu;
         let bank = Arc::new(Bank::new(&mint));
 
-        //start crdt1
-        let mut crdt1 = Crdt::new(target1.info.clone()).expect("Crdt::new");
-        crdt1.insert(&leader.info);
-        crdt1.set_leader(leader.info.id);
-        let cref1 = Arc::new(RwLock::new(crdt1));
+        //start cluster_info1
+        let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
+        cluster_info1.insert(&leader.info);
+        cluster_info1.set_leader(leader.info.id);
+        let cref1 = Arc::new(RwLock::new(cluster_info1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let tvu = Tvu::new(

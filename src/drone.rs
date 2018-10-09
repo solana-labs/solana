@@ -224,7 +224,7 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use crdt::Node;
+    use cluster_info::Node;
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
     use logger;

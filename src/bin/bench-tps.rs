@@ -11,7 +11,7 @@ use clap::{App, Arg};
 use influx_db_client as influxdb;
 use rayon::prelude::*;
 use solana::client::mk_client;
-use solana::crdt::{Crdt, NodeInfo};
+use solana::cluster_info::{ClusterInfo, NodeInfo};
 use solana::drone::DRONE_PORT;
 use solana::hash::Hash;
 use solana::logger;
@@ -734,7 +734,7 @@ fn main() {
         total_tx_sent_count.load(Ordering::Relaxed),
     );
 
-    // join the crdt client threads
+    // join the cluster_info client threads
     ncp.join().unwrap();
 }
 
@@ -744,11 +744,11 @@ fn converge(
     num_nodes: usize,
 ) -> (Vec<NodeInfo>, Option<NodeInfo>, Ncp) {
     //lets spy on the network
-    let (node, gossip_socket) = Crdt::spy_node();
-    let mut spy_crdt = Crdt::new(node).expect("Crdt::new");
-    spy_crdt.insert(&leader);
-    spy_crdt.set_leader(leader.id);
-    let spy_ref = Arc::new(RwLock::new(spy_crdt));
+    let (node, gossip_socket) = ClusterInfo::spy_node();
+    let mut spy_cluster_info = ClusterInfo::new(node).expect("ClusterInfo::new");
+    spy_cluster_info.insert(&leader);
+    spy_cluster_info.set_leader(leader.id);
+    let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
     let window = Arc::new(RwLock::new(default_window()));
     let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
@@ -763,7 +763,7 @@ fn converge(
                 v = spy_ref
                     .table
                     .values()
-                    .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+                    .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
                     .cloned()
                     .collect();
 

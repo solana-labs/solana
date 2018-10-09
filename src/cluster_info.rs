@@ -1,4 +1,4 @@
-//! The `crdt` module defines a data structure that is shared by all the nodes in the network over
+//! The `cluster_info` module defines a data structure that is shared by all the nodes in the network over
 //! a gossip control plane.  The goal is to share small bits of off-chain information and detect and
 //! repair partitions.
 //!
@@ -64,7 +64,7 @@ macro_rules! socketaddr_any {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum CrdtError {
+pub enum ClusterInfoError {
     NoPeers,
     NoLeader,
     BadContactInfo,
@@ -194,7 +194,7 @@ impl NodeInfo {
     }
 }
 
-/// `Crdt` structure keeps a table of `NodeInfo` structs
+/// `ClusterInfo` structure keeps a table of `NodeInfo` structs
 /// # Properties
 /// * `table` - map of public id's to versioned and signed NodeInfo structs
 /// * `local` - map of public id's to what `self.update_index` `self.table` was updated
@@ -205,7 +205,7 @@ impl NodeInfo {
 /// * `gossip` - asynchronously ask nodes to send updates
 /// * `listen` - listen for requests and responses
 /// No attempt to keep track of timeouts or dropped requests is made, or should be.
-pub struct Crdt {
+pub struct ClusterInfo {
     /// table of everyone in the network
     pub table: HashMap<Pubkey, NodeInfo>,
     /// Value of my update index when entry in table was updated.
@@ -247,12 +247,12 @@ enum Protocol {
     RequestWindowIndex(NodeInfo, u64),
 }
 
-impl Crdt {
-    pub fn new(node_info: NodeInfo) -> Result<Crdt> {
+impl ClusterInfo {
+    pub fn new(node_info: NodeInfo) -> Result<ClusterInfo> {
         if node_info.version != 0 {
-            return Err(Error::CrdtError(CrdtError::BadNodeInfo));
+            return Err(Error::ClusterInfoError(ClusterInfoError::BadNodeInfo));
         }
-        let mut me = Crdt {
+        let mut me = ClusterInfo {
             table: HashMap::new(),
             local: HashMap::new(),
             remote: HashMap::new(),
@@ -351,7 +351,7 @@ impl Crdt {
             .values()
             .into_iter()
             .filter(|x| x.id != me)
-            .filter(|x| Crdt::is_valid_address(&x.contact_info.rpu))
+            .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
             .cloned()
             .collect()
     }
@@ -374,7 +374,7 @@ impl Crdt {
         }
         if *pubkey == self.my_data().leader_id {
             info!("{}: LEADER_VOTED! {}", self.id, pubkey);
-            inc_new_counter_info!("crdt-insert_vote-leader_voted", 1);
+            inc_new_counter_info!("cluster_info-insert_vote-leader_voted", 1);
         }
 
         if v.version <= self.table[pubkey].version {
@@ -392,7 +392,7 @@ impl Crdt {
         }
     }
     pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
-        inc_new_counter_info!("crdt-vote-count", votes.len());
+        inc_new_counter_info!("cluster_info-vote-count", votes.len());
         if !votes.is_empty() {
             info!("{}: INSERTING VOTES {}", self.id, votes.len());
         }
@@ -409,7 +409,7 @@ impl Crdt {
             // we have stored ourselves
             trace!("{}: insert v.id: {} version: {}", self.id, v.id, v.version);
             if self.table.get(&v.id).is_none() {
-                inc_new_counter_info!("crdt-insert-new_entry", 1, 1);
+                inc_new_counter_info!("cluster_info-insert-new_entry", 1, 1);
             }
 
             self.update_index += 1;
@@ -462,7 +462,7 @@ impl Crdt {
                 }
             }).collect();
 
-        inc_new_counter_info!("crdt-purge-count", dead_ids.len());
+        inc_new_counter_info!("cluster_info-purge-count", dead_ids.len());
 
         for id in &dead_ids {
             self.alive.remove(id);
@@ -476,7 +476,7 @@ impl Crdt {
             }
             if *id == leader_id {
                 info!("{}: PURGE LEADER {}", self.id, id,);
-                inc_new_counter_info!("crdt-purge-purged_leader", 1, 1);
+                inc_new_counter_info!("cluster_info-purge-purged_leader", 1, 1);
                 self.set_leader(Pubkey::default());
             }
         }
@@ -516,7 +516,7 @@ impl Crdt {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         leader_rotation_interval: u64,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
@@ -526,9 +526,9 @@ impl Crdt {
         received_index: u64,
     ) -> Result<()> {
         if broadcast_table.is_empty() {
-            debug!("{}:not enough peers in crdt table", me.id);
-            inc_new_counter_info!("crdt-broadcast-not_enough_peers_error", 1);
-            Err(CrdtError::NoPeers)?;
+            debug!("{}:not enough peers in cluster_info table", me.id);
+            inc_new_counter_info!("cluster_info-broadcast-not_enough_peers_error", 1);
+            Err(ClusterInfoError::NoPeers)?;
         }
         trace!(
             "{} transmit_index: {:?} received_index: {} broadcast_len: {}",
@@ -563,7 +563,10 @@ impl Crdt {
             // so he can initiate repairs if necessary
             let entry_height = idx + 1;
             if entry_height % leader_rotation_interval == 0 {
-                let next_leader_id = crdt.read().unwrap().get_scheduled_leader(entry_height);
+                let next_leader_id = cluster_info
+                    .read()
+                    .unwrap()
+                    .get_scheduled_leader(entry_height);
                 if next_leader_id.is_some() && next_leader_id != Some(me.id) {
                     let info_result = broadcast_table
                         .iter()
@@ -640,7 +643,7 @@ impl Crdt {
             }
         }
         inc_new_counter_info!(
-            "crdt-broadcast-max_idx",
+            "cluster_info-broadcast-max_idx",
             (transmit_index.data - old_transmit_index) as usize
         );
         transmit_index.coding = transmit_index.data;
@@ -699,7 +702,7 @@ impl Crdt {
             }).collect();
         for e in errs {
             if let Err(e) = &e {
-                inc_new_counter_info!("crdt-retransmit-send_to_error", 1, 1);
+                inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
                 error!("retransmit result {:?}", e);
             }
             e?;
@@ -751,7 +754,7 @@ impl Crdt {
             .filter(|r| r.id != self.id && Self::is_valid_address(&r.contact_info.tvu))
             .collect();
         if valid.is_empty() {
-            Err(CrdtError::NoPeers)?;
+            Err(ClusterInfoError::NoPeers)?;
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].contact_info.ncp; // send the request to the peer's gossip port
@@ -783,8 +786,12 @@ impl Crdt {
 
         let choose_peer_result = choose_peer_strategy.choose_peer(options);
 
-        if let Err(Error::CrdtError(CrdtError::NoPeers)) = &choose_peer_result {
-            trace!("crdt too small for gossip {} {}", self.id, self.table.len());
+        if let Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)) = &choose_peer_result {
+            trace!(
+                "cluster_info too small for gossip {} {}",
+                self.id,
+                self.table.len()
+            );
         };
         let v = choose_peer_result?;
 
@@ -803,7 +810,10 @@ impl Crdt {
 
     pub fn new_vote(&mut self, last_id: Hash) -> Result<(Vote, SocketAddr)> {
         let mut me = self.my_data().clone();
-        let leader = self.leader_data().ok_or(CrdtError::NoLeader)?.clone();
+        let leader = self
+            .leader_data()
+            .ok_or(ClusterInfoError::NoLeader)?
+            .clone();
         me.version += 1;
         me.ledger_state.last_id = last_id;
         let vote = Vote {
@@ -879,7 +889,7 @@ impl Crdt {
         for v in data {
             insert_total += self.insert(&v);
         }
-        inc_new_counter_info!("crdt-update-count", insert_total);
+        inc_new_counter_info!("cluster_info-update-count", insert_total);
 
         for (pubkey, external_remote_index) in external_liveness {
             let remote_entry = if let Some(v) = self.remote.get(pubkey) {
@@ -974,11 +984,11 @@ impl Crdt {
                     outblob.meta.set_addr(from_addr);
                     outblob.set_id(sender_id).expect("blob set_id");
                 }
-                inc_new_counter_info!("crdt-window-request-pass", 1);
+                inc_new_counter_info!("cluster_info-window-request-pass", 1);
 
                 return Some(out);
             } else {
-                inc_new_counter_info!("crdt-window-request-outside", 1);
+                inc_new_counter_info!("cluster_info-window-request-outside", 1);
                 trace!(
                     "requested ix {} != blob_ix {}, outside window!",
                     ix,
@@ -990,7 +1000,7 @@ impl Crdt {
 
         if let Some(ledger_window) = ledger_window {
             if let Ok(entry) = ledger_window.get_entry(ix) {
-                inc_new_counter_info!("crdt-window-request-ledger", 1);
+                inc_new_counter_info!("cluster_info-window-request-ledger", 1);
 
                 let out = entry.to_blob(
                     Some(ix),
@@ -1002,7 +1012,7 @@ impl Crdt {
             }
         }
 
-        inc_new_counter_info!("crdt-window-request-fail", 1);
+        inc_new_counter_info!("cluster_info-window-request-fail", 1);
         trace!(
             "{}: failed RequestWindowIndex {} {} {}",
             me.id,
@@ -1023,10 +1033,10 @@ impl Crdt {
     ) -> Option<SharedBlob> {
         match deserialize(&blob.data[..blob.meta.size]) {
             Ok(request) => {
-                Crdt::handle_protocol(obj, &blob.meta.addr(), request, window, ledger_window)
+                ClusterInfo::handle_protocol(obj, &blob.meta.addr(), request, window, ledger_window)
             }
             Err(_) => {
-                warn!("deserialize crdt packet failed");
+                warn!("deserialize cluster_info packet failed");
                 None
             }
         }
@@ -1058,7 +1068,7 @@ impl Crdt {
                         me.read().unwrap().id,
                         from.id
                     );
-                    inc_new_counter_info!("crdt-window-request-loopback", 1);
+                    inc_new_counter_info!("cluster_info-window-request-loopback", 1);
                     return None;
                 }
 
@@ -1066,7 +1076,7 @@ impl Crdt {
                 //  this may or may not be correct for everybody but it's better than leaving him with
                 //  an unspecified address in our table
                 if from.contact_info.ncp.ip().is_unspecified() {
-                    inc_new_counter_info!("crdt-window-request-updates-unspec-ncp", 1);
+                    inc_new_counter_info!("cluster_info-window-request-updates-unspec-ncp", 1);
                     from.contact_info.ncp = *from_addr;
                 }
 
@@ -1144,7 +1154,7 @@ impl Crdt {
             Protocol::RequestWindowIndex(from, ix) => {
                 let now = Instant::now();
 
-                //TODO this doesn't depend on CRDT module, could be moved
+                //TODO this doesn't depend on cluster_info module, could be moved
                 //but we are using the listen thread to service these request
                 //TODO verify from is signed
 
@@ -1155,13 +1165,13 @@ impl Crdt {
                         from.id,
                         ix,
                     );
-                    inc_new_counter_info!("crdt-window-request-address-eq", 1);
+                    inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
                     return None;
                 }
 
                 me.write().unwrap().insert(&from);
                 let me = me.read().unwrap().my_data().clone();
-                inc_new_counter_info!("crdt-window-request-recv", 1);
+                inc_new_counter_info!("cluster_info-window-request-recv", 1);
                 trace!("{}: received RequestWindowIndex {} {} ", me.id, from.id, ix,);
                 let res =
                     Self::run_window_request(&from, &from_addr, &window, ledger_window, &me, ix);
@@ -1376,9 +1386,9 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use budget_instruction::Vote;
-    use crdt::{
-        Crdt, CrdtError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE, GOSSIP_PURGE_MILLIS,
-        GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
+    use cluster_info::{
+        ClusterInfo, ClusterInfoError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE,
+        GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
     };
     use entry::Entry;
     use hash::{hash, Hash};
@@ -1401,83 +1411,83 @@ mod tests {
     fn insert_test() {
         let mut d = NodeInfo::new_localhost(Keypair::new().pubkey());
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone()).unwrap();
-        assert_eq!(crdt.table[&d.id].version, 0);
-        assert!(!crdt.alive.contains_key(&d.id));
+        let mut cluster_info = ClusterInfo::new(d.clone()).unwrap();
+        assert_eq!(cluster_info.table[&d.id].version, 0);
+        assert!(!cluster_info.alive.contains_key(&d.id));
 
         d.version = 2;
-        crdt.insert(&d);
-        let liveness = crdt.alive[&d.id];
-        assert_eq!(crdt.table[&d.id].version, 2);
+        cluster_info.insert(&d);
+        let liveness = cluster_info.alive[&d.id];
+        assert_eq!(cluster_info.table[&d.id].version, 2);
 
         d.version = 1;
-        crdt.insert(&d);
-        assert_eq!(crdt.table[&d.id].version, 2);
-        assert_eq!(liveness, crdt.alive[&d.id]);
+        cluster_info.insert(&d);
+        assert_eq!(cluster_info.table[&d.id].version, 2);
+        assert_eq!(liveness, cluster_info.alive[&d.id]);
 
         // Ensure liveness will be updated for version 3
         sleep(Duration::from_millis(1));
 
         d.version = 3;
-        crdt.insert(&d);
-        assert_eq!(crdt.table[&d.id].version, 3);
-        assert!(liveness < crdt.alive[&d.id]);
+        cluster_info.insert(&d);
+        assert_eq!(cluster_info.table[&d.id].version, 3);
+        assert!(liveness < cluster_info.alive[&d.id]);
     }
     #[test]
     fn test_new_vote() {
         let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone()).unwrap();
-        assert_eq!(crdt.table[&d.id].version, 0);
+        let mut cluster_info = ClusterInfo::new(d.clone()).unwrap();
+        assert_eq!(cluster_info.table[&d.id].version, 0);
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1235"));
         assert_ne!(d.id, leader.id);
         assert_matches!(
-            crdt.new_vote(Hash::default()).err(),
-            Some(Error::CrdtError(CrdtError::NoLeader))
+            cluster_info.new_vote(Hash::default()).err(),
+            Some(Error::ClusterInfoError(ClusterInfoError::NoLeader))
         );
-        crdt.insert(&leader);
+        cluster_info.insert(&leader);
         assert_matches!(
-            crdt.new_vote(Hash::default()).err(),
-            Some(Error::CrdtError(CrdtError::NoLeader))
+            cluster_info.new_vote(Hash::default()).err(),
+            Some(Error::ClusterInfoError(ClusterInfoError::NoLeader))
         );
-        crdt.set_leader(leader.id);
-        assert_eq!(crdt.table[&d.id].version, 1);
+        cluster_info.set_leader(leader.id);
+        assert_eq!(cluster_info.table[&d.id].version, 1);
         let v = Vote {
             version: 2, //version should increase when we vote
             contact_info_version: 0,
         };
-        let expected = (v, crdt.table[&leader.id].contact_info.tpu);
-        assert_eq!(crdt.new_vote(Hash::default()).unwrap(), expected);
+        let expected = (v, cluster_info.table[&leader.id].contact_info.tpu);
+        assert_eq!(cluster_info.new_vote(Hash::default()).unwrap(), expected);
     }
 
     #[test]
     fn test_insert_vote() {
         let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         assert_eq!(d.version, 0);
-        let mut crdt = Crdt::new(d.clone()).unwrap();
-        assert_eq!(crdt.table[&d.id].version, 0);
+        let mut cluster_info = ClusterInfo::new(d.clone()).unwrap();
+        assert_eq!(cluster_info.table[&d.id].version, 0);
         let vote_same_version = Vote {
             version: d.version,
             contact_info_version: 0,
         };
-        crdt.insert_vote(&d.id, &vote_same_version, Hash::default());
-        assert_eq!(crdt.table[&d.id].version, 0);
+        cluster_info.insert_vote(&d.id, &vote_same_version, Hash::default());
+        assert_eq!(cluster_info.table[&d.id].version, 0);
 
         let vote_new_version_new_addrs = Vote {
             version: d.version + 1,
             contact_info_version: 1,
         };
-        crdt.insert_vote(&d.id, &vote_new_version_new_addrs, Hash::default());
+        cluster_info.insert_vote(&d.id, &vote_new_version_new_addrs, Hash::default());
         //should be dropped since the address is newer then we know
-        assert_eq!(crdt.table[&d.id].version, 0);
+        assert_eq!(cluster_info.table[&d.id].version, 0);
 
         let vote_new_version_old_addrs = Vote {
             version: d.version + 1,
             contact_info_version: 0,
         };
-        crdt.insert_vote(&d.id, &vote_new_version_old_addrs, Hash::default());
+        cluster_info.insert_vote(&d.id, &vote_new_version_old_addrs, Hash::default());
         //should be accepted, since the update is for the same address field as the one we know
-        assert_eq!(crdt.table[&d.id].version, 1);
+        assert_eq!(cluster_info.table[&d.id].version, 1);
     }
     fn sorted(ls: &Vec<NodeInfo>) -> Vec<NodeInfo> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();
@@ -1502,20 +1512,20 @@ mod tests {
         let d1 = NodeInfo::new_localhost(Keypair::new().pubkey());
         let d2 = NodeInfo::new_localhost(Keypair::new().pubkey());
         let d3 = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let mut crdt = Crdt::new(d1.clone()).expect("Crdt::new");
-        let (key, ix, ups) = crdt.get_updates_since(0);
+        let mut cluster_info = ClusterInfo::new(d1.clone()).expect("ClusterInfo::new");
+        let (key, ix, ups) = cluster_info.get_updates_since(0);
         assert_eq!(key, d1.id);
         assert_eq!(ix, 1);
         assert_eq!(ups.len(), 1);
         assert_eq!(sorted(&ups), sorted(&vec![d1.clone()]));
-        crdt.insert(&d2);
-        let (key, ix, ups) = crdt.get_updates_since(0);
+        cluster_info.insert(&d2);
+        let (key, ix, ups) = cluster_info.get_updates_since(0);
         assert_eq!(key, d1.id);
         assert_eq!(ix, 2);
         assert_eq!(ups.len(), 2);
         assert_eq!(sorted(&ups), sorted(&vec![d1.clone(), d2.clone()]));
-        crdt.insert(&d3);
-        let (key, ix, ups) = crdt.get_updates_since(0);
+        cluster_info.insert(&d3);
+        let (key, ix, ups) = cluster_info.get_updates_since(0);
         assert_eq!(key, d1.id);
         assert_eq!(ix, 3);
         assert_eq!(ups.len(), 3);
@@ -1523,24 +1533,24 @@ mod tests {
             sorted(&ups),
             sorted(&vec![d1.clone(), d2.clone(), d3.clone()])
         );
-        let mut crdt2 = Crdt::new(d2.clone()).expect("Crdt::new");
-        crdt2.apply_updates(key, ix, &ups, &vec![]);
-        assert_eq!(crdt2.table.values().len(), 3);
+        let mut cluster_info2 = ClusterInfo::new(d2.clone()).expect("ClusterInfo::new");
+        cluster_info2.apply_updates(key, ix, &ups, &vec![]);
+        assert_eq!(cluster_info2.table.values().len(), 3);
         assert_eq!(
-            sorted(&crdt2.table.values().map(|x| x.clone()).collect()),
-            sorted(&crdt.table.values().map(|x| x.clone()).collect())
+            sorted(&cluster_info2.table.values().map(|x| x.clone()).collect()),
+            sorted(&cluster_info.table.values().map(|x| x.clone()).collect())
         );
         let d4 = NodeInfo::new_entry_point(&socketaddr!("127.0.0.4:1234"));
-        crdt.insert(&d4);
-        let (_key, _ix, ups) = crdt.get_updates_since(0);
+        cluster_info.insert(&d4);
+        let (_key, _ix, ups) = cluster_info.get_updates_since(0);
         assert_eq!(sorted(&ups), sorted(&vec![d2.clone(), d1, d3]));
     }
     #[test]
     fn window_index_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let mut crdt = Crdt::new(me).expect("Crdt::new");
-        let rv = crdt.window_index_request(0);
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        let mut cluster_info = ClusterInfo::new(me).expect("ClusterInfo::new");
+        let rv = cluster_info.window_index_request(0);
+        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let ncp = socketaddr!([127, 0, 0, 1], 1234);
         let nxt = NodeInfo::new(
@@ -1551,8 +1561,8 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1237),
             socketaddr!([127, 0, 0, 1], 1238),
         );
-        crdt.insert(&nxt);
-        let rv = crdt.window_index_request(0).unwrap();
+        cluster_info.insert(&nxt);
+        let rv = cluster_info.window_index_request(0).unwrap();
         assert_eq!(nxt.contact_info.ncp, ncp);
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
@@ -1565,12 +1575,12 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1237),
             socketaddr!([127, 0, 0, 1], 1238),
         );
-        crdt.insert(&nxt);
+        cluster_info.insert(&nxt);
         let mut one = false;
         let mut two = false;
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
-            let rv = crdt.window_index_request(0).unwrap();
+            let rv = cluster_info.window_index_request(0).unwrap();
             if rv.0 == ncp {
                 one = true;
             }
@@ -1592,41 +1602,41 @@ mod tests {
             socketaddr!("127.0.0.1:127"),
         );
 
-        let mut crdt = Crdt::new(me).expect("Crdt::new");
+        let mut cluster_info = ClusterInfo::new(me).expect("ClusterInfo::new");
         let nxt1 = NodeInfo::new_unspecified();
         // Filter out unspecified addresses
-        crdt.insert(&nxt1); //<--- attack!
-        let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        cluster_info.insert(&nxt1); //<--- attack!
+        let rv = cluster_info.gossip_request();
+        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
         let nxt2 = NodeInfo::new_multicast();
         // Filter out multicast addresses
-        crdt.insert(&nxt2); //<--- attack!
-        let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        cluster_info.insert(&nxt2); //<--- attack!
+        let rv = cluster_info.gossip_request();
+        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
     }
 
     /// test that gossip requests are eventually generated for all nodes
     #[test]
     fn gossip_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        let rv = crdt.gossip_request();
-        assert_matches!(rv, Err(Error::CrdtError(CrdtError::NoPeers)));
+        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
+        let rv = cluster_info.gossip_request();
+        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
         let nxt1 = NodeInfo::new_localhost(Keypair::new().pubkey());
 
-        crdt.insert(&nxt1);
+        cluster_info.insert(&nxt1);
 
-        let rv = crdt.gossip_request().unwrap();
+        let rv = cluster_info.gossip_request().unwrap();
         assert_eq!(rv.0, nxt1.contact_info.ncp);
 
         let nxt2 = NodeInfo::new_entry_point(&socketaddr!("127.0.0.3:1234"));
-        crdt.insert(&nxt2);
+        cluster_info.insert(&nxt2);
         // check that the service works
         // and that it eventually produces a request for both nodes
         let (sender, reader) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let obj = Arc::new(RwLock::new(crdt));
-        let thread = Crdt::gossip(obj, sender, exit.clone());
+        let obj = Arc::new(RwLock::new(cluster_info));
+        let thread = ClusterInfo::gossip(obj, sender, exit.clone());
         let mut one = false;
         let mut two = false;
         for _ in 0..30 {
@@ -1660,67 +1670,67 @@ mod tests {
     fn purge_test() {
         logger::setup();
         let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
+        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
         let nxt = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt.id);
-        crdt.set_leader(me.id);
-        crdt.insert(&nxt);
-        let rv = crdt.gossip_request().unwrap();
+        cluster_info.set_leader(me.id);
+        cluster_info.insert(&nxt);
+        let rv = cluster_info.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
-        let now = crdt.alive[&nxt.id];
-        crdt.purge(now);
-        let rv = crdt.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        crdt.purge(now + GOSSIP_PURGE_MILLIS);
-        let rv = crdt.gossip_request().unwrap();
+        let now = cluster_info.alive[&nxt.id];
+        cluster_info.purge(now);
+        let rv = cluster_info.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        let rv = crdt.gossip_request().unwrap();
+        cluster_info.purge(now + GOSSIP_PURGE_MILLIS);
+        let rv = cluster_info.gossip_request().unwrap();
+        assert_eq!(rv.0, nxt.contact_info.ncp);
+
+        cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
+        let rv = cluster_info.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
 
         let mut nxt2 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt2.id);
         assert_ne!(nxt.id, nxt2.id);
-        crdt.insert(&nxt2);
-        while now == crdt.alive[&nxt2.id] {
+        cluster_info.insert(&nxt2);
+        while now == cluster_info.alive[&nxt2.id] {
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
             nxt2.version += 1;
-            crdt.insert(&nxt2);
+            cluster_info.insert(&nxt2);
         }
-        let len = crdt.table.len() as u64;
+        let len = cluster_info.table.len() as u64;
         assert!((MIN_TABLE_SIZE as u64) < len);
-        crdt.purge(now + GOSSIP_PURGE_MILLIS);
-        assert_eq!(len as usize, crdt.table.len());
+        cluster_info.purge(now + GOSSIP_PURGE_MILLIS);
+        assert_eq!(len as usize, cluster_info.table.len());
         trace!("purging");
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        assert_eq!(len as usize - 1, crdt.table.len());
-        let rv = crdt.gossip_request().unwrap();
+        cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
+        assert_eq!(len as usize - 1, cluster_info.table.len());
+        let rv = cluster_info.gossip_request().unwrap();
         assert_eq!(rv.0, nxt.contact_info.ncp);
     }
     #[test]
     fn purge_leader_test() {
         logger::setup();
         let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
+        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
         let nxt = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
         assert_ne!(me.id, nxt.id);
-        crdt.insert(&nxt);
-        crdt.set_leader(nxt.id);
-        let now = crdt.alive[&nxt.id];
+        cluster_info.insert(&nxt);
+        cluster_info.set_leader(nxt.id);
+        let now = cluster_info.alive[&nxt.id];
         let mut nxt2 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
-        crdt.insert(&nxt2);
-        while now == crdt.alive[&nxt2.id] {
+        cluster_info.insert(&nxt2);
+        while now == cluster_info.alive[&nxt2.id] {
             sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
             nxt2.version = nxt2.version + 1;
-            crdt.insert(&nxt2);
+            cluster_info.insert(&nxt2);
         }
-        let len = crdt.table.len() as u64;
-        crdt.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        assert_eq!(len as usize - 1, crdt.table.len());
-        assert_eq!(crdt.my_data().leader_id, Pubkey::default());
-        assert!(crdt.leader_data().is_none());
+        let len = cluster_info.table.len() as u64;
+        cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
+        assert_eq!(len as usize - 1, cluster_info.table.len());
+        assert_eq!(cluster_info.my_data().leader_id, Pubkey::default());
+        assert!(cluster_info.leader_data().is_none());
     }
 
     /// test window requests respond with the right blob, and do not overrun
@@ -1736,18 +1746,21 @@ mod tests {
             socketaddr!("127.0.0.1:1237"),
             socketaddr!("127.0.0.1:1238"),
         );
-        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
+        let rv =
+            ClusterInfo::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
         assert!(rv.is_none());
         let out = SharedBlob::default();
         out.write().unwrap().meta.size = 200;
         window.write().unwrap()[0].data = Some(out);
-        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
+        let rv =
+            ClusterInfo::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
         assert!(rv.is_some());
         let v = rv.unwrap();
         //test we copied the blob
         assert_eq!(v.read().unwrap().meta.size, 200);
         let len = window.read().unwrap().len() as u64;
-        let rv = Crdt::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, len);
+        let rv =
+            ClusterInfo::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, len);
         assert!(rv.is_none());
 
         fn tmp_ledger(name: &str) -> String {
@@ -1769,7 +1782,7 @@ mod tests {
         let ledger_path = tmp_ledger("run_window_request");
         let mut ledger_window = LedgerWindow::open(&ledger_path).unwrap();
 
-        let rv = Crdt::run_window_request(
+        let rv = ClusterInfo::run_window_request(
             &me,
             &socketaddr_any!(),
             &window,
@@ -1793,8 +1806,14 @@ mod tests {
         let mock_peer = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
         // Simulate handling a repair request from mock_peer
-        let rv =
-            Crdt::run_window_request(&mock_peer, &socketaddr_any!(), &window, &mut None, &me, 0);
+        let rv = ClusterInfo::run_window_request(
+            &mock_peer,
+            &socketaddr_any!(),
+            &window,
+            &mut None,
+            &me,
+            0,
+        );
         assert!(rv.is_none());
         let blob = SharedBlob::default();
         let blob_size = 200;
@@ -1803,7 +1822,7 @@ mod tests {
 
         let num_requests: u32 = 64;
         for i in 0..num_requests {
-            let shared_blob = Crdt::run_window_request(
+            let shared_blob = ClusterInfo::run_window_request(
                 &mock_peer,
                 &socketaddr_any!(),
                 &window,
@@ -1831,23 +1850,23 @@ mod tests {
         let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let leader0 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         let leader1 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let mut crdt = Crdt::new(me.clone()).expect("Crdt::new");
-        assert_eq!(crdt.top_leader(), None);
-        crdt.set_leader(leader0.id);
-        assert_eq!(crdt.top_leader().unwrap(), leader0.id);
+        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
+        assert_eq!(cluster_info.top_leader(), None);
+        cluster_info.set_leader(leader0.id);
+        assert_eq!(cluster_info.top_leader().unwrap(), leader0.id);
         //add a bunch of nodes with a new leader
         for _ in 0..10 {
             let mut dum = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1234"));
             dum.id = Keypair::new().pubkey();
             dum.leader_id = leader1.id;
-            crdt.insert(&dum);
+            cluster_info.insert(&dum);
         }
-        assert_eq!(crdt.top_leader().unwrap(), leader1.id);
-        crdt.update_leader();
-        assert_eq!(crdt.my_data().leader_id, leader0.id);
-        crdt.insert(&leader1);
-        crdt.update_leader();
-        assert_eq!(crdt.my_data().leader_id, leader1.id);
+        assert_eq!(cluster_info.top_leader().unwrap(), leader1.id);
+        cluster_info.update_leader();
+        assert_eq!(cluster_info.my_data().leader_id, leader0.id);
+        cluster_info.insert(&leader1);
+        cluster_info.update_leader();
+        assert_eq!(cluster_info.my_data().leader_id, leader1.id);
     }
 
     #[test]
@@ -1870,11 +1889,14 @@ mod tests {
             socketaddr_any!(),
         );
         leader3.ledger_state.last_id = hash(b"3");
-        let mut crdt = Crdt::new(leader0.clone()).expect("Crdt::new");
-        crdt.insert(&leader1);
-        crdt.insert(&leader2);
-        crdt.insert(&leader3);
-        assert_eq!(crdt.valid_last_ids(), vec![leader0.ledger_state.last_id]);
+        let mut cluster_info = ClusterInfo::new(leader0.clone()).expect("ClusterInfo::new");
+        cluster_info.insert(&leader1);
+        cluster_info.insert(&leader2);
+        cluster_info.insert(&leader3);
+        assert_eq!(
+            cluster_info.valid_last_ids(),
+            vec![leader0.ledger_state.last_id]
+        );
     }
 
     /// Validates the node that sent Protocol::ReceiveUpdates gets its
@@ -1890,25 +1912,25 @@ mod tests {
         assert_ne!(node.id, node_with_same_addr.id);
         let node_with_diff_addr = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:4321"));
 
-        let crdt = Crdt::new(node.clone()).expect("Crdt::new");
-        assert_eq!(crdt.alive.len(), 0);
+        let cluster_info = ClusterInfo::new(node.clone()).expect("ClusterInfo::new");
+        assert_eq!(cluster_info.alive.len(), 0);
 
-        let obj = Arc::new(RwLock::new(crdt));
+        let obj = Arc::new(RwLock::new(cluster_info));
 
         let request = Protocol::RequestUpdates(1, node.clone());
         assert!(
-            Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
+            ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
                 .is_none()
         );
 
         let request = Protocol::RequestUpdates(1, node_with_same_addr.clone());
         assert!(
-            Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
+            ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
                 .is_none()
         );
 
         let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
-        Crdt::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None);
+        ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None);
 
         let me = obj.write().unwrap();
 
@@ -1924,24 +1946,24 @@ mod tests {
     fn test_is_valid_address() {
         assert!(cfg!(test));
         let bad_address_port = socketaddr!("127.0.0.1:0");
-        assert!(!Crdt::is_valid_address(&bad_address_port));
+        assert!(!ClusterInfo::is_valid_address(&bad_address_port));
         let bad_address_unspecified = socketaddr!(0, 1234);
-        assert!(!Crdt::is_valid_address(&bad_address_unspecified));
+        assert!(!ClusterInfo::is_valid_address(&bad_address_unspecified));
         let bad_address_multicast = socketaddr!([224, 254, 0, 0], 1234);
-        assert!(!Crdt::is_valid_address(&bad_address_multicast));
+        assert!(!ClusterInfo::is_valid_address(&bad_address_multicast));
         let loopback = socketaddr!("127.0.0.1:1234");
-        assert!(Crdt::is_valid_address(&loopback));
-        //        assert!(!Crdt::is_valid_ip_internal(loopback.ip(), false));
+        assert!(ClusterInfo::is_valid_address(&loopback));
+        //        assert!(!ClusterInfo::is_valid_ip_internal(loopback.ip(), false));
     }
 
     #[test]
     fn test_default_leader() {
         logger::setup();
         let node_info = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let mut crdt = Crdt::new(node_info).unwrap();
+        let mut cluster_info = ClusterInfo::new(node_info).unwrap();
         let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
-        crdt.insert(&network_entry_point);
-        assert!(crdt.leader_data().is_none());
+        cluster_info.insert(&network_entry_point);
+        assert!(cluster_info.leader_data().is_none());
     }
 
     #[test]

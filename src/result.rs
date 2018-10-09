@@ -2,7 +2,7 @@
 
 use bank;
 use bincode;
-use crdt;
+use cluster_info;
 #[cfg(feature = "erasure")]
 use erasure;
 use packet;
@@ -20,7 +20,7 @@ pub enum Error {
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
     BankError(bank::BankError),
-    CrdtError(crdt::CrdtError),
+    ClusterInfoError(cluster_info::ClusterInfoError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
     ErasureError(erasure::ErasureError),
@@ -52,9 +52,9 @@ impl std::convert::From<bank::BankError> for Error {
         Error::BankError(e)
     }
 }
-impl std::convert::From<crdt::CrdtError> for Error {
-    fn from(e: crdt::CrdtError) -> Error {
-        Error::CrdtError(e)
+impl std::convert::From<cluster_info::ClusterInfoError> for Error {
+    fn from(e: cluster_info::ClusterInfoError) -> Error {
+        Error::ClusterInfoError(e)
     }
 }
 #[cfg(feature = "erasure")]
