@@ -284,15 +284,23 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
     }
-    pub fn store_account_subscription(&self, pubkey: Pubkey, sink: Sink<Account>) {
-        self.bank.store_account_subscription(pubkey, sink);
+    pub fn store_account_subscription(
+        &self,
+        bank_sub_id: Pubkey,
+        pubkey: Pubkey,
+        sink: Sink<Account>,
+    ) {
+        self.bank
+            .store_account_subscription(bank_sub_id, pubkey, sink);
     }
     pub fn store_signature_subscription(
         &self,
+        bank_sub_id: Pubkey,
         signature: Signature,
         sink: Sink<RpcSignatureStatus>,
     ) {
-        self.bank.store_signature_subscription(signature, sink);
+        self.bank
+            .store_signature_subscription(bank_sub_id, signature, sink);
     }
 }
 

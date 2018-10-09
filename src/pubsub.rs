@@ -9,10 +9,10 @@ use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, SubscriptionId};
 use jsonrpc_ws_server::ws;
 use jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
 use rpc::{JsonRpcRequestProcessor, RpcSignatureStatus};
-use signature::Signature;
+use signature::{Keypair, KeypairUtil, Signature};
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -45,6 +45,7 @@ impl PubSubService {
         let request_processor = JsonRpcRequestProcessor::new(bank.clone());
         let status = Arc::new(Mutex::new(ClientState::Uninitialized));
         let client_status = status.clone();
+        let server_bank = bank.clone();
         let _thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
@@ -75,11 +76,14 @@ impl PubSubService {
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         server.unwrap().close();
+                        server_bank.remove_all_subscriptions();
                         break;
                     }
                     if let ClientState::Init(ref mut sender) = *status.lock().unwrap() {
                         if sender.check_active().is_err() {
                             server.unwrap().close();
+                            // bank.remove_client_account_subscriptions(sender);
+                            // bank.remove_client_signature_subscriptions(sender);
                             break;
                         }
                     }
@@ -134,7 +138,7 @@ build_rpc_trait! {
 #[derive(Default)]
 struct RpcSolPubSubImpl {
     uid: atomic::AtomicUsize,
-    subscriptions: Arc<RwLock<HashSet<SubscriptionId>>>,
+    subscriptions: Arc<RwLock<HashMap<SubscriptionId, Pubkey>>>,
 }
 impl RpcSolPubSub for RpcSolPubSubImpl {
     type Metadata = Meta;
@@ -160,7 +164,11 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        self.subscriptions.write().unwrap().insert(sub_id.clone());
+        let bank_sub_id = Keypair::new().pubkey();
+        self.subscriptions
+            .write()
+            .unwrap()
+            .insert(sub_id.clone(), bank_sub_id);
 
         match meta.request_processor.get_signature_status(signature) {
             Ok(_) => {
@@ -170,14 +178,14 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             }
             Err(_) => {
                 meta.request_processor
-                    .store_signature_subscription(signature, sink);
+                    .store_signature_subscription(bank_sub_id, signature, sink);
             }
         }
     }
 
     fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-        let removed = self.subscriptions.write().unwrap().remove(&id);
-        if removed {
+        if let Some(_bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
+            // Remove from bank here, once metadata
             Ok(true)
         } else {
             Err(Error {
@@ -208,15 +216,19 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        self.subscriptions.write().unwrap().insert(sub_id.clone());
+        let bank_sub_id = Keypair::new().pubkey();
+        self.subscriptions
+            .write()
+            .unwrap()
+            .insert(sub_id.clone(), bank_sub_id);
 
         meta.request_processor
-            .store_account_subscription(pubkey, sink);
+            .store_account_subscription(bank_sub_id, pubkey, sink);
     }
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-        let removed = self.subscriptions.write().unwrap().remove(&id);
-        if removed {
+        if let Some(_bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
+            // Remove from bank here, once metadata
             Ok(true)
         } else {
             Err(Error {
