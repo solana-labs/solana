@@ -1,26 +1,3 @@
-// fn loaded_contract(
-//     &self,
-//     tx_program_id: &Pubkey,
-//     tx: &Transaction,
-//     program_index: usize,
-//     accounts: &mut [&mut Account],
-// ) -> bool {
-//     let loaded_contracts = self.loaded_contracts.write().unwrap();
-//     match loaded_contracts.get(&tx_program_id) {
-//         Some(dc) => {
-//             let mut infos: Vec<_> = (&tx.account_keys)
-//                 .into_iter()
-//                 .zip(accounts)
-//                 .map(|(key, account)| KeyedAccount { key, account })
-//                 .collect();
-
-//             dc.call(&mut infos, tx.userdata(program_index));
-//             true
-//         }
-//         None => false,
-//     }
-// }
-
 extern crate elf;
 extern crate rbpf;
 
@@ -32,16 +9,17 @@ use std::path::PathBuf;
 use bincode::{deserialize, serialize};
 use bpf_verifier;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use dynamic_instruction::DynamicInstruction;
 use libc;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use result::Result;
-
-use dynamic_instruction::Instruction;
 use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
+use std::io::prelude::*;
+use std::mem;
+use std::path::PathBuf;
 use transaction::Transaction;
 
 /// Dynamic link library prefixs
@@ -183,7 +161,7 @@ impl DynamicProgram {
         if let Ok(instruction) = deserialize(tx.userdata(ix)) {
             trace!("program process_transaction: {:?}", instruction);
             match instruction {
-                Instruction::LoadNative { name } => {
+                DynamicInstruction::LoadNative { name } => {
                     println!("LoadNative: {:?}", name);
 
                     let dp = DynamicProgram::Native { name };
@@ -197,7 +175,7 @@ impl DynamicProgram {
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
                 }
-                Instruction::LoadBpfFile { name } => {
+                DynamicInstruction::LoadBpfFile { name } => {
                     println!("LoadBpfFile: {:?}", name);
 
                     let dp = DynamicProgram::BpfFile { name };
@@ -211,7 +189,10 @@ impl DynamicProgram {
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
                 }
-                Instruction::LoadBpf { offset, prog } => {
+                DynamicInstruction::LoadBpf {
+                    /* TODO */ offset: _offset,
+                    prog,
+                } => {
                     println!("LoadBpf");
 
                     let dp = DynamicProgram::Bpf { prog };
@@ -225,14 +206,14 @@ impl DynamicProgram {
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
                 }
-                Instruction::LoadState { data, .. } => {
+                DynamicInstruction::LoadState { data, .. } => {
                     // TODO handle chunks
                     println!("LoadState size {}", data.len());
                     assert!(accounts[1].userdata.len() >= data.len());
                     accounts[1].userdata = data;
                     true
                 }
-                Instruction::Call { input } => {
+                DynamicInstruction::Call { input } => {
                     // TODO passing account[0] (mint) and account[1] (program) as mutable
                     //      don't want to allow program to mutate those two accounts
                     let dp: DynamicProgram = deserialize(&accounts[1].userdata).unwrap();
@@ -341,9 +322,8 @@ impl DynamicProgram {
 mod tests {
     use super::*;
     use hash::Hash;
-    use signature::{Keypair, KeypairUtil, Signature};
+    use signature::{Keypair, KeypairUtil};
     use solana_program_interface::account::Account;
-    use solana_program_interface::pubkey::Pubkey;
     use std::path::Path;
 
     #[test]

@@ -492,7 +492,7 @@ impl Bank {
         instruction_index: usize,
         tx_program_id: &Pubkey,
         pre_program_id: &Pubkey,
-        pre_tokens: i64,
+        _pre_tokens: i64,
         account: &Account,
     ) -> Result<()> {
         // Verify the transaction
@@ -504,6 +504,8 @@ impl Bank {
             //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
+        // TODO don't understand this
+        // TODO no test coverage for this check
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         // println!("tx_program_id: {:?}", tx_program_id);
         // println!("account.program_id: {:?}", account.program_id);

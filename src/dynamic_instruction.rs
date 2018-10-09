@@ -1,5 +1,5 @@
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum Instruction {
+pub enum DynamicInstruction {
     /// Load native program by name
     LoadNative { name: String },
 
