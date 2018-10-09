@@ -24,7 +24,7 @@ typedef struct {
 
 typedef struct {
     SolPubkey *key;
-    int64_t tokens;
+    int64_t* tokens;
     uint64_t userdata_len;
     uint8_t *userdata;
     SolPubkey *program_id;
@@ -61,8 +61,8 @@ SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccount
         src += SIZE_PUBKEY;
 
         // tokens
-        ka[i].tokens = *(uint64_t *)src;
-        src += sizeof(uint64_t);
+        ka[i].tokens = (int64_t *)src;
+        src += sizeof(int64_t);
 
         // account userdata
         ka[i].userdata_len = *(uint64_t *)src;
@@ -105,7 +105,7 @@ SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
         print_key(ka[i].key);
 
         // tokens
-        sol_print(0, 0, 0, 0, ka[i].tokens);
+        sol_print(0, 0, 0, 0, *ka[i].tokens);
 
         // account userdata
         print_userdata(ka[i].userdata, ka[i].userdata_len);
@@ -125,6 +125,15 @@ void entrypoint(char *buf) {
     if (0 != sol_deserialize((uint8_t *)buf, 3, ka, &userdata, &userdata_len)) {
         return;
     }
+    //print_params(3, ka, userdata, userdata_len);
 
-    print_params(3, ka, userdata, userdata_len);
+    int64_t tokens = *(int64_t*)userdata;
+    if (*ka[0].tokens >= tokens) {
+        *ka[0].tokens -= tokens;
+        *ka[2].tokens += tokens;
+        //sol_print(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
+    } else {
+        //sol_print(0, 0, 0xFF, *ka[0].tokens, tokens);
+    }    
 }
+

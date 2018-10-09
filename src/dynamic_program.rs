@@ -1,3 +1,26 @@
+// fn loaded_contract(
+//     &self,
+//     tx_program_id: &Pubkey,
+//     tx: &Transaction,
+//     program_index: usize,
+//     accounts: &mut [&mut Account],
+// ) -> bool {
+//     let loaded_contracts = self.loaded_contracts.write().unwrap();
+//     match loaded_contracts.get(&tx_program_id) {
+//         Some(dc) => {
+//             let mut infos: Vec<_> = (&tx.account_keys)
+//                 .into_iter()
+//                 .zip(accounts)
+//                 .map(|(key, account)| KeyedAccount { key, account })
+//                 .collect();
+
+//             dc.call(&mut infos, tx.userdata(program_index));
+//             true
+//         }
+//         None => false,
+//     }
+// }
+
 extern crate elf;
 extern crate rbpf;
 
@@ -6,8 +29,9 @@ use std::io::prelude::*;
 use std::mem;
 use std::path::PathBuf;
 
+use bincode::{deserialize, serialize};
 use bpf_verifier;
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc;
 #[cfg(unix)]
 use libloading::os::unix::*;
@@ -15,8 +39,10 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use result::Result;
 
-use solana_program_interface::account::KeyedAccount;
+use dynamic_instruction::Instruction;
+use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
+use transaction::Transaction;
 
 /// Dynamic link library prefixs
 const PLATFORM_FILE_PREFIX_BPF: &str = "";
@@ -37,8 +63,8 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "so";
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
 /// Section name
-const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
-const PLATFORM_SECTION_C: &str = ".text.entrypoint";
+pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
+pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 
 pub enum ProgramPath {
     Bpf,
@@ -62,58 +88,39 @@ impl ProgramPath {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum ProgramError {
+    // TODO
+    UserdataDeserializeFailure,
+}
+
+pub const DYNAMIC_PROGRAM_ID: [u8; 32] = [2u8; 32];
+
 // All programs export a symbol named process()
 const ENTRYPOINT: &str = "process";
 type Entrypoint = unsafe extern "C" fn(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum DynamicProgram {
-    /// Native program
-    /// * Transaction::keys[0..] - program dependent
-    /// * name - name of the program, translated to a file path of the program module
-    /// * userdata - program specific user data
-    Native { name: String, library: Library },
-    /// Bpf program
-    /// * Transaction::keys[0..] - program dependent
-    /// * TODO BPF specific stuff
-    /// * userdata - program specific user data
-    Bpf { name: String, prog: Vec<u8> },
+    /// Native program by name
+    Native { name: String },
+    /// Bpf program by name
+    BpfFile { name: String },
+    /// Bpf program by account
+    Bpf { prog: Vec<u8> },
 }
 
 impl DynamicProgram {
-    pub fn new_native(name: String) -> Result<Self> {
-        // create native program
-        let path = ProgramPath::Native {}.create(&name);
-        // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
-        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)?;
-        Ok(DynamicProgram::Native { name, library })
+    pub fn check_id(program_id: &Pubkey) -> bool {
+        program_id.as_ref() == DYNAMIC_PROGRAM_ID
     }
 
-    pub fn new_bpf_from_file(name: String) -> Self {
-        // create native program
-        let path = ProgramPath::Bpf {}.create(&name);
-        let file = match elf::File::open_path(&path) {
-            Ok(f) => f,
-            Err(e) => panic!("Error opening ELF {:?}: {:?}", path, e),
-        };
-
-        let text_section = match file.get_section(PLATFORM_SECTION_RS) {
-            Some(s) => s,
-            None => match file.get_section(PLATFORM_SECTION_C) {
-                Some(s) => s,
-                None => panic!("Failed to find text section"),
-            },
-        };
-        let prog = text_section.data.clone();
-
-        DynamicProgram::Bpf { name, prog }
+    pub fn id() -> Pubkey {
+        Pubkey::new(&DYNAMIC_PROGRAM_ID)
     }
 
-    pub fn new_bpf_from_buffer(prog: Vec<u8>) -> Self {
-        DynamicProgram::Bpf {
-            name: "from_buffer".to_string(),
-            prog,
-        }
+    pub fn get_balance(account: &Account) -> i64 {
+        account.tokens
     }
 
     #[allow(dead_code)]
@@ -130,7 +137,7 @@ impl DynamicProgram {
         }
     }
 
-    fn serialize(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> Vec<u8> {
+    fn serialize_state(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> Vec<u8> {
         assert_eq!(32, mem::size_of::<Pubkey>());
 
         let mut v: Vec<u8> = Vec::new();
@@ -149,54 +156,183 @@ impl DynamicProgram {
         v
     }
 
-    fn deserialize(infos: &mut Vec<KeyedAccount>, buffer: &[u8]) {
+    fn deserialize_state(infos: &mut Vec<KeyedAccount>, buffer: &[u8]) {
         assert_eq!(32, mem::size_of::<Pubkey>());
 
         let mut start = mem::size_of::<u64>();
         for info in infos.iter_mut() {
-            start += mem::size_of::<Pubkey>() // pubkey
-                  + mem::size_of::<u64>() // tokens
-                  + mem::size_of::<u64>(); // length tag
+            start += mem::size_of::<Pubkey>(); // skip pubkey
+            info.account.tokens = LittleEndian::read_i64(&buffer[start..]);
 
+            start += mem::size_of::<u64>() // skip tokens
+                  + mem::size_of::<u64>(); // skip length tag
             let end = start + info.account.userdata.len();
-
             info.account.userdata.clone_from_slice(&buffer[start..end]);
 
-            start += info.account.userdata.len() // userdata
-                  + mem::size_of::<Pubkey>(); // program_id
+            start += info.account.userdata.len() // skip userdata
+                  + mem::size_of::<Pubkey>(); // skip program_id
                                               //println!("userdata: {:?}", infos[i].account.userdata);
         }
     }
 
-    pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
-        match self {
-            DynamicProgram::Native { name, library } => unsafe {
-                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => panic!(
-                        "Unable to find {:?} in program {}: {:?} ",
-                        e, ENTRYPOINT, name
-                    ),
-                };
-                entrypoint(infos, data)
-            },
-            DynamicProgram::Bpf { prog, .. } => {
-                println!("Instructions: {}", prog.len() / 8);
-                //DynamicProgram::dump_prog(name, prog);
+    pub fn process_transaction(
+        tx: &Transaction,
+        ix: usize,
+        accounts: &mut [&mut Account],
+    ) bool {
+        if let Ok(instruction) = deserialize(tx.userdata(ix)) {
+            trace!("program process_transaction: {:?}", instruction);
+            match instruction {
+                Instruction::LoadNative { name } => {
+                    println!("LoadNative: {:?}", name);
 
-                let mut vm = rbpf::EbpfVmRaw::new(prog, Some(bpf_verifier::verifier));
+                    let dp = DynamicProgram::Native { name };
+                    println!("num accounts: {}", accounts.len());
+                    println!(
+                        "size needed {} allocated {}",
+                        mem::size_of_val(&dp),
+                        accounts[1].userdata.len()
+                    );
+                    assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
+                    accounts[1].userdata = serialize(&dp).unwrap();
+                    true
+                }
+                Instruction::LoadBpfFile { name } => {
+                    println!("LoadBpfFile: {:?}", name);
 
-                // TODO register more handlers (memcpy for example)
-                vm.register_helper(
-                    rbpf::helpers::BPF_TRACE_PRINTK_IDX,
-                    rbpf::helpers::bpf_trace_printf,
-                );
+                    let dp = DynamicProgram::BpfFile { name };
+                    println!("num accounts: {}", accounts.len());
+                    println!(
+                        "size needed {} allocated {}",
+                        mem::size_of_val(&dp),
+                        accounts[1].userdata.len()
+                    );
+                    assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
+                    accounts[1].userdata = serialize(&dp).unwrap();
+                    true
+                }
+                Instruction::LoadBpf { offset, prog } => {
+                    println!("LoadBpf");
 
-                let mut v = DynamicProgram::serialize(infos, data);
-                vm.prog_exec(v.as_mut_slice());
-                DynamicProgram::deserialize(infos, &v);
-                true // TODO: return false on Bpf program failure
+                    let dp = DynamicProgram::Bpf { prog };
+                    println!("num accounts: {}", accounts.len());
+                    println!(
+                        "size needed {} allocated {}",
+                        mem::size_of_val(&dp),
+                        accounts[1].userdata.len()
+                    );
+                    assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
+                    accounts[1].userdata = serialize(&dp).unwrap();
+                    true
+                }
+                Instruction::LoadState { data, .. } => {
+                    // TODO handle chunks
+                    println!("LoadState size {}", data.len());
+                    assert!(accounts[1].userdata.len() >= data.len());
+                    accounts[1].userdata = data;
+                    true
+                }
+                Instruction::Call { input } => {
+                    // TODO passing account[0] (mint) and account[1] (program) as mutable
+                    //      don't want to allow program to mutate those two accounts
+                    let dp: DynamicProgram = deserialize(&accounts[1].userdata).unwrap();
+                    match dp {
+                        DynamicProgram::Native { name } => unsafe {
+                            println!("Call native {:?}", name);
+                            // create native program
+                            let path = ProgramPath::Native {}.create(&name);
+                            // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
+                            let library =
+                                Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+                                    .unwrap();
+                            let entrypoint: Symbol<Entrypoint> =
+                                match library.get(ENTRYPOINT.as_bytes()) {
+                                    Ok(s) => s,
+                                    Err(e) => panic!(
+                                        "Unable to find {:?} in program {}: {:?} ",
+                                        e, ENTRYPOINT, name
+                                    ),
+                                };
+
+                            let mut infos: Vec<_> = (&tx.account_keys)
+                                .into_iter()
+                                .zip(accounts)
+                                .map(|(key, account)| KeyedAccount { key, account })
+                                .collect();
+
+                            entrypoint(&mut infos, &input);
+                            true
+                        },
+                        DynamicProgram::BpfFile { name } => {
+                            let path = ProgramPath::Bpf {}.create(&name);
+                            let file = match elf::File::open_path(&path) {
+                                Ok(f) => f,
+                                Err(e) => panic!("Error opening ELF {:?}: {:?}", path, e),
+                            };
+
+                            let text_section = match file.get_section(PLATFORM_SECTION_RS) {
+                                Some(s) => s,
+                                None => match file.get_section(PLATFORM_SECTION_C) {
+                                    Some(s) => s,
+                                    None => panic!("Failed to find text section"),
+                                },
+                            };
+                            let prog = text_section.data.clone();
+
+                            println!("Call BPF, {} Instructions", prog.len() / 8);
+                            //DynamicProgram::dump_prog(name, prog);
+
+                            let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));
+
+                            // TODO register more handlers (e.g: signals, memcpy, etc...)
+                            vm.register_helper(
+                                rbpf::helpers::BPF_TRACE_PRINTK_IDX,
+                                rbpf::helpers::bpf_trace_printf,
+                            );
+
+                            let mut infos: Vec<_> = (&tx.account_keys)
+                                .into_iter()
+                                .zip(accounts)
+                                .map(|(key, account)| KeyedAccount { key, account })
+                                .collect();
+
+                            let mut v = DynamicProgram::serialize_state(&mut infos, &input);
+                            vm.prog_exec(v.as_mut_slice());
+                            DynamicProgram::deserialize_state(&mut infos, &v);
+                            true
+                        }
+                        DynamicProgram::Bpf { prog } => {
+                            println!("Call BPF, {} Instructions", prog.len() / 8);
+                            //DynamicProgram::dump_prog(name, prog);
+
+                            let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));
+
+                            // TODO register more handlers (e.g: signals, memcpy, etc...)
+                            vm.register_helper(
+                                rbpf::helpers::BPF_TRACE_PRINTK_IDX,
+                                rbpf::helpers::bpf_trace_printf,
+                            );
+
+                            let mut infos: Vec<_> = (&tx.account_keys)
+                                .into_iter()
+                                .zip(accounts)
+                                .map(|(key, account)| KeyedAccount { key, account })
+                                .collect();
+
+                            let mut v = DynamicProgram::serialize_state(&mut infos, &input);
+                            vm.prog_exec(v.as_mut_slice());
+                            DynamicProgram::deserialize_state(&mut infos, &v);
+                            true
+                        }
+                    }
+                }
             }
+        } else {
+            info!(
+                "Invalid program transaction userdata: {:?}",
+                tx.userdata(ix)
+            );
+            false
         }
     }
 }
@@ -204,10 +340,11 @@ impl DynamicProgram {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
-
+    use hash::Hash;
+    use signature::{Keypair, KeypairUtil, Signature};
     use solana_program_interface::account::Account;
     use solana_program_interface::pubkey::Pubkey;
+    use std::path::Path;
 
     #[test]
     fn test_path_create_native() {
@@ -223,22 +360,22 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	exit
         ];
 
-        let data: Vec<u8> = vec![0];
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
+        let dp = DynamicProgram::Bpf { prog };
 
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
+        let tx = Transaction::new(
+            &Keypair::new(),
+            &[Keypair::new().pubkey()],
+            Keypair::new().pubkey(),
+            vec![0u8],
+            Hash::default(),
+            0,
+        );
 
-            let dp = DynamicProgram::new_bpf_from_buffer(prog);
-            dp.call(&mut infos, &data);
-        }
+        let mut account = Account::default();
+        account.tokens = 1;
+        account.userdata = serialize(&dp).unwrap();
+
+        DynamicProgram::process_transaction(&tx, 0, &mut [&mut account]);
     }
 
     #[test]
@@ -252,23 +389,22 @@ mod tests {
             0x85, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // 	call 6
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	exit
         ];
+        let dp = DynamicProgram::Bpf { prog };
 
-        let data: Vec<u8> = vec![0];
-        let keys = vec![Pubkey::default(); 2];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
+        let tx = Transaction::new(
+            &Keypair::new(),
+            &[Keypair::new().pubkey()],
+            Keypair::new().pubkey(),
+            vec![0u8],
+            Hash::default(),
+            0,
+        );
 
-        {
-            let mut infos: Vec<_> = (&keys)
-                .into_iter()
-                .zip(&mut accounts)
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
+        let mut account = Account::default();
+        account.tokens = 1;
+        account.userdata = serialize(&dp).unwrap();
 
-            let dp = DynamicProgram::new_bpf_from_buffer(prog);
-            dp.call(&mut infos, &data);
-        }
+        DynamicProgram::process_transaction(&tx, 0, &mut [&mut account]);
     }
 
     // TODO add more tests to validate the Userdata and Account data is

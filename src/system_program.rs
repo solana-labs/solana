@@ -1,12 +1,9 @@
 //! system program
 
 use bincode::deserialize;
-use dynamic_program::DynamicProgram;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std;
-use std::collections::HashMap;
-use std::sync::RwLock;
 use transaction::Transaction;
 
 #[derive(Debug)]
@@ -42,10 +39,6 @@ pub enum SystemProgram {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { tokens: i64 },
-    /// Load a program
-    /// program_id - id to associate this program
-    /// nanme - file path of the program to load
-    Load { program_id: Pubkey, name: String },
 }
 
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
@@ -65,7 +58,6 @@ impl SystemProgram {
         tx: &Transaction,
         pix: usize,
         accounts: &mut [&mut Account],
-        loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
     ) -> Result<()> {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             trace!("process_transaction: {:?}", syscall);
@@ -100,16 +92,6 @@ impl SystemProgram {
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }
-                SystemProgram::Load { program_id, name } => {
-                    let mut hashmap = loaded_programs.write().unwrap();
-                    hashmap.insert(
-                        program_id,
-                        DynamicProgram::new_native(name).map_err(|err| {
-                            warn!("SystemProgram::Load failure: {:?}", err);
-                            Error::InvalidArgument
-                        })?,
-                    );
-                }
             }
             Ok(())
         } else {
@@ -131,13 +113,9 @@ mod test {
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
-    fn process_transaction(
-        tx: &Transaction,
-        accounts: &mut [Account],
-        loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
-    ) -> Result<()> {
+    fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs)
+        SystemProgram::process_transaction(&tx, 0, &mut refs[..])
     }
 
     #[test]
@@ -146,8 +124,7 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         let tx = Transaction::system_new(&from, to.pubkey(), 0, Hash::default());
-        let hash = RwLock::new(HashMap::new());
-        process_transaction(&tx, &mut accounts, &hash).unwrap();
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -158,8 +135,7 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        let hash = RwLock::new(HashMap::new());
-        process_transaction(&tx, &mut accounts, &hash).unwrap();
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
@@ -171,8 +147,7 @@ mod test {
         accounts[0].tokens = 1;
         accounts[0].program_id = from.pubkey();
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        let hash = RwLock::new(HashMap::new());
-        assert!(process_transaction(&tx, &mut accounts, &hash).is_err());
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].tokens, 1);
         assert_eq!(accounts[1].tokens, 0);
     }
@@ -183,8 +158,7 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         let tx =
             Transaction::system_create(&from, to.pubkey(), Hash::default(), 0, 1, to.pubkey(), 0);
-        let hash = RwLock::new(HashMap::new());
-        process_transaction(&tx, &mut accounts, &hash).unwrap();
+        process_transaction(&tx, &mut accounts).unwrap();
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
         assert_eq!(accounts[1].program_id, to.pubkey());
@@ -204,8 +178,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        let hash = RwLock::new(HashMap::new());
-        assert!(process_transaction(&tx, &mut accounts, &hash).is_err());
+        assert!(process_transaction(&tx, &mut accounts).is_err());
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -223,8 +196,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        let hash = RwLock::new(HashMap::new());
-        assert!(process_transaction(&tx, &mut accounts, &hash).is_err());
+        assert!(process_transaction(&tx, &mut accounts).is_err());
         assert!(accounts[1].userdata.is_empty());
     }
     #[test]
@@ -242,8 +214,7 @@ mod test {
             Pubkey::default(),
             0,
         );
-        let hash = RwLock::new(HashMap::new());
-        assert!(process_transaction(&tx, &mut accounts, &hash).is_err());
+        assert!(process_transaction(&tx, &mut accounts).is_err());
         assert_eq!(accounts[1].userdata.len(), 3);
     }
     #[test]
@@ -252,8 +223,7 @@ mod test {
         let program = Keypair::new();
         let mut accounts = vec![Account::default()];
         let tx = Transaction::system_assign(&from, Hash::default(), program.pubkey(), 0);
-        let hash = RwLock::new(HashMap::new());
-        process_transaction(&tx, &mut accounts, &hash).unwrap();
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].program_id, program.pubkey());
     }
     #[test]
@@ -263,8 +233,7 @@ mod test {
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        let hash = RwLock::new(HashMap::new());
-        process_transaction(&tx, &mut accounts, &hash).unwrap();
+        process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }

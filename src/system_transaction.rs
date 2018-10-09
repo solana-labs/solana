@@ -30,13 +30,6 @@ pub trait SystemTransaction {
         fee: i64,
     ) -> Self;
 
-    fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self;
     fn system_move_many(
         from_keypair: &Keypair,
         moves: &[(Pubkey, i64)],
@@ -56,6 +49,7 @@ impl SystemTransaction for Transaction {
         program_id: Pubkey,
         fee: i64,
     ) -> Self {
+        println!("system_create {}", tokens);
         let create = SystemProgram::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
@@ -86,6 +80,7 @@ impl SystemTransaction for Transaction {
     }
     /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
     fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+        println!("system_new");
         Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
     /// Create and sign new SystemProgram::Move transaction
@@ -96,6 +91,7 @@ impl SystemTransaction for Transaction {
         last_id: Hash,
         fee: i64,
     ) -> Self {
+        println!("system_move {}", tokens);
         let move_tokens = SystemProgram::Move { tokens };
         let userdata = serialize(&move_tokens).unwrap();
         Transaction::new(
@@ -107,25 +103,7 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Load transaction
-    fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self {
-        let load = SystemProgram::Load { program_id, name };
-        let userdata = serialize(&load).unwrap();
-        Transaction::new(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            userdata,
-            last_id,
-            fee,
-        )
-    }
+
     fn system_move_many(from: &Keypair, moves: &[(Pubkey, i64)], last_id: Hash, fee: i64) -> Self {
         let instructions: Vec<_> = moves
             .iter()

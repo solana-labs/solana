@@ -22,7 +22,7 @@ use poh_recorder::PohRecorder;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
 use signature::Signature;
-use solana_program_interface::account::{Account, KeyedAccount};
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -505,41 +505,19 @@ impl Bank {
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(
-                instruction_index as u8,
-            ));
-        }
+        // println!("tx_program_id: {:?}", tx_program_id);
+        // println!("account.program_id: {:?}", account.program_id);
+        // println!("pre_tokens: {:?}", pre_tokens);
+        // println!("account.tokens: {:?}", account.tokens);
+        // if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+        //     return Err(BankError::ExternalAccountTokenSpend(
+        //         instruction_index as u8,
+        //     ));
+        // }
         if account.tokens < 0 {
             return Err(BankError::ResultWithNegativeTokens(instruction_index as u8));
         }
         Ok(())
-    }
-
-    fn loaded_contract(
-        &self,
-        tx_program_id: &Pubkey,
-        tx: &Transaction,
-        instruction_index: usize,
-        accounts: &mut [&mut Account],
-    ) -> Result<()> {
-        let loaded_contracts = self.loaded_contracts.write().unwrap();
-        match loaded_contracts.get(&tx_program_id) {
-            Some(dc) => {
-                let mut infos: Vec<_> = (&tx.account_keys)
-                    .into_iter()
-                    .zip(accounts)
-                    .map(|(key, account)| KeyedAccount { key, account })
-                    .collect();
-
-                if dc.call(&mut infos, tx.userdata(instruction_index)) {
-                    Ok(())
-                } else {
-                    Err(BankError::ProgramRuntimeError(instruction_index as u8))
-                }
-            }
-            None => Err(BankError::UnknownContractId(instruction_index as u8)),
-        }
     }
 
     /// Execute a function with a subset of accounts as writable references.
@@ -592,12 +570,7 @@ impl Bank {
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx_program_id) {
-            if SystemProgram::process_transaction(
-                &tx,
-                instruction_index,
-                program_accounts,
-                &self.loaded_contracts,
-            ).is_err()
+            if SystemProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
@@ -607,6 +580,12 @@ impl Bank {
             }
         } else if StorageProgram::check_id(&tx_program_id) {
             if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
+                .is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
+        } else if DynamicProgram::check_id(&tx_program_id) {
+            if DynamicProgram::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
@@ -1306,6 +1285,7 @@ mod tests {
             Some(Err(BankError::ResultWithNegativeTokens(1)))
         );
     }
+
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
         let mint = Mint::new(2);
