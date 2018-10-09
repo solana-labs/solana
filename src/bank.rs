@@ -579,9 +579,7 @@ impl Bank {
         }
         // Check account subscriptions
         for ((pre, pubkey), post) in pre_userdata.iter().zip(program_accounts.iter()) {
-            if pre != &post.userdata {
-                self.check_account_subscriptions(&pubkey, &post);
-            }
+            self.check_account_subscriptions(&pubkey, &pre, &post);
         }
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
@@ -984,16 +982,12 @@ impl Bank {
 
     pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey) -> bool {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
-        if subscriptions.remove(bank_sub_id).is_some() {
-            true
-        } else {
-            false
-        }
+        subscriptions.remove(bank_sub_id).is_some()
     }
 
-    fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {
+    fn check_account_subscriptions(&self, pubkey: &Pubkey, pre_userdata: &[u8], account: &Account) {
         for (_bank_sub_id, (id, sink)) in self.account_subscriptions.read().unwrap().iter() {
-            if pubkey == id {
+            if pubkey == id && pre_userdata != account.userdata.as_slice() {
                 sink.notify(Ok(account.clone())).wait().unwrap();
             }
         }
@@ -1011,11 +1005,7 @@ impl Bank {
 
     pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey) -> bool {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        if subscriptions.remove(bank_sub_id).is_some() {
-            true
-        } else {
-            false
-        }
+        subscriptions.remove(bank_sub_id).is_some()
     }
 
     fn check_signature_subscriptions(&self, signature: &Signature, status: RpcSignatureStatus) {
@@ -1028,7 +1018,7 @@ impl Bank {
                 to_remove.push(*bank_sub_id);
             }
         }
-        for id in to_remove.iter() {
+        for id in &to_remove {
             subscriptions.remove(&id);
         }
     }
@@ -1038,6 +1028,7 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
+    use budget_program::BudgetState;
     use entry::next_entry;
     use entry::Entry;
     use entry_writer::{self, EntryWriter};
@@ -1595,7 +1586,15 @@ mod tests {
         let alice = Keypair::new();
         let bank_sub_id = Keypair::new().pubkey();
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            alice.pubkey(),
+            last_id,
+            1,
+            16,
+            BudgetState::id(),
+            0,
+        );
         bank.process_transaction(&tx).unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
@@ -1611,12 +1610,13 @@ mod tests {
                 .contains_key(&bank_sub_id)
         );
 
+        let pre_userdata = vec![];
         let account = bank.get_account(&alice.pubkey()).unwrap();
-        bank.check_account_subscriptions(&alice.pubkey(), &account);
+        bank.check_account_subscriptions(&alice.pubkey(), &pre_userdata, &account);
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"account_notification","params":{{"result":{{"program_id":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":20,"userdata":[]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"account_notification","params":{{"result":{{"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 
