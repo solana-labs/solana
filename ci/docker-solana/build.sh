@@ -20,6 +20,7 @@ rm -rf usr/
 ../docker-run.sh solanalabs/rust:1.29.1 \
   cargo install --path . --root ci/docker-solana/usr
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
+../../scripts/install-native-programs.sh usr/bin/
 
 docker build -t solanalabs/solana:$CHANNEL .
 

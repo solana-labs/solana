@@ -110,6 +110,7 @@ build() {
     set -x
     rm -rf farf
     $MAYBE_DOCKER cargo install --features="$cargoFeatures" --root farf
+    ./scripts/install-native-programs.sh farf/
   )
   echo "Build took $SECONDS seconds"
 }
