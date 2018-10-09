@@ -1,7 +1,7 @@
 //! The `broadcast_stage` broadcasts data from a leader node to validators
 //!
+use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use counter::Counter;
-use crdt::{Crdt, CrdtError, NodeInfo};
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
@@ -27,7 +27,7 @@ pub enum BroadcastStageReturnType {
 }
 
 fn broadcast(
-    crdt: &Arc<RwLock<Crdt>>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
     leader_rotation_interval: u64,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
@@ -129,8 +129,8 @@ fn broadcast(
         *receive_index += blobs_len as u64;
 
         // Send blobs out from the window
-        Crdt::broadcast(
-            crdt,
+        ClusterInfo::broadcast(
+            cluster_info,
             leader_rotation_interval,
             &node_info,
             &broadcast_table,
@@ -179,7 +179,7 @@ pub struct BroadcastStage {
 impl BroadcastStage {
     fn run(
         sock: &UdpSocket,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
@@ -192,16 +192,16 @@ impl BroadcastStage {
         let me;
         let leader_rotation_interval;
         {
-            let rcrdt = crdt.read().unwrap();
-            me = rcrdt.my_data().clone();
-            leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+            let rcluster_info = cluster_info.read().unwrap();
+            me = rcluster_info.my_data().clone();
+            leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
         }
 
         loop {
             if transmit_index.data % (leader_rotation_interval as u64) == 0 {
-                let rcrdt = crdt.read().unwrap();
-                let my_id = rcrdt.my_data().id;
-                match rcrdt.get_scheduled_leader(transmit_index.data) {
+                let rcluster_info = cluster_info.read().unwrap();
+                let my_id = rcluster_info.my_data().id;
+                match rcluster_info.get_scheduled_leader(transmit_index.data) {
                     Some(id) if id == my_id => (),
                     // If the leader stays in power for the next
                     // round as well, then we don't exit. Otherwise, exit.
@@ -211,9 +211,9 @@ impl BroadcastStage {
                 }
             }
 
-            let broadcast_table = crdt.read().unwrap().compute_broadcast_table();
+            let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
-                crdt,
+                cluster_info,
                 leader_rotation_interval,
                 &me,
                 &broadcast_table,
@@ -228,7 +228,7 @@ impl BroadcastStage {
                         return BroadcastStageReturnType::ChannelDisconnected
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                    Error::CrdtError(CrdtError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                    Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                     _ => {
                         inc_new_counter_info!("streamer-broadcaster-error", 1, 1);
                         error!("broadcaster error: {:?}", e);
@@ -239,11 +239,11 @@ impl BroadcastStage {
     }
 
     /// Service to broadcast messages from the leader to layer 1 nodes.
-    /// See `crdt` for network layer definitions.
+    /// See `cluster_info` for network layer definitions.
     /// # Arguments
     /// * `sock` - Socket to send from.
     /// * `exit` - Boolean to signal system exit.
-    /// * `crdt` - CRDT structure
+    /// * `cluster_info` - ClusterInfo structure
     /// * `window` - Cache of blobs that we have broadcast
     /// * `receiver` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
     /// * `exit_sender` - Set to true when this stage exits, allows rest of Tpu to exit cleanly. Otherwise,
@@ -255,7 +255,7 @@ impl BroadcastStage {
     /// completing the cycle.
     pub fn new(
         sock: UdpSocket,
-        crdt: Arc<RwLock<Crdt>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         entry_height: u64,
         receiver: Receiver<Vec<Entry>>,
@@ -265,7 +265,7 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(&sock, &crdt, &window, entry_height, &receiver)
+                Self::run(&sock, &cluster_info, &window, entry_height, &receiver)
             }).unwrap();
 
         BroadcastStage { thread_hdl }
@@ -283,7 +283,7 @@ impl Service for BroadcastStage {
 #[cfg(test)]
 mod tests {
     use broadcast_stage::{BroadcastStage, BroadcastStageReturnType};
-    use crdt::{Crdt, Node};
+    use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use ledger::next_entries_mut;
     use mint::Mint;
@@ -302,7 +302,7 @@ mod tests {
         broadcast_stage: BroadcastStage,
         shared_window: SharedWindow,
         entry_sender: Sender<Vec<Entry>>,
-        crdt: Arc<RwLock<Crdt>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         entries: Vec<Entry>,
     }
 
@@ -317,11 +317,12 @@ mod tests {
         let buddy_id = buddy_keypair.pubkey();
         let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
 
-        // Fill the crdt with the buddy's info
-        let mut crdt = Crdt::new(leader_info.info.clone()).expect("Crdt::new");
-        crdt.insert(&broadcast_buddy.info);
-        crdt.set_leader_rotation_interval(leader_rotation_interval);
-        let crdt = Arc::new(RwLock::new(crdt));
+        // Fill the cluster_info with the buddy's info
+        let mut cluster_info =
+            ClusterInfo::new(leader_info.info.clone()).expect("ClusterInfo::new");
+        cluster_info.insert(&broadcast_buddy.info);
+        cluster_info.set_leader_rotation_interval(leader_rotation_interval);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         // Make dummy initial entries
         let mint = Mint::new(10000);
@@ -338,7 +339,7 @@ mod tests {
         // Start up the broadcast stage
         let broadcast_stage = BroadcastStage::new(
             leader_info.sockets.broadcast,
-            crdt.clone(),
+            cluster_info.clone(),
             shared_window.clone(),
             entry_height,
             entry_receiver,
@@ -351,7 +352,7 @@ mod tests {
             broadcast_stage,
             shared_window,
             entry_sender,
-            crdt,
+            cluster_info,
             entries,
         }
     }
@@ -372,9 +373,9 @@ mod tests {
         let leader_rotation_interval = 10;
         let broadcast_info = setup_dummy_broadcast_stage(leader_rotation_interval);
         {
-            let mut wcrdt = broadcast_info.crdt.write().unwrap();
+            let mut wcluster_info = broadcast_info.cluster_info.write().unwrap();
             // Set the leader for the next rotation to be myself
-            wcrdt.set_scheduled_leader(leader_rotation_interval, broadcast_info.my_id);
+            wcluster_info.set_scheduled_leader(leader_rotation_interval, broadcast_info.my_id);
         }
 
         let genesis_len = broadcast_info.entries.len() as u64;
@@ -394,16 +395,16 @@ mod tests {
             broadcast_info.entry_sender.send(new_entry).unwrap();
         }
 
-        // Set the scheduled next leader in the crdt to the other buddy on the network
+        // Set the scheduled next leader in the cluster_info to the other buddy on the network
         broadcast_info
-            .crdt
+            .cluster_info
             .write()
             .unwrap()
             .set_scheduled_leader(2 * leader_rotation_interval, broadcast_info.buddy_id);
 
         // Input another leader_rotation_interval dummy entries, which will take us
         // past the point of the leader rotation. The write_stage will see that
-        // it's no longer the leader after checking the crdt, and exit
+        // it's no longer the leader after checking the cluster_info, and exit
         for _ in 0..leader_rotation_interval {
             let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
 

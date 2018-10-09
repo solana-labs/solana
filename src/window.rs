@@ -1,7 +1,7 @@
 //! The `window` module defines data structure for storing the tail of the ledger.
 //!
+use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
-use crdt::{Crdt, NodeInfo};
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
@@ -53,7 +53,7 @@ pub trait WindowUtil {
 
     fn repair(
         &mut self,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         id: &Pubkey,
         times: usize,
         consumed: u64,
@@ -67,7 +67,7 @@ pub trait WindowUtil {
     fn process_blob(
         &mut self,
         id: &Pubkey,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
@@ -95,20 +95,20 @@ impl WindowUtil for Window {
 
     fn repair(
         &mut self,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         id: &Pubkey,
         times: usize,
         consumed: u64,
         received: u64,
         max_entry_height: u64,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
-        let rcrdt = crdt.read().unwrap();
-        let leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+        let rcluster_info = cluster_info.read().unwrap();
+        let leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
         // Calculate the next leader rotation height and check if we are the leader
         let next_leader_rotation =
             consumed + leader_rotation_interval - (consumed % leader_rotation_interval);
-        let is_next_leader = rcrdt.get_scheduled_leader(next_leader_rotation) == Some(*id);
-        let num_peers = rcrdt.table.len() as u64;
+        let is_next_leader = rcluster_info.get_scheduled_leader(next_leader_rotation) == Some(*id);
+        let num_peers = rcluster_info.table.len() as u64;
 
         let max_repair = if max_entry_height == 0 {
             calculate_max_repair(num_peers, consumed, received, times, is_next_leader)
@@ -119,10 +119,10 @@ impl WindowUtil for Window {
         let idxs = self.clear_slots(consumed, max_repair);
         let reqs: Vec<_> = idxs
             .into_iter()
-            .filter_map(|pix| rcrdt.window_index_request(pix).ok())
+            .filter_map(|pix| rcluster_info.window_index_request(pix).ok())
             .collect();
 
-        drop(rcrdt);
+        drop(rcluster_info);
 
         inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
 
@@ -196,7 +196,7 @@ impl WindowUtil for Window {
     fn process_blob(
         &mut self,
         id: &Pubkey,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         blob: SharedBlob,
         pix: u64,
         consume_queue: &mut Vec<Entry>,
@@ -259,9 +259,9 @@ impl WindowUtil for Window {
         // push all contiguous blobs into consumed queue, increment consumed
         loop {
             if *consumed != 0 && *consumed % (leader_rotation_interval as u64) == 0 {
-                let rcrdt = crdt.read().unwrap();
-                let my_id = rcrdt.my_data().id;
-                match rcrdt.get_scheduled_leader(*consumed) {
+                let rcluster_info = cluster_info.read().unwrap();
+                let my_id = rcluster_info.my_data().id;
+                match rcluster_info.get_scheduled_leader(*consumed) {
                     // If we are the next leader, exit
                     Some(id) if id == my_id => {
                         break;
@@ -388,7 +388,7 @@ pub fn index_blobs(
 }
 
 /// Initialize a rebroadcast window with most recent Entry blobs
-/// * `crdt` - gossip instance, used to set blob ids
+/// * `cluster_info` - gossip instance, used to set blob ids
 /// * `blobs` - up to WINDOW_SIZE most recent blobs
 /// * `entry_height` - current entry height
 pub fn initialized_window(

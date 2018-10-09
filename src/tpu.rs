@@ -27,7 +27,7 @@
 
 use bank::Bank;
 use banking_stage::{BankingStage, Config};
-use crdt::Crdt;
+use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
 use service::Service;
@@ -56,7 +56,7 @@ impl Tpu {
     pub fn new(
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_duration: Config,
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
@@ -76,7 +76,7 @@ impl Tpu {
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,
             bank.clone(),
-            crdt.clone(),
+            cluster_info.clone(),
             ledger_path,
             entry_receiver,
             entry_height,

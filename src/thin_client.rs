@@ -5,7 +5,7 @@
 
 use bank::Bank;
 use bincode::{deserialize, serialize};
-use crdt::{Crdt, CrdtError, NodeInfo};
+use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use hash::Hash;
 use log::Level;
 use ncp::Ncp;
@@ -373,14 +373,22 @@ impl Drop for ThinClient {
 
 pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
-    let (node, gossip_socket) = Crdt::spy_node();
+    let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
-    let crdt = Arc::new(RwLock::new(Crdt::new(node).expect("Crdt::new")));
+    let cluster_info = Arc::new(RwLock::new(
+        ClusterInfo::new(node).expect("ClusterInfo::new"),
+    ));
     let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(&crdt.clone(), window, None, gossip_socket, exit.clone());
+    let ncp = Ncp::new(
+        &cluster_info.clone(),
+        window,
+        None,
+        gossip_socket,
+        exit.clone(),
+    );
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
-    crdt.write().unwrap().insert(&leader_entry_point);
+    cluster_info.write().unwrap().insert(&leader_entry_point);
 
     sleep(Duration::from_millis(100));
 
@@ -395,17 +403,17 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     loop {
         trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
 
-        if let Some(l) = crdt.read().unwrap().leader_data() {
+        if let Some(l) = cluster_info.read().unwrap().leader_data() {
             leader = Some(l.clone());
             break;
         }
 
         if log_enabled!(Level::Trace) {
-            trace!("{}", crdt.read().unwrap().node_info_trace());
+            trace!("{}", cluster_info.read().unwrap().node_info_trace());
         }
 
         if now.elapsed() > deadline {
-            return Err(Error::CrdtError(CrdtError::NoLeader));
+            return Err(Error::ClusterInfoError(ClusterInfoError::NoLeader));
         }
 
         sleep(Duration::from_millis(100));
@@ -414,7 +422,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     ncp.close()?;
 
     if log_enabled!(Level::Trace) {
-        trace!("{}", crdt.read().unwrap().node_info_trace());
+        trace!("{}", cluster_info.read().unwrap().node_info_trace());
     }
 
     Ok(leader.unwrap().clone())
@@ -424,7 +432,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
 mod tests {
     use super::*;
     use bank::Bank;
-    use crdt::Node;
+    use cluster_info::Node;
     use fullnode::Fullnode;
     use ledger::LedgerWriter;
     use logger;

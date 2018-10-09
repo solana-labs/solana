@@ -9,7 +9,7 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
-use solana::crdt::Node;
+use solana::cluster_info::Node;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::logger;

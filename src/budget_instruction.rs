@@ -12,9 +12,9 @@ pub struct Contract {
 pub struct Vote {
     /// We send some gossip specific membership information through the vote to shortcut
     /// liveness voting
-    /// The version of the CRDT struct that the last_id of this network voted with
+    /// The version of the ClusterInfo struct that the last_id of this network voted with
     pub version: u64,
-    /// The version of the CRDT struct that has the same network configuration as this one
+    /// The version of the ClusterInfo struct that has the same network configuration as this one
     pub contact_info_version: u64,
     // TODO: add signature of the state here as well
 }

@@ -1,8 +1,8 @@
 //! The `replicate_stage` replicates transactions broadcast by the leader.
 
 use bank::Bank;
+use cluster_info::ClusterInfo;
 use counter::Counter;
-use crdt::Crdt;
 use entry::EntryReceiver;
 use ledger::{Block, LedgerWriter};
 use log::Level;
@@ -46,7 +46,7 @@ impl ReplicateStage {
     /// Process entry blobs, already in order
     fn replicate_requests(
         bank: &Arc<Bank>,
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
@@ -62,12 +62,12 @@ impl ReplicateStage {
         let res = bank.process_entries(&entries);
 
         if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, keypair, crdt, sender)?;
+            send_validator_vote(bank, keypair, cluster_info, sender)?;
         }
 
         {
-            let mut wcrdt = crdt.write().unwrap();
-            wcrdt.insert_votes(&entries.votes());
+            let mut wcluster_info = cluster_info.write().unwrap();
+            wcluster_info.insert_votes(&entries.votes());
         }
 
         inc_new_counter_info!(
@@ -87,7 +87,7 @@ impl ReplicateStage {
     pub fn new(
         keypair: Arc<Keypair>,
         bank: Arc<Bank>,
-        crdt: Arc<RwLock<Crdt>>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
@@ -116,7 +116,7 @@ impl ReplicateStage {
 
                     if let Err(e) = Self::replicate_requests(
                         &bank,
-                        &crdt,
+                        &cluster_info,
                         &window_receiver,
                         ledger_writer.as_mut(),
                         &keypair,

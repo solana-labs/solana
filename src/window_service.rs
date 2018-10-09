@@ -1,7 +1,7 @@
 //! The `window_service` provides a thread for maintaining a window (tail of the ledger).
 //!
+use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
-use crdt::{Crdt, NodeInfo};
 use entry::EntrySender;
 use log::Level;
 use packet::SharedBlob;
@@ -136,7 +136,7 @@ fn retransmit_all_leader_blocks(
 fn recv_window(
     window: &SharedWindow,
     id: &Pubkey,
-    crdt: &Arc<RwLock<Crdt>>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
     consumed: &mut u64,
     received: &mut u64,
     max_ix: u64,
@@ -149,9 +149,9 @@ fn recv_window(
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
-    let maybe_leader: Option<NodeInfo> = crdt
+    let maybe_leader: Option<NodeInfo> = cluster_info
         .read()
-        .expect("'crdt' read lock in fn recv_window")
+        .expect("'cluster_info' read lock in fn recv_window")
         .leader_data()
         .cloned();
     let leader_unknown = maybe_leader.is_none();
@@ -204,7 +204,7 @@ fn recv_window(
 
         window.write().unwrap().process_blob(
             id,
-            crdt,
+            cluster_info,
             b,
             pix,
             &mut consume_queue,
@@ -239,7 +239,7 @@ fn recv_window(
 }
 
 pub fn window_service(
-    crdt: Arc<RwLock<Crdt>>,
+    cluster_info: Arc<RwLock<ClusterInfo>>,
     window: SharedWindow,
     entry_height: u64,
     max_entry_height: u64,
@@ -259,20 +259,20 @@ pub fn window_service(
             let id;
             let leader_rotation_interval;
             {
-                let rcrdt = crdt.read().unwrap();
-                id = rcrdt.id;
-                leader_rotation_interval = rcrdt.get_leader_rotation_interval();
+                let rcluster_info = cluster_info.read().unwrap();
+                id = rcluster_info.id;
+                leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
             }
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
-                    match crdt.read().unwrap().get_scheduled_leader(consumed) {
+                    match cluster_info.read().unwrap().get_scheduled_leader(consumed) {
                         // If we are the next leader, exit
                         Some(next_leader_id) if id == next_leader_id => {
                             return Some(WindowServiceReturnType::LeaderRotation(consumed));
                         }
-                        // TODO: Figure out where to set the new leader in the crdt for 
+                        // TODO: Figure out where to set the new leader in the cluster_info for 
                         // validator -> validator transition (once we have real leader scheduling, 
                         // this decision will be clearer). Also make sure new blobs to window actually 
                         // originate from new leader
@@ -283,7 +283,7 @@ pub fn window_service(
                 if let Err(e) = recv_window(
                     &window,
                     &id,
-                    &crdt,
+                    &cluster_info,
                     &mut consumed,
                     &mut received,
                     max_entry_height,
@@ -322,7 +322,7 @@ pub fn window_service(
                 trace!("{} let's repair! times = {}", id, times);
 
                 let mut window = window.write().unwrap();
-                let reqs = window.repair(&crdt, &id, times, consumed, received, max_entry_height);
+                let reqs = window.repair(&cluster_info, &id, times, consumed, received, max_entry_height);
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -336,7 +336,7 @@ pub fn window_service(
 
 #[cfg(test)]
 mod test {
-    use crdt::{Crdt, Node};
+    use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::Hash;
     use logger;
@@ -371,10 +371,10 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
-        let me_id = crdt_me.my_data().id;
-        crdt_me.set_leader(me_id);
-        let subs = Arc::new(RwLock::new(crdt_me));
+        let mut cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let me_id = cluster_info_me.my_data().id;
+        cluster_info_me.set_leader(me_id);
+        let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
@@ -429,9 +429,9 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
-        let me_id = crdt_me.my_data().id;
-        let subs = Arc::new(RwLock::new(crdt_me));
+        let cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let me_id = cluster_info_me.my_data().id;
+        let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
@@ -485,9 +485,9 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
-        let me_id = crdt_me.my_data().id;
-        let subs = Arc::new(RwLock::new(crdt_me));
+        let cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let me_id = cluster_info_me.my_data().id;
+        let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
@@ -595,20 +595,21 @@ mod test {
         let my_leader_begin_epoch = 2;
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut crdt_me = Crdt::new(tn.info.clone()).expect("Crdt::new");
-        let me_id = crdt_me.my_data().id;
+        let mut cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let me_id = cluster_info_me.my_data().id;
 
         // Set myself in an upcoming epoch, but set the old_leader_id as the
         // leader for all epochs before that
         let old_leader_id = Keypair::new().pubkey();
-        crdt_me.set_leader(me_id);
-        crdt_me.set_leader_rotation_interval(leader_rotation_interval);
+        cluster_info_me.set_leader(me_id);
+        cluster_info_me.set_leader_rotation_interval(leader_rotation_interval);
         for i in 0..my_leader_begin_epoch {
-            crdt_me.set_scheduled_leader(leader_rotation_interval * i, old_leader_id);
+            cluster_info_me.set_scheduled_leader(leader_rotation_interval * i, old_leader_id);
         }
-        crdt_me.set_scheduled_leader(my_leader_begin_epoch * leader_rotation_interval, me_id);
+        cluster_info_me
+            .set_scheduled_leader(my_leader_begin_epoch * leader_rotation_interval, me_id);
 
-        let subs = Arc::new(RwLock::new(crdt_me));
+        let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
         let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);

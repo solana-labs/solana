@@ -1,6 +1,6 @@
 //! The `ncp` module implements the network control plane.
 
-use crdt::Crdt;
+use cluster_info::ClusterInfo;
 use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,7 +17,7 @@ pub struct Ncp {
 
 impl Ncp {
     pub fn new(
-        crdt: &Arc<RwLock<Crdt>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         ledger_path: Option<&str>,
         gossip_socket: UdpSocket,
@@ -27,22 +27,22 @@ impl Ncp {
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
             "Ncp: id: {:?}, listening on: {:?}",
-            &crdt.read().unwrap().id.as_ref()[..4],
+            &cluster_info.read().unwrap().id.as_ref()[..4],
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver =
             streamer::blob_receiver(gossip_socket.clone(), exit.clone(), request_sender);
         let (response_sender, response_receiver) = channel();
         let t_responder = streamer::responder("ncp", gossip_socket, response_receiver);
-        let t_listen = Crdt::listen(
-            crdt.clone(),
+        let t_listen = ClusterInfo::listen(
+            cluster_info.clone(),
             window,
             ledger_path,
             request_receiver,
             response_sender.clone(),
             exit.clone(),
         );
-        let t_gossip = Crdt::gossip(crdt.clone(), response_sender, exit.clone());
+        let t_gossip = ClusterInfo::gossip(cluster_info.clone(), response_sender, exit.clone());
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Ncp { exit, thread_hdls }
     }
@@ -66,7 +66,7 @@ impl Service for Ncp {
 
 #[cfg(test)]
 mod tests {
-    use crdt::{Crdt, Node};
+    use cluster_info::{ClusterInfo, Node};
     use ncp::Ncp;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, RwLock};
@@ -77,8 +77,8 @@ mod tests {
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = Node::new_localhost();
-        let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
-        let c = Arc::new(RwLock::new(crdt));
+        let cluster_info = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let c = Arc::new(RwLock::new(cluster_info));
         let w = Arc::new(RwLock::new(vec![]));
         let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone());
         d.close().expect("thread join");

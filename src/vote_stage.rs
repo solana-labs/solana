@@ -3,8 +3,8 @@
 use bank::Bank;
 use bincode::serialize;
 use budget_transaction::BudgetTransaction;
+use cluster_info::ClusterInfo;
 use counter::Counter;
-use crdt::Crdt;
 use hash::Hash;
 use influx_db_client as influxdb;
 use log::Level;
@@ -30,14 +30,14 @@ enum VoteError {
 pub fn create_new_signed_vote_blob(
     last_id: &Hash,
     keypair: &Keypair,
-    crdt: &Arc<RwLock<Crdt>>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
 ) -> Result<SharedBlob> {
     let shared_blob = SharedBlob::default();
     let (vote, addr) = {
-        let mut wcrdt = crdt.write().unwrap();
+        let mut wcluster_info = cluster_info.write().unwrap();
         //TODO: doesn't seem like there is a synchronous call to get height and id
         debug!("voting on {:?}", &last_id.as_ref()[..8]);
-        wcrdt.new_vote(*last_id)
+        wcluster_info.new_vote(*last_id)
     }?;
     let tx = Transaction::budget_new_vote(&keypair, vote, *last_id, 0);
     {
@@ -107,14 +107,14 @@ pub fn send_leader_vote(
     id: &Pubkey,
     keypair: &Keypair,
     bank: &Arc<Bank>,
-    crdt: &Arc<RwLock<Crdt>>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
 ) -> Result<()> {
     let now = timing::timestamp();
     if now - *last_vote > VOTE_TIMEOUT_MS {
-        let ids: Vec<_> = crdt.read().unwrap().valid_last_ids();
+        let ids: Vec<_> = cluster_info.read().unwrap().valid_last_ids();
         if let Ok((last_id, super_majority_timestamp)) = get_last_id_to_vote_on(
             id,
             &ids,
@@ -123,7 +123,7 @@ pub fn send_leader_vote(
             last_vote,
             last_valid_validator_timestamp,
         ) {
-            if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
+            if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, cluster_info) {
                 vote_blob_sender.send(vec![shared_blob])?;
                 let finality_ms = now - super_majority_timestamp;
 
@@ -147,11 +147,11 @@ pub fn send_leader_vote(
 pub fn send_validator_vote(
     bank: &Arc<Bank>,
     keypair: &Arc<Keypair>,
-    crdt: &Arc<RwLock<Crdt>>,
+    cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
-    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, crdt) {
+    if let Ok(shared_blob) = create_new_signed_vote_blob(&last_id, keypair, cluster_info) {
         inc_new_counter_info!("replicate-vote_sent", 1);
 
         vote_blob_sender.send(vec![shared_blob])?;
@@ -165,7 +165,7 @@ pub mod tests {
     use bank::Bank;
     use bincode::deserialize;
     use budget_instruction::Vote;
-    use crdt::{Crdt, NodeInfo};
+    use cluster_info::{ClusterInfo, NodeInfo};
     use entry::next_entry;
     use hash::{hash, Hash};
     use logger;
@@ -193,14 +193,14 @@ pub mod tests {
         // Create a leader
         let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
-        let mut leader_crdt = Crdt::new(leader_data).unwrap();
+        let mut leader_cluster_info = ClusterInfo::new(leader_data).unwrap();
 
         // give the leader some tokens
         let give_leader_tokens_tx =
             Transaction::system_new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
         bank.process_transaction(&give_leader_tokens_tx).unwrap();
 
-        leader_crdt.set_leader(leader_pubkey);
+        leader_cluster_info.set_leader(leader_pubkey);
 
         // Insert 7 agreeing validators / 3 disagreeing
         // and votes for new last_id
@@ -217,12 +217,12 @@ pub mod tests {
                 validator.ledger_state.last_id = entry.id;
             }
 
-            leader_crdt.insert(&validator);
+            leader_cluster_info.insert(&validator);
             trace!("validator id: {:?}", validator.id);
 
-            leader_crdt.insert_vote(&validator.id, &vote, entry.id);
+            leader_cluster_info.insert_vote(&validator.id, &vote, entry.id);
         }
-        let leader = Arc::new(RwLock::new(leader_crdt));
+        let leader = Arc::new(RwLock::new(leader_cluster_info));
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let mut last_vote: u64 = timing::timestamp() - VOTE_TIMEOUT_MS - 1;
         let mut last_valid_validator_timestamp = 0;

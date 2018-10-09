@@ -4,7 +4,7 @@ extern crate rayon;
 extern crate solana;
 
 use rayon::iter::*;
-use solana::crdt::{Crdt, Node};
+use solana::cluster_info::{ClusterInfo, Node};
 use solana::logger;
 use solana::ncp::Ncp;
 use solana::packet::{Blob, SharedBlob};
@@ -16,10 +16,10 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
+fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket) {
     let mut tn = Node::new_localhost();
-    let crdt = Crdt::new(tn.info.clone()).expect("Crdt::new");
-    let c = Arc::new(RwLock::new(crdt));
+    let cluster_info = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+    let c = Arc::new(RwLock::new(cluster_info));
     let w = Arc::new(RwLock::new(vec![]));
     let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit);
     (c, d, tn.sockets.replicate.pop().unwrap())
@@ -31,7 +31,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<Crdt>>, Ncp, UdpSocket) {
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(topo: F)
 where
-    F: Fn(&Vec<(Arc<RwLock<Crdt>>, Ncp, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket)>) -> (),
 {
     let num: usize = 5;
     let exit = Arc::new(AtomicBool::new(false));
@@ -128,7 +128,7 @@ fn gossip_rstar() {
 }
 
 #[test]
-pub fn crdt_retransmit() -> result::Result<()> {
+pub fn cluster_info_retransmit() -> result::Result<()> {
     logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
@@ -161,7 +161,7 @@ pub fn crdt_retransmit() -> result::Result<()> {
     assert!(done);
     let b = SharedBlob::default();
     b.write().unwrap().meta.size = 10;
-    Crdt::retransmit(&c1, &b, &tn1)?;
+    ClusterInfo::retransmit(&c1, &b, &tn1)?;
     let res: Vec<_> = [tn1, tn2, tn3]
         .into_par_iter()
         .map(|s| {

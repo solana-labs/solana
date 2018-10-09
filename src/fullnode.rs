@@ -2,7 +2,7 @@
 
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
-use crdt::{Crdt, Node, NodeInfo};
+use cluster_info::{ClusterInfo, Node, NodeInfo};
 use drone::DRONE_PORT;
 use entry::Entry;
 use ledger::read_ledger;
@@ -80,7 +80,7 @@ pub struct Fullnode {
     rpc_service: JsonRpcService,
     ncp: Ncp,
     bank: Arc<Bank>,
-    crdt: Arc<RwLock<Crdt>>,
+    cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
     sigverify_disabled: bool,
     shared_window: window::SharedWindow,
@@ -270,14 +270,14 @@ impl Fullnode {
         let window = window::new_window_from_entries(ledger_tail, entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
 
-        let mut crdt = Crdt::new(node.info).expect("Crdt::new");
+        let mut cluster_info = ClusterInfo::new(node.info).expect("ClusterInfo::new");
         if let Some(interval) = leader_rotation_interval {
-            crdt.set_leader_rotation_interval(interval);
+            cluster_info.set_leader_rotation_interval(interval);
         }
-        let crdt = Arc::new(RwLock::new(crdt));
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         let ncp = Ncp::new(
-            &crdt,
+            &cluster_info,
             shared_window.clone(),
             Some(ledger_path),
             node.sockets.gossip,
@@ -289,13 +289,13 @@ impl Fullnode {
         match leader_info {
             Some(leader_info) => {
                 // Start in validator mode.
-                // TODO: let Crdt get that data from the network?
-                crdt.write().unwrap().insert(leader_info);
+                // TODO: let ClusterInfo get that data from the network?
+                cluster_info.write().unwrap().insert(leader_info);
                 let tvu = Tvu::new(
                     keypair.clone(),
                     &bank,
                     entry_height,
-                    crdt.clone(),
+                    cluster_info.clone(),
                     shared_window.clone(),
                     node.sockets
                         .replicate
@@ -320,7 +320,7 @@ impl Fullnode {
                 let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                     keypair.clone(),
                     &bank,
-                    &crdt,
+                    &cluster_info,
                     Default::default(),
                     node.sockets
                         .transaction
@@ -337,7 +337,7 @@ impl Fullnode {
                         .broadcast
                         .try_clone()
                         .expect("Failed to clone broadcast socket"),
-                    crdt.clone(),
+                    cluster_info.clone(),
                     shared_window.clone(),
                     entry_height,
                     entry_receiver,
@@ -350,7 +350,7 @@ impl Fullnode {
 
         Fullnode {
             keypair,
-            crdt,
+            cluster_info,
             shared_window,
             bank,
             sigverify_disabled,
@@ -377,13 +377,13 @@ impl Fullnode {
         self.bank = Arc::new(bank);
 
         {
-            let mut wcrdt = self.crdt.write().unwrap();
-            let scheduled_leader = wcrdt.get_scheduled_leader(entry_height);
+            let mut wcluster_info = self.cluster_info.write().unwrap();
+            let scheduled_leader = wcluster_info.get_scheduled_leader(entry_height);
             match scheduled_leader {
                 //TODO: Handle the case where we don't know who the next
                 //scheduled leader is
                 None => (),
-                Some(leader_id) => wcrdt.set_leader(leader_id),
+                Some(leader_id) => wcluster_info.set_leader(leader_id),
             }
         }
 
@@ -407,7 +407,7 @@ impl Fullnode {
             self.keypair.clone(),
             &self.bank,
             entry_height,
-            self.crdt.clone(),
+            self.cluster_info.clone(),
             self.shared_window.clone(),
             self.replicate_socket
                 .iter()
@@ -427,11 +427,14 @@ impl Fullnode {
     }
 
     fn validator_to_leader(&mut self, entry_height: u64) {
-        self.crdt.write().unwrap().set_leader(self.keypair.pubkey());
+        self.cluster_info
+            .write()
+            .unwrap()
+            .set_leader(self.keypair.pubkey());
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             self.keypair.clone(),
             &self.bank,
-            &self.crdt,
+            &self.cluster_info,
             Default::default(),
             self.transaction_sockets
                 .iter()
@@ -446,7 +449,7 @@ impl Fullnode {
             self.broadcast_socket
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
-            self.crdt.clone(),
+            self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
@@ -498,7 +501,7 @@ impl Fullnode {
     // TODO: only used for testing, get rid of this once we have actual
     // leader scheduling
     pub fn set_scheduled_leader(&self, leader_id: Pubkey, entry_height: u64) {
-        self.crdt
+        self.cluster_info
             .write()
             .unwrap()
             .set_scheduled_leader(entry_height, leader_id);
@@ -549,7 +552,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use crdt::Node;
+    use cluster_info::Node;
     use fullnode::{Fullnode, NodeRole, TvuReturnType};
     use ledger::genesis;
     use packet::make_consecutive_blobs;
