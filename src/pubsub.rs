@@ -51,6 +51,7 @@ impl PubSubService {
             .spawn(move || {
                 let mut io = PubSubHandler::default();
             	let rpc = RpcSolPubSubImpl::default();
+                let subs = rpc.subscriptions.clone();
             	io.extend_with(rpc.to_delegate());
 
             	let server = ServerBuilder::with_meta_extractor(io, move |context: &RequestContext|
@@ -75,15 +76,20 @@ impl PubSubService {
                 }
                 loop {
                     if exit.load(Ordering::Relaxed) {
+                        for (_, bank_sub_id) in subs.read().unwrap().iter() {
+                            server_bank.remove_account_subscription(bank_sub_id);
+                            server_bank.remove_signature_subscription(bank_sub_id);
+                        }
                         server.unwrap().close();
-                        server_bank.remove_all_subscriptions();
                         break;
                     }
                     if let ClientState::Init(ref mut sender) = *status.lock().unwrap() {
                         if sender.check_active().is_err() {
+                            for (_, bank_sub_id) in subs.read().unwrap().iter() {
+                                server_bank.remove_account_subscription(bank_sub_id);
+                                server_bank.remove_signature_subscription(bank_sub_id);
+                            }
                             server.unwrap().close();
-                            // bank.remove_client_account_subscriptions(sender);
-                            // bank.remove_client_signature_subscriptions(sender);
                             break;
                         }
                     }
@@ -120,7 +126,7 @@ build_rpc_trait! {
 
             // Unsubscribe from signature notification subscription.
             #[rpc(name = "signatureUnsubscribe")]
-            fn signature_unsubscribe(&self, SubscriptionId) -> Result<bool>;
+            fn signature_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
         }
         #[pubsub(name = "account_notification")] {
             // Get notification every time account userdata is changed
@@ -130,7 +136,7 @@ build_rpc_trait! {
 
             // Unsubscribe from account notification subscription.
             #[rpc(name = "accountUnsubscribe")]
-            fn account_unsubscribe(&self, SubscriptionId) -> Result<bool>;
+            fn account_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
         }
     }
 }
@@ -175,6 +181,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()
                     .unwrap();
+                self.subscriptions.write().unwrap().remove(&sub_id);
             }
             Err(_) => {
                 meta.request_processor
@@ -183,9 +190,10 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
     }
 
-    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-        if let Some(_bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
-            // Remove from bank here, once metadata
+    fn signature_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+        if let Some(bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
+            meta.request_processor
+                .remove_signature_subscription(&bank_sub_id);
             Ok(true)
         } else {
             Err(Error {
@@ -226,9 +234,10 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .store_account_subscription(bank_sub_id, pubkey, sink);
     }
 
-    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-        if let Some(_bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
-            // Remove from bank here, once metadata
+    fn account_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+        if let Some(bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
+            meta.request_processor
+                .remove_account_subscription(&bank_sub_id);
             Ok(true)
         } else {
             Err(Error {
@@ -268,7 +277,8 @@ mod tests {
     #[test]
     fn test_signature_subscribe() {
         let alice = Mint::new(10_000);
-        let bob_pubkey = Keypair::new().pubkey();
+        let bob = Keypair::new();
+        let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
@@ -396,7 +406,6 @@ mod tests {
     }
 
     #[test]
-    // #[ignore]
     fn test_account_subscribe() {
         let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
@@ -535,43 +544,43 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        // let tx = Transaction::system_new(&alice.keypair(), witness.pubkey(), 1, last_id);
-        // arc_bank
-        //     .process_transaction(&tx)
-        //     .expect("process transaction");
-        // sleep(Duration::from_millis(200));
-        // let tx = Transaction::budget_new_signature(
-        //     &witness,
-        //     contract_state.pubkey(),
-        //     bob_pubkey,
-        //     last_id,
-        // );
-        // arc_bank
-        //     .process_transaction(&tx)
-        //     .expect("process transaction");
-        // sleep(Duration::from_millis(200));
-        //
-        // let expected_userdata = arc_bank
-        //     .get_account(&contract_state.pubkey())
-        //     .unwrap()
-        //     .userdata;
-        // let expected = json!({
-        //    "jsonrpc": "2.0",
-        //    "method": "account_notification",
-        //    "params": {
-        //        "result": {
-        //            "program_id": budget_program_id,
-        //            "tokens": 1,
-        //            "userdata": expected_userdata
-        //        },
-        //        "subscription": 0,
-        //    }
-        // });
-        // let string = receiver.poll();
-        // assert!(string.is_ok());
-        // if let Async::Ready(Some(response)) = string.unwrap() {
-        //     assert_eq!(serde_json::to_string(&expected).unwrap(), response);
-        // }
+        let tx = Transaction::system_new(&alice.keypair(), witness.pubkey(), 1, last_id);
+        arc_bank
+            .process_transaction(&tx)
+            .expect("process transaction");
+        sleep(Duration::from_millis(200));
+        let tx = Transaction::budget_new_signature(
+            &witness,
+            contract_state.pubkey(),
+            bob_pubkey,
+            last_id,
+        );
+        arc_bank
+            .process_transaction(&tx)
+            .expect("process transaction");
+        sleep(Duration::from_millis(200));
+
+        let expected_userdata = arc_bank
+            .get_account(&contract_state.pubkey())
+            .unwrap()
+            .userdata;
+        let expected = json!({
+           "jsonrpc": "2.0",
+           "method": "account_notification",
+           "params": {
+               "result": {
+                   "program_id": budget_program_id,
+                   "tokens": 1,
+                   "userdata": expected_userdata
+               },
+               "subscription": 0,
+           }
+        });
+        let string = receiver.poll();
+        assert!(string.is_ok());
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            assert_eq!(serde_json::to_string(&expected).unwrap(), response);
+        }
     }
 
     #[test]

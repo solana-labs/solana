@@ -95,7 +95,7 @@ pub struct Meta {
 }
 impl Metadata for Meta {}
 
-#[derive(PartialEq, Serialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Serialize, Debug)]
 pub enum RpcSignatureStatus {
     Confirmed,
     SignatureNotFound,
@@ -293,6 +293,9 @@ impl JsonRpcRequestProcessor {
         self.bank
             .store_account_subscription(bank_sub_id, pubkey, sink);
     }
+    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey) {
+        self.bank.remove_account_subscription(bank_sub_id);
+    }
     pub fn store_signature_subscription(
         &self,
         bank_sub_id: Pubkey,
@@ -301,6 +304,9 @@ impl JsonRpcRequestProcessor {
     ) {
         self.bank
             .store_signature_subscription(bank_sub_id, signature, sink);
+    }
+    pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey) {
+        self.bank.remove_signature_subscription(bank_sub_id);
     }
 }
 

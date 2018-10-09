@@ -270,7 +270,13 @@ impl Bank {
                 &res[i],
                 &tx.last_id,
             );
-            self.check_signature_subscriptions(&tx.signature);
+            let status = match res[i] {
+                Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
+                Err(_) => RpcSignatureStatus::GenericFailure,
+            };
+            self.check_signature_subscriptions(&tx.signature, status);
         }
     }
 
@@ -976,10 +982,9 @@ impl Bank {
         subscriptions.insert(bank_sub_id, (pubkey, sink));
     }
 
-    pub fn remove_account_subscription(&self, bank_sub_id: Pubkey) -> bool {
+    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey) -> bool {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
-        if subscriptions.contains_key(&bank_sub_id) {
-            subscriptions.remove(&bank_sub_id);
+        if subscriptions.remove(bank_sub_id).is_some() {
             true
         } else {
             false
@@ -1004,24 +1009,21 @@ impl Bank {
         subscriptions.insert(bank_sub_id, (signature, sink));
     }
 
-    pub fn remove_signature_subscription(&self, bank_sub_id: Pubkey) -> bool {
+    pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey) -> bool {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        if subscriptions.contains_key(&bank_sub_id) {
-            subscriptions.remove(&bank_sub_id);
+        if subscriptions.remove(bank_sub_id).is_some() {
             true
         } else {
             false
         }
     }
 
-    fn check_signature_subscriptions(&self, signature: &Signature) {
+    fn check_signature_subscriptions(&self, signature: &Signature, status: RpcSignatureStatus) {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         let mut to_remove: Vec<Pubkey> = vec![];
         for (bank_sub_id, (sig, sink)) in subscriptions.iter() {
-            if sig == signature {
-                sink.notify(Ok(RpcSignatureStatus::Confirmed))
-                    .wait()
-                    .unwrap();
+            if sig == signature && status != RpcSignatureStatus::SignatureNotFound {
+                sink.notify(Ok(status)).wait().unwrap();
                 // Unsubscribe on confirmation
                 to_remove.push(*bank_sub_id);
             }
@@ -1029,19 +1031,6 @@ impl Bank {
         for id in to_remove.iter() {
             subscriptions.remove(&id);
         }
-    }
-
-    // pub fn remove_client_account_subscriptions(&self, sink: Sink<Account>) {
-    //     self.account_subscriptions.write().unwrap().retain(|_, &mut v| v != sink);
-    // }
-    //
-    // pub fn remove_client_signature_subscriptions(&self, sink: Sink<RpcSignatureStatus>) {
-    //     self.signature_subscriptions.write().unwrap().retain(|_, &mut v| v != sink);
-    // }
-    //
-    pub fn remove_all_subscriptions(&self) {
-        self.account_subscriptions.write().unwrap().clear();
-        self.signature_subscriptions.write().unwrap().clear();
     }
 }
 
@@ -1631,7 +1620,7 @@ mod tests {
             assert_eq!(expected, response);
         }
 
-        bank.remove_account_subscription(bank_sub_id);
+        bank.remove_account_subscription(&bank_sub_id);
         assert!(
             !bank
                 .account_subscriptions
@@ -1664,7 +1653,7 @@ mod tests {
                 .contains_key(&bank_sub_id)
         );
 
-        bank.check_signature_subscriptions(&signature);
+        bank.check_signature_subscriptions(&signature, RpcSignatureStatus::Confirmed);
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
@@ -1672,7 +1661,7 @@ mod tests {
             assert_eq!(expected, response);
         }
 
-        bank.remove_signature_subscription(bank_sub_id);
+        bank.remove_signature_subscription(&bank_sub_id);
         assert!(
             !bank
                 .signature_subscriptions
