@@ -6,6 +6,7 @@ use bs58;
 use cluster_info::FULLNODE_PORT_RANGE;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
+use jsonrpc_macros::pubsub::Sink;
 use netutil::find_available_port_in_range;
 use pubsub::{PubSubService, SubscriptionResponse};
 use service::Service;
@@ -282,6 +283,16 @@ impl JsonRpcRequestProcessor {
     }
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
+    }
+    pub fn store_account_subscription(&self, pubkey: Pubkey, sink: Sink<Account>) {
+        self.bank.store_account_subscription(pubkey, sink);
+    }
+    pub fn store_signature_subscription(
+        &self,
+        signature: Signature,
+        sink: Sink<RpcSignatureStatus>,
+    ) {
+        self.bank.store_signature_subscription(signature, sink);
     }
 }
 
