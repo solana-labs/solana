@@ -109,6 +109,7 @@ tokio-codec = "0.1"
 untrusted = "0.6.2"
 
 [dev-dependencies]
+solua = { path = "programs/native/solua" }
 move_funds = { path = "programs/native/move_funds" }
 noop = { path = "programs/native/noop" }
 
@@ -135,6 +136,7 @@ name = "chacha"
 members = [
     ".",
     "common",
+    "programs/native/solua",
     "programs/native/move_funds",
     "programs/native/noop",
     "programs/bpf/noop_rust",
