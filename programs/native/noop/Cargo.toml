@@ -8,5 +8,5 @@ solana_program_interface = { path = "../../../common" }
 
 [lib]
 name = "noop"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 
