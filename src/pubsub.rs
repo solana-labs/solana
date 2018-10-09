@@ -27,7 +27,7 @@ pub enum ClientState {
 
 #[derive(Serialize)]
 pub struct SubscriptionResponse {
-    pub addr: SocketAddr,
+    pub port: u16,
     pub path: String,
 }
 

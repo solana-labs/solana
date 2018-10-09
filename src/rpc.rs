@@ -3,8 +3,10 @@
 use bank::{Bank, BankError};
 use bincode::deserialize;
 use bs58;
+use cluster_info::FULLNODE_PORT_RANGE;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
+use netutil::find_available_port_in_range;
 use pubsub::{PubSubService, SubscriptionResponse};
 use service::Service;
 use signature::{Keypair, KeypairUtil, Signature};
@@ -132,7 +134,7 @@ build_rpc_trait! {
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
 
         #[rpc(meta, name = "subscriptionChannel")]
-        fn launch_subscription_channel(&self, Self::Metadata, u16) -> Result<SubscriptionResponse>;
+        fn launch_subscription_channel(&self, Self::Metadata) -> Result<SubscriptionResponse>;
     }
 }
 
@@ -231,18 +233,19 @@ impl RpcSol for RpcSolImpl {
             })?;
         Ok(bs58::encode(tx.signature).into_string())
     }
-    fn launch_subscription_channel(
-        &self,
-        meta: Self::Metadata,
-        port: u16,
-    ) -> Result<SubscriptionResponse> {
+    fn launch_subscription_channel(&self, meta: Self::Metadata) -> Result<SubscriptionResponse> {
+        let port: u16 = find_available_port_in_range(FULLNODE_PORT_RANGE).map_err(|_| Error {
+            code: ErrorCode::InternalError,
+            message: "No available port in range".into(),
+            data: None,
+        })?;
         let mut pubsub_addr = meta.rpc_addr;
         pubsub_addr.set_port(port);
         let pubkey = Keypair::new().pubkey();
         let _pubsub_service =
             PubSubService::new(&meta.request_processor.bank, pubsub_addr, pubkey, meta.exit);
         Ok(SubscriptionResponse {
-            addr: pubsub_addr,
+            port,
             path: pubkey.to_string(),
         })
     }
