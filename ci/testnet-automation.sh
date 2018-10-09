@@ -60,7 +60,7 @@ launchTestnet() {
   curl -G "https://metrics.solana.com:8086/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" |
-    python -c ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
+    python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
 
   upload_ci_artifact TPS"$nodeCount".log
 }
