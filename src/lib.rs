@@ -68,6 +68,7 @@ pub mod thin_client;
 pub mod tictactoe_dashboard_program;
 pub mod tictactoe_program;
 pub mod timing;
+pub mod token_program;
 pub mod tpu;
 pub mod transaction;
 pub mod tvu;
