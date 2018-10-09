@@ -10,6 +10,7 @@ fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Resul
     let accounts = lua.create_table()?;
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let account = lua.create_table()?;
+        account.set("key", keyed_account.key.to_string())?;
         account.set("tokens", keyed_account.account.tokens)?;
         let data_str = lua.create_string(&keyed_account.account.userdata)?;
         account.set("userdata", data_str)?;
@@ -159,5 +160,35 @@ mod tests {
         process(&mut create_keyed_accounts(&mut accounts), &data);
         assert_eq!(accounts[0].1.tokens, 90);
         assert_eq!(accounts[1].1.tokens, 11);
+    }
+
+    #[test]
+    fn test_abort_tx_with_lua() {
+        let userdata = r#"
+            if data == accounts[1].key then
+                accounts[1].userdata = ""
+            end
+        "#.as_bytes()
+        .to_vec();
+
+        let alice_pubkey = Pubkey::default();
+        let program_id = Pubkey::default();
+
+        let mut accounts = [(
+            alice_pubkey,
+            Account {
+                tokens: 100,
+                userdata,
+                program_id,
+            },
+        )];
+
+        // Abort
+        let data = alice_pubkey.to_string().as_bytes().to_vec();
+
+        assert_ne!(accounts[0].1.userdata, vec![]);
+        process(&mut create_keyed_accounts(&mut accounts), &data);
+        assert_eq!(accounts[0].1.tokens, 100);
+        assert_eq!(accounts[0].1.userdata, vec![]);
     }
 }
