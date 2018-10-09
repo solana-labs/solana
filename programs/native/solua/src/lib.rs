@@ -29,8 +29,12 @@ fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut Vec<KeyedAccount>
     Ok(())
 }
 
-fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str) -> Result<()> {
+fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str, data: &[u8]) -> Result<()> {
     let lua = Lua::new();
+    let globals = lua.globals();
+    let data_str = lua.create_string(data)?;
+    globals.set("data", data_str)?;
+
     set_accounts(&lua, "accounts", keyed_accounts)?;
     lua.exec::<_, ()>(code, None)?;
     update_accounts(&lua, "accounts", keyed_accounts)
@@ -38,8 +42,8 @@ fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str) -> Result<()> {
 
 #[no_mangle]
 pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) {
-    let code: String = deserialize(&data).unwrap();
-    run_lua(keyed_accounts, &code).unwrap();
+    let code: String = deserialize(&keyed_accounts[0].account.userdata).unwrap();
+    run_lua(keyed_accounts, &code, data).unwrap();
 }
 
 #[cfg(test)]
@@ -68,7 +72,7 @@ mod tests {
     fn test_credit_with_lua() -> Result<()> {
         let code = r#"accounts[1].tokens = accounts[1].tokens + 1"#;
         let mut accounts = [(Pubkey::default(), Account::default())];
-        run_lua(&mut create_keyed_accounts(&mut accounts), code)?;
+        run_lua(&mut create_keyed_accounts(&mut accounts), code, &[])?;
         assert_eq!(accounts[0].1.tokens, 1);
         Ok(())
     }
@@ -77,14 +81,14 @@ mod tests {
     fn test_error_with_lua() {
         let code = r#"accounts[1].tokens += 1"#;
         let mut accounts = [(Pubkey::default(), Account::default())];
-        assert!(run_lua(&mut create_keyed_accounts(&mut accounts), code).is_err());
+        assert!(run_lua(&mut create_keyed_accounts(&mut accounts), code, &[]).is_err());
     }
 
     #[test]
     fn test_move_funds_with_lua_via_process() {
-        let data: Vec<u8> = serialize(
+        let userdata: Vec<u8> = serialize(
             r#"
-            local tokens = 100
+            local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
         "#,
@@ -95,12 +99,23 @@ mod tests {
         let program_id = Pubkey::default();
 
         let mut accounts = [
-            (alice_pubkey, Account::new(100, 0, program_id)),
+            (
+                alice_pubkey,
+                Account {
+                    tokens: 100,
+                    userdata,
+                    program_id,
+                },
+            ),
             (bob_pubkey, Account::new(1, 0, program_id)),
         ];
+        let data = serialize(&10).unwrap();
         process(&mut create_keyed_accounts(&mut accounts), &data);
+        assert_eq!(accounts[0].1.tokens, 90);
+        assert_eq!(accounts[1].1.tokens, 11);
 
-        assert_eq!(accounts[0].1.tokens, 0);
-        assert_eq!(accounts[1].1.tokens, 101);
+        process(&mut create_keyed_accounts(&mut accounts), &data);
+        assert_eq!(accounts[0].1.tokens, 80);
+        assert_eq!(accounts[1].1.tokens, 21);
     }
 }
