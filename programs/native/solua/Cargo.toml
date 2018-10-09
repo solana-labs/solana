@@ -4,9 +4,11 @@ version = "0.1.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
-bincode = "1.0.0"
 rlua = "0.15.2"
 solana_program_interface = { path = "../../../common" }
+
+[dev-dependencies]
+bincode = "1.0.0"
 
 [lib]
 name = "solua"
