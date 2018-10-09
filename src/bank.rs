@@ -32,6 +32,7 @@ use system_transaction::SystemTransaction;
 use tictactoe_dashboard_program::TicTacToeDashboardProgram;
 use tictactoe_program::TicTacToeProgram;
 use timing::{duration_as_us, timestamp};
+use token_program::TokenProgram;
 use transaction::Transaction;
 use window::WINDOW_SIZE;
 
@@ -529,6 +530,11 @@ impl Bank {
                 instruction_index,
                 program_accounts,
             ).is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
+        } else if TokenProgram::check_id(&tx_program_id) {
+            if TokenProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
