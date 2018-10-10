@@ -3,11 +3,11 @@
 //! stdout, and then sends the Entry to its output channel.
 
 use bank::Bank;
-use cluster_info::ClusterInfo;
 use budget_transaction::BudgetTransaction;
+use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::Entry;
-use leader_scheduler::{entries_until_next_leader_rotation, LeaderScheduler};
+use leader_scheduler::LeaderScheduler;
 use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
@@ -47,14 +47,19 @@ impl WriteStage {
         entry_height: u64,
         mut new_entries: Vec<Entry>,
     ) -> (Vec<Entry>, bool) {
+        // In the case we're using the default implemntation of the leader scheduler,
+        // there won't ever be leader rotations at particular entry heights, so just
+        // return the entire input vector of entries
+        if leader_scheduler.use_only_bootstrap_leader {
+            return (new_entries, false);
+        }
+
         let new_entries_length = new_entries.len();
 
         // i is the number of entries to take
         let mut i = 0;
         let mut is_leader_rotation = false;
 
-        let bootstrap_height = leader_scheduler.bootstrap_height;
-        let leader_rotation_interval = leader_scheduler.leader_rotation_interval;
         loop {
             let next_leader = leader_scheduler.get_scheduled_leader(entry_height + i as u64);
 
@@ -69,11 +74,9 @@ impl WriteStage {
 
             // Find out how many more entries we can squeeze in until the next leader
             // rotation
-            let entries_until_leader_rotation = entries_until_next_leader_rotation(
-                entry_height + (i as u64),
-                bootstrap_height,
-                leader_rotation_interval,
-            );
+            let entries_until_leader_rotation = leader_scheduler.entries_until_next_leader_rotation(
+                entry_height + (i as u64)
+            ).expect("Leader rotation should exist when not using default implementation of LeaderScheduler");
 
             // Check the next leader rotation height entries in new_entries, or
             // if the new_entries doesnt have that many entries remaining,
@@ -122,7 +125,7 @@ impl WriteStage {
         entry_sender: &Sender<Vec<Entry>>,
         entry_receiver: &Receiver<Vec<Entry>>,
         entry_height: &mut u64,
-        leader_scheduler_option: &mut Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<()> {
         let mut ventries = Vec::new();
         let mut received_entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
@@ -131,25 +134,15 @@ impl WriteStage {
         let mut num_txs = 0;
 
         loop {
-            let new_entries: Vec<Entry>;
-            let mut is_leader_rotation = false;
-            if let Some(leader_scheduler_lock) = leader_scheduler_option {
-                let mut wlock = leader_scheduler_lock.write().unwrap();
-                // Find out how many more entries we can squeeze in until the next leader
-                // rotation
-                let (new_entries_, is_leader_rotation_) = Self::find_leader_rotation_index(
-                    bank,
-                    &cluster_info.read().unwrap().my_data().id,
-                    &mut (*wlock),
-                    *entry_height + num_new_entries as u64,
-                    received_entries,
-                );
-
-                new_entries = new_entries_;
-                is_leader_rotation = is_leader_rotation_;
-            } else {
-                new_entries = received_entries;
-            }
+            // Find out how many more entries we can squeeze in until the next leader
+            // rotation
+            let (new_entries, is_leader_rotation) = Self::find_leader_rotation_index(
+                bank,
+                &cluster_info.read().unwrap().my_data().id,
+                &mut *leader_scheduler.write().unwrap(),
+                *entry_height + num_new_entries as u64,
+                received_entries,
+            );
 
             num_new_entries += new_entries.len();
             ventries.push(new_entries);
@@ -224,7 +217,7 @@ impl WriteStage {
         ledger_path: &str,
         entry_receiver: Receiver<Vec<Entry>>,
         entry_height: u64,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -243,34 +236,26 @@ impl WriteStage {
                 let mut last_valid_validator_timestamp = 0;
                 let id = cluster_info.read().unwrap().id;
                 let mut entry_height_ = entry_height;
-                let mut leader_rotation_interval_option = None;
-                if let Some(ref leader_scheduler_lock) = leader_scheduler_option {
-                    leader_rotation_interval_option = Some(leader_scheduler_lock.read().unwrap().leader_rotation_interval);
-                }
-                let mut leader_scheduler_option_ = leader_scheduler_option;
                 loop {
                     // Note that entry height is not zero indexed, it starts at 1, so the
                     // old leader is in power up to and including entry height
                     // n * leader_rotation_interval for some "n". Once we've forwarded
                     // that last block, check for the next scheduled leader.
-                    if let Some(ref leader_rotation_interval) = leader_rotation_interval_option {
-                        if entry_height_ % (*leader_rotation_interval as u64) == 0 {
-                            let leader_scheduler_lock = leader_scheduler_option_.as_ref().expect(
-                                "leader_scheduler_option cannot be None if 
-                                leader_rotation_interval_option is not None",
-                            );
-                            let rlock = leader_scheduler_lock.read().unwrap();
+                    match leader_scheduler
+                        .read()
+                        .unwrap()
+                        .get_scheduled_leader(entry_height_)
+                    {
+                        Some(leader_id) if leader_id == id => (),
+                        None => panic!(
+                            "Scheduled leader id should never be unknown while processing entries"
+                        ),
+                        _ => {
                             // If the leader is no longer in power, exit.
-                            match rlock.get_scheduled_leader(entry_height_) {
-                                Some(leader_id) if leader_id == id => (),
-                                None => panic!("Scheduled leader id should never be unknown while processing entries"),
-                                _ => {
-                                    // When the broadcast stage has received the last blob, it
-                                    // will signal to close the fetch stage, which will in turn
-                                    // close down this write stage
-                                    return WriteStageReturnType::LeaderRotation;
-                                }
-                            }
+                            // When the broadcast stage has received the last blob, it
+                            // will signal to close the fetch stage, which will in turn
+                            // close down this write stage
+                            return WriteStageReturnType::LeaderRotation;
                         }
                     }
 
@@ -281,7 +266,7 @@ impl WriteStage {
                         &entry_sender,
                         &entry_receiver,
                         &mut entry_height_,
-                        &mut leader_scheduler_option_,
+                        &leader_scheduler,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -369,7 +354,8 @@ mod tests {
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
 
         info!("processing ledger...");
-        bank.process_ledger(entries, None).expect("process_ledger")
+        bank.process_ledger(entries, &mut LeaderScheduler::default())
+            .expect("process_ledger")
     }
 
     fn setup_dummy_write_stage(
@@ -380,7 +366,9 @@ mod tests {
         // Setup leader info
         let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(leader_info.info).expect("ClusterInfo::new")));
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(leader_info.info).expect("ClusterInfo::new"),
+        ));
         let bank = Arc::new(Bank::new_default(true));
 
         // Make a ledger
@@ -402,7 +390,7 @@ mod tests {
             &leader_ledger_path,
             entry_receiver,
             entry_height,
-            Some(leader_scheduler.clone()),
+            leader_scheduler.clone(),
         );
 
         DummyWriteStage {

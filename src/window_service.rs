@@ -246,7 +246,7 @@ pub fn window_service(
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
-    leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     done: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     Builder::new()
@@ -256,18 +256,9 @@ pub fn window_service(
             let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
-            let id = crdt.read().unwrap().id;
+            let id = cluster_info.read().unwrap().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
-            let mut bootstrap_height_option = None;
-            let mut leader_rotation_interval_option = None;
-            if let Some(ref leader_scheduler) = leader_scheduler_option {
-                // Keep track of the leader_rotation_interval, so we don't have to
-                // grab the leader_scheduler lock every iteration of the loop.
-                let ls_lock = leader_scheduler.read().unwrap();
-                leader_rotation_interval_option = Some(ls_lock.leader_rotation_interval);
-                bootstrap_height_option = Some(ls_lock.bootstrap_height);
-            }
             loop {
                 // Check if leader rotation was configured
                 if let Err(e) = recv_window(
@@ -318,9 +309,7 @@ pub fn window_service(
                     consumed,
                     received,
                     max_entry_height,
-                    &bootstrap_height_option,
-                    &leader_rotation_interval_option,
-                    &leader_scheduler_option,
+                    &leader_scheduler,
                 );
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
@@ -337,6 +326,7 @@ mod test {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::Hash;
+    use leader_scheduler::LeaderScheduler;
     use logger;
     use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
     use std::net::UdpSocket;
@@ -388,7 +378,7 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
         );
         let t_responder = {
@@ -450,7 +440,13 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
+            // TODO: For now, the window still checks the ClusterInfo for the current leader
+            // to determine whether to retransmit a block. In the future when we rely on
+            // the LeaderScheduler for retransmits, this test will need to be rewritten
+            // because a leader should only be unknown in the window when the write stage
+            // hasn't yet calculated the leaders for slots in the next epoch (on entries
+            // at heights that are multiples of seed_rotation_interval in LeaderScheduler)
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done,
         );
         let t_responder = {
@@ -507,7 +503,13 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
-            None,
+            // TODO: For now, the window still checks the ClusterInfo for the current leader
+            // to determine whether to retransmit a block. In the future when we rely on
+            // the LeaderScheduler for retransmits, this test will need to be rewritten
+            // becasue a leader should only be unknown in the window when the write stage
+            // hasn't yet calculated the leaders for slots in the next epoch (on entries
+            // at heights that are multiples of seed_rotation_interval in LeaderScheduler)
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done,
         );
         let t_responder = {

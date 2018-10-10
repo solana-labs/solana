@@ -434,6 +434,7 @@ mod tests {
     use bank::Bank;
     use cluster_info::Node;
     use fullnode::Fullnode;
+    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use logger;
     use mint::Mint;
@@ -476,7 +477,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));
@@ -523,7 +524,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -583,7 +584,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(300));
@@ -644,7 +645,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));

@@ -29,9 +29,7 @@ pub enum BroadcastStageReturnType {
 
 #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn broadcast(
-    bootstrap_height_option: &Option<u64>,
-    leader_rotation_interval_option: &Option<u64>,
-    leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -133,9 +131,7 @@ fn broadcast(
 
         // Send blobs out from the window
         ClusterInfo::broadcast(
-            bootstrap_height_option,
-            leader_rotation_interval_option,
-            leader_scheduler_option,
+            &leader_scheduler,
             &node_info,
             &broadcast_table,
             &window,
@@ -187,7 +183,7 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
-        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -195,21 +191,10 @@ impl BroadcastStage {
         };
         let mut receive_index = entry_height;
         let me = cluster_info.read().unwrap().my_data().clone();
-        let mut leader_rotation_interval_option = None;
-        let mut bootstrap_height_option = None;
-        if let Some(leader_scheduler) = leader_scheduler_option {
-            // Keep track of the leader_rotation_interval, so we don't have to
-            // grab the leader_scheduler lock every iteration of the loop.
-            let ls_lock = leader_scheduler.read().unwrap();
-            leader_rotation_interval_option = Some(ls_lock.leader_rotation_interval);
-            bootstrap_height_option = Some(ls_lock.bootstrap_height);
-        }
         loop {
             let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
-                &bootstrap_height_option,
-                &leader_rotation_interval_option,
-                leader_scheduler_option,
+                leader_scheduler,
                 &me,
                 &broadcast_table,
                 &window,
@@ -254,13 +239,12 @@ impl BroadcastStage {
         window: SharedWindow,
         entry_height: u64,
         receiver: Receiver<Vec<Entry>>,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
-                let leader_scheduler_option_ = leader_scheduler_option;
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
                     &sock,
@@ -268,7 +252,7 @@ impl BroadcastStage {
                     &window,
                     entry_height,
                     &receiver,
-                    &leader_scheduler_option_,
+                    &leader_scheduler,
                 )
             }).unwrap();
 

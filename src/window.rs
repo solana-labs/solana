@@ -5,7 +5,7 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
-use leader_scheduler::{entries_until_next_leader_rotation, LeaderScheduler};
+use leader_scheduler::LeaderScheduler;
 use ledger::{reconstruct_entries_from_blobs, Block};
 use log::Level;
 use packet::SharedBlob;
@@ -61,9 +61,7 @@ pub trait WindowUtil {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
-        bootstrap_height_option: &Option<u64>,
-        leader_rotation_interval_option: &Option<u64>,
-        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
@@ -104,51 +102,37 @@ impl WindowUtil for Window {
         consumed: u64,
         received: u64,
         max_entry_height: u64,
-        bootstrap_height_option: &Option<u64>,
-        leader_rotation_interval_option: &Option<u64>,
-        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
         let rcluster_info = cluster_info.read().unwrap();
         let mut is_next_leader = false;
-        if let Some(leader_rotation_interval) = leader_rotation_interval_option {
-            // Calculate the next leader rotation height and check if we are the leader
-            let bootstrap_height = bootstrap_height_option.expect(
-                "bootstrap_height_option cannot be None if 
-                leader_rotation_interval_option is not None",
-            );
-            let next_leader_rotation = consumed + entries_until_next_leader_rotation(
-                consumed,
-                bootstrap_height,
-                *leader_rotation_interval,
-            );
-            let leader_scheduler = leader_scheduler_option.as_ref().expect(
-                "leader_scheduler_option cannot be None if 
-                leader_rotation_interval_option is not None",
-            );
-            match leader_scheduler
-                .read()
-                .unwrap()
-                .get_scheduled_leader(next_leader_rotation)
-            {
-                Some(leader_id) if leader_id == *id => is_next_leader = true,
-                // In the case that we are not in the current scope of the leader schedule
-                // window then either:
-                //
-                // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
-                // in which case it will eventually catch up
-                //
-                // 2) We are on the border between seed_rotation_intervals, so the
-                // schedule won't be known until the entry on that cusp is received
-                // by the replicate stage (which comes after this stage). Hence, the next
-                // leader at the beginning of that next epoch will not know he is the
-                // leader until he receives that last "cusp" entry. He also won't ask for repairs
-                // for that entry because "is_next_leader" won't be set here. In this case,
-                // everybody will be blocking waiting for that "cusp" entry instead of repairing,
-                // until the leader hits "times" >= the max times in calculate_max_repair().
-                // The impact of this, along with the similar problem from broadcast for the transitioning
-                // leader, can be observed in the multinode test, test_full_leader_validator_network(),
-                None => (),
-                _ => (),
+        {
+            let ls_lock = leader_scheduler_option.read().unwrap();
+            if !ls_lock.use_only_bootstrap_leader {
+                // Calculate the next leader rotation height and check if we are the leader
+                let next_leader_rotation_height = consumed + ls_lock.entries_until_next_leader_rotation(consumed).expect("Leader rotation should exist when not using default implementation of LeaderScheduler");
+
+                match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
+                    Some(leader_id) if leader_id == *id => is_next_leader = true,
+                    // In the case that we are not in the current scope of the leader schedule
+                    // window then either:
+                    //
+                    // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
+                    // in which case it will eventually catch up
+                    //
+                    // 2) We are on the border between seed_rotation_intervals, so the
+                    // schedule won't be known until the entry on that cusp is received
+                    // by the replicate stage (which comes after this stage). Hence, the next
+                    // leader at the beginning of that next epoch will not know he is the
+                    // leader until he receives that last "cusp" entry. He also won't ask for repairs
+                    // for that entry because "is_next_leader" won't be set here. In this case,
+                    // everybody will be blocking waiting for that "cusp" entry instead of repairing,
+                    // until the leader hits "times" >= the max times in calculate_max_repair().
+                    // The impact of this, along with the similar problem from broadcast for the transitioning
+                    // leader, can be observed in the multinode test, test_full_leader_validator_network(),
+                    None => (),
+                    _ => (),
+                }
             }
         }
 

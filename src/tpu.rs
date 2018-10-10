@@ -63,7 +63,7 @@ impl Tpu {
         ledger_path: &str,
         sigverify_disabled: bool,
         entry_height: u64,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -82,7 +82,7 @@ impl Tpu {
             ledger_path,
             entry_receiver,
             entry_height,
-            leader_scheduler_option,
+            leader_scheduler,
         );
 
         let tpu = Tpu {

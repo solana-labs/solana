@@ -12,6 +12,7 @@ use solana::client::mk_client;
 use solana::cluster_info::Node;
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
+use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::{Keypair, KeypairUtil};
@@ -83,9 +84,6 @@ fn main() -> () {
     let node_info = node.info.clone();
     let pubkey = keypair.pubkey();
 
-    let mut fullnode = Fullnode::new(node, ledger_path, keypair, network, false, None);
-
-    // airdrop stuff, probably goes away at some point
     let leader = match network {
         Some(network) => {
             poll_gossip_for_leader(network, None).expect("can't find leader on network")
@@ -93,6 +91,14 @@ fn main() -> () {
         None => node_info,
     };
 
+    let mut fullnode = Fullnode::new(
+        node,
+        ledger_path,
+        keypair,
+        network,
+        false,
+        LeaderScheduler::from_bootstrap_leader(leader.id),
+    );
     let mut client = mk_client(&leader);
 
     // TODO: maybe have the drone put itself in gossip somewhere instead of hardcoding?

@@ -1,6 +1,7 @@
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use hash::{Hash, Hasher};
+use leader_scheduler::LeaderScheduler;
 use ncp::Ncp;
 use service::Service;
 use std::fs::File;
@@ -82,8 +83,9 @@ impl Replicator {
         ));
 
         let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
-
+        let leader_pubkey;
         if let Some(leader_info) = leader_info.as_ref() {
+            leader_pubkey = leader_info.id;
             cluster_info.write().unwrap().insert(leader_info);
         } else {
             panic!("No leader info!");
@@ -108,7 +110,9 @@ impl Replicator {
             entry_window_sender,
             retransmit_sender,
             repair_socket,
-            None,
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+                leader_pubkey,
+            ))),
             done,
         );
 
@@ -153,6 +157,7 @@ mod tests {
     use cluster_info::Node;
     use fullnode::Fullnode;
     use hash::Hash;
+    use leader_scheduler::LeaderScheduler;
     use ledger::{genesis, read_ledger, tmp_ledger_path};
     use logger;
     use replicator::sample_file;
@@ -192,7 +197,7 @@ mod tests {
             leader_keypair,
             None,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id),
         );
 
         let mut leader_client = mk_client(&leader_info);

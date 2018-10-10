@@ -4,7 +4,7 @@ use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::EntryReceiver;
-use leader_scheduler::{is_leader_rotation_height, LeaderScheduler};
+use leader_scheduler::LeaderScheduler;
 use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
@@ -59,7 +59,7 @@ impl ReplicateStage {
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
         entry_height: &mut u64,
-        leader_scheduler_option: &mut Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -70,38 +70,27 @@ impl ReplicateStage {
 
         let mut res = Ok(());
         {
-            let mut leader_scheduler_lock_option = None;
-            if let Some(ref leader_scheduler_lock) = leader_scheduler_option {
-                let wlock = leader_scheduler_lock.write().unwrap();
-                leader_scheduler_lock_option = Some(wlock);
-            }
-
             let mut num_entries_to_write = entries.len();
             for (i, entry) in entries.iter().enumerate() {
                 res = bank.process_entry(&entry);
-                if let Some(ref mut wlock) = leader_scheduler_lock_option {
-                    Bank::process_entry_votes(
-                        &bank,
-                        &entry,
-                        *entry_height + i as u64 + 1,
-                        &mut **wlock,
-                    );
-                }
+                Bank::process_entry_votes(
+                    &bank,
+                    &entry,
+                    *entry_height + i as u64 + 1,
+                    &mut *leader_scheduler.write().unwrap(),
+                );
 
-                if let Some(ref leader_scheduler) = leader_scheduler_lock_option {
-                    let leader_rotation_interval = leader_scheduler.leader_rotation_interval;
-                    let bootstrap_height = leader_scheduler.bootstrap_height;
-                    if is_leader_rotation_height(
+                {
+                    let ls_lock = leader_scheduler.read().unwrap();
+                    if ls_lock.is_leader_rotation_height(
                         // i is zero indexed, so current entry height for this entry is actually the
                         // old entry height + i + 1
                         *entry_height + i as u64 + 1,
-                        bootstrap_height,
-                        leader_rotation_interval,
                     ) {
                         let my_id = keypair.pubkey();
                         let scheduled_leader =
-                            leader_scheduler.get_scheduled_leader(*entry_height + i as u64 + 1).expect("Scheduled leader id should never be unknown while processing entries");
-                        crdt.write().unwrap().set_leader(scheduled_leader);
+                            ls_lock.get_scheduled_leader(*entry_height + i as u64 + 1).expect("Scheduled leader id should never be unknown while processing entries");
+                        cluster_info.write().unwrap().set_leader(scheduled_leader);
                         if my_id == scheduled_leader {
                             num_entries_to_write = i + 1;
                             break;
@@ -157,7 +146,7 @@ impl ReplicateStage {
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
         entry_height: u64,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -173,18 +162,16 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
-                let mut leader_scheduler_option_ = leader_scheduler_option;
                 loop {
-                    if let Some(ref leader_scheduler_lock) = leader_scheduler_option_ {
-                        let leader_id = leader_scheduler_lock
-                            .read()
-                            .unwrap()
-                            .get_scheduled_leader(entry_height_)
-                            .expect("Scheduled leader id should never be unknown at this point");
-                        if leader_id == keypair.pubkey() {
-                            return Some(ReplicateStageReturnType::LeaderRotation(entry_height_));
-                        }
+                    let leader_id = leader_scheduler
+                        .read()
+                        .unwrap()
+                        .get_scheduled_leader(entry_height_)
+                        .expect("Scheduled leader id should never be unknown at this point");
+                    if leader_id == keypair.pubkey() {
+                        return Some(ReplicateStageReturnType::LeaderRotation(entry_height_));
                     }
+
                     // Only vote once a second.
                     let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
                         next_vote_secs += 1;
@@ -201,7 +188,7 @@ impl ReplicateStage {
                         &keypair,
                         vote_sender,
                         &mut entry_height_,
-                        &mut leader_scheduler_option_,
+                        &leader_scheduler,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -232,7 +219,7 @@ impl Service for ReplicateStage {
 
 #[cfg(test)]
 mod test {
-    use crdt::{Crdt, Node};
+    use cluster_info::{ClusterInfo, Node};
     use fullnode::Fullnode;
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{genesis, next_entries_mut, LedgerWriter};
@@ -252,7 +239,7 @@ mod test {
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
-        let crdt_me = Crdt::new(my_node.info.clone()).expect("Crdt::new");
+        let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
 
         // Create a ledger
         let (mint, my_ledger_path) = genesis("test_replicate_stage_leader_rotation_exit", 10_000);
@@ -288,8 +275,9 @@ mod test {
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         // Set up the bank
-        let (bank, _, _) =
-            Fullnode::new_bank_from_ledger(&my_ledger_path, Some(&mut leader_scheduler));
+        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
+
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         // Set up the replicate stage
         let (entry_sender, entry_receiver) = channel();
@@ -297,12 +285,12 @@ mod test {
         let replicate_stage = ReplicateStage::new(
             Arc::new(my_keypair),
             Arc::new(bank),
-            Arc::new(RwLock::new(crdt_me)),
+            Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
             Some(&my_ledger_path),
             exit.clone(),
             ledger_initial_len,
-            Some(Arc::new(RwLock::new(leader_scheduler))),
+            leader_scheduler.clone(),
         );
 
         // Send enough entries to trigger leader rotation
@@ -329,7 +317,13 @@ mod test {
         assert_eq!(exit.load(Ordering::Relaxed), true);
 
         //Check ledger height is correct
-        let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, None);
+        let mut leader_scheduler = Arc::try_unwrap(leader_scheduler)
+            .expect("Multiple references to this RwLock still exist")
+            .into_inner()
+            .expect("RwLock for LeaderScheduler is still locked");
+
+        let (_, entry_height, _) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
         assert_eq!(entry_height, bootstrap_height);
     }

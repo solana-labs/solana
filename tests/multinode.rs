@@ -10,7 +10,7 @@ use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
-use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
+use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{read_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
@@ -152,7 +152,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         leader_keypair,
         None,
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
     // Send leader some tokens to vote
@@ -172,7 +172,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
     // Send validator some tokens to vote
@@ -242,7 +242,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         leader_keypair,
         None,
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
     // Send leader some tokens to vote
@@ -273,7 +273,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             keypair,
             Some(leader_data.contact_info.ncp),
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_pubkey),
         );
         nodes.push(val);
     }
@@ -309,7 +309,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
     nodes.push(val);
     //contains the leader and new node
@@ -375,7 +375,7 @@ fn test_multi_node_basic() {
         leader_keypair,
         None,
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
     // Send leader some tokens to vote
@@ -403,7 +403,7 @@ fn test_multi_node_basic() {
             keypair,
             Some(leader_data.contact_info.ncp),
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_pubkey),
         );
         nodes.push(val);
     }
@@ -439,6 +439,7 @@ fn test_multi_node_basic() {
 fn test_boot_validator_from_file() -> result::Result<()> {
     logger::setup();
     let leader_keypair = Keypair::new();
+    let leader_pubkey = leader_keypair.pubkey();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
     let (alice, leader_ledger_path, _) = genesis("boot_validator_from_file", 100_000);
@@ -452,7 +453,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         leader_keypair,
         None,
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
@@ -472,7 +473,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -491,7 +492,14 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
     let leader_keypair = Keypair::new();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
-    let leader_fullnode = Fullnode::new(leader, &ledger_path, leader_keypair, None, false, None);
+    let leader_fullnode = Fullnode::new(
+        leader,
+        &ledger_path,
+        leader_keypair,
+        None,
+        false,
+        LeaderScheduler::from_bootstrap_leader(leader_data.id),
+    );
     (leader_data, leader_fullnode)
 }
 
@@ -545,7 +553,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         keypair,
         Some(leader_data.contact_info.ncp),
         false,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_data.id),
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -609,7 +617,7 @@ fn test_multi_node_dynamic_network() {
         leader_keypair,
         None,
         true,
-        None,
+        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
     // Send leader some tokens to vote
@@ -683,7 +691,7 @@ fn test_multi_node_dynamic_network() {
                         keypair,
                         Some(leader_data.contact_info.ncp),
                         true,
-                        None,
+                        LeaderScheduler::from_bootstrap_leader(leader_pubkey),
                     );
                     (rd, val)
                 }).unwrap()
@@ -825,7 +833,7 @@ fn test_leader_to_validator_transition() {
         leader_keypair,
         Some(leader_info.contact_info.ncp),
         false,
-        Some(&leader_scheduler_config),
+        LeaderScheduler::new(&leader_scheduler_config),
     );
 
     // Make an extra node for our leader to broadcast to,
@@ -904,7 +912,8 @@ fn test_leader_to_validator_transition() {
 
     // Check the ledger to make sure it's the right height, we should've
     // transitioned after the bootstrap_height entry
-    let (_, entry_height, _) = Fullnode::new_bank_from_ledger(&leader_ledger_path, None);
+    let (_, entry_height, _) =
+        Fullnode::new_bank_from_ledger(&leader_ledger_path, &mut LeaderScheduler::default());
 
     assert_eq!(entry_height, bootstrap_height);
 
@@ -972,7 +981,7 @@ fn test_leader_validator_basic() {
         leader_keypair,
         Some(leader_info.contact_info.ncp),
         false,
-        Some(&leader_scheduler_config),
+        LeaderScheduler::new(&leader_scheduler_config),
     );
 
     // Start the validator node
@@ -982,7 +991,7 @@ fn test_leader_validator_basic() {
         validator_keypair,
         Some(leader_info.contact_info.ncp),
         false,
-        Some(&leader_scheduler_config),
+        LeaderScheduler::new(&leader_scheduler_config),
     );
 
     // Wait for convergence
@@ -1137,7 +1146,7 @@ fn test_full_leader_validator_network() {
         node_keypairs.pop_front().unwrap(),
         Some(bootstrap_leader_info.contact_info.ncp),
         false,
-        Some(&leader_scheduler_config),
+        LeaderScheduler::new(&leader_scheduler_config),
     )));
 
     let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
@@ -1162,7 +1171,7 @@ fn test_full_leader_validator_network() {
             kp,
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
-            Some(&leader_scheduler_config),
+            LeaderScheduler::new(&leader_scheduler_config),
         )));
 
         nodes.push(validator.clone());
@@ -1186,7 +1195,7 @@ fn test_full_leader_validator_network() {
         num_reached_target_height = 0;
         for n in nodes.iter() {
             let node_lock = n.read().unwrap();
-            let ls_lock = node_lock.leader_scheduler_option.as_ref().unwrap();
+            let ls_lock = &node_lock.leader_scheduler;
             if let Some(sh) = ls_lock.read().unwrap().last_seed_height {
                 if sh >= target_height {
                     num_reached_target_height += 1;

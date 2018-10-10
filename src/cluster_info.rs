@@ -17,7 +17,7 @@ use budget_instruction::Vote;
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
-use leader_scheduler::{is_leader_rotation_height, LeaderScheduler};
+use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
@@ -488,9 +488,7 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn broadcast(
-        bootstrap_height_option: &Option<u64>,
-        leader_rotation_interval_option: &Option<u64>,
-        leader_scheduler_option: &Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -498,14 +496,6 @@ impl ClusterInfo {
         transmit_index: &mut WindowIndex,
         received_index: u64,
     ) -> Result<()> {
-        assert!(
-            (leader_rotation_interval_option.is_some()
-                && leader_scheduler_option.is_some()
-                && bootstrap_height_option.is_some())
-                || (leader_rotation_interval_option.is_none()
-                    && leader_scheduler_option.is_none()
-                    && bootstrap_height_option.is_none())
-        );
         if broadcast_table.is_empty() {
             debug!("{}:not enough peers in cluster_info table", me.id);
             inc_new_counter_info!("cluster_info-broadcast-not_enough_peers_error", 1);
@@ -542,42 +532,28 @@ impl ClusterInfo {
 
             // Make sure the next leader in line knows about the last entry before rotation
             // so he can initiate repairs if necessary
-            if let Some(leader_rotation_interval) = leader_rotation_interval_option {
-                let entry_height = idx + 1;
-                if is_leader_rotation_height(
-                    entry_height,
-                    bootstrap_height_option.expect(
-                        "bootstrap_height_option cannot be None if 
-                        leader_rotation_interval_option is not None",
-                    ),
-                    *leader_rotation_interval,
-                ) {
-                    let leader_scheduler_lock = leader_scheduler_option.as_ref().expect(
-                        "leader_scheduler_option cannot be None if 
-                        leader_rotation_interval_option is not None",
-                    );
-                    let next_leader_id = leader_scheduler_lock
-                        .read()
-                        .unwrap()
-                        .get_scheduled_leader(entry_height);
-                    // In the case the next scheduled leader is None, then the write_stage moved
-                    // the schedule too far ahead and we no longer are in the known window
-                    // (will happen during calculation of the next set of slots every epoch or
-                    // seed_rotation_interval heights when we move the window forward in the
-                    // LeaderScheduler). For correctness, this is fine write_stage will never send
-                    // blobs past the point of when this node should stop being leader, so we just
-                    // continue broadcasting until we catch up to write_stage. The downside is we
-                    // can't guarantee the current leader will broadcast the last entry to the next
-                    // scheduled leader, so the next leader will have to rely on avalanche/repairs
-                    // to get this last blob, which could cause slowdowns during leader handoffs.
-                    // See corresponding issue for repairs in repair() function in window.rs.
-                    if next_leader_id.is_some() && next_leader_id != Some(me.id) {
-                        let info_result = broadcast_table
-                            .iter()
-                            .position(|n| n.id == next_leader_id.unwrap());
-                        if let Some(index) = info_result {
-                            orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
-                        }
+            let entry_height = idx + 1;
+
+            {
+                let ls_lock = leader_scheduler.read().unwrap();
+                let next_leader_id = ls_lock.get_scheduled_leader(entry_height);
+                // In the case the next scheduled leader is None, then the write_stage moved
+                // the schedule too far ahead and we no longer are in the known window
+                // (will happen during calculation of the next set of slots every epoch or
+                // seed_rotation_interval heights when we move the window forward in the
+                // LeaderScheduler). For correctness, this is fine write_stage will never send
+                // blobs past the point of when this node should stop being leader, so we just
+                // continue broadcasting until we catch up to write_stage. The downside is we
+                // can't guarantee the current leader will broadcast the last entry to the next
+                // scheduled leader, so the next leader will have to rely on avalanche/repairs
+                // to get this last blob, which could cause slowdowns during leader handoffs.
+                // See corresponding issue for repairs in repair() function in window.rs.
+                if next_leader_id.is_some() && next_leader_id != Some(me.id) {
+                    let info_result = broadcast_table
+                        .iter()
+                        .position(|n| n.id == next_leader_id.unwrap());
+                    if let Some(index) = info_result {
+                        orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
                     }
                 }
             }

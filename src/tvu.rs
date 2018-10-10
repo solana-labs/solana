@@ -85,7 +85,7 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
-        leader_scheduler_option: Option<Arc<RwLock<LeaderScheduler>>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -105,7 +105,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            leader_scheduler_option.as_ref().cloned(),
+            leader_scheduler.clone(),
         );
 
         let replicate_stage = ReplicateStage::new(
@@ -116,7 +116,7 @@ impl Tvu {
             ledger_path,
             exit.clone(),
             entry_height,
-            leader_scheduler_option,
+            leader_scheduler,
         );
 
         Tvu {
@@ -163,6 +163,7 @@ pub mod tests {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::{hash, Hash};
+    use leader_scheduler::LeaderScheduler;
     use logger;
     use mint::Mint;
     use ncp::Ncp;
@@ -258,7 +259,9 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
-            None,
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+                leader_id,
+            ))),
         );
 
         let mut alice_ref_balance = starting_balance;
