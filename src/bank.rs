@@ -504,7 +504,7 @@ impl Bank {
             //TODO, this maybe redundant bpf should be able to guarantee this property
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
-        // TODO no test coverage for this check
+        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if *tx_program_id != account.program_id && pre_tokens > account.tokens {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
