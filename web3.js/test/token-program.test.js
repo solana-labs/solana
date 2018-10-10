@@ -1,12 +1,14 @@
 // @flow
 
-import {Account} from '../src/account';
-import {Connection} from '../src/connection';
-import {Token, TokenAmount} from '../src/token-program';
-import {PublicKey} from '../src/publickey';
+import {
+  Connection,
+  PublicKey,
+  Token,
+  TokenAmount,
+} from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
-import {url} from './url.js';
-import type {SignatureStatus} from '../src/connection';
+import {url} from './url';
+import {newAccountWithTokens} from './new-account-with-tokens';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
@@ -27,7 +29,7 @@ function mockGetLastId() {
   ]);
 }
 
-function mockGetSignatureStatus(result: SignatureStatus = 'Confirmed') {
+function mockGetSignatureStatus(result: string = 'Confirmed') {
   mockRpc.push([
     url,
     {
@@ -52,27 +54,6 @@ function mockSendTransaction() {
   ]);
 }
 
-
-async function newAccountWithTokens(connection: Connection, amount: number = 10): Promise<Account> {
-  const account = new Account();
-
-  {
-    mockRpc.push([
-      url,
-      {
-        method: 'requestAirdrop',
-        params: [account.publicKey.toBase58(), amount],
-      },
-      {
-        error: null,
-        result: '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-      }
-    ]);
-  }
-
-  await connection.requestAirdrop(account.publicKey, amount);
-  return account;
-}
 
 // A token created by the first test and used by all subsequent tests
 let testToken: Token;
