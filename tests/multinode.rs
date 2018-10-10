@@ -1073,6 +1073,143 @@ fn run_node(
 }
 
 #[test]
+#[ignore]
+fn test_dropped_handoff_recovery() {
+    logger::setup();
+    // The number of validators
+    const N: usize = 3;
+    assert!(N > 1);
+    logger::setup();
+
+    // Create the bootstrap leader node information
+    let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
+    let bootstrap_leader_info = bootstrap_leader_node.info.clone();
+
+    // Make a common mint and a genesis entry for both leader + validator's ledgers
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
+        genesis("test_dropped_handoff_recovery", 10_000);
+
+    let last_id = genesis_entries
+        .last()
+        .expect("expected at least one genesis entry")
+        .id;
+
+    // Create the validator keypair that will be the next leader in line
+    let next_leader_keypair = Keypair::new();
+
+    // Create a common ledger with entries in the beginning that will add only
+    // the "next_leader" validator to the active set for leader election, guaranteeing
+    // he is the next leader after bootstrap_height
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(bootstrap_leader_ledger_path.clone());
+
+    // Make the entries to give the next_leader validator some stake so that he will be in
+    // leader election active set
+    let first_entries = make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id);
+    let first_entries_len = first_entries.len();
+
+    // Write the entries
+    let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
+    ledger_writer.write_entries(first_entries).unwrap();
+
+    let ledger_initial_len = (genesis_entries.len() + first_entries_len) as u64;
+
+    let next_leader_ledger_path = tmp_copy_ledger(
+        &bootstrap_leader_ledger_path,
+        "test_dropped_handoff_recovery",
+    );
+
+    ledger_paths.push(next_leader_ledger_path.clone());
+
+    // Create the common leader scheduling configuration
+    let num_slots_per_epoch = (N + 1) as u64;
+    let leader_rotation_interval = 5;
+    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+    let bootstrap_height = ledger_initial_len + 1;
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        bootstrap_leader_info.id,
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(seed_rotation_interval),
+        Some(leader_rotation_interval),
+    );
+
+    // Start up the bootstrap leader fullnode
+    let bootstrap_leader = Fullnode::new(
+        bootstrap_leader_node,
+        &bootstrap_leader_ledger_path,
+        bootstrap_leader_keypair,
+        Some(bootstrap_leader_info.contact_info.ncp),
+        false,
+        LeaderScheduler::new(&leader_scheduler_config),
+    );
+
+    let mut nodes = vec![bootstrap_leader];
+
+    // Start up the validators other than the "next_leader" validator
+    for _ in 0..(N - 1) {
+        let kp = Keypair::new();
+        let validator_ledger_path = tmp_copy_ledger(
+            &bootstrap_leader_ledger_path,
+            "test_dropped_handoff_recovery",
+        );
+        ledger_paths.push(validator_ledger_path.clone());
+        let validator_id = kp.pubkey();
+        let validator_node = Node::new_localhost_with_pubkey(validator_id);
+        let validator = Fullnode::new(
+            validator_node,
+            &validator_ledger_path,
+            kp,
+            Some(bootstrap_leader_info.contact_info.ncp),
+            false,
+            LeaderScheduler::new(&leader_scheduler_config),
+        );
+
+        nodes.push(validator);
+    }
+
+    // Wait for convergence
+    let num_converged = converge(&bootstrap_leader_info, N).len();
+    assert_eq!(num_converged, N);
+
+    // Wait for leader transition
+    match nodes[0].handle_role_transition().unwrap() {
+        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
+        _ => panic!("Expected reason for exit to be leader rotation"),
+    }
+
+    // Now start up the "next leader" node
+    let next_leader_node = Node::new_localhost_with_pubkey(next_leader_keypair.pubkey());
+    let mut next_leader = Fullnode::new(
+        next_leader_node,
+        &next_leader_ledger_path,
+        next_leader_keypair,
+        Some(bootstrap_leader_info.contact_info.ncp),
+        false,
+        LeaderScheduler::new(&leader_scheduler_config),
+    );
+
+    // Wait for catchup
+    match next_leader.handle_role_transition().unwrap() {
+        Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
+        _ => panic!("Expected reason for exit to be leader rotation"),
+    }
+
+    nodes.push(next_leader);
+
+    for node in nodes {
+        node.close().unwrap();
+    }
+
+    for path in ledger_paths {
+        remove_dir_all(path).unwrap();
+    }
+}
+
+#[test]
+//TODO: Ignore for now due to bug exposed by the test "test_dropped_handoff_recovery"
+#[ignore]
 fn test_full_leader_validator_network() {
     logger::setup();
     // The number of validators
@@ -1139,7 +1276,7 @@ fn test_full_leader_validator_network() {
     );
 
     let exit = Arc::new(AtomicBool::new(false));
-    // Start the leader fullnode
+    // Start the bootstrap leader fullnode
     let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_ledger_path,
