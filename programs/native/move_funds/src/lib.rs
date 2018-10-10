@@ -18,7 +18,6 @@ pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -
         );
         false
     }
-    println!("end of move funds");
 }
 
 #[cfg(test)]

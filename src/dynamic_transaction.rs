@@ -13,16 +13,7 @@ pub trait ProgramTransaction {
     fn program_new_load(
         from_keypair: &Keypair,
         program: Pubkey,
-        instruction: DynamicInstruction,
-        last_id: Hash,
-        fee: i64,
-    ) -> Self;
-
-    fn program_new_load_state(
-        from_keypair: &Keypair,
-        state: Pubkey,
-        offset: u64,
-        data: Vec<u8>,
+        instruction: &DynamicInstruction,
         last_id: Hash,
         fee: i64,
     ) -> Self;
@@ -32,7 +23,6 @@ pub trait ProgramTransaction {
     fn program_new_call(
         from_keypari: &Keypair,
         program: Pubkey,
-        state: Pubkey,
         accounts: &[Pubkey],
         input: Vec<u8>,
         last_id: Hash,
@@ -45,12 +35,12 @@ impl ProgramTransaction for Transaction {
     fn program_new_load(
         from_keypair: &Keypair,
         program: Pubkey,
-        instruction: DynamicInstruction,
+        instruction: &DynamicInstruction,
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        println!("program_load {:?}", instruction);
-        let userdata = serialize(&instruction).unwrap();
+        trace!("program_load {:?}", instruction);
+        let userdata = serialize(instruction).unwrap();
         Transaction::new(
             from_keypair,
             &[program],
@@ -61,38 +51,16 @@ impl ProgramTransaction for Transaction {
         )
     }
 
-    fn program_new_load_state(
-        from_keypair: &Keypair,
-        state: Pubkey,
-        offset: u64,
-        data: Vec<u8>,
-        last_id: Hash,
-        fee: i64,
-    ) -> Self {
-        println!("program_load_state offset {} size {}", offset, data.len());
-        let inst = DynamicInstruction::LoadState { offset, data };
-        let userdata = serialize(&inst).unwrap();
-        Transaction::new(
-            from_keypair,
-            &[state],
-            DynamicProgram::id(),
-            userdata,
-            last_id,
-            fee,
-        )
-    }
-
     fn program_new_call(
         from_keypair: &Keypair,
         program: Pubkey,
-        state: Pubkey,
         accounts: &[Pubkey],
         input: Vec<u8>,
         last_id: Hash,
         fee: i64,
     ) -> Self {
-        println!("program_call size {}", input.len());
-        let mut keys = vec![program, state];
+        trace!("program_call, input size {}", input.len());
+        let mut keys = vec![program];
         keys.extend_from_slice(accounts);
         let inst = DynamicInstruction::Call { input };
         let userdata = serialize(&inst).unwrap();

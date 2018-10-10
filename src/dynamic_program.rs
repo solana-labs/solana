@@ -162,29 +162,15 @@ impl DynamicProgram {
             trace!("program process_transaction: {:?}", instruction);
             match instruction {
                 DynamicInstruction::LoadNative { name } => {
-                    println!("LoadNative: {:?}", name);
-
+                    trace!("LoadNative: {:?}", name);
                     let dp = DynamicProgram::Native { name };
-                    println!("num accounts: {}", accounts.len());
-                    println!(
-                        "size needed {} allocated {}",
-                        mem::size_of_val(&dp),
-                        accounts[1].userdata.len()
-                    );
                     assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
                 }
                 DynamicInstruction::LoadBpfFile { name } => {
-                    println!("LoadBpfFile: {:?}", name);
-
+                    trace!("LoadBpfFile: {:?}", name);
                     let dp = DynamicProgram::BpfFile { name };
-                    println!("num accounts: {}", accounts.len());
-                    println!(
-                        "size needed {} allocated {}",
-                        mem::size_of_val(&dp),
-                        accounts[1].userdata.len()
-                    );
                     assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
@@ -193,19 +179,13 @@ impl DynamicProgram {
                     /* TODO */ offset: _offset,
                     prog,
                 } => {
-                    println!("LoadBpf");
-
+                    trace!("LoadBpf");
                     let dp = DynamicProgram::Bpf { prog };
-                    println!("num accounts: {}", accounts.len());
-                    println!(
-                        "size needed {} allocated {}",
-                        mem::size_of_val(&dp),
-                        accounts[1].userdata.len()
-                    );
                     assert!(accounts[1].userdata.len() >= mem::size_of_val(&dp));
                     accounts[1].userdata = serialize(&dp).unwrap();
                     true
                 }
+<<<<<<< HEAD
                 DynamicInstruction::LoadState { data, .. } => {
                     // TODO handle chunks
                     println!("LoadState size {}", data.len());
@@ -213,13 +193,15 @@ impl DynamicProgram {
                     accounts[1].userdata = data;
                     true
                 }
+=======
+>>>>>>> Distinguish between program and system accounts
                 DynamicInstruction::Call { input } => {
                     // TODO passing account[0] (mint) and account[1] (program) as mutable
                     //      don't want to allow program to mutate those two accounts
                     let dp: DynamicProgram = deserialize(&accounts[1].userdata).unwrap();
                     match dp {
                         DynamicProgram::Native { name } => unsafe {
-                            println!("Call native {:?}", name);
+                            trace!("Call native {:?}", name);
                             // create native program
                             let path = ProgramPath::Native {}.create(&name);
                             // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
@@ -260,7 +242,7 @@ impl DynamicProgram {
                             };
                             let prog = text_section.data.clone();
 
-                            println!("Call BPF, {} Instructions", prog.len() / 8);
+                            trace!("Call BPF, {} Instructions", prog.len() / 8);
                             //DynamicProgram::dump_prog(name, prog);
 
                             let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));
@@ -283,7 +265,7 @@ impl DynamicProgram {
                             true
                         }
                         DynamicProgram::Bpf { prog } => {
-                            println!("Call BPF, {} Instructions", prog.len() / 8);
+                            trace!("Call BPF, {} Instructions", prog.len() / 8);
                             //DynamicProgram::dump_prog(name, prog);
 
                             let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));

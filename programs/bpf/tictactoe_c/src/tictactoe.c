@@ -89,31 +89,31 @@ SOL_FN_PREFIX void print_key(SolPubkey *key) {
     }
 }
 
-// SOL_FN_PREFIX void print_userdata(uint8_t *data, int len) {
-//     for (int j = 0; j < len; j++) {
-//         sol_print(0, 0, 0, j, data[j]);
-//     }
-// }
+SOL_FN_PREFIX void print_userdata(uint8_t *data, int len) {
+    for (int j = 0; j < len; j++) {
+        sol_print(0, 0, 0, j, data[j]);
+    }
+}
 
-// SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
-//                                 uint8_t *userdata, uint64_t userdata_len) {
-//     sol_print(0, 0, 0, 0, num_ka);
-//     for (int i = 0; i < num_ka; i++) {
-//         // key
-//         print_key(ka[i].key);
+SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
+                                uint8_t *userdata, uint64_t userdata_len) {
+    sol_print(0, 0, 0, 0, num_ka);
+    for (int i = 0; i < num_ka; i++) {
+        // key
+        print_key(ka[i].key);
 
-//         // tokens
-//         sol_print(0, 0, 0, 0, ka[i].tokens);
+        // tokens
+        sol_print(0, 0, 0, 0, ka[i].tokens);
 
-//         // account userdata
-//         print_userdata(ka[i].userdata, ka[i].userdata_len);
+        // account userdata
+        print_userdata(ka[i].userdata, ka[i].userdata_len);
 
-//         // program_id
-//         print_key(ka[i].program_id);
-//     }
-//     // tx userdata
-//     print_userdata(userdata, userdata_len);
-// }
+        // program_id
+        print_key(ka[i].program_id);
+    }
+    // tx userdata
+    print_userdata(userdata, userdata_len);
+}
 
 // void entrypoint(char *buf) {
 //     SolKeyedAccounts ka[3];
@@ -343,7 +343,7 @@ void entrypoint(uint8_t *buf) {
     sol_memcpy(&game, ka[2].userdata, ka[2].userdata_len);
 
     Command command = *userdata;
-    sol_print(0, 0, 0, 0, command);
+    //sol_print(0, 0, 0, 0, command);
     switch (command) {
         case Command_Init:
             game_create(&game, ka[3].key);
