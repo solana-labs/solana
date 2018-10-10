@@ -448,14 +448,25 @@ test('invalid approve', async () => {
   const owner = await newAccountWithTokens(connection);
 
   const account1 = await testToken.newAccount(owner);
+  const account1Delegate = await testToken.newAccount(owner, account1);
   const account2 = await testToken.newAccount(owner);
 
-  // account2 is not a delegate account
+  // account2 is not a delegate account of account1
   expect(
     testToken.approve(
       owner,
       account1,
       account2,
+      123
+    )
+  ).rejects.toThrow();
+
+  // account1Delegate is not a delegate account of account2
+  expect(
+    testToken.approve(
+      owner,
+      account2,
+      account1Delegate,
       123
     )
   ).rejects.toThrow();
