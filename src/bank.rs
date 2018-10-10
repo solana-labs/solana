@@ -6,12 +6,14 @@
 use bincode::deserialize;
 use bincode::serialize;
 use budget_program::BudgetState;
+use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use dynamic_program::DynamicProgram;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
 use jsonrpc_macros::pubsub::Sink;
+use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
 use mint::Mint;
@@ -781,6 +783,22 @@ impl Bank {
         results
     }
 
+    pub fn process_entry_votes(
+        bank: &Bank,
+        entry: &Entry,
+        entry_height: u64,
+        leader_scheduler: &mut LeaderScheduler,
+    ) {
+        for tx in &entry.transactions {
+            if tx.vote().is_some() {
+                // Update the active set in the leader scheduler
+                leader_scheduler.push_vote(*tx.from(), entry_height);
+            }
+        }
+
+        leader_scheduler.update_height(entry_height, bank);
+    }
+
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.transactions.is_empty() {
             for result in self.process_transactions(&entry.transactions) {
@@ -795,7 +813,7 @@ impl Bank {
     ///   as we go.
     fn process_entries_tail(
         &self,
-        entries: Vec<Entry>,
+        entries: &[Entry],
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
     ) -> Result<u64> {
@@ -810,7 +828,7 @@ impl Bank {
             *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
             entry_count += 1;
-            self.process_entry(&entry)?;
+            self.process_entry(entry)?;
         }
 
         Ok(entry_count)
@@ -831,6 +849,7 @@ impl Bank {
         entries: I,
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
+        leader_scheduler: &mut LeaderScheduler,
     ) -> Result<u64>
     where
         I: IntoIterator<Item = Entry>,
@@ -846,13 +865,30 @@ impl Bank {
                 return Err(BankError::LedgerVerificationFailed);
             }
             id = block.last().unwrap().id;
-            entry_count += self.process_entries_tail(block, tail, tail_idx)?;
+            let tail_count = self.process_entries_tail(&block, tail, tail_idx)?;
+
+            if !leader_scheduler.use_only_bootstrap_leader {
+                for (i, entry) in block.iter().enumerate() {
+                    Self::process_entry_votes(
+                        self,
+                        &entry,
+                        entry_count + i as u64 + 1,
+                        leader_scheduler,
+                    );
+                }
+            }
+
+            entry_count += tail_count;
         }
         Ok(entry_count)
     }
 
     /// Process a full ledger.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Vec<Entry>)>
+    pub fn process_ledger<I>(
+        &self,
+        entries: I,
+        leader_scheduler: &mut LeaderScheduler,
+    ) -> Result<(u64, Vec<Entry>)>
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -894,9 +930,15 @@ impl Bank {
         tail.push(entry0);
         tail.push(entry1);
         let mut tail_idx = 2;
-        let entry_count = self.process_blocks(entry1_id, entries, &mut tail, &mut tail_idx)?;
+        let entry_count = self.process_blocks(
+            entry1_id,
+            entries,
+            &mut tail,
+            &mut tail_idx,
+            leader_scheduler,
+        )?;
 
-        // check f we need to rotate tail
+        // check if we need to rotate tail
         if tail.len() == WINDOW_SIZE as usize {
             tail.rotate_left(tail_idx)
         }
@@ -1069,6 +1111,13 @@ impl Bank {
         }
         subscriptions.remove(&signature);
     }
+
+    #[cfg(test)]
+    // Used to access accounts for things like controlling stake to control
+    // the eligible set of nodes for leader selection
+    pub fn accounts(&self) -> &RwLock<HashMap<Pubkey, Account>> {
+        &self.accounts
+    }
 }
 
 #[cfg(test)]
@@ -1081,6 +1130,7 @@ mod tests {
     use entry_writer::{self, EntryWriter};
     use hash::hash;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
+    use leader_scheduler::LeaderScheduler;
     use ledger;
     use logger;
     use signature::Keypair;
@@ -1429,7 +1479,8 @@ mod tests {
         let mint = Mint::new(1);
         let genesis = mint.create_entries();
         let bank = Bank::default();
-        bank.process_ledger(genesis).unwrap();
+        bank.process_ledger(genesis, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
@@ -1487,7 +1538,9 @@ mod tests {
         let (ledger, pubkey) = create_sample_ledger(1);
         let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
-        let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+        let (ledger_height, tail) = bank
+            .process_ledger(ledger, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 3);
         assert_eq!(tail.len(), 3);
@@ -1509,7 +1562,9 @@ mod tests {
         for entry_count in window_size - 3..window_size + 2 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
-            let (ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+            let (ledger_height, tail) = bank
+                .process_ledger(ledger, &mut LeaderScheduler::default())
+                .unwrap();
             assert_eq!(bank.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 2);
             assert!(tail.len() <= window_size);
@@ -1534,7 +1589,8 @@ mod tests {
         let ledger = to_file_iter(ledger);
 
         let bank = Bank::default();
-        bank.process_ledger(ledger).unwrap();
+        bank.process_ledger(ledger, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
@@ -1545,7 +1601,8 @@ mod tests {
         let block = to_file_iter(create_sample_block(&mint, 1));
 
         let bank = Bank::default();
-        bank.process_ledger(genesis.chain(block)).unwrap();
+        bank.process_ledger(genesis.chain(block), &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
@@ -1568,9 +1625,13 @@ mod tests {
         let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
         let bank0 = Bank::default();
-        bank0.process_ledger(ledger0).unwrap();
+        bank0
+            .process_ledger(ledger0, &mut LeaderScheduler::default())
+            .unwrap();
         let bank1 = Bank::default();
-        bank1.process_ledger(ledger1).unwrap();
+        bank1
+            .process_ledger(ledger1, &mut LeaderScheduler::default())
+            .unwrap();
 
         let initial_state = bank0.hash_internal_state();
 

@@ -406,6 +406,7 @@ impl Blob {
 pub fn make_consecutive_blobs(
     me_id: Pubkey,
     num_blobs_to_make: u64,
+    start_height: u64,
     start_hash: Hash,
     addr: &SocketAddr,
 ) -> SharedBlobs {
@@ -415,7 +416,7 @@ pub fn make_consecutive_blobs(
     for _ in 0..num_blobs_to_make {
         all_entries.extend(next_entries_mut(&mut last_hash, &mut num_hashes, vec![]));
     }
-    let mut new_blobs = all_entries.to_blobs_with_id(me_id, 0, addr);
+    let mut new_blobs = all_entries.to_blobs_with_id(me_id, start_height, addr);
     new_blobs.truncate(num_blobs_to_make as usize);
     new_blobs
 }

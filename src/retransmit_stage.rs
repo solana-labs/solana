@@ -3,6 +3,7 @@
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::Entry;
+use leader_scheduler::LeaderScheduler;
 use log::Level;
 use result::{Error, Result};
 use service::Service;
@@ -15,12 +16,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
 use window::SharedWindow;
-use window_service::{window_service, WindowServiceReturnType};
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum RetransmitStageReturnType {
-    LeaderRotation(u64),
-}
+use window_service::window_service;
 
 fn retransmit(
     cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -71,8 +67,7 @@ fn retransmitter(
 }
 
 pub struct RetransmitStage {
-    t_retransmit: JoinHandle<()>,
-    t_window: JoinHandle<Option<WindowServiceReturnType>>,
+    thread_hdls: Vec<JoinHandle<()>>,
 }
 
 impl RetransmitStage {
@@ -83,6 +78,7 @@ impl RetransmitStage {
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -99,29 +95,22 @@ impl RetransmitStage {
             entry_sender,
             retransmit_sender,
             repair_socket,
+            leader_scheduler,
             done,
         );
 
-        (
-            RetransmitStage {
-                t_window,
-                t_retransmit,
-            },
-            entry_receiver,
-        )
+        let thread_hdls = vec![t_retransmit, t_window];
+        (RetransmitStage { thread_hdls }, entry_receiver)
     }
 }
 
 impl Service for RetransmitStage {
-    type JoinReturnType = Option<RetransmitStageReturnType>;
+    type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<Option<RetransmitStageReturnType>> {
-        self.t_retransmit.join()?;
-        match self.t_window.join()? {
-            Some(WindowServiceReturnType::LeaderRotation(entry_height)) => Ok(Some(
-                RetransmitStageReturnType::LeaderRotation(entry_height),
-            )),
-            _ => Ok(None),
+    fn join(self) -> thread::Result<()> {
+        for thread_hdl in self.thread_hdls {
+            thread_hdl.join()?;
         }
+        Ok(())
     }
 }

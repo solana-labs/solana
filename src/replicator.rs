@@ -1,6 +1,7 @@
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use hash::{Hash, Hasher};
+use leader_scheduler::LeaderScheduler;
 use ncp::Ncp;
 use service::Service;
 use std::fs::File;
@@ -22,13 +23,13 @@ use std::time::Duration;
 use store_ledger_stage::StoreLedgerStage;
 use streamer::BlobReceiver;
 use window;
-use window_service::{window_service, WindowServiceReturnType};
+use window_service::window_service;
 
 pub struct Replicator {
     ncp: Ncp,
     fetch_stage: BlobFetchStage,
     store_ledger_stage: StoreLedgerStage,
-    t_window: JoinHandle<Option<WindowServiceReturnType>>,
+    t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
 }
 
@@ -82,8 +83,9 @@ impl Replicator {
         ));
 
         let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
-
+        let leader_pubkey;
         if let Some(leader_info) = leader_info.as_ref() {
+            leader_pubkey = leader_info.id;
             cluster_info.write().unwrap().insert(leader_info);
         } else {
             panic!("No leader info!");
@@ -108,6 +110,9 @@ impl Replicator {
             entry_window_sender,
             retransmit_sender,
             repair_socket,
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+                leader_pubkey,
+            ))),
             done,
         );
 
@@ -152,6 +157,7 @@ mod tests {
     use cluster_info::Node;
     use fullnode::Fullnode;
     use hash::Hash;
+    use leader_scheduler::LeaderScheduler;
     use ledger::{genesis, read_ledger, tmp_ledger_path};
     use logger;
     use replicator::sample_file;
@@ -185,14 +191,13 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let network_addr = leader_node.sockets.gossip.local_addr().unwrap();
         let leader_info = leader_node.info.clone();
-        let leader_rotation_interval = 20;
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
             None,
             false,
-            Some(leader_rotation_interval),
+            LeaderScheduler::from_bootstrap_leader(leader_info.id),
         );
 
         let mut leader_client = mk_client(&leader_info);

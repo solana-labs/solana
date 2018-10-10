@@ -227,6 +227,7 @@ mod tests {
     use cluster_info::Node;
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
+    use leader_scheduler::LeaderScheduler;
     use logger;
     use mint::Mint;
     use netutil::get_ip_addr;
@@ -338,7 +339,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
 
@@ -376,7 +377,14 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let server = Fullnode::new(leader, &ledger_path, leader_keypair, None, false, None);
+        let server = Fullnode::new(
+            leader,
+            &ledger_path,
+            leader_keypair,
+            None,
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
+        );
 
         let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =

@@ -39,8 +39,9 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
-use replicate_stage::ReplicateStage;
-use retransmit_stage::{RetransmitStage, RetransmitStageReturnType};
+use leader_scheduler::LeaderScheduler;
+use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
+use retransmit_stage::RetransmitStage;
 use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
@@ -84,6 +85,7 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -103,6 +105,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
+            leader_scheduler.clone(),
         );
 
         let replicate_stage = ReplicateStage::new(
@@ -112,6 +115,8 @@ impl Tvu {
             blob_window_receiver,
             ledger_path,
             exit.clone(),
+            entry_height,
+            leader_scheduler,
         );
 
         Tvu {
@@ -120,6 +125,10 @@ impl Tvu {
             retransmit_stage,
             exit,
         }
+    }
+
+    pub fn is_exited(&self) -> bool {
+        self.exit.load(Ordering::Relaxed)
     }
 
     pub fn exit(&self) -> () {
@@ -136,10 +145,10 @@ impl Service for Tvu {
     type JoinReturnType = Option<TvuReturnType>;
 
     fn join(self) -> thread::Result<Option<TvuReturnType>> {
-        self.replicate_stage.join()?;
+        self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
-        match self.retransmit_stage.join()? {
-            Some(RetransmitStageReturnType::LeaderRotation(entry_height)) => {
+        match self.replicate_stage.join()? {
+            Some(ReplicateStageReturnType::LeaderRotation(entry_height)) => {
                 Ok(Some(TvuReturnType::LeaderRotation(entry_height)))
             }
             _ => Ok(None),
@@ -154,6 +163,7 @@ pub mod tests {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::{hash, Hash};
+    use leader_scheduler::LeaderScheduler;
     use logger;
     use mint::Mint;
     use ncp::Ncp;
@@ -249,6 +259,9 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+                leader_id,
+            ))),
         );
 
         let mut alice_ref_balance = starting_balance;

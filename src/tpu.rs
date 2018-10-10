@@ -30,6 +30,7 @@ use banking_stage::{BankingStage, Config};
 use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
+use leader_scheduler::LeaderScheduler;
 use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
@@ -62,6 +63,7 @@ impl Tpu {
         ledger_path: &str,
         sigverify_disabled: bool,
         entry_height: u64,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -80,6 +82,7 @@ impl Tpu {
             ledger_path,
             entry_receiver,
             entry_height,
+            leader_scheduler,
         );
 
         let tpu = Tpu {
@@ -94,6 +97,10 @@ impl Tpu {
 
     pub fn exit(&self) -> () {
         self.exit.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_exited(&self) -> bool {
+        self.exit.load(Ordering::Relaxed)
     }
 
     pub fn close(self) -> thread::Result<Option<TpuReturnType>> {

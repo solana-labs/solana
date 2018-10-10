@@ -403,7 +403,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     loop {
         trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
 
-        if let Some(l) = cluster_info.read().unwrap().leader_data() {
+        if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
             leader = Some(l.clone());
             break;
         }
@@ -434,6 +434,7 @@ mod tests {
     use bank::Bank;
     use cluster_info::Node;
     use fullnode::Fullnode;
+    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use logger;
     use mint::Mint;
@@ -476,7 +477,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));
@@ -523,7 +524,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -583,7 +584,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(300));
@@ -644,7 +645,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));

@@ -3,6 +3,7 @@
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
 use entry::EntrySender;
+use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
@@ -144,7 +145,6 @@ fn recv_window(
     s: &EntrySender,
     retransmit: &BlobSender,
     pending_retransmits: &mut bool,
-    leader_rotation_interval: u64,
     done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
@@ -204,14 +204,12 @@ fn recv_window(
 
         window.write().unwrap().process_blob(
             id,
-            cluster_info,
             b,
             pix,
             &mut consume_queue,
             consumed,
             leader_unknown,
             pending_retransmits,
-            leader_rotation_interval,
         );
 
         // Send a signal when we hit the max entry_height
@@ -238,6 +236,7 @@ fn recv_window(
     Ok(())
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 pub fn window_service(
     cluster_info: Arc<RwLock<ClusterInfo>>,
     window: SharedWindow,
@@ -247,8 +246,9 @@ pub fn window_service(
     s: EntrySender,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
+    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     done: Arc<AtomicBool>,
-) -> JoinHandle<Option<WindowServiceReturnType>> {
+) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
@@ -256,30 +256,11 @@ pub fn window_service(
             let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
-            let id;
-            let leader_rotation_interval;
-            {
-                let rcluster_info = cluster_info.read().unwrap();
-                id = rcluster_info.id;
-                leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
-            }
+            let id = cluster_info.read().unwrap().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
             loop {
-                if consumed != 0 && consumed % (leader_rotation_interval as u64) == 0 {
-                    match cluster_info.read().unwrap().get_scheduled_leader(consumed) {
-                        // If we are the next leader, exit
-                        Some(next_leader_id) if id == next_leader_id => {
-                            return Some(WindowServiceReturnType::LeaderRotation(consumed));
-                        }
-                        // TODO: Figure out where to set the new leader in the cluster_info for 
-                        // validator -> validator transition (once we have real leader scheduling, 
-                        // this decision will be clearer). Also make sure new blobs to window actually 
-                        // originate from new leader
-                        _ => (),
-                    }
-                }
-
+                // Check if leader rotation was configured
                 if let Err(e) = recv_window(
                     &window,
                     &id,
@@ -291,7 +272,6 @@ pub fn window_service(
                     &s,
                     &retransmit,
                     &mut pending_retransmits,
-                    leader_rotation_interval,
                     &done,
                 ) {
                     match e {
@@ -322,7 +302,15 @@ pub fn window_service(
                 trace!("{} let's repair! times = {}", id, times);
 
                 let mut window = window.write().unwrap();
-                let reqs = window.repair(&cluster_info, &id, times, consumed, received, max_entry_height);
+                let reqs = window.repair(
+                    &cluster_info,
+                    &id,
+                    times,
+                    consumed,
+                    received,
+                    max_entry_height,
+                    &leader_scheduler,
+                );
                 for (to, req) in reqs {
                     repair_socket.send_to(&req, to).unwrap_or_else(|e| {
                         info!("{} repair req send_to({}) error {:?}", id, to, e);
@@ -330,7 +318,6 @@ pub fn window_service(
                     });
                 }
             }
-            None
         }).unwrap()
 }
 
@@ -339,9 +326,9 @@ mod test {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use hash::Hash;
+    use leader_scheduler::LeaderScheduler;
     use logger;
     use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
-    use signature::{Keypair, KeypairUtil};
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver};
@@ -349,7 +336,7 @@ mod test {
     use std::time::Duration;
     use streamer::{blob_receiver, responder};
     use window::default_window;
-    use window_service::{repair_backoff, window_service, WindowServiceReturnType};
+    use window_service::{repair_backoff, window_service};
 
     fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {
@@ -391,6 +378,7 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
         );
         let t_responder = {
@@ -401,11 +389,15 @@ mod test {
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut num_blobs_to_make = 10;
             let gossip_address = &tn.info.contact_info.ncp;
-            let msgs =
-                make_consecutive_blobs(me_id, num_blobs_to_make, Hash::default(), &gossip_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
+            let msgs = make_consecutive_blobs(
+                me_id,
+                num_blobs_to_make,
+                0,
+                Hash::default(),
+                &gossip_address,
+            ).into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -448,6 +440,13 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            // TODO: For now, the window still checks the ClusterInfo for the current leader
+            // to determine whether to retransmit a block. In the future when we rely on
+            // the LeaderScheduler for retransmits, this test will need to be rewritten
+            // because a leader should only be unknown in the window when the write stage
+            // hasn't yet calculated the leaders for slots in the next epoch (on entries
+            // at heights that are multiples of seed_rotation_interval in LeaderScheduler)
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done,
         );
         let t_responder = {
@@ -504,6 +503,13 @@ mod test {
             s_window,
             s_retransmit,
             Arc::new(tn.sockets.repair),
+            // TODO: For now, the window still checks the ClusterInfo for the current leader
+            // to determine whether to retransmit a block. In the future when we rely on
+            // the LeaderScheduler for retransmits, this test will need to be rewritten
+            // becasue a leader should only be unknown in the window when the write stage
+            // hasn't yet calculated the leaders for slots in the next epoch (on entries
+            // at heights that are multiples of seed_rotation_interval in LeaderScheduler)
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done,
         );
         let t_responder = {
@@ -584,86 +590,5 @@ mod test {
         let avg = res / num_tests;
         assert!(avg >= 3);
         assert!(avg <= 5);
-    }
-
-    #[test]
-    pub fn test_window_leader_rotation_exit() {
-        logger::setup();
-        let leader_rotation_interval = 10;
-        // Height at which this node becomes the leader =
-        // my_leader_begin_epoch * leader_rotation_interval
-        let my_leader_begin_epoch = 2;
-        let tn = Node::new_localhost();
-        let exit = Arc::new(AtomicBool::new(false));
-        let mut cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
-        let me_id = cluster_info_me.my_data().id;
-
-        // Set myself in an upcoming epoch, but set the old_leader_id as the
-        // leader for all epochs before that
-        let old_leader_id = Keypair::new().pubkey();
-        cluster_info_me.set_leader(me_id);
-        cluster_info_me.set_leader_rotation_interval(leader_rotation_interval);
-        for i in 0..my_leader_begin_epoch {
-            cluster_info_me.set_scheduled_leader(leader_rotation_interval * i, old_leader_id);
-        }
-        cluster_info_me
-            .set_scheduled_leader(my_leader_begin_epoch * leader_rotation_interval, me_id);
-
-        let subs = Arc::new(RwLock::new(cluster_info_me));
-
-        let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
-        let (s_window, _r_window) = channel();
-        let (s_retransmit, _r_retransmit) = channel();
-        let win = Arc::new(RwLock::new(default_window()));
-        let done = Arc::new(AtomicBool::new(false));
-        let t_window = window_service(
-            subs,
-            win,
-            0,
-            0,
-            r_reader,
-            s_window,
-            s_retransmit,
-            Arc::new(tn.sockets.repair),
-            done,
-        );
-
-        let t_responder = {
-            let (s_responder, r_responder) = channel();
-            let blob_sockets: Vec<Arc<UdpSocket>> =
-                tn.sockets.replicate.into_iter().map(Arc::new).collect();
-
-            let t_responder = responder(
-                "test_window_leader_rotation_exit",
-                blob_sockets[0].clone(),
-                r_responder,
-            );
-
-            let ncp_address = &tn.info.contact_info.ncp;
-            // Send the blobs out of order, in reverse. Also send an extra leader_rotation_interval
-            // number of blobs to make sure the window stops in the right place.
-            let extra_blobs = leader_rotation_interval;
-            let total_blobs_to_send =
-                my_leader_begin_epoch * leader_rotation_interval + extra_blobs;
-            let msgs =
-                make_consecutive_blobs(me_id, total_blobs_to_send, Hash::default(), &ncp_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
-            s_responder.send(msgs).expect("send");
-            t_responder
-        };
-
-        assert_eq!(
-            Some(WindowServiceReturnType::LeaderRotation(
-                my_leader_begin_epoch * leader_rotation_interval
-            )),
-            t_window.join().expect("window service join")
-        );
-
-        t_responder.join().expect("responder thread join");
-        exit.store(true, Ordering::Relaxed);
-        t_receiver.join().expect("receiver thread join");
     }
 }

@@ -84,7 +84,6 @@ impl BankingStage {
 
         // Many banks that process transactions in parallel.
         let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
-            .into_iter()
             .map(|_| {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();

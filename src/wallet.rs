@@ -616,6 +616,7 @@ mod tests {
     use cluster_info::Node;
     use drone::run_local_drone;
     use fullnode::Fullnode;
+    use leader_scheduler::LeaderScheduler;
     use ledger::LedgerWriter;
     use mint::Mint;
     use serde_json::Value;
@@ -950,7 +951,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1025,7 +1026,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1101,7 +1102,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1222,7 +1223,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1341,7 +1342,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            None,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));

@@ -5,6 +5,7 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
 use packet::SharedBlobs;
@@ -26,9 +27,9 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn broadcast(
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
-    leader_rotation_interval: u64,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -130,8 +131,7 @@ fn broadcast(
 
         // Send blobs out from the window
         ClusterInfo::broadcast(
-            cluster_info,
-            leader_rotation_interval,
+            &leader_scheduler,
             &node_info,
             &broadcast_table,
             &window,
@@ -183,38 +183,18 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
             coding: entry_height,
         };
         let mut receive_index = entry_height;
-        let me;
-        let leader_rotation_interval;
-        {
-            let rcluster_info = cluster_info.read().unwrap();
-            me = rcluster_info.my_data().clone();
-            leader_rotation_interval = rcluster_info.get_leader_rotation_interval();
-        }
-
+        let me = cluster_info.read().unwrap().my_data().clone();
         loop {
-            if transmit_index.data % (leader_rotation_interval as u64) == 0 {
-                let rcluster_info = cluster_info.read().unwrap();
-                let my_id = rcluster_info.my_data().id;
-                match rcluster_info.get_scheduled_leader(transmit_index.data) {
-                    Some(id) if id == my_id => (),
-                    // If the leader stays in power for the next
-                    // round as well, then we don't exit. Otherwise, exit.
-                    _ => {
-                        return BroadcastStageReturnType::LeaderRotation;
-                    }
-                }
-            }
-
             let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
-                cluster_info,
-                leader_rotation_interval,
+                leader_scheduler,
                 &me,
                 &broadcast_table,
                 &window,
@@ -259,13 +239,21 @@ impl BroadcastStage {
         window: SharedWindow,
         entry_height: u64,
         receiver: Receiver<Vec<Entry>>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(&sock, &cluster_info, &window, entry_height, &receiver)
+                Self::run(
+                    &sock,
+                    &cluster_info,
+                    &window,
+                    entry_height,
+                    &receiver,
+                    &leader_scheduler,
+                )
             }).unwrap();
 
         BroadcastStage { thread_hdl }
@@ -277,153 +265,5 @@ impl Service for BroadcastStage {
 
     fn join(self) -> thread::Result<BroadcastStageReturnType> {
         self.thread_hdl.join()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use broadcast_stage::{BroadcastStage, BroadcastStageReturnType};
-    use cluster_info::{ClusterInfo, Node};
-    use entry::Entry;
-    use ledger::next_entries_mut;
-    use mint::Mint;
-    use service::Service;
-    use signature::{Keypair, KeypairUtil};
-    use solana_program_interface::pubkey::Pubkey;
-    use std::cmp;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::mpsc::{channel, Sender};
-    use std::sync::{Arc, RwLock};
-    use window::{new_window_from_entries, SharedWindow};
-
-    struct DummyBroadcastStage {
-        my_id: Pubkey,
-        buddy_id: Pubkey,
-        broadcast_stage: BroadcastStage,
-        shared_window: SharedWindow,
-        entry_sender: Sender<Vec<Entry>>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-        entries: Vec<Entry>,
-    }
-
-    fn setup_dummy_broadcast_stage(leader_rotation_interval: u64) -> DummyBroadcastStage {
-        // Setup dummy leader info
-        let leader_keypair = Keypair::new();
-        let my_id = leader_keypair.pubkey();
-        let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        // Give the leader somebody to broadcast to so he isn't lonely
-        let buddy_keypair = Keypair::new();
-        let buddy_id = buddy_keypair.pubkey();
-        let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
-
-        // Fill the cluster_info with the buddy's info
-        let mut cluster_info =
-            ClusterInfo::new(leader_info.info.clone()).expect("ClusterInfo::new");
-        cluster_info.insert(&broadcast_buddy.info);
-        cluster_info.set_leader_rotation_interval(leader_rotation_interval);
-        let cluster_info = Arc::new(RwLock::new(cluster_info));
-
-        // Make dummy initial entries
-        let mint = Mint::new(10000);
-        let entries = mint.create_entries();
-        let entry_height = entries.len() as u64;
-
-        // Setup a window
-        let window = new_window_from_entries(&entries, entry_height, &leader_info.info);
-
-        let shared_window = Arc::new(RwLock::new(window));
-
-        let (entry_sender, entry_receiver) = channel();
-        let exit_sender = Arc::new(AtomicBool::new(false));
-        // Start up the broadcast stage
-        let broadcast_stage = BroadcastStage::new(
-            leader_info.sockets.broadcast,
-            cluster_info.clone(),
-            shared_window.clone(),
-            entry_height,
-            entry_receiver,
-            exit_sender,
-        );
-
-        DummyBroadcastStage {
-            my_id,
-            buddy_id,
-            broadcast_stage,
-            shared_window,
-            entry_sender,
-            cluster_info,
-            entries,
-        }
-    }
-
-    fn find_highest_window_index(shared_window: &SharedWindow) -> u64 {
-        let window = shared_window.read().unwrap();
-        window.iter().fold(0, |m, w_slot| {
-            if let Some(ref blob) = w_slot.data {
-                cmp::max(m, blob.read().unwrap().get_index().unwrap())
-            } else {
-                m
-            }
-        })
-    }
-
-    #[test]
-    fn test_broadcast_stage_leader_rotation_exit() {
-        let leader_rotation_interval = 10;
-        let broadcast_info = setup_dummy_broadcast_stage(leader_rotation_interval);
-        {
-            let mut wcluster_info = broadcast_info.cluster_info.write().unwrap();
-            // Set the leader for the next rotation to be myself
-            wcluster_info.set_scheduled_leader(leader_rotation_interval, broadcast_info.my_id);
-        }
-
-        let genesis_len = broadcast_info.entries.len() as u64;
-        let mut last_id = broadcast_info
-            .entries
-            .last()
-            .expect("Ledger should not be empty")
-            .id;
-        let mut num_hashes = 0;
-
-        // Input enough entries to make exactly leader_rotation_interval entries, which will
-        // trigger a check for leader rotation. Because the next scheduled leader
-        // is ourselves, we won't exit
-        for _ in genesis_len..leader_rotation_interval {
-            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
-
-            broadcast_info.entry_sender.send(new_entry).unwrap();
-        }
-
-        // Set the scheduled next leader in the cluster_info to the other buddy on the network
-        broadcast_info
-            .cluster_info
-            .write()
-            .unwrap()
-            .set_scheduled_leader(2 * leader_rotation_interval, broadcast_info.buddy_id);
-
-        // Input another leader_rotation_interval dummy entries, which will take us
-        // past the point of the leader rotation. The write_stage will see that
-        // it's no longer the leader after checking the cluster_info, and exit
-        for _ in 0..leader_rotation_interval {
-            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
-
-            match broadcast_info.entry_sender.send(new_entry) {
-                // We disconnected, break out of loop and check the results
-                Err(_) => break,
-                _ => (),
-            };
-        }
-
-        // Make sure the threads closed cleanly
-        assert_eq!(
-            broadcast_info.broadcast_stage.join().unwrap(),
-            BroadcastStageReturnType::LeaderRotation
-        );
-
-        let highest_index = find_highest_window_index(&broadcast_info.shared_window);
-        // The blob index is zero indexed, so it will always be one behind the entry height
-        // which starts at one.
-        assert_eq!(highest_index, 2 * leader_rotation_interval - 1);
     }
 }

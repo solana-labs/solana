@@ -4,11 +4,12 @@ use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::EntryReceiver;
+use leader_scheduler::LeaderScheduler;
 use ledger::{Block, LedgerWriter};
 use log::Level;
 use result::{Error, Result};
 use service::Service;
-use signature::Keypair;
+use signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -19,6 +20,11 @@ use std::time::Duration;
 use std::time::Instant;
 use streamer::{responder, BlobSender};
 use vote_stage::send_validator_vote;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ReplicateStageReturnType {
+    LeaderRotation(u64),
+}
 
 // Implement a destructor for the ReplicateStage thread to signal it exited
 // even on panics
@@ -39,7 +45,8 @@ impl Drop for Finalizer {
 }
 
 pub struct ReplicateStage {
-    thread_hdls: Vec<JoinHandle<()>>,
+    t_responder: JoinHandle<()>,
+    t_replicate: JoinHandle<Option<ReplicateStageReturnType>>,
 }
 
 impl ReplicateStage {
@@ -51,6 +58,8 @@ impl ReplicateStage {
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
+        entry_height: &mut u64,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -59,27 +68,72 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        let res = bank.process_entries(&entries);
+        let mut res = Ok(());
+        {
+            let mut num_entries_to_write = entries.len();
+            for (i, entry) in entries.iter().enumerate() {
+                res = bank.process_entry(&entry);
+                Bank::process_entry_votes(
+                    &bank,
+                    &entry,
+                    *entry_height + i as u64 + 1,
+                    &mut *leader_scheduler.write().unwrap(),
+                );
+
+                {
+                    let ls_lock = leader_scheduler.read().unwrap();
+                    if ls_lock.is_leader_rotation_height(
+                        // i is zero indexed, so current entry height for this entry is actually the
+                        // old entry height + i + 1
+                        *entry_height + i as u64 + 1,
+                    ) {
+                        let my_id = keypair.pubkey();
+                        let scheduled_leader =
+                            ls_lock.get_scheduled_leader(*entry_height + i as u64 + 1).expect("Scheduled leader id should never be unknown while processing entries");
+                        cluster_info.write().unwrap().set_leader(scheduled_leader);
+                        if my_id == scheduled_leader {
+                            num_entries_to_write = i + 1;
+                            break;
+                        }
+                    }
+                }
+
+                if res.is_err() {
+                    // TODO: This will return early from the first entry that has an erroneous
+                    // transaction, instad of processing the rest of the entries in the vector
+                    // of received entries. This is in line with previous behavior when
+                    // bank.process_entries() was used to process the entries, but doesn't solve the
+                    // issue that the bank state was still changed, leading to inconsistencies with the
+                    // leader as the leader currently should not be publishing erroneous transactions
+                    break;
+                }
+            }
+
+            // If leader rotation happened, only write the entries up to leader rotation.
+            entries.truncate(num_entries_to_write);
+        }
 
         if let Some(sender) = vote_blob_sender {
             send_validator_vote(bank, keypair, cluster_info, sender)?;
         }
 
-        {
-            let mut wcluster_info = cluster_info.write().unwrap();
-            wcluster_info.insert_votes(&entries.votes());
-        }
+        cluster_info.write().unwrap().insert_votes(&entries.votes());
 
         inc_new_counter_info!(
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
 
+        let entries_len = entries.len() as u64;
         // TODO: move this to another stage?
+        // TODO: In line with previous behavior, this will write all the entries even if
+        // an error occurred processing one of the entries (causing the rest of the entries to
+        // not be processed).
         if let Some(ledger_writer) = ledger_writer {
             ledger_writer.write_entries(entries)?;
         }
 
+        *entry_height += entries_len;
         res?;
         Ok(())
     }
@@ -91,6 +145,8 @@ impl ReplicateStage {
         window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
+        entry_height: u64,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
@@ -105,7 +161,17 @@ impl ReplicateStage {
                 let _exit = Finalizer::new(exit);
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
+                let mut entry_height_ = entry_height;
                 loop {
+                    let leader_id = leader_scheduler
+                        .read()
+                        .unwrap()
+                        .get_scheduled_leader(entry_height_)
+                        .expect("Scheduled leader id should never be unknown at this point");
+                    if leader_id == keypair.pubkey() {
+                        return Some(ReplicateStageReturnType::LeaderRotation(entry_height_));
+                    }
+
                     // Only vote once a second.
                     let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
                         next_vote_secs += 1;
@@ -121,6 +187,8 @@ impl ReplicateStage {
                         ledger_writer.as_mut(),
                         &keypair,
                         vote_sender,
+                        &mut entry_height_,
+                        &leader_scheduler,
                     ) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -129,21 +197,134 @@ impl ReplicateStage {
                         }
                     }
                 }
+
+                None
             }).unwrap();
 
-        let thread_hdls = vec![t_responder, t_replicate];
-
-        ReplicateStage { thread_hdls }
+        ReplicateStage {
+            t_responder,
+            t_replicate,
+        }
     }
 }
 
 impl Service for ReplicateStage {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<ReplicateStageReturnType>;
 
-    fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
+    fn join(self) -> thread::Result<Option<ReplicateStageReturnType>> {
+        self.t_responder.join()?;
+        self.t_replicate.join()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cluster_info::{ClusterInfo, Node};
+    use fullnode::Fullnode;
+    use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
+    use ledger::{genesis, next_entries_mut, LedgerWriter};
+    use logger;
+    use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
+    use service::Service;
+    use signature::{Keypair, KeypairUtil};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::channel;
+    use std::sync::{Arc, RwLock};
+
+    #[test]
+    pub fn test_replicate_stage_leader_rotation_exit() {
+        logger::setup();
+
+        // Set up dummy node to host a ReplicateStage
+        let my_keypair = Keypair::new();
+        let my_id = my_keypair.pubkey();
+        let my_node = Node::new_localhost_with_pubkey(my_id);
+        let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
+
+        // Create a ledger
+        let (mint, my_ledger_path) = genesis("test_replicate_stage_leader_rotation_exit", 10_000);
+        let genesis_entries = mint.create_entries();
+        let mut last_id = genesis_entries
+            .last()
+            .expect("expected at least one genesis entry")
+            .id;
+
+        // Write two entries to the ledger so that the validator is in the active set:
+        // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
+        // This will cause leader rotation after the bootstrap height
+        let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
+        let bootstrap_entries = make_active_set_entries(&my_keypair, &mint.keypair(), &last_id);
+        last_id = bootstrap_entries.last().unwrap().id;
+        let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
+        ledger_writer.write_entries(bootstrap_entries).unwrap();
+
+        // Set up the LeaderScheduler so that this this node becomes the leader at
+        // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
+        let old_leader_id = Keypair::new().pubkey();
+        let leader_rotation_interval = 10;
+        let num_bootstrap_slots = 2;
+        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            old_leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(leader_rotation_interval * 2),
+            Some(bootstrap_height),
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Set up the bank
+        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
+
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
+
+        // Set up the replicate stage
+        let (entry_sender, entry_receiver) = channel();
+        let exit = Arc::new(AtomicBool::new(false));
+        let replicate_stage = ReplicateStage::new(
+            Arc::new(my_keypair),
+            Arc::new(bank),
+            Arc::new(RwLock::new(cluster_info_me)),
+            entry_receiver,
+            Some(&my_ledger_path),
+            exit.clone(),
+            ledger_initial_len,
+            leader_scheduler.clone(),
+        );
+
+        // Send enough entries to trigger leader rotation
+        let extra_entries = leader_rotation_interval;
+        let total_entries_to_send = (bootstrap_height + extra_entries) as usize;
+        let mut num_hashes = 0;
+        let mut entries_to_send = vec![];
+
+        while entries_to_send.len() < total_entries_to_send {
+            let entries = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+            last_id = entries.last().expect("expected at least one entry").id;
+            entries_to_send.extend(entries);
         }
-        Ok(())
+
+        entries_to_send.truncate(total_entries_to_send);
+        entry_sender.send(entries_to_send).unwrap();
+
+        // Wait for replicate_stage to exit and check return value is correct
+        assert_eq!(
+            Some(ReplicateStageReturnType::LeaderRotation(bootstrap_height)),
+            replicate_stage.join().expect("replicate stage join")
+        );
+
+        assert_eq!(exit.load(Ordering::Relaxed), true);
+
+        //Check ledger height is correct
+        let mut leader_scheduler = Arc::try_unwrap(leader_scheduler)
+            .expect("Multiple references to this RwLock still exist")
+            .into_inner()
+            .expect("RwLock for LeaderScheduler is still locked");
+
+        let (_, entry_height, _) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
+
+        assert_eq!(entry_height, bootstrap_height);
     }
 }

@@ -17,6 +17,7 @@ use budget_instruction::Vote;
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
+use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, multi_bind_in_range};
@@ -223,12 +224,6 @@ pub struct ClusterInfo {
     /// last time we heard from anyone getting a message fro this public key
     /// these are rumers and shouldn't be trusted directly
     external_liveness: HashMap<Pubkey, HashMap<Pubkey, u64>>,
-    /// TODO: Clearly not the correct implementation of this, but a temporary abstraction
-    /// for testing
-    pub scheduled_leaders: HashMap<u64, Pubkey>,
-    // TODO: Is there a better way to do this? We didn't make this a constant because
-    // we want to be able to set it in integration tests so that the tests don't time out.
-    pub leader_rotation_interval: u64,
 }
 
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
@@ -260,8 +255,6 @@ impl ClusterInfo {
             external_liveness: HashMap::new(),
             id: node_info.id,
             update_index: 1,
-            scheduled_leaders: HashMap::new(),
-            leader_rotation_interval: 100,
         };
         me.local.insert(node_info.id, me.update_index);
         me.table.insert(node_info.id, node_info);
@@ -324,32 +317,10 @@ impl ClusterInfo {
         self.insert(&me);
     }
 
-    // TODO: Dummy leader scheduler, need to implement actual leader scheduling.
-    pub fn get_scheduled_leader(&self, entry_height: u64) -> Option<Pubkey> {
-        match self.scheduled_leaders.get(&entry_height) {
-            Some(x) => Some(*x),
-            None => Some(self.my_data().leader_id),
-        }
-    }
-
-    pub fn set_leader_rotation_interval(&mut self, leader_rotation_interval: u64) {
-        self.leader_rotation_interval = leader_rotation_interval;
-    }
-
-    pub fn get_leader_rotation_interval(&self) -> u64 {
-        self.leader_rotation_interval
-    }
-
-    // TODO: Dummy leader schedule setter, need to implement actual leader scheduling.
-    pub fn set_scheduled_leader(&mut self, entry_height: u64, new_leader_id: Pubkey) -> () {
-        self.scheduled_leaders.insert(entry_height, new_leader_id);
-    }
-
     pub fn get_valid_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
         self.table
             .values()
-            .into_iter()
             .filter(|x| x.id != me)
             .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
             .cloned()
@@ -515,9 +486,9 @@ impl ClusterInfo {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn broadcast(
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        leader_rotation_interval: u64,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -562,11 +533,21 @@ impl ClusterInfo {
             // Make sure the next leader in line knows about the last entry before rotation
             // so he can initiate repairs if necessary
             let entry_height = idx + 1;
-            if entry_height % leader_rotation_interval == 0 {
-                let next_leader_id = cluster_info
-                    .read()
-                    .unwrap()
-                    .get_scheduled_leader(entry_height);
+
+            {
+                let ls_lock = leader_scheduler.read().unwrap();
+                let next_leader_id = ls_lock.get_scheduled_leader(entry_height);
+                // In the case the next scheduled leader is None, then the write_stage moved
+                // the schedule too far ahead and we no longer are in the known window
+                // (will happen during calculation of the next set of slots every epoch or
+                // seed_rotation_interval heights when we move the window forward in the
+                // LeaderScheduler). For correctness, this is fine write_stage will never send
+                // blobs past the point of when this node should stop being leader, so we just
+                // continue broadcasting until we catch up to write_stage. The downside is we
+                // can't guarantee the current leader will broadcast the last entry to the next
+                // scheduled leader, so the next leader will have to rely on avalanche/repairs
+                // to get this last blob, which could cause slowdowns during leader handoffs.
+                // See corresponding issue for repairs in repair() function in window.rs.
                 if next_leader_id.is_some() && next_leader_id != Some(me.id) {
                     let info_result = broadcast_table
                         .iter()
@@ -842,8 +823,8 @@ impl ClusterInfo {
         blob_sender.send(vec![blob])?;
         Ok(())
     }
-    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
-    fn top_leader(&self) -> Option<Pubkey> {
+
+    pub fn get_gossip_top_leader(&self) -> Option<&NodeInfo> {
         let mut table = HashMap::new();
         let def = Pubkey::default();
         let cur = self.table.values().filter(|x| x.leader_id != def);
@@ -857,16 +838,12 @@ impl ClusterInfo {
             trace!("{}: sorted leaders {} votes: {}", self.id, x.0, x.1);
         }
         sorted.sort_by_key(|a| a.1);
-        sorted.last().map(|a| *a.0)
-    }
+        let top_leader = sorted.last().map(|a| *a.0);
 
-    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection
-    /// A t-shirt for the first person to actually use this bad behavior to attack the alpha testnet
-    fn update_leader(&mut self) {
-        if let Some(leader_id) = self.top_leader() {
-            if self.my_data().leader_id != leader_id && self.table.get(&leader_id).is_some() {
-                self.set_leader(leader_id);
-            }
+        if let Some(l) = top_leader {
+            self.table.get(&l)
+        } else {
+            None
         }
     }
 
@@ -936,7 +913,6 @@ impl ClusterInfo {
                 obj.write().unwrap().purge(timestamp());
                 //TODO: possibly tune this parameter
                 //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
-                obj.write().unwrap().update_leader();
                 let elapsed = timestamp() - start;
                 if GOSSIP_SLEEP_MILLIS > elapsed {
                     let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
@@ -1841,32 +1817,6 @@ mod tests {
             };
             assert_eq!(blob.get_id().unwrap(), id);
         }
-    }
-    /// TODO: This is obviously the wrong way to do this. Need to implement leader selection,
-    /// delete this test after leader selection is correctly implemented
-    #[test]
-    fn test_update_leader() {
-        logger::setup();
-        let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let leader0 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let leader1 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
-        assert_eq!(cluster_info.top_leader(), None);
-        cluster_info.set_leader(leader0.id);
-        assert_eq!(cluster_info.top_leader().unwrap(), leader0.id);
-        //add a bunch of nodes with a new leader
-        for _ in 0..10 {
-            let mut dum = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1234"));
-            dum.id = Keypair::new().pubkey();
-            dum.leader_id = leader1.id;
-            cluster_info.insert(&dum);
-        }
-        assert_eq!(cluster_info.top_leader().unwrap(), leader1.id);
-        cluster_info.update_leader();
-        assert_eq!(cluster_info.my_data().leader_id, leader0.id);
-        cluster_info.insert(&leader1);
-        cluster_info.update_leader();
-        assert_eq!(cluster_info.my_data().leader_id, leader1.id);
     }
 
     #[test]

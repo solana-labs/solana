@@ -2,18 +2,28 @@
 //! managing the schedule for leader rotation
 
 use bank::Bank;
+
 use bincode::serialize;
+use budget_instruction::Vote;
+use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
-use hash::hash;
+use entry::Entry;
+use hash::{hash, Hash};
+use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
+use system_transaction::SystemTransaction;
+use transaction::Transaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
 pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = 1000;
 pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = 1000;
 
+#[derive(Debug)]
 pub struct ActiveValidators {
     // Map from validator id to the last PoH height at which they voted,
     pub active_validators: HashMap<Pubkey, u64>,
@@ -43,13 +53,17 @@ impl ActiveValidators {
 
         // Note: height == 0 will only be included for all
         // height < self.active_window_length
+        let upper_bound = height;
         if height >= self.active_window_length {
             let lower_bound = height - self.active_window_length;
             self.active_validators
                 .retain(|_, height| *height > lower_bound);
         }
 
-        self.active_validators.keys().cloned().collect()
+        self.active_validators
+            .iter()
+            .filter_map(|(k, v)| if *v <= upper_bound { Some(*k) } else { None })
+            .collect()
     }
 
     // Push a vote for a validator with id == "id" who voted at PoH height == "height"
@@ -58,6 +72,10 @@ impl ActiveValidators {
         if height > *old_height {
             *old_height = height;
         }
+    }
+
+    pub fn reset(&mut self) -> () {
+        self.active_validators.clear();
     }
 }
 
@@ -83,7 +101,6 @@ pub struct LeaderSchedulerConfig {
 // Used to toggle leader rotation in fullnode so that tests that don't
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
-    #[allow(dead_code)]
     pub fn new(
         bootstrap_leader: Pubkey,
         bootstrap_height_option: Option<u64>,
@@ -101,7 +118,12 @@ impl LeaderSchedulerConfig {
     }
 }
 
+#[derive(Debug)]
 pub struct LeaderScheduler {
+    // Set to true if we want the default implementation of the LeaderScheduler,
+    // where ony the bootstrap leader is used
+    pub use_only_bootstrap_leader: bool,
+
     // The interval at which to rotate the leader, should be much less than
     // seed_rotation_interval
     pub leader_rotation_interval: u64,
@@ -119,11 +141,11 @@ pub struct LeaderScheduler {
     // Maintain the set of active validators
     pub active_validators: ActiveValidators,
 
+    // The last height at which the seed + schedule was generated
+    pub last_seed_height: Option<u64>,
+
     // Round-robin ordering for the validators
     leader_schedule: Vec<Pubkey>,
-
-    // The last height at which the seed + schedule was generated
-    last_seed_height: Option<u64>,
 
     // The seed used to determine the round robin order of leaders
     seed: u64,
@@ -147,6 +169,13 @@ pub struct LeaderScheduler {
 // 3) When we we hit the next seed rotation PoH height, step 2) is executed again to
 // calculate the leader schedule for the upcoming seed_rotation_interval PoH counts.
 impl LeaderScheduler {
+    pub fn from_bootstrap_leader(bootstrap_leader: Pubkey) -> Self {
+        let config = LeaderSchedulerConfig::new(bootstrap_leader, None, None, None, None);
+        let mut leader_scheduler = LeaderScheduler::new(&config);
+        leader_scheduler.use_only_bootstrap_leader = true;
+        leader_scheduler
+    }
+
     pub fn new(config: &LeaderSchedulerConfig) -> Self {
         let mut bootstrap_height = DEFAULT_BOOTSTRAP_HEIGHT;
         if let Some(input) = config.bootstrap_height_option {
@@ -169,6 +198,7 @@ impl LeaderScheduler {
         assert!(seed_rotation_interval % leader_rotation_interval == 0);
 
         LeaderScheduler {
+            use_only_bootstrap_leader: false,
             active_validators: ActiveValidators::new(config.active_window_length_option),
             leader_rotation_interval,
             seed_rotation_interval,
@@ -180,15 +210,51 @@ impl LeaderScheduler {
         }
     }
 
+    pub fn is_leader_rotation_height(&self, height: u64) -> bool {
+        if self.use_only_bootstrap_leader {
+            return false;
+        }
+
+        if height < self.bootstrap_height {
+            return false;
+        }
+
+        (height - self.bootstrap_height) % self.leader_rotation_interval == 0
+    }
+
+    pub fn entries_until_next_leader_rotation(&self, height: u64) -> Option<u64> {
+        if self.use_only_bootstrap_leader {
+            return None;
+        }
+
+        if height < self.bootstrap_height {
+            Some(self.bootstrap_height - height)
+        } else {
+            Some(
+                self.leader_rotation_interval
+                    - ((height - self.bootstrap_height) % self.leader_rotation_interval),
+            )
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.last_seed_height = None;
+        self.active_validators.reset();
+    }
+
     pub fn push_vote(&mut self, id: Pubkey, height: u64) {
+        if self.use_only_bootstrap_leader {
+            return;
+        }
+
         self.active_validators.push_vote(id, height);
     }
 
-    fn get_active_set(&mut self, height: u64) -> Vec<Pubkey> {
-        self.active_validators.get_active_set(height)
-    }
-
     pub fn update_height(&mut self, height: u64, bank: &Bank) {
+        if self.use_only_bootstrap_leader {
+            return;
+        }
+
         if height < self.bootstrap_height {
             return;
         }
@@ -201,6 +267,10 @@ impl LeaderScheduler {
     // Uses the schedule generated by the last call to generate_schedule() to return the
     // leader for a given PoH height in round-robin fashion
     pub fn get_scheduled_leader(&self, height: u64) -> Option<Pubkey> {
+        if self.use_only_bootstrap_leader {
+            return Some(self.bootstrap_leader);
+        }
+
         // This covers cases where the schedule isn't yet generated.
         if self.last_seed_height == None {
             if height < self.bootstrap_height {
@@ -226,6 +296,10 @@ impl LeaderScheduler {
         Some(self.leader_schedule[validator_index])
     }
 
+    fn get_active_set(&mut self, height: u64) -> Vec<Pubkey> {
+        self.active_validators.get_active_set(height)
+    }
+
     // Called every seed_rotation_interval entries, generates the leader schedule
     // for the range of entries: [height, height + seed_rotation_interval)
     fn generate_schedule(&mut self, height: u64, bank: &Bank) {
@@ -238,6 +312,7 @@ impl LeaderScheduler {
         // non-zero stake. In this case, use the bootstrap leader for
         // the upcoming rounds
         if ranked_active_set.is_empty() {
+            self.last_seed_height = Some(height);
             self.leader_schedule = vec![self.bootstrap_leader];
             self.last_seed_height = Some(height);
             return;
@@ -322,6 +397,57 @@ impl LeaderScheduler {
     }
 }
 
+impl Default for LeaderScheduler {
+    // Create a dummy leader scheduler
+    fn default() -> Self {
+        let id = Keypair::new().pubkey();
+        Self::from_bootstrap_leader(id)
+    }
+}
+
+// Remove all candiates for leader selection from the active set by clearing the bank,
+// and then set a single new candidate who will be eligible starting at height = vote_height
+// by adding one new account to the bank
+#[cfg(test)]
+pub fn set_new_leader(bank: &Bank, leader_scheduler: &mut LeaderScheduler, vote_height: u64) {
+    // Set the scheduled next leader to some other node
+    let new_leader_keypair = Keypair::new();
+    let new_leader_id = new_leader_keypair.pubkey();
+    leader_scheduler.push_vote(new_leader_id, vote_height);
+    let dummy_id = Keypair::new().pubkey();
+    let new_account = Account::new(1, 10, dummy_id.clone());
+
+    // Remove the previous acounts from the active set
+    let mut accounts = bank.accounts().write().unwrap();
+    accounts.clear();
+    accounts.insert(new_leader_id, new_account);
+}
+
+// Create two entries so that the node with keypair == active_keypair
+// is in the active set for leader selection:
+// 1) Give the node a nonzero number of tokens,
+// 2) A vote from the validator
+pub fn make_active_set_entries(
+    active_keypair: &Keypair,
+    token_source: &Keypair,
+    last_id: &Hash,
+) -> Vec<Entry> {
+    // 1) Create transfer token entry
+    let transfer_tx = Transaction::system_new(&token_source, active_keypair.pubkey(), 1, *last_id);
+    let transfer_entry = Entry::new(last_id, 0, vec![transfer_tx]);
+    let last_id = transfer_entry.id;
+
+    // 2) Create vote entry
+    let vote = Vote {
+        version: 0,
+        contact_info_version: 0,
+    };
+    let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, last_id, 0);
+    let vote_entry = Entry::new(&last_id, 0, vec![vote_tx]);
+
+    vec![transfer_entry, vote_entry]
+}
+
 #[cfg(test)]
 mod tests {
     use bank::Bank;
@@ -335,13 +461,6 @@ mod tests {
     use std::collections::HashSet;
     use std::hash::Hash;
     use std::iter::FromIterator;
-
-    fn to_hashset<T>(slice: &[T]) -> HashSet<&T>
-    where
-        T: Eq + Hash,
-    {
-        HashSet::from_iter(slice.iter())
-    }
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where
@@ -495,13 +614,11 @@ mod tests {
             leader_scheduler.push_vote(pk, start_height + active_window_length);
         }
 
-        let all_ids = old_ids.union(&new_ids).collect();
-
         // Queries for the active set
         let result = leader_scheduler.get_active_set(active_window_length + start_height - 1);
-        assert_eq!(result.len(), num_old_ids + num_new_ids);
-        let result_set = to_hashset(&result);
-        assert_eq!(result_set, all_ids);
+        assert_eq!(result.len(), num_old_ids);
+        let result_set = to_hashset_owned(&result);
+        assert_eq!(result_set, old_ids);
 
         let result = leader_scheduler.get_active_set(active_window_length + start_height);
         assert_eq!(result.len(), num_new_ids);
@@ -769,18 +886,13 @@ mod tests {
         for i in 0..=num_validators {
             leader_scheduler.generate_schedule(i * active_window_length, &bank);
             let result = &leader_scheduler.leader_schedule;
-            let mut expected_set;
-            if i == num_validators {
-                // When there are no active validators remaining, should default back to the
-                // bootstrap leader
-                expected_set = HashSet::new();
-                expected_set.insert(&bootstrap_leader_id);
+            let expected = if i == num_validators {
+                bootstrap_leader_id
             } else {
-                assert_eq!(num_validators - i, result.len() as u64);
-                expected_set = to_hashset(&validators[i as usize..]);
-            }
-            let result_set = to_hashset(&result[..]);
-            assert_eq!(expected_set, result_set);
+                validators[i as usize]
+            };
+
+            assert_eq!(vec![expected], *result);
         }
     }
 
