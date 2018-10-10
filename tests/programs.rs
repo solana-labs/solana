@@ -236,7 +236,7 @@ fn process_transaction(
     loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
 ) {
     let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs)
+    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs).unwrap();
 }
 
 #[test]
