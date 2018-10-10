@@ -293,8 +293,8 @@ impl JsonRpcRequestProcessor {
         self.bank
             .add_account_subscription(bank_sub_id, pubkey, sink);
     }
-    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey) {
-        self.bank.remove_account_subscription(bank_sub_id);
+    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey, pubkey: &Pubkey) {
+        self.bank.remove_account_subscription(bank_sub_id, pubkey);
     }
     pub fn add_signature_subscription(
         &self,
@@ -305,8 +305,9 @@ impl JsonRpcRequestProcessor {
         self.bank
             .add_signature_subscription(bank_sub_id, signature, sink);
     }
-    pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey) {
-        self.bank.remove_signature_subscription(bank_sub_id);
+    pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey, signature: &Signature) {
+        self.bank
+            .remove_signature_subscription(bank_sub_id, signature);
     }
 }
 
