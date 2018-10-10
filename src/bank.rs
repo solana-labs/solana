@@ -536,12 +536,15 @@ impl Bank {
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx_program_id) {
-            SystemProgram::process_transaction(
+            if SystemProgram::process_transaction(
                 &tx,
                 instruction_index,
                 program_accounts,
                 &self.loaded_contracts,
-            )
+            ).is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
         } else if BudgetState::check_id(&tx_program_id) {
             if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
