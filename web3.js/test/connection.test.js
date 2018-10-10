@@ -3,8 +3,14 @@
 import {Account} from '../src/account';
 import {Connection} from '../src/connection';
 import {SystemProgram} from '../src/system-program';
-import {mockRpc} from './__mocks__/node-fetch';
+import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url.js';
+
+if (!mockRpcEnabled) {
+  // The default of 5 seconds is too slow for live testing sometimes
+  jest.setTimeout(10000);
+}
+
 
 const errorMessage = 'Invalid request';
 const errorResponse = {
