@@ -6,12 +6,10 @@ extern crate solana_program_interface;
 use bincode::serialize;
 use solana::bank::Bank;
 use solana::dynamic_instruction::DynamicInstruction;
+use solana::dynamic_program::DynamicProgram;
 #[cfg(feature = "bpf_c")]
-use solana::dynamic_program::{
-    DynamicProgram, ProgramPath, PLATFORM_SECTION_C, PLATFORM_SECTION_RS,
-};
+use solana::dynamic_program::{ProgramPath, PLATFORM_SECTION_C, PLATFORM_SECTION_RS};
 use solana::dynamic_transaction::ProgramTransaction;
-#[cfg(feature = "bpf_c")]
 use solana::hash::Hash;
 use solana::logger;
 use solana::mint::Mint;
@@ -21,6 +19,7 @@ use solana::system_transaction::SystemTransaction;
 use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
 use solana_program_interface::account::Account;
+#[cfg(feature = "bpf_c")]
 use solana_program_interface::pubkey::Pubkey;
 use std::mem;
 #[cfg(feature = "bpf_c")]
@@ -60,7 +59,6 @@ fn test_transaction_load_native() {
     //      which leads to duplicate tx signature errors
     let bank = Bank::new(&mint);
     let program = Keypair::new().pubkey();
-    let state = Keypair::new().pubkey();
 
     // allocate program bits account
     let tx = Transaction::system_create(
@@ -339,23 +337,34 @@ fn test_program_native_file_move_funds_insufficident_funds() {
 #[test]
 #[ignore]
 fn test_program_bpf_file_noop_rust() {
+    let tokens: i64 = 10;
+    let input = serialize(&tokens).unwrap();
+    let inst = DynamicInstruction::Call { input };
     let tx = Transaction::new(
         &Keypair::new(),
-        &[Keypair::new().pubkey()],
+        &[
+            Keypair::new().pubkey(),
+            Keypair::new().pubkey(),
+            Keypair::new().pubkey(),
+        ],
         DynamicProgram::id(),
-        vec![0u8],
+        serialize(&inst).unwrap(),
         Hash::default(),
         0,
     );
 
-    let dp = DynamicProgram::BpfFile {
+    let dp_bpf = DynamicProgram::BpfFile {
         name: "noop_rust".to_string(),
     };
-    let mut accounts = vec![Account::default()];
-    accounts[0].tokens = 1;
-    accounts[0].userdata = serialize(&dp).unwrap();
+    let mut accounts = vec![Account::default(), Account::default(), Account::default()];
+    accounts[0].tokens = 10;
+    accounts[1].tokens = 1;
+    accounts[1].userdata = serialize(&dp_bpf).unwrap();
+    accounts[2].tokens = 1;
 
     dynamic_propgram_process_transaction(&tx, &mut accounts);
+    assert_eq!(0, accounts[0].tokens);
+    assert_eq!(11, accounts[2].tokens);
 }
 
 #[cfg(feature = "bpf_c")]

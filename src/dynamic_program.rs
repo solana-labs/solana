@@ -308,6 +308,14 @@ mod tests {
     use solana_program_interface::account::Account;
     use std::path::Path;
 
+    fn dynamic_propgram_process_transaction(tx: &Transaction, accounts: &mut [Account]) {
+        let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
+        assert_eq!(
+            Ok(()),
+            DynamicProgram::process_transaction(&tx, 0, &mut refs[..])
+        );
+    }
+
     #[test]
     fn test_path_create_native() {
         let path = ProgramPath::Native {}.create("noop");
@@ -321,23 +329,23 @@ mod tests {
         let prog = vec![
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	exit
         ];
-
         let dp = DynamicProgram::Bpf { prog };
 
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[1].tokens = 1;
+        accounts[1].userdata = serialize(&dp).unwrap();
+
+        let instruction = DynamicInstruction::Call { input: vec![0u8] };
         let tx = Transaction::new(
             &Keypair::new(),
-            &[Keypair::new().pubkey()],
+            &[Keypair::new().pubkey(), Keypair::new().pubkey()],
             Keypair::new().pubkey(),
-            vec![0u8],
+            serialize(&instruction).unwrap(),
             Hash::default(),
             0,
         );
 
-        let mut account = Account::default();
-        account.tokens = 1;
-        account.userdata = serialize(&dp).unwrap();
-
-        DynamicProgram::process_transaction(&tx, 0, &mut [&mut account]);
+        dynamic_propgram_process_transaction(&tx, &mut accounts);
     }
 
     #[test]
@@ -353,20 +361,21 @@ mod tests {
         ];
         let dp = DynamicProgram::Bpf { prog };
 
+        let mut accounts = vec![Account::default(), Account::default()];
+        accounts[1].tokens = 1;
+        accounts[1].userdata = serialize(&dp).unwrap();
+
+        let instruction = DynamicInstruction::Call { input: vec![0u8] };
         let tx = Transaction::new(
             &Keypair::new(),
-            &[Keypair::new().pubkey()],
+            &[Keypair::new().pubkey(), Keypair::new().pubkey()],
             Keypair::new().pubkey(),
-            vec![0u8],
+            serialize(&instruction).unwrap(),
             Hash::default(),
             0,
         );
 
-        let mut account = Account::default();
-        account.tokens = 1;
-        account.userdata = serialize(&dp).unwrap();
-
-        DynamicProgram::process_transaction(&tx, 0, &mut [&mut account]);
+        dynamic_propgram_process_transaction(&tx, &mut accounts);
     }
 
     // TODO add more tests to validate the Userdata and Account data is
