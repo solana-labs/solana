@@ -327,7 +327,9 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if Some(&delegate_account.source.unwrap()) != tx.key(pix, 1) {
+            if delegate_account.source.is_none()
+                || Some(&delegate_account.source.unwrap()) != tx.key(pix, 1)
+            {
                 info!("account 2 is not a delegate of account 1");
                 Err(Error::InvalidArgument)?;
             }
