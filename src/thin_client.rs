@@ -455,6 +455,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_thin_client() {
         logger::setup();
         let leader_keypair = Keypair::new();

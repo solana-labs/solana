@@ -23,6 +23,13 @@ Methods
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
+* [subscriptionChannel](#subscriptionChannel)
+
+* [Subscription Websocket](#subscription-websocket)
+  * [accountSubscribe](#accountsubscribe)
+  * [accountUnsubscribe](#accountunsubscribe)
+  * [signatureSubscribe](#signaturesubscribe)
+  * [signatureUnsubscribe](#signatureunsubscribe)
 
 Request Formatting
 ---
@@ -227,3 +234,122 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 ```
 
 ---
+
+### startSubscriptionChannel
+Open a socket on the node for JSON-RPC subscription requests
+
+##### Parameters:
+None
+
+##### Results:
+* `string` - "port", open websocket port
+* `string` - "path", unique key to use as websocket path
+
+##### Example:
+```bash
+// Request
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"startSubscriptionChannel"}' http://localhost:8899
+
+// Result
+{"jsonrpc":"2.0","result":{"port":9876,"path":"BRbmMXn71cKfzXjFsmrTsWsXuQwbjXbwKdoRwVw1FRA3"},"id":1}
+```
+
+---
+
+### Subscription Websocket
+After opening a subscription socket with the `subscriptionChannel` JSON-RPC request method, submit subscription requests via websocket protocol
+Connect to the websocket at `ws://<ADDRESS>/<PATH>` returned from the request
+- Submit subscription requests to the websocket using the methods below
+- Multiple subscriptions may be active at once
+- The subscription-channel socket will close when client closes websocket. To create new subscriptions, send a new `subscriptionChannel` JSON-RPC request.
+
+---
+
+### accountSubscribe
+Subscribe to an account to receive notifications when the userdata for a given account public key changes
+
+##### Parameters:
+* `string` - account Pubkey, as base-58 encoded string
+
+##### Results:
+* `integer` - Subscription id (needed to unsubscribe)
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12"]}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+##### Notification Format:
+```bash
+{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
+```
+
+---
+
+### accountUnsubscribe
+Unsubscribe from account userdata change notifications
+
+##### Parameters:
+* `integer` - id of account Subscription to cancel
+
+##### Results:
+* `bool` - unsubscribe success message
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```
+
+---
+
+### signatureSubscribe
+Subscribe to a transaction signature to receive notification when the transaction is confirmed
+On `signatureNotification`, the subscription is automatically cancelled
+
+##### Parameters:
+* `string` - Transaction Signature, as base-58 encoded string
+
+##### Results:
+* `integer` - subscription id (needed to unsubscribe)
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"signatureSubscribe", "params":["2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b"]}
+
+// Result
+{"jsonrpc": "2.0","result": 0,"id": 1}
+```
+
+##### Notification Format:
+```bash
+{"jsonrpc": "2.0","method": "signatureNotification", "params": {"result": "Confirmed","subscription":0}}
+```
+
+---
+
+### signatureUnsubscribe
+Unsubscribe from account userdata change notifications
+
+##### Parameters:
+* `integer` - id of account subscription to cancel
+
+##### Results:
+* `bool` - unsubscribe success message
+
+##### Example:
+```bash
+// Request
+{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
+
+// Result
+{"jsonrpc": "2.0","result": true,"id": 1}
+```

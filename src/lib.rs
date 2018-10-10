@@ -44,6 +44,7 @@ pub mod packet;
 pub mod payment_plan;
 pub mod poh;
 pub mod poh_recorder;
+pub mod pubsub;
 pub mod recvmmsg;
 pub mod replicate_stage;
 pub mod replicator;
@@ -109,6 +110,8 @@ extern crate solana_jsonrpc_core as jsonrpc_core;
 extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
 #[macro_use]
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
+extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
+extern crate solana_jsonrpc_ws_server as jsonrpc_ws_server;
 extern crate solana_program_interface;
 extern crate sys_info;
 extern crate tokio;

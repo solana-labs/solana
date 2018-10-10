@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 use reqwest;
 use socket2::{Domain, SockAddr, Socket, Type};
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::os::unix::io::AsRawFd;
 
 /// A data type representing a public Udp socket
@@ -156,6 +156,26 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
     match sock.bind(&SockAddr::from(addr)) {
         Ok(_) => Result::Ok(sock.into_udp_socket()),
         Err(err) => Err(err),
+    }
+}
+
+pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
+    let (start, end) = range;
+    let mut tries_left = end - start;
+    loop {
+        let rand_port = thread_rng().gen_range(start, end);
+        match TcpListener::bind(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            rand_port,
+        )) {
+            Ok(_) => {
+                break Ok(rand_port);
+            }
+            Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
+                return Err(err);
+            },
+        }
+        tries_left -= 1;
     }
 }
 
