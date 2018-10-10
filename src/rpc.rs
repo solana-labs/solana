@@ -134,8 +134,8 @@ build_rpc_trait! {
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
 
-        #[rpc(meta, name = "subscriptionChannel")]
-        fn launch_subscription_channel(&self, Self::Metadata) -> Result<SubscriptionResponse>;
+        #[rpc(meta, name = "startSubscriptionChannel")]
+        fn start_subscription_channel(&self, Self::Metadata) -> Result<SubscriptionResponse>;
     }
 }
 
@@ -234,7 +234,7 @@ impl RpcSol for RpcSolImpl {
             })?;
         Ok(bs58::encode(tx.signature).into_string())
     }
-    fn launch_subscription_channel(&self, meta: Self::Metadata) -> Result<SubscriptionResponse> {
+    fn start_subscription_channel(&self, meta: Self::Metadata) -> Result<SubscriptionResponse> {
         let port: u16 = find_available_port_in_range(FULLNODE_PORT_RANGE).map_err(|_| Error {
             code: ErrorCode::InternalError,
             message: "No available port in range".into(),
@@ -284,26 +284,26 @@ impl JsonRpcRequestProcessor {
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
     }
-    pub fn store_account_subscription(
+    pub fn add_account_subscription(
         &self,
         bank_sub_id: Pubkey,
         pubkey: Pubkey,
         sink: Sink<Account>,
     ) {
         self.bank
-            .store_account_subscription(bank_sub_id, pubkey, sink);
+            .add_account_subscription(bank_sub_id, pubkey, sink);
     }
     pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey) {
         self.bank.remove_account_subscription(bank_sub_id);
     }
-    pub fn store_signature_subscription(
+    pub fn add_signature_subscription(
         &self,
         bank_sub_id: Pubkey,
         signature: Signature,
         sink: Sink<RpcSignatureStatus>,
     ) {
         self.bank
-            .store_signature_subscription(bank_sub_id, signature, sink);
+            .add_signature_subscription(bank_sub_id, signature, sink);
     }
     pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey) {
         self.bank.remove_signature_subscription(bank_sub_id);

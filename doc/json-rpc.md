@@ -235,7 +235,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### subscriptionChannel
+### startSubscriptionChannel
 Open a socket on the node for JSON-RPC subscription requests
 
 ##### Parameters:
@@ -248,7 +248,7 @@ None
 ##### Example:
 ```bash
 // Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"subscriptionChannel"}' http://localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"startSubscriptionChannel"}' http://localhost:8899
 
 // Result
 {"jsonrpc":"2.0","result":{"port":9876,"path":"BRbmMXn71cKfzXjFsmrTsWsXuQwbjXbwKdoRwVw1FRA3"},"id":1}
@@ -277,7 +277,7 @@ Subscribe to an account to receive notifications when the userdata for a given a
 ##### Example:
 ```bash
 // Request
-{"jsonrpc":"2.0", "id":1, "method":"accountSub", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12"]}
+{"jsonrpc":"2.0", "id":1, "method":"accountSubscribe", "params":["CM78CPUeXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNH12"]}
 
 // Result
 {"jsonrpc": "2.0","result": 0,"id": 1}
@@ -285,7 +285,7 @@ Subscribe to an account to receive notifications when the userdata for a given a
 
 ##### Notification Format:
 ```bash
-{"jsonrpc": "2.0","method": "account_notification", "params": {"result": {"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
+{"jsonrpc": "2.0","method": "accountNotification", "params": {"result": {"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[3,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,20,0,0,0,0,0,0,0,50,48,53,48,45,48,49,45,48,49,84,48,48,58,48,48,58,48,48,90,252,10,7,28,246,140,88,177,98,82,10,227,89,81,18,30,194,101,199,16,11,73,133,20,246,62,114,39,20,113,189,32,50,0,0,0,0,0,0,0,247,15,36,102,167,83,225,42,133,127,82,34,36,224,207,130,109,230,224,188,163,33,213,13,5,117,211,251,65,159,197,51,0,0,0,0,0,0]},"subscription":0}}
 ```
 
 ---
@@ -302,7 +302,7 @@ Unsubscribe from account userdata change notifications
 ##### Example:
 ```bash
 // Request
-{"jsonrpc":"2.0", "id":1, "method":"accountSub", "params":[0]}
+{"jsonrpc":"2.0", "id":1, "method":"accountUnsubscribe", "params":[0]}
 
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}
@@ -312,6 +312,7 @@ Unsubscribe from account userdata change notifications
 
 ### signatureSubscribe
 Subscribe to a transaction signature to receive notification when the transaction is confirmed
+On `signatureNotification`, the subscription is automatically cancelled
 
 ##### Parameters:
 * `string` - Transaction Signature, as base-58 encoded string
@@ -330,7 +331,7 @@ Subscribe to a transaction signature to receive notification when the transactio
 
 ##### Notification Format:
 ```bash
-{"jsonrpc": "2.0","method": "signature_notification", "params": {"result": "Confirmed","subscription":0}}
+{"jsonrpc": "2.0","method": "signatureNotification", "params": {"result": "Confirmed","subscription":0}}
 ```
 
 ---
@@ -347,7 +348,7 @@ Unsubscribe from account userdata change notifications
 ##### Example:
 ```bash
 // Request
-{"jsonrpc":"2.0", "id":1, "method":"signatureUnubscribe", "params":[0]}
+{"jsonrpc":"2.0", "id":1, "method":"signatureUnsubscribe", "params":[0]}
 
 // Result
 {"jsonrpc": "2.0","result": true,"id": 1}

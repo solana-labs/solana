@@ -970,7 +970,7 @@ impl Bank {
         self.finality_time.store(finality, Ordering::Relaxed);
     }
 
-    pub fn store_account_subscription(
+    pub fn add_account_subscription(
         &self,
         bank_sub_id: Pubkey,
         pubkey: Pubkey,
@@ -993,7 +993,7 @@ impl Bank {
         }
     }
 
-    pub fn store_signature_subscription(
+    pub fn add_signature_subscription(
         &self,
         bank_sub_id: Pubkey,
         signature: Signature,
@@ -1598,10 +1598,10 @@ mod tests {
         bank.process_transaction(&tx).unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
-            Subscriber::new_test("account_notification");
+            Subscriber::new_test("accountNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        bank.store_account_subscription(bank_sub_id, alice.pubkey(), sink);
+        bank.add_account_subscription(bank_sub_id, alice.pubkey(), sink);
 
         assert!(
             bank.account_subscriptions
@@ -1616,7 +1616,7 @@ mod tests {
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"account_notification","params":{{"result":{{"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 
@@ -1641,10 +1641,10 @@ mod tests {
         bank.process_transaction(&tx).unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
-            Subscriber::new_test("signature_notification");
+            Subscriber::new_test("signatureNotification");
         let sub_id = SubscriptionId::Number(0 as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        bank.store_signature_subscription(bank_sub_id, signature, sink);
+        bank.add_signature_subscription(bank_sub_id, signature, sink);
 
         assert!(
             bank.signature_subscriptions
@@ -1657,7 +1657,7 @@ mod tests {
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signature_notification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 

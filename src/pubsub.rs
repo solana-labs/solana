@@ -50,51 +50,43 @@ impl PubSubService {
             .name("solana-pubsub".to_string())
             .spawn(move || {
                 let mut io = PubSubHandler::default();
-            	let rpc = RpcSolPubSubImpl::default();
+                let rpc = RpcSolPubSubImpl::default();
                 let subs = rpc.subscriptions.clone();
-            	io.extend_with(rpc.to_delegate());
+                io.extend_with(rpc.to_delegate());
 
-            	let server = ServerBuilder::with_meta_extractor(io, move |context: &RequestContext|
-                        {
-                            *client_status.lock().unwrap() = ClientState::Init(context.out.clone());
-                            Meta {
-                                request_processor: request_processor.clone(),
-                                session: Arc::new(Session::new(context.sender().clone())),
+                let server = ServerBuilder::with_meta_extractor(io, move |context: &RequestContext|
+                    {
+                        *client_status.lock().unwrap() = ClientState::Init(context.out.clone());
+                        Meta {
+                            request_processor: request_processor.clone(),
+                            session: Arc::new(Session::new(context.sender().clone())),
                         }
                     })
                     .request_middleware(move |req: &ws::Request|
                         if req.resource() != format!("/{}", path.to_string()) {
-            				Some(ws::Response::new(403, "Client path incorrect or not provided"))
-            			} else {
-            				None
-            			})
-            		.start(&pubsub_addr);
+                            Some(ws::Response::new(403, "Client path incorrect or not provided"))
+                        } else {
+                            None
+                        })
+                    .start(&pubsub_addr);
 
                 if server.is_err() {
                     warn!("Pubsub service unavailable: unable to bind to port {}. \nMake sure this port is not already in use by another application", pubsub_addr.port());
                     return;
                 }
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        for (_, bank_sub_id) in subs.read().unwrap().iter() {
-                            server_bank.remove_account_subscription(bank_sub_id);
-                            server_bank.remove_signature_subscription(bank_sub_id);
-                        }
-                        server.unwrap().close();
-                        break;
-                    }
+                while !exit.load(Ordering::Relaxed) {
                     if let ClientState::Init(ref mut sender) = *status.lock().unwrap() {
                         if sender.check_active().is_err() {
-                            for (_, bank_sub_id) in subs.read().unwrap().iter() {
-                                server_bank.remove_account_subscription(bank_sub_id);
-                                server_bank.remove_signature_subscription(bank_sub_id);
-                            }
-                            server.unwrap().close();
                             break;
                         }
                     }
                     sleep(Duration::from_millis(100));
                 }
+                for (_, bank_sub_id) in subs.read().unwrap().iter() {
+                    server_bank.remove_account_subscription(bank_sub_id);
+                    server_bank.remove_signature_subscription(bank_sub_id);
+                }
+                server.unwrap().close();
                 ()
             })
             .unwrap();
@@ -118,17 +110,7 @@ build_rpc_trait! {
     pub trait RpcSolPubSub {
         type Metadata;
 
-        #[pubsub(name = "signature_notification")] {
-            // Get notification when signature is verified
-            // Accepts signature parameter as base-58 encoded string
-            #[rpc(name = "signatureSubscribe")]
-            fn signature_subscribe(&self, Self::Metadata, pubsub::Subscriber<RpcSignatureStatus>, String);
-
-            // Unsubscribe from signature notification subscription.
-            #[rpc(name = "signatureUnsubscribe")]
-            fn signature_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
-        }
-        #[pubsub(name = "account_notification")] {
+        #[pubsub(name = "accountNotification")] {
             // Get notification every time account userdata is changed
             // Accepts pubkey parameter as base-58 encoded string
             #[rpc(name = "accountSubscribe")]
@@ -137,6 +119,16 @@ build_rpc_trait! {
             // Unsubscribe from account notification subscription.
             #[rpc(name = "accountUnsubscribe")]
             fn account_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
+        }
+        #[pubsub(name = "signatureNotification")] {
+            // Get notification when signature is verified
+            // Accepts signature parameter as base-58 encoded string
+            #[rpc(name = "signatureSubscribe")]
+            fn signature_subscribe(&self, Self::Metadata, pubsub::Subscriber<RpcSignatureStatus>, String);
+
+            // Unsubscribe from signature notification subscription.
+            #[rpc(name = "signatureUnsubscribe")]
+            fn signature_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
         }
     }
 }
@@ -148,6 +140,51 @@ struct RpcSolPubSubImpl {
 }
 impl RpcSolPubSub for RpcSolPubSubImpl {
     type Metadata = Meta;
+
+    fn account_subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: pubsub::Subscriber<Account>,
+        pubkey_str: String,
+    ) {
+        let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
+        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+            subscriber
+                .reject(Error {
+                    code: ErrorCode::InvalidParams,
+                    message: "Invalid Request: Invalid pubkey provided".into(),
+                    data: None,
+                }).unwrap();
+            return;
+        }
+        let pubkey = Pubkey::new(&pubkey_vec);
+
+        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
+        let sub_id = SubscriptionId::Number(id as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let bank_sub_id = Keypair::new().pubkey();
+        self.subscriptions
+            .write()
+            .unwrap()
+            .insert(sub_id.clone(), bank_sub_id);
+
+        meta.request_processor
+            .add_account_subscription(bank_sub_id, pubkey, sink);
+    }
+
+    fn account_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+        if let Some(bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
+            meta.request_processor
+                .remove_account_subscription(&bank_sub_id);
+            Ok(true)
+        } else {
+            Err(Error {
+                code: ErrorCode::InvalidParams,
+                message: "Invalid Request: Subscription id does not exist".into(),
+                data: None,
+            })
+        }
+    }
 
     fn signature_subscribe(
         &self,
@@ -185,7 +222,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             }
             Err(_) => {
                 meta.request_processor
-                    .store_signature_subscription(bank_sub_id, signature, sink);
+                    .add_signature_subscription(bank_sub_id, signature, sink);
             }
         }
     }
@@ -194,50 +231,6 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         if let Some(bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
             meta.request_processor
                 .remove_signature_subscription(&bank_sub_id);
-            Ok(true)
-        } else {
-            Err(Error {
-                code: ErrorCode::InvalidParams,
-                message: "Invalid Request: Subscription id does not exist".into(),
-                data: None,
-            })
-        }
-    }
-    fn account_subscribe(
-        &self,
-        meta: Self::Metadata,
-        subscriber: pubsub::Subscriber<Account>,
-        pubkey_str: String,
-    ) {
-        let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            subscriber
-                .reject(Error {
-                    code: ErrorCode::InvalidParams,
-                    message: "Invalid Request: Invalid pubkey provided".into(),
-                    data: None,
-                }).unwrap();
-            return;
-        }
-        let pubkey = Pubkey::new(&pubkey_vec);
-
-        let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
-        let sub_id = SubscriptionId::Number(id as u64);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let bank_sub_id = Keypair::new().pubkey();
-        self.subscriptions
-            .write()
-            .unwrap()
-            .insert(sub_id.clone(), bank_sub_id);
-
-        meta.request_processor
-            .store_account_subscription(bank_sub_id, pubkey, sink);
-    }
-
-    fn account_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
-        if let Some(bank_sub_id) = self.subscriptions.write().unwrap().remove(&id) {
-            meta.request_processor
-                .remove_account_subscription(&bank_sub_id);
             Ok(true)
         } else {
             Err(Error {
@@ -333,7 +326,7 @@ mod tests {
         let string = receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signature_notification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 
@@ -491,7 +484,7 @@ mod tests {
             .userdata;
         let expected = json!({
            "jsonrpc": "2.0",
-           "method": "account_notification",
+           "method": "accountNotification",
            "params": {
                "result": {
                    "program_id": budget_program_id,
@@ -529,7 +522,7 @@ mod tests {
             .userdata;
         let expected = json!({
            "jsonrpc": "2.0",
-           "method": "account_notification",
+           "method": "accountNotification",
            "params": {
                "result": {
                    "program_id": budget_program_id,
@@ -566,7 +559,7 @@ mod tests {
             .userdata;
         let expected = json!({
            "jsonrpc": "2.0",
-           "method": "account_notification",
+           "method": "accountNotification",
            "params": {
                "result": {
                    "program_id": budget_program_id,
