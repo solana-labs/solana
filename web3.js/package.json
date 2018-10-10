@@ -43,7 +43,7 @@
     "localnet:up": "bin/localnet.sh up",
     "localnet:down": "bin/localnet.sh down",
     "localnet:update": "bin/localnet.sh update",
-    "localnet:logs": "bin/localnet.sh logs",
+    "localnet:logs": "bin/localnet.sh logs -f",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "prepare": "npm run clean && npm run ok && npm run build",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
