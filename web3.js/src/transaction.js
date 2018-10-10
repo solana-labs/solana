@@ -85,41 +85,71 @@ export class Transaction {
     if (!lastId) {
       throw new Error('Transaction lastId required');
     }
+    const programIds = [programId];
+    const instructions = [
+      {
+        programId: 0,
+        accountsLength: keys.length,
+        accounts: [...keys.keys()],
+        userdataLength: userdata.length,
+        userdata,
+      },
+    ];
 
-    const signDataLayout = BufferLayout.struct([
-      BufferLayout.ns64('keysLength'),
+    const instructionLayout = BufferLayout.struct([
+      BufferLayout.u8('programId'),
+
+      BufferLayout.u32('accountsLength'),
+      BufferLayout.u32('accountsLengthPadding'),
       BufferLayout.seq(
-        Layout.publicKey('key'),
-        keys.length,
-        'keys'
+        BufferLayout.u8('account'),
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'accounts'
       ),
-      Layout.publicKey('programId'),
-      Layout.publicKey('lastId'),
-      BufferLayout.ns64('fee'),
       BufferLayout.ns64('userdataLength'),
       BufferLayout.blob(userdata.length, 'userdata'),
     ]);
 
-    let signData = Buffer.alloc(2048);
-    let length = signDataLayout.encode(
-      {
-        keysLength: keys.length,
-        keys: keys.map((key) => key.toBuffer()),
-        programId: programId.toBuffer(),
-        lastId: Buffer.from(bs58.decode(lastId)),
-        fee: 0,
-        userdataLength: userdata.length,
-        userdata,
-      },
-      signData
-    );
+    const signDataLayout = BufferLayout.struct([
+      BufferLayout.u32('accountKeysLength'),
+      BufferLayout.u32('accountKeysLengthPadding'),
+      BufferLayout.seq(
+        Layout.publicKey('accountKey'),
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'accountKeys'
+      ),
+      Layout.publicKey('lastId'),
+      BufferLayout.ns64('fee'),
 
-    if (userdata.length === 0) {
-      // If userdata is empty, strip the 64bit 'userdataLength' field from
-      // the end of signData
-      length -= 8;
-    }
+      BufferLayout.u32('programIdsLength'),
+      BufferLayout.u32('programIdsLengthPadding'),
+      BufferLayout.seq(
+        Layout.publicKey('programId'),
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'programIds'
+      ),
+
+      BufferLayout.u32('instructionsLength'),
+      BufferLayout.u32('instructionsLengthPadding'),
+      BufferLayout.seq(
+        instructionLayout,
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'instructions'
+      ),
+    ]);
+
+    const transaction = {
+      accountKeys: keys.map((key) => key.toBuffer()),
+      lastId: Buffer.from(bs58.decode(lastId)),
+      fee: 0,
+      programIds: programIds.map((programId) => programId.toBuffer()),
+      instructions,
+    };
+
+    let signData = Buffer.alloc(2048);
+    const length = signDataLayout.encode(transaction, signData);
     signData = signData.slice(0, length);
+
     return signData;
   }
 
