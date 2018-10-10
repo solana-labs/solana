@@ -16,41 +16,6 @@ import {
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from '.';
 
-
-/**
- * @private
- */
-const RustStringLayout = (property: string = 'rustString') => {
-  const lengthLayout = BufferLayout.u8('length');
-  const rsl = BufferLayout.struct(
-    [
-      lengthLayout,
-      BufferLayout.seq(BufferLayout.u8(), 7, 'u8 into u64 padding'), // TODO: avoid padding
-      BufferLayout.blob(
-        BufferLayout.offset(lengthLayout, -8),
-        'chars',
-      ),
-    ],
-    property,
-  );
-  const _decode = rsl.decode.bind(rsl);
-  const _encode = rsl.encode.bind(rsl);
-
-  rsl.decode = (buffer, offset) => {
-    const data = _decode(buffer, offset);
-    return data.chars.toString('utf8');
-  };
-
-  rsl.encode = (str, buffer, offset) => {
-    const data = {
-      chars: Buffer.from(str, 'utf8'),
-    };
-    return _encode(data, buffer, offset);
-  };
-
-  return rsl;
-};
-
 /**
  * Some amount of tokens
  */
@@ -115,8 +80,8 @@ type TokenInfo = {
 const TokenInfoLayout = BufferLayout.struct([
   Layout.uint64('supply'),
   BufferLayout.u8('decimals'),
-  new RustStringLayout('name'),
-  new RustStringLayout('symbol'),
+  Layout.rustString('name'),
+  Layout.rustString('symbol'),
 ]);
 
 /**
@@ -216,8 +181,8 @@ export class Token {
       BufferLayout.u32('instruction'),
       Layout.uint64('supply'),
       BufferLayout.u8('decimals'),
-      new RustStringLayout('name'),
-      new RustStringLayout('symbol'),
+      Layout.rustString('name'),
+      Layout.rustString('symbol'),
     ]);
 
     let userdata = Buffer.alloc(1024);
