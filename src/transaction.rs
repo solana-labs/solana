@@ -17,8 +17,8 @@ pub struct Instruction {
     /// The program code that executes this transaction is identified by the program_id.
     /// this is an offset into the Transaction::program_ids field
     pub program_ids_index: u8,
-    /// Indices into the keys array of which accounts to load
-    pub accounts: Vec<u8>,
+    /// Indices into the keys array of which accounts to load and whether it's signed.
+    pub accounts: Vec<(u8, bool)>,
     /// Userdata to be stored in the account
     pub userdata: Vec<u8>,
 }
@@ -59,10 +59,13 @@ impl Transaction {
         fee: i64,
     ) -> Self {
         let program_ids = vec![program_id];
+        let accounts = (0..=transaction_keys.len() as u8)
+            .map(|x| (x, false))
+            .collect();
         let instructions = vec![Instruction {
             program_ids_index: 0,
             userdata,
-            accounts: (0..=transaction_keys.len() as u8).collect(),
+            accounts,
         }];
         Self::new_with_instructions(
             from_keypair,
@@ -110,7 +113,7 @@ impl Transaction {
         self.instructions
             .get(instruction_index)
             .and_then(|instruction| instruction.accounts.get(accounts_index))
-            .and_then(|ai| self.account_keys.get(*ai as usize))
+            .and_then(|(ai, _)| self.account_keys.get(*ai as usize))
     }
     pub fn program_id(&self, instruction_index: usize) -> &Pubkey {
         let program_ids_index = self.instructions[instruction_index].program_ids_index;
@@ -136,6 +139,15 @@ impl Transaction {
 
     /// Sign this transaction.
     pub fn sign(&mut self, keypair: &Keypair) {
+        // Mark references to the pubkey as signed.
+        for mut ix in &mut self.instructions {
+            for &mut (index, ref mut signed) in &mut ix.accounts {
+                if index == 0 {
+                    *signed = true;
+                }
+            }
+        }
+
         let sign_data = self.get_sign_data();
         self.signature = Signature::new(keypair.sign(&sign_data).as_ref());
     }
@@ -153,8 +165,12 @@ impl Transaction {
             if (instruction.program_ids_index as usize) >= self.program_ids.len() {
                 return false;
             }
-            for account_index in &instruction.accounts {
-                if (*account_index as usize) >= self.account_keys.len() {
+            for &(account_index, signed) in &instruction.accounts {
+                if account_index != 0 && signed {
+                    // At the time of this writing, only key 0 can be signed.
+                    return false;
+                }
+                if (account_index as usize) >= self.account_keys.len() {
                     return false;
                 }
             }
@@ -193,12 +209,12 @@ mod tests {
             Instruction {
                 program_ids_index: 0,
                 userdata: vec![],
-                accounts: vec![0, 1],
+                accounts: vec![(0, false), (1, false)],
             },
             Instruction {
                 program_ids_index: 1,
                 userdata: vec![],
-                accounts: vec![0, 2],
+                accounts: vec![(0, false), (2, false)],
             },
         ];
         let tx = Transaction::new_with_instructions(
@@ -243,7 +259,7 @@ mod tests {
         let instructions = vec![Instruction {
             program_ids_index: 0,
             userdata: vec![],
-            accounts: vec![1],
+            accounts: vec![(1, false)],
         }];
         let tx = Transaction::new_with_instructions(
             &key,
@@ -283,20 +299,20 @@ mod tests {
         assert_eq!(
             serialize(&tx).unwrap(),
             vec![
-                234, 139, 34, 5, 120, 28, 107, 203, 69, 25, 236, 200, 164, 1, 12, 47, 147, 53, 41,
-                143, 23, 116, 230, 203, 59, 228, 153, 14, 22, 241, 103, 226, 186, 169, 181, 65, 49,
-                215, 44, 2, 61, 214, 113, 216, 184, 206, 147, 104, 140, 225, 138, 21, 172, 135,
-                211, 80, 103, 80, 216, 106, 249, 86, 194, 1, 3, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186,
-                201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30,
-                78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 32, 253, 186, 201, 177, 11,
-                117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16,
-                252, 180, 72, 134, 137, 247, 161, 68, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0,
-                0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0,
-                0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
-            ],
+                180, 231, 90, 75, 174, 120, 238, 222, 10, 98, 60, 9, 222, 239, 11, 39, 31, 254,
+                153, 217, 117, 213, 24, 38, 92, 129, 25, 168, 237, 174, 191, 159, 28, 234, 157,
+                142, 125, 95, 247, 204, 120, 215, 147, 239, 252, 113, 29, 77, 110, 160, 24, 26, 22,
+                26, 28, 190, 254, 144, 61, 14, 184, 166, 228, 3, 3, 0, 0, 0, 0, 0, 0, 0, 32, 253,
+                186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215,
+                30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 32, 253, 186, 201, 177,
+                11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76,
+                16, 252, 180, 72, 134, 137, 247, 161, 68, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0,
+                0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0,
+                0, 0, 0, 0, 0, 1, 1, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
+            ]
         );
     }
 }

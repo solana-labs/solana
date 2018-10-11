@@ -135,7 +135,7 @@ impl SystemTransaction for Transaction {
                 Instruction {
                     program_ids_index: 0,
                     userdata: serialize(&spend).unwrap(),
-                    accounts: vec![0, i as u8 + 1],
+                    accounts: vec![(0, false), (i as u8 + 1, false)],
                 }
             }).collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(tx.account_keys[1], t1.pubkey());
         assert_eq!(tx.account_keys[2], t2.pubkey());
         assert_eq!(tx.instructions.len(), 2);
-        assert_eq!(tx.instructions[0].accounts, vec![0, 1]);
-        assert_eq!(tx.instructions[1].accounts, vec![0, 2]);
+        assert_eq!(tx.instructions[0].accounts, vec![(0, true), (1, false)]);
+        assert_eq!(tx.instructions[1].accounts, vec![(0, true), (2, false)]);
     }
 }
