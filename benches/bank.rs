@@ -28,17 +28,14 @@ fn bench_process_transaction(bencher: &mut Bencher) {
                 &mint.keypair(),
                 rando0.pubkey(),
                 10_000,
-                mint.last_id(),
+                bank.last_id(),
                 0,
             );
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Seed the 'to' account and a cell for its signature.
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_entry_id(&last_id);
-
             let rando1 = Keypair::new();
-            let tx = Transaction::system_move(&rando0, rando1.pubkey(), 1, last_id, 0);
+            let tx = Transaction::system_move(&rando0, rando1.pubkey(), 1, bank.last_id(), 0);
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.

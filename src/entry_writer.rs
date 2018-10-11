@@ -2,24 +2,15 @@
 //! writes entries to the given writer, which is typically a file or
 //! stdout, and then sends the Entry to its output channel.
 
-use bank::Bank;
 use bincode;
 use entry::Entry;
 use std::io::{self, BufRead, Error, ErrorKind, Write};
 use std::mem::size_of;
 
-pub struct EntryWriter<'a, W> {
-    bank: &'a Bank,
-    writer: W,
-}
+pub struct EntryWriter {}
 
-impl<'a, W: Write> EntryWriter<'a, W> {
-    /// Create a new Tpu that wraps the given Bank.
-    pub fn new(bank: &'a Bank, writer: W) -> Self {
-        EntryWriter { bank, writer }
-    }
-
-    fn write_entry(writer: &mut W, entry: &Entry) -> io::Result<()> {
+impl EntryWriter {
+    fn write_entry<W: Write>(writer: &mut W, entry: &Entry) -> io::Result<()> {
         let entry_bytes =
             bincode::serialize(&entry).map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
 
@@ -32,26 +23,12 @@ impl<'a, W: Write> EntryWriter<'a, W> {
         writer.flush()
     }
 
-    pub fn write_entries<I>(writer: &mut W, entries: I) -> io::Result<()>
+    pub fn write_entries<W: Write, I>(writer: &mut W, entries: I) -> io::Result<()>
     where
         I: IntoIterator<Item = Entry>,
     {
         for entry in entries {
             Self::write_entry(writer, &entry)?;
-        }
-        Ok(())
-    }
-
-    fn write_and_register_entry(&mut self, entry: &Entry) -> io::Result<()> {
-        trace!("write_and_register_entry entry");
-        self.bank.register_entry_id(&entry.id);
-
-        Self::write_entry(&mut self.writer, entry)
-    }
-
-    pub fn write_and_register_entries(&mut self, entries: &[Entry]) -> io::Result<()> {
-        for entry in entries {
-            self.write_and_register_entry(&entry)?;
         }
         Ok(())
     }

@@ -18,8 +18,10 @@ use solana::ncp::Ncp;
 use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil};
+use solana::system_transaction::SystemTransaction;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
+use solana::transaction::Transaction;
 use solana::window::{default_window, WINDOW_SIZE};
 use solana_program_interface::pubkey::Pubkey;
 use std::collections::{HashSet, VecDeque};
@@ -1469,10 +1471,9 @@ fn send_tx_and_retry_get_balance(
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();
+    let tx = Transaction::system_new(&alice.keypair(), *bob_pubkey, transfer_amount, last_id);
     info!("executing leader transfer");
-    let _sig = client
-        .transfer(transfer_amount, &alice.keypair(), *bob_pubkey, &last_id)
-        .unwrap();
+    let _res = client.retry_transfer_signed(&tx, 30);
     retry_get_balance(&mut client, bob_pubkey, expected)
 }
 

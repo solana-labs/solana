@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use bank::Bank;
+use bank::{Bank, NUM_TICKS_PER_SECOND};
 use bincode::deserialize;
 use counter::Counter;
 use entry::Entry;
@@ -44,7 +44,7 @@ pub enum Config {
 impl Default for Config {
     fn default() -> Config {
         // TODO: Change this to Tick to enable PoH
-        Config::Sleep(Duration::from_millis(500))
+        Config::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64))
     }
 }
 impl BankingStage {
