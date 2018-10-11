@@ -38,8 +38,8 @@ fn main() {
                     let deviation = v["deviation"].to_string().parse().unwrap();
                     metrics::submit(
                         influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
-                            .add_tag("test", "bench")
-                            .add_tag("branch", &args[3])
+                            .add_tag("test", influxdb::Value::String("bench".to_string()))
+                            .add_tag("branch", influxdb::Value::String(args[3].to_string()))
                             .add_field("median", influxdb::Value::Integer(median))
                             .add_field("deviation", influxdb::Value::Integer(deviation))
                             .add_field(
