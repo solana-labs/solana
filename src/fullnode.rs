@@ -3,7 +3,6 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
-use drone::DRONE_PORT;
 use entry::Entry;
 use hash::Hash;
 use leader_scheduler::LeaderScheduler;
@@ -259,23 +258,6 @@ impl Fullnode {
                 .expect("Failed to clone respond socket"),
         ));
 
-        // TODO: this code assumes this node is the leader
-        let mut drone_addr = node.info.contact_info.tpu;
-        drone_addr.set_port(DRONE_PORT);
-
-        // Use custom RPC port, if provided (`Some(port)`)
-        // RPC port may be any open port on the node
-        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
-        // If rpc_port == `Some(0)`, node will dynamically choose any open port. Useful for tests.
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
-        let rpc_service = JsonRpcService::new(
-            &bank,
-            node.info.contact_info.tpu,
-            drone_addr,
-            rpc_addr,
-            exit.clone(),
-        );
-
         let last_entry_id = &ledger_tail
             .last()
             .expect("Expected at least one entry in the ledger")
@@ -286,6 +268,15 @@ impl Fullnode {
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(node.info).expect("ClusterInfo::new"),
         ));
+
+        // Use custom RPC port, if provided (`Some(port)`)
+        // RPC port may be any open port on the node
+        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
+        // If rpc_port == `Some(0)`, node will dynamically choose any open port. Useful for tests.
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
+        // TODO: The RPC service assumes that there is a drone running on the leader
+        // Drone location/id will need to be handled a different way as soon as leader rotation begins
+        let rpc_service = JsonRpcService::new(&bank, &cluster_info, rpc_addr, exit.clone());
 
         let ncp = Ncp::new(
             &cluster_info,
