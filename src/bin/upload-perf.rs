@@ -18,31 +18,36 @@ fn main() {
         Ok(file) => file,
     };
 
+    let upload_flag = &args[2];
+
     let git_output = Command::new("git")
         .args(&["rev-parse", "HEAD"])
         .output()
         .expect("failed to execute git rev-parse");
     let git_commit_hash = String::from_utf8_lossy(&git_output.stdout);
     let trimmed_hash = git_commit_hash.trim().to_string();
-    println!("uploading hash: {}", trimmed_hash);
+    println!("hash: {}", trimmed_hash);
 
     for line in BufReader::new(file).lines() {
         if let Ok(v) = serde_json::from_str(&line.unwrap()) {
             let v: Value = v;
             if v["type"] == "bench" {
                 println!("{}", v);
-                println!("  {}", v["type"]);
-                let median = v["median"].to_string().parse().unwrap();
-                let deviation = v["deviation"].to_string().parse().unwrap();
-                metrics::submit(
-                    influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
-                        .add_field("median", influxdb::Value::Integer(median))
-                        .add_field("deviation", influxdb::Value::Integer(deviation))
-                        .add_field(
-                            "commit",
-                            influxdb::Value::String(git_commit_hash.trim().to_string()),
-                        ).to_owned(),
-                );
+                if upload_flag == "upload" {
+                    let median = v["median"].to_string().parse().unwrap();
+                    let deviation = v["deviation"].to_string().parse().unwrap();
+                    metrics::submit(
+                        influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
+                            .add_tag("test", "bench")
+                            .add_tag("branch", &args[3])
+                            .add_field("median", influxdb::Value::Integer(median))
+                            .add_field("deviation", influxdb::Value::Integer(deviation))
+                            .add_field(
+                                "commit",
+                                influxdb::Value::String(git_commit_hash.trim().to_string()),
+                            ).to_owned(),
+                    );
+                }
             }
         }
     }

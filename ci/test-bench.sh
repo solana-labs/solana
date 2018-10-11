@@ -2,6 +2,9 @@
 
 cd "$(dirname "$0")/.."
 
+# shellcheck disable=SC1091
+source ci/upload_ci_artifact.sh
+
 ci/version-check.sh nightly
 export RUST_BACKTRACE=1
 
@@ -12,6 +15,14 @@ _() {
 
 set -o pipefail
 
+UPLOAD_METRICS="upload"
+if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
+  UPLOAD_METRICS="no-upload"
+fi
+
 BENCH_FILE=bench_output.log
-_ cargo bench --features=unstable --verbose -- -Z unstable-options --format=json | tee $BENCH_FILE
-_ cargo run --release --bin solana-upload-perf -- $BENCH_FILE
+BENCH_ARTIFACT=current_bench_results.log
+_ cargo bench --features=unstable --verbose -- -Z unstable-options --format=json | tee "$BENCH_FILE"
+_ cargo run --release --bin solana-upload-perf -- "$BENCH_FILE" "$UPLOAD_METRICS" "$BUILDKITE_BRANCH" >"$BENCH_ARTIFACT"
+
+upload_ci_artifact "$BENCH_ARTIFACT"
