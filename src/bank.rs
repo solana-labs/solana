@@ -538,13 +538,13 @@ impl Bank {
     /// Execute a function with a subset of accounts as writable references.
     /// Since the subset can point to the same references, in any order there is no way
     /// for the borrow checker to track them with regards to the original set.
-    fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
+    fn with_subset<F, A>(accounts: &mut [Account], ixes: &[(u8, bool)], func: F) -> A
     where
         F: Fn(&mut [&mut Account]) -> A,
     {
         let mut subset: Vec<&mut Account> = ixes
             .iter()
-            .map(|ix| {
+            .map(|(ix, _)| {
                 let ptr = &mut accounts[*ix as usize] as *mut Account;
                 // lifetime of this unsafe is only within the scope of the closure
                 // there is no way to reorder them without breaking borrow checker rules
@@ -1270,12 +1270,12 @@ mod tests {
             Instruction {
                 program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
-                accounts: vec![0, 1],
+                accounts: vec![(0, false), (1, false)],
             },
             Instruction {
                 program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
-                accounts: vec![0, 2],
+                accounts: vec![(0, false), (2, false)],
             },
         ];
 
