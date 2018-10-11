@@ -15,7 +15,6 @@ Methods
 ---
 
 * [confirmTransaction](#confirmtransaction)
-* [getAddress](#getaddress)
 * [getBalance](#getbalance)
 * [getAccountInfo](#getaccountinfo)
 * [getLastId](#getlastid)
@@ -23,7 +22,7 @@ Methods
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
-* [startSubscriptionChannel](#startSubscriptionChannel)
+* [startSubscriptionChannel](#startsubscriptionchannel)
 
 * [Subscription Websocket](#subscription-websocket)
   * [accountSubscribe](#accountsubscribe)
