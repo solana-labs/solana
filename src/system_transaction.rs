@@ -230,4 +230,21 @@ mod tests {
         assert_eq!(tx.instructions[0].accounts, vec![(0, true), (1, false)]);
         assert_eq!(tx.instructions[1].accounts, vec![(0, true), (2, false)]);
     }
+
+    #[test]
+    fn test_move_attack() {
+        let from = Keypair::new();
+        let to = Keypair::new().pubkey();
+        let mut tx = Transaction::system_move(&from, to, 1, Default::default(), 0);
+        assert!(tx.verify_refs());
+
+        tx.instructions[0].accounts[0].0 = 1; // <-- attack! Attempt to spend `to` tokens instead of `from` tokens.
+        tx.sign(&from);
+        assert!(tx.verify_signature());
+        assert!(!tx.verify_refs());
+
+        // Note: here's how to sneak by verify_refs(). The engine itself needs to reject debits from unsigned accounts.
+        tx.instructions[0].accounts[0].1 = false;
+        assert!(tx.verify_refs());
+    }
 }
