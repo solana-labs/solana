@@ -23,7 +23,7 @@ Methods
 * [getTransactionCount](#gettransactioncount)
 * [requestAirdrop](#requestairdrop)
 * [sendTransaction](#sendtransaction)
-* [subscriptionChannel](#subscriptionChannel)
+* [startSubscriptionChannel](#startSubscriptionChannel)
 
 * [Subscription Websocket](#subscription-websocket)
   * [accountSubscribe](#accountsubscribe)
