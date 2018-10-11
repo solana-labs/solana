@@ -232,6 +232,7 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    #[ignore]
     pub fn test_replicate_stage_leader_rotation_exit() {
         logger::setup();
 

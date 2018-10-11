@@ -664,6 +664,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_wrong_role_transition() {
         // Create the leader node information
         let bootstrap_leader_keypair = Keypair::new();
@@ -745,6 +746,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_validator_to_leader_transition() {
         // Make a leader identity
         let leader_keypair = Keypair::new();
