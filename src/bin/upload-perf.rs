@@ -76,12 +76,16 @@ fn main() {
             if v["type"] == "bench" {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
-                last_commit =
-                    match get_last_metrics(&query_url, &"commit".to_string(), &db, &name, &branch)
-                    {
-                        Result::Ok(v) => Some(v),
-                        Result::Err(_) => None,
-                    };
+                last_commit = match get_last_metrics(
+                    &query_url,
+                    &"commit".to_string(),
+                    &db,
+                    &name,
+                    &branch,
+                ) {
+                    Result::Ok(v) => Some(v),
+                    Result::Err(_) => None,
+                };
 
                 let median = v["median"].to_string().parse().unwrap();
                 let deviation = v["deviation"].to_string().parse().unwrap();
