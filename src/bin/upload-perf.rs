@@ -94,8 +94,8 @@ fn main() {
 
     if let Some(commit) = last_commit {
         println!(
-            "Comparing current commits: {} against baseline {}",
-            trimmed_hash, commit
+            "Comparing current commits: {} against baseline {} on {} branch",
+            trimmed_hash, commit, branch
         );
         println!("bench_name, median, last_median, deviation, last_deviation");
         for (entry, values) in results {
