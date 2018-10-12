@@ -1017,11 +1017,13 @@ mod tests {
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
+        let genesis_entries = &alice.create_entries();
+        let entry_height = genesis_entries.len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
-            0,
-            &[],
+            entry_height,
+            &genesis_entries,
             leader,
             None,
             &ledger_path,

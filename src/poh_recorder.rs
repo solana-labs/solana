@@ -21,8 +21,8 @@ impl PohRecorder {
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
-    pub fn new(bank: Arc<Bank>, sender: Sender<Vec<Entry>>) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(bank.last_id())));
+    pub fn new(bank: Arc<Bank>, sender: Sender<Vec<Entry>>, last_entry_id: Hash) -> Self {
+        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id)));
         PohRecorder { poh, bank, sender }
     }
 
@@ -77,8 +77,9 @@ mod tests {
     fn test_poh() {
         let mint = Mint::new(1);
         let bank = Arc::new(Bank::new(&mint));
+        let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank, entry_sender);
+        let poh_recorder = PohRecorder::new(bank, entry_sender, last_id);
 
         //send some data
         let h1 = hash(b"hello world!");

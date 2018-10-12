@@ -6,6 +6,7 @@ use bank::{Bank, NUM_TICKS_PER_SECOND};
 use bincode::deserialize;
 use counter::Counter;
 use entry::Entry;
+use hash::Hash;
 use log::Level;
 use packet::Packets;
 use poh_recorder::PohRecorder;
@@ -53,10 +54,11 @@ impl BankingStage {
         bank: &Arc<Bank>,
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
+        last_entry_id: &Hash,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh = PohRecorder::new(bank.clone(), entry_sender);
+        let poh = PohRecorder::new(bank.clone(), entry_sender, *last_entry_id);
         let tick_poh = poh.clone();
         // Tick producer is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
@@ -264,20 +266,28 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let bank = Bank::new(&Mint::new(2));
+        let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, _entry_receiver) =
-            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
+        let (banking_stage, _entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            Default::default(),
+            &bank.last_id(),
+        );
         drop(verified_sender);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let bank = Bank::new(&Mint::new(2));
+        let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (_verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&Arc::new(bank), verified_receiver, Default::default());
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            Default::default(),
+            &bank.last_id(),
+        );
         drop(entry_receiver);
         assert_eq!(banking_stage.join().unwrap(), ());
     }
@@ -291,6 +301,7 @@ mod tests {
             &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
+            &bank.last_id(),
         );
         sleep(Duration::from_millis(500));
         drop(verified_sender);
@@ -308,8 +319,12 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, Default::default());
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            Default::default(),
+            &bank.last_id(),
+        );
 
         // good tx
         let keypair = mint.keypair();
@@ -354,8 +369,12 @@ mod tests {
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, Default::default());
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            Default::default(),
+            &bank.last_id(),
+        );
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();

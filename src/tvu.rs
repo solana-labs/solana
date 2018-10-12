@@ -39,6 +39,7 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
+use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -52,7 +53,7 @@ use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
-    LeaderRotation(u64),
+    LeaderRotation(u64, Hash),
 }
 
 pub struct Tvu {
@@ -148,9 +149,9 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         match self.replicate_stage.join()? {
-            Some(ReplicateStageReturnType::LeaderRotation(entry_height)) => {
-                Ok(Some(TvuReturnType::LeaderRotation(entry_height)))
-            }
+            Some(ReplicateStageReturnType::LeaderRotation(entry_height, last_entry_id)) => Ok(
+                Some(TvuReturnType::LeaderRotation(entry_height, last_entry_id)),
+            ),
             _ => Ok(None),
         }
     }
