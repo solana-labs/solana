@@ -9,6 +9,7 @@ use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
 use rpc::{JsonRpcService, RPC_PORT};
+use rpc_pubsub::PubSubService;
 use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
@@ -88,6 +89,7 @@ pub struct Fullnode {
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
     rpc_service: JsonRpcService,
+    rpc_pubsub_service: PubSubService,
     ncp: Ncp,
     bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -278,6 +280,12 @@ impl Fullnode {
         // Drone location/id will need to be handled a different way as soon as leader rotation begins
         let rpc_service = JsonRpcService::new(&bank, &cluster_info, rpc_addr, exit.clone());
 
+        let rpc_pubsub_addr = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::from(0)),
+            rpc_port.unwrap_or(RPC_PORT) + 1,
+        );
+        let rpc_pubsub_service = PubSubService::new(&bank, rpc_pubsub_addr, exit.clone());
+
         let ncp = Ncp::new(
             &cluster_info,
             shared_window.clone(),
@@ -373,6 +381,7 @@ impl Fullnode {
             rpu,
             ncp,
             rpc_service,
+            rpc_pubsub_service,
             node_role,
             ledger_path: ledger_path.to_owned(),
             exit,
@@ -567,6 +576,7 @@ impl Service for Fullnode {
         }
         self.ncp.join()?;
         self.rpc_service.join()?;
+        self.rpc_pubsub_service.join()?;
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {

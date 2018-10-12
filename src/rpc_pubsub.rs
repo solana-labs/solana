@@ -5,10 +5,10 @@ use bs58;
 use jsonrpc_core::futures::Future;
 use jsonrpc_core::*;
 use jsonrpc_macros::pubsub;
-use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, SubscriptionId};
-use jsonrpc_ws_server::ws;
+use jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
 use jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
 use rpc::{JsonRpcRequestProcessor, RpcSignatureStatus};
+use service::Service;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{atomic, Arc, Mutex, RwLock};
-use std::thread::{sleep, Builder, JoinHandle};
+use std::sync::{atomic, Arc, RwLock};
+use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
 pub enum ClientState {
@@ -25,87 +25,59 @@ pub enum ClientState {
     Init(Sender),
 }
 
-#[derive(Serialize)]
-pub struct SubscriptionResponse {
-    pub port: u16,
-    pub path: String,
+pub struct PubSubService {
+    thread_hdl: JoinHandle<()>,
 }
 
-pub struct PubSubService {
-    _thread_hdl: JoinHandle<()>,
+impl Service for PubSubService {
+    type JoinReturnType = ();
+
+    fn join(self) -> thread::Result<()> {
+        self.thread_hdl.join()
+    }
 }
 
 impl PubSubService {
-    pub fn new(
-        bank: &Arc<Bank>,
-        pubsub_addr: SocketAddr,
-        path: Pubkey,
-        exit: Arc<AtomicBool>,
-    ) -> Self {
-        let request_processor = JsonRpcRequestProcessor::new(bank.clone());
-        let status = Arc::new(Mutex::new(ClientState::Uninitialized));
-        let client_status = status.clone();
-        let server_bank = bank.clone();
-        let _thread_hdl = Builder::new()
+    pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
+        let rpc = RpcSolPubSubImpl::new(JsonRpcRequestProcessor::new(bank.clone()), bank.clone());
+        let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
                 let mut io = PubSubHandler::default();
-                let rpc = RpcSolPubSubImpl::default();
-                let account_subs = rpc.account_subscriptions.clone();
-                let signature_subs = rpc.signature_subscriptions.clone();
                 io.extend_with(rpc.to_delegate());
 
-                let server = ServerBuilder::with_meta_extractor(io, move |context: &RequestContext|
-                    {
-                        *client_status.lock().unwrap() = ClientState::Init(context.out.clone());
-                        Meta {
-                            request_processor: request_processor.clone(),
-                            session: Arc::new(Session::new(context.sender().clone())),
-                        }
-                    })
-                    .request_middleware(move |req: &ws::Request|
-                        if req.resource() != format!("/{}", path.to_string()) {
-                            Some(ws::Response::new(403, "Client path incorrect or not provided"))
-                        } else {
-                            None
-                        })
-                    .start(&pubsub_addr);
+                let server = ServerBuilder::with_meta_extractor(io, |context: &RequestContext| {
+                        info!("New pubsub connection");
+                        let session = Arc::new(Session::new(context.sender().clone()));
+                        session.on_drop(Box::new(|| {
+                            info!("Pubsub connection dropped");
+                            // Following should not be required as jsonrpc_pubsub will
+                            // unsubscribe automatically once the websocket is dropped ...
+                            /*
+                            for (_, (bank_sub_id, pubkey)) in self.account_subscriptions.read().unwrap().iter() {
+                                server_bank.remove_account_subscription(bank_sub_id, pubkey);
+                            }
+                            for (_, (bank_sub_id, signature)) in self.signature_subscriptions.read().unwrap().iter() {
+                                server_bank.remove_signature_subscription(bank_sub_id, signature);
+                            }
+                            */
+                        }));
+                        session
+                })
+                .start(&pubsub_addr);
 
                 if server.is_err() {
                     warn!("Pubsub service unavailable: unable to bind to port {}. \nMake sure this port is not already in use by another application", pubsub_addr.port());
                     return;
                 }
                 while !exit.load(Ordering::Relaxed) {
-                    if let ClientState::Init(ref mut sender) = *status.lock().unwrap() {
-                        if sender.check_active().is_err() {
-                            break;
-                        }
-                    }
                     sleep(Duration::from_millis(100));
-                }
-                for (_, (bank_sub_id, pubkey)) in account_subs.read().unwrap().iter() {
-                    server_bank.remove_account_subscription(bank_sub_id, pubkey);
-                }
-                for (_, (bank_sub_id, signature)) in signature_subs.read().unwrap().iter() {
-                    server_bank.remove_signature_subscription(bank_sub_id, signature);
                 }
                 server.unwrap().close();
                 ()
             })
             .unwrap();
-        PubSubService { _thread_hdl }
-    }
-}
-
-#[derive(Clone)]
-pub struct Meta {
-    pub request_processor: JsonRpcRequestProcessor,
-    pub session: Arc<Session>,
-}
-impl Metadata for Meta {}
-impl PubSubMetadata for Meta {
-    fn session(&self) -> Option<Arc<Session>> {
-        Some(self.session.clone())
+        PubSubService { thread_hdl }
     }
 }
 
@@ -136,21 +108,36 @@ build_rpc_trait! {
     }
 }
 
-#[derive(Default)]
 struct RpcSolPubSubImpl {
-    uid: atomic::AtomicUsize,
+    uid: Arc<atomic::AtomicUsize>,
+    request_processor: JsonRpcRequestProcessor,
+    bank: Arc<Bank>,
     account_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Pubkey)>>>,
     signature_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Signature)>>>,
 }
+
+impl RpcSolPubSubImpl {
+    fn new(request_processor: JsonRpcRequestProcessor, bank: Arc<Bank>) -> Self {
+        RpcSolPubSubImpl {
+            uid: Default::default(),
+            request_processor,
+            bank,
+            account_subscriptions: Default::default(),
+            signature_subscriptions: Default::default(),
+        }
+    }
+}
+
 impl RpcSolPubSub for RpcSolPubSubImpl {
-    type Metadata = Meta;
+    type Metadata = Arc<Session>;
 
     fn account_subscribe(
         &self,
-        meta: Self::Metadata,
+        _meta: Self::Metadata,
         subscriber: pubsub::Subscriber<Account>,
         pubkey_str: String,
     ) {
+        info!("account_subscribe");
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             subscriber
@@ -172,15 +159,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .unwrap()
             .insert(sub_id.clone(), (bank_sub_id, pubkey));
 
-        meta.request_processor
+        self.bank
             .add_account_subscription(bank_sub_id, pubkey, sink);
     }
 
-    fn account_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+    fn account_unsubscribe(&self, _meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+        info!("account_unsubscribe");
         if let Some((bank_sub_id, pubkey)) = self.account_subscriptions.write().unwrap().remove(&id)
         {
-            meta.request_processor
-                .remove_account_subscription(&bank_sub_id, &pubkey);
+            self.bank.remove_account_subscription(&bank_sub_id, &pubkey);
             Ok(true)
         } else {
             Err(Error {
@@ -193,10 +180,11 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
     fn signature_subscribe(
         &self,
-        meta: Self::Metadata,
+        _meta: Self::Metadata,
         subscriber: pubsub::Subscriber<RpcSignatureStatus>,
         signature_str: String,
     ) {
+        info!("signature_subscribe");
         let signature_vec = bs58::decode(signature_str).into_vec().unwrap();
         if signature_vec.len() != mem::size_of::<Signature>() {
             subscriber
@@ -218,7 +206,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .unwrap()
             .insert(sub_id.clone(), (bank_sub_id, signature));
 
-        match meta.request_processor.get_signature_status(signature) {
+        match self.request_processor.get_signature_status(signature) {
             Ok(_) => {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()
@@ -229,17 +217,18 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     .remove(&sub_id);
             }
             Err(_) => {
-                meta.request_processor
+                self.bank
                     .add_signature_subscription(bank_sub_id, signature, sink);
             }
         }
     }
 
-    fn signature_unsubscribe(&self, meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+    fn signature_unsubscribe(&self, _meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+        info!("signature_unsubscribe");
         if let Some((bank_sub_id, signature)) =
             self.signature_subscriptions.write().unwrap().remove(&id)
         {
-            meta.request_processor
+            self.bank
                 .remove_signature_subscription(&bank_sub_id, &signature);
             Ok(true)
         } else {
@@ -270,10 +259,9 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let pubkey = Keypair::new().pubkey();
         let exit = Arc::new(AtomicBool::new(false));
-        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr, pubkey, exit);
-        let thread = pubsub_service._thread_hdl.thread();
+        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr, exit);
+        let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }
 
@@ -286,17 +274,15 @@ mod tests {
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
-        let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
         let (sender, mut receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::new(
+            JsonRpcRequestProcessor::new(arc_bank.clone()),
+            arc_bank.clone(),
+        );
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            session,
-        };
 
         // Test signature subscription
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
@@ -305,7 +291,7 @@ mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signature.to_string()
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":0,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -318,7 +304,7 @@ mod tests {
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["a1b2c3"]}}"#
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Invalid signature provided"}},"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -346,7 +332,7 @@ mod tests {
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signature.to_string()
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -364,28 +350,26 @@ mod tests {
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
-        let request_processor = JsonRpcRequestProcessor::new(arc_bank);
         let (sender, _receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::new(
+            JsonRpcRequestProcessor::new(arc_bank.clone()),
+            arc_bank.clone(),
+        );
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            session: session.clone(),
-        };
 
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signature.to_string()
         );
-        let _res = io.handle_request_sync(&req, meta.clone());
+        let _res = io.handle_request_sync(&req, session.clone());
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[0]}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
 
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
         let expected: Response =
@@ -398,7 +382,7 @@ mod tests {
         // Test bad parameter
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -420,24 +404,22 @@ mod tests {
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
-        let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
         let (sender, mut receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::new(
+            JsonRpcRequestProcessor::new(arc_bank.clone()),
+            arc_bank.clone(),
+        );
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            session,
-        };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
             contract_state.pubkey().to_string()
         );
 
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":0,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -450,7 +432,7 @@ mod tests {
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["a1b2c3"]}}"#
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Invalid pubkey provided"}},"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
@@ -481,6 +463,7 @@ mod tests {
             budget_program_id,
             0,
         );
+
         arc_bank
             .process_transaction(&tx)
             .expect("process transaction");
@@ -488,10 +471,12 @@ mod tests {
         // Test signature confirmation notification #1
         let string = receiver.poll();
         assert!(string.is_ok());
+
         let expected_userdata = arc_bank
             .get_account(&contract_state.pubkey())
             .unwrap()
             .userdata;
+
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -593,27 +578,26 @@ mod tests {
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
 
-        let request_processor = JsonRpcRequestProcessor::new(arc_bank);
         let (sender, _receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::default();
+        let rpc = RpcSolPubSubImpl::new(
+            JsonRpcRequestProcessor::new(arc_bank.clone()),
+            arc_bank.clone(),
+        );
+
         io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            session: session.clone(),
-        };
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
             bob_pubkey.to_string()
         );
-        let _res = io.handle_request_sync(&req, meta.clone());
+        let _res = io.handle_request_sync(&req, session.clone());
 
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[0]}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
 
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
         let expected: Response =
@@ -626,7 +610,7 @@ mod tests {
         // Test bad parameter
         let req =
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
