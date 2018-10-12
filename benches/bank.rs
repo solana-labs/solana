@@ -4,9 +4,7 @@ extern crate rayon;
 extern crate solana;
 extern crate test;
 
-use bincode::serialize;
 use solana::bank::*;
-use solana::hash::hash;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
@@ -21,7 +19,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
     // Create transactions between unrelated parties.
     let transactions: Vec<_> = (0..4096)
         .into_iter()
-        .map(|i| {
+        .map(|_| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
             let tx = Transaction::system_move(
