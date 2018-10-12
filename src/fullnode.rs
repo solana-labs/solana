@@ -5,6 +5,7 @@ use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use drone::DRONE_PORT;
 use entry::Entry;
+use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -275,6 +276,11 @@ impl Fullnode {
             exit.clone(),
         );
 
+        let last_entry_id = &ledger_tail
+            .last()
+            .expect("Expected at least one entry in the ledger")
+            .id;
+
         let window = window::new_window_from_entries(ledger_tail, entry_height, &node.info);
         let shared_window = Arc::new(RwLock::new(window));
         let cluster_info = Arc::new(RwLock::new(
@@ -347,6 +353,7 @@ impl Fullnode {
                 ledger_path,
                 sigverify_disabled,
                 entry_height,
+                last_entry_id,
                 leader_scheduler.clone(),
             );
 
@@ -455,7 +462,7 @@ impl Fullnode {
         Ok(())
     }
 
-    fn validator_to_leader(&mut self, entry_height: u64) {
+    fn validator_to_leader(&mut self, entry_height: u64, last_entry_id: Hash) {
         self.cluster_info
             .write()
             .unwrap()
@@ -472,6 +479,10 @@ impl Fullnode {
             &self.ledger_path,
             self.sigverify_disabled,
             entry_height,
+            // We pass the last_entry_id from the replicate stage because we can't trust that
+            // the window didn't overwrite the slot at for the last entry that the replicate stage
+            // processed. We also want to avoid reading processing the ledger for the last id.
+            &last_entry_id,
             self.leader_scheduler.clone(),
         );
 
@@ -509,8 +520,8 @@ impl Fullnode {
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
-                Some(TvuReturnType::LeaderRotation(entry_height)) => {
-                    self.validator_to_leader(entry_height);
+                Some(TvuReturnType::LeaderRotation(entry_height, last_entry_id)) => {
+                    self.validator_to_leader(entry_height, last_entry_id);
                     Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation))
                 }
                 _ => Ok(None),
@@ -568,7 +579,7 @@ impl Service for Fullnode {
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
-                if let Some(TvuReturnType::LeaderRotation(_)) = validator_service.join()? {
+                if let Some(TvuReturnType::LeaderRotation(_, _)) = validator_service.join()? {
                     return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
                 }
             }
@@ -590,7 +601,7 @@ mod tests {
     use cluster_info::Node;
     use fullnode::{Fullnode, NodeRole, TvuReturnType};
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{genesis, LedgerWriter};
+    use ledger::{create_sample_ledger, genesis, LedgerWriter};
     use packet::make_consecutive_blobs;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -605,14 +616,17 @@ mod tests {
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (alice, validator_ledger_path) = genesis("validator_exit", 10_000);
-        let bank = Bank::new(&alice);
+        let (mint, validator_ledger_path) = genesis("validator_exit", 10_000);
+        let bank = Bank::new(&mint);
         let entry = tn.info.clone();
+        let genesis_entries = &mint.create_entries();
+        let entry_height = genesis_entries.len() as u64;
+
         let v = Fullnode::new_with_bank(
             keypair,
             bank,
-            0,
-            &[],
+            entry_height,
+            &genesis_entries,
             tn,
             Some(&entry),
             &validator_ledger_path,
@@ -631,16 +645,19 @@ mod tests {
             .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (alice, validator_ledger_path) =
+                let (mint, validator_ledger_path) =
                     genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
-                let bank = Bank::new(&alice);
+                let bank = Bank::new(&mint);
                 let entry = tn.info.clone();
+
+                let genesis_entries = &mint.create_entries();
+                let entry_height = genesis_entries.len() as u64;
                 Fullnode::new_with_bank(
                     keypair,
                     bank,
-                    0,
-                    &[],
+                    entry_height,
+                    &genesis_entries,
                     tn,
                     Some(&entry),
                     &validator_ledger_path,
@@ -664,7 +681,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_wrong_role_transition() {
         // Create the leader node information
         let bootstrap_leader_keypair = Keypair::new();
@@ -677,9 +693,9 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let (mint, bootstrap_leader_ledger_path) = genesis("test_wrong_role_transition", 10_000);
+        let (mint, bootstrap_leader_ledger_path, genesis_entries) =
+            create_sample_ledger("test_wrong_role_transition", 10_000);
 
-        let genesis_entries = mint.create_entries();
         let last_id = genesis_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -688,7 +704,8 @@ mod tests {
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-        let first_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+        let first_entries =
+            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
 
         let ledger_initial_len = (genesis_entries.len() + first_entries.len()) as u64;
         ledger_writer.write_entries(first_entries).unwrap();
@@ -746,7 +763,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_validator_to_leader_transition() {
         // Make a leader identity
         let leader_keypair = Keypair::new();
@@ -755,12 +771,12 @@ mod tests {
         let leader_ncp = leader_node.info.contact_info.ncp;
 
         // Create validator identity
-        let (mint, validator_ledger_path) = genesis("test_validator_to_leader_transition", 10_000);
+        let (mint, validator_ledger_path, genesis_entries) =
+            create_sample_ledger("test_validator_to_leader_transition", 10_000);
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
 
-        let genesis_entries = mint.create_entries();
         let mut last_id = genesis_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -775,7 +791,7 @@ mod tests {
         // 2) A vote from the validator
         let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
         let bootstrap_entries =
-            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
         let bootstrap_entries_len = bootstrap_entries.len();
         last_id = bootstrap_entries.last().unwrap().id;
         ledger_writer.write_entries(bootstrap_entries).unwrap();
@@ -845,10 +861,11 @@ mod tests {
                 let join_result = validator_services
                     .join()
                     .expect("Expected successful validator join");
-                assert_eq!(
-                    join_result,
-                    Some(TvuReturnType::LeaderRotation(bootstrap_height))
-                );
+                if let Some(TvuReturnType::LeaderRotation(result_bh, _)) = join_result {
+                    assert_eq!(result_bh, bootstrap_height);
+                } else {
+                    panic!("Expected validator to have exited due to leader rotation");
+                }
             }
             _ => panic!("Role should not be leader"),
         }

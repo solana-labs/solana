@@ -30,6 +30,7 @@ use banking_stage::{BankingStage, Config};
 use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
+use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use service::Service;
 use signature::Keypair;
@@ -54,6 +55,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
+    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
@@ -63,6 +65,7 @@ impl Tpu {
         ledger_path: &str,
         sigverify_disabled: bool,
         entry_height: u64,
+        last_entry_id: &Hash,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
@@ -73,7 +76,7 @@ impl Tpu {
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
         let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, tick_duration);
+            BankingStage::new(&bank, verified_receiver, tick_duration, last_entry_id);
 
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,

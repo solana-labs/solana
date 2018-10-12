@@ -8,12 +8,10 @@ use budget_transaction::BudgetTransaction;
 use entry::Entry;
 use hash::Hash;
 use log::Level::Trace;
-#[cfg(test)]
 use mint::Mint;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
-#[cfg(test)]
 use signature::{Keypair, KeypairUtil};
 use solana_program_interface::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
@@ -466,7 +464,8 @@ impl Block for [Entry] {
             let r = x1.verify(&x0.id);
             if !r {
                 warn!(
-                    "entry invalid!: {:?} num txs: {}",
+                    "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
+                    x0.id,
                     x1.id,
                     x1.transactions.len()
                 );
@@ -592,7 +591,6 @@ pub fn next_entries(
     next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
-#[cfg(test)]
 pub fn tmp_ledger_path(name: &str) -> String {
     use std::env;
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
@@ -609,6 +607,31 @@ pub fn genesis(name: &str, num: i64) -> (Mint, String) {
     writer.write_entries(mint.create_entries()).unwrap();
 
     (mint, path)
+}
+
+fn create_ticks(num_ticks: usize, hash: &mut Hash) -> Vec<Entry> {
+    let mut ticks = Vec::with_capacity(num_ticks);
+    let mut num_hashes = 0;
+    for _ in 0..num_ticks {
+        ticks.push(Entry::new_mut(hash, &mut num_hashes, vec![]));
+    }
+
+    ticks
+}
+
+pub fn create_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
+    let mint = Mint::new(num);
+    let path = tmp_ledger_path(name);
+
+    // Create the entries
+    let mut genesis = mint.create_entries();
+    let ticks = create_ticks(1, &mut mint.last_id());
+    genesis.extend(ticks);
+
+    let mut writer = LedgerWriter::open(&path, true).unwrap();
+    writer.write_entries(genesis.clone()).unwrap();
+
+    (mint, path, genesis)
 }
 
 #[cfg(test)]

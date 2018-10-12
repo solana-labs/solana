@@ -11,7 +11,7 @@ use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-use solana::ledger::{read_ledger, LedgerWriter};
+use solana::ledger::{create_sample_ledger, read_ledger, LedgerWriter};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -787,7 +787,6 @@ fn test_multi_node_dynamic_network() {
 }
 
 #[test]
-#[ignore]
 fn test_leader_to_validator_transition() {
     logger::setup();
     let leader_rotation_interval = 20;
@@ -805,7 +804,7 @@ fn test_leader_to_validator_transition() {
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let (mint, leader_ledger_path, genesis_entries) =
-        genesis("test_leader_to_validator_transition", 10_000);
+        create_sample_ledger("test_leader_to_validator_transition", 10_000);
 
     let last_id = genesis_entries
         .last()
@@ -815,7 +814,8 @@ fn test_leader_to_validator_transition() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
-    let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+    let bootstrap_entries =
+        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
     let bootstrap_entries_len = bootstrap_entries.len();
     ledger_writer.write_entries(bootstrap_entries).unwrap();
     let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
@@ -927,7 +927,6 @@ fn test_leader_to_validator_transition() {
 }
 
 #[test]
-#[ignore]
 fn test_leader_validator_basic() {
     logger::setup();
     let leader_rotation_interval = 10;
@@ -946,7 +945,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (mint, leader_ledger_path, genesis_entries) =
-        genesis("test_leader_validator_basic", 10_000);
+        create_sample_ledger("test_leader_to_validator_transition", 10_000);
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -954,7 +953,6 @@ fn test_leader_validator_basic() {
         .last()
         .expect("expected at least one genesis entry")
         .id;
-    let genesis_height = genesis_entries.len();
 
     // Initialize both leader + validator ledger
     let mut ledger_paths = Vec::new();
@@ -964,7 +962,9 @@ fn test_leader_validator_basic() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
-    let bootstrap_entries = make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id);
+    let bootstrap_entries =
+        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Create the leader scheduler config
@@ -1004,12 +1004,20 @@ fn test_leader_validator_basic() {
 
     // Send transactions to the leader
     let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
-    let total_transactions_to_send = bootstrap_height + extra_transactions;
 
     // Push "extra_transactions" past leader_rotation_interval entry height,
     // make sure the validator stops.
-    for _ in genesis_height as u64..total_transactions_to_send {
-        send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+    for i in ledger_initial_len..(bootstrap_height + extra_transactions) {
+        let expected_balance = std::cmp::min(
+            bootstrap_height - ledger_initial_len,
+            i - ledger_initial_len + 1,
+        );
+        let result = send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+        // If the transaction wasn't reflected in the node, then we assume
+        // the node has transitioned already
+        if result != Some(expected_balance as i64) {
+            break;
+        }
     }
 
     // Wait for validator to shut down tvu and restart tpu
@@ -1092,7 +1100,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        genesis("test_dropped_handoff_recovery", 10_000);
+        create_sample_ledger("test_dropped_handoff_recovery", 10_000);
 
     let last_id = genesis_entries
         .last()
@@ -1110,7 +1118,8 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that he will be in
     // leader election active set
-    let first_entries = make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id);
+    let first_entries =
+        make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id, &last_id);
     let first_entries_len = first_entries.len();
 
     // Write the entries
@@ -1212,8 +1221,8 @@ fn test_dropped_handoff_recovery() {
 }
 
 #[test]
-//TODO: Ignore for now due to bug exposed by the test "test_dropped_handoff_recovery"
 #[ignore]
+//TODO: Ignore for now due to bug exposed by the test "test_dropped_handoff_recovery"
 fn test_full_leader_validator_network() {
     logger::setup();
     // The number of validators
@@ -1236,9 +1245,14 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        genesis("test_full_leader_validator_network", 10_000);
+        create_sample_ledger("test_full_leader_validator_network", 10_000);
 
-    let mut last_id = genesis_entries
+    let last_tick_id = genesis_entries
+        .last()
+        .expect("expected at least one genesis entry")
+        .id;
+
+    let mut last_entry_id = genesis_entries
         .last()
         .expect("expected at least one genesis entry")
         .id;
@@ -1254,11 +1268,12 @@ fn test_full_leader_validator_network() {
     for node_keypair in node_keypairs.iter() {
         // Make entries to give the validator some stake so that he will be in
         // leader election active set
-        let bootstrap_entries = make_active_set_entries(node_keypair, &mint.keypair(), &last_id);
+        let bootstrap_entries =
+            make_active_set_entries(node_keypair, &mint.keypair(), &last_entry_id, &last_tick_id);
 
         // Write the entries
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-        last_id = bootstrap_entries
+        last_entry_id = bootstrap_entries
             .last()
             .expect("expected at least one genesis entry")
             .id;

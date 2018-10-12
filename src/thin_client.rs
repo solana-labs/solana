@@ -575,11 +575,13 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("client_check_signature", &alice);
 
+        let genesis_entries = &alice.create_entries();
+        let entry_height = genesis_entries.len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
-            0,
-            &[],
+            entry_height,
+            &genesis_entries,
             leader,
             None,
             &ledger_path,
@@ -636,11 +638,13 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = tmp_ledger("zero_balance_check", &alice);
 
+        let genesis_entries = &alice.create_entries();
+        let entry_height = genesis_entries.len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
-            0,
-            &[],
+            entry_height,
+            &genesis_entries,
             leader,
             None,
             &ledger_path,

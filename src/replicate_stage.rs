@@ -4,6 +4,7 @@ use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::EntryReceiver;
+use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::{Block, LedgerWriter};
 use log::Level;
@@ -23,7 +24,7 @@ use vote_stage::send_validator_vote;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ReplicateStageReturnType {
-    LeaderRotation(u64),
+    LeaderRotation(u64, Hash),
 }
 
 // Implement a destructor for the ReplicateStage thread to signal it exited
@@ -60,7 +61,7 @@ impl ReplicateStage {
         vote_blob_sender: Option<&BlobSender>,
         entry_height: &mut u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Result<()> {
+    ) -> Result<Hash> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
         let mut entries = window_receiver.recv_timeout(timer)?;
@@ -69,7 +70,7 @@ impl ReplicateStage {
         }
 
         let mut res = Ok(());
-        {
+        let last_entry_id = {
             let mut num_entries_to_write = entries.len();
             for (i, entry) in entries.iter().enumerate() {
                 res = bank.process_entry(&entry);
@@ -111,7 +112,11 @@ impl ReplicateStage {
 
             // If leader rotation happened, only write the entries up to leader rotation.
             entries.truncate(num_entries_to_write);
-        }
+            entries
+                .last()
+                .expect("Entries cannot be empty at this point")
+                .id
+        };
 
         if let Some(sender) = vote_blob_sender {
             send_validator_vote(bank, keypair, cluster_info, sender)?;
@@ -135,7 +140,7 @@ impl ReplicateStage {
 
         *entry_height += entries_len;
         res?;
-        Ok(())
+        Ok(last_entry_id)
     }
 
     pub fn new(
@@ -162,6 +167,7 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
+                let mut last_entry_id = None;
                 loop {
                     let leader_id = leader_scheduler
                         .read()
@@ -169,7 +175,14 @@ impl ReplicateStage {
                         .get_scheduled_leader(entry_height_)
                         .expect("Scheduled leader id should never be unknown at this point");
                     if leader_id == keypair.pubkey() {
-                        return Some(ReplicateStageReturnType::LeaderRotation(entry_height_));
+                        return Some(ReplicateStageReturnType::LeaderRotation(
+                            entry_height_,
+                            // We should never start the TPU / this stage on an exact entry that causes leader
+                            // rotation (Fullnode should automatically transition on startup if it detects 
+                            // are no longer a validator. Hence we can assume that some entry must have 
+                            // triggered leader rotation
+                            last_entry_id.expect("Must exist an entry that triggered rotation"),
+                        ));
                     }
 
                     // Only vote once a second.
@@ -180,7 +193,7 @@ impl ReplicateStage {
                         None
                     };
 
-                    if let Err(e) = Self::replicate_requests(
+                    match Self::replicate_requests(
                         &bank,
                         &cluster_info,
                         &window_receiver,
@@ -190,10 +203,11 @@ impl ReplicateStage {
                         &mut entry_height_,
                         &leader_scheduler,
                     ) {
-                        match e {
-                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                            _ => error!("{:?}", e),
+                        Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
+                        Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
+                        Err(e) => error!("{:?}", e),
+                        Ok(last_entry_id_) => {
+                            last_entry_id = Some(last_entry_id_);
                         }
                     }
                 }
@@ -222,7 +236,7 @@ mod test {
     use cluster_info::{ClusterInfo, Node};
     use fullnode::Fullnode;
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{genesis, next_entries_mut, LedgerWriter};
+    use ledger::{create_sample_ledger, next_entries_mut, LedgerWriter};
     use logger;
     use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
     use service::Service;
@@ -232,7 +246,6 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
-    #[ignore]
     pub fn test_replicate_stage_leader_rotation_exit() {
         logger::setup();
 
@@ -243,8 +256,8 @@ mod test {
         let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
 
         // Create a ledger
-        let (mint, my_ledger_path) = genesis("test_replicate_stage_leader_rotation_exit", 10_000);
-        let genesis_entries = mint.create_entries();
+        let (mint, my_ledger_path, genesis_entries) =
+            create_sample_ledger("test_replicate_stage_leader_rotation_exit", 10_000);
         let mut last_id = genesis_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -254,7 +267,8 @@ mod test {
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
-        let bootstrap_entries = make_active_set_entries(&my_keypair, &mint.keypair(), &last_id);
+        let bootstrap_entries =
+            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id);
         last_id = bootstrap_entries.last().unwrap().id;
         let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
         ledger_writer.write_entries(bootstrap_entries).unwrap();
@@ -307,11 +321,15 @@ mod test {
         }
 
         entries_to_send.truncate(total_entries_to_send);
+        let last_id = entries_to_send[(bootstrap_height - 1) as usize].id;
         entry_sender.send(entries_to_send).unwrap();
 
         // Wait for replicate_stage to exit and check return value is correct
         assert_eq!(
-            Some(ReplicateStageReturnType::LeaderRotation(bootstrap_height)),
+            Some(ReplicateStageReturnType::LeaderRotation(
+                bootstrap_height,
+                last_id
+            )),
             replicate_stage.join().expect("replicate stage join")
         );
 
