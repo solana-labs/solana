@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ci/upload_ci_artifact.sh
 
+eval "$(ci/channel-info.sh)"
+
 ci/version-check.sh nightly
 export RUST_BACKTRACE=1
 
