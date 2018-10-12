@@ -197,18 +197,8 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.get_transaction_count()
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
-        let drone_addr = if let Some(leader_data) = meta.cluster_info.read().unwrap().leader_data()
-        {
-            let mut addr = leader_data.contact_info.tpu;
-            addr.set_port(DRONE_PORT);
-            addr
-        } else {
-            return Err(Error {
-                code: ErrorCode::InternalError,
-                message: "No leader detected".into(),
-                data: None,
-            });
-        };
+        let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
+        drone_addr.set_port(DRONE_PORT);
         let pubkey_vec = bs58::decode(id)
             .into_vec()
             .map_err(|_| Error::invalid_request())?;
@@ -232,16 +222,7 @@ impl RpcSol for RpcSolImpl {
         }
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
-        let transactions_addr =
-            if let Some(leader_data) = meta.cluster_info.read().unwrap().leader_data() {
-                leader_data.contact_info.tpu
-            } else {
-                return Err(Error {
-                    code: ErrorCode::InternalError,
-                    message: "No leader detected".into(),
-                    data: None,
-                });
-            };
+        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
         let tx: Transaction = deserialize(&data).map_err(|err| {
             debug!("send_transaction: deserialize error: {:?}", err);
             Error::invalid_request()
@@ -329,6 +310,18 @@ impl JsonRpcRequestProcessor {
     pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey, signature: &Signature) {
         self.bank
             .remove_signature_subscription(bank_sub_id, signature);
+    }
+}
+
+fn get_leader_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
+    if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
+        Ok(leader_data.contact_info.tpu)
+    } else {
+        Err(Error {
+            code: ErrorCode::InternalError,
+            message: "No leader detected".into(),
+            data: None,
+        })
     }
 }
 
@@ -471,5 +464,26 @@ mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+    #[test]
+    fn test_rpc_get_leader_addr() {
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
+        ));
+        assert_eq!(
+            get_leader_addr(&cluster_info),
+            Err(Error {
+                code: ErrorCode::InternalError,
+                message: "No leader detected".into(),
+                data: None,
+            })
+        );
+        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        cluster_info.write().unwrap().insert(&leader);
+        cluster_info.write().unwrap().set_leader(leader.id);
+        assert_eq!(
+            get_leader_addr(&cluster_info),
+            Ok(socketaddr!("127.0.0.1:1234"))
+        );
     }
 }
