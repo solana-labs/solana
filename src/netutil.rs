@@ -283,4 +283,10 @@ mod tests {
         let _ = bind_in_range((2000, 2000));
     }
 
+    #[test]
+    fn test_find_available_port_in_range() {
+        assert_eq!(find_available_port_in_range((3000, 3001)).unwrap(), 3000);
+        let port = find_available_port_in_range((3000, 3050)).unwrap();
+        assert!(3000 <= port && port < 3050);
+    }
 }
