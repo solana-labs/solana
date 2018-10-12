@@ -106,7 +106,6 @@ fn main() {
                 exit(1);
             }
             let bank = Bank::default();
-
             {
                 let genesis = match read_ledger(ledger_path, true) {
                     Ok(entries) => entries,
@@ -127,16 +126,22 @@ fn main() {
             let entries = entries.map(|e| e.unwrap());
 
             let head = head - 2;
+
+            let mut last_id = bank.last_id();
+
             for (i, entry) in entries.skip(2).enumerate() {
                 if i >= head {
                     break;
                 }
-                if !entry.verify(&bank.last_id()) {
+
+                if !entry.verify(&last_id) {
                     eprintln!("entry.verify() failed at entry[{}]", i + 2);
                     if !matches.is_present("continue") {
                         exit(1);
                     }
                 }
+                last_id = entry.id;
+
                 if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
