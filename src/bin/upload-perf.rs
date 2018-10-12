@@ -12,11 +12,11 @@ use std::io::{BufRead, BufReader};
 use std::process::Command;
 
 fn get_last_metrics(
-    url: &String,
-    metric: &String,
-    db: &String,
-    name: &String,
-    branch: &String,
+    url: &str,
+    metric: &str,
+    db: &str,
+    name: &str,
+    branch: &str,
 ) -> Result<String, String> {
     let query = format!(
         "{}&q=SELECT last(\"{}\") FROM \"{}\".\"autogen\".\"{}\" WHERE \"branch\"='{}'",
