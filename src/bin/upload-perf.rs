@@ -51,6 +51,7 @@ fn main() {
     };
 
     let upload_flag = &args[2];
+    let branch = &args[3];
 
     let git_output = Command::new("git")
         .args(&["rev-parse", "HEAD"])
@@ -76,7 +77,7 @@ fn main() {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
                 last_commit =
-                    match get_last_metrics(&query_url, &"commit".to_string(), &db, &name, &args[3])
+                    match get_last_metrics(&query_url, &"commit".to_string(), &db, &name, &branch)
                     {
                         Result::Ok(v) => Some(v),
                         Result::Err(_) => None,
@@ -88,7 +89,7 @@ fn main() {
                     metrics::submit(
                         influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
                             .add_tag("test", influxdb::Value::String("bench".to_string()))
-                            .add_tag("branch", influxdb::Value::String(args[3].to_string()))
+                            .add_tag("branch", influxdb::Value::String(branch.to_string()))
                             .add_field("median", influxdb::Value::Integer(median))
                             .add_field("deviation", influxdb::Value::Integer(deviation))
                             .add_field(
@@ -98,10 +99,10 @@ fn main() {
                     );
                 }
                 let last_median =
-                    get_last_metrics(&query_url, &"median".to_string(), &db, &name, &args[3])
+                    get_last_metrics(&query_url, &"median".to_string(), &db, &name, &branch)
                         .unwrap_or_default();
                 let last_deviation =
-                    get_last_metrics(&query_url, &"deviation".to_string(), &db, &name, &args[3])
+                    get_last_metrics(&query_url, &"deviation".to_string(), &db, &name, &branch)
                         .unwrap_or_default();
 
                 results.insert(name, (median, deviation, last_median, last_deviation));
@@ -122,7 +123,7 @@ fn main() {
             );
         }
     } else {
-        println!("No previous results found for branch");
+        println!("No previous results found for {} branch", branch);
         println!("hash: {}", trimmed_hash);
         println!("bench_name, median, deviation");
         for (entry, values) in results {
