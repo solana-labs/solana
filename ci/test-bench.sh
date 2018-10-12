@@ -17,7 +17,7 @@ set -o pipefail
 
 UPLOAD_METRICS="upload"
 if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
-  UPLOAD_METRICS="upload"
+  UPLOAD_METRICS="no-upload"
 fi
 
 BENCH_FILE=bench_output.log

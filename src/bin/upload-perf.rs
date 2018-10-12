@@ -1,13 +1,45 @@
 extern crate influx_db_client;
+extern crate reqwest;
 extern crate serde_json;
 extern crate solana;
 use influx_db_client as influxdb;
 use serde_json::Value;
 use solana::metrics;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::process::Command;
+
+fn get_last_metrics(
+    url: &String,
+    metric: &String,
+    db: &String,
+    name: &String,
+    branch: &String,
+) -> Result<String, String> {
+    let query = format!(
+        "{}&q=SELECT last(\"{}\") FROM \"{}\".\"autogen\".\"{}\" WHERE \"branch\"='{}'",
+        url, metric, db, name, branch
+    );
+
+    let response = reqwest::get(query.as_str())
+        .map_err(|err| err.to_string())?
+        .text()
+        .map_err(|err| err.to_string())?;
+
+    match serde_json::from_str(&response) {
+        Result::Ok(v) => {
+            let v: Value = v;
+            let data = &v["results"][0]["series"][0]["values"][0][1];
+            if data.is_null() {
+                return Result::Err("Key not found".to_string());
+            }
+            Result::Ok(data.to_string())
+        }
+        Result::Err(err) => Result::Err(err.to_string()),
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,16 +58,33 @@ fn main() {
         .expect("failed to execute git rev-parse");
     let git_commit_hash = String::from_utf8_lossy(&git_output.stdout);
     let trimmed_hash = git_commit_hash.trim().to_string();
-    println!("hash: {}", trimmed_hash);
+
+    let host =
+        env::var("INFLUX_HOST").unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
+    let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
+    let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "pankaj".to_string());
+    let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "abc123".to_string());
+    let query_url = format!("{}/query?u={}&p={}", &host, &username, &password);
+
+    let mut last_commit = None;
+    let mut results = HashMap::new();
 
     for line in BufReader::new(file).lines() {
         if let Ok(v) = serde_json::from_str(&line.unwrap()) {
             let v: Value = v;
             if v["type"] == "bench" {
-                println!("{}", v);
+                let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
+
+                last_commit =
+                    match get_last_metrics(&query_url, &"commit".to_string(), &db, &name, &args[3])
+                    {
+                        Result::Ok(v) => Some(v),
+                        Result::Err(_) => None,
+                    };
+
+                let median = v["median"].to_string().parse().unwrap();
+                let deviation = v["deviation"].to_string().parse().unwrap();
                 if upload_flag == "upload" {
-                    let median = v["median"].to_string().parse().unwrap();
-                    let deviation = v["deviation"].to_string().parse().unwrap();
                     metrics::submit(
                         influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
                             .add_tag("test", influxdb::Value::String("bench".to_string()))
@@ -48,7 +97,36 @@ fn main() {
                             ).to_owned(),
                     );
                 }
+                let last_median =
+                    get_last_metrics(&query_url, &"median".to_string(), &db, &name, &args[3])
+                        .unwrap_or_default();
+                let last_deviation =
+                    get_last_metrics(&query_url, &"deviation".to_string(), &db, &name, &args[3])
+                        .unwrap_or_default();
+
+                results.insert(name, (median, deviation, last_median, last_deviation));
             }
+        }
+    }
+
+    if let Some(commit) = last_commit {
+        println!(
+            "Comparing current commits: {} against baseline {}",
+            trimmed_hash, commit
+        );
+        println!("bench_name, median, last_median, deviation, last_deviation");
+        for (entry, values) in results {
+            println!(
+                "{}, {}, {}, {}, {}",
+                entry, values.0, values.2, values.1, values.3
+            );
+        }
+    } else {
+        println!("No previous results found for branch");
+        println!("hash: {}", trimmed_hash);
+        println!("bench_name, median, deviation");
+        for (entry, values) in results {
+            println!("{}, {}, {}", entry, values.0, values.1);
         }
     }
     metrics::flush();
