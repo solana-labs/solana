@@ -5,11 +5,18 @@ Solana nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.o
 
 To interact with a Solana node inside a JavaScript application, use the [solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which gives a convenient interface for the RPC methods.
 
-RPC Endpoint
+RPC HTTP Endpoint
 ---
 
 **Default port:** 8899
 eg. http://localhost:8899, http://192.168.1.88:8899
+
+RPC PubSub WebSocket Endpoint
+---
+
+**Default port:** 8900
+eg. ws://localhost:8900, http://192.168.1.88:8900
+
 
 Methods
 ---
@@ -234,33 +241,10 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 ---
 
-### startSubscriptionChannel
-Open a socket on the node for JSON-RPC subscription requests
-
-##### Parameters:
-None
-
-##### Results:
-* `string` - "port", open websocket port
-* `string` - "path", unique key to use as websocket path
-
-##### Example:
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"startSubscriptionChannel"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":{"port":9876,"path":"BRbmMXn71cKfzXjFsmrTsWsXuQwbjXbwKdoRwVw1FRA3"},"id":1}
-```
-
----
-
 ### Subscription Websocket
-After opening a subscription socket with the `subscriptionChannel` JSON-RPC request method, submit subscription requests via websocket protocol
-Connect to the websocket at `ws://<ADDRESS>/<PATH>` returned from the request
+After connect to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
-- The subscription-channel socket will close when client closes websocket. To create new subscriptions, send a new `subscriptionChannel` JSON-RPC request.
 
 ---
 

@@ -3,15 +3,12 @@
 use bank::{Bank, BankError};
 use bincode::deserialize;
 use bs58;
-use cluster_info::{ClusterInfo, FULLNODE_PORT_RANGE};
+use cluster_info::ClusterInfo;
 use drone::DRONE_PORT;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
-use jsonrpc_macros::pubsub::Sink;
-use netutil::find_available_port_in_range;
-use rpc_pubsub::{PubSubService, SubscriptionResponse};
 use service::Service;
-use signature::{Keypair, KeypairUtil, Signature};
+use signature::Signature;
 use solana_program_interface::account::Account;
 use solana_program_interface::pubkey::Pubkey;
 use std::mem;
@@ -63,13 +60,10 @@ impl JsonRpcService {
                     warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
                     return;
                 }
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        server.unwrap().close();
-                        break;
-                    }
+                while !exit.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }
+                server.unwrap().close();
                 ()
             })
             .unwrap();
@@ -132,9 +126,6 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
-
-        #[rpc(meta, name = "startSubscriptionChannel")]
-        fn start_subscription_channel(&self, Self::Metadata) -> Result<SubscriptionResponse>;
     }
 }
 
@@ -214,22 +205,6 @@ impl RpcSol for RpcSolImpl {
             })?;
         Ok(bs58::encode(tx.signature).into_string())
     }
-    fn start_subscription_channel(&self, meta: Self::Metadata) -> Result<SubscriptionResponse> {
-        let port: u16 = find_available_port_in_range(FULLNODE_PORT_RANGE).map_err(|_| Error {
-            code: ErrorCode::InternalError,
-            message: "No available port in range".into(),
-            data: None,
-        })?;
-        let mut pubsub_addr = meta.rpc_addr;
-        pubsub_addr.set_port(port);
-        let pubkey = Keypair::new().pubkey();
-        let _pubsub_service =
-            PubSubService::new(&meta.request_processor.bank, pubsub_addr, pubkey, meta.exit);
-        Ok(SubscriptionResponse {
-            port,
-            path: pubkey.to_string(),
-        })
-    }
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
@@ -263,31 +238,6 @@ impl JsonRpcRequestProcessor {
     }
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
-    }
-    pub fn add_account_subscription(
-        &self,
-        bank_sub_id: Pubkey,
-        pubkey: Pubkey,
-        sink: Sink<Account>,
-    ) {
-        self.bank
-            .add_account_subscription(bank_sub_id, pubkey, sink);
-    }
-    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey, pubkey: &Pubkey) {
-        self.bank.remove_account_subscription(bank_sub_id, pubkey);
-    }
-    pub fn add_signature_subscription(
-        &self,
-        bank_sub_id: Pubkey,
-        signature: Signature,
-        sink: Sink<RpcSignatureStatus>,
-    ) {
-        self.bank
-            .add_signature_subscription(bank_sub_id, signature, sink);
-    }
-    pub fn remove_signature_subscription(&self, bank_sub_id: &Pubkey, signature: &Signature) {
-        self.bank
-            .remove_signature_subscription(bank_sub_id, signature);
     }
 }
 
