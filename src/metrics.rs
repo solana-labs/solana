@@ -1,5 +1,7 @@
 //! The `metrics` module enables sending measurements to an InfluxDB instance
 
+extern crate reqwest;
+
 use influx_db_client as influxdb;
 use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
@@ -37,11 +39,7 @@ impl InfluxDbMetricsWriter {
     }
 
     fn build_client() -> Option<influxdb::Client> {
-        let host = env::var("INFLUX_HOST")
-            .unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
-        let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
-        let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "scratch_writer".to_string());
-        let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "topsecret".to_string());
+        let (host, db, username, password) = get_env_settings();
 
         debug!("InfluxDB host={} db={} username={}", host, db, username);
         let mut client = influxdb::Client::new_with_option(host, db, None)
@@ -175,6 +173,27 @@ pub fn submit(point: influxdb::Point) {
     let agent_mutex = get_singleton_agent();
     let agent = agent_mutex.lock().unwrap();
     agent.submit(point);
+}
+
+fn get_env_settings() -> (String, String, String, String) {
+    let host =
+        env::var("INFLUX_HOST").unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
+    let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
+    let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "scratch_writer".to_string());
+    let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "topsecret".to_string());
+    (host, db, username, password)
+}
+
+pub fn query(q: &str) -> Result<String, String> {
+    let (host, _, username, password) = get_env_settings();
+    let query = format!("{}/query?u={}&p={}&q={}", &host, &username, &password, &q);
+
+    let response = reqwest::get(query.as_str())
+        .map_err(|err| err.to_string())?
+        .text()
+        .map_err(|err| err.to_string())?;
+
+    Result::Ok(response)
 }
 
 /// Blocks until all pending points from previous calls to `submit` have been
