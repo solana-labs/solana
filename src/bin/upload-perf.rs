@@ -1,5 +1,4 @@
 extern crate influx_db_client;
-extern crate reqwest;
 extern crate serde_json;
 extern crate solana;
 use influx_db_client as influxdb;
@@ -11,22 +10,13 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::process::Command;
 
-fn get_last_metrics(
-    url: &str,
-    metric: &str,
-    db: &str,
-    name: &str,
-    branch: &str,
-) -> Result<String, String> {
+fn get_last_metrics(metric: &str, db: &str, name: &str, branch: &str) -> Result<String, String> {
     let query = format!(
-        "{}&q=SELECT last(\"{}\") FROM \"{}\".\"autogen\".\"{}\" WHERE \"branch\"='{}'",
-        url, metric, db, name, branch
+        r#"SELECT last("{}") FROM "{}"."autogen"."{}" WHERE "branch"='{}'"#,
+        metric, db, name, branch
     );
 
-    let response = reqwest::get(query.as_str())
-        .map_err(|err| err.to_string())?
-        .text()
-        .map_err(|err| err.to_string())?;
+    let response = metrics::query(&query)?;
 
     match serde_json::from_str(&response) {
         Result::Ok(v) => {
@@ -50,8 +40,8 @@ fn main() {
         Ok(file) => file,
     };
 
-    let upload_flag = &args[2];
-    let branch = &args[3];
+    let branch = &args[2];
+    let upload_metrics = args.len() > 2;
 
     let git_output = Command::new("git")
         .args(&["rev-parse", "HEAD"])
@@ -60,15 +50,10 @@ fn main() {
     let git_commit_hash = String::from_utf8_lossy(&git_output.stdout);
     let trimmed_hash = git_commit_hash.trim().to_string();
 
-    let host =
-        env::var("INFLUX_HOST").unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
-    let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
-    let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "pankaj".to_string());
-    let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "abc123".to_string());
-    let query_url = format!("{}/query?u={}&p={}", &host, &username, &password);
-
     let mut last_commit = None;
     let mut results = HashMap::new();
+
+    let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
 
     for line in BufReader::new(file).lines() {
         if let Ok(v) = serde_json::from_str(&line.unwrap()) {
@@ -76,20 +61,14 @@ fn main() {
             if v["type"] == "bench" {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
-                last_commit = match get_last_metrics(
-                    &query_url,
-                    &"commit".to_string(),
-                    &db,
-                    &name,
-                    &branch,
-                ) {
+                last_commit = match get_last_metrics(&"commit".to_string(), &db, &name, &branch) {
                     Result::Ok(v) => Some(v),
                     Result::Err(_) => None,
                 };
 
                 let median = v["median"].to_string().parse().unwrap();
                 let deviation = v["deviation"].to_string().parse().unwrap();
-                if upload_flag == "upload" {
+                if upload_metrics {
                     metrics::submit(
                         influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
                             .add_tag("test", influxdb::Value::String("bench".to_string()))
@@ -102,11 +81,10 @@ fn main() {
                             ).to_owned(),
                     );
                 }
-                let last_median =
-                    get_last_metrics(&query_url, &"median".to_string(), &db, &name, &branch)
-                        .unwrap_or_default();
+                let last_median = get_last_metrics(&"median".to_string(), &db, &name, &branch)
+                    .unwrap_or_default();
                 let last_deviation =
-                    get_last_metrics(&query_url, &"deviation".to_string(), &db, &name, &branch)
+                    get_last_metrics(&"deviation".to_string(), &db, &name, &branch)
                         .unwrap_or_default();
 
                 results.insert(name, (median, deviation, last_median, last_deviation));
