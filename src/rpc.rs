@@ -8,7 +8,7 @@ use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use jsonrpc_macros::pubsub::Sink;
 use netutil::find_available_port_in_range;
-use pubsub::{PubSubService, SubscriptionResponse};
+use rpc_pubsub::{PubSubService, SubscriptionResponse};
 use service::Service;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_program_interface::account::Account;
