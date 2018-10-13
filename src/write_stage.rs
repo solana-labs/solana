@@ -159,7 +159,7 @@ impl WriteStage {
         }
         inc_new_counter_info!("write_stage-entries_received", num_new_entries);
 
-        info!("write_stage entries: {}", num_new_entries);
+        debug!("write_stage entries: {}", num_new_entries);
 
         let mut entries_send_total = 0;
         let mut cluster_info_votes_total = 0;
@@ -200,7 +200,7 @@ impl WriteStage {
             "write_stage-time_ms",
             duration_as_ms(&now.elapsed()) as usize
         );
-        info!("done write_stage txs: {} time {} ms txs/s: {} entries_send_total: {} cluster_info_votes_total: {}",
+        debug!("done write_stage txs: {} time {} ms txs/s: {} entries_send_total: {} cluster_info_votes_total: {}",
               num_txs, duration_as_ms(&start.elapsed()),
               num_txs as f32 / duration_as_s(&start.elapsed()),
               entries_send_total,
