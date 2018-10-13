@@ -77,9 +77,28 @@ down)
   )
   ;;
 logs)
+  follow=false
+  if [[ -n $1 ]]; then
+    if [[ $1 = "-f" ]]; then
+      follow=true
+    else
+      usage "Unknown argument: $1"
+    fi
+  fi
+
+  while $follow; do
+    if [[ -n $(docker ps -q -f name=solana-localnet) ]]; then
+      (
+        set -x
+        docker logs solana-localnet -f
+      ) || true
+    fi
+    sleep 1
+  done
+
   (
     set -x
-    docker logs solana-localnet "$@"
+    docker logs solana-localnet
   )
   ;;
 *)
