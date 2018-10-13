@@ -2,7 +2,7 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
-use budget_instruction::{Contract, Instruction, Vote};
+use budget_instruction::{Instruction, Vote};
 use budget_program::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
@@ -81,7 +81,7 @@ impl BudgetTransaction for Transaction {
             to,
         };
         let budget = Budget::Pay(payment);
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let instruction = Instruction::NewBudget(tokens, budget);
         let userdata = serialize(&instruction).unwrap();
         Self::new(
             from_keypair,
@@ -162,7 +162,7 @@ impl BudgetTransaction for Transaction {
         } else {
             Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
         };
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let instruction = Instruction::NewBudget(tokens, budget);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
@@ -191,7 +191,7 @@ impl BudgetTransaction for Transaction {
         } else {
             Budget::After(Condition::Signature(witness), Payment { tokens, to })
         };
-        let instruction = Instruction::NewContract(Contract { budget, tokens });
+        let instruction = Instruction::NewBudget(tokens, budget);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
@@ -220,11 +220,8 @@ impl BudgetTransaction for Transaction {
     /// Verify only the payment plan.
     fn verify_plan(&self) -> bool {
         for pix in 0..self.instructions.len() {
-            if let Some(Instruction::NewContract(contract)) = self.instruction(pix) {
-                if !(self.fee >= 0
-                    && self.fee <= contract.tokens
-                    && contract.budget.verify(contract.tokens - self.fee))
-                {
+            if let Some(Instruction::NewBudget(tokens, budget)) = self.instruction(pix) {
+                if !(self.fee >= 0 && self.fee <= tokens && budget.verify(tokens - self.fee)) {
                     return false;
                 }
             }
@@ -274,7 +271,7 @@ mod tests {
             tokens: 0,
             to: Default::default(),
         });
-        let instruction = Instruction::NewContract(Contract { budget, tokens: 0 });
+        let instruction = Instruction::NewBudget(0, budget);
         let userdata = serialize(&instruction).unwrap();
         let instructions = vec![transaction::Instruction {
             program_ids_index: 0,
@@ -301,10 +298,10 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::budget_new(&keypair, pubkey, 42, zero);
         let mut instruction = tx.instruction(0).unwrap();
-        if let Instruction::NewContract(ref mut contract) = instruction {
-            contract.tokens = 1_000_000; // <-- attack, part 1!
-            if let Budget::Pay(ref mut payment) = contract.budget {
-                payment.tokens = contract.tokens; // <-- attack, part 2!
+        if let Instruction::NewBudget(ref mut tokens, ref mut budget) = instruction {
+            *tokens = 1_000_000; // <-- attack, part 1!
+            if let Budget::Pay(ref mut payment) = budget {
+                payment.tokens = *tokens; // <-- attack, part 2!
             }
         }
         tx.instructions[0].userdata = serialize(&instruction).unwrap();
@@ -321,8 +318,8 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
         let mut instruction = tx.instruction(0);
-        if let Some(Instruction::NewContract(ref mut contract)) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.budget {
+        if let Some(Instruction::NewBudget(_, ref mut budget)) = instruction {
+            if let Budget::Pay(ref mut payment) = budget {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -338,8 +335,8 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, keypair1.pubkey(), 1, zero);
         let mut instruction = tx.instruction(0).unwrap();
-        if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.budget {
+        if let Instruction::NewBudget(_, ref mut budget) = instruction {
+            if let Budget::Pay(ref mut payment) = budget {
                 payment.tokens = 2; // <-- attack!
             }
         }
@@ -348,8 +345,8 @@ mod tests {
 
         // Also, ensure all branchs of the plan spend all tokens
         let mut instruction = tx.instruction(0).unwrap();
-        if let Instruction::NewContract(ref mut contract) = instruction {
-            if let Budget::Pay(ref mut payment) = contract.budget {
+        if let Instruction::NewBudget(_, ref mut budget) = instruction {
+            if let Budget::Pay(ref mut payment) = budget {
                 payment.tokens = 0; // <-- whoops!
             }
         }
