@@ -43,12 +43,13 @@ snap)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
+  # shellcheck disable=SC2089
   commonNodeConfig="\
-    leader-ip=$entrypointIp \
+    leader-ip=\"$entrypointIp\" \
     default-metrics-rate=1 \
-    metrics-config=$SOLANA_METRICS_CONFIG \
-    rust-log=$RUST_LOG \
-    setup-args=$setupArgs \
+    metrics-config=\"$SOLANA_METRICS_CONFIG\" \
+    rust-log=\"$RUST_LOG\" \
+    setup-args=\"$setupArgs\" \
   "
 
   if [[ -e /dev/nvidia0 ]]; then
@@ -68,7 +69,7 @@ snap)
   logger "$logmarker"
 
   # shellcheck disable=SC2086 # Don't want to double quote "$nodeConfig"
-  sudo snap set solana $nodeConfig
+  sudo snap set solana "$nodeConfig"
   snap info solana
   sudo snap get solana
   echo Slight delay to get more syslog output
