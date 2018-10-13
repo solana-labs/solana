@@ -549,7 +549,7 @@ pub fn next_entries_mut(
                     next,
                     transactions.len()
                 );
-                if Entry::will_fit(transactions[chunk_start..chunk_end].to_vec()) {
+                if Entry::will_fit(&transactions[chunk_start..chunk_end]) {
                     next = (upper + chunk_end) / 2;
                     lower = chunk_end;
                     debug!(
