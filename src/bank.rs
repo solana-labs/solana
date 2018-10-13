@@ -1517,7 +1517,7 @@ mod tests {
         let mint = Mint::new(1);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
-        let entry = next_entry(&mint.last_id(), 1, vec![]);
+        let entry = next_entry(&mint.last_id(), 1, vec![], Pubkey::default());
         let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
@@ -1544,6 +1544,7 @@ mod tests {
     fn create_sample_block_with_next_entries_using_keypairs(
         mint: &Mint,
         keypairs: &[Keypair],
+        leader_id: Pubkey,
     ) -> impl Iterator<Item = Entry> {
         let mut last_id = mint.last_id();
         let mut hash = mint.last_id();
@@ -1556,10 +1557,10 @@ mod tests {
                 1,
                 last_id,
             )];
-            let mut e = ledger::next_entries(&hash, 0, txs);
+            let mut e = ledger::next_entries(&hash, 0, txs, leader_id);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
-            let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![]);
+            let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![], leader_id);
             last_id = hash;
             entries.push(tick);
         }
@@ -1571,6 +1572,7 @@ mod tests {
         mint: &Mint,
         length: usize,
         ticks: usize,
+        leader_id: Pubkey,
     ) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
@@ -1579,10 +1581,10 @@ mod tests {
         for i in 0..length {
             let keypair = Keypair::new();
             let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, last_id);
-            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx]);
+            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx], leader_id);
             entries.push(entry);
             if (i + 1) % ticks == 0 {
-                let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![]);
+                let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![], leader_id);
                 last_id = hash;
                 entries.push(tick);
             }
@@ -1590,25 +1592,29 @@ mod tests {
         entries.into_iter()
     }
 
-    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
+    fn create_sample_ledger(
+        length: usize,
+        leader_id: Pubkey,
+    ) -> (impl Iterator<Item = Entry>, Pubkey) {
         let mint = Mint::new(length as i64 + 1);
         let genesis = mint.create_entries();
-        let block = create_sample_block_with_ticks(&mint, length, length);
+        let block = create_sample_block_with_ticks(&mint, length, length, leader_id);
         (genesis.into_iter().chain(block), mint.pubkey())
     }
 
     fn create_sample_ledger_with_mint_and_keypairs(
         mint: &Mint,
         keypairs: &[Keypair],
+        leader_id: Pubkey,
     ) -> impl Iterator<Item = Entry> {
         let genesis = mint.create_entries();
-        let block = create_sample_block_with_next_entries_using_keypairs(mint, keypairs);
+        let block = create_sample_block_with_next_entries_using_keypairs(mint, keypairs, leader_id);
         genesis.into_iter().chain(block)
     }
 
     #[test]
     fn test_process_ledger_simple() {
-        let (ledger, pubkey) = create_sample_ledger(1);
+        let (ledger, pubkey) = create_sample_ledger(1, Pubkey::default());
         let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
         let (ledger_height, tail) = bank
@@ -1636,7 +1642,7 @@ mod tests {
 
         let window_size = WINDOW_SIZE as usize;
         for entry_count in window_size - 3..window_size + 2 {
-            let (ledger, pubkey) = create_sample_ledger(entry_count);
+            let (ledger, pubkey) = create_sample_ledger(entry_count, Pubkey::default());
             let bank = Bank::default();
             let (ledger_height, tail) = bank
                 .process_ledger(ledger, &mut LeaderScheduler::default())
@@ -1661,7 +1667,7 @@ mod tests {
 
     #[test]
     fn test_process_ledger_from_file() {
-        let (ledger, pubkey) = create_sample_ledger(1);
+        let (ledger, pubkey) = create_sample_ledger(1, Pubkey::default());
         let ledger = to_file_iter(ledger);
 
         let bank = Bank::default();
@@ -1674,7 +1680,12 @@ mod tests {
     fn test_process_ledger_from_files() {
         let mint = Mint::new(2);
         let genesis = to_file_iter(mint.create_entries().into_iter());
-        let block = to_file_iter(create_sample_block_with_ticks(&mint, 1, 1));
+        let block = to_file_iter(create_sample_block_with_ticks(
+            &mint,
+            1,
+            1,
+            Pubkey::default(),
+        ));
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block), &mut LeaderScheduler::default())
@@ -1697,8 +1708,10 @@ mod tests {
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
-        let ledger0 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
-        let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
+        let ledger0 =
+            create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs, Pubkey::default());
+        let ledger1 =
+            create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs, Pubkey::default());
 
         let bank0 = Bank::default();
         bank0

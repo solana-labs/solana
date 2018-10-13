@@ -14,6 +14,7 @@ use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use sigverify_stage::VerifiedPackets;
+use solana_program_interface::pubkey::Pubkey;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -51,6 +52,7 @@ impl Default for Config {
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     pub fn new(
+        my_id: Pubkey,
         bank: &Arc<Bank>,
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
@@ -58,7 +60,7 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh = PohRecorder::new(bank.clone(), entry_sender, *last_entry_id);
+        let poh = PohRecorder::new(bank.clone(), entry_sender, *last_entry_id, my_id);
         let tick_poh = poh.clone();
         // Tick producer is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
@@ -269,6 +271,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
+            Pubkey::default(),
             &bank,
             verified_receiver,
             Default::default(),
@@ -283,6 +286,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
+            Pubkey::default(),
             &bank,
             verified_receiver,
             Default::default(),
@@ -298,6 +302,7 @@ mod tests {
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
+            Pubkey::default(),
             &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
@@ -320,6 +325,7 @@ mod tests {
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
+            Pubkey::default(),
             &bank,
             verified_receiver,
             Default::default(),
@@ -370,6 +376,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
+            Pubkey::default(),
             &bank,
             verified_receiver,
             Default::default(),

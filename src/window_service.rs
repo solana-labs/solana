@@ -395,6 +395,7 @@ mod test {
                 0,
                 Hash::default(),
                 &gossip_address,
+                me_id,
             ).into_iter()
             .rev()
             .collect();;
