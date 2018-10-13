@@ -142,7 +142,7 @@ fn test_native_file_noop() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("noop".to_string());
+        let dp = DynamicProgram::new_native("noop".to_string()).unwrap();
         dp.call(&mut infos, &data);
     }
 }
@@ -163,7 +163,7 @@ fn test_native_file_move_funds_success() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
         dp.call(&mut infos, &data);
     }
     assert_eq!(0, accounts[0].tokens);
@@ -186,7 +186,7 @@ fn test_native_file_move_funds_insufficient_funds() {
             .map(|(key, account)| KeyedAccount { key, account })
             .collect();
 
-        let dp = DynamicProgram::new_native("move_funds".to_string());
+        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
         dp.call(&mut infos, &data);
     }
     assert_eq!(10, accounts[0].tokens);
@@ -216,7 +216,7 @@ fn test_program_native_move_funds_succes_many_threads() {
                             .map(|(key, account)| KeyedAccount { key, account })
                             .collect();
 
-                        let dp = DynamicProgram::new_native("move_funds".to_string());
+                        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
                         dp.call(&mut infos, &data);
                     }
                     assert_eq!(0, accounts[0].tokens);

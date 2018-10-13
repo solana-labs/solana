@@ -13,6 +13,7 @@ use libc;
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
+use result::Result;
 
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::pubkey::Pubkey;
@@ -80,12 +81,12 @@ pub enum DynamicProgram {
 }
 
 impl DynamicProgram {
-    pub fn new_native(name: String) -> Self {
+    pub fn new_native(name: String) -> Result<Self> {
         // create native program
         let path = ProgramPath::Native {}.create(&name);
         // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
-        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
-        DynamicProgram::Native { name, library }
+        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)?;
+        Ok(DynamicProgram::Native { name, library })
     }
 
     pub fn new_bpf_from_file(name: String) -> Self {

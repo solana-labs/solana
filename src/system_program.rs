@@ -102,7 +102,13 @@ impl SystemProgram {
                 }
                 SystemProgram::Load { program_id, name } => {
                     let mut hashmap = loaded_programs.write().unwrap();
-                    hashmap.insert(program_id, DynamicProgram::new_native(name));
+                    hashmap.insert(
+                        program_id,
+                        DynamicProgram::new_native(name).map_err(|err| {
+                            warn!("SystemProgram::Load failure: {:?}", err);
+                            Error::InvalidArgument
+                        })?,
+                    );
                 }
             }
             Ok(())
