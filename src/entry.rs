@@ -8,6 +8,7 @@ use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
 use solana_program_interface::pubkey::Pubkey;
 use std::io::Cursor;
+use std::mem::size_of;
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
 use transaction::Transaction;
@@ -96,13 +97,11 @@ impl Entry {
         blob
     }
 
-    pub fn will_fit(transactions: Vec<Transaction>) -> bool {
-        serialized_size(&Entry {
-            num_hashes: 0,
-            id: Hash::default(),
-            transactions,
-        }).unwrap()
-            <= BLOB_DATA_SIZE as u64
+    pub fn will_fit(transactions: &[Transaction]) -> bool {
+        let txs_size = serialized_size(transactions).unwrap() as usize;
+
+        // Estimate serialized_size of Entry without creating an Entry.
+        size_of::<u64>() + size_of::<Hash>() + txs_size <= BLOB_DATA_SIZE
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -122,7 +121,7 @@ impl Entry {
                 next,
                 transactions.len()
             );
-            if Entry::will_fit(transactions[..num].to_vec()) {
+            if Self::will_fit(&transactions[..num]) {
                 next = (upper + num) / 2;
                 lower = num;
                 debug!("num {} fits, maybe too well? trying {}", num, next);
