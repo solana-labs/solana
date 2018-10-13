@@ -43,6 +43,7 @@ snap)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
+  # shellcheck disable=SC2089
   commonNodeConfig="\
     leader-ip=\"$entrypointIp\" \
     default-metrics-rate=1 \
