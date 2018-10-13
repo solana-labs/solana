@@ -69,7 +69,7 @@ snap)
   logger "$logmarker"
 
   # shellcheck disable=SC2086 # Don't want to double quote "$nodeConfig"
-  sudo snap set solana $nodeConfig
+  sudo snap set solana "$nodeConfig"
   snap info solana
   sudo snap get solana
   echo Slight delay to get more syslog output
