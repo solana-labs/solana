@@ -47,7 +47,7 @@ snap)
     leader-ip=$entrypointIp \
     default-metrics-rate=1 \
     metrics-config=$SOLANA_METRICS_CONFIG \
-    rust-log=$RUST_LOG \
+    rust-log=\"$RUST_LOG\" \
     setup-args=$setupArgs \
   "
 
