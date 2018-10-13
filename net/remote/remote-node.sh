@@ -44,11 +44,11 @@ snap)
   sudo snap install solana.snap --devmode --dangerous
 
   commonNodeConfig="\
-    leader-ip=$entrypointIp \
+    leader-ip=\"$entrypointIp\" \
     default-metrics-rate=1 \
-    metrics-config=$SOLANA_METRICS_CONFIG \
+    metrics-config=\"$SOLANA_METRICS_CONFIG\" \
     rust-log=\"$RUST_LOG\" \
-    setup-args=$setupArgs \
+    setup-args=\"$setupArgs\" \
   "
 
   if [[ -e /dev/nvidia0 ]]; then
