@@ -112,17 +112,17 @@ impl BudgetState {
                 trace!("source is pending");
                 return Err(BudgetError::SourceIsPendingContract);
             }
-            if let Instruction::NewContract(contract) = &instruction {
-                if contract.tokens < 0 {
+            if let Instruction::NewBudget(tokens, _) = instruction {
+                if *tokens < 0 {
                     trace!("negative tokens");
                     return Err(BudgetError::NegativeTokens);
                 }
 
-                if accounts[0].tokens < contract.tokens {
+                if accounts[0].tokens < *tokens {
                     trace!("insufficient funds");
                     return Err(BudgetError::InsufficientFunds);
                 } else {
-                    accounts[0].tokens -= contract.tokens;
+                    accounts[0].tokens -= *tokens;
                 }
             };
         }
@@ -138,8 +138,8 @@ impl BudgetState {
         instruction: &Instruction,
     ) -> Result<(), BudgetError> {
         match instruction {
-            Instruction::NewContract(contract) => {
-                let budget = contract.budget.clone();
+            Instruction::NewBudget(tokens, budget) => {
+                let budget = budget.clone();
                 if let Some(payment) = budget.final_payment() {
                     accounts[1].tokens += payment.tokens;
                     Ok(())
@@ -151,7 +151,7 @@ impl BudgetState {
                     } else {
                         let mut state = BudgetState::default();
                         state.pending_budget = Some(budget);
-                        accounts[1].tokens += contract.tokens;
+                        accounts[1].tokens += tokens;
                         state.initialized = true;
                         state.serialize(&mut accounts[1].userdata)
                     }

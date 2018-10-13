@@ -1,13 +1,6 @@
 use budget::Budget;
 use chrono::prelude::{DateTime, Utc};
 
-/// A smart contract.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Contract {
-    /// The number of tokens allocated to the `Budget` and any transaction fees.
-    pub tokens: i64,
-    pub budget: Budget,
-}
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     /// We send some gossip specific membership information through the vote to shortcut
@@ -22,13 +15,13 @@ pub struct Vote {
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
-    /// Declare and instantiate `Contract`.
-    NewContract(Contract),
+    /// Declare and instantiate `Budget`.
+    NewBudget(i64, Budget),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
 
-    /// Tell the payment plan that the `NewContract` with `Signature` has been
+    /// Tell the budget that the `NewBudget` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     ApplySignature,
 
