@@ -7,7 +7,7 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [update|up|down|logs] [command-specific options]
+usage: $0 [update|up|down|logs|deploy] [command-specific options]
 
 Operate a local testnet
 
@@ -15,6 +15,7 @@ Operate a local testnet
  up       - Start the network
  down     - Stop the network
  logs     - Display network logging
+ deploy   - Deploy a native program.
 
 
  logs-specific options:
@@ -27,8 +28,11 @@ Operate a local testnet
  down-specific options:
    none
 
+ deploy-specific options:
+   program - The program to deploy.
 
-Assumes that docker is installed
+   Note that deployments are discarded on network stop
+
 EOF
   exit $exitcode
 }
@@ -100,6 +104,24 @@ logs)
     set -x
     docker logs solana-localnet
   )
+  ;;
+deploy)
+  program=$1
+  [[ -n $program ]] || usage
+  [[ -f $program ]] || usage "file does not exist: $program"
+
+  basename=$(basename "$program")
+  if docker exec solana-localnet test -f /usr/bin/"$basename"; then
+    echo "Error: $basename has already been deployed"
+    exit 1
+  fi
+
+  (
+    set -x
+    docker cp "$program" solana-localnet:/usr/bin/
+  )
+  docker exec solana-localnet ls -l /usr/bin/"$basename"
+  echo "$basename deployed successfully"
   ;;
 *)
   usage "Unknown command: $cmd"
