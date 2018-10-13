@@ -97,11 +97,10 @@ impl Entry {
         blob
     }
 
-    pub fn will_fit(transactions: &[Transaction]) -> bool {
-        let txs_size = serialized_size(transactions).unwrap() as usize;
-
-        // Estimate serialized_size of Entry without creating an Entry.
-        size_of::<u64>() + size_of::<Hash>() + txs_size <= BLOB_DATA_SIZE
+    /// Estimate serialized_size of Entry without creating an Entry.
+    pub fn serialized_size(transactions: &[Transaction]) -> u64 {
+        let txs_size = serialized_size(transactions).unwrap();
+        size_of::<u64>() as u64 + size_of::<Hash>() as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -121,7 +120,7 @@ impl Entry {
                 next,
                 transactions.len()
             );
-            if Self::will_fit(&transactions[..num]) {
+            if Self::serialized_size(&transactions[..num]) <= BLOB_DATA_SIZE as u64 {
                 next = (upper + num) / 2;
                 lower = num;
                 debug!("num {} fits, maybe too well? trying {}", num, next);
@@ -303,5 +302,17 @@ mod tests {
         let keypair = Keypair::new();
         let tx = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
         next_entry(&zero, 0, vec![tx]);
+    }
+
+    #[test]
+    fn test_serialized_size() {
+        let zero = Hash::default();
+        let keypair = Keypair::new();
+        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
+        let entry = next_entry(&zero, 1, vec![tx.clone()]);
+        assert_eq!(
+            Entry::serialized_size(&[tx]),
+            serialized_size(&entry).unwrap()
+        );
     }
 }

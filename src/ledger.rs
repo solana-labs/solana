@@ -549,7 +549,9 @@ pub fn next_entries_mut(
                     next,
                     transactions.len()
                 );
-                if Entry::will_fit(&transactions[chunk_start..chunk_end]) {
+                if Entry::serialized_size(&transactions[chunk_start..chunk_end])
+                    <= BLOB_DATA_SIZE as u64
+                {
                     next = (upper + chunk_end) / 2;
                     lower = chunk_end;
                     debug!(
