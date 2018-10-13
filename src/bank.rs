@@ -349,7 +349,7 @@ impl Bank {
         let mut last_ids_q = self.last_ids_q.write().unwrap();
         if last_ids_q.last_ids.len() >= MAX_ENTRY_IDS {
             let id = last_ids_q.last_ids.pop_front().unwrap();
-            info!("removing last_id {}", id);
+            debug!("removing last_id {}", id);
             last_ids_q.last_ids_sigs.remove(&id);
         }
         inc_new_counter_info!("bank-register_entry_id-registered", 1);
