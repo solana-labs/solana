@@ -19,6 +19,7 @@ use log::Level;
 use mint::Mint;
 use payment_plan::Payment;
 use poh_recorder::PohRecorder;
+use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
 use signature::Signature;
@@ -912,9 +913,55 @@ impl Bank {
 
     /// Process an ordered list of entries.
     pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
-        for entry in entries {
-            self.process_entry(&entry)?;
+        self.par_process_entries(entries)
+    }
+
+    pub fn all_ok(results: &[Result<()>]) -> Result<()> {
+        for r in results {
+            if r.is_err() {
+                return r;
+            }
         }
+        Ok(()) 
+    }
+    pub fn par_execute_entries(&self, entries: &Vec<Entry>) -> Result<()> {
+        let results: Vec<Result<()>> = entries
+            .par_iter()
+            .map(|(e, locks)| {
+                let results =
+                    self.execute_and_commit_transactions(e.transactions, locks, MAX_ENTRY_IDS);
+                self.unlock_accounts(e.transactions, &results);
+                Self::all_ok(results)
+            }).collect();
+        Self::all_ok(results)
+    }
+
+    /// process entries in parallel
+    /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
+    /// 2. Process the locked group in parallel
+    /// 3. Register the `Tick` if it's available, goto 1
+    pub fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
+        // accumilator for entries that can be processed in parallel
+        let mut mt_group = vec![];
+        for entry in entries {
+            if entry.transactions.is_empty() {
+                // if its a tick, execute the group and register the tick
+                self.par_execute_entries(&mt_group)?;
+                self.register_entry_id(&entry.id);
+                mt_group = vec![];
+                continue;
+            }
+            // try to lock the accounts
+            let locked = bank.lock_accounts(&entry.transactions);
+            // if any of the locks error out
+            // execute the current group
+            if Self::all_ok(&locked).is_err() {
+                self.par_execute_entries(&mt_group)?;
+                mt_group = vec![];
+            }
+            mt_group.push((entry, locked));
+        }
+        self.par_execute_entries(&mt_group)?;
         Ok(())
     }
 
