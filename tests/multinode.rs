@@ -651,30 +651,28 @@ fn test_multi_node_dynamic_network() {
     let t1: Vec<_> = (0..num_nodes)
         .into_iter()
         .map(|n| {
-            let leader_data = leader_data.clone();
-            let alice_clone = alice_arc.clone();
             Builder::new()
                 .name("keypair-thread".to_string())
                 .spawn(move || {
                     info!("Spawned thread {}", n);
-                    let keypair = Keypair::new();
-                    //send some tokens to the new validators
-                    let bal = retry_send_tx_and_retry_get_balance(
-                        &leader_data,
-                        &alice_clone.read().unwrap(),
-                        &keypair.pubkey(),
-                        Some(500),
-                    );
-                    assert_eq!(bal, Some(500));
-                    info!("sent balance to[{}/{}] {}", n, num_nodes, keypair.pubkey());
-                    keypair
+                    Keypair::new()
                 }).unwrap()
         }).collect();
 
     info!("Waiting for keypairs to be created");
     let keypairs: Vec<_> = t1.into_iter().map(|t| t.join().unwrap()).collect();
     info!("keypairs created");
-
+    keypairs.iter().enumerate().for_each(|(n, keypair)| {
+        //send some tokens to the new validators
+        let bal = retry_send_tx_and_retry_get_balance(
+            &leader_data,
+            &alice_arc.read().unwrap(),
+            &keypair.pubkey(),
+            Some(500),
+        );
+        assert_eq!(bal, Some(500));
+        info!("sent balance to [{}/{}] {}", n, num_nodes, keypair.pubkey());
+    });
     let t2: Vec<_> = keypairs
         .into_iter()
         .map(|keypair| {
