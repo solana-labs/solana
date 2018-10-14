@@ -4,6 +4,7 @@ use hash::{hash, hashv, Hash};
 
 pub struct Poh {
     last_hash: Hash,
+    pub poh_height: u64,
     num_hashes: u64,
 }
 
@@ -15,16 +16,18 @@ pub struct PohEntry {
 }
 
 impl Poh {
-    pub fn new(last_hash: Hash) -> Self {
+    pub fn new(last_hash: Hash, poh_height: u64) -> Self {
         Poh {
             last_hash,
             num_hashes: 0,
+            poh_height,
         }
     }
 
     pub fn hash(&mut self) {
         self.last_hash = hash(&self.last_hash.as_ref());
         self.num_hashes += 1;
+        self.poh_height += 1;
     }
 
     pub fn record(&mut self, mixin: Hash) -> PohEntry {
@@ -32,7 +35,7 @@ impl Poh {
         self.last_hash = hashv(&[&self.last_hash.as_ref(), &mixin.as_ref()]);
 
         self.num_hashes = 0;
-
+        self.poh_height += 1;
         PohEntry {
             num_hashes,
             id: self.last_hash,

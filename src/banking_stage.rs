@@ -9,7 +9,7 @@ use entry::Entry;
 use hash::Hash;
 use log::Level;
 use packet::Packets;
-use poh_recorder::PohRecorder;
+use poh_recorder::{PohRecorder, PohRecorderError};
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
@@ -25,13 +25,20 @@ use std::time::Instant;
 use timing;
 use transaction::Transaction;
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BankingStageReturnType {
+    LeaderRotation,
+    ChannelDisconnected,
+}
+
 // number of threads is 1 until mt bank is ready
 pub const NUM_THREADS: usize = 10;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     /// Handle to the stage's thread.
-    thread_hdls: Vec<JoinHandle<()>>,
+    bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
+    tick_producer: JoinHandle<Option<BankingStageReturnType>>,
 }
 
 pub enum Config {
@@ -55,10 +62,18 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
+        poh_height: u64,
+        max_poh_height: Option<u64>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh = PohRecorder::new(bank.clone(), entry_sender, *last_entry_id);
+        let poh = PohRecorder::new(
+            bank.clone(),
+            entry_sender,
+            *last_entry_id,
+            poh_height,
+            max_poh_height,
+        );
         let tick_poh = poh.clone();
         // Tick producer is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
@@ -71,21 +86,24 @@ impl BankingStage {
         let tick_producer = Builder::new()
             .name("solana-banking-stage-tick_producer".to_string())
             .spawn(move || {
-                if let Err(e) = Self::tick_producer(&tick_poh, &config, &poh_exit) {
-                    match e {
-                        Error::SendError => (),
-                        _ => error!(
+                let return_value = match Self::tick_producer(&tick_poh, &config, &poh_exit) {
+                    Err(Error::SendError) => Some(BankingStageReturnType::ChannelDisconnected),
+                    Err(e) => {
+                        error!(
                             "solana-banking-stage-tick_producer unexpected error {:?}",
                             e
-                        ),
+                        );
+                        None
                     }
-                }
+                    Ok(x) => x,
+                };
                 debug!("tick producer exiting");
                 poh_exit.store(true, Ordering::Relaxed);
+                return_value
             }).unwrap();
 
         // Many banks that process transactions in parallel.
-        let mut thread_hdls: Vec<JoinHandle<()>> = (0..NUM_THREADS)
+        let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0..NUM_THREADS)
             .map(|_| {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
@@ -94,7 +112,7 @@ impl BankingStage {
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
-                        loop {
+                        let return_result = loop {
                             if let Err(e) = Self::process_packets(
                                 &thread_bank,
                                 &thread_verified_receiver,
@@ -104,23 +122,34 @@ impl BankingStage {
                                 match e {
                                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                                        break
+                                        break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
-                                    Error::RecvError(_) => break,
-                                    Error::SendError => break,
+                                    Error::RecvError(_) => {
+                                        break Some(BankingStageReturnType::ChannelDisconnected);
+                                    }
+                                    Error::SendError => {
+                                        break Some(BankingStageReturnType::ChannelDisconnected);
+                                    }
                                     _ => error!("solana-banking-stage-tx {:?}", e),
                                 }
                             }
                             if thread_banking_exit.load(Ordering::Relaxed) {
                                 debug!("tick service exited");
-                                break;
+                                break None;
                             }
-                        }
+                        };
                         thread_banking_exit.store(true, Ordering::Relaxed);
+                        return_result
                     }).unwrap()
             }).collect();
-        thread_hdls.push(tick_producer);
-        (BankingStage { thread_hdls }, entry_receiver)
+
+        (
+            BankingStage {
+                bank_thread_hdls,
+                tick_producer,
+            },
+            entry_receiver,
+        )
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
@@ -135,22 +164,55 @@ impl BankingStage {
             }).collect()
     }
 
-    fn tick_producer(poh: &PohRecorder, config: &Config, poh_exit: &AtomicBool) -> Result<()> {
+    fn tick_producer(
+        poh: &PohRecorder,
+        config: &Config,
+        poh_exit: &AtomicBool,
+    ) -> Result<Option<BankingStageReturnType>> {
         loop {
             match *config {
                 Config::Tick(num) => {
                     for _ in 0..num {
-                        poh.hash();
+                        match poh.hash() {
+                            Ok(height) if Some(height) == poh.last_hash_height() => {
+                                break;
+                            }
+                            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                                // Break and Record. We will then call tick_with_max(),
+                                // where then either CASE 1 or CASE 2 must happen, see
+                                // below call to that function for details
+                                break;
+                            }
+                            Err(e) => {
+                                return Err(e);
+                            }
+                            _ => (),
+                        }
                     }
                 }
                 Config::Sleep(duration) => {
                     sleep(duration);
                 }
             }
-            poh.tick()?;
+            match poh.tick() {
+                Ok(height) if Some(height) == poh.max_poh_height => {
+                    // CASE 1: We were successful in recording the last PoH tick at PoH height == max_poh,
+                    // so exit
+                    return Ok(Some(BankingStageReturnType::LeaderRotation));
+                }
+                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                    // CASE 2: Somebody beat us by recording a last Entry at PoH height == max_poh,
+                    // so we can just exit
+                    return Ok(Some(BankingStageReturnType::LeaderRotation));
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+                _ => (),
+            };
             if poh_exit.load(Ordering::Relaxed) {
                 debug!("tick service exited");
-                return Ok(());
+                return Ok(None);
             }
         }
     }
@@ -242,13 +304,21 @@ impl BankingStage {
 }
 
 impl Service for BankingStage {
-    type JoinReturnType = ();
+    type JoinReturnType = Option<BankingStageReturnType>;
 
-    fn join(self) -> thread::Result<()> {
-        for thread_hdl in self.thread_hdls {
-            thread_hdl.join()?;
+    fn join(self) -> thread::Result<Option<BankingStageReturnType>> {
+        let mut return_value = None;
+
+        for bank_thread_hdl in self.bank_thread_hdls {
+            return_value = bank_thread_hdl.join()?;
         }
-        Ok(())
+
+        let tick_return_value = self.tick_producer.join()?;
+        if tick_return_value.is_some() {
+            return_value = tick_return_value;
+        }
+
+        Ok(return_value)
     }
 }
 
@@ -256,6 +326,7 @@ impl Service for BankingStage {
 mod tests {
     use super::*;
     use bank::Bank;
+    use banking_stage::BankingStageReturnType;
     use ledger::Block;
     use mint::Mint;
     use packet::to_packets;
@@ -273,9 +344,14 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
+            0,
+            None,
         );
         drop(verified_sender);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::ChannelDisconnected)
+        );
     }
 
     #[test]
@@ -287,9 +363,14 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
+            0,
+            None,
         );
         drop(entry_receiver);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::ChannelDisconnected)
+        );
     }
 
     #[test]
@@ -302,6 +383,8 @@ mod tests {
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
+            0,
+            None,
         );
         sleep(Duration::from_millis(500));
         drop(verified_sender);
@@ -310,7 +393,10 @@ mod tests {
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
         assert_eq!(entries[entries.len() - 1].id, bank.last_id());
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::ChannelDisconnected)
+        );
     }
 
     #[test]
@@ -324,6 +410,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
+            0,
+            None,
         );
 
         // good tx
@@ -359,7 +447,10 @@ mod tests {
             last_id = entries.last().unwrap().id;
         });
         drop(entry_receiver);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::ChannelDisconnected)
+        );
     }
     #[test]
     fn test_banking_stage_entryfication() {
@@ -374,6 +465,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
+            0,
+            None,
         );
 
         // Process a batch that includes a transaction that receives two tokens.
@@ -392,7 +485,10 @@ mod tests {
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
         drop(verified_sender);
-        assert_eq!(banking_stage.join().unwrap(), ());
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::ChannelDisconnected)
+        );
 
         // Collect the ledger and feed it to a new bank.
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
@@ -409,5 +505,24 @@ mod tests {
                 .for_each(|x| assert_eq!(*x, Ok(())));
         }
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+    }
+
+    #[test]
+    fn test_max_poh_height_shutdown() {
+        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let (_verified_sender_, verified_receiver) = channel();
+        let max_poh = 10;
+        let (banking_stage, _entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            Default::default(),
+            &bank.last_id(),
+            0,
+            Some(max_poh),
+        );
+        assert_eq!(
+            banking_stage.join().unwrap(),
+            Some(BankingStageReturnType::LeaderRotation)
+        );
     }
 }

@@ -110,7 +110,7 @@ impl WindowUtil for Window {
             let ls_lock = leader_scheduler_option.read().unwrap();
             if !ls_lock.use_only_bootstrap_leader {
                 // Calculate the next leader rotation height and check if we are the leader
-                let next_leader_rotation_height = consumed + ls_lock.entries_until_next_leader_rotation(consumed).expect("Leader rotation should exist when not using default implementation of LeaderScheduler");
+                let next_leader_rotation_height = consumed + ls_lock.count_until_next_leader_rotation(consumed).expect("Leader rotation should exist when not using default implementation of LeaderScheduler");
 
                 match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
                     Some(leader_id) if leader_id == *id => is_next_leader = true,

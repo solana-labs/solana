@@ -269,8 +269,12 @@ mod test {
         let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
 
         // Create a ledger
-        let (mint, my_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger("test_replicate_stage_leader_rotation_exit", 10_000);
+        let num_ending_ticks = 1;
+        let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+            "test_replicate_stage_leader_rotation_exit",
+            10_000,
+            num_ending_ticks,
+        );
         let mut last_id = genesis_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -303,7 +307,8 @@ mod test {
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         // Set up the bank
-        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
+        let (bank, _, _, _) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
@@ -354,7 +359,8 @@ mod test {
             .into_inner()
             .expect("RwLock for LeaderScheduler is still locked");
 
-        let (_, entry_height, _) =
+        leader_scheduler.reset();
+        let (_, entry_height, _, _) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
         assert_eq!(entry_height, bootstrap_height);

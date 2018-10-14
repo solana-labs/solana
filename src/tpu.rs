@@ -26,12 +26,11 @@
 //! ```
 
 use bank::Bank;
-use banking_stage::{BankingStage, Config};
+use banking_stage::{BankingStage, BankingStageReturnType, Config};
 use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
 use hash::Hash;
-use leader_scheduler::LeaderScheduler;
 use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
@@ -40,7 +39,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use write_stage::{WriteStage, WriteStageReturnType};
+use write_stage::WriteStage;
 
 pub enum TpuReturnType {
     LeaderRotation,
@@ -64,9 +63,9 @@ impl Tpu {
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
         sigverify_disabled: bool,
-        entry_height: u64,
+        poh_height: u64,
+        max_poh_height: Option<u64>,
         last_entry_id: &Hash,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -75,8 +74,14 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, tick_duration, last_entry_id);
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &bank,
+            verified_receiver,
+            tick_duration,
+            last_entry_id,
+            poh_height,
+            max_poh_height,
+        );
 
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,
@@ -84,8 +89,6 @@ impl Tpu {
             cluster_info.clone(),
             ledger_path,
             entry_receiver,
-            entry_height,
-            leader_scheduler,
         );
 
         let tpu = Tpu {
@@ -118,9 +121,9 @@ impl Service for Tpu {
     fn join(self) -> thread::Result<(Option<TpuReturnType>)> {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
-        self.banking_stage.join()?;
-        match self.write_stage.join()? {
-            WriteStageReturnType::LeaderRotation => Ok(Some(TpuReturnType::LeaderRotation)),
+        self.write_stage.join()?;
+        match self.banking_stage.join()? {
+            Some(BankingStageReturnType::LeaderRotation) => Ok(Some(TpuReturnType::LeaderRotation)),
             _ => Ok(None),
         }
     }

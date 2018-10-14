@@ -786,8 +786,12 @@ fn test_leader_to_validator_transition() {
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
-    let (mint, leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_leader_to_validator_transition", 10_000);
+    let num_ending_ticks = 1;
+    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        "test_leader_to_validator_transition",
+        10_000,
+        num_ending_ticks,
+    );
 
     let last_id = genesis_entries
         .last()
@@ -799,9 +803,8 @@ fn test_leader_to_validator_transition() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
-    let bootstrap_entries_len = bootstrap_entries.len();
+    let initial_poh_height = num_ending_ticks + bootstrap_entries.len() as u64;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
-    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
 
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
@@ -846,15 +849,15 @@ fn test_leader_to_validator_transition() {
 
     // Push leader "extra_transactions" past bootstrap_height,
     // make sure the leader stops.
-    assert!(ledger_initial_len < bootstrap_height);
-    for i in ledger_initial_len..(bootstrap_height + extra_transactions) {
+    assert!(initial_poh_height < bootstrap_height);
+    for i in initial_poh_height..(bootstrap_height + extra_transactions) {
         if i < bootstrap_height {
             // Poll to see that the bank state is updated after every transaction
             // to ensure that each transaction is packaged as a single entry,
             // so that we can be sure leader rotation is triggered
             let expected_balance = std::cmp::min(
-                bootstrap_height - ledger_initial_len,
-                i - ledger_initial_len + 1,
+                bootstrap_height - initial_poh_height,
+                i - initial_poh_height + 1,
             );
             let result = send_tx_and_retry_get_balance(
                 &leader_info,
@@ -888,7 +891,7 @@ fn test_leader_to_validator_transition() {
     // transactions earlier
     let mut leader_client = mk_client(&leader_info);
 
-    let maximum_bal = bootstrap_height - ledger_initial_len;
+    let maximum_bal = bootstrap_height - initial_poh_height;
     let bal = leader_client
         .poll_get_balance(&validator_id)
         .expect("Expected success when polling newly transitioned validator for balance")
@@ -897,11 +900,11 @@ fn test_leader_to_validator_transition() {
     assert!(bal <= maximum_bal);
 
     // Check the ledger to make sure it's the right height, we should've
-    // transitioned after the bootstrap_height entry
-    let (_, entry_height, _) =
+    // transitioned after poh_height == bootstrap_height
+    let (_, _, poh_height, _) =
         Fullnode::new_bank_from_ledger(&leader_ledger_path, &mut LeaderScheduler::default());
 
-    assert_eq!(entry_height, bootstrap_height);
+    assert_eq!(poh_height, bootstrap_height);
 
     // Shut down
     ncp.close().unwrap();
@@ -927,8 +930,9 @@ fn test_leader_validator_basic() {
     let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
+    let num_ending_ticks = 1;
     let (mint, leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_leader_to_validator_transition", 10_000);
+        create_tmp_sample_ledger("test_leader_validator_basic", 10_000, num_ending_ticks);
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -1082,8 +1086,9 @@ fn test_dropped_handoff_recovery() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
+    let num_ending_ticks = 1;
     let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_dropped_handoff_recovery", 10_000);
+        create_tmp_sample_ledger("test_dropped_handoff_recovery", 10_000, num_ending_ticks);
 
     let last_id = genesis_entries
         .last()
@@ -1227,8 +1232,12 @@ fn test_full_leader_validator_network() {
     }
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_full_leader_validator_network", 10_000);
+    let num_ending_ticks = 1;
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        "test_full_leader_validator_network",
+        10_000,
+        num_ending_ticks,
+    );
 
     let last_tick_id = genesis_entries
         .last()
