@@ -1,6 +1,6 @@
 #!/bin/bash -ex
 
-export RUST_LOG=solana=info
+export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 
 solana-keygen -o /config/leader-keypair.json
