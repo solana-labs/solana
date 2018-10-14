@@ -255,24 +255,6 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
 
-        // Create a ledger
-        let (mint, my_ledger_path, genesis_entries) =
-            create_sample_ledger("test_replicate_stage_leader_rotation_exit", 10_000);
-        let mut last_id = genesis_entries
-            .last()
-            .expect("expected at least one genesis entry")
-            .id;
-
-        // Write two entries to the ledger so that the validator is in the active set:
-        // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
-        // This will cause leader rotation after the bootstrap height
-        let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
-        let bootstrap_entries =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id);
-        last_id = bootstrap_entries.last().unwrap().id;
-        let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
-        ledger_writer.write_entries(bootstrap_entries).unwrap();
-
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
         let old_leader_id = Keypair::new().pubkey();
@@ -288,6 +270,32 @@ mod test {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Create a ledger
+        let (mint, my_ledger_path, genesis_entries) = create_sample_ledger(
+            "test_replicate_stage_leader_rotation_exit",
+            10_000,
+            old_leader_id,
+        );
+        let mut last_id = genesis_entries
+            .last()
+            .expect("expected at least one genesis entry")
+            .id;
+
+        // Write two entries to the ledger so that the validator is in the active set:
+        // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
+        // This will cause leader rotation after the bootstrap height
+        let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
+        let bootstrap_entries = make_active_set_entries(
+            &my_keypair,
+            &mint.keypair(),
+            &last_id,
+            &last_id,
+            old_leader_id,
+        );
+        last_id = bootstrap_entries.last().unwrap().id;
+        let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
+        ledger_writer.write_entries(bootstrap_entries).unwrap();
 
         // Set up the bank
         let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
@@ -315,7 +323,7 @@ mod test {
         let mut entries_to_send = vec![];
 
         while entries_to_send.len() < total_entries_to_send {
-            let entries = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+            let entries = next_entries_mut(&mut last_id, &mut num_hashes, vec![], old_leader_id);
             last_id = entries.last().expect("expected at least one entry").id;
             entries_to_send.extend(entries);
         }

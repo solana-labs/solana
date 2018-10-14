@@ -33,7 +33,7 @@ use fetch_stage::FetchStage;
 use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use service::Service;
-use signature::Keypair;
+use signature::{Keypair, KeypairUtil};
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -75,8 +75,13 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, entry_receiver) =
-            BankingStage::new(&bank, verified_receiver, tick_duration, last_entry_id);
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            keypair.pubkey(),
+            &bank,
+            verified_receiver,
+            tick_duration,
+            last_entry_id,
+        );
 
         let (write_stage, entry_forwarder) = WriteStage::new(
             keypair,

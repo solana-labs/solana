@@ -684,8 +684,11 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-            create_sample_ledger("test_wrong_role_transition", 10_000);
+        let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_sample_ledger(
+            "test_wrong_role_transition",
+            10_000,
+            bootstrap_leader_keypair.pubkey(),
+        );
 
         let last_id = genesis_entries
             .last()
@@ -695,8 +698,13 @@ mod tests {
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-        let first_entries =
-            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+        let first_entries = make_active_set_entries(
+            &validator_keypair,
+            &mint.keypair(),
+            &last_id,
+            &last_id,
+            bootstrap_leader_info.id,
+        );
 
         let ledger_initial_len = (genesis_entries.len() + first_entries.len()) as u64;
         ledger_writer.write_entries(first_entries).unwrap();
@@ -763,7 +771,7 @@ mod tests {
 
         // Create validator identity
         let (mint, validator_ledger_path, genesis_entries) =
-            create_sample_ledger("test_validator_to_leader_transition", 10_000);
+            create_sample_ledger("test_validator_to_leader_transition", 10_000, leader_id);
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
@@ -781,8 +789,13 @@ mod tests {
         //
         // 2) A vote from the validator
         let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
-        let bootstrap_entries =
-            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+        let bootstrap_entries = make_active_set_entries(
+            &validator_keypair,
+            &mint.keypair(),
+            &last_id,
+            &last_id,
+            leader_id,
+        );
         let bootstrap_entries_len = bootstrap_entries.len();
         last_id = bootstrap_entries.last().unwrap().id;
         ledger_writer.write_entries(bootstrap_entries).unwrap();
@@ -838,6 +851,7 @@ mod tests {
                 ledger_initial_len,
                 last_id,
                 &tvu_address,
+                leader_id,
             ).into_iter()
             .rev()
             .collect();

@@ -458,7 +458,7 @@ mod tests {
         // trigger a check for leader rotation. Because the next scheduled leader
         // is ourselves, we won't exit
         for _ in genesis_entry_height..bootstrap_height {
-            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![], leader_id);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
@@ -472,7 +472,7 @@ mod tests {
         // The write_stage will see that it's no longer the leader after
         // checking the schedule, and exit
         for _ in 0..seed_rotation_interval {
-            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![]);
+            let new_entry = next_entries_mut(&mut last_id, &mut num_hashes, vec![], leader_id);
             write_stage_info.entry_sender.send(new_entry).unwrap();
         }
 
@@ -522,7 +522,7 @@ mod tests {
         let new_account = Account::new(1, 10, dummy_id.clone());
         accounts.write().unwrap().insert(my_id, new_account.clone());
 
-        let entry = Entry::new(&Hash::default(), 0, vec![]);
+        let entry = Entry::new(&Hash::default(), 0, vec![], my_id);
 
         // Note: An slot is the period of leader_rotation_interval entries
         // time during which a leader is in power
@@ -611,7 +611,7 @@ mod tests {
 
         // Set up a dummy bank
         let bank = Arc::new(Bank::new_default(true));
-        let entry = Entry::new(&Hash::default(), 0, vec![]);
+        let entry = Entry::new(&Hash::default(), 0, vec![], my_id);
 
         // Note: An slot is the period of leader_rotation_interval entries
         // time during which a leader is in power

@@ -6,6 +6,7 @@ use entry::Entry;
 use hash::Hash;
 use poh::Poh;
 use result::Result;
+use solana_program_interface::pubkey::Pubkey;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use transaction::Transaction;
@@ -15,15 +16,26 @@ pub struct PohRecorder {
     poh: Arc<Mutex<Poh>>,
     bank: Arc<Bank>,
     sender: Sender<Vec<Entry>>,
+    my_id: Pubkey,
 }
 
 impl PohRecorder {
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
-    pub fn new(bank: Arc<Bank>, sender: Sender<Vec<Entry>>, last_entry_id: Hash) -> Self {
+    pub fn new(
+        bank: Arc<Bank>,
+        sender: Sender<Vec<Entry>>,
+        last_entry_id: Hash,
+        my_id: Pubkey,
+    ) -> Self {
         let poh = Arc::new(Mutex::new(Poh::new(last_entry_id)));
-        PohRecorder { poh, bank, sender }
+        PohRecorder {
+            poh,
+            bank,
+            sender,
+            my_id,
+        }
     }
 
     pub fn hash(&self) {
@@ -43,6 +55,7 @@ impl PohRecorder {
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: vec![],
+            leader_id: self.my_id,
         };
         self.sender.send(vec![entry])?;
         Ok(())
@@ -58,6 +71,7 @@ impl PohRecorder {
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: txs,
+            leader_id: self.my_id,
         };
         self.sender.send(vec![entry])?;
         Ok(())
@@ -69,6 +83,7 @@ mod tests {
     use super::*;
     use hash::hash;
     use mint::Mint;
+    use solana_program_interface::pubkey::Pubkey;
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use system_transaction::test_tx;
@@ -79,7 +94,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank, entry_sender, last_id);
+        let poh_recorder = PohRecorder::new(bank, entry_sender, last_id, Pubkey::default());
 
         //send some data
         let h1 = hash(b"hello world!");

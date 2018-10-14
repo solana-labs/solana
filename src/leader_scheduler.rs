@@ -432,11 +432,12 @@ pub fn make_active_set_entries(
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
+    leader_id: Pubkey,
 ) -> Vec<Entry> {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 1, *last_tick_id);
-    let transfer_entry = Entry::new(last_entry_id, 0, vec![transfer_tx]);
+    let transfer_entry = Entry::new(last_entry_id, 0, vec![transfer_tx], leader_id);
     let last_entry_id = transfer_entry.id;
 
     // 2) Create vote entry
@@ -445,7 +446,7 @@ pub fn make_active_set_entries(
         contact_info_version: 0,
     };
     let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, *last_tick_id, 0);
-    let vote_entry = Entry::new(&last_entry_id, 0, vec![vote_tx]);
+    let vote_entry = Entry::new(&last_entry_id, 0, vec![vote_tx], leader_id);
 
     vec![transfer_entry, vote_entry]
 }

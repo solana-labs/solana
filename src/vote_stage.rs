@@ -186,14 +186,14 @@ pub mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let hash0 = Hash::default();
 
-        // get a non-default hash last_id
-        let entry = next_entry(&hash0, 1, vec![]);
-        bank.register_entry_id(&entry.id);
-
         // Create a leader
         let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
         let leader_pubkey = leader_data.id.clone();
         let mut leader_cluster_info = ClusterInfo::new(leader_data).unwrap();
+
+        // get a non-default hash last_id
+        let entry = next_entry(&hash0, 1, vec![], leader_pubkey);
+        bank.register_entry_id(&entry.id);
 
         // give the leader some tokens
         let give_leader_tokens_tx =

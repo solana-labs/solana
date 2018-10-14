@@ -458,7 +458,7 @@ pub trait Block {
 
 impl Block for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
-        let genesis = [Entry::new_tick(0, start_hash)];
+        let genesis = [Entry::new_tick(0, start_hash, Pubkey::default())];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
         entry_pairs.all(|(x0, x1)| {
             let r = x1.verify(&x0.id);
@@ -524,11 +524,17 @@ pub fn next_entries_mut(
     start_hash: &mut Hash,
     num_hashes: &mut u64,
     transactions: Vec<Transaction>,
+    leader_id: Pubkey,
 ) -> Vec<Entry> {
     // TODO: ?? find a number that works better than |?
     //                                               V
     if transactions.is_empty() || transactions.len() == 1 {
-        vec![Entry::new_mut(start_hash, num_hashes, transactions)]
+        vec![Entry::new_mut(
+            start_hash,
+            num_hashes,
+            transactions,
+            leader_id,
+        )]
     } else {
         let mut chunk_start = 0;
         let mut entries = Vec::new();
@@ -572,6 +578,7 @@ pub fn next_entries_mut(
                 start_hash,
                 num_hashes,
                 transactions[chunk_start..chunk_end].to_vec(),
+                leader_id,
             ));
             chunk_start = chunk_end;
         }
@@ -585,10 +592,11 @@ pub fn next_entries(
     start_hash: &Hash,
     num_hashes: u64,
     transactions: Vec<Transaction>,
+    leader_id: Pubkey,
 ) -> Vec<Entry> {
     let mut id = *start_hash;
     let mut num_hashes = num_hashes;
-    next_entries_mut(&mut id, &mut num_hashes, transactions)
+    next_entries_mut(&mut id, &mut num_hashes, transactions, leader_id)
 }
 
 pub fn tmp_ledger_path(name: &str) -> String {
@@ -609,23 +617,23 @@ pub fn genesis(name: &str, num: i64) -> (Mint, String) {
     (mint, path)
 }
 
-fn create_ticks(num_ticks: usize, hash: &mut Hash) -> Vec<Entry> {
+fn create_ticks(num_ticks: usize, hash: &mut Hash, leader_id: Pubkey) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks);
     let mut num_hashes = 0;
     for _ in 0..num_ticks {
-        ticks.push(Entry::new_mut(hash, &mut num_hashes, vec![]));
+        ticks.push(Entry::new_mut(hash, &mut num_hashes, vec![], leader_id));
     }
 
     ticks
 }
 
-pub fn create_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
+pub fn create_sample_ledger(name: &str, num: i64, leader_id: Pubkey) -> (Mint, String, Vec<Entry>) {
     let mint = Mint::new(num);
     let path = tmp_ledger_path(name);
 
     // Create the entries
     let mut genesis = mint.create_entries();
-    let ticks = create_ticks(1, &mut mint.last_id());
+    let ticks = create_ticks(1, &mut mint.last_id(), leader_id);
     genesis.extend(ticks);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
@@ -656,16 +664,16 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
-        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
-        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
-        assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
+        assert!(vec![Entry::new_tick(0, &zero, Pubkey::default())][..].verify(&zero)); // singleton case 1
+        assert!(!vec![Entry::new_tick(0, &zero, Pubkey::default())][..].verify(&one)); // singleton case 2, bad
+        assert!(vec![next_entry(&zero, 0, vec![], Pubkey::default()); 2][..].verify(&zero)); // inductive step
 
-        let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
+        let mut bad_ticks = vec![next_entry(&zero, 0, vec![], Pubkey::default()); 2];
         bad_ticks[1].id = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
 
-    fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
+    fn make_tiny_test_entries(num: usize, leader_id: Pubkey) -> Vec<Entry> {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
@@ -684,6 +692,7 @@ mod tests {
                         Utc::now(),
                         one,
                     )],
+                    leader_id,
                 )
             }).collect()
     }
@@ -720,7 +729,7 @@ mod tests {
         //                                V
         let mut transactions = vec![tx0; 362];
         transactions.extend(vec![tx1; 100]);
-        next_entries(&zero, 0, transactions)
+        next_entries(&zero, 0, transactions, Pubkey::default())
     }
 
     #[test]
@@ -767,6 +776,7 @@ mod tests {
             num_hashes: 0,
             id: Hash::default(),
             transactions: vec![],
+            leader_id: Pubkey::default(),
         }).unwrap() as usize;
         assert!(tx_small_size < tx_large_size);
         assert!(tx_large_size < PACKET_DATA_SIZE);
@@ -775,13 +785,13 @@ mod tests {
 
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&id, 0, transactions.clone(), Pubkey::default());
         assert_eq!(entries0.len(), 1);
         assert!(entries0.verify(&id));
 
         // verify the split with uniform transactions
         let transactions = vec![tx_small.clone(); threshold * 2];
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&id, 0, transactions.clone(), Pubkey::default());
         assert_eq!(entries0.len(), 2);
         assert!(entries0.verify(&id));
 
@@ -792,7 +802,7 @@ mod tests {
 
         transactions.extend(large_transactions);
 
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&id, 0, transactions.clone(), Pubkey::default());
         assert!(entries0.len() >= 2);
         assert!(entries0.verify(&id));
     }
@@ -802,7 +812,7 @@ mod tests {
         use logger;
         logger::setup();
         let ledger_path = tmp_ledger_path("test_ledger_reader_writer");
-        let entries = make_tiny_test_entries(10);
+        let entries = make_tiny_test_entries(10, Pubkey::default());
 
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
@@ -880,7 +890,7 @@ mod tests {
         use logger;
         logger::setup();
 
-        let entries = make_tiny_test_entries(10);
+        let entries = make_tiny_test_entries(10, Pubkey::default());
         let ledger_path = tmp_ledger_path("test_recover_ledger");
 
         // truncate data file, tests recover inside read_ledger_check()
@@ -931,7 +941,7 @@ mod tests {
         use logger;
         logger::setup();
 
-        let entries = make_tiny_test_entries(10);
+        let entries = make_tiny_test_entries(10, Pubkey::default());
         let ledger_path = tmp_ledger_path("test_verify_ledger");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
@@ -948,7 +958,7 @@ mod tests {
     fn test_get_entries_bytes() {
         use logger;
         logger::setup();
-        let entries = make_tiny_test_entries(10);
+        let entries = make_tiny_test_entries(10, Pubkey::default());
         let ledger_path = tmp_ledger_path("test_raw_entries");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
@@ -1002,8 +1012,7 @@ mod tests {
         let bytes6 = bytes6 as usize;
         assert_eq!(bytes6, bytes);
 
-        // Read out of range
+        /// Read out of range
         assert!(window.get_entries_bytes(20, 2, &mut buf).is_err());
     }
-
 }

@@ -113,11 +113,11 @@ fn tmp_copy_ledger(from: &str, name: &str) -> String {
     tostr
 }
 
-fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
+fn make_tiny_test_entries(start_hash: Hash, num: usize, leader_id: Pubkey) -> Vec<Entry> {
     let mut id = start_hash;
     let mut num_hashes = 0;
     (0..num)
-        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![]))
+        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![], leader_id))
         .collect()
 }
 
@@ -142,7 +142,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // write a bunch more ledger into leader's ledger, this should populate his window
     // and force him to respond to repair from the ledger window
     {
-        let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize);
+        let entries =
+            make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize, Pubkey::default());
         let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
 
         writer.write_entries(entries).unwrap();
@@ -798,13 +799,14 @@ fn test_leader_to_validator_transition() {
 
     // Create the leader node information
     let leader_keypair = Keypair::new();
+    let leader_pubkey = leader_keypair.pubkey();
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let (mint, leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_leader_to_validator_transition", 10_000);
+        create_sample_ledger("test_leader_to_validator_transition", 10_000, leader_pubkey);
 
     let last_id = genesis_entries
         .last()
@@ -814,16 +816,22 @@ fn test_leader_to_validator_transition() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
-    let bootstrap_entries =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+    let bootstrap_entries = make_active_set_entries(
+        &validator_keypair,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        leader_pubkey,
+    );
     let bootstrap_entries_len = bootstrap_entries.len();
     ledger_writer.write_entries(bootstrap_entries).unwrap();
     let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
 
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
+    assert!(bootstrap_height > ledger_initial_len);
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
+        leader_pubkey,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(leader_rotation_interval * 2),
@@ -936,6 +944,7 @@ fn test_leader_validator_basic() {
 
     // Create the leader node information
     let leader_keypair = Keypair::new();
+    let leader_pubkey = leader_keypair.pubkey();
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
@@ -945,7 +954,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (mint, leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_leader_to_validator_transition", 10_000);
+        create_sample_ledger("test_leader_to_validator_transition", 10_000, leader_pubkey);
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -962,14 +971,20 @@ fn test_leader_validator_basic() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
-    let bootstrap_entries =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+    let bootstrap_entries = make_active_set_entries(
+        &validator_keypair,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        leader_pubkey,
+    );
     let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Create the leader scheduler config
     let num_bootstrap_slots = 2;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+    assert!(bootstrap_height > ledger_initial_len);
     let leader_scheduler_config = LeaderSchedulerConfig::new(
         leader_info.id,
         Some(bootstrap_height),
@@ -1095,12 +1110,16 @@ fn test_dropped_handoff_recovery() {
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_pubkey = bootstrap_leader_keypair.pubkey();
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_dropped_handoff_recovery", 10_000);
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_sample_ledger(
+        "test_dropped_handoff_recovery",
+        10_000,
+        bootstrap_leader_pubkey,
+    );
 
     let last_id = genesis_entries
         .last()
@@ -1118,8 +1137,13 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that he will be in
     // leader election active set
-    let first_entries =
-        make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id, &last_id);
+    let first_entries = make_active_set_entries(
+        &next_leader_keypair,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        bootstrap_leader_pubkey,
+    );
     let first_entries_len = first_entries.len();
 
     // Write the entries
@@ -1141,7 +1165,7 @@ fn test_dropped_handoff_recovery() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = ledger_initial_len + 1;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
+        bootstrap_leader_pubkey,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
@@ -1231,6 +1255,7 @@ fn test_full_leader_validator_network() {
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_pubkey = bootstrap_leader_keypair.pubkey();
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
@@ -1244,8 +1269,11 @@ fn test_full_leader_validator_network() {
     }
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_full_leader_validator_network", 10_000);
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_sample_ledger(
+        "test_full_leader_validator_network",
+        10_000,
+        bootstrap_leader_pubkey,
+    );
 
     let last_tick_id = genesis_entries
         .last()
@@ -1264,12 +1292,20 @@ fn test_full_leader_validator_network() {
     // write stage.
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
+    let mut ledger_len = genesis_entries.len();
 
     for node_keypair in node_keypairs.iter() {
         // Make entries to give the validator some stake so that he will be in
         // leader election active set
-        let bootstrap_entries =
-            make_active_set_entries(node_keypair, &mint.keypair(), &last_entry_id, &last_tick_id);
+        let bootstrap_entries = make_active_set_entries(
+            node_keypair,
+            &mint.keypair(),
+            &last_entry_id,
+            &last_tick_id,
+            bootstrap_leader_pubkey,
+        );
+
+        ledger_len += bootstrap_entries.len();
 
         // Write the entries
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
@@ -1282,12 +1318,11 @@ fn test_full_leader_validator_network() {
 
     // Create the common leader scheduling configuration
     let num_slots_per_epoch = (N + 1) as u64;
-    let num_bootstrap_slots = 2;
     let leader_rotation_interval = 5;
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-    let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+    let bootstrap_height = ledger_len as u64;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
+        bootstrap_leader_pubkey,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
@@ -1307,7 +1342,7 @@ fn test_full_leader_validator_network() {
 
     let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
     let mut t_nodes = vec![run_node(
-        bootstrap_leader_info.id,
+        bootstrap_leader_pubkey,
         bootstrap_leader,
         exit.clone(),
     )];

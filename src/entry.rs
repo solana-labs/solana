@@ -32,6 +32,9 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
+    // The leader that created this entry
+    pub leader_id: Pubkey,
+
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,
 
@@ -46,13 +49,19 @@ pub struct Entry {
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
+    pub fn new(
+        start_hash: &Hash,
+        num_hashes: u64,
+        transactions: Vec<Transaction>,
+        leader_id: Pubkey,
+    ) -> Self {
         let num_hashes = num_hashes + if transactions.is_empty() { 0 } else { 1 };
         let id = next_hash(start_hash, 0, &transactions);
         let entry = Entry {
             num_hashes,
             id,
             transactions,
+            leader_id,
         };
 
         let size = serialized_size(&entry).unwrap();
@@ -99,6 +108,7 @@ impl Entry {
     pub fn will_fit(transactions: Vec<Transaction>) -> bool {
         serialized_size(&Entry {
             num_hashes: 0,
+            leader_id: Pubkey::default(),
             id: Hash::default(),
             transactions,
         }).unwrap()
@@ -146,8 +156,9 @@ impl Entry {
         start_hash: &mut Hash,
         num_hashes: &mut u64,
         transactions: Vec<Transaction>,
+        leader_id: Pubkey,
     ) -> Self {
-        let entry = Self::new(start_hash, *num_hashes, transactions);
+        let entry = Self::new(start_hash, *num_hashes, transactions, leader_id);
         *start_hash = entry.id;
         *num_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
@@ -156,8 +167,9 @@ impl Entry {
 
     /// Creates a Entry from the number of hashes `num_hashes` since the previous transaction
     /// and that resulting `id`.
-    pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
+    pub fn new_tick(num_hashes: u64, id: &Hash, leader_id: Pubkey) -> Self {
         Entry {
+            leader_id,
             num_hashes,
             id: *id,
             transactions: vec![],
@@ -202,12 +214,18 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
 }
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
-pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
+pub fn next_entry(
+    start_hash: &Hash,
+    num_hashes: u64,
+    transactions: Vec<Transaction>,
+    leader_id: Pubkey,
+) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
         id: next_hash(start_hash, num_hashes, &transactions),
         transactions,
+        leader_id,
     }
 }
 
@@ -226,10 +244,10 @@ mod tests {
     fn test_entry_verify() {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
-        assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
-        assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
-        assert!(!next_entry(&zero, 1, vec![]).verify(&one)); // inductive step, bad
+        assert!(Entry::new_tick(0, &zero, Pubkey::default()).verify(&zero)); // base case
+        assert!(!Entry::new_tick(0, &zero, Pubkey::default()).verify(&one)); // base case, bad
+        assert!(next_entry(&zero, 1, vec![], Pubkey::default()).verify(&zero)); // inductive step
+        assert!(!next_entry(&zero, 1, vec![], Pubkey::default()).verify(&one)); // inductive step, bad
     }
 
     #[test]
@@ -240,7 +258,7 @@ mod tests {
         let keypair = Keypair::new();
         let tx0 = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
         let tx1 = Transaction::system_new(&keypair, keypair.pubkey(), 1, zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], Pubkey::default());
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
@@ -264,7 +282,7 @@ mod tests {
         );
         let tx1 =
             Transaction::budget_new_signature(&keypair, keypair.pubkey(), keypair.pubkey(), zero);
-        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()], Pubkey::default());
         assert!(e0.verify(&zero));
 
         // Next, swap two witness transactions and ensure verification fails.
@@ -276,11 +294,11 @@ mod tests {
     #[test]
     fn test_next_entry() {
         let zero = Hash::default();
-        let tick = next_entry(&zero, 1, vec![]);
+        let tick = next_entry(&zero, 1, vec![], Pubkey::default());
         assert_eq!(tick.num_hashes, 1);
         assert_ne!(tick.id, zero);
 
-        let tick = next_entry(&zero, 0, vec![]);
+        let tick = next_entry(&zero, 0, vec![], Pubkey::default());
         assert_eq!(tick.num_hashes, 0);
         assert_eq!(tick.id, zero);
 
@@ -292,7 +310,7 @@ mod tests {
             Utc::now(),
             zero,
         );
-        let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
+        let entry0 = next_entry(&zero, 1, vec![tx0.clone()], Pubkey::default());
         assert_eq!(entry0.num_hashes, 1);
         assert_eq!(entry0.id, next_hash(&zero, 1, &vec![tx0]));
     }
@@ -303,6 +321,6 @@ mod tests {
         let zero = Hash::default();
         let keypair = Keypair::new();
         let tx = Transaction::system_new(&keypair, keypair.pubkey(), 0, zero);
-        next_entry(&zero, 0, vec![tx]);
+        next_entry(&zero, 0, vec![tx], Pubkey::default());
     }
 }
