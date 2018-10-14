@@ -64,12 +64,15 @@ up)
 
   (
     set -x
+    RUST_LOG="solana=warn,solana_fullnode=info,solana::drone=info,solana::banking_stage=info"
+
     docker run \
       --detach \
       --name solana-localnet \
       --rm \
       --publish 8899:8899 \
       --tty \
+      --env RUST_LOG="$RUST_LOG" \
       solanalabs/solana:"$channel"
 
   )
