@@ -520,9 +520,9 @@ impl Bank {
         &self,
         tx_program_id: &Pubkey,
         tx: &Transaction,
-        program_index: usize,
+        instruction_index: usize,
         accounts: &mut [&mut Account],
-    ) -> bool {
+    ) -> Result<()> {
         let loaded_contracts = self.loaded_contracts.write().unwrap();
         match loaded_contracts.get(&tx_program_id) {
             Some(dc) => {
@@ -532,10 +532,13 @@ impl Bank {
                     .map(|(key, account)| KeyedAccount { key, account })
                     .collect();
 
-                dc.call(&mut infos, tx.userdata(program_index));
-                true
+                if dc.call(&mut infos, tx.userdata(instruction_index)) {
+                    Ok(())
+                } else {
+                    Err(BankError::ProgramRuntimeError(instruction_index as u8))
+                }
             }
-            None => false,
+            None => Err(BankError::UnknownContractId(instruction_index as u8)),
         }
     }
 
@@ -628,10 +631,10 @@ impl Bank {
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if self.loaded_contract(tx_program_id, tx, instruction_index, program_accounts) {
         } else {
-            return Err(BankError::UnknownContractId(instruction_index as u8));
+            self.loaded_contract(tx_program_id, tx, instruction_index, program_accounts)?;
         }
+
         // Verify the transaction
         for ((pre_program_id, pre_tokens), post_account) in
             pre_data.iter().zip(program_accounts.iter())

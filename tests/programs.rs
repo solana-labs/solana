@@ -51,7 +51,7 @@ fn test_bpf_file_noop_rust() {
             .collect();
 
         let dp = DynamicProgram::new_bpf_from_file("noop_rust".to_string());
-        dp.call(&mut infos, &data);
+        assert!(dp.call(&mut infos, &data));
     }
 }
 
@@ -73,7 +73,7 @@ fn test_bpf_file_move_funds_c() {
             .collect();
 
         let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
-        dp.call(&mut infos, &data);
+        assert!(dp.call(&mut infos, &data));
     }
 }
 
@@ -97,7 +97,7 @@ fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubk
             .collect();
 
         let dp = DynamicProgram::new_bpf_from_file("tictactoe_c".to_string());
-        dp.call(&mut infos, &data);
+        assert!(dp.call(&mut infos, &data));
     }
 }
 
@@ -143,7 +143,7 @@ fn test_native_file_noop() {
             .collect();
 
         let dp = DynamicProgram::new_native("noop".to_string()).unwrap();
-        dp.call(&mut infos, &data);
+        assert!(dp.call(&mut infos, &data));
     }
 }
 
@@ -164,7 +164,7 @@ fn test_native_file_move_funds_success() {
             .collect();
 
         let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-        dp.call(&mut infos, &data);
+        assert!(dp.call(&mut infos, &data));
     }
     assert_eq!(0, accounts[0].tokens);
     assert_eq!(101, accounts[1].tokens);
@@ -187,7 +187,7 @@ fn test_native_file_move_funds_insufficient_funds() {
             .collect();
 
         let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-        dp.call(&mut infos, &data);
+        assert!(!dp.call(&mut infos, &data));
     }
     assert_eq!(10, accounts[0].tokens);
     assert_eq!(1, accounts[1].tokens);
@@ -217,7 +217,7 @@ fn test_program_native_move_funds_succes_many_threads() {
                             .collect();
 
                         let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-                        dp.call(&mut infos, &data);
+                        assert!(dp.call(&mut infos, &data));
                     }
                     assert_eq!(0, accounts[0].tokens);
                     assert_eq!(101, accounts[1].tokens);
@@ -276,7 +276,7 @@ fn test_system_program_load_call() {
                         .map(|(key, account)| KeyedAccount { key, account })
                         .collect();
 
-                    dp.call(&mut infos, &data);
+                    assert!(dp.call(&mut infos, &data));
                 }
                 None => panic!("failed to find program in hash"),
             }
@@ -329,7 +329,7 @@ fn test_system_program_load_call_many_threads() {
                                     .map(|(key, account)| KeyedAccount { key, account })
                                     .collect();
 
-                                dp.call(&mut infos, &data);
+                                assert!(dp.call(&mut infos, &data));
                             }
                             None => panic!("failed to find program in hash"),
                         }

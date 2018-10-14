@@ -64,7 +64,7 @@ impl ProgramPath {
 
 // All programs export a symbol named process()
 const ENTRYPOINT: &str = "process";
-type Entrypoint = unsafe extern "C" fn(infos: &mut Vec<KeyedAccount>, data: &[u8]);
+type Entrypoint = unsafe extern "C" fn(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool;
 
 #[derive(Debug)]
 pub enum DynamicProgram {
@@ -168,7 +168,7 @@ impl DynamicProgram {
         }
     }
 
-    pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) {
+    pub fn call(&self, infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
         match self {
             DynamicProgram::Native { name, library } => unsafe {
                 let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
@@ -178,7 +178,7 @@ impl DynamicProgram {
                         e, ENTRYPOINT, name
                     ),
                 };
-                entrypoint(infos, data);
+                entrypoint(infos, data)
             },
             DynamicProgram::Bpf { prog, .. } => {
                 println!("Instructions: {}", prog.len() / 8);
@@ -195,6 +195,7 @@ impl DynamicProgram {
                 let mut v = DynamicProgram::serialize(infos, data);
                 vm.prog_exec(v.as_mut_slice());
                 DynamicProgram::deserialize(infos, &v);
+                true // TODO: return false on Bpf program failure
             }
         }
     }

@@ -45,10 +45,11 @@ fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str, data: &[u8]) -> R
 }
 
 #[no_mangle]
-pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) {
+pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
     let code_data = keyed_accounts[0].account.userdata.clone();
     let code = str::from_utf8(&code_data).unwrap();
     run_lua(keyed_accounts, &code, data).unwrap();
+    true
 }
 
 #[cfg(test)]
