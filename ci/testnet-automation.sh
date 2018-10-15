@@ -9,7 +9,7 @@ buildkite-agent artifact download "solana_*.snap" .
 source ci/upload_ci_artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
-[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
+[[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 150"
 [[ -n $LEADER_CPU_MACHINE_TYPE ]] ||
   LEADER_CPU_MACHINE_TYPE="n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100"
 [[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
