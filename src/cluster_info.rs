@@ -496,6 +496,7 @@ impl ClusterInfo {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn broadcast(
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+        poh_height: u64,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -537,13 +538,11 @@ impl ClusterInfo {
                 br_idx
             );
 
-            // Make sure the next leader in line knows about the last entry before rotation
-            // so he can initiate repairs if necessary
-            let entry_height = idx + 1;
-
+            // Make sure the next leader in line knows about the entries before his slot in the leader
+            // rotation so he can initiate repairs if necessary
             {
                 let ls_lock = leader_scheduler.read().unwrap();
-                let next_leader_id = ls_lock.get_scheduled_leader(entry_height);
+                let next_leader_id = ls_lock.get_scheduled_leader(poh_height);
                 // In the case the next scheduled leader is None, then the write_stage moved
                 // the schedule too far ahead and we no longer are in the known window
                 // (will happen during calculation of the next set of slots every epoch or

@@ -383,6 +383,7 @@ impl Fullnode {
                 entry_height,
                 entry_receiver,
                 leader_scheduler.clone(),
+                poh_height,
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -536,6 +537,7 @@ impl Fullnode {
             entry_height,
             blob_receiver,
             self.leader_scheduler.clone(),
+            poh_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);
