@@ -38,7 +38,7 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 validatorNodeCount=5
 clientNodeCount=1
-leaderBootDiskSizeInGb=1000
+leaderBootDiskSizeInGb=512
 validatorBootDiskSizeInGb=$leaderBootDiskSizeInGb
 clientBootDiskSizeInGb=75
 
