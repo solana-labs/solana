@@ -51,16 +51,6 @@ impl PubSubService {
                         let session = Arc::new(Session::new(context.sender().clone()));
                         session.on_drop(Box::new(|| {
                             info!("Pubsub connection dropped");
-                            // Following should not be required as jsonrpc_pubsub will
-                            // unsubscribe automatically once the websocket is dropped ...
-                            /*
-                            for (_, (bank_sub_id, pubkey)) in self.account_subscriptions.read().unwrap().iter() {
-                                server_bank.remove_account_subscription(bank_sub_id, pubkey);
-                            }
-                            for (_, (bank_sub_id, signature)) in self.signature_subscriptions.read().unwrap().iter() {
-                                server_bank.remove_signature_subscription(bank_sub_id, signature);
-                            }
-                            */
                         }));
                         session
                 })
@@ -93,7 +83,7 @@ build_rpc_trait! {
 
             // Unsubscribe from account notification subscription.
             #[rpc(name = "accountUnsubscribe")]
-            fn account_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
+            fn account_unsubscribe(&self, SubscriptionId) -> Result<bool>;
         }
         #[pubsub(name = "signatureNotification")] {
             // Get notification when signature is verified
@@ -103,7 +93,7 @@ build_rpc_trait! {
 
             // Unsubscribe from signature notification subscription.
             #[rpc(name = "signatureUnsubscribe")]
-            fn signature_unsubscribe(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
+            fn signature_unsubscribe(&self, SubscriptionId) -> Result<bool>;
         }
     }
 }
@@ -163,7 +153,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .add_account_subscription(bank_sub_id, pubkey, sink);
     }
 
-    fn account_unsubscribe(&self, _meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("account_unsubscribe");
         if let Some((bank_sub_id, pubkey)) = self.account_subscriptions.write().unwrap().remove(&id)
         {
@@ -223,7 +213,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
     }
 
-    fn signature_unsubscribe(&self, _meta: Self::Metadata, id: SubscriptionId) -> Result<bool> {
+    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("signature_unsubscribe");
         if let Some((bank_sub_id, signature)) =
             self.signature_subscriptions.write().unwrap().remove(&id)
