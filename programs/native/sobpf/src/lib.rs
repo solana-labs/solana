@@ -105,7 +105,7 @@ pub enum BpfLoader {
 }
 
 #[no_mangle]
-pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) {
+pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
     println!("sobpf: AccountInfos: {:#?}", keyed_accounts);
     println!("sobpf: data: {:?} len: {}", tx_data, tx_data.len());
 
@@ -138,7 +138,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) {
             }
         } else {
             println!("deserialize failed: {:?}", tx_data);
-            return; // TODO false
+            return false;
         }
         println!("Call BPF, {} Instructions", prog.len() / 8);
 
@@ -153,6 +153,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) {
         let mut v = serialize_state(&mut keyed_accounts[1..], &tx_data);
         if 0 == vm.prog_exec(v.as_mut_slice()) {
             println!("BPF program failed");
+            return false;
         }
         deserialize_state(&mut keyed_accounts[1..], &v);
     } else if let Ok(instruction) = deserialize(tx_data) {
@@ -162,7 +163,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) {
                     println!("LoaderInstruction::Write offset {} bits {:?}", offset, bits);
                     let offset = offset as usize;
                     if keyed_accounts[0].account.userdata.len() <= offset + bits.len() {
-                        return; // TODO  Err(ProgramError::Overflow);
+                        return false;
                     }
                     // TODO support both name and bits?  only name supported now
                     // TODO this should be in finalize
@@ -193,7 +194,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) {
             }
         } else {
             println!("Invalid program transaction: {:?}", tx_data);
-            return; // TODO false
+            return false;
         }
-    return; // TODO true;
+    true
 }

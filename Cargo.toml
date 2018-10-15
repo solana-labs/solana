@@ -137,7 +137,6 @@ name = "chacha"
 members = [
     ".",
     "common",
-    
     "programs/native/move_funds",
     "programs/native/noop",
     "programs/native/sobpf",

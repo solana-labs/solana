@@ -6,5 +6,5 @@ use solana_program_interface::account::KeyedAccount;
 pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], data: &[u8]) ->bool {
     println!("noop: AccountInfos: {:#?}", keyed_accounts);
     println!("noop: data: {:?}", data);
-    true;
+    true
 }

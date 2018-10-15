@@ -647,10 +647,10 @@ impl Bank {
                 }).collect();
             keyed_accounts.append(&mut keyed_accounts2);
 
-            if NativeProgram::process_transaction(
+            if !NativeProgram::process_transaction(
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
-            ).is_err()
+            )
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }

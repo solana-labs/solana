@@ -1,21 +1,17 @@
+
 extern crate bincode;
 extern crate elf;
 extern crate solana;
 extern crate solana_program_interface;
 
 use solana::bank::Bank;
-#[cfg(feature = "bpf_c")]
 use solana::dynamic_program::{NativeProgram};
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
-#[cfg(feature = "bpf_c")]
 use solana::transaction::Transaction;
-#[cfg(feature = "bpf_c")]
-
-#[cfg(feature = "bpf_c")]
 
 // TODO test modified user data
 // TODO test failure if account tokens decrease but not assigned to program
@@ -80,6 +76,7 @@ fn test_transaction_load_native() {
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 }
 
+#[cfg(feature = "bpf_c")]
 #[test]
 fn test_transaction_load_bpf() {
     logger::setup();
