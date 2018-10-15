@@ -148,23 +148,11 @@ impl RpcSol for RpcSolImpl {
     }
 
     fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
-        let pubkey_vec = bs58::decode(id)
-            .into_vec()
-            .map_err(|_| Error::invalid_request())?;
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            return Err(Error::invalid_request());
-        }
-        let pubkey = Pubkey::new(&pubkey_vec);
+        let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_account_info(pubkey)
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64> {
-        let pubkey_vec = bs58::decode(id)
-            .into_vec()
-            .map_err(|_| Error::invalid_request())?;
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            return Err(Error::invalid_request());
-        }
-        let pubkey = Pubkey::new(&pubkey_vec);
+        let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_balance(pubkey)
     }
     fn get_finality(&self, meta: Self::Metadata) -> Result<usize> {
@@ -174,13 +162,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.get_last_id()
     }
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
-        let signature_vec = bs58::decode(id)
-            .into_vec()
-            .map_err(|_| Error::invalid_request())?;
-        if signature_vec.len() != mem::size_of::<Signature>() {
-            return Err(Error::invalid_request());
-        }
-        let signature = Signature::new(&signature_vec);
+        let signature = verify_signature(id)?;
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
@@ -197,17 +179,13 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.get_transaction_count()
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
+        let pubkey = verify_pubkey(id)?;
+
         let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
         drone_addr.set_port(DRONE_PORT);
-        let pubkey_vec = bs58::decode(id)
-            .into_vec()
-            .map_err(|_| Error::invalid_request())?;
-        if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-            return Err(Error::invalid_request());
-        }
-        let pubkey = Pubkey::new(&pubkey_vec);
         let signature =
             request_airdrop(&drone_addr, &pubkey, tokens).map_err(|_| Error::internal_error())?;
+
         let now = Instant::now();
         let mut signature_status;
         loop {
@@ -222,12 +200,12 @@ impl RpcSol for RpcSolImpl {
         }
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
-        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
         let tx: Transaction = deserialize(&data).map_err(|err| {
             debug!("send_transaction: deserialize error: {:?}", err);
             Error::invalid_request()
         })?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
         transactions_socket
             .send_to(&data, transactions_addr)
             .map_err(|err| {
@@ -325,32 +303,63 @@ fn get_leader_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr
     }
 }
 
+fn verify_pubkey(input: String) -> Result<Pubkey> {
+    let pubkey_vec = bs58::decode(input)
+        .into_vec()
+        .map_err(|_| Error::invalid_request())?;
+    if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+        Err(Error::invalid_request())
+    } else {
+        Ok(Pubkey::new(&pubkey_vec))
+    }
+}
+
+fn verify_signature(input: String) -> Result<Signature> {
+    let signature_vec = bs58::decode(input)
+        .into_vec()
+        .map_err(|_| Error::invalid_request())?;
+    if signature_vec.len() != mem::size_of::<Signature>() {
+        Err(Error::invalid_request())
+    } else {
+        Ok(Signature::new(&signature_vec))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use bank::Bank;
-    use cluster_info::NodeInfo;
+    use bincode::serialize;
+    use cluster_info::{Node, NodeInfo};
+    use fullnode::Fullnode;
+    use hash::{hash, Hash};
     use jsonrpc_core::Response;
+    use leader_scheduler::LeaderScheduler;
+    use ledger::tmp_ledger_with_mint;
     use mint::Mint;
+    use reqwest;
+    use reqwest::header::CONTENT_TYPE;
     use signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
-    #[test]
-    fn test_rpc_request() {
+    fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let alice = Mint::new(10_000);
-        let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
 
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+        let tx = Transaction::system_move(&alice.keypair(), pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
         ));
+        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        cluster_info.write().unwrap().insert(&leader);
+        cluster_info.write().unwrap().set_leader(leader.id);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -363,36 +372,102 @@ mod tests {
             rpc_addr,
             exit,
         };
+        (io, meta, last_id, alice.keypair())
+    }
+
+    #[test]
+    fn test_rpc_new() {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
+        ));
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
+        let exit = Arc::new(AtomicBool::new(false));
+        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, exit);
+        let thread = rpc_service.thread_hdl.thread();
+        assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
+
+        let rpc_string = format!("http://{}", rpc_addr.to_string());
+        let client = reqwest::Client::new();
+        let request = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "getBalance",
+           "params": vec![alice.pubkey().to_string()],
+        });
+        let mut response = client
+            .post(&rpc_string)
+            .header(CONTENT_TYPE, "application/json")
+            .body(request.to_string())
+            .send()
+            .unwrap();
+        let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+
+        assert_eq!(10_000, json["result"].as_u64().unwrap());
+    }
+
+    #[test]
+    fn test_rpc_request_processor_new() {
+        let alice = Mint::new(10_000);
+        let bob_pubkey = Keypair::new().pubkey();
+        let bank = Bank::new(&alice);
+        let arc_bank = Arc::new(bank);
+        let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
+        thread::spawn(move || {
+            let last_id = arc_bank.last_id();
+            let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+            arc_bank
+                .process_transaction(&tx)
+                .expect("process transaction");
+        }).join()
+        .unwrap();
+        assert_eq!(request_processor.get_transaction_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn test_rpc_get_balance() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":20,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
-
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_tx_count() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
-
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_account_info() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
             bob_pubkey
         );
-
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = r#"{
             "jsonrpc":"2.0",
             "result":{
@@ -404,48 +479,209 @@ mod tests {
         "#;
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
-
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
     }
+
     #[test]
-    fn test_rpc_request_bad_parameter_type() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+    fn test_rpc_confirm_tx() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
 
-        let mut io = MetaIoHandler::default();
-        let rpc = RpcSolImpl;
-        io.extend_with(rpc.to_delegate());
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":[1234567890]}"#;
-        let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
-            cluster_info: Arc::new(RwLock::new(
-                ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
-            )),
-            rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            exit: Arc::new(AtomicBool::new(false)),
-        };
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
+            tx.signature
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
 
-        let res = io.handle_request_sync(req, meta);
-        let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params: invalid type: integer `1234567890`, expected a string."},"id":1}"#;
+    #[test]
+    fn test_rpc_get_signature_status() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
+
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            tx.signature
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":"Confirmed","id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+
+        // Test getSignatureStatus request on unprocessed tx
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 10, last_id, 0);
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
+            tx.signature
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_finality() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getFinality"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":18446744073709551615,"id":1}}"#);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_get_last_id() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLastId"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, last_id);
+        let expected: Response =
+            serde_json::from_str(&expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_rpc_request_airdrop() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
+        // Expect internal error because no leader is running
+        let req = format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
+            bob_pubkey
+        );
+        let res = io.handle_request_sync(&req, meta);
+        let expected =
+            r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1}"#;
         let expected: Response =
             serde_json::from_str(expected).expect("expected response deserialization");
-
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
     }
+
     #[test]
-    fn test_rpc_request_bad_signature() {
+    fn test_rpc_start_sub_channel() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"startSubscriptionChannel"}}"#);
+        let res = io.handle_request_sync(&req, meta);
+        let json: Value = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let port = json["result"]["port"].as_u64().unwrap();
+        assert!(8000 <= port && port < 10000);
+        assert!(json["result"]["path"].is_string());
+    }
+
+    #[test]
+    fn test_rpc_send_tx() {
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+
+        let alice = Mint::new(10_000_000);
+        let bank = Bank::new(&alice);
+        let bob_pubkey = Keypair::new().pubkey();
+        let leader_data = leader.info.clone();
+        let ledger_path = tmp_ledger_with_mint("rpc_send_tx", &alice);
+
+        let last_id = bank.last_id();
+        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+        let serial_tx = serialize(&tx).unwrap();
+        let rpc_port = 22222; // Needs to be distinct known number to not conflict with other tests
+
+        let genesis_entries = &alice.create_entries();
+        let entry_height = genesis_entries.len() as u64;
+        let server = Fullnode::new_with_bank(
+            leader_keypair,
+            bank,
+            entry_height,
+            &genesis_entries,
+            leader,
+            None,
+            &ledger_path,
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
+            Some(rpc_port),
+        );
+        sleep(Duration::from_millis(900));
+
+        let client = reqwest::Client::new();
+        let request = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "sendTransaction",
+           "params": json!(vec![serial_tx])
+        });
+        let mut rpc_addr = leader_data.contact_info.ncp;
+        rpc_addr.set_port(22222);
+        let rpc_string = format!("http://{}", rpc_addr.to_string());
+        let mut response = client
+            .post(&rpc_string)
+            .header(CONTENT_TYPE, "application/json")
+            .body(request.to_string())
+            .send()
+            .unwrap();
+        let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+        let signature = &json["result"];
+
+        sleep(Duration::from_millis(500));
+
+        let client = reqwest::Client::new();
+        let request = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "confirmTransaction",
+           "params": vec![signature],
+        });
+        let mut response = client
+            .post(&rpc_string)
+            .header(CONTENT_TYPE, "application/json")
+            .body(request.to_string())
+            .send()
+            .unwrap();
+        let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+
+        assert_eq!(true, json["result"]);
+
+        server.close().unwrap();
+        remove_dir_all(ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_rpc_send_bad_tx() {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
-        let req =
-            r#"{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["a1b2c3d4e5"]}"#;
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             cluster_info: Arc::new(RwLock::new(
@@ -455,16 +691,18 @@ mod tests {
             exit: Arc::new(AtomicBool::new(false)),
         };
 
-        let res = io.handle_request_sync(req, meta);
+        let req =
+            r#"{"jsonrpc":"2.0","id":1,"method":"sendTransaction","params":[[0,0,0,0,0,0,0,0]]}"#;
+        let res = io.handle_request_sync(req, meta.clone());
         let expected =
             r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":1}"#;
         let expected: Response =
             serde_json::from_str(expected).expect("expected response deserialization");
-
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
     }
+
     #[test]
     fn test_rpc_get_leader_addr() {
         let cluster_info = Arc::new(RwLock::new(
@@ -484,6 +722,32 @@ mod tests {
         assert_eq!(
             get_leader_addr(&cluster_info),
             Ok(socketaddr!("127.0.0.1:1234"))
+        );
+    }
+
+    #[test]
+    fn test_rpc_verify_pubkey() {
+        let pubkey = Keypair::new().pubkey();
+        assert_eq!(verify_pubkey(pubkey.to_string()).unwrap(), pubkey);
+        let bad_pubkey = "a1b2c3d4";
+        assert_eq!(
+            verify_pubkey(bad_pubkey.to_string()),
+            Err(Error::invalid_request())
+        );
+    }
+
+    #[test]
+    fn test_rpc_verify_signature() {
+        let tx =
+            Transaction::system_move(&Keypair::new(), Keypair::new().pubkey(), 20, hash(&[0]), 0);
+        assert_eq!(
+            verify_signature(tx.signature.to_string()).unwrap(),
+            tx.signature
+        );
+        let bad_signature = "a1b2c3d4";
+        assert_eq!(
+            verify_signature(bad_signature.to_string()),
+            Err(Error::invalid_request())
         );
     }
 }

@@ -602,6 +602,20 @@ pub fn tmp_ledger_path(name: &str) -> String {
 }
 
 #[cfg(test)]
+pub fn tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
+    use std::env;
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    let keypair = Keypair::new();
+
+    let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
+
+    let mut writer = LedgerWriter::open(&path, true).unwrap();
+    writer.write_entries(mint.create_entries()).unwrap();
+
+    path
+}
+
+#[cfg(test)]
 pub fn genesis(name: &str, num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
     let path = tmp_ledger_path(name);
