@@ -537,20 +537,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_start_sub_channel() {
-        let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
-
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"startSubscriptionChannel"}}"#);
-        let res = io.handle_request_sync(&req, meta);
-        let json: Value = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        let port = json["result"]["port"].as_u64().unwrap();
-        assert!(8000 <= port && port < 10000);
-        assert!(json["result"]["path"].is_string());
-    }
-
-    #[test]
     fn test_rpc_send_tx() {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
