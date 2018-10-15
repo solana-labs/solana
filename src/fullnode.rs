@@ -274,7 +274,8 @@ impl Fullnode {
         // Use custom RPC port, if provided (`Some(port)`)
         // RPC port may be any open port on the node
         // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
-        // If rpc_port == `Some(0)`, node will dynamically choose any open port. Useful for tests.
+        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
+        //  Rpc and RpcPubsub serivces. Useful for tests.
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
         // TODO: The RPC service assumes that there is a drone running on the leader
         // Drone location/id will need to be handled a different way as soon as leader rotation begins
@@ -282,7 +283,7 @@ impl Fullnode {
 
         let rpc_pubsub_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::from(0)),
-            rpc_port.unwrap_or(RPC_PORT) + 1,
+            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
         );
         let rpc_pubsub_service = PubSubService::new(&bank, rpc_pubsub_addr, exit.clone());
 
