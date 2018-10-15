@@ -3,8 +3,10 @@
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::Entry;
+use influx_db_client as influxdb;
 use leader_scheduler::LeaderScheduler;
 use log::Level;
+use metrics;
 use result::{Error, Result};
 use service::Service;
 use std::net::UdpSocket;
@@ -15,6 +17,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
+use sys_info::hostname;
 use window::SharedWindow;
 use window_service::window_service;
 
@@ -28,6 +31,16 @@ fn retransmit(
     while let Ok(mut nq) = r.try_recv() {
         dq.append(&mut nq);
     }
+
+    metrics::submit(
+        influxdb::Point::new("retransmit-stage")
+            .add_field(
+                "host",
+                influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
+            ).add_field("count", influxdb::Value::Integer(dq.len() as i64))
+            .to_owned(),
+    );
+
     for b in &mut dq {
         ClusterInfo::retransmit(&cluster_info, b, sock)?;
     }
