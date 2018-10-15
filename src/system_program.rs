@@ -80,6 +80,8 @@ impl SystemProgram {
                     accounts[1].tokens += tokens;
                     accounts[1].program_id = program_id;
                     accounts[1].userdata = vec![0; space as usize];
+                    accounts[1].executable = false;
+                    accounts[1].loader_program_id = Pubkey::default();
                 }
                 SystemProgram::Assign { program_id } => {
                     if !Self::check_id(&accounts[0].program_id) {
@@ -107,8 +109,6 @@ mod test {
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::account::Account;
     use solana_program_interface::pubkey::Pubkey;
-    use std::collections::HashMap;
-    use std::sync::RwLock;
     use system_program::SystemProgram;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;

@@ -1,36 +1,25 @@
-extern crate elf;
-extern crate rbpf;
+// TODO rename to native_loader
 
-use std::env;
-use std::io::prelude::*;
-use std::mem;
-use std::path::PathBuf;
-
-use bincode::{deserialize, serialize};
-use bpf_verifier;
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use dynamic_instruction::DynamicInstruction;
+use bincode::deserialize;
 use libc;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use solana_program_interface::account::{Account, KeyedAccount};
+use solana_program_interface::account::KeyedAccount;
+use solana_program_interface::loader_instruction::LoaderInstruction;
 use solana_program_interface::pubkey::Pubkey;
-use std::io::prelude::*;
-use std::mem;
+use std::env;
 use std::path::PathBuf;
-use transaction::Transaction;
+use std::str;
 
 /// Dynamic link library prefixs
-const PLATFORM_FILE_PREFIX_BPF: &str = "";
 #[cfg(unix)]
 const PLATFORM_FILE_PREFIX_NATIVE: &str = "lib";
 #[cfg(windows)]
 const PLATFORM_FILE_PREFIX_NATIVE: &str = "";
 
 /// Dynamic link library file extension specific to the platform
-const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dylib";
 /// Dynamic link library file extension specific to the platform
@@ -42,118 +31,44 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
 /// Section name
 pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
-pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 
-pub enum ProgramPath {
-    Bpf,
-    Native,
-}
+fn create_path(name: &str) -> PathBuf {
+    let pathbuf = {
+        let current_exe = env::current_exe().unwrap();
+        PathBuf::from(current_exe.parent().unwrap())
+    };
 
-impl ProgramPath {
-    /// Creates a platform-specific file path
-    pub fn create(&self, name: &str) -> PathBuf {
-        let pathbuf = {
-            let current_exe = env::current_exe().unwrap();
-            PathBuf::from(current_exe.parent().unwrap())
-        };
-
-        pathbuf.join(match self {
-            ProgramPath::Bpf => PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
-                .with_extension(PLATFORM_FILE_EXTENSION_BPF),
-            ProgramPath::Native => PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
-                .with_extension(PLATFORM_FILE_EXTENSION_NATIVE),
-        })
-    }
+    pathbuf.join(
+        PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
+            .with_extension(PLATFORM_FILE_EXTENSION_NATIVE),
+    )
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ProgramError {
-    // TODO
+    Overflow,
     UserdataDeserializeFailure,
 }
 
-pub const DYNAMIC_PROGRAM_ID: [u8; 32] = [2u8; 32];
+pub const NATIVE_PROGRAM_ID: [u8; 32] = [2u8; 32];
 
-// All programs export a symbol named process()
+// All native programs export a symbol named process()
 const ENTRYPOINT: &str = "process";
-type Entrypoint = unsafe extern "C" fn(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool;
+type Entrypoint = unsafe extern "C" fn(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> bool;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum DynamicProgram {
-    /// Native program by name
-    Native { name: String },
-    /// Bpf program by name
-    BpfFile { name: String },
-    /// Bpf program by account
-    Bpf { prog: Vec<u8> },
-}
+pub enum NativeProgram {}
 
-impl DynamicProgram {
+impl NativeProgram {
     pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == DYNAMIC_PROGRAM_ID
+        program_id.as_ref() == NATIVE_PROGRAM_ID
     }
 
     pub fn id() -> Pubkey {
-        Pubkey::new(&DYNAMIC_PROGRAM_ID)
-    }
-
-    pub fn get_balance(account: &Account) -> i64 {
-        account.tokens
-    }
-
-    #[allow(dead_code)]
-    fn dump_prog(name: &str, prog: &[u8]) {
-        let mut eight_bytes: Vec<u8> = Vec::new();
-        println!("BPF Program: {}", name);
-        for i in prog.iter() {
-            if eight_bytes.len() >= 7 {
-                println!("{:02X?}", eight_bytes);
-                eight_bytes.clear();
-            } else {
-                eight_bytes.push(i.clone());
-            }
-        }
-    }
-
-    fn serialize_state(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> Vec<u8> {
-        assert_eq!(32, mem::size_of::<Pubkey>());
-
-        let mut v: Vec<u8> = Vec::new();
-        v.write_u64::<LittleEndian>(infos.len() as u64).unwrap();
-        for info in infos.iter_mut() {
-            v.write_all(info.key.as_ref()).unwrap();
-            v.write_i64::<LittleEndian>(info.account.tokens).unwrap();
-            v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
-                .unwrap();
-            v.write_all(&info.account.userdata).unwrap();
-            v.write_all(info.account.program_id.as_ref()).unwrap();
-            //println!("userdata: {:?}", infos[i].account.userdata);
-        }
-        v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
-        v.write_all(data).unwrap();
-        v
-    }
-
-    fn deserialize_state(infos: &mut Vec<KeyedAccount>, buffer: &[u8]) {
-        assert_eq!(32, mem::size_of::<Pubkey>());
-
-        let mut start = mem::size_of::<u64>();
-        for info in infos.iter_mut() {
-            start += mem::size_of::<Pubkey>(); // skip pubkey
-            info.account.tokens = LittleEndian::read_i64(&buffer[start..]);
-
-            start += mem::size_of::<u64>() // skip tokens
-                  + mem::size_of::<u64>(); // skip length tag
-            let end = start + info.account.userdata.len();
-            info.account.userdata.clone_from_slice(&buffer[start..end]);
-
-            start += info.account.userdata.len() // skip userdata
-                  + mem::size_of::<Pubkey>(); // skip program_id
-                                              //println!("userdata: {:?}", infos[i].account.userdata);
-        }
+        Pubkey::new(&NATIVE_PROGRAM_ID)
     }
 
     pub fn process_transaction(
+<<<<<<< HEAD
         tx: &Transaction,
         ix: usize,
         accounts: &mut [&mut Account],
@@ -263,33 +178,74 @@ impl DynamicProgram {
                             vm.prog_exec(v.as_mut_slice());
                             DynamicProgram::deserialize_state(&mut infos, &v);
                             true
+=======
+        keyed_accounts: &mut Vec<KeyedAccount>,
+        tx_data: &[u8],
+    ) -> Result<(), ProgramError> {
+        if keyed_accounts[0].account.executable {
+            // dispatch it
+        
+            // TODO do this in a cleaner way
+            let name = keyed_accounts[0].account.userdata.clone();
+            let name = match str::from_utf8(&name) {
+                Ok(v) => v,
+                Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            };
+            println!("Call native {:?}", name);
+            {
+                // create native program
+                let path = create_path(&name);
+                // TODO linux tls bug can cause crash on dlclose, workaround by never unloading
+                let library =
+                    Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
+                unsafe {
+                    let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
+                        Ok(s) => s,
+                        Err(e) => panic!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT),
+                    };
+                    entrypoint(&mut keyed_accounts[1..], tx_data);
+                }
+            }
+        } else if let Ok(instruction) = deserialize(tx_data) {
+                println!("program process_transaction: {:?}", instruction);
+                match instruction {
+                    LoaderInstruction::Write { offset, bits } => {
+                        println!("LoaderInstruction::Write offset {} bits {:?}", offset, bits);
+                        let offset = offset as usize;
+                        if keyed_accounts[0].account.userdata.len() <= offset + bits.len() {
+                            return Err(ProgramError::Overflow);
+>>>>>>> Chain loaders, BPF loader now dynamic, lua will follow
                         }
-                        DynamicProgram::Bpf { prog } => {
-                            trace!("Call BPF, {} Instructions", prog.len() / 8);
-                            //DynamicProgram::dump_prog(name, prog);
+                        // native loader takes a name and we assume it all comes in at once
+                        // TODO this is essentially a realloc (free and alloc)
+                        keyed_accounts[0].account.userdata = bits;
+                    }
 
-                            let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));
-
-                            // TODO register more handlers (e.g: signals, memcpy, etc...)
-                            vm.register_helper(
-                                rbpf::helpers::BPF_TRACE_PRINTK_IDX,
-                                rbpf::helpers::bpf_trace_printf,
-                            );
-
-                            let mut infos: Vec<_> = (&tx.account_keys)
-                                .into_iter()
-                                .zip(accounts)
-                                .map(|(key, account)| KeyedAccount { key, account })
-                                .collect();
-
+<<<<<<< HEAD
                             let mut v = DynamicProgram::serialize_state(&mut infos, &input);
                             vm.prog_exec(v.as_mut_slice());
                             DynamicProgram::deserialize_state(&mut infos, &v);
                             true
                         }
+=======
+                    LoaderInstruction::Finalize => {
+                        keyed_accounts[0].account.executable = true;
+                        // TODO move this to spawn
+                        keyed_accounts[0].account.loader_program_id = NativeProgram::id();
+                        keyed_accounts[0].account.program_id = *keyed_accounts[0].key;
+                        println!(
+                            "LoaderInstruction::Finalize prog: {:?} loader {:?}",
+                            keyed_accounts[0].account.program_id,
+                            keyed_accounts[0].account.loader_program_id
+                        );
+>>>>>>> Chain loaders, BPF loader now dynamic, lua will follow
                     }
                 }
+            } else {
+                info!("Invalid program transaction: {:?}", tx_data);
+                return Err(ProgramError::UserdataDeserializeFailure)
             }
+<<<<<<< HEAD
         } else {
             info!(
                 "Invalid program transaction userdata: {:?}",
@@ -346,38 +302,8 @@ mod tests {
         );
 
         dynamic_propgram_process_transaction(&tx, &mut accounts);
+=======
+        Ok(()) // TODO true
+>>>>>>> Chain loaders, BPF loader now dynamic, lua will follow
     }
-
-    #[test]
-    fn test_bpf_buf_print() {
-        let prog = vec![
-            0xb7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	r1 = 0
-            0xb7, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	r2 = 0
-            0xb7, 0x03, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // 	r3 = 1
-            0xb7, 0x04, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, // 	r4 = 2
-            0xb7, 0x05, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, // 	r5 = 3
-            0x85, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // 	call 6
-            0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 	exit
-        ];
-        let dp = DynamicProgram::Bpf { prog };
-
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[1].tokens = 1;
-        accounts[1].userdata = serialize(&dp).unwrap();
-
-        let instruction = DynamicInstruction::Call { input: vec![0u8] };
-        let tx = Transaction::new(
-            &Keypair::new(),
-            &[Keypair::new().pubkey(), Keypair::new().pubkey()],
-            Keypair::new().pubkey(),
-            serialize(&instruction).unwrap(),
-            Hash::default(),
-            0,
-        );
-
-        dynamic_propgram_process_transaction(&tx, &mut accounts);
-    }
-
-    // TODO add more tests to validate the Userdata and Account data is
-    // moving across the boundary correctly
 }

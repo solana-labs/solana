@@ -8,7 +8,7 @@ use bincode::serialize;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
-use dynamic_program::DynamicProgram;
+use dynamic_program::NativeProgram;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -22,7 +22,7 @@ use poh_recorder::PohRecorder;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
 use signature::Signature;
-use solana_program_interface::account::Account;
+use solana_program_interface::account::{Account, KeyedAccount};
 use solana_program_interface::pubkey::Pubkey;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -100,6 +100,9 @@ pub enum BankError {
 
     /// Recoding into PoH failed
     RecordFailure,
+
+    /// Loader call chain too deep
+    CallChainTooDeep,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -148,9 +151,6 @@ pub struct Bank {
     // The latest finality time for the network
     finality_time: AtomicUsize,
 
-    // loaded contracts hashed by program_id
-    loaded_contracts: RwLock<HashMap<Pubkey, DynamicProgram>>,
-
     // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
     account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
 
@@ -176,7 +176,6 @@ impl Default for Bank {
             transaction_count: AtomicUsize::new(0),
             is_leader: true,
             finality_time: AtomicUsize::new(std::usize::MAX),
-            loaded_contracts: RwLock::new(HashMap::new()),
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
         }
@@ -431,6 +430,7 @@ impl Bank {
                 error_counters.duplicate_signature += 1;
             }
             err?;
+
             let mut called_accounts: Vec<Account> = tx
                 .account_keys
                 .iter()
@@ -502,7 +502,8 @@ impl Bank {
                 && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            return Err(BankError::ModifiedContractId(instruction_index as u8));
+            // TODO re-enable once we have SystemProgram::spawn
+            // return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if *tx_program_id != account.program_id && pre_tokens > account.tokens {
@@ -565,6 +566,7 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
+        // TODO budget, storage, tictactoes can move to native dynamic
         if SystemProgram::check_id(&tx_program_id) {
             if SystemProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
             {
@@ -576,12 +578,6 @@ impl Bank {
             }
         } else if StorageProgram::check_id(&tx_program_id) {
             if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
-                .is_err()
-            {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
-            }
-        } else if DynamicProgram::check_id(&tx_program_id) {
-            if DynamicProgram::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
@@ -607,7 +603,57 @@ impl Bank {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else {
-            self.loaded_contract(tx_program_id, tx, instruction_index, program_accounts)?;
+            let mut depth = 0;
+            let mut keys = Vec::new();
+            let mut accounts = Vec::new();
+
+            let mut program_id = tx.program_ids[instruction_index];
+            loop {
+                if NativeProgram::check_id(&program_id) {
+                    // at root of call chain
+                    break;
+                }
+
+                if depth >= 5 {
+                    return Err(BankError::CallChainTooDeep);
+                }
+                depth += 1;
+
+                // TODO fail gracefully
+                let program = self.get_account(&program_id).unwrap();
+                if !program.executable || program.loader_program_id == Pubkey::default() {
+                    return Err(BankError::AccountNotFound);
+                }
+
+                // add loader to chain
+                keys.insert(0, program_id);
+                accounts.insert(0, program.clone());
+
+                program_id = program.loader_program_id;
+            }
+
+            // TODO wow this is a lame way to build keyed_accounts
+            let mut keyed_accounts: Vec<_> = (&keys)
+                .into_iter()
+                .zip(accounts.iter_mut())
+                .map(|(key, account)| KeyedAccount { key, account })
+                .collect();
+            let mut keyed_accounts2: Vec<_> = (&tx.instructions[instruction_index].accounts)
+                .into_iter()
+                .zip(program_accounts.iter_mut())
+                .map(|(index, account)| KeyedAccount {
+                    key: &tx.account_keys[*index as usize],
+                    account,
+                }).collect();
+            keyed_accounts.append(&mut keyed_accounts2);
+
+            if NativeProgram::process_transaction(
+                &mut keyed_accounts,
+                &tx.instructions[instruction_index].userdata,
+            ).is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
         }
 
         // Verify the transaction
@@ -641,8 +687,8 @@ impl Bank {
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     fn execute_transaction(&self, tx: &Transaction, tx_accounts: &mut [Account]) -> Result<()> {
-        for (instruction_index, prog) in tx.instructions.iter().enumerate() {
-            Self::with_subset(tx_accounts, &prog.accounts, |program_accounts| {
+        for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+            Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
                 self.execute_instruction(tx, instruction_index, program_accounts)
             })?;
         }
@@ -1779,7 +1825,7 @@ mod tests {
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader_program_id":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"program_id":[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 

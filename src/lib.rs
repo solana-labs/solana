@@ -25,9 +25,7 @@ pub mod cluster_info;
 pub mod bpf_verifier;
 pub mod budget_program;
 pub mod drone;
-pub mod dynamic_instruction;
-pub mod dynamic_program;
-pub mod dynamic_transaction;
+pub mod dynamic_program; // rename to native_program
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
@@ -37,6 +35,7 @@ pub mod fullnode;
 pub mod hash;
 pub mod leader_scheduler;
 pub mod ledger;
+pub mod loader_transaction;
 pub mod logger;
 pub mod metrics;
 pub mod mint;

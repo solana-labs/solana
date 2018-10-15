@@ -49,7 +49,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
 SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccounts *ka,
                               uint8_t **userdata, uint64_t *userdata_len) {
     if (num_ka != *(uint64_t *)src) {
-        return -1;
+        return 0;
     }
     src += sizeof(uint64_t);
 
@@ -78,7 +78,7 @@ SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccount
     src += sizeof(uint64_t);
     *userdata = src;
 
-    return 0;
+    return 1;
 }
 
 // // -- Debug --
@@ -325,19 +325,19 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
     return Result_Ok;
 }
 
-void entrypoint(uint8_t *buf) {
+uint64_t entrypoint(uint8_t *buf) {
     SolKeyedAccounts ka[4];
     uint64_t userdata_len;
     uint8_t *userdata;
     int err = 0;
 
-    if (0 != sol_deserialize(buf, 4, ka, &userdata, &userdata_len)) {
-        sol_panic();
+    if (1 != sol_deserialize(buf, 4, ka, &userdata, &userdata_len)) {
+        return 0;
     }
 
     if (sizeof(Game) > ka[2].userdata_len) {
         sol_print(0, 0, 0xFF, sizeof(Game), ka[2].userdata_len);
-        sol_panic();
+        return 0;
     }
     Game game;
     sol_memcpy(&game, ka[2].userdata, ka[2].userdata_len);
@@ -362,10 +362,11 @@ void entrypoint(uint8_t *buf) {
             break;
 
         default:
-            sol_panic();
+            return 0;
     }
 
     sol_memcpy(ka[2].userdata, &game, ka[2].userdata_len);
     sol_print(0, 0, 0, err, game.state);
+    return 1;
 }
 

@@ -11,6 +11,12 @@ pub struct Account {
     pub userdata: Vec<u8>,
     /// contract id this contract belongs to
     pub program_id: Pubkey,
+
+    /// this account contains a program (and is strictly read-only)
+    pub executable: bool,
+
+    /// the loader for this program (Pubkey::default() for no loader)
+    pub loader_program_id: Pubkey,
 }
 
 impl Account {
@@ -19,6 +25,8 @@ impl Account {
             tokens,
             userdata: vec![0u8; space],
             program_id,
+            executable: false,
+            loader_program_id: Pubkey::default(),
         }
     }
 }
