@@ -332,7 +332,7 @@ mod tests {
     use bincode::serialize;
     use cluster_info::{Node, NodeInfo};
     use fullnode::Fullnode;
-    use hash::hash;
+    use hash::{hash, Hash};
     use jsonrpc_core::Response;
     use leader_scheduler::LeaderScheduler;
     use ledger::tmp_ledger_with_mint;
@@ -344,6 +344,36 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
+
+    fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+
+        let last_id = bank.last_id();
+        let tx = Transaction::system_move(&alice.keypair(), pubkey, 20, last_id, 0);
+        bank.process_transaction(&tx).expect("process transaction");
+
+        let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
+        ));
+        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        cluster_info.write().unwrap().insert(&leader);
+        cluster_info.write().unwrap().set_leader(leader.id);
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let mut io = MetaIoHandler::default();
+        let rpc = RpcSolImpl;
+        io.extend_with(rpc.to_delegate());
+        let meta = Meta {
+            request_processor,
+            cluster_info,
+            rpc_addr,
+            exit,
+        };
+        (io, meta, last_id, alice.keypair())
+    }
 
     #[test]
     fn test_rpc_new() {
@@ -396,64 +426,48 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_requests() {
-        let alice = Mint::new(10_000);
+    fn test_rpc_get_balance() {
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&alice);
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
-        let last_id = bank.last_id();
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
-        bank.process_transaction(&tx).expect("process transaction");
-
-        let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
-        let cluster_info = Arc::new(RwLock::new(
-            ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
-        ));
-        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        cluster_info.write().unwrap().insert(&leader);
-        cluster_info.write().unwrap().set_leader(leader.id);
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let exit = Arc::new(AtomicBool::new(false));
-
-        let mut io = MetaIoHandler::default();
-        let rpc = RpcSolImpl;
-        io.extend_with(rpc.to_delegate());
-        let meta = Meta {
-            request_processor,
-            cluster_info,
-            rpc_addr,
-            exit,
-        };
-
-        // Test getBalance request
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":20,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test getTransactionCount request
+    #[test]
+    fn test_rpc_get_tx_count() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test getAccountInfo request
+    #[test]
+    fn test_rpc_get_account_info() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = r#"{
             "jsonrpc":"2.0",
             "result":{
@@ -468,21 +482,33 @@ mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test confirmTransaction request
+    #[test]
+    fn test_rpc_confirm_tx() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
+
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
             tx.signature
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test getSignatureStatus request
+    #[test]
+    fn test_rpc_get_signature_status() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
+
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signature
@@ -496,46 +522,61 @@ mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 10, last_id, 0);
+        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signature
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test getFinality request
+    #[test]
+    fn test_rpc_get_finality() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getFinality"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":18446744073709551615,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test getLastId request
+    #[test]
+    fn test_rpc_get_last_id() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLastId"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, last_id);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test requestAirdrop request
+    #[test]
+    fn test_rpc_request_airdrop() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         // Expect internal error because no leader is running
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"requestAirdrop","params":["{}", 50]}}"#,
             bob_pubkey
         );
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let expected =
             r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1}"#;
         let expected: Response =
@@ -543,10 +584,15 @@ mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
 
-        // Test startSubscriptionChannel request
+    #[test]
+    fn test_rpc_start_sub_channel() {
+        let bob_pubkey = Keypair::new().pubkey();
+        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"startSubscriptionChannel"}}"#);
-        let res = io.handle_request_sync(&req, meta.clone());
+        let res = io.handle_request_sync(&req, meta);
         let json: Value = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         let port = json["result"]["port"].as_u64().unwrap();
