@@ -68,8 +68,8 @@ snap)
   logmarker="solana deploy $(date)/$RANDOM"
   logger "$logmarker"
 
-  # shellcheck disable=SC2086 # Don't want to double quote "$nodeConfig"
-  sudo snap set solana "$nodeConfig"
+  # shellcheck disable=SC2086,SC2090 # Don't want to double quote "$nodeConfig"
+  sudo snap set solana $nodeConfig
   snap info solana
   sudo snap get solana
   echo Slight delay to get more syslog output
