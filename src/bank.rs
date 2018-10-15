@@ -876,7 +876,13 @@ impl Bank {
 
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.transactions.is_empty() {
-            for result in self.process_transactions(&entry.transactions) {
+            // The leader guarentees all unique accounts within a single entry.
+            let lock_results = entry.transactions.iter().map(|_| Ok(())).collect();
+            for result in self.execute_and_commit_transactions(
+                &entry.transactions,
+                lock_results,
+                MAX_ENTRY_IDS,
+            ) {
                 result?;
             }
         } else {
