@@ -90,7 +90,7 @@ $ npx solana-localnet logs -f
 
 Stop the network with:
 ```bash
-$ npx solana-localnet up
+$ npx solana-localnet down
 ```
 
 ## Flow
