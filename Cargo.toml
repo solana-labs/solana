@@ -94,7 +94,6 @@ matches = "0.1.6"
 nix = "0.11.0"
 pnet_datalink = "0.21.0"
 rand = "0.5.1"
-rbpf = { git = "https://github.com/solana-labs/rbpf" }
 rayon = "1.0.0"
 reqwest = "0.9.0"
 ring = "0.13.2"

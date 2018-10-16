@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
-rbpf = { git = "https://github.com/solana-labs/rbpf" }
+rbpf = { git = "https://github.com/qmonnet/rbpf", rev="bc41ec47d9b51751585f6ddcde1d1eb1afe2be69" }
 solana = { path = "../../.." }
