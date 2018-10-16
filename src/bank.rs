@@ -145,10 +145,6 @@ pub struct Bank {
     /// start of the ledger.
     transaction_count: AtomicUsize,
 
-    /// This bool allows us to submit metrics that are specific for leaders or validators
-    /// It is set to `true` by fullnode before creating the bank.
-    pub is_leader: bool,
-
     // The latest finality time for the network
     finality_time: AtomicUsize,
 
@@ -175,7 +171,6 @@ impl Default for Bank {
             account_locks: Mutex::new(HashSet::new()),
             last_ids_q: RwLock::new(LastIdsQ::default()),
             transaction_count: AtomicUsize::new(0),
-            is_leader: true,
             finality_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
@@ -184,12 +179,6 @@ impl Default for Bank {
 }
 
 impl Bank {
-    /// Create a default Bank
-    pub fn new_default(is_leader: bool) -> Self {
-        let mut bank = Bank::default();
-        bank.is_leader = is_leader;
-        bank
-    }
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let bank = Self::default();
@@ -1759,15 +1748,6 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
-    #[test]
-    fn test_new_default() {
-        let def_bank = Bank::default();
-        assert!(def_bank.is_leader);
-        let leader_bank = Bank::new_default(true);
-        assert!(leader_bank.is_leader);
-        let validator_bank = Bank::new_default(false);
-        assert!(!validator_bank.is_leader);
-    }
     #[test]
     fn test_hash_internal_state() {
         let mint = Mint::new(2_000);
