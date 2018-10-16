@@ -1,11 +1,11 @@
-
 extern crate bincode;
 extern crate elf;
 extern crate solana;
 extern crate solana_program_interface;
 
+use bincode::serialize;
 use solana::bank::Bank;
-use solana::dynamic_program::{NativeProgram};
+use solana::dynamic_program;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
@@ -32,10 +32,6 @@ fn test_transaction_load_native() {
     let bank = Bank::new(&mint);
     let program = Keypair::new();
 
-    println!("mint {:?}", mint.pubkey());
-    println!("NativeLoader::id() {:?}", NativeProgram::id());
-    println!("program {:?}", program.pubkey());
-
     // allocate, populate, finalize user program
 
     let tx = Transaction::system_create(
@@ -44,23 +40,25 @@ fn test_transaction_load_native() {
         mint.last_id(),
         1,
         56, // TODO How does the user know how much space to allocate, this is really an internally known size
-        NativeProgram::id(),
+        dynamic_program::id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
+    println!("id: {:?}", dynamic_program::id());
     let name = String::from("noop");
     let tx = Transaction::write(
         &program,
-        NativeProgram::id(),
+        dynamic_program::id(),
         0,
         name.as_bytes().to_vec(),
         mint.last_id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    println!("id after: {:?}", dynamic_program::id());
 
-    let tx = Transaction::finalize(&program, NativeProgram::id(), mint.last_id(), 0);
+    let tx = Transaction::finalize(&program, dynamic_program::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program
@@ -76,6 +74,104 @@ fn test_transaction_load_native() {
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 }
 
+#[test]
+fn test_transaction_load_lua() {
+    logger::setup();
+
+    let mint = Mint::new(50);
+    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
+    //      which leads to duplicate tx signature errors
+    let bank = Bank::new(&mint);
+    let loader = Keypair::new();
+    let program = Keypair::new();
+    let from = Keypair::new();
+    let to = Keypair::new().pubkey();
+
+    // allocate, populate, and finalize Lua loader
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        loader.pubkey(),
+        mint.last_id(),
+        1,
+        56, // TODO How does the user know how much space to allocate for what should be an internally known size
+        dynamic_program::id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let name = String::from("solua");
+    let tx = Transaction::write(
+        &loader,
+        dynamic_program::id(),
+        0,
+        name.as_bytes().to_vec(),
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    // allocate, populate, and finalize user program
+
+    let bytes = r#"
+            print("Lua Script!")
+            local tokens, _ = string.unpack("I", data)
+            accounts[1].tokens = accounts[1].tokens - tokens
+            accounts[2].tokens = accounts[2].tokens + tokens
+        "#.as_bytes()
+    .to_vec();
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        program.pubkey(),
+        mint.last_id(),
+        1,
+        300, // TODO How does the user know how much space to allocate for what should be an internally known size
+        loader.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::write(&program, loader.pubkey(), 0, bytes, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    // Call user program with two accounts
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        from.pubkey(),
+        mint.last_id(),
+        10,
+        0,
+        program.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        to,
+        mint.last_id(),
+        1,
+        0,
+        program.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let data = serialize(&10).unwrap();
+    let tx = Transaction::new(&from, &[to], program.pubkey(), data, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    assert_eq!(bank.get_balance(&from.pubkey()), 0);
+    assert_eq!(bank.get_balance(&to), 11);
+}
+
 #[cfg(feature = "bpf_c")]
 #[test]
 fn test_transaction_load_bpf() {
@@ -88,11 +184,6 @@ fn test_transaction_load_bpf() {
     let loader = Keypair::new();
     let program = Keypair::new();
 
-    println!("mint {:?}", mint.pubkey());
-    println!("NativeLoader::id() {:?}", NativeProgram::id());
-    println!("loader {:?}", loader.pubkey());
-    println!("program {:?}", program.pubkey());
-
     // allocate, populate, finalize BPF loader
 
     let tx = Transaction::system_create(
@@ -101,7 +192,7 @@ fn test_transaction_load_bpf() {
         mint.last_id(),
         1,
         56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        NativeProgram::id(),
+        dynamic_program::id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
@@ -109,7 +200,7 @@ fn test_transaction_load_bpf() {
     let name = String::from("sobpf");
     let tx = Transaction::write(
         &loader,
-        NativeProgram::id(),
+        dynamic_program::id(),
         0,
         name.as_bytes().to_vec(),
         mint.last_id(),
@@ -117,7 +208,7 @@ fn test_transaction_load_bpf() {
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    let tx = Transaction::finalize(&loader, NativeProgram::id(), mint.last_id(), 0);
+    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // allocate, populate, and finalize user program

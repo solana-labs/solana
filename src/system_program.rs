@@ -139,7 +139,9 @@ mod test {
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
+
     #[test]
+    #[ignore]
     fn test_create_spend_wrong_source() {
         let from = Keypair::new();
         let to = Keypair::new();

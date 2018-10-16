@@ -8,7 +8,7 @@ use bincode::serialize;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
-use dynamic_program::NativeProgram;
+use dynamic_program;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -502,7 +502,6 @@ impl Bank {
                 && SystemProgram::check_id(&pre_program_id)))
         {
             //TODO, this maybe redundant bpf should be able to guarantee this property
-            // TODO re-enable once we have SystemProgram::spawn
             // return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
@@ -566,7 +565,6 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        // TODO budget, storage, tictactoes can move to native dynamic
         if SystemProgram::check_id(&tx_program_id) {
             if SystemProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
             {
@@ -609,8 +607,8 @@ impl Bank {
 
             let mut program_id = tx.program_ids[instruction_index];
             loop {
-                if NativeProgram::check_id(&program_id) {
-                    // at root of call chain
+                if dynamic_program::check_id(&program_id) {
+                    // at the root of the chain, ready to dispatch
                     break;
                 }
 
@@ -619,8 +617,10 @@ impl Bank {
                 }
                 depth += 1;
 
-                // TODO fail gracefully
-                let program = self.get_account(&program_id).unwrap();
+                let program = match self.get_account(&program_id) {
+                    Some(program) => program,
+                    None => return Err(BankError::AccountNotFound),
+                };
                 if !program.executable || program.loader_program_id == Pubkey::default() {
                     return Err(BankError::AccountNotFound);
                 }
@@ -632,7 +632,6 @@ impl Bank {
                 program_id = program.loader_program_id;
             }
 
-            // TODO wow this is a lame way to build keyed_accounts
             let mut keyed_accounts: Vec<_> = (&keys)
                 .into_iter()
                 .zip(accounts.iter_mut())
@@ -647,11 +646,10 @@ impl Bank {
                 }).collect();
             keyed_accounts.append(&mut keyed_accounts2);
 
-            if !NativeProgram::process_transaction(
+            if !dynamic_program::process_transaction(
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
-            )
-            {
+            ) {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         }
@@ -734,7 +732,7 @@ impl Bank {
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelyhood of any single thread getting starved and processing old ids.
-        // TODO: Banking stage threads should be prioratized to complete faster then this queue
+        // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let results = self.execute_and_commit_transactions(txs, locked_accounts, MAX_ENTRY_IDS / 2);
         let process_time = now.elapsed();

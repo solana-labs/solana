@@ -25,7 +25,7 @@ pub mod cluster_info;
 pub mod bpf_verifier;
 pub mod budget_program;
 pub mod drone;
-pub mod dynamic_program; // rename to native_program
+pub mod dynamic_program;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]

@@ -1,10 +1,9 @@
 //! The `dynamic_transaction` module provides functionality for loading and calling a program
 
 use bincode::serialize;
-use solana_program_interface::loader_instruction::LoaderInstruction;
-// use dynamic_program::DynamicProgram;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
+use solana_program_interface::loader_instruction::LoaderInstruction;
 use solana_program_interface::pubkey::Pubkey;
 use transaction::Transaction;
 
@@ -13,7 +12,7 @@ pub trait LoaderTransaction {
         from_keypair: &Keypair,
         loader: Pubkey,
         offset: u32,
-        bits: Vec<u8>,
+        bytes: Vec<u8>,
         last_id: Hash,
         fee: i64,
     ) -> Self;
@@ -26,7 +25,7 @@ impl LoaderTransaction for Transaction {
         from_keypair: &Keypair,
         loader: Pubkey,
         offset: u32,
-        bits: Vec<u8>,
+        bytes: Vec<u8>,
         last_id: Hash,
         fee: i64,
     ) -> Self {
@@ -34,10 +33,10 @@ impl LoaderTransaction for Transaction {
             "LoaderTransaction::Write() program {:?} offset {} length {}",
             from_keypair.pubkey(),
             offset,
-            bits.len()
+            bytes.len()
         );
-        let inst = LoaderInstruction::Write { offset, bits };
-        let userdata = serialize(&inst).unwrap();
+        let instruction = LoaderInstruction::Write { offset, bytes };
+        let userdata = serialize(&instruction).unwrap();
         Transaction::new(from_keypair, &[], loader, userdata, last_id, fee)
     }
 
@@ -46,8 +45,8 @@ impl LoaderTransaction for Transaction {
             "LoaderTransaction::Finalize() program {:?}",
             from_keypair.pubkey(),
         );
-        let inst = LoaderInstruction::Finalize;
-        let userdata = serialize(&inst).unwrap();
+        let instruction = LoaderInstruction::Finalize;
+        let userdata = serialize(&instruction).unwrap();
         Transaction::new(from_keypair, &[], loader, userdata, last_id, fee)
     }
 }

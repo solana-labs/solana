@@ -20,6 +20,7 @@ pub struct Account {
 }
 
 impl Account {
+    // TODO do we want to add executable and leader_program_id even though they should always be false/default?
     pub fn new(tokens: i64, space: usize, program_id: Pubkey) -> Account {
         Account {
             tokens,
