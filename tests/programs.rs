@@ -5,10 +5,10 @@ extern crate solana_program_interface;
 
 use bincode::serialize;
 use solana::bank::Bank;
-use solana::native_loader;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
+use solana::native_loader;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
