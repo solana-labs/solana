@@ -23,6 +23,15 @@ fn main() {
     if bpf_c {
         let out_dir = "target/".to_string() + &env::var("PROFILE").unwrap();
 
+        println!("cargo:rerun-if-changed=programs/bpf/noop_c/build.sh");
+        println!("cargo:rerun-if-changed=programs/bpf/noop_c/src/noop.c");
+        println!("cargo:warning=(not a warning) Compiling noop_c");
+        let status = Command::new("programs/bpf/noop_c/build.sh")
+            .arg(&out_dir)
+            .status()
+            .expect("Failed to call noop_c build script");
+        assert!(status.success());
+
         println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/build.sh");
         println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/src/move_funds.c");
         println!("cargo:warning=(not a warning) Compiling move_funds_c");

@@ -1,9 +1,22 @@
+extern crate bincode;
 extern crate rlua;
 extern crate solana_program_interface;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate log;
 
+use bincode::{deserialize, serialize};
 use rlua::{Lua, Result, Table};
 use solana_program_interface::account::KeyedAccount;
+use solana_program_interface::loader_instruction::LoaderInstruction;
 use std::str;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum LuaLoader {
+    File { name: String },
+    Bytes { bytes: Vec<u8> },
+}
 
 /// Make KeyAccount values available to Lua.
 fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Result<()> {
@@ -21,7 +34,7 @@ fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Resul
 }
 
 /// Commit the new KeyedAccount values.
-fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<()> {
+fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut [KeyedAccount]) -> Result<()> {
     let globals = lua.globals();
     let accounts: Table = globals.get(name)?;
     for (i, keyed_account) in keyed_accounts.into_iter().enumerate() {
@@ -33,7 +46,7 @@ fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut Vec<KeyedAccount>
     Ok(())
 }
 
-fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str, data: &[u8]) -> Result<()> {
+fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> Result<()> {
     let lua = Lua::new();
     let globals = lua.globals();
     let data_str = lua.create_string(data)?;
@@ -45,10 +58,67 @@ fn run_lua(keyed_accounts: &mut Vec<KeyedAccount>, code: &str, data: &[u8]) -> R
 }
 
 #[no_mangle]
-pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
-    let code_data = keyed_accounts[0].account.userdata.clone();
-    let code = str::from_utf8(&code_data).unwrap();
-    run_lua(keyed_accounts, &code, data).unwrap();
+pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+    if keyed_accounts[0].account.executable {
+        let prog: Vec<u8>;
+        if let Ok(program) = deserialize(&keyed_accounts[0].account.userdata) {
+            match program {
+                LuaLoader::File { name } => {
+                    trace!("Call Lua with file {:?}", name);
+                    panic!("Not supported");
+                }
+                LuaLoader::Bytes { bytes } => {
+                    trace!("Call Lua with bytes, code size {}", bytes.len());
+                    prog = bytes;
+                }
+            }
+        } else {
+            warn!("deserialize failed: {:?}", tx_data);
+            return false;
+        }
+
+        let code = str::from_utf8(&prog).unwrap();
+        match run_lua(&mut keyed_accounts[1..], &code, tx_data) {
+            Ok(()) => {
+                trace!("Lua success");
+                return true;
+            }
+            Err(e) => {
+                warn!("Lua Error: {:#?}", e);
+                return false;
+            }
+        }
+    } else if let Ok(instruction) = deserialize(tx_data) {
+        match instruction {
+            LoaderInstruction::Write { offset, bytes } => {
+                trace!("LuaLoader::Write offset {} bytes {:?}", offset, bytes);
+                let offset = offset as usize;
+                if keyed_accounts[0].account.userdata.len() <= offset + bytes.len() {
+                    warn!("program overflow offset {} len {}", offset, bytes.len());
+                    return false;
+                }
+                let s = serialize(&LuaLoader::Bytes { bytes }).unwrap();
+                keyed_accounts[0]
+                    .account
+                    .userdata
+                    .splice(0..s.len(), s.iter().cloned());
+            }
+
+            LoaderInstruction::Finalize => {
+                keyed_accounts[0].account.executable = true;
+                keyed_accounts[0].account.loader_program_id = keyed_accounts[0].account.program_id;
+                keyed_accounts[0].account.program_id = *keyed_accounts[0].key;
+                trace!(
+                    "LuaLoader::Finalize prog: {:?} loader {:?}",
+                    keyed_accounts[0].account.program_id,
+                    keyed_accounts[0].account.loader_program_id
+                );
+            }
+        }
+    } else {
+        warn!("Invalid program transaction: {:?}", tx_data);
+        return false;
+    }
     true
 }
 
@@ -98,12 +168,13 @@ mod tests {
 
     #[test]
     fn test_move_funds_with_lua_via_process() {
-        let userdata = r#"
+        let bytes = r#"
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
         "#.as_bytes()
         .to_vec();
+        let userdata = serialize(&LuaLoader::Bytes { bytes }).unwrap();
 
         let alice_pubkey = Pubkey::default();
         let bob_pubkey = Pubkey::default();
@@ -111,89 +182,26 @@ mod tests {
 
         let mut accounts = [
             (
-                alice_pubkey,
+                Pubkey::default(),
                 Account {
-                    tokens: 100,
+                    tokens: 1,
                     userdata,
                     program_id,
+                    executable: true,
+                    loader_program_id: Pubkey::default(),
                 },
             ),
+            (alice_pubkey, Account::new(100, 0, program_id)),
             (bob_pubkey, Account::new(1, 0, program_id)),
         ];
         let data = serialize(&10u64).unwrap();
         process(&mut create_keyed_accounts(&mut accounts), &data);
-        assert_eq!(accounts[0].1.tokens, 90);
-        assert_eq!(accounts[1].1.tokens, 11);
+        assert_eq!(accounts[1].1.tokens, 90);
+        assert_eq!(accounts[2].1.tokens, 11);
 
         process(&mut create_keyed_accounts(&mut accounts), &data);
-        assert_eq!(accounts[0].1.tokens, 80);
-        assert_eq!(accounts[1].1.tokens, 21);
-    }
-
-    #[test]
-    fn test_move_funds_with_lua_via_process_and_terminate() {
-        let userdata = r#"
-            local tokens, _ = string.unpack("I", data)
-            accounts[1].tokens = accounts[1].tokens - tokens
-            accounts[2].tokens = accounts[2].tokens + tokens
-            accounts[1].userdata = ""
-        "#.as_bytes()
-        .to_vec();
-
-        let alice_pubkey = Pubkey::default();
-        let bob_pubkey = Pubkey::default();
-        let program_id = Pubkey::default();
-
-        let mut accounts = [
-            (
-                alice_pubkey,
-                Account {
-                    tokens: 100,
-                    userdata,
-                    program_id,
-                },
-            ),
-            (bob_pubkey, Account::new(1, 0, program_id)),
-        ];
-        let data = serialize(&10).unwrap();
-        process(&mut create_keyed_accounts(&mut accounts), &data);
-        assert_eq!(accounts[0].1.tokens, 90);
-        assert_eq!(accounts[1].1.tokens, 11);
-
-        // Verify the program modified itself to a no-op.
-        process(&mut create_keyed_accounts(&mut accounts), &data);
-        assert_eq!(accounts[0].1.tokens, 90);
-        assert_eq!(accounts[1].1.tokens, 11);
-    }
-
-    #[test]
-    fn test_abort_tx_with_lua() {
-        let userdata = r#"
-            if data == accounts[1].key then
-                accounts[1].userdata = ""
-            end
-        "#.as_bytes()
-        .to_vec();
-
-        let alice_pubkey = Pubkey::default();
-        let program_id = Pubkey::default();
-
-        let mut accounts = [(
-            alice_pubkey,
-            Account {
-                tokens: 100,
-                userdata,
-                program_id,
-            },
-        )];
-
-        // Abort
-        let data = alice_pubkey.to_string().as_bytes().to_vec();
-
-        assert_ne!(accounts[0].1.userdata, vec![]);
-        process(&mut create_keyed_accounts(&mut accounts), &data);
-        assert_eq!(accounts[0].1.tokens, 100);
-        assert_eq!(accounts[0].1.userdata, vec![]);
+        assert_eq!(accounts[1].1.tokens, 80);
+        assert_eq!(accounts[2].1.tokens, 21);
     }
 
     fn read_test_file(name: &str) -> Vec<u8> {
@@ -207,27 +215,35 @@ mod tests {
 
     #[test]
     fn test_load_lua_library() {
-        let userdata = r#"
+        let bytes = r#"
             local serialize = load(accounts[2].userdata)().serialize
             accounts[3].userdata = serialize({a=1, b=2, c=3}, nil, "s")
         "#.as_bytes()
         .to_vec();
+        let userdata = serialize(&LuaLoader::Bytes { bytes }).unwrap();
 
         let program_id = Pubkey::default();
 
-        let alice_account = Account {
-            tokens: 100,
+        let program_account = Account {
+            tokens: 1,
             userdata,
             program_id,
+            executable: true,
+            loader_program_id: Pubkey::default(),
         };
+
+        let alice_account = Account::new(100, 0, program_id);
 
         let serialize_account = Account {
             tokens: 100,
             userdata: read_test_file("serialize.lua"),
             program_id,
+            executable: false,
+            loader_program_id: Pubkey::default(),
         };
 
         let mut accounts = [
+            (Pubkey::default(), program_account),
             (Pubkey::default(), alice_account),
             (Pubkey::default(), serialize_account),
             (Pubkey::default(), Account::new(1, 0, program_id)),
@@ -238,7 +254,7 @@ mod tests {
 
         // Verify deterministic ordering of a serialized Lua table.
         assert_eq!(
-            str::from_utf8(&keyed_accounts[2].account.userdata).unwrap(),
+            str::from_utf8(&keyed_accounts[3].account.userdata).unwrap(),
             "{a=1,b=2,c=3}"
         );
     }
@@ -255,20 +271,36 @@ mod tests {
         let dan_pubkey = Pubkey::new(&[5; 32]);
         let erin_pubkey = Pubkey::new(&[6; 32]);
 
+        let userdata = serialize(&LuaLoader::Bytes {
+            bytes: read_test_file("multisig.lua"),
+        }).unwrap();
+        let program_account = Account {
+            tokens: 1,
+            userdata,
+            program_id,
+            executable: true,
+            loader_program_id: Pubkey::default(),
+        };
+
         let alice_account = Account {
             tokens: 100,
-            userdata: read_test_file("multisig.lua"),
+            userdata: Vec::new(),
             program_id,
+            executable: true,
+            loader_program_id: Pubkey::default(),
         };
 
         let serialize_account = Account {
             tokens: 100,
             userdata: read_test_file("serialize.lua"),
             program_id,
+            executable: true,
+            loader_program_id: Pubkey::default(),
         };
 
         let mut accounts = [
-            (alice_pubkey, alice_account), // The payer and where the program is stored.
+            (Pubkey::default(), program_account), // Account holding the program
+            (alice_pubkey, alice_account),        // The payer
             (serialize_pubkey, serialize_account), // Where the serialize library is stored.
             (state_pubkey, Account::new(1, 0, program_id)), // Where program state is stored.
             (bob_pubkey, Account::new(1, 0, program_id)), // The payee once M signatures are collected.
@@ -282,18 +314,18 @@ mod tests {
         .to_vec();
 
         process(&mut keyed_accounts, &data);
-        assert_eq!(keyed_accounts[3].account.tokens, 1);
+        assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, carol_pubkey).into_bytes();
         process(&mut keyed_accounts, &data);
-        assert_eq!(keyed_accounts[3].account.tokens, 1);
+        assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, dan_pubkey).into_bytes();
         process(&mut keyed_accounts, &data);
-        assert_eq!(keyed_accounts[3].account.tokens, 101); // Pay day!
+        assert_eq!(keyed_accounts[4].account.tokens, 101); // Pay day!
 
         let data = format!(r#""{}""#, erin_pubkey).into_bytes();
         process(&mut keyed_accounts, &data);
-        assert_eq!(keyed_accounts[3].account.tokens, 101); // No change!
+        assert_eq!(keyed_accounts[4].account.tokens, 101); // No change!
     }
 }

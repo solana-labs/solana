@@ -109,9 +109,10 @@ sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-solua = { path = "programs/native/solua" }
 move_funds = { path = "programs/native/move_funds" }
 noop = { path = "programs/native/noop" }
+sobpf = { path = "programs/native/sobpf" }
+solua = { path = "programs/native/solua" }
 
 [[bench]]
 name = "bank"
@@ -136,8 +137,9 @@ name = "chacha"
 members = [
     ".",
     "common",
-    "programs/native/solua",
     "programs/native/move_funds",
     "programs/native/noop",
+    "programs/native/sobpf",
+    "programs/native/solua",
     "programs/bpf/noop_rust",
 ]

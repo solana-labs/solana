@@ -49,7 +49,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
 SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccounts *ka,
                               uint8_t **userdata, uint64_t *userdata_len) {
     if (num_ka != *(uint64_t *)src) {
-        return -1;
+        return 0;
     }
     src += sizeof(uint64_t);
 
@@ -78,8 +78,54 @@ SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka, SolKeyedAccount
     src += sizeof(uint64_t);
     *userdata = src;
 
-    return 0;
+    return 1;
 }
+
+// // -- Debug --
+
+SOL_FN_PREFIX void print_key(SolPubkey *key) {
+    for (int j = 0; j < SIZE_PUBKEY; j++) {
+        sol_print(0, 0, 0, j, key->x[j]);
+    }
+}
+
+SOL_FN_PREFIX void print_userdata(uint8_t *data, int len) {
+    for (int j = 0; j < len; j++) {
+        sol_print(0, 0, 0, j, data[j]);
+    }
+}
+
+SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
+                                uint8_t *userdata, uint64_t userdata_len) {
+    sol_print(0, 0, 0, 0, num_ka);
+    for (int i = 0; i < num_ka; i++) {
+        // key
+        print_key(ka[i].key);
+
+        // tokens
+        sol_print(0, 0, 0, 0, ka[i].tokens);
+
+        // account userdata
+        print_userdata(ka[i].userdata, ka[i].userdata_len);
+
+        // program_id
+        print_key(ka[i].program_id);
+    }
+    // tx userdata
+    print_userdata(userdata, userdata_len);
+}
+
+// void entrypoint(char *buf) {
+//     SolKeyedAccounts ka[3];
+//     uint64_t userdata_len;
+//     uint8_t *userdata;
+
+//     if (0 != sol_deserialize((uint8_t *)buf, 3, ka, &userdata,  &userdata_len)) {
+//         return;
+//     }
+
+//     print_params(3, ka, userdata, userdata_len);
+// }
 
 // -- TicTacToe --
 
@@ -279,92 +325,48 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
     return Result_Ok;
 }
 
-void entrypoint(uint8_t *buf) {
-    SolKeyedAccounts ka[3];
+uint64_t entrypoint(uint8_t *buf) {
+    SolKeyedAccounts ka[4];
     uint64_t userdata_len;
     uint8_t *userdata;
     int err = 0;
 
-    if (0 != sol_deserialize(buf, 3, ka, &userdata, &userdata_len)) {
-        sol_panic();
+    if (1 != sol_deserialize(buf, 4, ka, &userdata, &userdata_len)) {
+        return 0;
     }
 
-    if (sizeof(Game) > ka[1].userdata_len) {
-        sol_print(0, 0, 0xFF, sizeof(Game), ka[1].userdata_len);
-        sol_panic();
+    if (sizeof(Game) > ka[2].userdata_len) {
+        sol_print(0, 0, 0xFF, sizeof(Game), ka[2].userdata_len);
+        return 0;
     }
     Game game;
-    sol_memcpy(&game, ka[1].userdata, ka[1].userdata_len);
+    sol_memcpy(&game, ka[2].userdata, ka[2].userdata_len);
 
     Command command = *userdata;
-    sol_print(0, 0, 0, 0, command);
+    //sol_print(0, 0, 0, 0, command);
     switch (command) {
         case Command_Init:
-            game_create(&game, ka[2].key);
+            game_create(&game, ka[3].key);
             break;
 
         case Command_Join:
-            err = game_join(&game, ka[0].key, userdata[8]);
+            err = game_join(&game, ka[3].key, userdata[8]);
             break;
 
         case Command_KeepAlive:
-            err = game_keep_alive(&game, ka[0].key, /*TODO*/ 0);
+            err = game_keep_alive(&game, ka[3].key, /*TODO*/ 0);
             break;
 
         case Command_Move:
-            err = game_next_move(&game, ka[0].key, userdata[8], userdata[9]);
+            err = game_next_move(&game, ka[3].key, userdata[8], userdata[9]);
             break;
 
         default:
-            sol_panic();
+            return 0;
     }
 
-    sol_memcpy(ka[1].userdata, &game, ka[1].userdata_len);
+    sol_memcpy(ka[2].userdata, &game, ka[2].userdata_len);
     sol_print(0, 0, 0, err, game.state);
+    return 1;
 }
 
-// // -- Debug --
-
-// SOL_FN_PREFIX void print_key(SolPubkey *key) {
-//     for (int j = 0; j < SIZE_PUBKEY; j++) {
-//         sol_print(0, 0, 0, j, key->x[j]);
-//     }
-// }
-
-// SOL_FN_PREFIX void print_userdata(uint8_t *data, int len) {
-//     for (int j = 0; j < len; j++) {
-//         sol_print(0, 0, 0, j, data[j]);
-//     }
-// }
-
-// SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
-//                                 uint8_t *userdata, uint64_t userdata_len) {
-//     sol_print(0, 0, 0, 0, num_ka);
-//     for (int i = 0; i < num_ka; i++) {
-//         // key
-//         print_key(ka[i].key);
-
-//         // tokens
-//         sol_print(0, 0, 0, 0, ka[i].tokens);
-
-//         // account userdata
-//         print_userdata(ka[i].userdata, ka[i].userdata_len);
-
-//         // program_id
-//         print_key(ka[i].program_id);
-//     }
-//     // tx userdata
-//     print_userdata(userdata, userdata_len);
-// }
-
-// void entrypoint(char *buf) {
-//     SolKeyedAccounts ka[3];
-//     uint64_t userdata_len;
-//     uint8_t *userdata;
-
-//     if (0 != sol_deserialize((uint8_t *)buf, 3, ka, &userdata_len, &userdata)) {
-//         return;
-//     }
-
-//     print_params(3, ka, userdata, userdata_len);
-// }

@@ -35,6 +35,7 @@ pub mod fullnode;
 pub mod hash;
 pub mod leader_scheduler;
 pub mod ledger;
+pub mod loader_transaction;
 pub mod logger;
 pub mod metrics;
 pub mod mint;

@@ -390,6 +390,8 @@ mod tests {
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
         let budget_program_id = BudgetState::id();
+        let loader_program_id = Pubkey::default(); // TODO
+        let executable = false; // TODO
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
@@ -474,7 +476,10 @@ mod tests {
                "result": {
                    "program_id": budget_program_id,
                    "tokens": 1,
-                   "userdata": expected_userdata
+                   "userdata": expected_userdata,
+                   "executable": executable,
+                   "loader_program_id": loader_program_id,
+
                },
                "subscription": 0,
            }
@@ -512,7 +517,9 @@ mod tests {
                "result": {
                    "program_id": budget_program_id,
                    "tokens": 51,
-                   "userdata": expected_userdata
+                   "userdata": expected_userdata,
+                    "executable": executable,
+                   "loader_program_id": loader_program_id,
                },
                "subscription": 0,
            }
@@ -549,7 +556,9 @@ mod tests {
                "result": {
                    "program_id": budget_program_id,
                    "tokens": 1,
-                   "userdata": expected_userdata
+                   "userdata": expected_userdata,
+                    "executable": executable,
+                   "loader_program_id": loader_program_id,
                },
                "subscription": 0,
            }

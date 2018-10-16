@@ -5,16 +5,16 @@ use bincode::deserialize;
 use solana_program_interface::account::KeyedAccount;
 
 #[no_mangle]
-pub extern "C" fn process(infos: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
+pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
     let tokens: i64 = deserialize(data).unwrap();
-    if infos[0].account.tokens >= tokens {
-        infos[0].account.tokens -= tokens;
-        infos[1].account.tokens += tokens;
+    if keyed_accounts[0].account.tokens >= tokens {
+        keyed_accounts[0].account.tokens -= tokens;
+        keyed_accounts[1].account.tokens += tokens;
         true
     } else {
         println!(
             "Insufficient funds, asked {}, only had {}",
-            tokens, infos[0].account.tokens
+            tokens, keyed_accounts[0].account.tokens
         );
         false
     }
@@ -37,12 +37,12 @@ mod tests {
         accounts[1].tokens = 1;
 
         {
-            let mut infos: Vec<KeyedAccount> = Vec::new();
+            let mut keyed_accounts: Vec<KeyedAccount> = Vec::new();
             for (key, account) in keys.iter().zip(&mut accounts).collect::<Vec<_>>() {
                 infos.push(KeyedAccount { key, account });
             }
 
-            process(&mut infos, &data);
+            process(&mut keyed_accounts, &data);
         }
         assert_eq!(0, accounts[0].tokens);
         assert_eq!(101, accounts[1].tokens);

@@ -117,24 +117,17 @@ SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
     print_userdata(userdata, userdata_len);
 }
 
+// -- Program entrypoint --
+
 uint64_t entrypoint(char *buf) {
-    SolKeyedAccounts ka[3];
+    SolKeyedAccounts ka[1];
     uint64_t userdata_len;
     uint8_t *userdata;
 
-    if (1 != sol_deserialize((uint8_t *)buf, 3, ka, &userdata, &userdata_len)) {
-        return 1;
+    if (1 != sol_deserialize((uint8_t *)buf, 1, ka, &userdata, &userdata_len)) {
+        return 0;
     }
-    print_params(3, ka, userdata, userdata_len);
-
-    int64_t tokens = *(int64_t*)userdata;
-    if (*ka[0].tokens >= tokens) {
-        *ka[0].tokens -= tokens;
-        *ka[2].tokens += tokens;
-        //sol_print(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
-    } else {
-        //sol_print(0, 0, 0xFF, *ka[0].tokens, tokens);
-    }
-    return 0;
+    print_params(1, ka, userdata, userdata_len);
+    return 1;
 }
 

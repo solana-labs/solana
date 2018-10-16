@@ -1,20 +1,20 @@
 [package]
-name = "solua"
+name = "sobpf"
 version = "0.1.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
 bincode = "1.0.0"
+byteorder = "1.2.1"
+elf = "0.0.10"
+libc = "0.2.43"
 log = "0.4.2"
-rlua = "0.15.2"
+rbpf = { git = "https://github.com/solana-labs/rbpf" }
 serde = "1.0.27"
 serde_derive = "1.0.27"
 solana_program_interface = { path = "../../../common" }
 
-[dev-dependencies]
-bincode = "1.0.0"
-
 [lib]
-name = "solua"
+name = "sobpf"
 crate-type = ["cdylib"]
 

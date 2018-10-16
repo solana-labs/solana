@@ -30,13 +30,6 @@ pub trait SystemTransaction {
         fee: i64,
     ) -> Self;
 
-    fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self;
     fn system_move_many(
         from_keypair: &Keypair,
         moves: &[(Pubkey, i64)],
@@ -107,25 +100,7 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Load transaction
-    fn system_load(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        fee: i64,
-        program_id: Pubkey,
-        name: String,
-    ) -> Self {
-        let load = SystemProgram::Load { program_id, name };
-        let userdata = serialize(&load).unwrap();
-        Transaction::new(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            userdata,
-            last_id,
-            fee,
-        )
-    }
+
     fn system_move_many(from: &Keypair, moves: &[(Pubkey, i64)], last_id: Hash, fee: i64) -> Self {
         let instructions: Vec<_> = moves
             .iter()

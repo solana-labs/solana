@@ -1,347 +1,252 @@
 extern crate bincode;
+extern crate elf;
 extern crate solana;
 extern crate solana_program_interface;
 
-use std::collections::HashMap;
-#[cfg(feature = "bpf_c")]
-use std::path::Path;
-use std::sync::RwLock;
-use std::thread;
-
 use bincode::serialize;
-
-use solana::dynamic_program::DynamicProgram;
-#[cfg(feature = "bpf_c")]
-use solana::dynamic_program::ProgramPath;
-use solana::hash::Hash;
+use solana::bank::Bank;
+use solana::dynamic_program;
+use solana::loader_transaction::LoaderTransaction;
+use solana::logger;
+use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
-use solana::system_program::SystemProgram;
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
-use solana_program_interface::account::{Account, KeyedAccount};
-use solana_program_interface::pubkey::Pubkey;
 
-#[cfg(feature = "bpf_c")]
-use solana::tictactoe_program::Command;
+// TODO test modified user data
+// TODO test failure if account tokens decrease but not assigned to program
 
-#[cfg(feature = "bpf_c")]
-#[test]
-fn test_path_create_bpf() {
-    let path = ProgramPath::Bpf {}.create("move_funds_c");
-    assert_eq!(true, Path::new(&path).exists());
-    let path = ProgramPath::Bpf {}.create("tictactoe_c");
-    assert_eq!(true, Path::new(&path).exists());
+fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0], Ok(()));
+    assert_eq!(bank.get_signature(&tx.last_id, &tx.signature), Some(Ok(())));
 }
 
-#[cfg(feature = "bpf_c")]
 #[test]
-#[ignore]
-fn test_bpf_file_noop_rust() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
+fn test_transaction_load_native() {
+    logger::setup();
 
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
+    let mint = Mint::new(50);
+    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
+    //      which leads to duplicate tx signature errors
+    let bank = Bank::new(&mint);
+    let program = Keypair::new();
 
-        let dp = DynamicProgram::new_bpf_from_file("noop_rust".to_string());
-        assert!(dp.call(&mut infos, &data));
-    }
-}
+    // allocate, populate, finalize user program
 
-#[cfg(feature = "bpf_c")]
-#[test]
-fn test_bpf_file_move_funds_c() {
-    let data: Vec<u8> = vec![0xa, 0xb, 0xc, 0xd, 0xe, 0xf];
-    let keys = vec![Pubkey::new(&[0xAA; 32]), Pubkey::new(&[0xBB; 32])];
-    let mut accounts = vec![
-        Account::new(0x0123456789abcdef, 4, Pubkey::default()),
-        Account::new(1, 8, Pubkey::default()),
-    ];
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new_bpf_from_file("move_funds_c".to_string());
-        assert!(dp.call(&mut infos, &data));
-    }
-}
-
-#[cfg(feature = "bpf_c")]
-fn tictactoe_command(command: Command, accounts: &mut Vec<Account>, player: Pubkey) {
-    let p = &command as *const Command as *const u8;
-    let data: &[u8] = unsafe { std::slice::from_raw_parts(p, std::mem::size_of::<Command>()) };
-
-    // Init
-    // player_x pub key in keys[2]
-    // accounts[0].program_id must be tictactoe
-    // accounts[1].userdata must be tictactoe game state
-
-    let keys = vec![player, Pubkey::default(), player];
-
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut *accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
-
-        let dp = DynamicProgram::new_bpf_from_file("tictactoe_c".to_string());
-        assert!(dp.call(&mut infos, &data));
-    }
-}
-
-#[cfg(feature = "bpf_c")]
-#[test]
-fn test_bpf_file_tictactoe_c() {
-    let game_size = 0x78; // corresponds to the C structure size
-    let mut accounts = vec![
-        Account::new(0, 0, Pubkey::default()),
-        Account::new(0, game_size, Pubkey::default()),
-        Account::new(0, 0, Pubkey::default()),
-    ];
-
-    tictactoe_command(Command::Init, &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(
-        Command::Join(0xAABBCCDD),
-        &mut accounts,
-        Pubkey::new(&[0xA; 32]),
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        program.pubkey(),
+        mint.last_id(),
+        1,
+        56, // TODO How does the user know how much space to allocate, this is really an internally known size
+        dynamic_program::id(),
+        0,
     );
-    tictactoe_command(Command::Move(1, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(Command::Move(0, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(Command::Move(2, 0), &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(Command::Move(0, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(Command::Move(2, 2), &mut accounts, Pubkey::new(&[0xA; 32]));
-    tictactoe_command(Command::Move(0, 1), &mut accounts, Pubkey::new(&[0xA; 32]));
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    // validate test
+    println!("id: {:?}", dynamic_program::id());
+    let name = String::from("noop");
+    let tx = Transaction::write(
+        &program,
+        dynamic_program::id(),
+        0,
+        name.as_bytes().to_vec(),
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    println!("id after: {:?}", dynamic_program::id());
+
+    let tx = Transaction::finalize(&program, dynamic_program::id(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    // Call user program
+
+    let tx = Transaction::new(
+        &mint.keypair(), // TODO
+        &[],
+        program.pubkey(),
+        vec![1u8],
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 }
 
 #[test]
-fn test_native_file_noop() {
-    let data: Vec<u8> = vec![0];
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
+fn test_transaction_load_lua() {
+    logger::setup();
 
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
+    let mint = Mint::new(50);
+    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
+    //      which leads to duplicate tx signature errors
+    let bank = Bank::new(&mint);
+    let loader = Keypair::new();
+    let program = Keypair::new();
+    let from = Keypair::new();
+    let to = Keypair::new().pubkey();
 
-        let dp = DynamicProgram::new_native("noop".to_string()).unwrap();
-        assert!(dp.call(&mut infos, &data));
-    }
+    // allocate, populate, and finalize Lua loader
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        loader.pubkey(),
+        mint.last_id(),
+        1,
+        56, // TODO How does the user know how much space to allocate for what should be an internally known size
+        dynamic_program::id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let name = String::from("solua");
+    let tx = Transaction::write(
+        &loader,
+        dynamic_program::id(),
+        0,
+        name.as_bytes().to_vec(),
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    // allocate, populate, and finalize user program
+
+    let bytes = r#"
+            print("Lua Script!")
+            local tokens, _ = string.unpack("I", data)
+            accounts[1].tokens = accounts[1].tokens - tokens
+            accounts[2].tokens = accounts[2].tokens + tokens
+        "#.as_bytes()
+    .to_vec();
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        program.pubkey(),
+        mint.last_id(),
+        1,
+        300, // TODO How does the user know how much space to allocate for what should be an internally known size
+        loader.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::write(&program, loader.pubkey(), 0, bytes, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    // Call user program with two accounts
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        from.pubkey(),
+        mint.last_id(),
+        10,
+        0,
+        program.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        to,
+        mint.last_id(),
+        1,
+        0,
+        program.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let data = serialize(&10).unwrap();
+    let tx = Transaction::new(&from, &[to], program.pubkey(), data, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    assert_eq!(bank.get_balance(&from.pubkey()), 0);
+    assert_eq!(bank.get_balance(&to), 11);
 }
 
+#[cfg(feature = "bpf_c")]
 #[test]
-fn test_native_file_move_funds_success() {
-    let tokens: i64 = 100;
-    let data: Vec<u8> = serialize(&tokens).unwrap();
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 100;
-    accounts[1].tokens = 1;
+fn test_transaction_load_bpf() {
+    logger::setup();
 
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
+    let mint = Mint::new(50);
+    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
+    //      which leads to duplicate tx signature errors
+    let bank = Bank::new(&mint);
+    let loader = Keypair::new();
+    let program = Keypair::new();
 
-        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-        assert!(dp.call(&mut infos, &data));
-    }
-    assert_eq!(0, accounts[0].tokens);
-    assert_eq!(101, accounts[1].tokens);
-}
+    // allocate, populate, finalize BPF loader
 
-#[test]
-fn test_native_file_move_funds_insufficient_funds() {
-    let tokens: i64 = 100;
-    let data: Vec<u8> = serialize(&tokens).unwrap();
-    let keys = vec![Pubkey::default(); 2];
-    let mut accounts = vec![Account::default(), Account::default()];
-    accounts[0].tokens = 10;
-    accounts[1].tokens = 1;
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        loader.pubkey(),
+        mint.last_id(),
+        1,
+        56, // TODO How does the user know how much space to allocate for what should be an internally known size
+        dynamic_program::id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    {
-        let mut infos: Vec<_> = (&keys)
-            .into_iter()
-            .zip(&mut accounts)
-            .map(|(key, account)| KeyedAccount { key, account })
-            .collect();
+    let name = String::from("sobpf");
+    let tx = Transaction::write(
+        &loader,
+        dynamic_program::id(),
+        0,
+        name.as_bytes().to_vec(),
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-        assert!(!dp.call(&mut infos, &data));
-    }
-    assert_eq!(10, accounts[0].tokens);
-    assert_eq!(1, accounts[1].tokens);
-}
+    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-#[test]
-fn test_program_native_move_funds_succes_many_threads() {
-    let num_threads = 42; // number of threads to spawn
-    let num_iters = 100; // number of iterations of test in each thread
-    let mut threads = Vec::new();
-    for _t in 0..num_threads {
-        threads.push(thread::spawn(move || {
-            for _i in 0..num_iters {
-                {
-                    let tokens: i64 = 100;
-                    let data: Vec<u8> = serialize(&tokens).unwrap();
-                    let keys = vec![Pubkey::default(); 2];
-                    let mut accounts = vec![Account::default(), Account::default()];
-                    accounts[0].tokens = 100;
-                    accounts[1].tokens = 1;
+    // allocate, populate, and finalize user program
 
-                    {
-                        let mut infos: Vec<_> = (&keys)
-                            .into_iter()
-                            .zip(&mut accounts)
-                            .map(|(key, account)| KeyedAccount { key, account })
-                            .collect();
+    let tx = Transaction::system_create(
+        &mint.keypair(),
+        program.pubkey(),
+        mint.last_id(),
+        1,
+        56, // TODO How does the user know how much space to allocate for what should be an internally known size
+        loader.pubkey(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-                        let dp = DynamicProgram::new_native("move_funds".to_string()).unwrap();
-                        assert!(dp.call(&mut infos, &data));
-                    }
-                    assert_eq!(0, accounts[0].tokens);
-                    assert_eq!(101, accounts[1].tokens);
-                }
-            }
-        }));
-    }
+    let name = String::from("noop_c");
+    let tx = Transaction::write(
+        &program,
+        loader.pubkey(),
+        0,
+        name.as_bytes().to_vec(),
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    for thread in threads {
-        thread.join().unwrap();
-    }
-}
-fn process_transaction(
-    tx: &Transaction,
-    accounts: &mut [Account],
-    loaded_programs: &RwLock<HashMap<Pubkey, DynamicProgram>>,
-) {
-    let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-    SystemProgram::process_transaction(&tx, 0, &mut refs[..], loaded_programs).unwrap();
-}
+    let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-#[test]
-fn test_system_program_load_call() {
-    // first load the program
-    let loaded_programs = RwLock::new(HashMap::new());
-    {
-        let from = Keypair::new();
-        let mut accounts = vec![Account::default(), Account::default()];
-        let program_id = Pubkey::default(); // same program id for both
-        let tx = Transaction::system_load(
-            &from,
-            Hash::default(),
-            0,
-            program_id,
-            "move_funds".to_string(),
-        );
+    // Call user program
 
-        process_transaction(&tx, &mut accounts, &loaded_programs);
-    }
-    // then call the program
-    {
-        let program_id = Pubkey::default(); // same program id for both
-        let keys = vec![Pubkey::default(), Pubkey::default()];
-        let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].tokens = 100;
-        accounts[1].tokens = 1;
-        let tokens: i64 = 100;
-        let data: Vec<u8> = serialize(&tokens).unwrap();
-        {
-            let hash = loaded_programs.write().unwrap();
-            match hash.get(&program_id) {
-                Some(dp) => {
-                    let mut infos: Vec<_> = (&keys)
-                        .into_iter()
-                        .zip(&mut accounts)
-                        .map(|(key, account)| KeyedAccount { key, account })
-                        .collect();
-
-                    assert!(dp.call(&mut infos, &data));
-                }
-                None => panic!("failed to find program in hash"),
-            }
-        }
-        assert_eq!(0, accounts[0].tokens);
-        assert_eq!(101, accounts[1].tokens);
-    }
-}
-#[test]
-fn test_system_program_load_call_many_threads() {
-    let num_threads = 42;
-    let num_iters = 100;
-    let mut threads = Vec::new();
-    for _t in 0..num_threads {
-        threads.push(thread::spawn(move || {
-            let _tid = thread::current().id();
-            for _i in 0..num_iters {
-                // first load the program
-                let loaded_programs = RwLock::new(HashMap::new());
-                {
-                    let from = Keypair::new();
-                    let mut accounts = vec![Account::default(), Account::default()];
-                    let program_id = Pubkey::default(); // same program id for both
-                    let tx = Transaction::system_load(
-                        &from,
-                        Hash::default(),
-                        0,
-                        program_id,
-                        "move_funds".to_string(),
-                    );
-
-                    process_transaction(&tx, &mut accounts, &loaded_programs);
-                }
-                // then call the program
-                {
-                    let program_id = Pubkey::default(); // same program id for both
-                    let keys = vec![Pubkey::default(), Pubkey::default()];
-                    let mut accounts = vec![Account::default(), Account::default()];
-                    accounts[0].tokens = 100;
-                    accounts[1].tokens = 1;
-                    let tokens: i64 = 100;
-                    let data: Vec<u8> = serialize(&tokens).unwrap();
-                    {
-                        let hash = loaded_programs.write().unwrap();
-                        match hash.get(&program_id) {
-                            Some(dp) => {
-                                let mut infos: Vec<_> = (&keys)
-                                    .into_iter()
-                                    .zip(&mut accounts)
-                                    .map(|(key, account)| KeyedAccount { key, account })
-                                    .collect();
-
-                                assert!(dp.call(&mut infos, &data));
-                            }
-                            None => panic!("failed to find program in hash"),
-                        }
-                    }
-                    assert_eq!(0, accounts[0].tokens);
-                    assert_eq!(101, accounts[1].tokens);
-                }
-            }
-        }));
-    }
-
-    for thread in threads {
-        thread.join().unwrap();
-    }
+    let tx = Transaction::new(
+        &mint.keypair(), // TODO
+        &[],
+        program.pubkey(),
+        vec![1u8],
+        mint.last_id(),
+        0,
+    );
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 }
