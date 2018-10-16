@@ -237,8 +237,11 @@ impl LeaderScheduler {
         }
     }
 
-    pub fn max_height_for_leader(&self, height: u64) -> u64 {
-        assert!(!self.use_only_bootstrap_leader);
+    pub fn max_height_for_leader(&self, height: u64) -> Option<u64> {
+        if self.use_only_bootstrap_leader {
+            return None;
+        }
+
         assert!(self.get_scheduled_leader(height).is_some());
 
         // 1) If the leader is less than the bootstrap height, they they will be leader
@@ -247,19 +250,24 @@ impl LeaderScheduler {
         // 2) If this leader is not the only one in the schedule, then they will
         // only be leader until the end of this slot
         //
-        if height < self.bootstrap_height || self.leader_schedule.len() > 1 {
-            self.count_until_next_leader_rotation(height).expect(
-                "Function should not be called on default implementation of LeaderScheduler",
-            ) + height
-        } else {
-            // If the height is greater than bootstrap_height and this leader is
-            // the only leader in the schedule, then that leader will be in power
-            // until the next seed_rotation_height
-            self.last_seed_height.expect(
-                "If height >= bootstrap height, then we expect
-                 a seed has been generated",
-            ) + self.seed_rotation_interval
-        }
+        let result = {
+            if height < self.bootstrap_height || self.leader_schedule.len() > 1 {
+                self.count_until_next_leader_rotation(height).expect(
+                    "Should return some value when not using default implementation 
+                     of LeaderScheduler",
+                ) + height
+            } else {
+                // If the height is greater than bootstrap_height and this leader is
+                // the only leader in the schedule, then that leader will be in power
+                // until the next seed_rotation_height
+                self.last_seed_height.expect(
+                    "If height >= bootstrap height, then we expect
+                    a seed has been generated",
+                ) + self.seed_rotation_interval
+            }
+        };
+
+        Some(result)
     }
 
     pub fn reset(&mut self) {

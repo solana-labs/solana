@@ -311,13 +311,8 @@ impl Fullnode {
         let scheduled_leader = leader_scheduler
             .read()
             .unwrap()
-            .get_scheduled_leader(entry_height)
+            .get_scheduled_leader(poh_height)
             .expect("Leader not known after processing bank");
-
-        println!(
-            "Scheduled leader: {}, poh_height: {}",
-            scheduled_leader, poh_height
-        );
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
         let node_role = if scheduled_leader != keypair.pubkey() {
@@ -350,11 +345,7 @@ impl Fullnode {
         } else {
             let max_poh_height = {
                 let ls_lock = leader_scheduler.read().unwrap();
-                if ls_lock.use_only_bootstrap_leader {
-                    None
-                } else {
-                    Some(ls_lock.max_height_for_leader(poh_height))
-                }
+                ls_lock.max_height_for_leader(poh_height)
             };
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
@@ -504,11 +495,7 @@ impl Fullnode {
 
         let max_poh_height = {
             let ls_lock = self.leader_scheduler.read().unwrap();
-            if ls_lock.use_only_bootstrap_leader {
-                None
-            } else {
-                Some(ls_lock.max_height_for_leader(poh_height))
-            }
+            ls_lock.max_height_for_leader(poh_height)
         };
 
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
@@ -737,8 +724,6 @@ mod tests {
             Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
-        println!("Bootstrap keypair: {:?}", bootstrap_leader_keypair.pubkey());
-
         // Make a mint and a genesis entries for leader ledger
         let num_ending_ticks = 1;
         let (_, bootstrap_leader_ledger_path, genesis_entries) =
@@ -778,7 +763,6 @@ mod tests {
         match bootstrap_leader.handle_role_transition().unwrap() {
             Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
             x => {
-                println!("x: {:?}", x);
                 panic!("Expected a leader transition");
             }
         }
@@ -819,7 +803,7 @@ mod tests {
         let first_entries =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
 
-        let initial_poh_height = first_entries.len() as u64;
+        let initial_poh_height = first_entries.len() as u64 + num_ending_ticks;
         ledger_writer.write_entries(first_entries).unwrap();
 
         // Create the common leader scheduling configuration
@@ -988,14 +972,18 @@ mod tests {
             _ => panic!("Role should not be leader"),
         }
 
-        // Check the validator ledger to make sure it's the right height, we should've
-        // transitioned after the bootstrap_height entry
-        let (_, entry_height, _, _) = Fullnode::new_bank_from_ledger(
+        // Check the validator ledger for the correct entry + poh heights, we should've
+        // transitioned after poh_height = bootstrap_height.
+        let (_, entry_height, poh_height, _) = Fullnode::new_bank_from_ledger(
             &validator_ledger_path,
             &mut LeaderScheduler::new(&leader_scheduler_config),
         );
 
-        assert_eq!(entry_height, bootstrap_height);
+        assert_eq!(poh_height, bootstrap_height);
+        assert_eq!(
+            entry_height,
+            bootstrap_height + mint.create_entries().len() as u64
+        );
 
         // Shut down
         t_responder.join().expect("responder thread join");

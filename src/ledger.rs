@@ -626,9 +626,10 @@ pub fn create_tmp_genesis(name: &str, num: i64) -> (Mint, String) {
 
 fn create_ticks(num_ticks: usize, hash: &mut Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks);
-    let mut num_hashes = 0;
     for _ in 0..num_ticks {
-        ticks.push(Entry::new_mut(hash, &mut num_hashes, vec![]));
+        let new_tick = Entry::new(hash, 1, vec![]);
+        *hash = new_tick.id;
+        ticks.push(new_tick);
     }
 
     ticks

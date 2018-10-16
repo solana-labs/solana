@@ -106,7 +106,8 @@ impl ReplicateStage {
                     &mut *leader_scheduler.write().unwrap(),
                 );
 
-                {
+                // Will runif leader_scheduler.use_only_bootstrap_leader is false
+                if let Some(max_poh_height) = max_poh_height {
                     let ls_lock = leader_scheduler.read().unwrap();
                     if current_poh_height > max_poh_height {
                         // TODO: Handle the case where the leader acts badly and sends
@@ -382,16 +383,17 @@ mod test {
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
 
-        //Check ledger height is correct
+        // Check ledger height is correct
         let mut leader_scheduler = Arc::try_unwrap(leader_scheduler)
             .expect("Multiple references to this RwLock still exist")
             .into_inner()
             .expect("RwLock for LeaderScheduler is still locked");
 
         leader_scheduler.reset();
-        let (_, entry_height, _, _) =
+        let (_, entry_height, poh_height, _) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
+        assert_eq!(poh_height, bootstrap_height);
         assert_eq!(entry_height, expected_entry_length);
         let _ignored = remove_dir_all(&my_ledger_path);
     }

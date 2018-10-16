@@ -951,7 +951,7 @@ fn test_leader_validator_basic() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
-    let ledger_initial_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
+    let initial_poh_height = bootstrap_entries.len() as u64 + num_ending_ticks;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Create the leader scheduler config
@@ -989,22 +989,22 @@ fn test_leader_validator_basic() {
     let servers = converge(&leader_info, 2);
     assert_eq!(servers.len(), 2);
 
-    // Send transactions to the leader
-    let extra_transactions = std::cmp::max(leader_rotation_interval / 3, 1);
-
-    // Push "extra_transactions" past leader_rotation_interval entry height,
-    // make sure the validator stops.
-    for i in ledger_initial_len..(bootstrap_height + extra_transactions) {
+    // Push some transactions until PoH height > bootstrap_height.
+    // Make sure the validator stops.
+    let mut i = initial_poh_height;
+    loop {
         let expected_balance = std::cmp::min(
-            bootstrap_height - ledger_initial_len,
-            i - ledger_initial_len + 1,
+            bootstrap_height - initial_poh_height,
+            i - initial_poh_height + 1,
         );
         let result = send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+
         // If the transaction wasn't reflected in the node, then we assume
         // the node has transitioned already
         if result != Some(expected_balance as i64) {
             break;
         }
+        i += 1;
     }
 
     // Wait for validator to shut down tvu and restart tpu
@@ -1114,8 +1114,6 @@ fn test_dropped_handoff_recovery() {
     let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
     ledger_writer.write_entries(first_entries).unwrap();
 
-    let ledger_initial_len = (genesis_entries.len() + first_entries_len) as u64;
-
     let next_leader_ledger_path = tmp_copy_ledger(
         &bootstrap_leader_ledger_path,
         "test_dropped_handoff_recovery",
@@ -1124,10 +1122,11 @@ fn test_dropped_handoff_recovery() {
     ledger_paths.push(next_leader_ledger_path.clone());
 
     // Create the common leader scheduling configuration
+    let initial_poh_height = first_entries_len as u64 + num_ending_ticks;
     let num_slots_per_epoch = (N + 1) as u64;
     let leader_rotation_interval = 5;
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-    let bootstrap_height = ledger_initial_len + 1;
+    let bootstrap_height = initial_poh_height + 1;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
         bootstrap_leader_info.id,
         Some(bootstrap_height),
@@ -1209,7 +1208,6 @@ fn test_dropped_handoff_recovery() {
 }
 
 #[test]
-#[ignore]
 //TODO: Ignore for now due to bug exposed by the test "test_dropped_handoff_recovery"
 fn test_full_leader_validator_network() {
     logger::setup();
