@@ -100,7 +100,7 @@ fn test_transaction_load_lua() {
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    let name = String::from("solua");
+    let name = String::from("lua_loader");
     let tx = Transaction::write(
         &loader,
         native_loader::id(),
@@ -197,7 +197,7 @@ fn test_transaction_load_bpf() {
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    let name = String::from("sobpf");
+    let name = String::from("bpf_loader");
     let tx = Transaction::write(
         &loader,
         native_loader::id(),

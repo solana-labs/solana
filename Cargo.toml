@@ -110,8 +110,8 @@ tokio-codec = "0.1"
 untrusted = "0.6.2"
 move_funds = { path = "programs/native/move_funds" }
 noop = { path = "programs/native/noop" }
-sobpf = { path = "programs/native/sobpf" }
-solua = { path = "programs/native/solua" }
+bpf_loader = { path = "programs/native/bpf_loader" }
+lua_loader = { path = "programs/native/lua_loader" }
 
 [[bench]]
 name = "bank"
@@ -138,7 +138,7 @@ members = [
     "common",
     "programs/native/move_funds",
     "programs/native/noop",
-    "programs/native/sobpf",
-    "programs/native/solua",
+    "programs/native/bpf_loader",
+    "programs/native/lua_loader",
     "programs/bpf/noop_rust",
 ]
