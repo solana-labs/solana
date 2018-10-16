@@ -3,8 +3,10 @@
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
 use entry::EntrySender;
+use influx_db_client as influxdb;
 use leader_scheduler::LeaderScheduler;
 use log::Level;
+use metrics;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
@@ -16,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
+use sys_info::hostname;
 use timing::duration_as_ms;
 use window::{blob_idx_in_window, SharedWindow, WindowUtil};
 
@@ -116,6 +119,16 @@ fn retransmit_all_leader_blocks(
                 }
             }
         }
+        metrics::submit(
+            influxdb::Point::new("retransmit-queue")
+                .add_field(
+                    "host",
+                    influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
+                ).add_field(
+                    "count",
+                    influxdb::Value::Integer(retransmit_queue.len() as i64),
+                ).to_owned(),
+        );
     } else {
         warn!("{}: no leader to retransmit from", id);
     }
@@ -160,6 +173,16 @@ fn recv_window(
     }
     let now = Instant::now();
     inc_new_counter_info!("streamer-recv_window-recv", dq.len(), 100);
+
+    metrics::submit(
+        influxdb::Point::new("recv-window")
+            .add_field(
+                "host",
+                influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
+            ).add_field("count", influxdb::Value::Integer(dq.len() as i64))
+            .to_owned(),
+    );
+
     trace!(
         "{}: RECV_WINDOW {} {}: got packets {}",
         id,
