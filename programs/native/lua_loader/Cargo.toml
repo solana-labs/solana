@@ -1,5 +1,5 @@
 [package]
-name = "solua"
+name = "lua_loader"
 version = "0.1.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
@@ -15,6 +15,6 @@ solana_program_interface = { path = "../../../common" }
 bincode = "1.0.0"
 
 [lib]
-name = "solua"
+name = "lua_loader"
 crate-type = ["cdylib"]
 
