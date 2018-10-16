@@ -24,7 +24,6 @@ pub mod client;
 pub mod cluster_info;
 pub mod budget_program;
 pub mod drone;
-pub mod dynamic_program;
 pub mod entry;
 pub mod entry_writer;
 #[cfg(feature = "erasure")]
@@ -38,6 +37,7 @@ pub mod loader_transaction;
 pub mod logger;
 pub mod metrics;
 pub mod mint;
+pub mod native_loader;
 pub mod ncp;
 pub mod netutil;
 pub mod packet;
