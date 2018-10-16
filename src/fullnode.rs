@@ -325,6 +325,7 @@ impl Fullnode {
             let tvu = Tvu::new(
                 keypair.clone(),
                 &bank,
+                poh_height,
                 entry_height,
                 cluster_info.clone(),
                 shared_window.clone(),
@@ -352,7 +353,7 @@ impl Fullnode {
                 if ls_lock.use_only_bootstrap_leader {
                     None
                 } else {
-                    Some(ls_lock.max_height_for_leader(keypair.pubkey(), poh_height))
+                    Some(ls_lock.max_height_for_leader(poh_height))
                 }
             };
             // Start in leader mode.
@@ -415,7 +416,7 @@ impl Fullnode {
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        let (scheduled_leader, entry_height, last_entry_id, poh_height) = {
+        let (scheduled_leader, poh_height, entry_height, last_entry_id) = {
             let mut ls_lock = self.leader_scheduler.write().unwrap();
             // Clear the leader scheduler
             ls_lock.reset();
@@ -431,12 +432,12 @@ impl Fullnode {
                 ls_lock
                     .get_scheduled_leader(entry_height)
                     .expect("Scheduled leader should exist after rebuilding bank"),
+                poh_height,
                 entry_height,
                 ledger_tail
                     .last()
                     .expect("Expected at least one entry in the ledger")
                     .id,
-                poh_height,
             )
         };
 
@@ -466,13 +467,14 @@ impl Fullnode {
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
         if scheduled_leader == self.keypair.pubkey() {
-            self.validator_to_leader(entry_height, poh_height, last_entry_id);
+            self.validator_to_leader(poh_height, entry_height, last_entry_id);
             return Ok(());
         }
 
         let tvu = Tvu::new(
             self.keypair.clone(),
             &self.bank,
+            poh_height,
             entry_height,
             self.cluster_info.clone(),
             self.shared_window.clone(),
@@ -494,7 +496,7 @@ impl Fullnode {
         Ok(())
     }
 
-    fn validator_to_leader(&mut self, entry_height: u64, poh_height: u64, last_entry_id: Hash) {
+    fn validator_to_leader(&mut self, poh_height: u64, entry_height: u64, last_entry_id: Hash) {
         self.cluster_info
             .write()
             .unwrap()
@@ -505,7 +507,7 @@ impl Fullnode {
             if ls_lock.use_only_bootstrap_leader {
                 None
             } else {
-                Some(ls_lock.max_height_for_leader(self.keypair.pubkey(), poh_height))
+                Some(ls_lock.max_height_for_leader(poh_height))
             }
         };
 
@@ -563,9 +565,9 @@ impl Fullnode {
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
-                Some(TvuReturnType::LeaderRotation(entry_height, last_entry_id)) => {
+                Some(TvuReturnType::LeaderRotation(poh_height, entry_height, last_entry_id)) => {
                     //TODO: Fix this to return actual poh height.
-                    self.validator_to_leader(entry_height, 0, last_entry_id);
+                    self.validator_to_leader(poh_height, entry_height, last_entry_id);
                     Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation))
                 }
                 _ => Ok(None),
@@ -624,7 +626,7 @@ impl Service for Fullnode {
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
-                if let Some(TvuReturnType::LeaderRotation(_, _)) = validator_service.join()? {
+                if let Some(TvuReturnType::LeaderRotation(_, _, _)) = validator_service.join()? {
                     return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
                 }
             }
@@ -977,8 +979,8 @@ mod tests {
                 let join_result = validator_services
                     .join()
                     .expect("Expected successful validator join");
-                if let Some(TvuReturnType::LeaderRotation(result_bh, _)) = join_result {
-                    assert_eq!(result_bh, bootstrap_height);
+                if let Some(TvuReturnType::LeaderRotation(poh_height, _, _)) = join_result {
+                    assert_eq!(poh_height, bootstrap_height);
                 } else {
                     panic!("Expected validator to have exited due to leader rotation");
                 }

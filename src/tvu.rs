@@ -53,7 +53,7 @@ use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
-    LeaderRotation(u64, Hash),
+    LeaderRotation(u64, u64, Hash),
 }
 
 pub struct Tvu {
@@ -79,6 +79,7 @@ impl Tvu {
     pub fn new(
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
+        poh_height: u64,
         entry_height: u64,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -116,6 +117,7 @@ impl Tvu {
             blob_window_receiver,
             ledger_path,
             exit.clone(),
+            poh_height,
             entry_height,
             leader_scheduler,
         );
@@ -149,9 +151,15 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         match self.replicate_stage.join()? {
-            Some(ReplicateStageReturnType::LeaderRotation(entry_height, last_entry_id)) => Ok(
-                Some(TvuReturnType::LeaderRotation(entry_height, last_entry_id)),
-            ),
+            Some(ReplicateStageReturnType::LeaderRotation(
+                poh_height,
+                entry_height,
+                last_entry_id,
+            )) => Ok(Some(TvuReturnType::LeaderRotation(
+                poh_height,
+                entry_height,
+                last_entry_id,
+            ))),
             _ => Ok(None),
         }
     }
@@ -253,6 +261,7 @@ pub mod tests {
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
             &bank,
+            0,
             0,
             cref1,
             dr_1.1,
