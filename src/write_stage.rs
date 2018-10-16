@@ -369,7 +369,7 @@ mod tests {
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(leader_info.info).expect("ClusterInfo::new"),
         ));
-        let bank = Arc::new(Bank::new_default(true));
+        let bank = Arc::new(Bank::default());
 
         // Make a ledger
         let (_, leader_ledger_path) = genesis(test_name, 10_000);
@@ -516,7 +516,7 @@ mod tests {
         let my_id = my_keypair.pubkey();
 
         // Set up a dummy bank
-        let bank = Arc::new(Bank::new_default(true));
+        let bank = Arc::new(Bank::default());
         let accounts = bank.accounts();
         let dummy_id = Keypair::new().pubkey();
         let new_account = Account::new(1, 10, dummy_id.clone());
@@ -610,7 +610,7 @@ mod tests {
         let my_id = my_keypair.pubkey();
 
         // Set up a dummy bank
-        let bank = Arc::new(Bank::new_default(true));
+        let bank = Arc::new(Bank::default());
         let entry = Entry::new(&Hash::default(), 0, vec![]);
 
         // Note: An slot is the period of leader_rotation_interval entries
