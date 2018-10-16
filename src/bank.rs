@@ -8,7 +8,7 @@ use bincode::serialize;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
-use dynamic_program;
+use native_loader;
 use entry::Entry;
 use hash::{hash, Hash};
 use itertools::Itertools;
@@ -608,7 +608,7 @@ impl Bank {
 
             let mut program_id = tx.program_ids[instruction_index];
             loop {
-                if dynamic_program::check_id(&program_id) {
+                if native_loader::check_id(&program_id) {
                     // at the root of the chain, ready to dispatch
                     break;
                 }
@@ -647,7 +647,7 @@ impl Bank {
                 }).collect();
             keyed_accounts.append(&mut keyed_accounts2);
 
-            if !dynamic_program::process_transaction(
+            if !native_loader::process_transaction(
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
             ) {

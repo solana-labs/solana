@@ -5,7 +5,7 @@ extern crate solana_program_interface;
 
 use bincode::serialize;
 use solana::bank::Bank;
-use solana::dynamic_program;
+use solana::native_loader;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
@@ -40,25 +40,25 @@ fn test_transaction_load_native() {
         mint.last_id(),
         1,
         56, // TODO How does the user know how much space to allocate, this is really an internally known size
-        dynamic_program::id(),
+        native_loader::id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    println!("id: {:?}", dynamic_program::id());
+    println!("id: {:?}", native_loader::id());
     let name = String::from("noop");
     let tx = Transaction::write(
         &program,
-        dynamic_program::id(),
+        native_loader::id(),
         0,
         name.as_bytes().to_vec(),
         mint.last_id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-    println!("id after: {:?}", dynamic_program::id());
+    println!("id after: {:?}", native_loader::id());
 
-    let tx = Transaction::finalize(&program, dynamic_program::id(), mint.last_id(), 0);
+    let tx = Transaction::finalize(&program, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program
@@ -95,7 +95,7 @@ fn test_transaction_load_lua() {
         mint.last_id(),
         1,
         56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        dynamic_program::id(),
+        native_loader::id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
@@ -103,7 +103,7 @@ fn test_transaction_load_lua() {
     let name = String::from("solua");
     let tx = Transaction::write(
         &loader,
-        dynamic_program::id(),
+        native_loader::id(),
         0,
         name.as_bytes().to_vec(),
         mint.last_id(),
@@ -111,7 +111,7 @@ fn test_transaction_load_lua() {
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
+    let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // allocate, populate, and finalize user program
@@ -192,7 +192,7 @@ fn test_transaction_load_bpf() {
         mint.last_id(),
         1,
         56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        dynamic_program::id(),
+        native_loader::id(),
         0,
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
@@ -200,7 +200,7 @@ fn test_transaction_load_bpf() {
     let name = String::from("sobpf");
     let tx = Transaction::write(
         &loader,
-        dynamic_program::id(),
+        native_loader::id(),
         0,
         name.as_bytes().to_vec(),
         mint.last_id(),
@@ -208,7 +208,7 @@ fn test_transaction_load_bpf() {
     );
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-    let tx = Transaction::finalize(&loader, dynamic_program::id(), mint.last_id(), 0);
+    let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // allocate, populate, and finalize user program
