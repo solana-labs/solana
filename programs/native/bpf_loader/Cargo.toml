@@ -7,6 +7,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 bincode = "1.0.0"
 byteorder = "1.2.1"
 elf = "0.0.10"
+env_logger = "0.5.12"
 libc = "0.2.43"
 log = "0.4.2"
 rbpf = { git = "https://github.com/qmonnet/rbpf", rev="bc41ec47d9b51751585f6ddcde1d1eb1afe2be69" }

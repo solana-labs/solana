@@ -1,16 +1,18 @@
 extern crate bincode;
-extern crate rlua;
-extern crate solana_program_interface;
-#[macro_use]
-extern crate serde_derive;
+extern crate env_logger;
 #[macro_use]
 extern crate log;
+extern crate rlua;
+#[macro_use]
+extern crate serde_derive;
+extern crate solana_program_interface;
 
 use bincode::{deserialize, serialize};
 use rlua::{Lua, Result, Table};
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::loader_instruction::LoaderInstruction;
 use std::str;
+use std::sync::{Once, ONCE_INIT};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum LuaLoader {
@@ -59,6 +61,12 @@ fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> Resu
 
 #[no_mangle]
 pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+    static INIT: Once = ONCE_INIT;
+    INIT.call_once(|| {
+        // env_logger can only be initialized once
+        env_logger::init();
+    });
+
     if keyed_accounts[0].account.executable {
         let prog: Vec<u8>;
         if let Ok(program) = deserialize(&keyed_accounts[0].account.userdata) {
