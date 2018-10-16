@@ -1,15 +1,16 @@
+pub mod bpf_verifier;
+
 extern crate bincode;
 extern crate byteorder;
 extern crate elf;
+extern crate env_logger;
 extern crate libc;
-extern crate rbpf;
-extern crate solana_program_interface;
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate log;
-
-pub mod bpf_verifier;
+extern crate rbpf;
+#[macro_use]
+extern crate serde_derive;
+extern crate solana_program_interface;
 
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
@@ -22,6 +23,7 @@ use std::io::Error;
 use std::mem;
 use std::path::PathBuf;
 use std::str;
+use std::sync::{Once, ONCE_INIT};
 
 /// Dynamic link library prefixs
 const PLATFORM_FILE_PREFIX_BPF: &str = "";
@@ -115,6 +117,12 @@ pub enum BpfLoader {
 
 #[no_mangle]
 pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+    static INIT: Once = ONCE_INIT;
+    INIT.call_once(|| {
+        // env_logger can only be initialized once
+        env_logger::init();
+    });
+
     if keyed_accounts[0].account.executable {
         let prog: Vec<u8>;
         if let Ok(program) = deserialize(&keyed_accounts[0].account.userdata) {

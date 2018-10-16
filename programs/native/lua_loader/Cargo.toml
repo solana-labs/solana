@@ -5,6 +5,7 @@ authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
 bincode = "1.0.0"
+env_logger = "0.5.12"
 log = "0.4.2"
 rlua = "0.15.2"
 serde = "1.0.27"
