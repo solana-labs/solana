@@ -18,6 +18,7 @@ use solana_program_interface::loader_instruction::LoaderInstruction;
 use solana_program_interface::pubkey::Pubkey;
 use std::env;
 use std::io::prelude::*;
+use std::io::Error;
 use std::mem;
 use std::path::PathBuf;
 use std::str;
@@ -42,6 +43,17 @@ fn create_path(name: &str) -> PathBuf {
         PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
             .with_extension(PLATFORM_FILE_EXTENSION_BPF),
     )
+}
+
+fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
+    let mut vm = rbpf::EbpfVmRaw::new(None)?;
+    vm.set_verifier(bpf_verifier::check)?;
+    vm.set_prog(&prog)?;
+    vm.register_helper(
+        rbpf::helpers::BPF_TRACE_PRINTK_IDX,
+        rbpf::helpers::bpf_trace_printf,
+    );
+    Ok(vm)
 }
 
 #[allow(dead_code)]
@@ -141,11 +153,13 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         }
         trace!("Call BPF, {} Instructions", prog.len() / 8);
 
-        let mut vm = rbpf::EbpfVmRaw::new(&prog, Some(bpf_verifier::verifier));
-        vm.register_helper(
-            rbpf::helpers::BPF_TRACE_PRINTK_IDX,
-            rbpf::helpers::bpf_trace_printf,
-        );
+        let vm = match create_vm(&prog) {
+            Ok(vm) => vm,
+            Err(e) => {
+                warn!("{}", e);
+                return false;
+            }
+        };
 
         let mut v = serialize_state(&mut keyed_accounts[1..], &tx_data);
         if 0 == vm.prog_exec(v.as_mut_slice()) {
