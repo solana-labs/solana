@@ -52,7 +52,7 @@ export class TokenAmount extends BN {
 /**
  * Information about a token
  */
-type TokenInfo = {
+type TokenInfo = {|
   /**
    * Total supply of tokens
    */
@@ -72,7 +72,7 @@ type TokenInfo = {
    * Symbol for this token
    */
   symbol: string,
-};
+|};
 
 /**
  * @private
@@ -87,7 +87,7 @@ const TokenInfoLayout = BufferLayout.struct([
 /**
  * Information about a token account
  */
-type TokenAccountInfo = {
+type TokenAccountInfo = {|
   /**
    * The kind of token this account holds
    */
@@ -111,7 +111,7 @@ type TokenAccountInfo = {
    * an allowance of tokens that may be transferred from the source account
    */
   source: null | PublicKey,
-};
+|};
 
 /**
  * @private

@@ -10,6 +10,8 @@
  *
  */
 
+import BN from 'bn.js';
+
 declare module '@solana/web3.js' {
   // === src/publickey.js ===
   declare export class PublicKey {
@@ -95,6 +97,59 @@ declare module '@solana/web3.js' {
   }
 
   // === src/token-program.js ===
-  /* TODO */
+  declare export class TokenAmount extends BN {
+    toBuffer(): Buffer;
+    fromBuffer(buffer: Buffer): TokenAmount;
+  }
+
+  declare export type TokenInfo = {|
+    supply: TokenAmount,
+    decimals: number,
+    name: string,
+    symbol: string,
+  |};
+  declare export type TokenAccountInfo = {|
+    token: PublicKey;
+    owner: PublicKey;
+    amount: TokenAmount;
+    source: null | PublicKey;
+  |}
+  declare type TokenAndPublicKey = [Token, PublicKey];
+
+  declare export class Token {
+    static programId: PublicKey;
+    token: PublicKey;
+
+    static createNewToken(
+      connection: Connection,
+      owner: Account,
+      supply: TokenAmount,
+      name: string,
+      symbol: string,
+      decimals: number,
+    ): Promise<TokenAndPublicKey>;
+
+    constructor(connection: Connection, token: PublicKey) : Token;
+    newAccount(owner: Account, source: null | PublicKey): Promise<PublicKey>;
+    tokenInfo(): Promise<TokenInfo>;
+    accountInfo(account: PublicKey): Promise<TokenAccountInfo>;
+    transfer(
+      owner: Account,
+      source: PublicKey,
+      destination: PublicKey,
+      amount: number | TokenAmount,
+    ): Promise<void>;
+    approve(
+      owner: Account,
+      source: PublicKey,
+      delegate: PublicKey,
+      amount: number | TokenAmount
+    ): Promise<void>;
+    (
+      owner: Account,
+      source: PublicKey,
+      delegate: PublicKey
+    ): Promise<void>;
+  }
 
 }
