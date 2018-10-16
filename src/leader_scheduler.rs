@@ -238,11 +238,9 @@ impl LeaderScheduler {
     }
 
     pub fn max_height_for_leader(&self, height: u64) -> Option<u64> {
-        if self.use_only_bootstrap_leader {
+        if self.use_only_bootstrap_leader || self.get_scheduled_leader(height).is_none() {
             return None;
         }
-
-        assert!(self.get_scheduled_leader(height).is_some());
 
         // 1) If the leader is less than the bootstrap height, they they will be leader
         // until PoH height = bootstrap_height

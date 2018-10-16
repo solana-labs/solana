@@ -762,7 +762,7 @@ mod tests {
         // reach the height for leader rotation
         match bootstrap_leader.handle_role_transition().unwrap() {
             Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-            x => {
+            _ => {
                 panic!("Expected a leader transition");
             }
         }

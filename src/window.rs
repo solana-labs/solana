@@ -60,6 +60,7 @@ pub trait WindowUtil {
         times: usize,
         consumed: u64,
         received: u64,
+        consumed_poh_height: u64,
         max_entry_height: u64,
         leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
@@ -74,6 +75,7 @@ pub trait WindowUtil {
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
+        consumed_poh_height: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     );
@@ -101,6 +103,7 @@ impl WindowUtil for Window {
         times: usize,
         consumed: u64,
         received: u64,
+        consumed_poh_height: u64,
         max_entry_height: u64,
         leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
@@ -110,28 +113,30 @@ impl WindowUtil for Window {
             let ls_lock = leader_scheduler_option.read().unwrap();
             if !ls_lock.use_only_bootstrap_leader {
                 // Calculate the next leader rotation height and check if we are the leader
-                let next_leader_rotation_height = consumed + ls_lock.count_until_next_leader_rotation(consumed).expect("Leader rotation should exist when not using default implementation of LeaderScheduler");
-
-                match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
-                    Some(leader_id) if leader_id == *id => is_next_leader = true,
-                    // In the case that we are not in the current scope of the leader schedule
-                    // window then either:
-                    //
-                    // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
-                    // in which case it will eventually catch up
-                    //
-                    // 2) We are on the border between seed_rotation_intervals, so the
-                    // schedule won't be known until the entry on that cusp is received
-                    // by the replicate stage (which comes after this stage). Hence, the next
-                    // leader at the beginning of that next epoch will not know he is the
-                    // leader until he receives that last "cusp" entry. He also won't ask for repairs
-                    // for that entry because "is_next_leader" won't be set here. In this case,
-                    // everybody will be blocking waiting for that "cusp" entry instead of repairing,
-                    // until the leader hits "times" >= the max times in calculate_max_repair().
-                    // The impact of this, along with the similar problem from broadcast for the transitioning
-                    // leader, can be observed in the multinode test, test_full_leader_validator_network(),
-                    None => (),
-                    _ => (),
+                if let Some(next_leader_rotation_height) =
+                    ls_lock.max_height_for_leader(consumed_poh_height)
+                {
+                    match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
+                        Some(leader_id) if leader_id == *id => is_next_leader = true,
+                        // In the case that we are not in the current scope of the leader schedule
+                        // window then either:
+                        //
+                        // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
+                        // in which case it will eventually catch up
+                        //
+                        // 2) We are on the border between seed_rotation_intervals, so the
+                        // schedule won't be known until the entry on that cusp is received
+                        // by the replicate stage (which comes after this stage). Hence, the next
+                        // leader at the beginning of that next epoch will not know he is the
+                        // leader until he receives that last "cusp" entry. He also won't ask for repairs
+                        // for that entry because "is_next_leader" won't be set here. In this case,
+                        // everybody will be blocking waiting for that "cusp" entry instead of repairing,
+                        // until the leader hits "times" >= the max times in calculate_max_repair().
+                        // The impact of this, along with the similar problem from broadcast for the transitioning
+                        // leader, can be observed in the multinode test, test_full_leader_validator_network(),
+                        None => (),
+                        _ => (),
+                    }
                 }
             }
         }
@@ -228,6 +233,7 @@ impl WindowUtil for Window {
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
+        consumed_poh_height: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     ) {
@@ -303,6 +309,9 @@ impl WindowUtil for Window {
             // Check that we can get the entries from this blob
             match reconstruct_entries_from_blobs(vec![k_data_blob]) {
                 Ok(entries) => {
+                    for entry in entries.iter() {
+                        *consumed_poh_height += entry.num_hashes;
+                    }
                     consume_queue.extend(entries);
                 }
                 Err(_) => {

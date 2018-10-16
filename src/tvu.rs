@@ -103,6 +103,7 @@ impl Tvu {
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &cluster_info,
             window,
+            poh_height,
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,

@@ -106,7 +106,7 @@ impl ReplicateStage {
                     &mut *leader_scheduler.write().unwrap(),
                 );
 
-                // Will runif leader_scheduler.use_only_bootstrap_leader is false
+                // Will run only if leader_scheduler.use_only_bootstrap_leader is false
                 if let Some(max_poh_height) = max_poh_height {
                     let ls_lock = leader_scheduler.read().unwrap();
                     if current_poh_height > max_poh_height {
