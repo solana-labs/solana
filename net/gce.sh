@@ -15,7 +15,7 @@ gce)
   cpuLeaderMachineType=n1-standard-16
   gpuLeaderMachineType="$cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   leaderMachineType=$cpuLeaderMachineType
-  validatorMachineType=n1-standard-4
+  validatorMachineType=n1-standard-16
   clientMachineType=n1-standard-16
   ;;
 ec2)
