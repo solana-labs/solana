@@ -17,8 +17,11 @@ _ cargo test --verbose --lib
 _ cargo clippy -- --deny=warnings
 
 # Run integration tests serially
-# shellcheck disable=SC2016
-_ find tests -type file -exec sh -c 'echo --test=$(basename ${0%.*})' {} \; | xargs cargo test --verbose --jobs=1
+for test in tests/*.rs; do
+  test=${test##*/} # basename x
+  test=${test%.rs} # basename x .rs
+  _ cargo test --verbose --jobs=1 --test="$test"
+done
 
 echo --- ci/localnet-sanity.sh
 (
