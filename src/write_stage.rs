@@ -166,15 +166,15 @@ impl WriteStage {
 
         let start = Instant::now();
         for entries in ventries {
-            for e in &entries {
-                num_txs += e.transactions.len();
-            }
             let cluster_info_votes_start = Instant::now();
             let votes = &entries.votes();
             cluster_info.write().unwrap().insert_votes(&votes);
             cluster_info_votes_total += duration_as_ms(&cluster_info_votes_start.elapsed());
 
-            ledger_writer.write_entries(entries.clone())?;
+            for e in &entries {
+                num_txs += e.transactions.len();
+                ledger_writer.write_entry_noflush(&e)?;
+            }
             // Once the entries have been written to the ledger, then we can
             // safely incement entry height
             *entry_height += entries.len() as u64;
@@ -196,6 +196,7 @@ impl WriteStage {
 
             entries_send_total += duration_as_ms(&entries_send_start.elapsed());
         }
+        ledger_writer.flush()?;
         inc_new_counter_info!(
             "write_stage-time_ms",
             duration_as_ms(&now.elapsed()) as usize
