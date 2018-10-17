@@ -141,7 +141,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_create_spend_wrong_source() {
         let from = Keypair::new();
         let to = Keypair::new();
@@ -149,7 +148,9 @@ mod test {
         accounts[0].tokens = 1;
         accounts[0].program_id = from.pubkey();
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
-        process_transaction(&tx, &mut accounts).unwrap();
+        if let Ok(()) = process_transaction(&tx, &mut accounts) {
+            panic!("Account not owned by SystemProgram");
+        }
         assert_eq!(accounts[0].tokens, 1);
         assert_eq!(accounts[1].tokens, 0);
     }
