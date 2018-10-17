@@ -1,6 +1,6 @@
 # Smart Contracts Engine
  
-The goal of this RFC is to define a set of constraints for APIs and smart contracts runtime such that we can execute our smart contracts safely on massively parallel hardware such as a GPU.
+The goal of this RFC is to define a set of constraints for APIs and smart contracts runtime such that we can execute our contracts safely on massively parallel hardware such as a GPU.
 
 ## Version
 
@@ -46,7 +46,7 @@ In Figure 1 an untrusted client, creates a program in the front-end language of 
 
 ## Runtime
 
-The goal with the runtime is to have a general purpose execution environment that is highly parallelizeable and doesn't require dynamic resource management. The goal is to execute as many programs as possible in parallel, and have them pass or fail without a destructive state change.
+The goal with the runtime is to have a general purpose execution environment that is highly parallelizeable.  To achieve this goal the runtime forces each Instruction to specify all of its memory dependencies up front, and therefore a single Instruction cannot cause a dynamic memory allocation.  An explicit Instruction for memory allocation from the `SystemProgram::CreateAccount` is the only way to allocate new memory in the engine.  A Transaction may compose multiple Instruction, including `SystemProgram::CreateAccount`, into a single atomic sequence which allows for memory allocation to achieve a result that is similar to dynamic allocation.
 
 
 ### State
@@ -175,3 +175,7 @@ The interface is best described by the `Instruction::userdata` that the user enc
 4. Runtime guarantees that the `Program` can only spend tokens that are in `Account`s that are assigned to it
 5. Runtime guarantees the balances belonging to `Account`s are balanced before and after the transaction
 6. Runtime guarantees that multiple instructions all executed successfully when a transaction is committed.
+
+# Future Work
+
+* Continuations and Signals for long running Transactions. https://github.com/solana-labs/solana/issues/1485
