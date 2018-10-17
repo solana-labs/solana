@@ -603,7 +603,7 @@ mod tests {
     use cluster_info::Node;
     use fullnode::{Fullnode, NodeRole, TvuReturnType};
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{create_sample_ledger, genesis, LedgerWriter};
+    use ledger::{create_tmp_genesis, create_tmp_sample_ledger, LedgerWriter};
     use packet::make_consecutive_blobs;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
@@ -618,7 +618,7 @@ mod tests {
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (mint, validator_ledger_path) = genesis("validator_exit", 10_000);
+        let (mint, validator_ledger_path) = create_tmp_genesis("validator_exit", 10_000);
         let bank = Bank::new(&mint);
         let entry = tn.info.clone();
         let genesis_entries = &mint.create_entries();
@@ -648,7 +648,7 @@ mod tests {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
                 let (mint, validator_ledger_path) =
-                    genesis(&format!("validator_parallel_exit_{}", i), 10_000);
+                    create_tmp_genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
                 let bank = Bank::new(&mint);
                 let entry = tn.info.clone();
@@ -696,7 +696,7 @@ mod tests {
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
         let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-            create_sample_ledger("test_wrong_role_transition", 10_000);
+            create_tmp_sample_ledger("test_wrong_role_transition", 10_000);
 
         let last_id = genesis_entries
             .last()
@@ -762,6 +762,7 @@ mod tests {
                 panic!("Expected node to be the leader");
             }
         }
+        let _ignored = remove_dir_all(&bootstrap_leader_ledger_path);
     }
 
     #[test]
@@ -774,7 +775,7 @@ mod tests {
 
         // Create validator identity
         let (mint, validator_ledger_path, genesis_entries) =
-            create_sample_ledger("test_validator_to_leader_transition", 10_000);
+            create_tmp_sample_ledger("test_validator_to_leader_transition", 10_000);
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();

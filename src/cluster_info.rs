@@ -1393,7 +1393,7 @@ mod tests {
     };
     use entry::Entry;
     use hash::{hash, Hash};
-    use ledger::{LedgerWindow, LedgerWriter};
+    use ledger::{get_tmp_ledger_path, LedgerWindow, LedgerWriter};
     use logger;
     use packet::SharedBlob;
     use result::Error;
@@ -1815,11 +1815,7 @@ mod tests {
         assert!(rv.is_none());
 
         fn tmp_ledger(name: &str) -> String {
-            use std::env;
-            let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-            let keypair = Keypair::new();
-
-            let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
+            let path = get_tmp_ledger_path(name);
 
             let mut writer = LedgerWriter::open(&path, true).unwrap();
             let zero = Hash::default();

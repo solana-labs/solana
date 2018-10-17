@@ -158,7 +158,7 @@ mod tests {
     use fullnode::Fullnode;
     use hash::Hash;
     use leader_scheduler::LeaderScheduler;
-    use ledger::{genesis, read_ledger, tmp_ledger_path};
+    use ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
     use logger;
     use replicator::sample_file;
     use replicator::Replicator;
@@ -178,13 +178,13 @@ mod tests {
         logger::setup();
         info!("starting replicator test");
         let entry_height = 0;
-        let replicator_ledger_path = &tmp_ledger_path("replicator_test_replicator_ledger");
+        let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
 
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
 
         let leader_ledger_path = "replicator_test_leader_ledger";
-        let (mint, leader_ledger_path) = genesis(leader_ledger_path, 100);
+        let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100);
 
         info!("starting leader node");
         let leader_keypair = Keypair::new();

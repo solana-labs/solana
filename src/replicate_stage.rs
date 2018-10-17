@@ -190,8 +190,8 @@ impl ReplicateStage {
                         return Some(ReplicateStageReturnType::LeaderRotation(
                             entry_height_,
                             // We should never start the TPU / this stage on an exact entry that causes leader
-                            // rotation (Fullnode should automatically transition on startup if it detects 
-                            // are no longer a validator. Hence we can assume that some entry must have 
+                            // rotation (Fullnode should automatically transition on startup if it detects
+                            // are no longer a validator. Hence we can assume that some entry must have
                             // triggered leader rotation
                             last_entry_id.expect("Must exist an entry that triggered rotation"),
                         ));
@@ -248,11 +248,12 @@ mod test {
     use cluster_info::{ClusterInfo, Node};
     use fullnode::Fullnode;
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{create_sample_ledger, next_entries_mut, LedgerWriter};
+    use ledger::{create_tmp_sample_ledger, next_entries_mut, LedgerWriter};
     use logger;
     use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -269,7 +270,7 @@ mod test {
 
         // Create a ledger
         let (mint, my_ledger_path, genesis_entries) =
-            create_sample_ledger("test_replicate_stage_leader_rotation_exit", 10_000);
+            create_tmp_sample_ledger("test_replicate_stage_leader_rotation_exit", 10_000);
         let mut last_id = genesis_entries
             .last()
             .expect("expected at least one genesis entry")
@@ -357,5 +358,6 @@ mod test {
             Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
         assert_eq!(entry_height, bootstrap_height);
+        let _ignored = remove_dir_all(&my_ledger_path);
     }
 }

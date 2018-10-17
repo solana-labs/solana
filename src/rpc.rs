@@ -285,7 +285,7 @@ mod tests {
     use hash::{hash, Hash};
     use jsonrpc_core::Response;
     use leader_scheduler::LeaderScheduler;
-    use ledger::tmp_ledger_with_mint;
+    use ledger::create_tmp_ledger_with_mint;
     use mint::Mint;
     use reqwest;
     use reqwest::header::CONTENT_TYPE;
@@ -547,7 +547,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger_with_mint("rpc_send_tx", &alice);
+        let ledger_path = create_tmp_ledger_with_mint("rpc_send_tx", &alice);
 
         let last_id = bank.last_id();
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);

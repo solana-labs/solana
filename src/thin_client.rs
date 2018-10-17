@@ -435,25 +435,12 @@ mod tests {
     use cluster_info::Node;
     use fullnode::Fullnode;
     use leader_scheduler::LeaderScheduler;
-    use ledger::LedgerWriter;
+    use ledger::create_tmp_ledger_with_mint;
     use logger;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use system_program::SystemProgram;
-
-    fn tmp_ledger(name: &str, mint: &Mint) -> String {
-        use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
-
-        let mut writer = LedgerWriter::open(&path, true).unwrap();
-        writer.write_entries(mint.create_entries()).unwrap();
-
-        path
-    }
 
     #[test]
     #[ignore]
@@ -466,7 +453,7 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let ledger_path = tmp_ledger("thin_client", &alice);
+        let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
 
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -513,7 +500,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("bad_sig", &alice);
+        let ledger_path = create_tmp_ledger_with_mint("bad_sig", &alice);
 
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -573,7 +560,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("client_check_signature", &alice);
+        let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
@@ -636,7 +623,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("zero_balance_check", &alice);
+        let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
