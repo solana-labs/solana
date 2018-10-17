@@ -80,9 +80,11 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
 }
 
 fn tmp_ledger_path(name: &str) -> String {
+    use std::env;
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let keypair = Keypair::new();
 
-    format!("/tmp/tmp-ledger-{}-{}", name, keypair.pubkey())
+    format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
 }
 
 fn genesis(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
