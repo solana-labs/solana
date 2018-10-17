@@ -21,11 +21,14 @@ _() {
 }
 
 FEATURES=cuda,erasure,chacha
-_ cargo test --verbose --features=$FEATURES --lib
+_ cargo test --verbose --features="$FEATURES" --lib
 
 # Run integration tests serially
-# shellcheck disable=SC2016
-_ find tests -type file -exec sh -c 'echo --test=$(basename ${0%.*})' {} \; | xargs cargo test --verbose --jobs=1 --features=$FEATURES
+for test in tests/*.rs; do
+  test=${test##*/} # basename x
+  test=${test%.rs} # basename x .rs
+  _ cargo test --verbose --jobs=1 --features="$FEATURES" --test="$test"
+done
 
 echo --- ci/localnet-sanity.sh
 (
