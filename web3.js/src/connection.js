@@ -83,6 +83,8 @@ function jsonRpcResult(resultDescription: any) {
  * Expected JSON RPC response for the "getAccountInfo" message
  */
 const GetAccountInfoRpcResult = jsonRpcResult({
+  executable: 'boolean',
+  loader_program_id: 'array',
   program_id: 'array',
   tokens: 'number',
   userdata: 'array',
@@ -138,8 +140,9 @@ const SendTokensRpcResult = jsonRpcResult('string');
  * @property {?Buffer} userdata Optional userdata assigned to the account
  */
 type AccountInfo = {
-  tokens: number,
+  executable: boolean;
   programId: PublicKey,
+  tokens: number,
   userdata: Buffer,
 }
 
@@ -201,8 +204,10 @@ export class Connection {
     assert(typeof result !== 'undefined');
 
     return {
+      executable: result.executable,
       tokens: result.tokens,
       programId: new PublicKey(result.program_id),
+      loaderProgramId: new PublicKey(result.loader_program_id),
       userdata: Buffer.from(result.userdata),
     };
   }

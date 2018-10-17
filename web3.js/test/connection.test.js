@@ -213,6 +213,11 @@ test('request airdrop', async () => {
         ],
         tokens: 42,
         userdata: [],
+        executable: false,
+        loader_program_id: [
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ],
       }
     }
   ]);

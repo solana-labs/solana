@@ -34,8 +34,10 @@ declare module '@solana/web3.js' {
 
   // === src/connection.js ===
   declare export type AccountInfo = {
-    tokens: number,
+    executable: boolean;
+    loaderProgramId: PublicKey,
     programId: PublicKey,
+    tokens: number,
     userdata: Buffer,
   }
 
@@ -67,7 +69,6 @@ declare module '@solana/web3.js' {
     ): Transaction;
     static move(from: PublicKey, to: PublicKey, amount: number): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
-    static load(from: PublicKey, programId: PublicKey, name: string): Transaction;
   }
 
   // === src/transaction.js ===
@@ -152,4 +153,20 @@ declare module '@solana/web3.js' {
     ): Promise<void>;
   }
 
+  // === src/loader.js ===
+  declare export class Loader {
+    constructor(connection: Connection, programId: PublicKey) : Loader;
+    load(program: Account, offset: number, bytes: Array<number>): Promise<void>;
+    finalize(program: Account): Promise<void>;
+  }
+
+  // === src/native-loader.js ===
+  declare export class NativeLoader {
+    static programId: PublicKey;
+    static load(
+      connection: Connection,
+      owner: Account,
+      programName: string,
+    ): Promise<PublicKey>;
+  }
 }
