@@ -486,13 +486,10 @@ impl Bank {
         account: &Account,
     ) -> Result<()> {
         // Verify the transaction
-        // make sure that program_id is still the same or this was just assigned by the system call contract
-        if !((*pre_program_id == account.program_id)
-            || (SystemProgram::check_id(&tx_program_id)
-                && SystemProgram::check_id(&pre_program_id)))
-        {
-            //TODO, this maybe redundant bpf should be able to guarantee this property
-            // return Err(BankError::ModifiedContractId(instruction_index as u8));
+
+        // Make sure that program_id is still the same or this was just assigned by the system call contract
+        if !(*pre_program_id == account.program_id || SystemProgram::check_id(&tx_program_id)) {
+            return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
         if *tx_program_id != account.program_id && pre_tokens > account.tokens {
