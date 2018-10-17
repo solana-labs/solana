@@ -312,7 +312,10 @@ mod test {
         let bootstrap_entries =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id);
         last_id = bootstrap_entries.last().unwrap().id;
-        let initial_poh_height = num_ending_ticks + bootstrap_entries.len() as u64;
+        let genesis_poh_height = genesis_entries
+            .iter()
+            .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+        let initial_poh_height = genesis_poh_height + bootstrap_entries.len() as u64;
         let initial_entry_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
         ledger_writer.write_entries(bootstrap_entries).unwrap();
 
@@ -366,7 +369,10 @@ mod test {
         }
 
         assert!(num_ending_ticks < bootstrap_height);
-        let expected_entry_length = bootstrap_height + mint.create_entries().len() as u64;
+
+        // Only the first genesis entry has num_hashes = 0, every other entry
+        // had num_hashes = 1
+        let expected_entry_height = bootstrap_height + 1;
         let expected_last_id =
             entries_to_send[(bootstrap_height - initial_poh_height - 1) as usize].id;
         entry_sender.send(entries_to_send).unwrap();
@@ -375,7 +381,7 @@ mod test {
         assert_eq!(
             Some(ReplicateStageReturnType::LeaderRotation(
                 bootstrap_height,
-                expected_entry_length,
+                expected_entry_height,
                 expected_last_id,
             )),
             replicate_stage.join().expect("replicate stage join")

@@ -60,7 +60,7 @@ impl Mint {
 
     pub fn create_entries(&self) -> Vec<Entry> {
         let e0 = Entry::new(&self.seed(), 0, vec![]);
-        let e1 = Entry::new(&e0.id, 0, self.create_transactions());
+        let e1 = Entry::new(&e0.id, 1, self.create_transactions());
         vec![e0, e1]
     }
 }

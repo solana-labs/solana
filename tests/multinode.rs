@@ -803,7 +803,10 @@ fn test_leader_to_validator_transition() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
-    let initial_poh_height = num_ending_ticks + bootstrap_entries.len() as u64;
+    let genesis_poh_height = genesis_entries
+        .iter()
+        .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+    let initial_poh_height = genesis_poh_height + bootstrap_entries.len() as u64;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Start the leader node
@@ -951,7 +954,10 @@ fn test_leader_validator_basic() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
-    let initial_poh_height = bootstrap_entries.len() as u64 + num_ending_ticks;
+    let genesis_poh_height = genesis_entries
+        .iter()
+        .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+    let initial_poh_height = bootstrap_entries.len() as u64 + genesis_poh_height;
     ledger_writer.write_entries(bootstrap_entries).unwrap();
 
     // Create the leader scheduler config
@@ -1122,7 +1128,10 @@ fn test_dropped_handoff_recovery() {
     ledger_paths.push(next_leader_ledger_path.clone());
 
     // Create the common leader scheduling configuration
-    let initial_poh_height = first_entries_len as u64 + num_ending_ticks;
+    let genesis_poh_height = genesis_entries
+        .iter()
+        .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+    let initial_poh_height = first_entries_len as u64 + genesis_poh_height;
     let num_slots_per_epoch = (N + 1) as u64;
     let leader_rotation_interval = 5;
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;

@@ -803,7 +803,10 @@ mod tests {
         let first_entries =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
 
-        let initial_poh_height = first_entries.len() as u64 + num_ending_ticks;
+        let genesis_poh_height = genesis_entries
+            .iter()
+            .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+        let initial_poh_height = first_entries.len() as u64 + genesis_poh_height;
         ledger_writer.write_entries(first_entries).unwrap();
 
         // Create the common leader scheduling configuration
@@ -982,7 +985,9 @@ mod tests {
         assert_eq!(poh_height, bootstrap_height);
         assert_eq!(
             entry_height,
-            bootstrap_height + mint.create_entries().len() as u64
+            // Only the first genesis entry has num_hashes = 0, every other entry
+            // had num_hashes = 1
+            bootstrap_height + 1
         );
 
         // Shut down

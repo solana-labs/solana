@@ -48,12 +48,33 @@ pub struct Entry {
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
-        // If you want a tick, then pass in num_hashes = 1 and transactions = empty
-        let id = next_hash(start_hash, num_hashes, &transactions);
-        let entry = Entry {
-            num_hashes,
-            id,
-            transactions,
+        let entry = {
+            if num_hashes == 0 && transactions.is_empty() {
+                Entry {
+                    num_hashes: 0,
+                    id: *start_hash,
+                    transactions,
+                }
+            } else if num_hashes == 0 {
+                // If you passed in transactions, but passed in num_hashes == 0, then
+                // next_hash will generate the next hash and set num_hashes == 1
+                let id = next_hash(start_hash, 1, &transactions);
+                Entry {
+                    num_hashes: 1,
+                    id,
+                    transactions,
+                }
+            } else {
+                // Otherwise, the next Entry `num_hashes` after `start_hash`.
+                // If you wanted a tick for instance, then pass in num_hashes = 1
+                // and transactions = empty
+                let id = next_hash(start_hash, num_hashes, &transactions);
+                Entry {
+                    num_hashes,
+                    id,
+                    transactions,
+                }
+            }
         };
 
         let size = serialized_size(&entry).unwrap();

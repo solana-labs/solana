@@ -1699,7 +1699,7 @@ mod tests {
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 4);
-        assert_eq!(poh_height, 2);
+        assert_eq!(poh_height, 3);
         assert_eq!(tail.len(), 4);
         assert_eq!(tail, dup.collect_vec());
         let last_entry = &tail[tail.len() - 1];
@@ -1727,7 +1727,7 @@ mod tests {
                 .unwrap();
             assert_eq!(bank.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 3);
-            assert_eq!(poh_height, (entry_count + 1) as u64);
+            assert_eq!(poh_height, (entry_count + 2) as u64);
             assert!(tail.len() <= window_size);
             let last_entry = &tail[tail.len() - 1];
             assert_eq!(bank.last_id(), last_entry.id);
