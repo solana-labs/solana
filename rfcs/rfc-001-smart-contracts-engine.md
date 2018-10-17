@@ -165,7 +165,7 @@ pub enum SystemProgram {
 The interface is best described by the `Instruction::userdata` that the user encodes. 
 * `CreateAccount` - This allows the user to create and assign an Account to a Program.
 * `Assign` - allows the user to assign an existing account to a `Program`. 
-* `Move  - moves tokens between `Account`s that are assosciated with `SystemProgram`.  This cannot be used to move tokens of other `Account`s.  Programs need to implement their own version of Move.
+* `Move`  - moves tokens between `Account`s that are assosciated with `SystemProgram`.  This cannot be used to move tokens of other `Account`s.  Programs need to implement their own version of Move.
 
 ## Notes
 
