@@ -18,6 +18,10 @@ receive_errors=0
 receive_errors_diff=0
 rcvbuf_errors=0
 rcvbuf_errors_diff=0
+in_octets=0
+in_octets_diff=0
+out_octets=0
+out_octets_diff=0
 
 update_netstat() {
   declare net_stat
@@ -39,13 +43,21 @@ update_netstat() {
   stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /RcvbufErrors/ {tmp_var = $2} END { print tmp_var }')
   rcvbuf_errors_diff=$((stats - rcvbuf_errors))
   rcvbuf_errors="$stats"
+
+  stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /InOctets/ {tmp_var = $2} END { print tmp_var }')
+  in_octets_diff=$((stats - in_octets))
+  in_octets="$stats"
+
+  stats=$(echo "$net_stat" | awk 'BEGIN {tmp_var = 0} /OutOctets/ {tmp_var = $2} END { print tmp_var }')
+  out_octets_diff=$((stats - out_octets))
+  out_octets="$stats"
 }
 
 update_netstat
 
 while true; do
   update_netstat
-  report="packets_sent=$packets_sent_diff,packets_received=$packets_received_diff,receive_errors=$receive_errors_diff,rcvbuf_errors=$rcvbuf_errors_diff"
+  report="packets_sent=$packets_sent_diff,packets_received=$packets_received_diff,receive_errors=$receive_errors_diff,rcvbuf_errors=$rcvbuf_errors_diff,in_octets=$in_octets_diff,out_octets=$out_octets_diff"
 
   echo "$report"
   ./metrics-write-datapoint.sh "net-stats,hostname=$HOSTNAME $report"

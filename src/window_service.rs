@@ -307,6 +307,15 @@ pub fn window_service(
                     }
                 }
 
+                metrics::submit(
+                    influxdb::Point::new("window-stage")
+                        .add_field(
+                            "host",
+                            influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
+                        ).add_field("consumed", influxdb::Value::Integer(consumed as i64))
+                        .to_owned(),
+                );
+
                 if received <= consumed {
                     trace!(
                         "{} we have everything received:{} consumed:{}",
