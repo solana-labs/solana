@@ -277,7 +277,7 @@ pub fn window_service(
             let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
-            let id = cluster_info.read().unwrap().id;
+            let id = cluster_info.read().unwrap().my_data().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
             loop {
@@ -418,7 +418,7 @@ mod test {
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut num_blobs_to_make = 10;
-            let gossip_address = &tn.info.contact_info.ncp;
+            let gossip_address = &tn.info.ncp;
             let msgs = make_consecutive_blobs(
                 me_id,
                 num_blobs_to_make,
@@ -495,7 +495,7 @@ mod test {
                     w.set_id(&me_id).unwrap();
                     assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.ncp);
                 }
                 msgs.push(b);
             }
@@ -559,7 +559,7 @@ mod test {
                     w.set_id(&me_id).unwrap();
                     assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.ncp);
                 }
                 msgs.push(b);
             }
@@ -579,7 +579,7 @@ mod test {
                     w.set_id(&me_id).unwrap();
                     assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.contact_info.ncp);
+                    w.meta.set_addr(&tn.info.ncp);
                 }
                 msgs1.push(b);
             }

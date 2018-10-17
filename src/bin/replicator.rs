@@ -63,7 +63,7 @@ fn main() {
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
-                (data.keypair(), data.node_info.contact_info.ncp)
+                (data.keypair(), data.node_info.ncp)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -129,7 +129,7 @@ fn main() {
 
     let mut client = mk_client(&leader_info);
 
-    let mut drone_addr = leader_info.contact_info.tpu;
+    let mut drone_addr = leader_info.tpu;
     drone_addr.set_port(DRONE_PORT);
     let airdrop_amount = 5;
     if let Err(e) = request_airdrop(&drone_addr, &keypair.pubkey(), airdrop_amount) {

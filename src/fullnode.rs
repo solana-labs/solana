@@ -148,9 +148,9 @@ impl Fullnode {
 
         info!(
             "starting... local gossip address: {} (advertising {})",
-            local_gossip_addr, node.info.contact_info.ncp
+            local_gossip_addr, node.info.ncp
         );
-        let mut rpc_addr = node.info.contact_info.rpc;
+        let mut rpc_addr = node.info.rpc;
         if let Some(port) = rpc_port {
             rpc_addr.set_port(port);
         }
@@ -198,16 +198,16 @@ impl Fullnode {
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
-        let mut rpc_addr = node.info.contact_info.rpc;
-        let mut rpc_pubsub_addr = node.info.contact_info.rpc_pubsub;
+        let mut rpc_addr = node.info.rpc;
+        let mut rpc_pubsub_addr = node.info.rpc_pubsub;
         // Use custom RPC port, if provided (`Some(port)`)
         // RPC port may be any valid open port on the node
         // If rpc_port == `None`, node will listen on the ports set in NodeInfo
         if let Some(port) = rpc_port {
             rpc_addr.set_port(port);
-            node.info.contact_info.rpc = rpc_addr;
+            node.info.rpc = rpc_addr;
             rpc_pubsub_addr.set_port(port + 1);
-            node.info.contact_info.rpc_pubsub = rpc_pubsub_addr;
+            node.info.rpc_pubsub = rpc_pubsub_addr;
         }
 
         let exit = Arc::new(AtomicBool::new(false));
@@ -233,7 +233,10 @@ impl Fullnode {
         // Insert the bootstrap leader info, should only be None if this node
         // is the bootstrap leader
         if let Some(bootstrap_leader_info) = bootstrap_leader_info_option {
-            cluster_info.write().unwrap().insert(bootstrap_leader_info);
+            cluster_info
+                .write()
+                .unwrap()
+                .insert_info(bootstrap_leader_info.clone());
         }
 
         // Get the scheduled leader
@@ -736,7 +739,7 @@ mod tests {
             &bootstrap_leader_ledger_path,
             Arc::new(bootstrap_leader_keypair),
             Arc::new(Keypair::new()),
-            Some(bootstrap_leader_info.contact_info.ncp),
+            Some(bootstrap_leader_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -827,7 +830,7 @@ mod tests {
             &bootstrap_leader_ledger_path,
             bootstrap_leader_keypair,
             leader_vote_account_keypair,
-            Some(bootstrap_leader_info.contact_info.ncp),
+            Some(bootstrap_leader_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -846,7 +849,7 @@ mod tests {
             &bootstrap_leader_ledger_path,
             Arc::new(validator_keypair),
             Arc::new(validator_vote_account_keypair),
-            Some(bootstrap_leader_info.contact_info.ncp),
+            Some(bootstrap_leader_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -867,7 +870,7 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_id = leader_node.info.id;
-        let leader_ncp = leader_node.info.contact_info.ncp;
+        let leader_ncp = leader_node.info.ncp;
 
         // Create validator identity
         let num_ending_ticks = 1;
@@ -952,7 +955,7 @@ mod tests {
             // "extra_blobs" number of blobs to make sure the window stops in the right place.
             let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
             let total_blobs_to_send = bootstrap_height + extra_blobs;
-            let tvu_address = &validator_info.contact_info.tvu;
+            let tvu_address = &validator_info.tvu;
             let msgs = make_consecutive_blobs(
                 leader_id,
                 total_blobs_to_send,

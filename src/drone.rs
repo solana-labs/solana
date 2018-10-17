@@ -109,11 +109,7 @@ impl Drone {
         let leader = poll_gossip_for_leader(self.network_addr, Some(10))
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-        let mut client = ThinClient::new(
-            leader.contact_info.rpc,
-            leader.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader.rpc, leader.tpu, transactions_socket);
         let last_id = client.get_last_id();
 
         let mut tx = match req {
@@ -343,22 +339,12 @@ mod tests {
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
         addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
-        let mut drone = Drone::new(
-            alice.keypair(),
-            addr,
-            leader_data.contact_info.ncp,
-            None,
-            Some(150_000),
-        );
+        let mut drone = Drone::new(alice.keypair(), addr, leader_data.ncp, None, Some(150_000));
 
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
 
         let bob_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 50,
@@ -387,11 +373,7 @@ mod tests {
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
 
         let carlos_req = DroneRequest::GetAirdrop {
             airdrop_request_amount: 5_000_000,
