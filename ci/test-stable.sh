@@ -13,8 +13,12 @@ _() {
 
 _ cargo fmt -- --check
 _ cargo build --verbose
-_ cargo test --verbose
+_ cargo test --verbose --lib
 _ cargo clippy -- --deny=warnings
+
+# Run integration tests serially
+# shellcheck disable=SC2016
+_ find tests -type file -exec sh -c 'echo --test=$(basename ${0%.*})' {} \; | xargs cargo test --verbose --jobs=1
 
 echo --- ci/localnet-sanity.sh
 (
