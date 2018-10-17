@@ -12,7 +12,7 @@ use solana::transaction::Transaction;
 use test::Bencher;
 
 #[bench]
-fn bench_process_transaction(bencher: &mut Bencher) {
+fn bench_bank_process_transaction(bencher: &mut Bencher) {
     let mint = Mint::new(100_000_000);
     let bank = Bank::new(&mint);
 
