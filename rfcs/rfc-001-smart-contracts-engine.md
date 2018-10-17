@@ -170,8 +170,8 @@ The interface is best described by the `Instruction::userdata` that the user enc
 ## Notes
 
 1. There is no dynamic memory allocation.  Client's need to call the `SystemProgram` to create memory before passing it to another program.  This Instruction can be composed into a single Transaction with the call to the program itself.
-2. Runtime guarantees that when memory is assigned to the program it is zero initialized.
-3. Runtime guarantees that program's code is the only thing that can modify memory that its assigned to
-4. Runtime guarantees that the program can only spend tokens that are in Accounts that are assigned to it
-5. Runtime guarantees the balances belonging to Accounts are balanced before and after the transaction
+2. Runtime guarantees that when memory is assigned to the `Program` it is zero initialized.
+3. Runtime guarantees that `Program`'s code is the only thing that can modify memory that its assigned to
+4. Runtime guarantees that the `Program` can only spend tokens that are in `Account`s that are assigned to it
+5. Runtime guarantees the balances belonging to `Account`s are balanced before and after the transaction
 6. Runtime guarantees that multiple instructions all executed successfully when a transaction is committed.
