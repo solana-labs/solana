@@ -105,35 +105,4 @@ export class SystemProgram {
       userdata,
     });
   }
-
-  /**
-   * Load a dynamic program.  Unstable API, will change
-   *
-   * @private
-   */
-  static load(from: PublicKey, programId: PublicKey, name: string): Transaction {
-    const userdataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.publicKey('programId'),
-      Layout.rustString('name'),
-    ]);
-
-    let userdata = Buffer.alloc(1024);
-    const encodeLength = userdataLayout.encode(
-      {
-        instruction: 3, // Load instruction
-        programId: programId.toBuffer(),
-        name,
-      },
-      userdata,
-    );
-    userdata = userdata.slice(0, encodeLength);
-
-    return new Transaction({
-      fee: 0,
-      keys: [from],
-      programId: SystemProgram.programId,
-      userdata,
-    });
-  }
 }

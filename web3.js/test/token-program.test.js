@@ -120,6 +120,11 @@ test('create new token', async () => {
             10, 0, 0, 0, 0, 0, 0, 0, 84, 101, 115, 116, 32, 116, 111, 107, 101, 110,
             4, 0, 0, 0, 0, 0, 0, 0, 84, 69, 83, 84
           ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          ],
         }
       }
     ]);
@@ -152,6 +157,11 @@ test('create new token', async () => {
             ...initialOwner.publicKey.toBuffer(),
             16, 39, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
           ],
         }
       }
@@ -203,6 +213,11 @@ test('create new token account', async () => {
             ...destOwner.publicKey.toBuffer(),
             0, 0, 0, 0, 0, 0, 0, 0,
             0,
+          ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
           ],
         }
       }
@@ -256,6 +271,11 @@ test('transfer', async () => {
             123, 0, 0, 0, 0, 0, 0, 0,
             0,
           ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          ],
         }
       }
     ]);
@@ -292,6 +312,11 @@ test('transfer', async () => {
             ...dest.toBuffer(),
             123, 0, 0, 0, 0, 0, 0, 0,
             0,
+          ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
           ],
         }
       }
@@ -355,6 +380,11 @@ test('approve/revoke', async () => {
             1,
             ...initialOwnerTokenAccount.toBuffer(),
           ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          ],
         }
       }
     ]);
@@ -402,6 +432,11 @@ test('approve/revoke', async () => {
             0, 0, 0, 0, 0, 0, 0, 0,
             1,
             ...initialOwnerTokenAccount.toBuffer(),
+          ],
+          executable: false,
+          loader_program_id: [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
           ],
         }
       }
