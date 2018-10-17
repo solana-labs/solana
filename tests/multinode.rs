@@ -11,7 +11,9 @@ use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-use solana::ledger::{create_sample_ledger, read_ledger, LedgerWriter};
+use solana::ledger::{
+    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWriter,
+};
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
@@ -79,28 +81,8 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     rv
 }
 
-fn tmp_ledger_path(name: &str) -> String {
-    use std::env;
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-    let keypair = Keypair::new();
-
-    format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey())
-}
-
-fn genesis(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
-    let mint = Mint::new(num);
-
-    let path = tmp_ledger_path(name);
-    let mut writer = LedgerWriter::open(&path, true).unwrap();
-
-    let entries = mint.create_entries();
-    writer.write_entries(entries.clone()).unwrap();
-
-    (mint, path, entries)
-}
-
 fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let tostr = tmp_ledger_path(name);
+    let tostr = get_tmp_ledger_path(name);
 
     {
         let to = Path::new(&tostr);
@@ -134,7 +116,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, _) = genesis("multi_node_ledger_window", 10_000);
+    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_ledger_window", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
 
     // make a copy at zero
@@ -231,7 +213,8 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, _) = genesis("multi_node_validator_catchup_from_zero", 10_000);
+    let (alice, leader_ledger_path) =
+        create_tmp_genesis("multi_node_validator_catchup_from_zero", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_ledger(
@@ -371,7 +354,7 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, _) = genesis("multi_node_basic", 10_000);
+    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_basic", 10_000);
     ledger_paths.push(leader_ledger_path.clone());
     let server = Fullnode::new(
         leader,
@@ -446,7 +429,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let leader_pubkey = leader_keypair.pubkey();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, leader_ledger_path, _) = genesis("boot_validator_from_file", 100_000);
+    let (alice, leader_ledger_path) = create_tmp_genesis("boot_validator_from_file", 100_000);
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -514,7 +497,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     //    ledger (currently up to WINDOW_SIZE entries)
     logger::setup();
 
-    let (alice, ledger_path, _) = genesis(
+    let (alice, ledger_path) = create_tmp_genesis(
         "leader_restart_validator_start_from_old_ledger",
         100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as i64,
     );
@@ -607,7 +590,7 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, leader_ledger_path, _) = genesis("multi_node_dynamic_network", 10_000_000);
+    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_dynamic_network", 10_000_000);
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
@@ -804,7 +787,7 @@ fn test_leader_to_validator_transition() {
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let (mint, leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_leader_to_validator_transition", 10_000);
+        create_tmp_sample_ledger("test_leader_to_validator_transition", 10_000);
 
     let last_id = genesis_entries
         .last()
@@ -945,7 +928,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (mint, leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_leader_to_validator_transition", 10_000);
+        create_tmp_sample_ledger("test_leader_to_validator_transition", 10_000);
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -1100,7 +1083,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_dropped_handoff_recovery", 10_000);
+        create_tmp_sample_ledger("test_dropped_handoff_recovery", 10_000);
 
     let last_id = genesis_entries
         .last()
@@ -1245,7 +1228,7 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_sample_ledger("test_full_leader_validator_network", 10_000);
+        create_tmp_sample_ledger("test_full_leader_validator_network", 10_000);
 
     let last_tick_id = genesis_entries
         .last()

@@ -617,25 +617,11 @@ mod tests {
     use drone::run_local_drone;
     use fullnode::Fullnode;
     use leader_scheduler::LeaderScheduler;
-    use ledger::LedgerWriter;
-    use mint::Mint;
+    use ledger::create_tmp_genesis;
     use serde_json::Value;
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
-
-    fn tmp_ledger(name: &str, mint: &Mint) -> String {
-        use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-        let keypair = Keypair::new();
-
-        let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
-
-        let mut writer = LedgerWriter::open(&path, true).unwrap();
-        writer.write_entries(mint.create_entries()).unwrap();
-
-        path
-    }
 
     #[test]
     fn test_wallet_parse_command() {
@@ -929,15 +915,15 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_process_command() {
+        let (alice, ledger_path) = create_tmp_genesis("wallet_process_command", 10_000_000);
+        let bank = Bank::new(&alice);
+
+        let bob_pubkey = Keypair::new().pubkey();
+
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
-        let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_process_command", &alice);
 
         let mut config = WalletConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
@@ -1006,14 +992,13 @@ mod tests {
     }
     #[test]
     fn test_wallet_request_airdrop() {
-        let leader_keypair = Keypair::new();
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
+        let (alice, ledger_path) = create_tmp_genesis("wallet_request_airdrop", 10_000_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
+
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_request_airdrop", &alice);
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
@@ -1054,6 +1039,7 @@ mod tests {
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
+
     fn tmp_file_path(name: &str) -> String {
         use std::env;
         let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
@@ -1080,16 +1066,16 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_timestamp_tx() {
+        let (alice, ledger_path) = create_tmp_genesis("wallet_timestamp_tx", 10_000_000);
+        let bank = Bank::new(&alice);
+
+        let bob_pubkey = Keypair::new().pubkey();
+
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
-        let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_timestamp_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
@@ -1201,16 +1187,14 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_witness_tx() {
-        let leader_keypair = Keypair::new();
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
+        let (alice, ledger_path) = create_tmp_genesis("wallet_witness_tx", 10_000_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_witness_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
@@ -1320,16 +1304,14 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_cancel_tx() {
-        let leader_keypair = Keypair::new();
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
+        let (alice, ledger_path) = create_tmp_genesis("wallet_cancel_tx", 10_000_000);
         let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
+        let leader_keypair = Keypair::new();
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
-        let ledger_path = tmp_ledger("wallet_cancel_tx", &alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();

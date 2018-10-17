@@ -228,6 +228,7 @@ mod tests {
     use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
     use fullnode::Fullnode;
     use leader_scheduler::LeaderScheduler;
+    use ledger::get_tmp_ledger_path;
     use logger;
     use mint::Mint;
     use netutil::get_ip_addr;
@@ -305,14 +306,6 @@ mod tests {
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
 
-    fn tmp_ledger_path(name: &str) -> String {
-        use std::env;
-        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-        let keypair = Keypair::new();
-
-        format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey())
-    }
-
     #[test]
     #[ignore]
     fn test_send_airdrop() {
@@ -328,7 +321,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = tmp_ledger_path("send_airdrop");
+        let ledger_path = get_tmp_ledger_path("send_airdrop");
 
         let server = Fullnode::new_with_bank(
             leader_keypair,

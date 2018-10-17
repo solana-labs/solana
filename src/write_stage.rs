@@ -328,7 +328,7 @@ mod tests {
     use entry::Entry;
     use hash::Hash;
     use leader_scheduler::{set_new_leader, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{genesis, next_entries_mut, read_ledger};
+    use ledger::{create_tmp_genesis, next_entries_mut, read_ledger};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use solana_program_interface::account::Account;
@@ -373,7 +373,7 @@ mod tests {
         let bank = Arc::new(Bank::default());
 
         // Make a ledger
-        let (_, leader_ledger_path) = genesis(test_name, 10_000);
+        let (_, leader_ledger_path) = create_tmp_genesis(test_name, 10_000);
 
         let (entry_height, ledger_tail) = process_ledger(&leader_ledger_path, &bank);
 

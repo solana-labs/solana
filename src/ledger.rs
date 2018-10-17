@@ -595,21 +595,21 @@ pub fn next_entries(
     next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
-pub fn tmp_ledger_path(name: &str) -> String {
+pub fn get_tmp_ledger_path(name: &str) -> String {
     use std::env;
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let keypair = Keypair::new();
 
-    format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey())
+    let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
+
+    // whack any possible collision
+    let _ignored = remove_dir_all(&path);
+
+    path
 }
 
-#[cfg(test)]
-pub fn tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
-    use std::env;
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-    let keypair = Keypair::new();
-
-    let path = format!("{}/tmp-ledger-{}-{}", out_dir, name, keypair.pubkey());
+pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
+    let path = get_tmp_ledger_path(name);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
     writer.write_entries(mint.create_entries()).unwrap();
@@ -617,34 +617,20 @@ pub fn tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
     path
 }
 
-#[cfg(test)]
-pub fn genesis(name: &str, num: i64) -> (Mint, String) {
+pub fn create_tmp_genesis(name: &str, num: i64) -> (Mint, String) {
     let mint = Mint::new(num);
-    let path = tmp_ledger_path(name);
-    let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(mint.create_entries()).unwrap();
+    let path = create_tmp_ledger_with_mint(name, &mint);
 
     (mint, path)
 }
 
-fn create_ticks(num_ticks: usize, hash: &mut Hash) -> Vec<Entry> {
-    let mut ticks = Vec::with_capacity(num_ticks);
-    let mut num_hashes = 0;
-    for _ in 0..num_ticks {
-        ticks.push(Entry::new_mut(hash, &mut num_hashes, vec![]));
-    }
-
-    ticks
-}
-
-pub fn create_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
+pub fn create_tmp_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
     let mint = Mint::new(num);
-    let path = tmp_ledger_path(name);
+    let path = get_tmp_ledger_path(name);
 
     // Create the entries
     let mut genesis = mint.create_entries();
-    let ticks = create_ticks(1, &mut mint.last_id());
-    genesis.extend(ticks);
+    genesis.extend(vec![Entry::new(&mint.last_id(), 0, vec![])]);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
     writer.write_entries(genesis.clone()).unwrap();
@@ -819,7 +805,7 @@ mod tests {
     fn test_ledger_reader_writer() {
         use logger;
         logger::setup();
-        let ledger_path = tmp_ledger_path("test_ledger_reader_writer");
+        let ledger_path = get_tmp_ledger_path("test_ledger_reader_writer");
         let entries = make_tiny_test_entries(10);
 
         {
@@ -899,7 +885,7 @@ mod tests {
         logger::setup();
 
         let entries = make_tiny_test_entries(10);
-        let ledger_path = tmp_ledger_path("test_recover_ledger");
+        let ledger_path = get_tmp_ledger_path("test_recover_ledger");
 
         // truncate data file, tests recover inside read_ledger_check()
         truncated_last_entry(&ledger_path, entries.clone());
@@ -950,7 +936,7 @@ mod tests {
         logger::setup();
 
         let entries = make_tiny_test_entries(10);
-        let ledger_path = tmp_ledger_path("test_verify_ledger");
+        let ledger_path = get_tmp_ledger_path("test_verify_ledger");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
             writer.write_entries(entries.clone()).unwrap();
@@ -967,7 +953,7 @@ mod tests {
         use logger;
         logger::setup();
         let entries = make_tiny_test_entries(10);
-        let ledger_path = tmp_ledger_path("test_raw_entries");
+        let ledger_path = get_tmp_ledger_path("test_raw_entries");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
             writer.write_entries(entries.clone()).unwrap();
@@ -1018,10 +1004,14 @@ mod tests {
         let (num_entries, bytes6) = window.get_entries_bytes(9, 1, &mut buf).unwrap();
         assert_eq!(num_entries, 1);
         let bytes6 = bytes6 as usize;
-        assert_eq!(bytes6, bytes);
+
+        let entry: Entry = deserialize(&buf[size_of::<u64>()..bytes6]).unwrap();
+        assert_eq!(entry, entries[9]);
 
         // Read out of range
         assert!(window.get_entries_bytes(20, 2, &mut buf).is_err());
+
+        let _ignored = remove_dir_all(&ledger_path);
     }
 
 }
