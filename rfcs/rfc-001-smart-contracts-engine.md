@@ -120,11 +120,12 @@ Transactions are batched and processed in a pipeline
 
 At the `execute` stage, the loaded pages have no data dependencies, so all the programs can be executed in parallel. 
 
-The guarantee that runtime enforces:
-    1. The `program_id` code is the only code that will modify the contents of `Account::userdata` of Account's that have been assigned to it.  This means that upon assignment userdata vector is guarnteed to be `0`.
-    2. Total balances on all the accounts is equal before and after execution of a Transaction.
-    3. Balances of each of the accounts not assigned to `program_id` must be equal to or greater after the Transaction than before the transaction.
-    4. All Instructions in the Transaction executed without a failure.
+The runtime enforces the following rules:
+
+1. The `program_id` code is the only code that will modify the contents of `Account::userdata` of Account's that have been assigned to it.  This means that upon assignment userdata vector is guarnteed to be `0`.
+2. Total balances on all the accounts is equal before and after execution of a Transaction.
+3. Balances of each of the accounts not assigned to `program_id` must be equal to or greater after the Transaction than before the transaction.
+4. All Instructions in the Transaction executed without a failure.
 
 ## Entry Point
 Execution of the program involves mapping the Program's public key to an entry point which takes a pointer to the transaction, and an array of loaded pages.
