@@ -78,7 +78,6 @@ export class Loader {
     ]);
 
     const userdata = Buffer.alloc(userdataLayout.span);
-    console.log('sp',userdataLayout.span);
     userdataLayout.encode(
       {
         instruction: 1, // Finalize instruction
