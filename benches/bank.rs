@@ -5,6 +5,7 @@ extern crate solana;
 extern crate test;
 
 use solana::bank::*;
+use solana::hash::hash;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
@@ -39,6 +40,13 @@ fn bench_process_transaction(bencher: &mut Bencher) {
             // Finally, return the transaction to the benchmark.
             tx
         }).collect();
+
+    let mut id = bank.last_id();
+
+    for _ in 0..(MAX_ENTRY_IDS - 1) {
+        bank.register_entry_id(&id);
+        id = hash(&id.as_ref())
+    }
 
     bencher.iter(|| {
         // Since benchmarker runs this multiple times, we need to clear the signatures.
