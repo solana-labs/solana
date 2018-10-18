@@ -503,6 +503,10 @@ mod test {
         let tx = Transaction::budget_new(&keypair, to, 192, Hash::default());
         assert_eq!(
             tx.userdata(0).to_vec(),
+            vec![2, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            tx.userdata(1).to_vec(),
             vec![
                 0, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4, 1, 1, 1
