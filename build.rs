@@ -50,6 +50,17 @@ fn main() {
             .status()
             .expect("Failed to call tictactoe_c build script");
         assert!(status.success());
+
+        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_dashboard_c/build.sh");
+        println!(
+            "cargo:rerun-if-changed=programs/bpf/tictactoe_dashboard_c/src/tictactoe_dashboard.c"
+        );
+        println!("cargo:warning=(not a warning) Compiling tictactoe_dashboard_c");
+        let status = Command::new("programs/bpf/tictactoe_dashboard_c/build.sh")
+            .arg(&out_dir)
+            .status()
+            .expect("Failed to call tictactoe_dashboard_c build script");
+        assert!(status.success());
     }
     if chacha || cuda || erasure {
         println!("cargo:rustc-link-search=native=target/perf-libs");

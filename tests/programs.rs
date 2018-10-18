@@ -11,7 +11,10 @@ use solana::mint::Mint;
 use solana::native_loader;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
+#[cfg(feature = "bpf_c")]
+use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
+use solana_program_interface::pubkey::Pubkey;
 
 // TODO test modified user data
 // TODO test failure if account tokens decrease but not assigned to program
@@ -22,246 +25,485 @@ fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Res
     assert_eq!(bank.get_signature(&tx.last_id, &tx.signature), Some(Ok(())));
 }
 
+struct Loader {
+    mint: Mint,
+    bank: Bank,
+    loader: Pubkey,
+}
+
+impl Loader {
+    pub fn new_dynamic(loader_name: &str) -> Self {
+        let mint = Mint::new(50);
+        let bank = Bank::new(&mint);
+        let loader = Keypair::new();
+
+        // allocate, populate, finalize BPF loader
+
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            loader.pubkey(),
+            mint.last_id(),
+            1,
+            56, // TODO How does the user know how much space to allocate for what should be an internally known size
+            native_loader::id(),
+            0,
+        );
+        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+        let name = String::from(loader_name);
+        let tx = Transaction::write(
+            &loader,
+            native_loader::id(),
+            0,
+            name.as_bytes().to_vec(),
+            mint.last_id(),
+            0,
+        );
+        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+        let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
+        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+        let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
+        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+        Loader {
+            mint,
+            bank,
+            loader: loader.pubkey(),
+        }
+    }
+
+    pub fn new_native() -> Self {
+        let mint = Mint::new(50);
+        let bank = Bank::new(&mint);
+        let loader = native_loader::id();
+
+        Loader { mint, bank, loader }
+    }
+}
+
+struct Program {
+    program: Keypair,
+}
+
+impl Program {
+    pub fn new(loader: &Loader, userdata: Vec<u8>, size: u64) -> Self {
+        let program = Keypair::new();
+
+        // allocate, populate, and finalize user program
+
+        let tx = Transaction::system_create(
+            &loader.mint.keypair(),
+            program.pubkey(),
+            loader.mint.last_id(),
+            1,
+            size,
+            loader.loader,
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        let tx = Transaction::write(
+            &program,
+            loader.loader,
+            0,
+            userdata,
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        let tx = Transaction::finalize(&program, loader.loader, loader.mint.last_id(), 0);
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        let tx = Transaction::system_spawn(&program, loader.mint.last_id(), 0);
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        Program { program }
+    }
+}
+
 #[test]
 fn test_transaction_load_native() {
     logger::setup();
 
-    let mint = Mint::new(50);
-    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
-    //      which leads to duplicate tx signature errors
-    let bank = Bank::new(&mint);
-    let program = Keypair::new();
-
-    // allocate, populate, finalize user program
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        program.pubkey(),
-        mint.last_id(),
-        1,
-        56, // TODO How does the user know how much space to allocate, this is really an internally known size
-        native_loader::id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    println!("id: {:?}", native_loader::id());
+    let loader = Loader::new_native();
     let name = String::from("noop");
-    let tx = Transaction::write(
-        &program,
-        native_loader::id(),
-        0,
-        name.as_bytes().to_vec(),
-        mint.last_id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-    println!("id after: {:?}", native_loader::id());
-
-    let tx = Transaction::finalize(&program, native_loader::id(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    let userdata = name.as_bytes().to_vec();
+    let program = Program::new(&loader, userdata, 300);
 
     // Call user program
 
     let tx = Transaction::new(
-        &mint.keypair(), // TODO
+        &loader.mint.keypair(), // TODO
         &[],
-        program.pubkey(),
+        program.program.pubkey(),
         vec![1u8],
-        mint.last_id(),
+        loader.mint.last_id(),
         0,
     );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
 }
 
 #[test]
-fn test_transaction_load_lua() {
+fn test_program_lua_move_funds() {
     logger::setup();
 
-    let mint = Mint::new(50);
-    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
-    //      which leads to duplicate tx signature errors
-    let bank = Bank::new(&mint);
-    let loader = Keypair::new();
-    let program = Keypair::new();
-    let from = Keypair::new();
-    let to = Keypair::new().pubkey();
-
-    // allocate, populate, and finalize Lua loader
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        loader.pubkey(),
-        mint.last_id(),
-        1,
-        56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        native_loader::id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let name = String::from("lua_loader");
-    let tx = Transaction::write(
-        &loader,
-        native_loader::id(),
-        0,
-        name.as_bytes().to_vec(),
-        mint.last_id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    // allocate, populate, and finalize user program
-
-    let bytes = r#"
+    let loader = Loader::new_dynamic("lua_loader");
+    let userdata = r#"
             print("Lua Script!")
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
         "#.as_bytes()
     .to_vec();
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        program.pubkey(),
-        mint.last_id(),
-        1,
-        300, // TODO How does the user know how much space to allocate for what should be an internally known size
-        loader.pubkey(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::write(&program, loader.pubkey(), 0, bytes, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    let program = Program::new(&loader, userdata, 300);
+    let from = Keypair::new();
+    let to = Keypair::new().pubkey();
 
     // Call user program with two accounts
 
     let tx = Transaction::system_create(
-        &mint.keypair(),
+        &loader.mint.keypair(),
         from.pubkey(),
-        mint.last_id(),
+        loader.mint.last_id(),
         10,
         0,
-        program.pubkey(),
+        program.program.pubkey(),
         0,
     );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
 
     let tx = Transaction::system_create(
-        &mint.keypair(),
+        &loader.mint.keypair(),
         to,
-        mint.last_id(),
+        loader.mint.last_id(),
         1,
         0,
-        program.pubkey(),
+        program.program.pubkey(),
         0,
     );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
 
     let data = serialize(&10).unwrap();
-    let tx = Transaction::new(&from, &[to], program.pubkey(), data, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-    assert_eq!(bank.get_balance(&from.pubkey()), 0);
-    assert_eq!(bank.get_balance(&to), 11);
+    let tx = Transaction::new(
+        &from,
+        &[to],
+        program.program.pubkey(),
+        data,
+        loader.mint.last_id(),
+        0,
+    );
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
+    assert_eq!(loader.bank.get_balance(&from.pubkey()), 0);
+    assert_eq!(loader.bank.get_balance(&to), 11);
 }
 
 #[cfg(feature = "bpf_c")]
 #[test]
-fn test_transaction_load_bpf() {
+fn test_program_bpf_noop_c() {
     logger::setup();
 
-    let mint = Mint::new(50);
-    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
-    //      which leads to duplicate tx signature errors
-    let bank = Bank::new(&mint);
-    let loader = Keypair::new();
-    let program = Keypair::new();
-
-    // allocate, populate, finalize BPF loader
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        loader.pubkey(),
-        mint.last_id(),
-        1,
-        56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        native_loader::id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let name = String::from("bpf_loader");
-    let tx = Transaction::write(
-        &loader,
-        native_loader::id(),
-        0,
-        name.as_bytes().to_vec(),
-        mint.last_id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    // allocate, populate, and finalize user program
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        program.pubkey(),
-        mint.last_id(),
-        1,
-        56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        loader.pubkey(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
+    let loader = Loader::new_dynamic("bpf_loader");
     let name = String::from("noop_c");
-    let tx = Transaction::write(
-        &program,
-        loader.pubkey(),
-        0,
-        name.as_bytes().to_vec(),
-        mint.last_id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    let userdata = name.as_bytes().to_vec();
+    let program = Program::new(&loader, userdata, 56);
 
     // Call user program
 
     let tx = Transaction::new(
-        &mint.keypair(), // TODO
+        &loader.mint.keypair(), // TODO
         &[],
-        program.pubkey(),
+        program.program.pubkey(),
         vec![1u8],
-        mint.last_id(),
+        loader.mint.last_id(),
         0,
     );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
+}
+
+#[cfg(feature = "bpf_c")]
+struct TicTacToe {
+    game: Keypair,
+}
+
+#[cfg(feature = "bpf_c")]
+impl TicTacToe {
+    pub fn new(loader: &Loader, program: &Program) -> Self {
+        let game = Keypair::new();
+
+        // Create game account
+
+        let tx = Transaction::system_create(
+            &loader.mint.keypair(),
+            game.pubkey(),
+            loader.mint.last_id(),
+            1,
+            0x78, // corresponds to the C structure size
+            program.program.pubkey(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        TicTacToe { game }
+    }
+
+    pub fn id(&self) -> Pubkey {
+        self.game.pubkey().clone()
+    }
+
+    pub fn init(&self, loader: &Loader, program: &Program, player: &Pubkey) {
+        let userdata = serialize(&Command::Init).unwrap();
+        let tx = Transaction::new(
+            &self.game,
+            &[self.game.pubkey(), *player],
+            program.program.pubkey(),
+            userdata,
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
+
+    pub fn command(&self, loader: &Loader, program: &Program, command: Command, player: &Pubkey) {
+        let userdata = serialize(&command).unwrap();
+        let tx = Transaction::new(
+            &loader.mint.keypair(),
+            &[self.game.pubkey(), *player],
+            program.program.pubkey(),
+            userdata,
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
+
+    pub fn get_player_x(&self, loader: &Loader) -> Vec<u8> {
+        loader
+            .bank
+            .get_account(&self.game.pubkey())
+            .unwrap()
+            .userdata[0..32]
+            .to_vec()
+    }
+
+    pub fn get_player_y(&self, loader: &Loader) -> Vec<u8> {
+        loader
+            .bank
+            .get_account(&self.game.pubkey())
+            .unwrap()
+            .userdata[32..64]
+            .to_vec()
+    }
+
+    pub fn game(&self, loader: &Loader) -> Vec<u8> {
+        loader
+            .bank
+            .get_account(&self.game.pubkey())
+            .unwrap()
+            .userdata[64..68]
+            .to_vec()
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+struct Dashboard {
+    dashboard: Keypair,
+}
+
+#[cfg(feature = "bpf_c")]
+impl Dashboard {
+    pub fn new(loader: &Loader, program: &Program) -> Self {
+        let dashboard = Keypair::new();
+
+        // Create game account
+
+        let tx = Transaction::system_create(
+            &loader.mint.keypair(),
+            dashboard.pubkey(),
+            loader.mint.last_id(),
+            1,
+            0xD0, // corresponds to the C structure size
+            program.program.pubkey(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        Dashboard { dashboard }
+    }
+
+    pub fn update(&self, loader: &Loader, program: &Program, game: &Pubkey) {
+        let tx = Transaction::new(
+            &self.dashboard,
+            &[self.dashboard.pubkey(), *game],
+            program.program.pubkey(),
+            vec![],
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
+
+    pub fn get_game(&self, loader: &Loader, since_last: usize) -> Vec<u8> {
+        let userdata = loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata;
+
+        // TODO serialize
+        let last_game = userdata[192] as usize;
+        let this_game = (last_game + since_last * 4) % 5;
+        let start = 32 + this_game * 32;
+        let end = start + 32;
+
+        loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata[start..end]
+            .to_vec()
+    }
+
+    pub fn get_pending(&self, loader: &Loader) -> Vec<u8> {
+        loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata[0..32]
+            .to_vec()
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+#[test]
+fn test_program_bpf_file_tictactoe_c() {
+    logger::setup();
+
+    let loader = Loader::new_dynamic("bpf_loader");
+    let name = String::from("tictactoe_c");
+    let userdata = name.as_bytes().to_vec();
+    let program = Program::new(&loader, userdata, 56);
+    let player_x = Pubkey::new(&[0xA; 32]);
+    let player_y = Pubkey::new(&[0xB; 32]);
+
+    let ttt = TicTacToe::new(&loader, &program);
+    ttt.init(&loader, &program, &player_x);
+    ttt.command(&loader, &program, Command::Join(0xAABBCCDD), &player_y);
+    ttt.command(&loader, &program, Command::Move(1, 1), &player_x);
+    ttt.command(&loader, &program, Command::Move(0, 0), &player_y);
+    ttt.command(&loader, &program, Command::Move(2, 0), &player_x);
+    ttt.command(&loader, &program, Command::Move(0, 2), &player_y);
+    ttt.command(&loader, &program, Command::Move(2, 2), &player_x);
+    ttt.command(&loader, &program, Command::Move(0, 1), &player_y);
+
+    assert_eq!(player_x.as_ref(), &ttt.get_player_x(&loader)[..]); // validate x's key
+    assert_eq!(player_y.as_ref(), &ttt.get_player_y(&loader)[..]); // validate o's key
+    assert_eq!([4, 0, 0, 0], ttt.game(&loader)[..]); // validate that o won
+}
+
+#[cfg(feature = "bpf_c")]
+#[test]
+fn test_program_bpf_file_tictactoe_dashboard_c() {
+    logger::setup();
+
+    let loader = Loader::new_dynamic("bpf_loader");
+    let name = String::from("tictactoe_c");
+    let userdata = name.as_bytes().to_vec();
+    let ttt_program = Program::new(&loader, userdata, 56);
+    let player_x = Pubkey::new(&[0xA; 32]);
+    let player_y = Pubkey::new(&[0xB; 32]);
+
+    let ttt1 = TicTacToe::new(&loader, &ttt_program);
+    ttt1.init(&loader, &ttt_program, &player_x);
+    ttt1.command(&loader, &ttt_program, Command::Join(0xAABBCCDD), &player_y);
+    ttt1.command(&loader, &ttt_program, Command::Move(1, 1), &player_x);
+    ttt1.command(&loader, &ttt_program, Command::Move(0, 0), &player_y);
+    ttt1.command(&loader, &ttt_program, Command::Move(2, 0), &player_x);
+    ttt1.command(&loader, &ttt_program, Command::Move(0, 2), &player_y);
+    ttt1.command(&loader, &ttt_program, Command::Move(2, 2), &player_x);
+    ttt1.command(&loader, &ttt_program, Command::Move(0, 1), &player_y);
+
+    let ttt2 = TicTacToe::new(&loader, &ttt_program);
+    ttt2.init(&loader, &ttt_program, &player_x);
+    ttt2.command(&loader, &ttt_program, Command::Join(0xAABBCCDD), &player_y);
+    ttt2.command(&loader, &ttt_program, Command::Move(1, 1), &player_x);
+    ttt2.command(&loader, &ttt_program, Command::Move(0, 0), &player_y);
+    ttt2.command(&loader, &ttt_program, Command::Move(2, 0), &player_x);
+    ttt2.command(&loader, &ttt_program, Command::Move(0, 2), &player_y);
+    ttt2.command(&loader, &ttt_program, Command::Move(2, 2), &player_x);
+    ttt2.command(&loader, &ttt_program, Command::Move(0, 1), &player_y);
+
+    let ttt3 = TicTacToe::new(&loader, &ttt_program);
+    ttt3.init(&loader, &ttt_program, &player_x);
+
+    let name = String::from("tictactoe_dashboard_c");
+    let userdata = name.as_bytes().to_vec();
+    let dashboard_program = Program::new(&loader, userdata, 56);
+    let dashboard = Dashboard::new(&loader, &dashboard_program);
+
+    dashboard.update(&loader, &dashboard_program, &ttt1.id());
+    dashboard.update(&loader, &dashboard_program, &ttt2.id());
+    dashboard.update(&loader, &dashboard_program, &ttt3.id());
+
+    assert_eq!(ttt1.id().as_ref(), &dashboard.get_game(&loader, 1)[..]);
+    assert_eq!(ttt2.id().as_ref(), &dashboard.get_game(&loader, 0)[..]);
+    assert_eq!(ttt3.id().as_ref(), &dashboard.get_pending(&loader)[..]);
 }
