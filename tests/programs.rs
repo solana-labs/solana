@@ -61,6 +61,9 @@ fn test_transaction_load_native() {
     let tx = Transaction::finalize(&program, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
+    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
     // Call user program
 
     let tx = Transaction::new(
@@ -114,6 +117,9 @@ fn test_transaction_load_lua() {
     let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
+    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
     // allocate, populate, and finalize user program
 
     let bytes = r#"
@@ -139,6 +145,9 @@ fn test_transaction_load_lua() {
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program with two accounts
@@ -211,6 +220,9 @@ fn test_transaction_load_bpf() {
     let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
+    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
     // allocate, populate, and finalize user program
 
     let tx = Transaction::system_create(
@@ -236,6 +248,9 @@ fn test_transaction_load_bpf() {
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     let tx = Transaction::finalize(&program, loader.pubkey(), mint.last_id(), 0);
+    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+
+    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
     check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program

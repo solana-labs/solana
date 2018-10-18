@@ -197,21 +197,13 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
                     .userdata
                     .splice(0..s.len(), s.iter().cloned());
             }
-
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                keyed_accounts[0].account.loader_program_id = keyed_accounts[0].account.program_id;
-                keyed_accounts[0].account.program_id = *keyed_accounts[0].key;
-                trace!(
-                    "BPFLoader::Finalize prog: {:?} loader {:?}",
-                    keyed_accounts[0].account.program_id,
-                    keyed_accounts[0].account.loader_program_id
-                );
+                trace!("BPfLoader::Finalize prog: {:?}", keyed_accounts[0].key);
             }
         }
     } else {
         warn!("Invalid program transaction: {:?}", tx_data);
-        return false;
     }
     true
 }

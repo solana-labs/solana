@@ -65,21 +65,18 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
             }
         };
         trace!("Call native {:?}", name);
-        {
-            // create native program
-            let path = create_path(&name);
-            // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
-            let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
-            unsafe {
-                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT);
-                        return false;
-                    }
-                };
-                return entrypoint(&mut keyed_accounts[1..], tx_data);
-            }
+        let path = create_path(&name);
+        // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
+        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
+        unsafe {
+            let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT);
+                    return false;
+                }
+            };
+            return entrypoint(&mut keyed_accounts[1..], tx_data);
         }
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
@@ -96,23 +93,15 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
                 }
                 // native loader takes a name and we assume it all comes in at once
                 keyed_accounts[0].account.userdata = bytes;
-                return true;
             }
 
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                keyed_accounts[0].account.loader_program_id = id();
-                keyed_accounts[0].account.program_id = *keyed_accounts[0].key;
-                trace!(
-                    "NativeLoader::Finalize prog: {:?} loader {:?}",
-                    keyed_accounts[0].account.program_id,
-                    keyed_accounts[0].account.loader_program_id
-                );
-                return true;
+                trace!("NativeLoader::Finalize prog: {:?}", keyed_accounts[0].key);
             }
         }
     } else {
         warn!("Invalid program transaction: {:?}", tx_data);
     }
-    false
+    true
 }

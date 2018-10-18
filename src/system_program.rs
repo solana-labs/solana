@@ -9,6 +9,8 @@ use transaction::Transaction;
 #[derive(Debug)]
 pub enum Error {
     InvalidArgument,
+    AssignOfUnownedAccount,
+    AccountNotFinalized,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -39,6 +41,9 @@ pub enum SystemProgram {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { tokens: i64 },
+
+    /// Spawn a new program from an account
+    Spawn,
 }
 
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
@@ -85,7 +90,7 @@ impl SystemProgram {
                 }
                 SystemProgram::Assign { program_id } => {
                     if !Self::check_id(&accounts[0].program_id) {
-                        Err(Error::InvalidArgument)?;
+                        Err(Error::AssignOfUnownedAccount)?;
                     }
                     accounts[0].program_id = program_id;
                 }
@@ -93,6 +98,14 @@ impl SystemProgram {
                     //bank should be verifying correctness
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
+                }
+                SystemProgram::Spawn => {
+                    if !accounts[0].executable || accounts[0].loader_program_id != Pubkey::default()
+                    {
+                        Err(Error::AccountNotFinalized)?;
+                    }
+                    accounts[0].loader_program_id = accounts[0].program_id;
+                    accounts[0].program_id = tx.account_keys[0];
                 }
             }
             Ok(())

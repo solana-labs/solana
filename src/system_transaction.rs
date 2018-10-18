@@ -36,6 +36,8 @@ pub trait SystemTransaction {
         last_id: Hash,
         fee: i64,
     ) -> Self;
+
+    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: i64) -> Self;
 }
 
 impl SystemTransaction for Transaction {
@@ -100,7 +102,7 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-
+    /// Create and sign new SystemProgram::Move transaction to many destinations
     fn system_move_many(from: &Keypair, moves: &[(Pubkey, i64)], last_id: Hash, fee: i64) -> Self {
         let instructions: Vec<_> = moves
             .iter()
@@ -122,6 +124,19 @@ impl SystemTransaction for Transaction {
             fee,
             vec![SystemProgram::id()],
             instructions,
+        )
+    }
+    /// Create and sign new SystemProgram::Spawn transaction
+    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: i64) -> Self {
+        let spawn = SystemProgram::Spawn;
+        let userdata = serialize(&spawn).unwrap();
+        Transaction::new(
+            from_keypair,
+            &[],
+            SystemProgram::id(),
+            userdata,
+            last_id,
+            fee,
         )
     }
 }
