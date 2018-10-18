@@ -5,9 +5,11 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
+use influx_db_client as influxdb;
 use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
+use metrics;
 use packet::SharedBlobs;
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -149,6 +151,14 @@ fn broadcast(
     info!(
         "broadcast: {} entries, blob time {} chunking time {} broadcast time {}",
         num_entries, to_blobs_elapsed, chunking_elapsed, broadcast_elapsed
+    );
+
+    metrics::submit(
+        influxdb::Point::new("broadcast-stage")
+            .add_field(
+                "transmit-index",
+                influxdb::Value::Integer(transmit_index.data as i64),
+            ).to_owned(),
     );
 
     Ok(())
