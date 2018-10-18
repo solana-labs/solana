@@ -46,6 +46,19 @@ pub struct TokenInfo {
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TokenAccountDelegateInfo {
+    /**
+     * The source account for the tokens
+     */
+    source: Pubkey,
+
+    /**
+     * The original amount that this delegate account was authorized to spend up to
+     */
+    original_amount: u64,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TokenAccountInfo {
     /**
      * The kind of token this account holds
@@ -63,13 +76,11 @@ pub struct TokenAccountInfo {
     amount: u64,
 
     /**
-     * The source account for the tokens.
-     *
-     * If `source` is None, `amount` belongs to this account.
-     * If `source` is Option<>, `amount` represents an allowance of tokens that
-     * may be transferred from the `source` account.
+     * If `delegate` None, `amount` belongs to this account.
+     * If `delegate` is Option<_>, `amount` represents the remaining allowance
+     * of tokens that may be transferred from the `source` account.
      */
-    source: Option<Pubkey>,
+    delegate: Option<TokenAccountDelegateInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -166,7 +177,7 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if dest_account.source.is_some() {
+            if dest_account.delegate.is_some() {
                 info!("account 1 is a delegate and cannot accept tokens");
                 Err(Error::InvalidArgument)?;
             }
@@ -210,10 +221,13 @@ impl TokenProgram {
             token: *tx.key(pix, 2).unwrap(),
             owner: *tx.key(pix, 1).unwrap(),
             amount: 0,
-            source: None,
+            delegate: None,
         };
         if input_program_accounts.len() >= 4 {
-            token_account_info.source = Some(*tx.key(pix, 3).unwrap());
+            token_account_info.delegate = Some(TokenAccountDelegateInfo {
+                source: *tx.key(pix, 3).unwrap(),
+                original_amount: 0,
+            });
         }
         output_program_accounts.push((0, TokenProgram::Account(token_account_info)));
         Ok(())
@@ -239,7 +253,7 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if dest_account.source.is_some() {
+            if dest_account.delegate.is_some() {
                 info!("account 2 is a delegate and cannot accept tokens");
                 Err(Error::InvalidArgument)?;
             }
@@ -257,7 +271,7 @@ impl TokenProgram {
             output_source_account.amount -= amount;
             output_program_accounts.push((1, TokenProgram::Account(output_source_account)));
 
-            if source_account.source.is_some() {
+            if let Some(ref delegate_info) = source_account.delegate {
                 if input_program_accounts.len() != 4 {
                     error!("Expected 4 accounts");
                     Err(Error::InvalidArgument)?;
@@ -269,7 +283,7 @@ impl TokenProgram {
                         info!("account 1/3 token mismatch");
                         Err(Error::InvalidArgument)?;
                     }
-                    if Some(&delegate_account.source.unwrap()) != tx.key(pix, 3) {
+                    if Some(&delegate_info.source) != tx.key(pix, 3) {
                         info!("Account 1 is not a delegate of account 3");
                         Err(Error::InvalidArgument)?;
                     }
@@ -322,21 +336,32 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if source_account.source.is_some() {
+            if source_account.delegate.is_some() {
                 info!("account 1 is a delegate");
                 Err(Error::InvalidArgument)?;
             }
 
-            if delegate_account.source.is_none()
-                || Some(&delegate_account.source.unwrap()) != tx.key(pix, 1)
-            {
-                info!("account 2 is not a delegate of account 1");
-                Err(Error::InvalidArgument)?;
-            }
+            match &delegate_account.delegate {
+                None => {
+                    info!("account 2 is not a delegate");
+                    Err(Error::InvalidArgument)?;
+                }
+                Some(delegate_info) => {
+                    if Some(&delegate_info.source) != tx.key(pix, 1) {
+                        info!("account 2 is not a delegate of account 1");
+                        Err(Error::InvalidArgument)?;
+                    }
 
-            let mut output_delegate_account = delegate_account.clone();
-            output_delegate_account.amount = amount;
-            output_program_accounts.push((2, TokenProgram::Account(output_delegate_account)));
+                    let mut output_delegate_account = delegate_account.clone();
+                    output_delegate_account.amount = amount;
+                    output_delegate_account.delegate = Some(TokenAccountDelegateInfo {
+                        source: delegate_info.source,
+                        original_amount: amount,
+                    });
+                    output_program_accounts
+                        .push((2, TokenProgram::Account(output_delegate_account)));
+                }
+            }
         } else {
             info!("account 1 and/or 2 are invalid accounts");
             Err(Error::InvalidArgument)?;
@@ -425,7 +450,7 @@ mod test {
             token: Pubkey::new(&[1; 32]),
             owner: Pubkey::new(&[2; 32]),
             amount: 123,
-            source: None,
+            delegate: None,
         });
         assert!(account.serialize(&mut userdata).is_ok());
         assert_eq!(TokenProgram::deserialize(&userdata), Ok(account));
