@@ -16,7 +16,7 @@ pub struct Vote {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
     /// Declare and instantiate `Budget`.
-    NewBudget(i64, Budget),
+    NewBudget(Budget),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),
