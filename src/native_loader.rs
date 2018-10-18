@@ -82,13 +82,6 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
-                if keyed_accounts[0].account.executable {
-                    warn!(
-                        "Error: cannot write to a finalized account: {:?}",
-                        keyed_accounts[0].key
-                    );
-                    return false;
-                }
                 let offset = offset as usize;
                 if keyed_accounts[0].account.userdata.len() <= offset + bytes.len() {
                     warn!(

@@ -10,6 +10,7 @@ use transaction::Transaction;
 pub enum Error {
     InvalidArgument,
     AssignOfUnownedAccount,
+    AccountNotFinalized,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -101,7 +102,7 @@ impl SystemProgram {
                 SystemProgram::Spawn => {
                     if !accounts[0].executable || accounts[0].loader_program_id != Pubkey::default()
                     {
-                        Err(Error::AssignOfUnownedAccount)?;
+                        Err(Error::AccountNotFinalized)?;
                     }
                     accounts[0].loader_program_id = accounts[0].program_id;
                     accounts[0].program_id = tx.account_keys[0];

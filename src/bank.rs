@@ -488,7 +488,7 @@ impl Bank {
         // Verify the transaction
 
         // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if !(*pre_program_id == account.program_id || SystemProgram::check_id(&tx_program_id)) {
+        if *pre_program_id != account.program_id && !SystemProgram::check_id(&tx_program_id) {
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
