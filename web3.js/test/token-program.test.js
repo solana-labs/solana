@@ -174,6 +174,7 @@ test('create new token', async () => {
   expect(accountInfo.owner.equals(initialOwner.publicKey)).toBe(true);
   expect(accountInfo.amount.toNumber()).toBe(10000);
   expect(accountInfo.source).toBe(null);
+  expect(accountInfo.originalAmount.toNumber()).toBe(0);
 });
 
 
@@ -379,6 +380,7 @@ test('approve/revoke', async () => {
             200, 1, 0, 0, 0, 0, 0, 0,
             1,
             ...initialOwnerTokenAccount.toBuffer(),
+            200, 1, 0, 0, 0, 0, 0, 0,
           ],
           executable: false,
           loader_program_id: [
@@ -393,6 +395,7 @@ test('approve/revoke', async () => {
   let delegateAccountInfo = await testToken.accountInfo(delegate);
 
   expect(delegateAccountInfo.amount.toNumber()).toBe(456);
+  expect(delegateAccountInfo.originalAmount.toNumber()).toBe(456);
   if (delegateAccountInfo.source === null) {
     throw new Error('source should not be null');
   } else {
@@ -432,6 +435,7 @@ test('approve/revoke', async () => {
             0, 0, 0, 0, 0, 0, 0, 0,
             1,
             ...initialOwnerTokenAccount.toBuffer(),
+            0, 0, 0, 0, 0, 0, 0, 0,
           ],
           executable: false,
           loader_program_id: [
@@ -444,8 +448,8 @@ test('approve/revoke', async () => {
   }
 
   delegateAccountInfo = await testToken.accountInfo(delegate);
-
   expect(delegateAccountInfo.amount.toNumber()).toBe(0);
+  expect(delegateAccountInfo.originalAmount.toNumber()).toBe(0);
   if (delegateAccountInfo.source === null) {
     throw new Error('source should not be null');
   } else {
@@ -517,12 +521,9 @@ test.skip('fail on approve overspend', async () => {
     2
   );
 
-  await testToken.transfer(
-    owner,
-    account1Delegate,
-    account2,
-    1,
-  );
+  let delegateAccountInfo = await testToken.accountInfo(account1Delegate);
+  expect(delegateAccountInfo.amount.toNumber()).toBe(2);
+  expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
   await testToken.transfer(
     owner,
@@ -530,6 +531,21 @@ test.skip('fail on approve overspend', async () => {
     account2,
     1,
   );
+
+  delegateAccountInfo = await testToken.accountInfo(account1Delegate);
+  expect(delegateAccountInfo.amount.toNumber()).toBe(1);
+  expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
+
+  await testToken.transfer(
+    owner,
+    account1Delegate,
+    account2,
+    1,
+  );
+
+  delegateAccountInfo = await testToken.accountInfo(account1Delegate);
+  expect(delegateAccountInfo.amount.toNumber()).toBe(0);
+  expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
   expect(
     testToken.transfer(

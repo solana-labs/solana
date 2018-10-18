@@ -114,6 +114,7 @@ declare module '@solana/web3.js' {
     owner: PublicKey;
     amount: TokenAmount;
     source: null | PublicKey;
+    originalAmount: TokenAmount;
   |}
   declare type TokenAndPublicKey = [Token, PublicKey];
 

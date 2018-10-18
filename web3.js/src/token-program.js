@@ -111,6 +111,12 @@ type TokenAccountInfo = {|
    * an allowance of tokens that may be transferred from the source account
    */
   source: null | PublicKey,
+
+  /**
+   * Original amount of tokens this delegate account was authorized to spend
+   * If `source` is null, originalAmount is zero
+   */
+  originalAmount: TokenAmount,
 |};
 
 /**
@@ -122,6 +128,7 @@ const TokenAccountInfoLayout = BufferLayout.struct([
   Layout.uint64('amount'),
   BufferLayout.u8('sourceOption'),
   Layout.publicKey('source'),
+  Layout.uint64('originalAmount'),
 ]);
 
 
@@ -320,7 +327,13 @@ export class Token {
     tokenAccountInfo.token = new PublicKey(tokenAccountInfo.token);
     tokenAccountInfo.owner = new PublicKey(tokenAccountInfo.owner);
     tokenAccountInfo.amount = TokenAmount.fromBuffer(tokenAccountInfo.amount);
-    tokenAccountInfo.source = tokenAccountInfo.sourceOption === 0 ? null : new PublicKey(tokenAccountInfo.source);
+    if (tokenAccountInfo.sourceOption === 0) {
+      tokenAccountInfo.source = null;
+      tokenAccountInfo.originalAmount = new TokenAmount();
+    } else {
+      tokenAccountInfo.source = new PublicKey(tokenAccountInfo.source);
+      tokenAccountInfo.originalAmount = TokenAmount.fromBuffer(tokenAccountInfo.originalAmount);
+    }
 
     if (!tokenAccountInfo.token.equals(this.token)) {
       throw new Error(
