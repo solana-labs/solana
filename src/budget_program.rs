@@ -100,43 +100,16 @@ impl BudgetState {
         Ok(())
     }
 
-    /// Deduct tokens from the source account if it has sufficient funds and the contract isn't
-    /// pending
     fn apply_debits_to_budget_state(
-        accounts: &mut [&mut Account],
-        instruction: &Instruction,
-    ) -> Result<(), BudgetError> {
-        {
-            // if the source account userdata is not empty, this is a pending contract
-            if !accounts[0].userdata.is_empty() {
-                trace!("source is pending");
-                return Err(BudgetError::SourceIsPendingContract);
-            }
-            if let Instruction::NewBudget(tokens, _) = instruction {
-                if *tokens < 0 {
-                    trace!("negative tokens");
-                    return Err(BudgetError::NegativeTokens);
-                }
-
-                if accounts[0].tokens < *tokens {
-                    trace!("insufficient funds");
-                    return Err(BudgetError::InsufficientFunds);
-                } else {
-                    accounts[0].tokens -= *tokens;
-                }
-            };
-        }
-        Ok(())
-    }
-
-    /// Apply only a transaction's credits.
-    /// Note: It is safe to apply credits from multiple transactions in parallel.
-    fn apply_credits_to_budget_state(
         tx: &Transaction,
         instruction_index: usize,
         accounts: &mut [&mut Account],
         instruction: &Instruction,
     ) -> Result<(), BudgetError> {
+        if !accounts[0].userdata.is_empty() {
+            trace!("source is pending");
+            return Err(BudgetError::SourceIsPendingContract);
+        }
         match instruction {
             Instruction::NewBudget(tokens, budget) => {
                 let budget = budget.clone();
@@ -151,6 +124,7 @@ impl BudgetState {
                     } else {
                         let mut state = BudgetState::default();
                         state.pending_budget = Some(budget);
+                        accounts[0].tokens -= tokens;
                         accounts[1].tokens += tokens;
                         state.initialized = true;
                         state.serialize(&mut accounts[1].userdata)
@@ -246,9 +220,7 @@ impl BudgetState {
     ) -> Result<(), BudgetError> {
         if let Ok(instruction) = deserialize(tx.userdata(instruction_index)) {
             trace!("process_transaction: {:?}", instruction);
-            Self::apply_debits_to_budget_state(accounts, &instruction).and_then(|_| {
-                Self::apply_credits_to_budget_state(tx, instruction_index, accounts, &instruction)
-            })
+            Self::apply_debits_to_budget_state(tx, instruction_index, accounts, &instruction)
         } else {
             info!(
                 "Invalid transaction userdata: {:?}",
