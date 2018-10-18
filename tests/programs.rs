@@ -11,6 +11,7 @@ use solana::mint::Mint;
 use solana::native_loader;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
+#[cfg(feature = "bpf_c")]
 use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
 use solana_program_interface::pubkey::Pubkey;
