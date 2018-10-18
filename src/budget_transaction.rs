@@ -317,14 +317,19 @@ mod tests {
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::budget_new(&keypair, pubkey, 42, zero);
-        let mut instruction = tx.instruction(1).unwrap();
-        if let Instruction::NewBudget(ref mut budget) = instruction {
-            if let Budget::Pay(ref mut payment) = budget {
-                payment.tokens = 1_000_000; // <-- attack!
+        let mut system_instruction = tx.system_instruction(0).unwrap();
+        if let SystemProgram::Move { ref mut tokens } = system_instruction {
+            *tokens = 1_000_000; // <-- attack, part 1!
+            let mut instruction = tx.instruction(1).unwrap();
+            if let Instruction::NewBudget(ref mut budget) = instruction {
+                if let Budget::Pay(ref mut payment) = budget {
+                    payment.tokens = *tokens; // <-- attack, part 2!
+                }
             }
+            tx.instructions[1].userdata = serialize(&instruction).unwrap();
         }
-        tx.instructions[1].userdata = serialize(&instruction).unwrap();
-        assert!(!tx.verify_plan());
+        tx.instructions[0].userdata = serialize(&system_instruction).unwrap();
+        assert!(tx.verify_plan());
         assert!(!tx.verify_signature());
     }
 
