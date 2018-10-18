@@ -2,11 +2,12 @@
 //! ContactInfo data type represents the location of distributed nodes in the network which are
 //! hosting copies Crdt itself, and ContactInfo is stored in the Crdt itself.  So the Crdt
 //! maintains a list of the nodes that are distributing copies of itself.  For all the types
-//! replicated in the Crdt, the latest version is picked.
+//! replicated in the Crdt, the latest version is picked.  This creates a mutual dependency between
+//! Gossip <-> Crdt libraries.
 //!
 //! Additional types can be added by appending them to the Key, Value enums.
 //!
-//! merge(a: Crdt, b: Crdt) -> Crdt is implmented in the following steps
+//! Merge strategy `(a: Crdt, b: Crdt) -> Crdt` is implmented in the following steps
 //! 1. a has a local Crdt::version A', and it knows of b's remote Crdt::version B
 //! 2. b has a local Crdt::version B' and it knows of a's remote Crdt::version A
 //! 3. a asynchronosly calls b.get_updates_since(B, max_number_of_updates)
@@ -25,6 +26,7 @@
 //! while it would still transmit data, a's would not update any values in its table and there for
 //! wouldn't update its own Crdt::version.
 //!
+use bincode::serialized_size;
 use counter::Counter;
 use log::Level;
 use solana_program_interface::pubkey::Pubkey;
@@ -37,14 +39,11 @@ use transaction::Transaction;
 
 pub struct Crdt {
     /// key value hashmap
-    pub table: HashMap<Key, StoredValue>,
+    pub table: HashMap<Key, VersionedValue>,
 
     /// the version of the `table`
     /// every change to `table` should increase this version number
     pub version: u64,
-
-    /// The value of the remote `version` for ContactInfo's
-    pub remote_versions: HashMap<Pubkey, u64>,
 }
 
 /// Structure representing a node on the network
@@ -64,10 +63,23 @@ pub struct ContactInfo {
     /// latest version picked
     pub version: u64,
 }
-
+impl Default for ContactInfo {
+    fn default() -> Self {
+        let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
+        ContactInfo {
+            id: Pubkey::default(),
+            ncp: daddr.clone(),
+            tvu: daddr.clone(),
+            rpu: daddr.clone(),
+            tpu: daddr.clone(),
+            storage_addr: daddr.clone(),
+            version: 0,
+        }
+    }
+}
 /// Key type, after appending to this enum update
 /// * Crdt::update_timestamp_for_pubkey
-#[derive(PartialEq, Hash, Eq, Clone)]
+#[derive(PartialEq, Hash, Eq, Clone, Debug)]
 pub enum Key {
     ContactInfo(Pubkey),
     Vote(Pubkey),
@@ -85,15 +97,17 @@ impl fmt::Display for Key {
 }
 
 /// Value must correspond to Key
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Value {
+    /// * Merge Strategy - Latest version is picked
     ContactInfo(ContactInfo),
     /// TODO, Transactions need a height!!!
+    /// * Merge Strategy - Latest height is picked
     Vote {
         transaction: Transaction,
         height: u64,
     },
-    /// My Id, My Current leader, version
+    /// * Merge Strategy - Latest version is picked
     LeaderId {
         id: Pubkey,
         leader_id: Pubkey,
@@ -101,11 +115,12 @@ pub enum Value {
     },
 }
 
+#[derive(PartialEq, Debug)]
 pub enum CrdtError {
     InsertFailed,
 }
 
-pub struct StoredValue {
+pub struct VersionedValue {
     value: Value,
     /// local time when added
     local_timestamp: u64,
@@ -158,7 +173,6 @@ impl Default for Crdt {
         Crdt {
             table: HashMap::new(),
             version: 0,
-            remote_versions: HashMap::new(),
         }
     }
 }
@@ -176,12 +190,12 @@ impl Crdt {
                 inc_new_counter_info!("crdt-insert-new_entry", 1, 1);
             }
 
-            let stored_value = StoredValue {
+            let versioned_value = VersionedValue {
                 value,
                 local_timestamp,
                 local_version: self.version,
             };
-            let _ = self.table.insert(key, stored_value);
+            let _ = self.table.insert(key, versioned_value);
             self.version += 1;
             Ok(())
         } else {
@@ -196,7 +210,9 @@ impl Crdt {
     }
 
     fn update_timestamp(&mut self, id: Key, now: u64) {
-        self.table.get_mut(&id).map(|e| e.local_timestamp = now);
+        self.table
+            .get_mut(&id)
+            .map(|e| e.local_timestamp = cmp::max(e.local_timestamp, now));
     }
 
     /// Update the timestamp's of all the values that are assosciated with Pubkey
@@ -206,12 +222,12 @@ impl Crdt {
         self.update_timestamp(Key::LeaderId(pubkey), now);
     }
 
-    /// find all the keys that are older then min_ts
+    /// find all the keys that are older or equal to min_ts
     pub fn find_old_keys(&self, min_ts: u64) -> Vec<Key> {
         self.table
             .iter()
             .filter_map(|(k, v)| {
-                if v.local_timestamp < min_ts {
+                if v.local_timestamp <= min_ts {
                     Some(k)
                 } else {
                     None
@@ -220,16 +236,16 @@ impl Crdt {
             .collect()
     }
 
-    pub fn remove(&mut self, keys: &[Key]) {
-        for k in keys {
-            self.table.remove(k);
-        }
+    pub fn remove(&mut self, key: &Key) {
+        self.table.remove(key);
     }
 
     /// Get updated node since min_version up to a maximum of `max_number` of updates
     /// * min_version - return updates greater then min_version
     /// * max_number - max number of update
-    /// * Returns (max version, updates)  
+    /// * remote_versions - The remote `Crdt::version` values for each update.  This is a structure
+    /// about the external state of the network that is maintained by the gossip library.
+    /// Returns (max version, updates)  
     /// * max version - the maximum version that is in the updates
     /// * updates - a vector of (Values, Value's remote update index) that have been changed.  Values
     /// remote update index is the last update index seen from the ContactInfo that is referenced by
@@ -237,177 +253,215 @@ impl Crdt {
     pub fn get_updates_since(
         &self,
         min_version: u64,
-        max_number: usize,
+        mut max_bytes: usize,
+        remote_versions: &HashMap<Pubkey, u64>,
     ) -> (u64, Vec<(Value, u64)>) {
         let mut items: Vec<_> = self
             .table
             .iter()
             .filter_map(|(k, x)| {
-                if k.pubkey() != Pubkey::default() && x.local_version > min_version {
-                    let remote = *self.remote_versions.get(&k.pubkey()).unwrap_or(&0);
+                if k.pubkey() != Pubkey::default() && x.local_version >= min_version {
+                    let remote = *remote_versions.get(&k.pubkey()).unwrap_or(&0);
                     Some((x, remote))
                 } else {
                     None
                 }
             }).collect();
+        trace!("items length: {}", items.len());
         items.sort_by_key(|k| k.0.local_version);
-        let last = cmp::min(max_number, items.len()) - 1;
-        let max_update_version = items.get(last).map(|i| i.0.local_version).unwrap_or(0);
+        let last = {
+            let mut last = 0;
+            let sz =  serialized_size(&min_version).unwrap() as usize;
+            if max_bytes > sz {
+                max_bytes -= sz;
+            }
+            for i in &items {
+                let sz = serialized_size(&(&i.0.value, i.1)).unwrap() as usize;
+                if max_bytes < sz {
+                    break;
+                }
+                max_bytes -= sz;
+                last += 1;
+            }
+            last
+        };
+        let last_version = cmp::max(last, 1) - 1;
+        let max_update_version = items
+            .get(last_version)
+            .map(|i| i.0.local_version)
+            .unwrap_or(0);
         let updates: Vec<(Value, u64)> = items
             .into_iter()
-            .take(max_number)
+            .take(last)
             .map(|x| (x.0.value.clone(), x.1))
             .collect();
         (max_update_version, updates)
     }
 }
 
+#[cfg(test)]
 mod test {
+    use super::*;
+    use signature::{Keypair, KeypairUtil};
+    use system_transaction::test_tx;
     #[test]
-    fn insert_test() {
-        let mut d = NodeInfo::new_localhost(Keypair::new().pubkey());
-        assert_eq!(d.version, 0);
-        let mut cluster_info = Crdt::new(d.clone()).unwrap();
-        assert_eq!(cluster_info.table[&d.id].version, 0);
-        assert!(!cluster_info.alive.contains_key(&d.id));
-
-        d.version = 2;
-        cluster_info.insert(&d);
-        let liveness = cluster_info.alive[&d.id];
-        assert_eq!(cluster_info.table[&d.id].version, 2);
-
-        d.version = 1;
-        cluster_info.insert(&d);
-        assert_eq!(cluster_info.table[&d.id].version, 2);
-        assert_eq!(liveness, cluster_info.alive[&d.id]);
-
-        // Ensure liveness will be updated for version 3
-        sleep(Duration::from_millis(1));
-
-        d.version = 3;
-        cluster_info.insert(&d);
-        assert_eq!(cluster_info.table[&d.id].version, 3);
-        assert!(liveness < cluster_info.alive[&d.id]);
-    }
-
-    #[test]
-    fn update_test() {
-        let d1 = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let d2 = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let d3 = NodeInfo::new_localhost(Keypair::new().pubkey());
-        let mut cluster_info = ClusterInfo::new(d1.clone()).expect("ClusterInfo::new");
-        let (key, ix, ups) = cluster_info.get_updates_since(0, 1);
-        assert_eq!(key, d1.id);
-        assert_eq!(ix, 1);
-        assert_eq!(ups.len(), 1);
-        assert_eq!(sorted(&ups), sorted(&vec![(d1.clone(), 0)]));
-        cluster_info.insert(&d2);
-        let (key, ix, ups) = cluster_info.get_updates_since(0, 2);
-        assert_eq!(key, d1.id);
-        assert_eq!(ix, 2);
-        assert_eq!(ups.len(), 2);
-        assert_eq!(
-            sorted(&ups),
-            sorted(&vec![(d1.clone(), 0), (d2.clone(), 0)])
-        );
-        cluster_info.insert(&d3);
-        let (key, ix, ups) = cluster_info.get_updates_since(0, 3);
-        assert_eq!(key, d1.id);
-        assert_eq!(ix, 3);
-        assert_eq!(ups.len(), 3);
-        assert_eq!(
-            sorted(&ups),
-            sorted(&vec![(d1.clone(), 0), (d2.clone(), 0), (d3.clone(), 0)])
-        );
-        let mut cluster_info2 = ClusterInfo::new(d2.clone()).expect("ClusterInfo::new");
-        cluster_info2.apply_updates(key, ix, &ups);
-        assert_eq!(cluster_info2.table.values().len(), 3);
-        assert_eq!(
-            sorted(
-                &cluster_info2
-                    .table
-                    .values()
-                    .map(|x| (x.clone(), 0))
-                    .collect()
-            ),
-            sorted(
-                &cluster_info
-                    .table
-                    .values()
-                    .map(|x| (x.clone(), 0))
-                    .collect()
-            )
-        );
-        let d4 = NodeInfo::new_entry_point(&socketaddr!("127.0.0.4:1234"));
-        cluster_info.insert(&d4);
-        let (_key, ix, ups) = cluster_info.get_updates_since(0, 3);
-        assert_eq!(
-            sorted(&ups),
-            sorted(&vec![(d2.clone(), 0), (d1.clone(), 0), (d3.clone(), 0)])
-        );
-        assert_eq!(ix, 3);
-
-        let (_key, ix, ups) = cluster_info.get_updates_since(0, 2);
-        assert_eq!(
-            sorted(&ups),
-            sorted(&vec![(d2.clone(), 0), (d1.clone(), 0)])
-        );
-        assert_eq!(ix, 2);
-
-        let (_key, ix, ups) = cluster_info.get_updates_since(0, 1);
-        assert_eq!(sorted(&ups), sorted(&vec![(d1.clone(), 0)]));
-        assert_eq!(ix, 1);
-
-        let (_key, ix, ups) = cluster_info.get_updates_since(1, 3);
-        assert_eq!(ups.len(), 2);
-        assert_eq!(ix, 3);
-        assert_eq!(sorted(&ups), sorted(&vec![(d2, 0), (d3, 0)]));
-        let (_key, ix, ups) = cluster_info.get_updates_since(3, 3);
-        assert_eq!(ups.len(), 0);
-        assert_eq!(ix, 0);
-    }
-
-    #[test]
-    fn purge_test() {
-        logger::setup();
-        let me = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
-        let mut cluster_info = ClusterInfo::new(me.clone()).expect("ClusterInfo::new");
-        let nxt = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
-        assert_ne!(me.id, nxt.id);
-        cluster_info.set_leader(me.id);
-        cluster_info.insert(&nxt);
-        let rv = cluster_info.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-        let now = cluster_info.alive[&nxt.id];
-        cluster_info.purge(now);
-        let rv = cluster_info.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        cluster_info.purge(now + GOSSIP_PURGE_MILLIS);
-        let rv = cluster_info.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        let rv = cluster_info.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
-
-        let mut nxt2 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
-        assert_ne!(me.id, nxt2.id);
-        assert_ne!(nxt.id, nxt2.id);
-        cluster_info.insert(&nxt2);
-        while now == cluster_info.alive[&nxt2.id] {
-            sleep(Duration::from_millis(GOSSIP_SLEEP_MILLIS));
-            nxt2.version += 1;
-            cluster_info.insert(&nxt2);
+    fn test_keys_and_values() {
+        let v1 = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        let v2 = Value::ContactInfo(ContactInfo::default());
+        let v3 = Value::Vote {
+            transaction: test_tx(),
+            height: 0,
+        };
+        for v in &[v1, v2, v3] {
+            match (v, v.id()) {
+                (Value::ContactInfo(_), Key::ContactInfo(_)) => (),
+                (Value::Vote { .. }, Key::Vote(_)) => (),
+                (Value::LeaderId { .. }, Key::LeaderId(_)) => (),
+                _ => assert!(false),
+            }
         }
-        let len = cluster_info.table.len() as u64;
-        assert!((MIN_TABLE_SIZE as u64) < len);
-        cluster_info.purge(now + GOSSIP_PURGE_MILLIS);
-        assert_eq!(len as usize, cluster_info.table.len());
-        trace!("purging");
-        cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
-        assert_eq!(len as usize - 1, cluster_info.table.len());
-        let rv = cluster_info.gossip_request().unwrap();
-        assert_eq!(rv.0, nxt.contact_info.ncp);
+    }
+    #[test]
+    fn test_insert() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 0), Ok(()));
+        assert_eq!(crdt.version, 1);
+        assert_eq!(crdt.table.len(), 1);
+        assert!(crdt.table.contains_key(&val.id()));
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 0);
+        assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
+    }
+    #[test]
+    fn test_update_old() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 0), Ok(()));
+        assert_eq!(crdt.insert(val.clone(), 1), Err(CrdtError::InsertFailed));
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 0);
+        assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
+        assert_eq!(crdt.version, 1);
+    }
+    #[test]
+    fn test_update_new() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val, 0), Ok(()));
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 1,
+        };
+        assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 1);
+        assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
+        assert_eq!(crdt.version, 2);
+    }
+    #[test]
+    fn test_update_timestsamp() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 0), Ok(()));
+
+        crdt.update_timestamp(val.id(), 1);
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 1);
+
+        crdt.update_timestamp_for_pubkey(val.id().pubkey(), 2);
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 2);
+
+        crdt.update_timestamp_for_pubkey(val.id().pubkey(), 1);
+        assert_eq!(crdt.table[&val.id()].local_timestamp, 2);
+    }
+    #[test]
+    fn test_find_old_keys() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
+
+        assert!(crdt.find_old_keys(0).is_empty());
+        assert_eq!(crdt.find_old_keys(1), vec![val.id()]);
+        assert_eq!(crdt.find_old_keys(2), vec![val.id()]);
+    }
+    #[test]
+    fn test_remove() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
+
+        assert_eq!(crdt.find_old_keys(1), vec![val.id()]);
+        crdt.remove(&val.id());
+        assert!(crdt.find_old_keys(1).is_empty());
+    }
+    #[test]
+    fn test_updates_empty() {
+        let crdt = Crdt::default();
+        let remotes = HashMap::new();
+        assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(0, 1024, &remotes), (0, vec![]));
+    }
+    #[test]
+    fn test_updates_default_key() {
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: Pubkey::default(),
+            leader_id: Pubkey::default(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
+        let mut remotes = HashMap::new();
+        remotes.insert(val.id().pubkey(), 1);
+        assert_eq!(crdt.get_updates_since(0, 1024, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(1, 1024, &remotes), (0, vec![]));
+    }
+    #[test]
+    fn test_updates_real_key() {
+        let key = Keypair::new();
+        let mut crdt = Crdt::default();
+        let val = Value::LeaderId {
+            id: key.pubkey(),
+            leader_id: key.pubkey(),
+            version: 0,
+        };
+        assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
+        let mut remotes = HashMap::new();
+        assert_eq!(
+            crdt.get_updates_since(0, 1024, &remotes),
+            (0, vec![(val.clone(), 0)])
+        );
+        remotes.insert(val.id().pubkey(), 1);
+        let sz = serialized_size(&(0, vec![(val.clone(), 1)])).unwrap() as usize;
+        assert_eq!(crdt.get_updates_since(0, sz, &remotes), (0, vec![(val, 1)]));
+        assert_eq!(crdt.get_updates_since(0, sz-1, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(1, sz, &remotes), (0, vec![]));
     }
 }
