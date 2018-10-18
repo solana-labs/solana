@@ -150,10 +150,15 @@ typedef enum {
 } State;
 
 typedef struct {
+  // Player who initialized the game
   SolPubkey player_x;
+  // Player who joined the game
   SolPubkey player_o;
+  // Current state of the game
   State state;
+  // Tracks the player moves
   BoardItem board[9];
+  // Keep Alive for each player
   int64_t keep_alive[2];
 } Game;
 
@@ -316,8 +321,6 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
   return Result_Ok;
 }
 
-// TODO timestamp is broken
-
 // accounts[0] On Init must be player X, after that doesn't matter,
 //             anybody can cause a dashboard update
 // accounts[1] must be a TicTacToe state account
@@ -329,15 +332,15 @@ uint64_t entrypoint(uint8_t *buf) {
   int err = 0;
 
   if (1 != sol_deserialize(buf, 3, ka, &tx_data, &tx_data_len)) {
-    return 0;
+    return false;
   }
 
   if (sizeof(Game) > ka[1].userdata_len) {
     sol_print(0, 0, 0xFF, sizeof(Game), ka[2].userdata_len);
-    return 0;
+    return false;
   }
   Game game;
-  sol_memcpy(&game, ka[1].userdata, ka[1].userdata_len);
+  sol_memcpy(&game, ka[1].userdata, sizeof(game));
 
   Command command = *tx_data;
   switch (command) {
@@ -346,7 +349,7 @@ uint64_t entrypoint(uint8_t *buf) {
       break;
 
     case Command_Join:
-      err = game_join(&game, ka[2].key, tx_data[8]);
+      err = game_join(&game, ka[2].key, *((int64_t *)(tx_data + 4)));
       break;
 
     case Command_KeepAlive:
@@ -358,10 +361,13 @@ uint64_t entrypoint(uint8_t *buf) {
       break;
 
     default:
-      return 0;
+      return false;
   }
 
-  sol_memcpy(ka[1].userdata, &game, ka[1].userdata_len);
+  sol_memcpy(ka[1].userdata, &game, sizeof(game));
   sol_print(0, 0, 0, err, game.state);
-  return 1;
+  if (Result_Ok != err) {
+    return false;
+  }
+  return true;
 }

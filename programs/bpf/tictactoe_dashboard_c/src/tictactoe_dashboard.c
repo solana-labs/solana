@@ -158,14 +158,14 @@ typedef struct {
   // Latest pending game
   SolPubkey pending;
   // Last N completed games (0 is the latest)
-  SolPubkey *completed[MAX_GAMES_TRACKED];
+  SolPubkey completed[MAX_GAMES_TRACKED];
   // Index into completed pointing to latest game completed
   uint32_t latest_game;
   // Total number of completed games
   uint32_t total;
 } Dashboard;
 
-SOL_FN_PREFIX void update(Dashboard *self, Game *game, SolPubkey *game_pubkey) {
+SOL_FN_PREFIX bool update(Dashboard *self, Game *game, SolPubkey *game_pubkey) {
   switch (game->state) {
     case State_Waiting:
       sol_memcpy(&self->pending, game_pubkey, SIZE_PUBKEY);
@@ -177,22 +177,25 @@ SOL_FN_PREFIX void update(Dashboard *self, Game *game, SolPubkey *game_pubkey) {
     case State_XWon:
     case State_OWon:
     case State_Draw:
-      for (int i = 0; i <= MAX_GAMES_TRACKED; i++) {
-        if (!SolPubkey_same(self->completed[i], game_pubkey)) {
+      for (int i = 0; i < MAX_GAMES_TRACKED; i++) {
+        if (SolPubkey_same(&self->completed[i], game_pubkey)) {
           // TODO: Once the PoH height is exposed to programs, it could be used
           // to ensure
           //       that old games are not being re-added and causing total to
           //       increment incorrectly.
-          return;
+          return false;
         }
-
-        self->total += 1;
-
-        // TODO insert game
       }
+      self->total += 1;
+      self->latest_game = (self->latest_game + 1) % MAX_GAMES_TRACKED;
+      sol_memcpy(self->completed[self->latest_game].x, game_pubkey,
+                 SIZE_PUBKEY);
+      break;
+
     default:
       break;
   }
+  return true;
 }
 
 // accounts[0] doesn't matter, anybody can cause a dashboard update
@@ -205,29 +208,29 @@ uint64_t entrypoint(uint8_t *buf) {
   int err = 0;
 
   if (1 != sol_deserialize(buf, 3, ka, &tx_data, &tx_data_len)) {
-    return 0;
+    return false;
   }
 
   // TODO check dashboard and game program ids (how to check now that they are
   // not know values)
   // TODO check validity of dashboard and game structures contents
-
   if (sizeof(Dashboard) > ka[1].userdata_len) {
     sol_print(0, 0, 0xFF, sizeof(Dashboard), ka[2].userdata_len);
-    return 0;
+    return false;
   }
   Dashboard dashboard;
-  sol_memcpy(&dashboard, ka[1].userdata, ka[1].userdata_len);
+  sol_memcpy(&dashboard, ka[1].userdata, sizeof(dashboard));
 
   if (sizeof(Game) > ka[2].userdata_len) {
     sol_print(0, 0, 0xFF, sizeof(Game), ka[2].userdata_len);
-    return 0;
+    return false;
   }
   Game game;
-  sol_memcpy(&game, ka[2].userdata, ka[2].userdata_len);
+  sol_memcpy(&game, ka[2].userdata, sizeof(game));
+  if (true != update(&dashboard, &game, ka[2].key)) {
+    return false;
+  }
 
-  update(&dashboard, &game, ka[2].key);
-
-  sol_memcpy(ka[1].userdata, &dashboard, ka[1].userdata_len);
-  return 1;
+  sol_memcpy(ka[1].userdata, &dashboard, sizeof(dashboard));
+  return true;
 }

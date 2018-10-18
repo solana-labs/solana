@@ -342,6 +342,10 @@ impl TicTacToe {
         TicTacToe { game }
     }
 
+    pub fn id(&self) -> Pubkey {
+        self.game.pubkey().clone()
+    }
+
     pub fn init(&self, loader: &Loader, program: &Program, player: &Pubkey) {
         let userdata = serialize(&Command::Init).unwrap();
         let tx = Transaction::new(
@@ -400,6 +404,83 @@ impl TicTacToe {
             .get_account(&self.game.pubkey())
             .unwrap()
             .userdata[64..68]
+            .to_vec()
+    }
+}
+
+#[cfg(feature = "bpf_c")]
+struct Dashboard {
+    dashboard: Keypair,
+}
+
+#[cfg(feature = "bpf_c")]
+impl Dashboard {
+    pub fn new(loader: &Loader, program: &Program) -> Self {
+        let dashboard = Keypair::new();
+
+        // Create game account
+
+        let tx = Transaction::system_create(
+            &loader.mint.keypair(),
+            dashboard.pubkey(),
+            loader.mint.last_id(),
+            1,
+            0xD0, // corresponds to the C structure size
+            program.program.pubkey(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+
+        Dashboard { dashboard }
+    }
+
+    pub fn update(&self, loader: &Loader, program: &Program, game: &Pubkey) {
+        let tx = Transaction::new(
+            &self.dashboard,
+            &[self.dashboard.pubkey(), *game],
+            program.program.pubkey(),
+            vec![],
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
+
+    pub fn get_game(&self, loader: &Loader, since_last: usize) -> Vec<u8> {
+        let userdata = loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata;
+
+        // TODO serialize
+        let last_game = userdata[192] as usize;
+        let this_game = (last_game + since_last * 4) % 5;
+        let start = 32 + this_game * 32;
+        let end = start + 32;
+
+        loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata[start..end]
+            .to_vec()
+    }
+
+    pub fn get_pending(&self, loader: &Loader) -> Vec<u8> {
+        loader
+            .bank
+            .get_account(&self.dashboard.pubkey())
+            .unwrap()
+            .userdata[0..32]
             .to_vec()
     }
 }
@@ -470,9 +551,19 @@ fn test_program_bpf_file_tictactoe_dashboard_c() {
     ttt2.command(&loader, &ttt_program, Command::Move(2, 2), &player_x);
     ttt2.command(&loader, &ttt_program, Command::Move(0, 1), &player_y);
 
+    let ttt3 = TicTacToe::new(&loader, &ttt_program);
+    ttt3.init(&loader, &ttt_program, &player_x);
+
     let name = String::from("tictactoe_dashboard_c");
     let userdata = name.as_bytes().to_vec();
-    let _dashboard_program = Program::new(&loader, userdata, 56);
+    let dashboard_program = Program::new(&loader, userdata, 56);
+    let dashboard = Dashboard::new(&loader, &dashboard_program);
 
-    // TODO test dashboard
+    dashboard.update(&loader, &dashboard_program, &ttt1.id());
+    dashboard.update(&loader, &dashboard_program, &ttt2.id());
+    dashboard.update(&loader, &dashboard_program, &ttt3.id());
+
+    assert_eq!(ttt1.id().as_ref(), &dashboard.get_game(&loader, 1)[..]);
+    assert_eq!(ttt2.id().as_ref(), &dashboard.get_game(&loader, 0)[..]);
+    assert_eq!(ttt3.id().as_ref(), &dashboard.get_pending(&loader)[..]);
 }
