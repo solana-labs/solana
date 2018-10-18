@@ -101,7 +101,7 @@ impl fmt::Display for Key {
 pub enum Value {
     /// * Merge Strategy - Latest version is picked
     ContactInfo(ContactInfo),
-    /// TODO, Transactions need a height!!!
+    /// TODO, Votes need a height potentially in the userdata
     /// * Merge Strategy - Latest height is picked
     Vote {
         transaction: Transaction,
@@ -242,7 +242,8 @@ impl Crdt {
 
     /// Get updated node since min_version up to a maximum of `max_number` of updates
     /// * min_version - return updates greater then min_version
-    /// * max_number - max number of update
+    /// * max_bytes - max number of bytes to encode.  This would allow gossip to fit the response
+    /// into a 64kb packet.
     /// * remote_versions - The remote `Crdt::version` values for each update.  This is a structure
     /// about the external state of the network that is maintained by the gossip library.
     /// Returns (max version, updates)  
@@ -271,7 +272,7 @@ impl Crdt {
         items.sort_by_key(|k| k.0.local_version);
         let last = {
             let mut last = 0;
-            let sz =  serialized_size(&min_version).unwrap() as usize;
+            let sz = serialized_size(&min_version).unwrap() as usize;
             if max_bytes > sz {
                 max_bytes -= sz;
             }
@@ -460,7 +461,7 @@ mod test {
         remotes.insert(val.id().pubkey(), 1);
         let sz = serialized_size(&(0, vec![(val.clone(), 1)])).unwrap() as usize;
         assert_eq!(crdt.get_updates_since(0, sz, &remotes), (0, vec![(val, 1)]));
-        assert_eq!(crdt.get_updates_since(0, sz-1, &remotes), (0, vec![]));
+        assert_eq!(crdt.get_updates_since(0, sz - 1, &remotes), (0, vec![]));
         assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
         assert_eq!(crdt.get_updates_since(1, sz, &remotes), (0, vec![]));
     }
