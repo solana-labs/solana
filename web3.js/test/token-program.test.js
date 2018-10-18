@@ -6,6 +6,7 @@ import {
   Token,
   TokenAmount,
 } from '../src';
+import {SYSTEM_TOKEN_PROGRAM_ID} from '../src/token-program';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
 import {newAccountWithTokens} from './new-account-with-tokens';
@@ -111,7 +112,7 @@ test('create new token', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             1,
@@ -149,7 +150,7 @@ test('create new token', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,
@@ -206,7 +207,7 @@ test('create new token account', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,
@@ -263,7 +264,7 @@ test('transfer', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,
@@ -305,7 +306,7 @@ test('transfer', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,
@@ -371,7 +372,7 @@ test('approve/revoke', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,
@@ -426,7 +427,7 @@ test('approve/revoke', async () => {
       {
         error: null,
         result: {
-          program_id: [...Token.programId.toBuffer()],
+          program_id: [...SYSTEM_TOKEN_PROGRAM_ID.toBuffer()],
           tokens: 1,
           userdata: [
             2,

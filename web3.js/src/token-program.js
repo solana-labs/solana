@@ -134,6 +134,12 @@ const TokenAccountInfoLayout = BufferLayout.struct([
 
 type TokenAndPublicKey = [Token, PublicKey]; // This type exists to workaround an esdoc parse error
 
+
+/**
+ * The built-in token program
+ */
+export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey('0x500000000000000000000000000000000000000000000000000000000000000');
+
 /**
  * An ERC20-like Token
  */
@@ -150,13 +156,19 @@ export class Token {
   token: PublicKey;
 
   /**
+   * Program Identifier for the Token program
+   */
+  programId: PublicKey;
+
+  /**
    * Create a Token object attached to the specific token
    *
    * @param connection The connection to use
    * @param token Public key of the token
+   * @param programId Optional token programId, uses the system programId by default
    */
-  constructor(connection: Connection, token: PublicKey) {
-    Object.assign(this, {connection, token});
+  constructor(connection: Connection, token: PublicKey, programId: PublicKey = SYSTEM_TOKEN_PROGRAM_ID) {
+    Object.assign(this, {connection, token, programId});
   }
 
   /**
@@ -168,6 +180,7 @@ export class Token {
    * @param name Descriptive name of this token
    * @param symbol Symbol for this token
    * @param decimals Location of the decimal place
+   * @param programId Optional token programId, uses the system programId by default
    * @return Token object for the newly minted token, Public key of the Token Account holding the total supply of new tokens
    */
   static async createNewToken(
@@ -177,6 +190,7 @@ export class Token {
     name: string,
     symbol: string,
     decimals: number,
+    programId: PublicKey = SYSTEM_TOKEN_PROGRAM_ID,
   ): Promise<TokenAndPublicKey> {
     const tokenAccount = new Account();
     const token = new Token(connection, tokenAccount.publicKey);
@@ -213,14 +227,14 @@ export class Token {
       tokenAccount.publicKey,
       1,
       1 + userdata.length,
-      Token.programId,
+      programId,
     );
     await sendAndConfirmTransaction(connection, owner, transaction);
 
     transaction = new Transaction({
       fee: 0,
       keys: [tokenAccount.publicKey, initialAccountPublicKey],
-      programId: Token.programId,
+      programId,
       userdata,
     });
     await sendAndConfirmTransaction(connection, tokenAccount, transaction);
@@ -253,7 +267,7 @@ export class Token {
       tokenAccount.publicKey,
       1,
       1 + TokenAccountInfoLayout.span,
-      Token.programId,
+      this.programId,
     );
     await sendAndConfirmTransaction(this.connection, owner, transaction);
 
@@ -265,7 +279,7 @@ export class Token {
     transaction = new Transaction({
       fee: 0,
       keys,
-      programId: Token.programId,
+      programId: this.programId,
       userdata,
     });
     await sendAndConfirmTransaction(this.connection, tokenAccount, transaction);
@@ -292,7 +306,7 @@ export class Token {
    */
   async tokenInfo(): Promise<TokenInfo> {
     const accountInfo = await this.connection.getAccountInfo(this.token);
-    if (!accountInfo.programId.equals(Token.programId)) {
+    if (!accountInfo.programId.equals(this.programId)) {
       throw new Error(`Invalid token programId: ${JSON.stringify(accountInfo.programId)}`);
     }
 
@@ -314,7 +328,7 @@ export class Token {
    */
   async accountInfo(account: PublicKey): Promise<TokenAccountInfo> {
     const accountInfo = await this.connection.getAccountInfo(account);
-    if (!accountInfo.programId.equals(Token.programId)) {
+    if (!accountInfo.programId.equals(this.programId)) {
       throw new Error(`Invalid token account programId`);
     }
 
@@ -384,7 +398,7 @@ export class Token {
     const transaction = new Transaction({
       fee: 0,
       keys,
-      programId: Token.programId,
+      programId: this.programId,
       userdata,
     });
     await sendAndConfirmTransaction(this.connection, owner, transaction);
@@ -422,7 +436,7 @@ export class Token {
     const transaction = new Transaction({
       fee: 0,
       keys: [owner.publicKey, source, delegate],
-      programId: Token.programId,
+      programId: this.programId,
       userdata,
     });
     await sendAndConfirmTransaction(this.connection, owner, transaction);
@@ -441,13 +455,6 @@ export class Token {
     delegate: PublicKey
   ): Promise<void> {
     return this.approve(owner, source, delegate, 0);
-  }
-
-  /**
-   * Program Identifier for the Token program
-   */
-  static get programId(): PublicKey {
-    return new PublicKey('0x500000000000000000000000000000000000000000000000000000000000000');
   }
 }
 
