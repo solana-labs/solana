@@ -478,12 +478,24 @@ impl Bank {
             }).collect()
     }
 
+    // Return true if the given account is being used by its program or if owned by pubkey that signed this transaction.
+    // Note: does not authorize if owned by a different program, even if signed.
+    fn is_debit_authorized(
+        account_index: usize,
+        instruction_program_id: &Pubkey,
+        account_program_id: &Pubkey,
+    ) -> bool {
+        instruction_program_id == account_program_id
+            || SystemProgram::check_id(&account_program_id) && account_index == 0
+    }
+
     pub fn verify_transaction(
         instruction_index: usize,
         tx_program_id: &Pubkey,
         pre_program_id: &Pubkey,
         pre_tokens: i64,
         account: &Account,
+        account_index: usize,
     ) -> Result<()> {
         // Verify the transaction
         // make sure that program_id is still the same or this was just assigned by the system call contract
@@ -495,7 +507,9 @@ impl Bank {
             // return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+        if !Self::is_debit_authorized(account_index, tx_program_id, pre_program_id)
+            && pre_tokens > account.tokens
+        {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
             ));
@@ -645,15 +659,14 @@ impl Bank {
         }
 
         // Verify the transaction
-        for ((pre_program_id, pre_tokens), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
-        {
+        for (i, (pre_program_id, pre_tokens)) in pre_data.iter().enumerate() {
             Self::verify_transaction(
                 instruction_index,
                 &tx_program_id,
                 pre_program_id,
                 *pre_tokens,
-                post_account,
+                &program_accounts[i],
+                i,
             )?;
         }
         // Send notifications
