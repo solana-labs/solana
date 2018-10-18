@@ -1,7 +1,8 @@
 //! This module implements a crdt type designed for asynchronous updates in a distributed network.
 //! ContactInfo data type represents the location of distributed nodes in the network which are
 //! hosting copies Crdt itself, and ContactInfo is stored in the Crdt itself.  So the Crdt
-//! maintains a list of the nodes that are distributing copies of itself.
+//! maintains a list of the nodes that are distributing copies of itself.  For all the types
+//! replicated in the Crdt, the latest version is picked.
 //!
 //! Additional types can be added by appending them to the Key, Value enums.
 //! 
@@ -24,65 +25,15 @@
 //! while it would still transmit data, a's would not update any values in its table and there for
 //! wouldn't update its own Crdt::version.
 //!
-use timing::{duration_as_ms, timestamp};
-use cluster_info::{ClusterInfo};
+use std::sync::atomic::{AtomicUsize};
+use log::Level;
+use solana_program_interface::pubkey::Pubkey;
+use counter::Counter;
+use std::fmt;
+use std::cmp;
+use std::collections::HashMap;
+use std::net::{SocketAddr};
 use transaction::{Transaction};
-
-/// Key type, after appending to this enum update
-/// * Crdt::update_timestamp_for_pubkey
-enum Key {
-    ContactInfo(Pubkey),
-    Vote(Pubkey),
-    LeaderId(Pubkey),
-}
-
-/// Value must correspond to Key
-enum Value {
-    ContactInfo(ContactInfo),
-    /// TODO, Transactions need a height!!!
-    Vote(Transaction, u64),
-    /// My Id, My Current leader, version
-    LeaderId(Pubkey, Pubkey, u64),
-}
-
-enum CrdtError {
-    InsertFailed,
-}
-
-struct StoredValue {
-    value: Value,
-    /// local time when added
-    local_timestamp: u64,
-    /// local crdt version when added
-    local_version: u64,
-}
-
-impl Key {
-     fn pubkey(&self) -> Pubkey {
-        match self {
-            Key::ContactInfo(p) => p,
-            Key::Vote(p) => p,
-            Key::LeaderId(p) => p,
-        }
-    }  
-}
- 
-impl Value {
-    fn version(&self) -> u64 {
-        match self {
-            Value::ContactInfo(n) => n.version,
-            Value::Vote(_, height) => height,
-            Value::LeaderId(_, version) => version,
-        }
-    }
-    fn id(&self) -> Key {
-        match self {
-            Value::ContactInfo(n) => Key::ContactInfo(n.id),
-            Value::Vote(tx, height) => Key::Vote(tx.account_keys[0]),
-            Value::LeaderId(id, _, version) => Key::LeaderId(id),
-        }
-    } 
-}
 
 pub struct Crdt {
     /// key value hashmap
@@ -95,43 +46,127 @@ pub struct Crdt {
     /// The value of the remote `version` for ContactInfo's
     pub remote_versions: HashMap<Pubkey, u64>,
 }
+ 
+/// Structure representing a node on the network
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ContactInfo {
+    pub id: Pubkey,
+    /// gossip address
+    pub ncp: SocketAddr,
+    /// address to connect to for replication
+    pub tvu: SocketAddr,
+    /// address to connect to when this node is leader
+    pub rpu: SocketAddr,
+    /// transactions address
+    pub tpu: SocketAddr,
+    /// storage data address
+    pub storage_addr: SocketAddr,
+    /// latest version picked
+    pub version: u64,
+}
+ 
+/// Key type, after appending to this enum update
+/// * Crdt::update_timestamp_for_pubkey
+#[derive(PartialEq, Hash, Eq, Clone)]
+pub enum Key {
+    ContactInfo(Pubkey),
+    Vote(Pubkey),
+    LeaderId(Pubkey),
+}
+
+impl fmt::Display for Key {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+         match self {
+            Key::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
+            Key::Vote(_) => write!(f, "Vote({})", self.pubkey()),
+            Key::LeaderId(_) => write!(f, "LeaderId({})", self.pubkey()),
+        }
+    }   
+}
+ 
+/// Value must correspond to Key
+#[derive(Clone)]
+pub enum Value {
+    ContactInfo(ContactInfo),
+    /// TODO, Transactions need a height!!!
+    Vote{ transaction: Transaction, height: u64},
+    /// My Id, My Current leader, version
+    LeaderId{id: Pubkey, leader_id: Pubkey, version: u64},
+}
+
+pub enum CrdtError {
+    InsertFailed,
+}
+
+pub struct StoredValue {
+    value: Value,
+    /// local time when added
+    local_timestamp: u64,
+    /// local crdt version when added
+    local_version: u64,
+}
+
+impl Key {
+     fn pubkey(&self) -> Pubkey {
+        match self {
+            Key::ContactInfo(p) => *p,
+            Key::Vote(p) => *p,
+            Key::LeaderId(p) => *p,
+        }
+    }  
+}
+ 
+impl Value {
+    pub fn version(&self) -> u64 {
+        match self {
+            Value::ContactInfo(n) => n.version,
+            Value::Vote{transaction: _, height} => *height,
+            Value::LeaderId{id: _, leader_id: _, version} => *version,
+        }
+    }
+    pub fn id(&self) -> Key {
+        match self {
+            Value::ContactInfo(n) => Key::ContactInfo(n.id),
+            Value::Vote{transaction, height: _} => Key::Vote(transaction.account_keys[0]),
+            Value::LeaderId{id, leader_id: _, version: _} => Key::LeaderId(*id),
+        }
+    } 
+}
+
 
 impl Crdt {
-    fn insert(&mut self, value: Value, local_time: u64) -> Result<(), CrdtError> {
+    pub fn insert(&mut self, value: Value, local_timestamp: u64) -> Result<(), CrdtError> {
         let key = value.id();
-        if self.table.get(&key).is_none() || (value.version() > self.table[&key].version()) {
-            trace!("{}: insert value.id: {} version: {}", self.id, value.id, value.version);
-            if self.table.get(&value.id).is_none() {
-                inc_new_counter_info!("cluster_info-insert-new_entry", 1, 1);
+        if self.table.get(&key).is_none() || (value.version() > self.table[&key].value.version()) {
+            trace!("insert value.id: {} version: {}", value.id(), value.version());
+            if self.table.get(&value.id()).is_none() {
+                inc_new_counter_info!("crdt-insert-new_entry", 1, 1);
             }
 
-            let stored_value = StoredValue { value, local_time, local_version: self.version };
+            let stored_value = StoredValue { value, local_timestamp, local_version: self.version };
             let _ = self.table.insert(key, stored_value);
             self.version += 1;
             Ok(())
         } else {
             trace!(
-                "{}: INSERT FAILED data: {} new.version: {} me.version: {}",
-                self.id,
+                "INSERT FAILED data: {} new.version: {} me.version: {}",
                 value.id(),
                 value.version(),
-                self.table[&value.id()].version()
+                self.table[&value.id()].value.version()
             );
             Err(CrdtError::InsertFailed)
         } 
     }
 
-    fn update_timestamp(&mut self, id: Key) {
-        //update the liveness table
-        let now = timestamp();
-        self.table.entry(id).map(|e| e.local_time = now);
+    fn update_timestamp(&mut self, id: Key, now: u64) {
+        self.table.get_mut(&id).map(|e| e.local_timestamp = now);
     } 
 
-    /// update all the key types
-    pub fn update_timestamp_for_pubkey(&mut self, pubkey: Pubkey) {
-        self.update_timestamp(NodeInfo(pubkey));
-        self.update_timestamp(Vote(pubkey));
-        self.update_timestamp(LeaderId(pubkey));
+    /// Update the timestamp's of all the values that are assosciated with Pubkey
+    pub fn update_timestamp_for_pubkey(&mut self, pubkey: Pubkey, now: u64) {
+        self.update_timestamp(Key::ContactInfo(pubkey), now);
+        self.update_timestamp(Key::Vote(pubkey), now);
+        self.update_timestamp(Key::LeaderId(pubkey), now);
     }
 
     /// find all the keys that are older then min_ts
@@ -145,7 +180,7 @@ impl Crdt {
                 } else {
                     None
                 }
-            }).collect()
+            }).cloned().collect()
     }
 
     pub fn remove(&mut self, keys: &[Key]) {
@@ -165,9 +200,10 @@ impl Crdt {
    pub fn get_updates_since(&self, min_version: u64, max_number: usize) -> (u64, Vec<(Value, u64)>) {
         let mut items: Vec<_> = self
             .table
+            .iter()
             .filter_map(|(k,x)|  {
                if k.pubkey() != Pubkey::default() && x.local_version > min_version {
-                   let remote = *self.remote.get(&d.id().pubkey()).unwrap_or(&0)
+                   let remote = *self.remote_versions.get(&k.pubkey()).unwrap_or(&0);
                    Some((x, remote))
                } else {
                    None
@@ -175,9 +211,10 @@ impl Crdt {
             })
             .collect();
         items.sort_by_key(|k| k.0.local_version);
-        let updated_data: Vec<(Value, u64)> = out.into_iter().take(max).map(|x| (x.0.value, x.1)).collect();
-        trace!("get updates since response {} {}", v, updated_data.len());
-        (max_updated_node, updated_data)
+        let last = cmp::min(max_number, items.len()) - 1;
+        let max_update_version = items.get(last).map(|i| i.0.local_version).unwrap_or(0);
+        let updates: Vec<(Value, u64)> = items.into_iter().take(max_number).map(|x| (x.0.value.clone(), x.1)).collect();
+        (max_update_version, updates)
     }
 }
 mod test {
