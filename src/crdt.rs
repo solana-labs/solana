@@ -29,24 +29,18 @@
 use bincode::serialized_size;
 use counter::Counter;
 use log::Level;
+use serde::Serialize;
 use solana_program_interface::pubkey::Pubkey;
 use std::cmp;
 use std::collections::HashMap;
-use std::fmt;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use transaction::Transaction;
 
-pub struct Crdt {
-    /// key value hashmap
-    pub table: HashMap<Key, VersionedValue>,
-
-    /// the version of the `table`
-    /// every change to `table` should increase this version number
-    pub version: u64,
-}
+// TODO: Move all CrdtData implementations out of this module.
 
 /// Structure representing a node on the network
+/// * Merge Strategy - Latest version is picked
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ContactInfo {
     pub id: Pubkey,
@@ -63,6 +57,7 @@ pub struct ContactInfo {
     /// latest version picked
     pub version: u64,
 }
+
 impl Default for ContactInfo {
     fn default() -> Self {
         let daddr: SocketAddr = "0.0.0.0:0".parse().unwrap();
@@ -77,42 +72,74 @@ impl Default for ContactInfo {
         }
     }
 }
-/// Key type, after appending to this enum update
-/// * Crdt::update_timestamp_for_pubkey
-#[derive(PartialEq, Hash, Eq, Clone, Debug)]
-pub enum Key {
-    ContactInfo(Pubkey),
-    Vote(Pubkey),
-    LeaderId(Pubkey),
+
+/// TODO, Votes need a height potentially in the userdata
+/// * Merge Strategy - Latest height is picked
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Vote {
+    pub transaction: Transaction,
+    pub height: u64,
 }
 
-impl fmt::Display for Key {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Key::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
-            Key::Vote(_) => write!(f, "Vote({})", self.pubkey()),
-            Key::LeaderId(_) => write!(f, "LeaderId({})", self.pubkey()),
-        }
+/// * Merge Strategy - Latest version is picked
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+struct LeaderId {
+    pub id: Pubkey,
+    pub leader_id: Pubkey,
+    pub version: u64,
+}
+
+pub trait CrdtData {
+    fn version(&self) -> u64;
+    fn id(&self) -> Pubkey;
+}
+
+impl CrdtData for ContactInfo {
+    fn version(&self) -> u64 {
+        self.version
+    }
+
+    fn id(&self) -> Pubkey {
+        self.id
     }
 }
 
-/// Value must correspond to Key
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum Value {
-    /// * Merge Strategy - Latest version is picked
-    ContactInfo(ContactInfo),
-    /// TODO, Votes need a height potentially in the userdata
-    /// * Merge Strategy - Latest height is picked
-    Vote {
-        transaction: Transaction,
-        height: u64,
-    },
-    /// * Merge Strategy - Latest version is picked
-    LeaderId {
-        id: Pubkey,
-        leader_id: Pubkey,
-        version: u64,
-    },
+impl CrdtData for Vote {
+    fn version(&self) -> u64 {
+        self.height
+    }
+
+    fn id(&self) -> Pubkey {
+        self.transaction.account_keys[0]
+    }
+}
+
+impl CrdtData for LeaderId {
+    fn version(&self) -> u64 {
+        self.version
+    }
+
+    fn id(&self) -> Pubkey {
+        self.id
+    }
+}
+
+pub struct VersionedValue<T: CrdtData> {
+    value: T,
+    /// local time when added
+    local_timestamp: u64,
+    /// local crdt version when added
+    local_version: u64,
+}
+
+#[derive(Default)]
+pub struct Crdt<T: CrdtData> {
+    /// key value hashmap
+    pub table: HashMap<Pubkey, VersionedValue<T>>,
+
+    /// the version of the `table`
+    /// every change to `table` should increase this version number
+    pub version: u64,
 }
 
 #[derive(PartialEq, Debug)]
@@ -120,65 +147,11 @@ pub enum CrdtError {
     InsertFailed,
 }
 
-pub struct VersionedValue {
-    value: Value,
-    /// local time when added
-    local_timestamp: u64,
-    /// local crdt version when added
-    local_version: u64,
-}
-
-impl Key {
-    fn pubkey(&self) -> Pubkey {
-        match self {
-            Key::ContactInfo(p) => *p,
-            Key::Vote(p) => *p,
-            Key::LeaderId(p) => *p,
-        }
-    }
-}
-
-impl Value {
-    pub fn version(&self) -> u64 {
-        match self {
-            Value::ContactInfo(n) => n.version,
-            Value::Vote {
-                transaction: _,
-                height,
-            } => *height,
-            Value::LeaderId {
-                id: _,
-                leader_id: _,
-                version,
-            } => *version,
-        }
-    }
-    pub fn id(&self) -> Key {
-        match self {
-            Value::ContactInfo(n) => Key::ContactInfo(n.id),
-            Value::Vote {
-                transaction,
-                height: _,
-            } => Key::Vote(transaction.account_keys[0]),
-            Value::LeaderId {
-                id,
-                leader_id: _,
-                version: _,
-            } => Key::LeaderId(*id),
-        }
-    }
-}
-impl Default for Crdt {
-    fn default() -> Self {
-        Crdt {
-            table: HashMap::new(),
-            version: 0,
-        }
-    }
-}
-
-impl Crdt {
-    pub fn insert(&mut self, value: Value, local_timestamp: u64) -> Result<(), CrdtError> {
+impl<T> Crdt<T>
+where
+    T: CrdtData + Serialize + Clone,
+{
+    pub fn insert(&mut self, value: T, local_timestamp: u64) -> Result<(), CrdtError> {
         let key = value.id();
         if self.table.get(&key).is_none() || (value.version() > self.table[&key].value.version()) {
             trace!(
@@ -209,7 +182,7 @@ impl Crdt {
         }
     }
 
-    fn update_timestamp(&mut self, id: Key, now: u64) {
+    fn update_timestamp(&mut self, id: Pubkey, now: u64) {
         self.table
             .get_mut(&id)
             .map(|e| e.local_timestamp = cmp::max(e.local_timestamp, now));
@@ -217,13 +190,11 @@ impl Crdt {
 
     /// Update the timestamp's of all the values that are assosciated with Pubkey
     pub fn update_timestamp_for_pubkey(&mut self, pubkey: Pubkey, now: u64) {
-        self.update_timestamp(Key::ContactInfo(pubkey), now);
-        self.update_timestamp(Key::Vote(pubkey), now);
-        self.update_timestamp(Key::LeaderId(pubkey), now);
+        self.update_timestamp(pubkey, now);
     }
 
     /// find all the keys that are older or equal to min_ts
-    pub fn find_old_keys(&self, min_ts: u64) -> Vec<Key> {
+    pub fn find_old_keys(&self, min_ts: u64) -> Vec<Pubkey> {
         self.table
             .iter()
             .filter_map(|(k, v)| {
@@ -236,7 +207,7 @@ impl Crdt {
             .collect()
     }
 
-    pub fn remove(&mut self, key: &Key) {
+    pub fn remove(&mut self, key: &Pubkey) {
         self.table.remove(key);
     }
 
@@ -250,19 +221,19 @@ impl Crdt {
     /// * max version - the maximum version that is in the updates
     /// * updates - a vector of (Values, Value's remote update index) that have been changed.  Values
     /// remote update index is the last update index seen from the ContactInfo that is referenced by
-    /// Value::id().pubkey().
+    /// CrdtData::id().
     pub fn get_updates_since(
         &self,
         min_version: u64,
         mut max_bytes: usize,
         remote_versions: &HashMap<Pubkey, u64>,
-    ) -> (u64, Vec<(Value, u64)>) {
+    ) -> (u64, Vec<(T, u64)>) {
         let mut items: Vec<_> = self
             .table
             .iter()
             .filter_map(|(k, x)| {
-                if k.pubkey() != Pubkey::default() && x.local_version >= min_version {
-                    let remote = *remote_versions.get(&k.pubkey()).unwrap_or(&0);
+                if *k != Pubkey::default() && x.local_version >= min_version {
+                    let remote = *remote_versions.get(&k).unwrap_or(&0);
                     Some((x, remote))
                 } else {
                     None
@@ -291,7 +262,7 @@ impl Crdt {
             .get(last_version)
             .map(|i| i.0.local_version)
             .unwrap_or(0);
-        let updates: Vec<(Value, u64)> = items
+        let updates: Vec<_> = items
             .into_iter()
             .take(last)
             .map(|x| (x.0.value.clone(), x.1))
@@ -304,32 +275,11 @@ impl Crdt {
 mod test {
     use super::*;
     use signature::{Keypair, KeypairUtil};
-    use system_transaction::test_tx;
-    #[test]
-    fn test_keys_and_values() {
-        let v1 = Value::LeaderId {
-            id: Pubkey::default(),
-            leader_id: Pubkey::default(),
-            version: 0,
-        };
-        let v2 = Value::ContactInfo(ContactInfo::default());
-        let v3 = Value::Vote {
-            transaction: test_tx(),
-            height: 0,
-        };
-        for v in &[v1, v2, v3] {
-            match (v, v.id()) {
-                (Value::ContactInfo(_), Key::ContactInfo(_)) => (),
-                (Value::Vote { .. }, Key::Vote(_)) => (),
-                (Value::LeaderId { .. }, Key::LeaderId(_)) => (),
-                _ => assert!(false),
-            }
-        }
-    }
+
     #[test]
     fn test_insert() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
@@ -341,10 +291,11 @@ mod test {
         assert_eq!(crdt.table[&val.id()].local_timestamp, 0);
         assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
     }
+
     #[test]
     fn test_update_old() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
@@ -355,16 +306,17 @@ mod test {
         assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
         assert_eq!(crdt.version, 1);
     }
+
     #[test]
     fn test_update_new() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
         };
         assert_eq!(crdt.insert(val, 0), Ok(()));
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 1,
@@ -374,10 +326,11 @@ mod test {
         assert_eq!(crdt.table[&val.id()].local_version, crdt.version - 1);
         assert_eq!(crdt.version, 2);
     }
+
     #[test]
     fn test_update_timestsamp() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
@@ -387,16 +340,17 @@ mod test {
         crdt.update_timestamp(val.id(), 1);
         assert_eq!(crdt.table[&val.id()].local_timestamp, 1);
 
-        crdt.update_timestamp_for_pubkey(val.id().pubkey(), 2);
+        crdt.update_timestamp_for_pubkey(val.id(), 2);
         assert_eq!(crdt.table[&val.id()].local_timestamp, 2);
 
-        crdt.update_timestamp_for_pubkey(val.id().pubkey(), 1);
+        crdt.update_timestamp_for_pubkey(val.id(), 1);
         assert_eq!(crdt.table[&val.id()].local_timestamp, 2);
     }
+
     #[test]
     fn test_find_old_keys() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
@@ -410,7 +364,7 @@ mod test {
     #[test]
     fn test_remove() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
@@ -421,35 +375,38 @@ mod test {
         crdt.remove(&val.id());
         assert!(crdt.find_old_keys(1).is_empty());
     }
+
     #[test]
     fn test_updates_empty() {
-        let crdt = Crdt::default();
+        let crdt: Crdt<LeaderId> = Crdt::default();
         let remotes = HashMap::new();
         assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
         assert_eq!(crdt.get_updates_since(0, 1024, &remotes), (0, vec![]));
     }
+
     #[test]
     fn test_updates_default_key() {
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
+        let val = LeaderId {
             id: Pubkey::default(),
             leader_id: Pubkey::default(),
             version: 0,
         };
         assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
         let mut remotes = HashMap::new();
-        remotes.insert(val.id().pubkey(), 1);
+        remotes.insert(val.id(), 1);
         assert_eq!(crdt.get_updates_since(0, 1024, &remotes), (0, vec![]));
         assert_eq!(crdt.get_updates_since(0, 0, &remotes), (0, vec![]));
         assert_eq!(crdt.get_updates_since(1, 1024, &remotes), (0, vec![]));
     }
+
     #[test]
     fn test_updates_real_key() {
-        let key = Keypair::new();
+        let key = Keypair::new().pubkey();
         let mut crdt = Crdt::default();
-        let val = Value::LeaderId {
-            id: key.pubkey(),
-            leader_id: key.pubkey(),
+        let val = LeaderId {
+            id: key,
+            leader_id: key,
             version: 0,
         };
         assert_eq!(crdt.insert(val.clone(), 1), Ok(()));
@@ -458,7 +415,7 @@ mod test {
             crdt.get_updates_since(0, 1024, &remotes),
             (0, vec![(val.clone(), 0)])
         );
-        remotes.insert(val.id().pubkey(), 1);
+        remotes.insert(val.id(), 1);
         let sz = serialized_size(&(0, vec![(val.clone(), 1)])).unwrap() as usize;
         assert_eq!(crdt.get_updates_since(0, sz, &remotes), (0, vec![(val, 1)]));
         assert_eq!(crdt.get_updates_since(0, sz - 1, &remotes), (0, vec![]));
