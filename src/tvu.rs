@@ -79,7 +79,7 @@ impl Tvu {
     pub fn new(
         keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
-        poh_height: u64,
+        tick_height: u64,
         entry_height: u64,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -103,7 +103,7 @@ impl Tvu {
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &cluster_info,
             window,
-            poh_height,
+            tick_height,
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
@@ -118,7 +118,7 @@ impl Tvu {
             blob_window_receiver,
             ledger_path,
             exit.clone(),
-            poh_height,
+            tick_height,
             entry_height,
             leader_scheduler,
         );
@@ -153,11 +153,11 @@ impl Service for Tvu {
         self.fetch_stage.join()?;
         match self.replicate_stage.join()? {
             Some(ReplicateStageReturnType::LeaderRotation(
-                poh_height,
+                tick_height,
                 entry_height,
                 last_entry_id,
             )) => Ok(Some(TvuReturnType::LeaderRotation(
-                poh_height,
+                tick_height,
                 entry_height,
                 last_entry_id,
             ))),

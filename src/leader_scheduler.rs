@@ -9,6 +9,7 @@ use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use hash::{hash, Hash};
+use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
 #[cfg(test)]
 use solana_program_interface::account::Account;
@@ -299,6 +300,12 @@ impl LeaderScheduler {
             return;
         }
 
+        if let Some(last_seed_height) = self.last_seed_height {
+            if height <= last_seed_height {
+                return;
+            }
+        }
+
         if (height - self.bootstrap_height) % self.seed_rotation_interval == 0 {
             self.generate_schedule(height, bank);
         }
@@ -498,12 +505,13 @@ pub fn make_active_set_entries(
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
+    num_ending_ticks: usize,
 ) -> Vec<Entry> {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 1, *last_tick_id);
     let transfer_entry = Entry::new(last_entry_id, 1, vec![transfer_tx]);
-    let last_entry_id = transfer_entry.id;
+    let mut last_entry_id = transfer_entry.id;
 
     // 2) Create vote entry
     let vote = Vote {
@@ -512,8 +520,13 @@ pub fn make_active_set_entries(
     };
     let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
+    last_entry_id = vote_entry.id;
 
-    vec![transfer_entry, vote_entry]
+    // 3) Create the ending empty ticks
+    let mut txs = vec![transfer_entry, vote_entry];
+    let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
+    txs.extend(empty_ticks);
+    txs
 }
 
 #[cfg(test)]

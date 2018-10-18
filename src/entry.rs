@@ -196,6 +196,10 @@ impl Entry {
         }
         true
     }
+
+    pub fn is_tick(&self) -> bool {
+        self.transactions.is_empty()
+    }
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains

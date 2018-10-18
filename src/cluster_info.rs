@@ -496,7 +496,7 @@ impl ClusterInfo {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn broadcast(
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        poh_height: u64,
+        tick_height: u64,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -542,7 +542,9 @@ impl ClusterInfo {
             // rotation so he can initiate repairs if necessary
             {
                 let ls_lock = leader_scheduler.read().unwrap();
-                let next_leader_id = ls_lock.get_scheduled_leader(poh_height);
+                let next_leader_height = ls_lock.max_height_for_leader(tick_height);
+                let next_leader_id =
+                    next_leader_height.map(|nlh| ls_lock.get_scheduled_leader(nlh));
                 // In the case the next scheduled leader is None, then the write_stage moved
                 // the schedule too far ahead and we no longer are in the known window
                 // (will happen during calculation of the next set of slots every epoch or
@@ -554,10 +556,11 @@ impl ClusterInfo {
                 // scheduled leader, so the next leader will have to rely on avalanche/repairs
                 // to get this last blob, which could cause slowdowns during leader handoffs.
                 // See corresponding issue for repairs in repair() function in window.rs.
-                if next_leader_id.is_some() && next_leader_id != Some(me.id) {
-                    let info_result = broadcast_table
-                        .iter()
-                        .position(|n| n.id == next_leader_id.unwrap());
+                if let Some(Some(next_leader_id)) = next_leader_id {
+                    if next_leader_id == me.id {
+                        break;
+                    }
+                    let info_result = broadcast_table.iter().position(|n| n.id == next_leader_id);
                     if let Some(index) = info_result {
                         orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
                     }

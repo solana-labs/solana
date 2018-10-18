@@ -23,7 +23,7 @@ pub struct PohRecorder {
     // TODO: whe extracting PoH generator into a separate standalone service,
     // use this field for checking timeouts when running as a validator, and as
     // a transmission guard when running as the leader.
-    pub max_poh_height: Option<u64>,
+    pub max_tick_height: Option<u64>,
 }
 
 impl PohRecorder {
@@ -34,78 +34,64 @@ impl PohRecorder {
         bank: Arc<Bank>,
         sender: Sender<Vec<Entry>>,
         last_entry_id: Hash,
-        poh_height: u64,
-        max_poh_height: Option<u64>,
+        tick_height: u64,
+        max_tick_height: Option<u64>,
     ) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, poh_height)));
+        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, tick_height)));
         PohRecorder {
             poh,
             bank,
             sender,
-            max_poh_height,
+            max_tick_height,
         }
     }
 
-    pub fn hash(&self) -> Result<u64> {
+    pub fn hash(&self) -> Result<()> {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes
         let mut poh = self.poh.lock().unwrap();
-        if self.max_poh_height.is_some() {
-            if poh.poh_height < self.last_hash_height().unwrap() {
-                poh.hash();
-                Ok(poh.poh_height)
-            } else {
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-            }
+        if self.check_max_tick_height_reached(&*poh) {
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else {
             poh.hash();
-            Ok(poh.poh_height)
+            Ok(())
         }
     }
 
-    pub fn tick(&self) -> Result<u64> {
+    pub fn tick(&mut self) -> Result<u64> {
         // Register and send the entry out while holding the lock if the max PoH height
         // hasn't been reached.
         // This guarantees PoH order and Entry production and banks LastId queue is the same
         let mut poh = self.poh.lock().unwrap();
-        if let Some(max_poh) = self.max_poh_height {
-            if poh.poh_height < max_poh {
-                self.register_and_send_tick(&mut *poh)
-            } else {
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-            }
+        if self.check_max_tick_height_reached(&*poh) {
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else {
-            self.register_and_send_tick(&mut *poh)
+            self.register_and_send_tick(&mut *poh)?;
+            Ok(poh.tick_height)
         }
     }
 
-    pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<u64> {
+    pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
         // Register and send the entry out while holding the lock.
         // This guarantees PoH order and Entry production and banks LastId queue is the same.
         let mut poh = self.poh.lock().unwrap();
-        if let Some(max_poh) = self.max_poh_height {
-            if poh.poh_height < max_poh {
-                self.record_and_send_txs(&mut *poh, mixin, txs)
-            } else {
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-            }
+        if self.check_max_tick_height_reached(&*poh) {
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else {
-            self.record_and_send_txs(&mut *poh, mixin, txs)
+            self.record_and_send_txs(&mut *poh, mixin, txs)?;
+            Ok(())
         }
     }
 
-    pub fn last_hash_height(&self) -> Option<u64> {
-        // Both record() and a tick() will increment poh_height again,
-        // so stop one before to give some buffer room
-        self.max_poh_height.map(|height| height - 1)
+    fn check_max_tick_height_reached(&self, poh: &Poh) -> bool {
+        if let Some(max_tick_height) = self.max_tick_height {
+            poh.tick_height >= max_tick_height
+        } else {
+            false
+        }
     }
 
-    fn record_and_send_txs(
-        &self,
-        poh: &mut Poh,
-        mixin: Hash,
-        txs: Vec<Transaction>,
-    ) -> Result<u64> {
+    fn record_and_send_txs(&self, poh: &mut Poh, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
         let tick = poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let entry = Entry {
@@ -114,10 +100,10 @@ impl PohRecorder {
             transactions: txs,
         };
         self.sender.send(vec![entry])?;
-        Ok(poh.poh_height)
+        Ok(())
     }
 
-    fn register_and_send_tick(&self, poh: &mut Poh) -> Result<u64> {
+    fn register_and_send_tick(&self, poh: &mut Poh) -> Result<()> {
         let tick = poh.tick();
         self.bank.register_entry_id(&tick.id);
         let entry = Entry {
@@ -126,7 +112,7 @@ impl PohRecorder {
             transactions: vec![],
         };
         self.sender.send(vec![entry])?;
-        Ok(poh.poh_height)
+        Ok(())
     }
 }
 
@@ -145,7 +131,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank, entry_sender, last_id, 0, None);
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, last_id, 0, None);
 
         //send some data
         let h1 = hash(b"hello world!");

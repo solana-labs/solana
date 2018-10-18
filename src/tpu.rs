@@ -63,8 +63,8 @@ impl Tpu {
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
         sigverify_disabled: bool,
-        poh_height: u64,
-        max_poh_height: Option<u64>,
+        tick_height: u64,
+        max_tick_height: Option<u64>,
         last_entry_id: &Hash,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
@@ -79,8 +79,8 @@ impl Tpu {
             verified_receiver,
             tick_duration,
             last_entry_id,
-            poh_height,
-            max_poh_height,
+            tick_height,
+            max_tick_height,
         );
 
         let (write_stage, entry_forwarder) = WriteStage::new(

@@ -32,7 +32,7 @@ pub enum BroadcastStageReturnType {
 #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn broadcast(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    mut poh_height: u64,
+    mut tick_height: u64,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -50,9 +50,9 @@ fn broadcast(
     ventries.push(entries);
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
-        poh_height += entries
+        tick_height += entries
             .iter()
-            .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         ventries.push(entries);
     }
     inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
@@ -138,7 +138,7 @@ fn broadcast(
         // Send blobs out from the window
         ClusterInfo::broadcast(
             &leader_scheduler,
-            poh_height,
+            tick_height,
             &node_info,
             &broadcast_table,
             &window,
@@ -199,7 +199,7 @@ impl BroadcastStage {
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        poh_height: u64,
+        tick_height: u64,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -211,7 +211,7 @@ impl BroadcastStage {
             let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
                 leader_scheduler,
-                poh_height,
+                tick_height,
                 &me,
                 &broadcast_table,
                 &window,
@@ -257,7 +257,7 @@ impl BroadcastStage {
         entry_height: u64,
         receiver: Receiver<Vec<Entry>>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        poh_height: u64,
+        tick_height: u64,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
@@ -271,7 +271,7 @@ impl BroadcastStage {
                     entry_height,
                     &receiver,
                     &leader_scheduler,
-                    poh_height,
+                    tick_height,
                 )
             }).unwrap();
 

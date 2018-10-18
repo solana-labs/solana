@@ -62,7 +62,7 @@ impl ReplicateStage {
         ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
-        poh_height: &mut u64,
+        tick_height: &mut u64,
         entry_height: &mut u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<Hash> {
@@ -86,42 +86,32 @@ impl ReplicateStage {
         let last_entry_id = {
             let mut num_entries_to_write = entries.len();
             for (i, entry) in entries.iter().enumerate() {
-                // max_poh_height is the PoH height at which the next leader rotation will
+                // max_tick_height is the PoH height at which the next leader rotation will
                 // happen. The leader should send an entry such that the total PoH is equal
-                // to max_poh_height - guard.
+                // to max_tick_height - guard.
                 // TODO: Introduce a "guard" for the end of transmission periods, the guard
                 // is assumed to be zero for now.
-                let max_poh_height = {
+                let max_tick_height = {
                     let ls_lock = leader_scheduler.read().unwrap();
-                    ls_lock.max_height_for_leader(*poh_height)
+                    ls_lock.max_height_for_leader(*tick_height)
                 };
 
-                let current_poh_height = *poh_height + entry.num_hashes;
-
-                res = bank.process_entry(&entry);
-                Bank::process_entry_votes(
-                    &bank,
+                res = bank.process_entry(
                     &entry,
-                    current_poh_height,
+                    tick_height,
                     &mut *leader_scheduler.write().unwrap(),
                 );
 
                 // Will run only if leader_scheduler.use_only_bootstrap_leader is false
-                if let Some(max_poh_height) = max_poh_height {
+                if let Some(max_tick_height) = max_tick_height {
                     let ls_lock = leader_scheduler.read().unwrap();
-                    if current_poh_height > max_poh_height {
-                        // TODO: Handle the case where the leader acts badly and sends
-                        // an entry such that the total poh_height > max_poh_height - guard
-                    } else if current_poh_height == max_poh_height {
+                    if *tick_height == max_tick_height {
                         let my_id = keypair.pubkey();
-                        let scheduled_leader = ls_lock
-                            .get_scheduled_leader(current_poh_height)
-                            .expect(
+                        let scheduled_leader = ls_lock.get_scheduled_leader(*tick_height).expect(
                             "Scheduled leader id should never be unknown while processing entries",
                         );
                         cluster_info.write().unwrap().set_leader(scheduled_leader);
                         if my_id == scheduled_leader {
-                            *poh_height = current_poh_height;
                             num_entries_to_write = i + 1;
                             break;
                         }
@@ -137,9 +127,6 @@ impl ReplicateStage {
                     // leader as the leader currently should not be publishing erroneous transactions
                     break;
                 }
-
-                // Commit the poh height if everything went smoothly
-                *poh_height = current_poh_height;
             }
 
             // If leader rotation happened, only write the entries up to leader rotation.
@@ -182,7 +169,7 @@ impl ReplicateStage {
         window_receiver: EntryReceiver,
         ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
-        poh_height: u64,
+        tick_height: u64,
         entry_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
@@ -200,17 +187,17 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
-                let mut poh_height_ = poh_height;
+                let mut tick_height_ = tick_height;
                 let mut last_entry_id = None;
                 loop {
                     let leader_id = leader_scheduler
                         .read()
                         .unwrap()
-                        .get_scheduled_leader(poh_height_)
+                        .get_scheduled_leader(tick_height_)
                         .expect("Scheduled leader id should never be unknown at this point");
                     if leader_id == keypair.pubkey() {
                         return Some(ReplicateStageReturnType::LeaderRotation(
-                            poh_height_,
+                            tick_height_,
                             entry_height_,
                             // We should never start the TPU / this stage on an exact entry that causes leader
                             // rotation (Fullnode should automatically transition on startup if it detects
@@ -235,7 +222,7 @@ impl ReplicateStage {
                         ledger_writer.as_mut(),
                         &keypair,
                         vote_sender,
-                        &mut poh_height_,
+                        &mut tick_height_,
                         &mut entry_height_,
                         &leader_scheduler,
                     ) {
@@ -309,15 +296,16 @@ mod test {
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
-        let bootstrap_entries =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id);
-        last_id = bootstrap_entries.last().unwrap().id;
-        let genesis_poh_height = genesis_entries
+        let active_set_entries =
+            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
+        last_id = active_set_entries.last().unwrap().id;
+        let initial_tick_height = genesis_entries
             .iter()
-            .fold(0, |poh_count, entry| poh_count + entry.num_hashes);
-        let initial_poh_height = genesis_poh_height + bootstrap_entries.len() as u64;
-        let initial_entry_len = (genesis_entries.len() + bootstrap_entries.len()) as u64;
-        ledger_writer.write_entries(bootstrap_entries).unwrap();
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+        let active_set_entries_len = active_set_entries.len() as u64;
+        let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
+        let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
+        ledger_writer.write_entries(active_set_entries).unwrap();
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
@@ -351,12 +339,12 @@ mod test {
             entry_receiver,
             Some(&my_ledger_path),
             exit.clone(),
-            initial_poh_height,
+            initial_tick_height,
             initial_entry_len,
             leader_scheduler.clone(),
         );
 
-        // Send enough entries to trigger leader rotation
+        // Send enough ticks to trigger leader rotation
         let extra_entries = leader_rotation_interval;
         let total_entries_to_send = (bootstrap_height + extra_entries) as usize;
         let num_hashes = 1;
@@ -368,13 +356,14 @@ mod test {
             entries_to_send.push(entry);
         }
 
-        assert!(num_ending_ticks < bootstrap_height);
+        assert!((num_ending_ticks as u64) < bootstrap_height);
 
-        // Only the first genesis entry has num_hashes = 0, every other entry
-        // had num_hashes = 1
-        let expected_entry_height = bootstrap_height + 1;
+        // Add on the only entries that weren't ticks to the bootstrap height to get the
+        // total expected entry length
+        let expected_entry_height =
+            bootstrap_height + initial_non_tick_height + active_set_entries_len;
         let expected_last_id =
-            entries_to_send[(bootstrap_height - initial_poh_height - 1) as usize].id;
+            entries_to_send[(bootstrap_height - initial_tick_height - 1) as usize].id;
         entry_sender.send(entries_to_send).unwrap();
 
         // Wait for replicate_stage to exit and check return value is correct
@@ -396,11 +385,11 @@ mod test {
             .expect("RwLock for LeaderScheduler is still locked");
 
         leader_scheduler.reset();
-        let (_, entry_height, poh_height, _) =
+        let (_, tick_height, entry_height, _) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
 
-        assert_eq!(poh_height, bootstrap_height);
-        assert_eq!(entry_height, expected_entry_length);
+        assert_eq!(tick_height, bootstrap_height);
+        assert_eq!(entry_height, expected_entry_height);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 }

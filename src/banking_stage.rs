@@ -62,8 +62,8 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
-        poh_height: u64,
-        max_poh_height: Option<u64>,
+        tick_height: u64,
+        max_tick_height: Option<u64>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
@@ -71,8 +71,8 @@ impl BankingStage {
             bank.clone(),
             entry_sender,
             *last_entry_id,
-            poh_height,
-            max_poh_height,
+            tick_height,
+            max_tick_height,
         );
         let tick_poh = poh.clone();
         // Tick producer is a headless producer, so when it exits it should notify the banking stage.
@@ -86,7 +86,8 @@ impl BankingStage {
         let tick_producer = Builder::new()
             .name("solana-banking-stage-tick_producer".to_string())
             .spawn(move || {
-                let return_value = match Self::tick_producer(&tick_poh, &config, &poh_exit) {
+                let mut tick_poh_ = tick_poh;
+                let return_value = match Self::tick_producer(&mut tick_poh_, &config, &poh_exit) {
                     Err(Error::SendError) => Some(BankingStageReturnType::ChannelDisconnected),
                     Err(e) => {
                         error!(
@@ -130,6 +131,9 @@ impl BankingStage {
                                     Error::SendError => {
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
+                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
+                                        break Some(BankingStageReturnType::LeaderRotation);
+                                    }
                                     _ => error!("solana-banking-stage-tx {:?}", e),
                                 }
                             }
@@ -165,7 +169,7 @@ impl BankingStage {
     }
 
     fn tick_producer(
-        poh: &PohRecorder,
+        poh: &mut PohRecorder,
         config: &Config,
         poh_exit: &AtomicBool,
     ) -> Result<Option<BankingStageReturnType>> {
@@ -174,14 +178,8 @@ impl BankingStage {
                 Config::Tick(num) => {
                     for _ in 0..num {
                         match poh.hash() {
-                            Ok(height) if Some(height) == poh.last_hash_height() => {
-                                break;
-                            }
                             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                                // Break and Record. We will then call tick_with_max(),
-                                // where then either CASE 1 or CASE 2 must happen, see
-                                // below call to that function for details
-                                break;
+                                return Ok(Some(BankingStageReturnType::LeaderRotation));
                             }
                             Err(e) => {
                                 return Err(e);
@@ -195,20 +193,18 @@ impl BankingStage {
                 }
             }
             match poh.tick() {
-                Ok(height) if Some(height) == poh.max_poh_height => {
-                    // CASE 1: We were successful in recording the last PoH tick at PoH height == max_poh,
-                    // so exit
+                Ok(height) if Some(height) == poh.max_tick_height => {
+                    // CASE 1: We were successful in recording the last tick, so exit
                     return Ok(Some(BankingStageReturnType::LeaderRotation));
                 }
+                Ok(_) => (),
                 Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                    // CASE 2: Somebody beat us by recording a last Entry at PoH height == max_poh,
-                    // so we can just exit
+                    // CASE 2: Somebody beat us by recording the last tick, so we can just exit
                     return Ok(Some(BankingStageReturnType::LeaderRotation));
                 }
                 Err(e) => {
                     return Err(e);
                 }
-                _ => (),
             };
             if poh_exit.load(Ordering::Relaxed) {
                 debug!("tick service exited");
@@ -310,7 +306,10 @@ impl Service for BankingStage {
         let mut return_value = None;
 
         for bank_thread_hdl in self.bank_thread_hdls {
-            return_value = bank_thread_hdl.join()?;
+            let thread_return_value = bank_thread_hdl.join()?;
+            if thread_return_value.is_some() {
+                return_value = thread_return_value;
+            }
         }
 
         let tick_return_value = self.tick_producer.join()?;
@@ -508,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn test_max_poh_height_shutdown() {
+    fn test_max_tick_height_shutdown() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (_verified_sender_, verified_receiver) = channel();
         let max_poh = 10;

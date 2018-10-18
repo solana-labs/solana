@@ -60,7 +60,7 @@ pub trait WindowUtil {
         times: usize,
         consumed: u64,
         received: u64,
-        consumed_poh_height: u64,
+        tick_height: u64,
         max_entry_height: u64,
         leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)>;
@@ -75,7 +75,7 @@ pub trait WindowUtil {
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
-        consumed_poh_height: &mut u64,
+        tick_height: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     );
@@ -103,7 +103,7 @@ impl WindowUtil for Window {
         times: usize,
         consumed: u64,
         received: u64,
-        consumed_poh_height: u64,
+        tick_height: u64,
         max_entry_height: u64,
         leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
     ) -> Vec<(SocketAddr, Vec<u8>)> {
@@ -114,7 +114,7 @@ impl WindowUtil for Window {
             if !ls_lock.use_only_bootstrap_leader {
                 // Calculate the next leader rotation height and check if we are the leader
                 if let Some(next_leader_rotation_height) =
-                    ls_lock.max_height_for_leader(consumed_poh_height)
+                    ls_lock.max_height_for_leader(tick_height)
                 {
                     match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
                         Some(leader_id) if leader_id == *id => is_next_leader = true,
@@ -233,7 +233,7 @@ impl WindowUtil for Window {
         pix: u64,
         consume_queue: &mut Vec<Entry>,
         consumed: &mut u64,
-        consumed_poh_height: &mut u64,
+        tick_height: &mut u64,
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     ) {
@@ -309,8 +309,8 @@ impl WindowUtil for Window {
             // Check that we can get the entries from this blob
             match reconstruct_entries_from_blobs(vec![k_data_blob]) {
                 Ok(entries) => {
-                    for entry in entries.iter() {
-                        *consumed_poh_height += entry.num_hashes;
+                    for entry in &entries {
+                        *tick_height += entry.is_tick() as u64;
                     }
                     consume_queue.extend(entries);
                 }
