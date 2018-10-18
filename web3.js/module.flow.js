@@ -119,7 +119,7 @@ declare module '@solana/web3.js' {
   declare type TokenAndPublicKey = [Token, PublicKey];
 
   declare export class Token {
-    static programId: PublicKey;
+    programId: PublicKey;
     token: PublicKey;
 
     static createNewToken(
