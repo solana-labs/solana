@@ -63,8 +63,8 @@ impl Loader {
         let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        // let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
-        // check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+        let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
+        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         Loader {
             mint,
@@ -128,8 +128,12 @@ impl Program {
             loader.bank.process_transactions(&vec![tx.clone()]),
         );
 
-        // let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-        // check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
+        let tx = Transaction::system_spawn(&program, loader.mint.last_id(), 0);
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
 
         Program { program }
     }
@@ -143,9 +147,6 @@ fn test_transaction_load_native() {
     let name = String::from("noop");
     let userdata = name.as_bytes().to_vec();
     let program = Program::new(&loader, userdata, 300);
-
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program
 
@@ -168,53 +169,8 @@ fn test_transaction_load_native() {
 fn test_program_lua_move_funds() {
     logger::setup();
 
-<<<<<<< HEAD
-    let mint = Mint::new(50);
-    // TODO in a test like this how should the last_id be incremented, as used here it is always the same
-    //      which leads to duplicate tx signature errors
-    let bank = Bank::new(&mint);
-    let loader = Keypair::new();
-    let program = Keypair::new();
-    let from = Keypair::new();
-    let to = Keypair::new().pubkey();
-
-    // allocate, populate, and finalize Lua loader
-
-    let tx = Transaction::system_create(
-        &mint.keypair(),
-        loader.pubkey(),
-        mint.last_id(),
-        1,
-        56, // TODO How does the user know how much space to allocate for what should be an internally known size
-        native_loader::id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let name = String::from("lua_loader");
-    let tx = Transaction::write(
-        &loader,
-        native_loader::id(),
-        0,
-        name.as_bytes().to_vec(),
-        mint.last_id(),
-        0,
-    );
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    // allocate, populate, and finalize user program
-
-    let bytes = r#"
-=======
     let loader = Loader::new_dynamic("lua_loader");
     let userdata = r#"
->>>>>>> Add tictactoe dashboard
             print("Lua Script!")
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
@@ -224,9 +180,6 @@ fn test_program_lua_move_funds() {
     let program = Program::new(&loader, userdata, 300);
     let from = Keypair::new();
     let to = Keypair::new().pubkey();
-
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
     // Call user program with two accounts
 
@@ -305,17 +258,10 @@ fn test_program_bpf_noop_c() {
     );
 }
 
-<<<<<<< HEAD
-    let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    // allocate, populate, and finalize user program
-=======
 #[cfg(feature = "bpf_c")]
 struct TicTacToe {
     game: Keypair,
 }
->>>>>>> Add tictactoe dashboard
 
 #[cfg(feature = "bpf_c")]
 impl TicTacToe {
@@ -512,17 +458,10 @@ fn test_program_bpf_file_tictactoe_c() {
     assert_eq!([4, 0, 0, 0], ttt.game(&loader)[..]); // validate that o won
 }
 
-<<<<<<< HEAD
-    let tx = Transaction::system_spawn(&program, mint.last_id(), 0);
-    check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-    // Call user program
-=======
 #[cfg(feature = "bpf_c")]
 #[test]
 fn test_program_bpf_file_tictactoe_dashboard_c() {
     logger::setup();
->>>>>>> Add tictactoe dashboard
 
     let loader = Loader::new_dynamic("bpf_loader");
     let name = String::from("tictactoe_c");
