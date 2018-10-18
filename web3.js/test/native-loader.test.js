@@ -9,7 +9,7 @@ import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
 import {newAccountWithTokens} from './new-account-with-tokens';
 
-test('unstable - load', async () => {
+test('load noop program', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
@@ -25,6 +25,6 @@ test('unstable - load', async () => {
     programId: noopProgramId,
   });
   const signature = await connection.sendTransaction(from, noopTransaction);
-  expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+  await expect(connection.confirmTransaction(signature)).resolves.toBe(true);
 });
 

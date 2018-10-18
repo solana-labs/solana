@@ -69,6 +69,7 @@ declare module '@solana/web3.js' {
     ): Transaction;
     static move(from: PublicKey, to: PublicKey, amount: number): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
+    static spawn(programId: PublicKey): Transaction;
   }
 
   // === src/transaction.js ===
