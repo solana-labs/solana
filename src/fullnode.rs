@@ -88,8 +88,8 @@ pub struct Fullnode {
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
-    rpc_service: JsonRpcService,
-    rpc_pubsub_service: PubSubService,
+    rpc_service: Option<JsonRpcService>,
+    rpc_pubsub_service: Option<PubSubService>,
     ncp: Ncp,
     bank: Option<Arc<Bank>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -103,6 +103,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     requests_socket: UdpSocket,
     respond_socket: UdpSocket,
+    rpc_port: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -273,21 +274,8 @@ impl Fullnode {
             ClusterInfo::new(node.info).expect("ClusterInfo::new"),
         ));
 
-        // Use custom RPC port, if provided (`Some(port)`)
-        // RPC port may be any open port on the node
-        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
-        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
-        //  Rpc and RpcPubsub serivces. Useful for tests.
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
-        // TODO: The RPC service assumes that there is a drone running on the leader
-        // Drone location/id will need to be handled a different way as soon as leader rotation begins
-        let rpc_service = JsonRpcService::new(&bank, &cluster_info, rpc_addr, exit.clone());
-
-        let rpc_pubsub_addr = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::from(0)),
-            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
-        );
-        let rpc_pubsub_service = PubSubService::new(&bank, rpc_pubsub_addr, exit.clone());
+        let (rpc_service, rpc_pubsub_service) =
+            Self::startup_rpc_services(rpc_port, &bank, &cluster_info);
 
         let ncp = Ncp::new(
             &cluster_info,
@@ -319,7 +307,6 @@ impl Fullnode {
             let tvu = Tvu::new(
                 keypair.clone(),
                 &bank,
-                tick_height,
                 entry_height,
                 cluster_info.clone(),
                 shared_window.clone(),
@@ -388,8 +375,8 @@ impl Fullnode {
             sigverify_disabled,
             rpu,
             ncp,
-            rpc_service,
-            rpc_pubsub_service,
+            rpc_service: Some(rpc_service),
+            rpc_pubsub_service: Some(rpc_pubsub_service),
             node_role,
             ledger_path: ledger_path.to_owned(),
             exit,
@@ -400,6 +387,7 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             requests_socket: node.sockets.requests,
             respond_socket: node.sockets.respond,
+            rpc_port,
         }
     }
 
@@ -408,6 +396,16 @@ impl Fullnode {
         if self.rpu.is_some() {
             let old_rpu = self.rpu.take().unwrap();
             old_rpu.close()?;
+        }
+
+        if self.rpc_service.is_some() {
+            let old_rpc_service = self.rpc_service.take().unwrap();
+            old_rpc_service.close()?;
+        }
+
+        if self.rpc_pubsub_service.is_some() {
+            let old_rpc_pubsub_service = self.rpc_pubsub_service.take().unwrap();
+            old_rpc_pubsub_service.close()?;
         }
 
         // Correctness check: Ensure that references to the bank and leader scheduler are no
@@ -464,8 +462,8 @@ impl Fullnode {
             .unwrap()
             .set_leader(scheduled_leader);
 
-        // Make a new RPU to serve requests out of the new bank we've created
-        // instead of the old one
+        // Spin up new versions of all the services that relied on the bank, passing in the
+        // new bank
         self.rpu = Some(Rpu::new(
             &new_bank,
             self.requests_socket
@@ -476,38 +474,42 @@ impl Fullnode {
                 .expect("Failed to clone respond socket"),
         ));
 
+        let (rpc_service, rpc_pubsub_service) =
+            Self::startup_rpc_services(self.rpc_port, &new_bank, &self.cluster_info);
+        self.rpc_service = Some(rpc_service);
+        self.rpc_pubsub_service = Some(rpc_pubsub_service);
+        self.bank = Some(new_bank);
+
         // In the rare case that the leader exited on a multiple of seed_rotation_interval
         // when the new leader schedule was being generated, and there are no other validators
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
         if scheduled_leader == self.keypair.pubkey() {
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
-            return Ok(());
+            Ok(())
+        } else {
+            let tvu = Tvu::new(
+                self.keypair.clone(),
+                self.bank.as_ref().unwrap(),
+                entry_height,
+                self.cluster_info.clone(),
+                self.shared_window.clone(),
+                self.replicate_socket
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                    .collect(),
+                self.repair_socket
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                self.retransmit_socket
+                    .try_clone()
+                    .expect("Failed to clone retransmit socket"),
+                Some(&self.ledger_path),
+            );
+            let validator_state = ValidatorServices::new(tvu);
+            self.node_role = Some(NodeRole::Validator(validator_state));
+            Ok(())
         }
-
-        let tvu = Tvu::new(
-            self.keypair.clone(),
-            &new_bank,
-            tick_height,
-            entry_height,
-            self.cluster_info.clone(),
-            self.shared_window.clone(),
-            self.replicate_socket
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
-                .collect(),
-            self.repair_socket
-                .try_clone()
-                .expect("Failed to clone repair socket"),
-            self.retransmit_socket
-                .try_clone()
-                .expect("Failed to clone retransmit socket"),
-            Some(&self.ledger_path),
-        );
-        let validator_state = ValidatorServices::new(tvu);
-        self.node_role = Some(NodeRole::Validator(validator_state));
-        self.bank = Some(new_bank);
-        Ok(())
     }
 
     fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_entry_id: Hash) {
@@ -597,6 +599,12 @@ impl Fullnode {
         if let Some(ref rpu) = self.rpu {
             rpu.exit();
         }
+        if let Some(ref rpc_service) = self.rpc_service {
+            rpc_service.exit();
+        }
+        if let Some(ref rpc_pubsub_service) = self.rpc_pubsub_service {
+            rpc_pubsub_service.exit();
+        }
         match self.node_role {
             Some(NodeRole::Leader(ref leader_services)) => leader_services.exit(),
             Some(NodeRole::Validator(ref validator_services)) => validator_services.exit(),
@@ -630,6 +638,31 @@ impl Fullnode {
     pub fn get_leader_scheduler(&self) -> Option<&Arc<RwLock<LeaderScheduler>>> {
         self.bank.as_ref().map(|bank| &bank.leader_scheduler)
     }
+
+    fn startup_rpc_services(
+        rpc_port: Option<u16>,
+        bank: &Arc<Bank>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) -> (JsonRpcService, PubSubService) {
+        // Use custom RPC port, if provided (`Some(port)`)
+        // RPC port may be any open port on the node
+        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
+        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
+        //  Rpc and RpcPubsub serivces. Useful for tests.
+
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
+        let rpc_pubsub_addr = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::from(0)),
+            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
+        );
+
+        // TODO: The RPC service assumes that there is a drone running on the leader
+        // Drone location/id will need to be handled a different way as soon as leader rotation begins
+        (
+            JsonRpcService::new(bank, cluster_info, rpc_addr),
+            PubSubService::new(bank, rpc_pubsub_addr),
+        )
+    }
 }
 
 impl Service for Fullnode {
@@ -639,9 +672,14 @@ impl Service for Fullnode {
         if let Some(rpu) = self.rpu {
             rpu.join()?;
         }
+        if let Some(rpc_service) = self.rpc_service {
+            rpc_service.join()?;
+        }
+        if let Some(rpc_pubsub_service) = self.rpc_pubsub_service {
+            rpc_pubsub_service.join()?;
+        }
+
         self.ncp.join()?;
-        self.rpc_service.join()?;
-        self.rpc_pubsub_service.join()?;
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
