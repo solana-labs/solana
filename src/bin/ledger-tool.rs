@@ -141,8 +141,7 @@ fn main() {
                 }
                 last_id = entry.id;
 
-                if let Err(e) = bank.process_entry(&entry)
-                {
+                if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

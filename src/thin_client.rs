@@ -451,10 +451,14 @@ mod tests {
         let leader_data = leader.info.clone();
 
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
 
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
@@ -465,7 +469,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));
@@ -498,10 +501,15 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("bad_sig", &alice);
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
 
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -513,7 +521,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -559,13 +566,19 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
+
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
@@ -576,7 +589,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(300));
@@ -623,13 +635,19 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
+
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
@@ -640,7 +658,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));

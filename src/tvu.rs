@@ -40,7 +40,6 @@ use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
 use hash::Hash;
-use leader_scheduler::LeaderScheduler;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -89,7 +88,6 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -110,7 +108,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            leader_scheduler.clone(),
+            bank.leader_scheduler.clone(),
         );
 
         let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
@@ -121,7 +119,6 @@ impl Tvu {
             exit.clone(),
             tick_height,
             entry_height,
-            leader_scheduler,
         );
 
         let ledger_write_stage = LedgerWriteStage::new(ledger_path, ledger_entry_receiver, None);
@@ -255,7 +252,12 @@ pub mod tests {
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
         let replicate_addr = target1.info.contact_info.tvu;
-        let bank = Arc::new(Bank::new(&mint));
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_id,
+        )));
+        let mut bank = Bank::new(&mint);
+        bank.leader_scheduler = leader_scheduler;
+        let bank = Arc::new(bank);
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
@@ -275,9 +277,6 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_id,
-            ))),
         );
 
         let mut alice_ref_balance = starting_balance;

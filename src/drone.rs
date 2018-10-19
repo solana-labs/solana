@@ -235,6 +235,7 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{SocketAddr, UdpSocket};
+    use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use thin_client::ThinClient;
 
@@ -317,7 +318,11 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader.info.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
@@ -333,7 +338,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
 

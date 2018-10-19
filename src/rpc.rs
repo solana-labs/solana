@@ -590,7 +590,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("rpc_send_tx", &alice);
@@ -602,6 +602,12 @@ mod tests {
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
+
         let server = Fullnode::new_with_bank(
             leader_keypair,
             bank,
@@ -612,7 +618,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));

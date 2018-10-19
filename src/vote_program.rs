@@ -4,7 +4,7 @@
 use bank::Bank;
 use bincode::deserialize;
 use leader_scheduler::LeaderScheduler;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std;
 use transaction::Transaction;
 

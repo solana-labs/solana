@@ -883,8 +883,10 @@ fn test_leader_to_validator_transition() {
 
     // Check the ledger to make sure it's the right height, we should've
     // transitioned after tick_height == bootstrap_height
-    let (_, tick_height, _, _) =
-        Fullnode::new_bank_from_ledger(&leader_ledger_path, &mut LeaderScheduler::default());
+    let (_, tick_height, _, _) = Fullnode::new_bank_from_ledger(
+        &leader_ledger_path,
+        Arc::new(RwLock::new(LeaderScheduler::default())),
+    );
 
     assert_eq!(tick_height, bootstrap_height);
 
@@ -1338,8 +1340,13 @@ fn test_full_leader_validator_network() {
         num_reached_target_height = 0;
         for n in nodes.iter() {
             let node_lock = n.read().unwrap();
-            let ls_lock = &node_lock.leader_scheduler;
-            if let Some(sh) = ls_lock.read().unwrap().last_seed_height {
+            let ls_lock = node_lock.get_leader_scheduler();
+            if let Some(sh) = ls_lock
+                .expect("Expect leader scheduler to exist")
+                .read()
+                .unwrap()
+                .last_seed_height
+            {
                 if sh >= target_height {
                     num_reached_target_height += 1;
                 }

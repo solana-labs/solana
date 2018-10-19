@@ -3,7 +3,7 @@
 use bincode::{deserialize, serialize};
 use hash::Hash;
 use signature::Keypair;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
 use vote_program::{Vote, VoteProgram};
 

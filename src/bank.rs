@@ -30,7 +30,7 @@ use std;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
@@ -174,7 +174,7 @@ pub struct Bank {
 
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
-    leader_scheduler: RwLock<LeaderScheduler>,
+    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
     // The number of ticks that have elapsed since genesis
     tick_height: Mutex<u64>,
@@ -190,7 +190,7 @@ impl Default for Bank {
             finality_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
-            leader_scheduler: RwLock::new(LeaderScheduler::default()),
+            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             tick_height: Mutex::new(0),
         }
     }

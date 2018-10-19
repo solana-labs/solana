@@ -1388,7 +1388,6 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use vote_program::Vote;
     use cluster_info::{
         ClusterInfo, ClusterInfoError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE,
         GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
@@ -1408,6 +1407,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
+    use vote_program::Vote;
     use window::default_window;
 
     #[test]

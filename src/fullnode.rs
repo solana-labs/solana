@@ -85,14 +85,13 @@ pub enum FullnodeReturnType {
 
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
     rpc_service: JsonRpcService,
     rpc_pubsub_service: PubSubService,
     ncp: Ncp,
-    bank: Arc<Bank>,
+    bank: Option<Arc<Bank>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
     sigverify_disabled: bool,
@@ -135,11 +134,13 @@ impl Fullnode {
         keypair: Keypair,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
-        mut leader_scheduler: LeaderScheduler,
+        leader_scheduler: LeaderScheduler,
     ) -> Self {
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
+
         info!("creating bank...");
         let (bank, tick_height, entry_height, ledger_tail) =
-            Self::new_bank_from_ledger(ledger_path, &mut leader_scheduler);
+            Self::new_bank_from_ledger(ledger_path, leader_scheduler);
 
         info!("creating networking stack...");
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
@@ -162,7 +163,6 @@ impl Fullnode {
             leader_info.as_ref(),
             ledger_path,
             sigverify_disabled,
-            leader_scheduler,
             None,
         );
 
@@ -245,7 +245,6 @@ impl Fullnode {
         bootstrap_leader_info_option: Option<&NodeInfo>,
         ledger_path: &str,
         sigverify_disabled: bool,
-        leader_scheduler: LeaderScheduler,
         rpc_port: Option<u16>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
@@ -298,7 +297,6 @@ impl Fullnode {
             exit.clone(),
         );
 
-        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let keypair = Arc::new(keypair);
 
         // Insert the bootstrap leader info, should only be None if this node
@@ -308,7 +306,8 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let scheduled_leader = leader_scheduler
+        let scheduled_leader = bank
+            .leader_scheduler
             .read()
             .unwrap()
             .get_scheduled_leader(tick_height)
@@ -338,13 +337,12 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
-                leader_scheduler.clone(),
             );
             let validator_state = ValidatorServices::new(tvu);
             Some(NodeRole::Validator(validator_state))
         } else {
             let max_tick_height = {
-                let ls_lock = leader_scheduler.read().unwrap();
+                let ls_lock = bank.leader_scheduler.read().unwrap();
                 ls_lock.max_height_for_leader(tick_height)
             };
             // Start in leader mode.
@@ -374,7 +372,7 @@ impl Fullnode {
                 shared_window.clone(),
                 entry_height,
                 entry_receiver,
-                leader_scheduler.clone(),
+                bank.leader_scheduler.clone(),
                 tick_height,
                 tpu_exit,
             );
@@ -386,7 +384,7 @@ impl Fullnode {
             keypair,
             cluster_info,
             shared_window,
-            bank,
+            bank: Some(bank),
             sigverify_disabled,
             rpu,
             ncp,
@@ -402,27 +400,56 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             requests_socket: node.sockets.requests,
             respond_socket: node.sockets.respond,
-            leader_scheduler,
         }
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        let (scheduled_leader, tick_height, entry_height, last_entry_id) = {
-            let mut ls_lock = self.leader_scheduler.write().unwrap();
-            // Clear the leader scheduler
-            ls_lock.reset();
+        // Close down any services that could have a reference to the bank
+        if self.rpu.is_some() {
+            let old_rpu = self.rpu.take().unwrap();
+            old_rpu.close()?;
+        }
 
+        // Correctness check: Ensure that references to the bank and leader scheduler are no
+        // longer held by any running thread
+        let bank = match Arc::try_unwrap(
+            self.bank
+                .take()
+                .expect("Bank does not exist during leader to validator transition"),
+        ) {
+            Ok(bank) => bank,
+            Err(_) => panic!("References to Bank still exist"),
+        };
+
+        let mut leader_scheduler = match Arc::try_unwrap(bank.leader_scheduler) {
+            Ok(leader_scheduler) => leader_scheduler
+                .into_inner()
+                .expect("RwLock for bank's LeaderScheduler is still locked"),
+            Err(_) => panic!("References to LeaderScheduler still exist"),
+        };
+
+        // Clear the leader scheduler
+        leader_scheduler.reset();
+
+        let (new_bank, scheduled_leader, tick_height, entry_height, last_entry_id) = {
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
-            let (bank, tick_height, entry_height, ledger_tail) =
-                Self::new_bank_from_ledger(&self.ledger_path, &mut *ls_lock);
+            let (new_bank, tick_height, entry_height, ledger_tail) = Self::new_bank_from_ledger(
+                &self.ledger_path,
+                Arc::new(RwLock::new(leader_scheduler)),
+            );
 
-            self.bank = Arc::new(bank);
+            let new_bank = Arc::new(new_bank);
+            let scheduled_leader = new_bank
+                .leader_scheduler
+                .read()
+                .unwrap()
+                .get_scheduled_leader(entry_height)
+                .expect("Scheduled leader should exist after rebuilding bank");
 
             (
-                ls_lock
-                    .get_scheduled_leader(entry_height)
-                    .expect("Scheduled leader should exist after rebuilding bank"),
+                new_bank,
+                scheduled_leader,
                 tick_height,
                 entry_height,
                 ledger_tail
@@ -439,19 +466,15 @@ impl Fullnode {
 
         // Make a new RPU to serve requests out of the new bank we've created
         // instead of the old one
-        if self.rpu.is_some() {
-            let old_rpu = self.rpu.take().unwrap();
-            old_rpu.close()?;
-            self.rpu = Some(Rpu::new(
-                &self.bank,
-                self.requests_socket
-                    .try_clone()
-                    .expect("Failed to clone requests socket"),
-                self.respond_socket
-                    .try_clone()
-                    .expect("Failed to clone respond socket"),
-            ));
-        }
+        self.rpu = Some(Rpu::new(
+            &new_bank,
+            self.requests_socket
+                .try_clone()
+                .expect("Failed to clone requests socket"),
+            self.respond_socket
+                .try_clone()
+                .expect("Failed to clone respond socket"),
+        ));
 
         // In the rare case that the leader exited on a multiple of seed_rotation_interval
         // when the new leader schedule was being generated, and there are no other validators
@@ -464,7 +487,7 @@ impl Fullnode {
 
         let tvu = Tvu::new(
             self.keypair.clone(),
-            &self.bank,
+            &new_bank,
             tick_height,
             entry_height,
             self.cluster_info.clone(),
@@ -480,10 +503,10 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone retransmit socket"),
             Some(&self.ledger_path),
-            self.leader_scheduler.clone(),
         );
         let validator_state = ValidatorServices::new(tvu);
         self.node_role = Some(NodeRole::Validator(validator_state));
+        self.bank = Some(new_bank);
         Ok(())
     }
 
@@ -493,14 +516,19 @@ impl Fullnode {
             .unwrap()
             .set_leader(self.keypair.pubkey());
 
+        let bank = match self.bank {
+            Some(ref bank) => bank,
+            None => panic!("Bank does not exist during validator to leader transition"),
+        };
+
         let max_tick_height = {
-            let ls_lock = self.leader_scheduler.read().unwrap();
+            let ls_lock = bank.leader_scheduler.read().unwrap();
             ls_lock.max_height_for_leader(tick_height)
         };
 
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             self.keypair.clone(),
-            &self.bank,
+            &bank,
             &self.cluster_info,
             Default::default(),
             self.transaction_sockets
@@ -525,7 +553,7 @@ impl Fullnode {
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
-            self.leader_scheduler.clone(),
+            bank.leader_scheduler.clone(),
             tick_height,
             tpu_exit,
         );
@@ -583,8 +611,10 @@ impl Fullnode {
 
     pub fn new_bank_from_ledger(
         ledger_path: &str,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Bank, u64, u64, Vec<Entry>) {
-        let bank = Bank::new_with_builtin_programs();
+        let mut bank = Bank::new_with_builtin_programs();
+        bank.leader_scheduler = leader_scheduler;
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
@@ -595,6 +625,10 @@ impl Fullnode {
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
         (bank, tick_height, entry_height, ledger_tail)
+    }
+
+    pub fn get_leader_scheduler(&self) -> Option<&Arc<RwLock<LeaderScheduler>>> {
+        self.bank.as_ref().map(|bank| &bank.leader_scheduler)
     }
 }
 
@@ -641,7 +675,7 @@ mod tests {
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use streamer::responder;
 
     #[test]
@@ -649,10 +683,15 @@ mod tests {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
         let (mint, validator_ledger_path) = create_tmp_genesis("validator_exit", 10_000);
-        let bank = Bank::new(&mint);
+        let mut bank = Bank::new(&mint);
         let entry = tn.info.clone();
         let genesis_entries = &mint.create_entries();
         let entry_height = genesis_entries.len() as u64;
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            entry.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
 
         let v = Fullnode::new_with_bank(
             keypair,
@@ -664,7 +703,6 @@ mod tests {
             Some(&entry),
             &validator_ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(entry.id),
             Some(0),
         );
         v.close().unwrap();
@@ -681,11 +719,17 @@ mod tests {
                 let (mint, validator_ledger_path) =
                     create_tmp_genesis(&format!("validator_parallel_exit_{}", i), 10_000);
                 ledger_paths.push(validator_ledger_path.clone());
-                let bank = Bank::new(&mint);
+                let mut bank = Bank::new(&mint);
                 let entry = tn.info.clone();
 
                 let genesis_entries = &mint.create_entries();
                 let entry_height = genesis_entries.len() as u64;
+
+                let leader_scheduler = Arc::new(RwLock::new(
+                    LeaderScheduler::from_bootstrap_leader(entry.id),
+                ));
+                bank.leader_scheduler = leader_scheduler;
+
                 Fullnode::new_with_bank(
                     keypair,
                     bank,
@@ -696,7 +740,6 @@ mod tests {
                     Some(&entry),
                     &validator_ledger_path,
                     false,
-                    LeaderScheduler::from_bootstrap_leader(entry.id),
                     Some(0),
                 )
             }).collect();
@@ -991,7 +1034,7 @@ mod tests {
         // transitioned after tick_height = bootstrap_height.
         let (_, tick_height, entry_height, _) = Fullnode::new_bank_from_ledger(
             &validator_ledger_path,
-            &mut LeaderScheduler::new(&leader_scheduler_config),
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         );
 
         assert_eq!(tick_height, bootstrap_height);
