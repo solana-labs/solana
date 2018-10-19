@@ -21,6 +21,7 @@ pub enum BudgetError {
     FailedWitness,
     UserdataTooSmall,
     UserdataDeserializeFailure,
+    UnsignedKey,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -49,11 +50,14 @@ impl BudgetState {
         &mut self,
         tx: &Transaction,
         instruction_index: usize,
-        account: &mut [&mut Account],
+        accounts: &mut [&mut Account],
     ) -> Result<(), BudgetError> {
         let mut final_payment = None;
         if let Some(ref mut budget) = self.pending_budget {
-            let key = tx.key(instruction_index, 0).unwrap();
+            let key = match tx.signed_key(instruction_index, 0) {
+                None => return Err(BudgetError::UnsignedKey),
+                Some(key) => key,
+            };
             budget.apply_witness(&Witness::Signature, key);
             final_payment = budget.final_payment();
         }
@@ -64,8 +68,8 @@ impl BudgetState {
                 return Err(BudgetError::DestinationMissing);
             }
             self.pending_budget = None;
-            account[1].tokens -= payment.tokens;
-            account[2].tokens += payment.tokens;
+            accounts[1].tokens -= payment.tokens;
+            accounts[2].tokens += payment.tokens;
         }
         Ok(())
     }
@@ -83,7 +87,10 @@ impl BudgetState {
         let mut final_payment = None;
 
         if let Some(ref mut budget) = self.pending_budget {
-            let key = tx.key(instruction_index, 0).unwrap();
+            let key = match tx.signed_key(instruction_index, 0) {
+                None => return Err(BudgetError::UnsignedKey),
+                Some(key) => key,
+            };
             budget.apply_witness(&Witness::Timestamp(dt), key);
             final_payment = budget.final_payment();
         }
@@ -298,6 +305,85 @@ mod test {
             0,
         );
         assert!(process_transaction(&tx, &mut accounts).is_err());
+    }
+
+    #[test]
+    fn test_unsigned_witness_key() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetState::id()),
+            Account::new(0, 512, BudgetState::id()),
+            Account::new(0, 0, BudgetState::id()),
+        ];
+
+        // Initialize BudgetState
+        let from = Keypair::new();
+        let contract = Keypair::new().pubkey();
+        let to = Keypair::new().pubkey();
+        let witness = Keypair::new().pubkey();
+        let tx = Transaction::budget_new_when_signed(
+            &from,
+            to,
+            contract,
+            witness,
+            None,
+            1,
+            Hash::default(),
+        );
+        process_transaction(&tx, &mut accounts).unwrap();
+
+        // Attack! Part 1: Sign a witness transaction with a random key.
+        let rando = Keypair::new();
+        let mut tx = Transaction::budget_new_signature(&rando, contract, to, Hash::default());
+
+        // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
+        tx.account_keys.push(from.pubkey());
+        tx.instructions[0].accounts[0] = 3;
+
+        // Ensure the transaction fails because of the unsigned key.
+        assert_eq!(
+            process_transaction(&tx, &mut accounts),
+            Err(BudgetError::UnsignedKey)
+        );
+    }
+
+    #[test]
+    fn test_unsigned_timestamp() {
+        let mut accounts = vec![
+            Account::new(1, 0, BudgetState::id()),
+            Account::new(0, 512, BudgetState::id()),
+            Account::new(0, 0, BudgetState::id()),
+        ];
+
+        // Initialize BudgetState
+        let from = Keypair::new();
+        let contract = Keypair::new().pubkey();
+        let to = Keypair::new().pubkey();
+        let dt = Utc::now();
+        let tx = Transaction::budget_new_on_date(
+            &from,
+            to,
+            contract,
+            dt,
+            from.pubkey(),
+            None,
+            1,
+            Hash::default(),
+        );
+        process_transaction(&tx, &mut accounts).unwrap();
+
+        // Attack! Part 1: Sign a timestamp transaction with a random key.
+        let rando = Keypair::new();
+        let mut tx = Transaction::budget_new_timestamp(&rando, contract, to, dt, Hash::default());
+
+        // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
+        tx.account_keys.push(from.pubkey());
+        tx.instructions[0].accounts[0] = 3;
+
+        // Ensure the transaction fails because of the unsigned key.
+        assert_eq!(
+            process_transaction(&tx, &mut accounts),
+            Err(BudgetError::UnsignedKey)
+        );
     }
 
     #[test]
