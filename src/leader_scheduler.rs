@@ -238,7 +238,7 @@ impl LeaderScheduler {
         }
     }
 
-    // Let Leader X be the leader at the input "height". This function returns the
+    // Let Leader X be the leader at the input tick height. This function returns the
     // the PoH height at which Leader X's slot ends.
     pub fn max_height_for_leader(&self, height: u64) -> Option<u64> {
         if self.use_only_bootstrap_leader || self.get_scheduled_leader(height).is_none() {

@@ -198,10 +198,6 @@ impl BankingStage {
                     return Ok(Some(BankingStageReturnType::LeaderRotation));
                 }
                 Ok(_) => (),
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                    // CASE 2: Somebody beat us by recording the last tick, so we can just exit
-                    return Ok(Some(BankingStageReturnType::LeaderRotation));
-                }
                 Err(e) => {
                     return Err(e);
                 }
@@ -506,18 +502,20 @@ mod tests {
         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
     }
 
+    // Test that when the max_tick_height is reached, the banking stage exits
+    // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let (_verified_sender_, verified_receiver) = channel();
-        let max_poh = 10;
+        let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
             &bank.last_id(),
             0,
-            Some(max_poh),
+            Some(max_tick_height),
         );
         assert_eq!(
             banking_stage.join().unwrap(),
