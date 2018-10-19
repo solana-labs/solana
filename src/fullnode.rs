@@ -77,6 +77,7 @@ impl ValidatorServices {
     }
 }
 
+#[derive(Debug)]
 pub enum FullnodeReturnType {
     LeaderToValidatorRotation,
     ValidatorToLeaderRotation,
@@ -137,7 +138,7 @@ impl Fullnode {
         mut leader_scheduler: LeaderScheduler,
     ) -> Self {
         info!("creating bank...");
-        let (bank, entry_height, ledger_tail) =
+        let (bank, tick_height, entry_height, ledger_tail) =
             Self::new_bank_from_ledger(ledger_path, &mut leader_scheduler);
 
         info!("creating networking stack...");
@@ -154,6 +155,7 @@ impl Fullnode {
         let server = Self::new_with_bank(
             keypair,
             bank,
+            tick_height,
             entry_height,
             &ledger_tail,
             node,
@@ -236,6 +238,7 @@ impl Fullnode {
     pub fn new_with_bank(
         keypair: Keypair,
         bank: Bank,
+        tick_height: u64,
         entry_height: u64,
         ledger_tail: &[Entry],
         node: Node,
@@ -308,7 +311,7 @@ impl Fullnode {
         let scheduled_leader = leader_scheduler
             .read()
             .unwrap()
-            .get_scheduled_leader(entry_height)
+            .get_scheduled_leader(tick_height)
             .expect("Leader not known after processing bank");
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
@@ -317,6 +320,7 @@ impl Fullnode {
             let tvu = Tvu::new(
                 keypair.clone(),
                 &bank,
+                tick_height,
                 entry_height,
                 cluster_info.clone(),
                 shared_window.clone(),
@@ -339,6 +343,10 @@ impl Fullnode {
             let validator_state = ValidatorServices::new(tvu);
             Some(NodeRole::Validator(validator_state))
         } else {
+            let max_tick_height = {
+                let ls_lock = leader_scheduler.read().unwrap();
+                ls_lock.max_height_for_leader(tick_height)
+            };
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                 keypair.clone(),
@@ -352,9 +360,9 @@ impl Fullnode {
                     .collect(),
                 ledger_path,
                 sigverify_disabled,
-                entry_height,
+                tick_height,
+                max_tick_height,
                 last_entry_id,
-                leader_scheduler.clone(),
             );
 
             let broadcast_stage = BroadcastStage::new(
@@ -367,6 +375,7 @@ impl Fullnode {
                 entry_height,
                 entry_receiver,
                 leader_scheduler.clone(),
+                tick_height,
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -398,14 +407,14 @@ impl Fullnode {
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        let (scheduled_leader, entry_height) = {
+        let (scheduled_leader, tick_height, entry_height, last_entry_id) = {
             let mut ls_lock = self.leader_scheduler.write().unwrap();
             // Clear the leader scheduler
             ls_lock.reset();
 
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
-            let (bank, entry_height, _) =
+            let (bank, tick_height, entry_height, ledger_tail) =
                 Self::new_bank_from_ledger(&self.ledger_path, &mut *ls_lock);
 
             self.bank = Arc::new(bank);
@@ -414,7 +423,12 @@ impl Fullnode {
                 ls_lock
                     .get_scheduled_leader(entry_height)
                     .expect("Scheduled leader should exist after rebuilding bank"),
+                tick_height,
                 entry_height,
+                ledger_tail
+                    .last()
+                    .expect("Expected at least one entry in the ledger")
+                    .id,
             )
         };
 
@@ -439,9 +453,19 @@ impl Fullnode {
             ));
         }
 
+        // In the rare case that the leader exited on a multiple of seed_rotation_interval
+        // when the new leader schedule was being generated, and there are no other validators
+        // in the active set, then the leader scheduler will pick the same leader again, so
+        // check for that
+        if scheduled_leader == self.keypair.pubkey() {
+            self.validator_to_leader(tick_height, entry_height, last_entry_id);
+            return Ok(());
+        }
+
         let tvu = Tvu::new(
             self.keypair.clone(),
             &self.bank,
+            tick_height,
             entry_height,
             self.cluster_info.clone(),
             self.shared_window.clone(),
@@ -463,11 +487,17 @@ impl Fullnode {
         Ok(())
     }
 
-    fn validator_to_leader(&mut self, entry_height: u64, last_entry_id: Hash) {
+    fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_entry_id: Hash) {
         self.cluster_info
             .write()
             .unwrap()
             .set_leader(self.keypair.pubkey());
+
+        let max_tick_height = {
+            let ls_lock = self.leader_scheduler.read().unwrap();
+            ls_lock.max_height_for_leader(tick_height)
+        };
+
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             self.keypair.clone(),
             &self.bank,
@@ -479,12 +509,12 @@ impl Fullnode {
                 .collect(),
             &self.ledger_path,
             self.sigverify_disabled,
-            entry_height,
+            tick_height,
+            max_tick_height,
             // We pass the last_entry_id from the replicate stage because we can't trust that
             // the window didn't overwrite the slot at for the last entry that the replicate stage
             // processed. We also want to avoid reading processing the ledger for the last id.
             &last_entry_id,
-            self.leader_scheduler.clone(),
         );
 
         let broadcast_stage = BroadcastStage::new(
@@ -496,6 +526,7 @@ impl Fullnode {
             entry_height,
             blob_receiver,
             self.leader_scheduler.clone(),
+            tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -521,8 +552,9 @@ impl Fullnode {
                 _ => Ok(None),
             },
             Some(NodeRole::Validator(validator_services)) => match validator_services.join()? {
-                Some(TvuReturnType::LeaderRotation(entry_height, last_entry_id)) => {
-                    self.validator_to_leader(entry_height, last_entry_id);
+                Some(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
+                    //TODO: Fix this to return actual poh height.
+                    self.validator_to_leader(tick_height, entry_height, last_entry_id);
                     Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation))
                 }
                 _ => Ok(None),
@@ -552,19 +584,19 @@ impl Fullnode {
     pub fn new_bank_from_ledger(
         ledger_path: &str,
         leader_scheduler: &mut LeaderScheduler,
-    ) -> (Bank, u64, Vec<Entry>) {
+    ) -> (Bank, u64, u64, Vec<Entry>) {
         let bank = Bank::default();
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
         info!("processing ledger...");
-        let (entry_height, ledger_tail) = bank
+        let (tick_height, entry_height, ledger_tail) = bank
             .process_ledger(entries, leader_scheduler)
             .expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
-        (bank, entry_height, ledger_tail)
+        (bank, tick_height, entry_height, ledger_tail)
     }
 }
 
@@ -581,7 +613,7 @@ impl Service for Fullnode {
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
-                if let Some(TvuReturnType::LeaderRotation(_, _)) = validator_service.join()? {
+                if let Some(TvuReturnType::LeaderRotation(_, _, _)) = validator_service.join()? {
                     return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
                 }
             }
@@ -601,7 +633,7 @@ impl Service for Fullnode {
 mod tests {
     use bank::Bank;
     use cluster_info::Node;
-    use fullnode::{Fullnode, NodeRole, TvuReturnType};
+    use fullnode::{Fullnode, FullnodeReturnType, NodeRole, TvuReturnType};
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{create_tmp_genesis, create_tmp_sample_ledger, LedgerWriter};
     use packet::make_consecutive_blobs;
@@ -627,6 +659,7 @@ mod tests {
         let v = Fullnode::new_with_bank(
             keypair,
             bank,
+            0,
             entry_height,
             &genesis_entries,
             tn,
@@ -658,6 +691,7 @@ mod tests {
                 Fullnode::new_with_bank(
                     keypair,
                     bank,
+                    0,
                     entry_height,
                     &genesis_entries,
                     tn,
@@ -683,6 +717,70 @@ mod tests {
     }
 
     #[test]
+    fn test_leader_to_leader_transition() {
+        // Create the leader node information
+        let bootstrap_leader_keypair = Keypair::new();
+        let bootstrap_leader_node =
+            Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
+        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
+
+        // Make a mint and a genesis entries for leader ledger
+        let num_ending_ticks = 1;
+        let (_, bootstrap_leader_ledger_path, genesis_entries) =
+            create_tmp_sample_ledger("test_leader_to_leader_transition", 10_000, num_ending_ticks);
+
+        let initial_tick_height = genesis_entries
+            .iter()
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+
+        // Create the common leader scheduling configuration
+        let num_slots_per_epoch = 3;
+        let leader_rotation_interval = 5;
+        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+        let active_window_length = 5;
+
+        // Set the bootstrap height to be bigger than the initial tick height.
+        // Once the leader hits the bootstrap height ticks, because there are no other
+        // choices in the active set, this leader will remain the leader in the next
+        // epoch. In the next epoch, check that the same leader knows to shut down and
+        // restart as a leader again.
+        let bootstrap_height = initial_tick_height + 1;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_info.id,
+            Some(bootstrap_height as u64),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(active_window_length),
+        );
+
+        // Start up the leader
+        let mut bootstrap_leader = Fullnode::new(
+            bootstrap_leader_node,
+            &bootstrap_leader_ledger_path,
+            bootstrap_leader_keypair,
+            Some(bootstrap_leader_info.contact_info.ncp),
+            false,
+            LeaderScheduler::new(&leader_scheduler_config),
+        );
+
+        // Wait for the leader to transition, ticks should cause the leader to
+        // reach the height for leader rotation
+        match bootstrap_leader.handle_role_transition().unwrap() {
+            Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
+            _ => {
+                panic!("Expected a leader transition");
+            }
+        }
+
+        match bootstrap_leader.node_role {
+            Some(NodeRole::Leader(_)) => (),
+            _ => {
+                panic!("Expected bootstrap leader to be a leader");
+            }
+        }
+    }
+
+    #[test]
     fn test_wrong_role_transition() {
         // Create the leader node information
         let bootstrap_leader_keypair = Keypair::new();
@@ -695,8 +793,9 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
+        let num_ending_ticks = 1;
         let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger("test_wrong_role_transition", 10_000);
+            create_tmp_sample_ledger("test_wrong_role_transition", 10_000, num_ending_ticks);
 
         let last_id = genesis_entries
             .last()
@@ -706,27 +805,35 @@ mod tests {
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-        let first_entries =
-            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
+        let active_set_entries = make_active_set_entries(
+            &validator_keypair,
+            &mint.keypair(),
+            &last_id,
+            &last_id,
+            num_ending_ticks,
+        );
 
-        let ledger_initial_len = (genesis_entries.len() + first_entries.len()) as u64;
-        ledger_writer.write_entries(first_entries).unwrap();
+        let genesis_tick_height = genesis_entries
+            .iter()
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64)
+            + num_ending_ticks as u64;
+        ledger_writer.write_entries(active_set_entries).unwrap();
 
         // Create the common leader scheduling configuration
         let num_slots_per_epoch = 3;
         let leader_rotation_interval = 5;
         let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
 
-        // Set the bootstrap height exactly the current ledger length, so that we can
+        // Set the bootstrap height exactly the current tick height, so that we can
         // test if the bootstrap leader knows to immediately transition to a validator
         // after parsing the ledger during startup
-        let bootstrap_height = ledger_initial_len;
+        let bootstrap_height = genesis_tick_height;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             bootstrap_leader_info.id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
-            Some(ledger_initial_len),
+            Some(genesis_tick_height),
         );
 
         // Test that a node knows to transition to a validator based on parsing the ledger
@@ -774,8 +881,13 @@ mod tests {
         let leader_ncp = leader_node.info.contact_info.ncp;
 
         // Create validator identity
-        let (mint, validator_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger("test_validator_to_leader_transition", 10_000);
+        let num_ending_ticks = 1;
+        let (mint, validator_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+            "test_validator_to_leader_transition",
+            10_000,
+            num_ending_ticks,
+        );
+
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
@@ -793,12 +905,16 @@ mod tests {
         //
         // 2) A vote from the validator
         let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
-        let bootstrap_entries =
-            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id);
-        let bootstrap_entries_len = bootstrap_entries.len();
-        last_id = bootstrap_entries.last().unwrap().id;
-        ledger_writer.write_entries(bootstrap_entries).unwrap();
-        let ledger_initial_len = (genesis_entries.len() + bootstrap_entries_len) as u64;
+        let active_set_entries =
+            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
+        let initial_tick_height = genesis_entries
+            .iter()
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+        let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
+        let active_set_entries_len = active_set_entries.len() as u64;
+        last_id = active_set_entries.last().unwrap().id;
+        ledger_writer.write_entries(active_set_entries).unwrap();
+        let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 10;
@@ -864,8 +980,8 @@ mod tests {
                 let join_result = validator_services
                     .join()
                     .expect("Expected successful validator join");
-                if let Some(TvuReturnType::LeaderRotation(result_bh, _)) = join_result {
-                    assert_eq!(result_bh, bootstrap_height);
+                if let Some(TvuReturnType::LeaderRotation(tick_height, _, _)) = join_result {
+                    assert_eq!(tick_height, bootstrap_height);
                 } else {
                     panic!("Expected validator to have exited due to leader rotation");
                 }
@@ -873,14 +989,20 @@ mod tests {
             _ => panic!("Role should not be leader"),
         }
 
-        // Check the validator ledger to make sure it's the right height, we should've
-        // transitioned after the bootstrap_height entry
-        let (_, entry_height, _) = Fullnode::new_bank_from_ledger(
+        // Check the validator ledger for the correct entry + tick heights, we should've
+        // transitioned after tick_height = bootstrap_height.
+        let (_, tick_height, entry_height, _) = Fullnode::new_bank_from_ledger(
             &validator_ledger_path,
             &mut LeaderScheduler::new(&leader_scheduler_config),
         );
 
-        assert_eq!(entry_height, bootstrap_height);
+        assert_eq!(tick_height, bootstrap_height);
+        assert_eq!(
+            entry_height,
+            // Only the first genesis entry has num_hashes = 0, every other entry
+            // had num_hashes = 1
+            bootstrap_height + active_set_entries_len + initial_non_tick_height,
+        );
 
         // Shut down
         t_responder.join().expect("responder thread join");

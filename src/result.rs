@@ -6,6 +6,7 @@ use cluster_info;
 #[cfg(feature = "erasure")]
 use erasure;
 use packet;
+use poh_recorder;
 use serde_json;
 use std;
 use std::any::Any;
@@ -25,6 +26,7 @@ pub enum Error {
     #[cfg(feature = "erasure")]
     ErasureError(erasure::ErasureError),
     SendError,
+    PohRecorderError(poh_recorder::PohRecorderError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -73,7 +75,6 @@ impl std::convert::From<Box<Any + Send + 'static>> for Error {
         Error::JoinError(e)
     }
 }
-
 impl std::convert::From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Error {
         Error::IO(e)
@@ -92,6 +93,11 @@ impl std::convert::From<std::net::AddrParseError> for Error {
 impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
     fn from(e: std::boxed::Box<bincode::ErrorKind>) -> Error {
         Error::Serialize(e)
+    }
+}
+impl std::convert::From<poh_recorder::PohRecorderError> for Error {
+    fn from(e: poh_recorder::PohRecorderError) -> Error {
+        Error::PohRecorderError(e)
     }
 }
 

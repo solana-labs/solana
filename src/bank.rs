@@ -871,40 +871,50 @@ impl Bank {
         results
     }
 
-    pub fn process_entry_votes(
-        bank: &Bank,
+    pub fn process_entry(
+        &self,
         entry: &Entry,
-        entry_height: u64,
+        tick_height: &mut u64,
+        leader_scheduler: &mut LeaderScheduler,
+    ) -> Result<()> {
+        if !entry.is_tick() {
+            for result in self.process_transactions(&entry.transactions) {
+                result?;
+            }
+        } else {
+            *tick_height += 1;
+            self.register_entry_id(&entry.id);
+        }
+
+        self.process_entry_votes(entry, *tick_height, leader_scheduler);
+        Ok(())
+    }
+
+    fn process_entry_votes(
+        &self,
+        entry: &Entry,
+        tick_height: u64,
         leader_scheduler: &mut LeaderScheduler,
     ) {
         for tx in &entry.transactions {
             if tx.vote().is_some() {
                 // Update the active set in the leader scheduler
-                leader_scheduler.push_vote(*tx.from(), entry_height);
+                leader_scheduler.push_vote(*tx.from(), tick_height);
             }
         }
 
-        leader_scheduler.update_height(entry_height, bank);
-    }
-
-    pub fn process_entry(&self, entry: &Entry) -> Result<()> {
-        if !entry.transactions.is_empty() {
-            for result in self.process_transactions(&entry.transactions) {
-                result?;
-            }
-        } else {
-            self.register_entry_id(&entry.id);
-        }
-        Ok(())
+        leader_scheduler.update_height(tick_height, self);
     }
 
     /// Process an ordered list of entries, populating a circular buffer "tail"
-    ///   as we go.
+    /// as we go.
     fn process_entries_tail(
         &self,
         entries: &[Entry],
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
+        tick_height: &mut u64,
+        leader_scheduler: &mut LeaderScheduler,
     ) -> Result<u64> {
         let mut entry_count = 0;
 
@@ -917,7 +927,12 @@ impl Bank {
             *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
 
             entry_count += 1;
-            self.process_entry(entry)?;
+            // TODO: We prepare for implementing voting contract by making the associated
+            // process_entries functions aware of the vote-tracking structure inside
+            // the leader scheduler. Next we will extract the vote tracking structure
+            // out of the leader scheduler, and into the bank, and remove the leader
+            // scheduler from these banking functions.
+            self.process_entry(entry, tick_height, leader_scheduler)?;
         }
 
         Ok(entry_count)
@@ -958,7 +973,7 @@ impl Bank {
         // accumulator for entries that can be processed in parallel
         let mut mt_group = vec![];
         for entry in entries {
-            if entry.transactions.is_empty() {
+            if entry.is_tick() {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_entry_id(&entry.id);
@@ -992,37 +1007,37 @@ impl Bank {
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
         leader_scheduler: &mut LeaderScheduler,
-    ) -> Result<u64>
+    ) -> Result<(u64, u64)>
     where
         I: IntoIterator<Item = Entry>,
     {
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
-        let mut entry_count = *tail_idx as u64;
+        let mut entry_height = *tail_idx as u64;
+        let mut tick_height = 0;
+        for entry in &tail[0..*tail_idx] {
+            tick_height += entry.is_tick() as u64
+        }
+
         let mut id = start_hash;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
             if !block.verify(&id) {
-                warn!("Ledger proof of history failed at entry: {}", entry_count);
+                warn!("Ledger proof of history failed at entry: {}", entry_height);
                 return Err(BankError::LedgerVerificationFailed);
             }
             id = block.last().unwrap().id;
-            let tail_count = self.process_entries_tail(&block, tail, tail_idx)?;
+            let entry_count = self.process_entries_tail(
+                &block,
+                tail,
+                tail_idx,
+                &mut tick_height,
+                leader_scheduler,
+            )?;
 
-            if !leader_scheduler.use_only_bootstrap_leader {
-                for (i, entry) in block.iter().enumerate() {
-                    Self::process_entry_votes(
-                        self,
-                        &entry,
-                        entry_count + i as u64 + 1,
-                        leader_scheduler,
-                    );
-                }
-            }
-
-            entry_count += tail_count;
+            entry_height += entry_count;
         }
-        Ok(entry_count)
+        Ok((tick_height, entry_height))
     }
 
     /// Process a full ledger.
@@ -1030,7 +1045,7 @@ impl Bank {
         &self,
         entries: I,
         leader_scheduler: &mut LeaderScheduler,
-    ) -> Result<(u64, Vec<Entry>)>
+    ) -> Result<(u64, u64, Vec<Entry>)>
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -1072,7 +1087,7 @@ impl Bank {
         tail.push(entry0);
         tail.push(entry1);
         let mut tail_idx = 2;
-        let entry_count = self.process_blocks(
+        let (tick_height, entry_height) = self.process_blocks(
             entry1_id,
             entries,
             &mut tail,
@@ -1085,7 +1100,7 @@ impl Bank {
             tail.rotate_left(tail_idx)
         }
 
-        Ok((entry_count, tail))
+        Ok((tick_height, entry_height, tail))
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1618,7 +1633,7 @@ mod tests {
         let mut last_id = mint.last_id();
         let mut hash = mint.last_id();
         let mut entries: Vec<Entry> = vec![];
-        let mut num_hashes = 0;
+        let num_hashes = 1;
         for k in keypairs {
             let txs = vec![Transaction::system_new(
                 &mint.keypair(),
@@ -1629,7 +1644,8 @@ mod tests {
             let mut e = ledger::next_entries(&hash, 0, txs);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
-            let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![]);
+            let tick = Entry::new(&hash, num_hashes, vec![]);
+            hash = tick.id;
             last_id = hash;
             entries.push(tick);
         }
@@ -1645,14 +1661,16 @@ mod tests {
         let mut entries = Vec::with_capacity(length);
         let mut hash = mint.last_id();
         let mut last_id = mint.last_id();
-        let mut num_hashes = 0;
+        let num_hashes = 1;
         for i in 0..length {
             let keypair = Keypair::new();
             let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, last_id);
-            let entry = Entry::new_mut(&mut hash, &mut num_hashes, vec![tx]);
+            let entry = Entry::new(&hash, num_hashes, vec![tx]);
+            hash = entry.id;
             entries.push(entry);
             if (i + 1) % ticks == 0 {
-                let tick = Entry::new_mut(&mut hash, &mut num_hashes, vec![]);
+                let tick = Entry::new(&hash, num_hashes, vec![]);
+                hash = tick.id;
                 last_id = hash;
                 entries.push(tick);
             }
@@ -1681,11 +1699,12 @@ mod tests {
         let (ledger, pubkey) = create_sample_ledger(1);
         let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
-        let (ledger_height, tail) = bank
+        let (tick_height, ledger_height, tail) = bank
             .process_ledger(ledger, &mut LeaderScheduler::default())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 4);
+        assert_eq!(tick_height, 2);
         assert_eq!(tail.len(), 4);
         assert_eq!(tail, dup.collect_vec());
         let last_entry = &tail[tail.len() - 1];
@@ -1708,11 +1727,12 @@ mod tests {
         for entry_count in window_size - 3..window_size + 2 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
-            let (ledger_height, tail) = bank
+            let (tick_height, ledger_height, tail) = bank
                 .process_ledger(ledger, &mut LeaderScheduler::default())
                 .unwrap();
             assert_eq!(bank.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 3);
+            assert_eq!(tick_height, 2);
             assert!(tail.len() <= window_size);
             let last_entry = &tail[tail.len() - 1];
             assert_eq!(bank.last_id(), last_entry.id);

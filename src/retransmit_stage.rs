@@ -87,6 +87,7 @@ impl RetransmitStage {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
+        tick_height: u64,
         entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
@@ -102,6 +103,7 @@ impl RetransmitStage {
         let t_window = window_service(
             cluster_info.clone(),
             window,
+            tick_height,
             entry_height,
             0,
             fetch_stage_receiver,

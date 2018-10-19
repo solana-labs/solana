@@ -628,13 +628,29 @@ pub fn create_tmp_genesis(name: &str, num: i64) -> (Mint, String) {
     (mint, path)
 }
 
-pub fn create_tmp_sample_ledger(name: &str, num: i64) -> (Mint, String, Vec<Entry>) {
-    let mint = Mint::new(num);
+pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
+    let mut ticks = Vec::with_capacity(num_ticks as usize);
+    for _ in 0..num_ticks {
+        let new_tick = Entry::new(&hash, 1, vec![]);
+        hash = new_tick.id;
+        ticks.push(new_tick);
+    }
+
+    ticks
+}
+
+pub fn create_tmp_sample_ledger(
+    name: &str,
+    num_tokens: i64,
+    num_ending_ticks: usize,
+) -> (Mint, String, Vec<Entry>) {
+    let mint = Mint::new(num_tokens);
     let path = get_tmp_ledger_path(name);
 
     // Create the entries
     let mut genesis = mint.create_entries();
-    genesis.extend(vec![Entry::new(&mint.last_id(), 0, vec![])]);
+    let ticks = create_ticks(num_ending_ticks, mint.last_id());
+    genesis.extend(ticks);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
     writer.write_entries(genesis.clone()).unwrap();
@@ -1017,5 +1033,4 @@ mod tests {
 
         let _ignored = remove_dir_all(&ledger_path);
     }
-
 }

@@ -48,12 +48,33 @@ pub struct Entry {
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
     pub fn new(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
-        let num_hashes = num_hashes + if transactions.is_empty() { 0 } else { 1 };
-        let id = next_hash(start_hash, 0, &transactions);
-        let entry = Entry {
-            num_hashes,
-            id,
-            transactions,
+        let entry = {
+            if num_hashes == 0 && transactions.is_empty() {
+                Entry {
+                    num_hashes: 0,
+                    id: *start_hash,
+                    transactions,
+                }
+            } else if num_hashes == 0 {
+                // If you passed in transactions, but passed in num_hashes == 0, then
+                // next_hash will generate the next hash and set num_hashes == 1
+                let id = next_hash(start_hash, 1, &transactions);
+                Entry {
+                    num_hashes: 1,
+                    id,
+                    transactions,
+                }
+            } else {
+                // Otherwise, the next Entry `num_hashes` after `start_hash`.
+                // If you wanted a tick for instance, then pass in num_hashes = 1
+                // and transactions = empty
+                let id = next_hash(start_hash, num_hashes, &transactions);
+                Entry {
+                    num_hashes,
+                    id,
+                    transactions,
+                }
+            }
         };
 
         let size = serialized_size(&entry).unwrap();
@@ -175,6 +196,10 @@ impl Entry {
         }
         true
     }
+
+    pub fn is_tick(&self) -> bool {
+        self.transactions.is_empty()
+    }
 }
 
 /// Creates the hash `num_hashes` after `start_hash`. If the transaction contains
@@ -186,7 +211,7 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
         return *start_hash;
     }
 
-    let mut poh = Poh::new(*start_hash);
+    let mut poh = Poh::new(*start_hash, 0);
 
     for _ in 1..num_hashes {
         poh.hash();

@@ -142,7 +142,10 @@ fn main() {
                 }
                 last_id = entry.id;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                let mut tick_height = 0;
+                let mut leader_scheduler = LeaderScheduler::default();
+                if let Err(e) = bank.process_entry(&entry, &mut tick_height, &mut leader_scheduler)
+                {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

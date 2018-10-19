@@ -153,6 +153,7 @@ fn recv_window(
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     consumed: &mut u64,
     received: &mut u64,
+    tick_height: &mut u64,
     max_ix: u64,
     r: &BlobReceiver,
     s: &EntrySender,
@@ -231,6 +232,7 @@ fn recv_window(
             pix,
             &mut consume_queue,
             consumed,
+            tick_height,
             leader_unknown,
             pending_retransmits,
         );
@@ -263,6 +265,7 @@ fn recv_window(
 pub fn window_service(
     cluster_info: Arc<RwLock<ClusterInfo>>,
     window: SharedWindow,
+    tick_height: u64,
     entry_height: u64,
     max_entry_height: u64,
     r: BlobReceiver,
@@ -275,6 +278,7 @@ pub fn window_service(
     Builder::new()
         .name("solana-window".to_string())
         .spawn(move || {
+            let mut tick_height_ = tick_height;
             let mut consumed = entry_height;
             let mut received = entry_height;
             let mut last = entry_height;
@@ -290,6 +294,7 @@ pub fn window_service(
                     &cluster_info,
                     &mut consumed,
                     &mut received,
+                    &mut tick_height_,
                     max_entry_height,
                     &r,
                     &s,
@@ -340,6 +345,7 @@ pub fn window_service(
                     times,
                     consumed,
                     received,
+                    tick_height_,
                     max_entry_height,
                     &leader_scheduler,
                 );
@@ -406,6 +412,7 @@ mod test {
             win,
             0,
             0,
+            0,
             r_reader,
             s_window,
             s_retransmit,
@@ -466,6 +473,7 @@ mod test {
         let t_window = window_service(
             subs.clone(),
             win,
+            0,
             0,
             0,
             r_reader,
@@ -529,6 +537,7 @@ mod test {
         let t_window = window_service(
             subs.clone(),
             win,
+            0,
             0,
             0,
             r_reader,

@@ -5,6 +5,7 @@ use hash::{hash, hashv, Hash};
 pub struct Poh {
     last_hash: Hash,
     num_hashes: u64,
+    pub tick_height: u64,
 }
 
 #[derive(Debug)]
@@ -15,10 +16,11 @@ pub struct PohEntry {
 }
 
 impl Poh {
-    pub fn new(last_hash: Hash) -> Self {
+    pub fn new(last_hash: Hash, tick_height: u64) -> Self {
         Poh {
             last_hash,
             num_hashes: 0,
+            tick_height,
         }
     }
 
@@ -32,7 +34,6 @@ impl Poh {
         self.last_hash = hashv(&[&self.last_hash.as_ref(), &mixin.as_ref()]);
 
         self.num_hashes = 0;
-
         PohEntry {
             num_hashes,
             id: self.last_hash,
@@ -47,6 +48,7 @@ impl Poh {
 
         let num_hashes = self.num_hashes;
         self.num_hashes = 0;
+        self.tick_height += 1;
 
         PohEntry {
             num_hashes,

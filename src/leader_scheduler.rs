@@ -9,6 +9,7 @@ use budget_transaction::BudgetTransaction;
 use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use hash::{hash, Hash};
+use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
 #[cfg(test)]
 use solana_program_interface::account::Account;
@@ -222,7 +223,7 @@ impl LeaderScheduler {
         (height - self.bootstrap_height) % self.leader_rotation_interval == 0
     }
 
-    pub fn entries_until_next_leader_rotation(&self, height: u64) -> Option<u64> {
+    pub fn count_until_next_leader_rotation(&self, height: u64) -> Option<u64> {
         if self.use_only_bootstrap_leader {
             return None;
         }
@@ -235,6 +236,46 @@ impl LeaderScheduler {
                     - ((height - self.bootstrap_height) % self.leader_rotation_interval),
             )
         }
+    }
+
+    // Let Leader X be the leader at the input tick height. This function returns the
+    // the PoH height at which Leader X's slot ends.
+    pub fn max_height_for_leader(&self, height: u64) -> Option<u64> {
+        if self.use_only_bootstrap_leader || self.get_scheduled_leader(height).is_none() {
+            return None;
+        }
+
+        let result = {
+            if height < self.bootstrap_height || self.leader_schedule.len() > 1 {
+                // Two cases to consider:
+                //
+                // 1) If height is less than the bootstrap height, then the current leader's
+                // slot ends when PoH height = bootstrap_height
+                //
+                // 2) Otherwise, if height >= bootstrap height, then we have generated a schedule.
+                // If this leader is not the only one in the schedule, then they will
+                // only be leader until the end of this slot (someone else is then guaranteed
+                // to take over)
+                //
+                // Both above cases are calculated by the function:
+                // count_until_next_leader_rotation() + height
+                self.count_until_next_leader_rotation(height).expect(
+                    "Should return some value when not using default implementation 
+                     of LeaderScheduler",
+                ) + height
+            } else {
+                // If the height is greater than bootstrap_height and this leader is
+                // the only leader in the schedule, then that leader will be in power
+                // for every slot until the next epoch, which is seed_rotation_interval
+                // PoH counts from the beginning of the last epoch.
+                self.last_seed_height.expect(
+                    "If height >= bootstrap height, then we expect
+                    a seed has been generated",
+                ) + self.seed_rotation_interval
+            }
+        };
+
+        Some(result)
     }
 
     pub fn reset(&mut self) {
@@ -257,6 +298,12 @@ impl LeaderScheduler {
 
         if height < self.bootstrap_height {
             return;
+        }
+
+        if let Some(last_seed_height) = self.last_seed_height {
+            if height <= last_seed_height {
+                return;
+            }
         }
 
         if (height - self.bootstrap_height) % self.seed_rotation_interval == 0 {
@@ -303,6 +350,8 @@ impl LeaderScheduler {
     // Called every seed_rotation_interval entries, generates the leader schedule
     // for the range of entries: [height, height + seed_rotation_interval)
     fn generate_schedule(&mut self, height: u64, bank: &Bank) {
+        assert!(height >= self.bootstrap_height);
+        assert!((height - self.bootstrap_height) % self.seed_rotation_interval == 0);
         let seed = Self::calculate_seed(height);
         self.seed = seed;
         let active_set = self.get_active_set(height);
@@ -330,12 +379,36 @@ impl LeaderScheduler {
         // schedule
         let ordered_account_stake = ranked_active_set.into_iter().map(|(_, stake)| stake);
         let start_index = Self::choose_account(ordered_account_stake, self.seed, total_stake);
-        validator_rankings.rotate_left(start_index + 1);
+        validator_rankings.rotate_left(start_index);
 
         // There are only seed_rotation_interval / self.leader_rotation_interval slots, so
         // we only need to keep at most that many validators in the schedule
-        validator_rankings
-            .truncate((self.seed_rotation_interval / self.leader_rotation_interval) as usize);
+        let slots_per_epoch = self.seed_rotation_interval / self.leader_rotation_interval;
+
+        // If possible, try to avoid having the same leader twice in a row, but
+        // if there's only one leader to choose from, then we have no other choice
+        if validator_rankings.len() > 1 {
+            let old_epoch_last_leader = self
+                .get_scheduled_leader(height - 1)
+                .expect("Previous leader schedule should still exist");
+            let new_epoch_start_leader = validator_rankings[0];
+
+            if old_epoch_last_leader == new_epoch_start_leader {
+                if slots_per_epoch == 1 {
+                    // If there is only one slot per epoch, and the same leader as the last slot
+                    // of the previous epoch was chosen, then pick the next leader in the
+                    // rankings instead
+                    validator_rankings[0] = validator_rankings[1];
+                } else {
+                    // If there is more than one leader in the schedule, truncate and set the most
+                    // recent leader to the back of the line. This way that node will still remain
+                    // in the rotation, just at a later slot.
+                    validator_rankings.truncate(slots_per_epoch as usize);
+                    validator_rankings.rotate_left(1);
+                }
+            }
+        }
+
         self.leader_schedule = validator_rankings;
         self.last_seed_height = Some(height);
     }
@@ -432,12 +505,13 @@ pub fn make_active_set_entries(
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
+    num_ending_ticks: usize,
 ) -> Vec<Entry> {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 1, *last_tick_id);
-    let transfer_entry = Entry::new(last_entry_id, 0, vec![transfer_tx]);
-    let last_entry_id = transfer_entry.id;
+    let transfer_entry = Entry::new(last_entry_id, 1, vec![transfer_tx]);
+    let mut last_entry_id = transfer_entry.id;
 
     // 2) Create vote entry
     let vote = Vote {
@@ -445,9 +519,14 @@ pub fn make_active_set_entries(
         contact_info_version: 0,
     };
     let vote_tx = Transaction::budget_new_vote(&active_keypair, vote, *last_tick_id, 0);
-    let vote_entry = Entry::new(&last_entry_id, 0, vec![vote_tx]);
+    let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
+    last_entry_id = vote_entry.id;
 
-    vec![transfer_entry, vote_entry]
+    // 3) Create the ending empty ticks
+    let mut txs = vec![transfer_entry, vote_entry];
+    let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
+    txs.extend(empty_ticks);
+    txs
 }
 
 #[cfg(test)]
@@ -851,7 +930,7 @@ mod tests {
         // validators as part of the schedule each time (we need to check the active window
         // is the cause of validators being truncated later)
         let seed_rotation_interval = leader_rotation_interval * num_validators;
-        let active_window_length = 1;
+        let active_window_length = seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             bootstrap_leader_id,
@@ -877,7 +956,7 @@ mod tests {
             let new_pubkey = new_validator.pubkey();
             validators.push(new_pubkey);
             // Vote at height i * active_window_length for validator i
-            leader_scheduler.push_vote(new_pubkey, i * active_window_length);
+            leader_scheduler.push_vote(new_pubkey, i * active_window_length + bootstrap_height);
             bank.transfer((i + 1) as i64, &mint.keypair(), new_pubkey, last_id)
                 .unwrap();
         }
@@ -886,7 +965,7 @@ mod tests {
         // validators are falling out of the rotation as they fall out of the
         // active set
         for i in 0..=num_validators {
-            leader_scheduler.generate_schedule(i * active_window_length, &bank);
+            leader_scheduler.generate_schedule(i * active_window_length + bootstrap_height, &bank);
             let result = &leader_scheduler.leader_schedule;
             let expected = if i == num_validators {
                 bootstrap_leader_id
@@ -1021,5 +1100,203 @@ mod tests {
         // Check actual arguments for ActiveValidators
         let active_validators = ActiveValidators::new(Some(active_window_length));
         assert_eq!(active_validators.active_window_length, active_window_length);
+    }
+
+    fn run_consecutive_leader_test(num_slots_per_epoch: u64, add_validator: bool) {
+        let bootstrap_leader_id = Keypair::new().pubkey();
+        let bootstrap_height = 500;
+        let leader_rotation_interval = 100;
+        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+        let active_window_length = bootstrap_height + seed_rotation_interval;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(active_window_length),
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Create mint and bank
+        let mint = Mint::new(10000);
+        let bank = Bank::new(&mint);
+        let last_id = mint
+            .create_entries()
+            .last()
+            .expect("Mint should not create empty genesis entries")
+            .id;
+        let initial_vote_height = 1;
+
+        // Create and add validator to the active set
+        let validator_id = Keypair::new().pubkey();
+        if add_validator {
+            leader_scheduler.push_vote(validator_id, initial_vote_height);
+            bank.transfer(1, &mint.keypair(), validator_id, last_id)
+                .unwrap();
+        }
+
+        // Make sure the bootstrap leader, not the validator, is picked again on next slot
+        // Depending on the seed, we make the leader stake either 2, or 3. Because the
+        // validator stake is always 1, then the rankings will always be
+        // [(validator, 1), (leader, leader_stake)]. Thus we just need to make sure that
+        // seed % (leader_stake + 1) > 0 to make sure that the leader is picked again.
+        let seed = LeaderScheduler::calculate_seed(bootstrap_height);
+        let leader_stake = {
+            if seed % 3 == 0 {
+                3
+            } else {
+                2
+            }
+        };
+
+        // Add leader to the active set
+        leader_scheduler.push_vote(bootstrap_leader_id, initial_vote_height);
+        bank.transfer(leader_stake, &mint.keypair(), bootstrap_leader_id, last_id)
+            .unwrap();
+
+        leader_scheduler.generate_schedule(bootstrap_height, &bank);
+
+        // Make sure the validator, not the leader is selected on the first slot of the
+        // next epoch
+        if add_validator {
+            assert!(leader_scheduler.leader_schedule[0] == validator_id);
+        } else {
+            assert!(leader_scheduler.leader_schedule[0] == bootstrap_leader_id);
+        }
+    }
+
+    #[test]
+    fn test_avoid_consecutive_leaders() {
+        // Test when there is both a leader + validator in the active set
+        run_consecutive_leader_test(1, true);
+        run_consecutive_leader_test(2, true);
+        run_consecutive_leader_test(10, true);
+
+        // Test when there is only one node in the active set
+        run_consecutive_leader_test(1, false);
+        run_consecutive_leader_test(2, false);
+        run_consecutive_leader_test(10, false);
+    }
+
+    #[test]
+    fn test_max_height_for_leader() {
+        let bootstrap_leader_id = Keypair::new().pubkey();
+        let bootstrap_height = 500;
+        let leader_rotation_interval = 100;
+        let seed_rotation_interval = 2 * leader_rotation_interval;
+        let active_window_length = bootstrap_height + seed_rotation_interval;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_leader_id,
+            Some(bootstrap_height),
+            Some(leader_rotation_interval),
+            Some(seed_rotation_interval),
+            Some(active_window_length),
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        // Create mint and bank
+        let mint = Mint::new(10000);
+        let bank = Bank::new(&mint);
+        let last_id = mint
+            .create_entries()
+            .last()
+            .expect("Mint should not create empty genesis entries")
+            .id;
+        let initial_vote_height = 1;
+
+        // No schedule generated yet, so for all heights < bootstrap height, the
+        // max height will be bootstrap leader
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(0),
+            Some(bootstrap_height)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height - 1),
+            Some(bootstrap_height)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height),
+            None
+        );
+
+        // Test when the active set == 1 node
+
+        // Generate schedule where the bootstrap leader will be the only
+        // choice because the active set is empty. Thus if the schedule
+        // was generated on PoH height bootstrap_height + n * seed_rotation_interval,
+        // then the same leader will be in power until PoH height
+        // bootstrap_height + (n + 1) * seed_rotation_interval
+        leader_scheduler.generate_schedule(bootstrap_height, &bank);
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height),
+            Some(bootstrap_height + seed_rotation_interval)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height - 1),
+            None
+        );
+        leader_scheduler.generate_schedule(bootstrap_height + seed_rotation_interval, &bank);
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + seed_rotation_interval),
+            Some(bootstrap_height + 2 * seed_rotation_interval)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + seed_rotation_interval - 1),
+            None
+        );
+
+        leader_scheduler.reset();
+
+        // Now test when the active set > 1 node
+
+        // Create and add validator to the active set
+        let validator_id = Keypair::new().pubkey();
+        leader_scheduler.push_vote(validator_id, initial_vote_height);
+        bank.transfer(1, &mint.keypair(), validator_id, last_id)
+            .unwrap();
+
+        // Add leader to the active set
+        leader_scheduler.push_vote(bootstrap_leader_id, initial_vote_height);
+        bank.transfer(1, &mint.keypair(), bootstrap_leader_id, last_id)
+            .unwrap();
+
+        // Generate the schedule
+        leader_scheduler.generate_schedule(bootstrap_height, &bank);
+
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height),
+            Some(bootstrap_height + leader_rotation_interval)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height - 1),
+            None
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + leader_rotation_interval),
+            Some(bootstrap_height + 2 * leader_rotation_interval)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + seed_rotation_interval),
+            None,
+        );
+
+        leader_scheduler.generate_schedule(bootstrap_height + seed_rotation_interval, &bank);
+
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + seed_rotation_interval),
+            Some(bootstrap_height + seed_rotation_interval + leader_rotation_interval)
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + seed_rotation_interval - 1),
+            None
+        );
+        assert_eq!(
+            leader_scheduler.max_height_for_leader(bootstrap_height + 2 * seed_rotation_interval),
+            None
+        );
     }
 }

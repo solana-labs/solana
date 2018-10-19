@@ -108,6 +108,7 @@ impl Replicator {
         let t_window = window_service(
             cluster_info.clone(),
             shared_window.clone(),
+            0,
             entry_height,
             max_entry_height,
             blob_fetch_receiver,
