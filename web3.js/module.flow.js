@@ -134,7 +134,7 @@ declare module '@solana/web3.js' {
     ): Promise<TokenAndPublicKey>;
 
     constructor(connection: Connection, token: PublicKey) : Token;
-    newAccount(owner: Account, source: null | PublicKey): Promise<PublicKey>;
+    newAccount(owner: Account, source?: PublicKey): Promise<PublicKey>;
     tokenInfo(): Promise<TokenInfo>;
     accountInfo(account: PublicKey): Promise<TokenAccountInfo>;
     transfer(
