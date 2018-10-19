@@ -1,7 +1,6 @@
 //! Vote program
 //! Receive and processes votes from validators
 
-use bank::Bank;
 use bincode::deserialize;
 use leader_scheduler::LeaderScheduler;
 use solana_sdk::pubkey::Pubkey;
@@ -53,14 +52,12 @@ impl VoteProgram {
         instruction_index: usize,
         leader_scheduler: &mut LeaderScheduler,
         tick_height: u64,
-        bank: &Bank,
     ) -> Result<()> {
         match deserialize(tx.userdata(instruction_index)) {
             Ok(VoteProgram::NewVote(_vote)) => {
                 trace!("GOT VOTE! last_id={}", tx.last_id);
                 // Update the active set in the leader scheduler
                 leader_scheduler.push_vote(*tx.from(), tick_height);
-                leader_scheduler.update_height(tick_height, bank);
                 Ok(())
             }
             Err(_) => {

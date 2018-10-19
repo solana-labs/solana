@@ -628,7 +628,6 @@ impl Bank {
                 instruction_index,
                 &mut *self.leader_scheduler.write().unwrap(),
                 *self.tick_height.lock().unwrap(),
-                &self,
             ).is_err();
         } else {
             let mut depth = 0;
@@ -913,7 +912,16 @@ impl Bank {
                 result?;
             }
         } else {
-            *self.tick_height.lock().unwrap() += 1;
+            let tick_height = {
+                let mut tick_height_lock = self.tick_height.lock().unwrap();
+                *tick_height_lock += 1;
+                *tick_height_lock
+            };
+
+            self.leader_scheduler
+                .write()
+                .unwrap()
+                .update_height(tick_height, self);
             self.register_entry_id(&entry.id);
         }
 
@@ -1213,6 +1221,16 @@ impl Bank {
             }
         }
         subscriptions.remove(pubkey).is_some()
+    }
+
+    pub fn get_current_leader(&self) -> Option<Pubkey> {
+        let ls_lock = self.leader_scheduler.read().unwrap();
+        let tick_height = self.tick_height.lock().unwrap();
+        ls_lock.get_scheduled_leader(*tick_height)
+    }
+
+    pub fn get_tick_height(&self) -> u64 {
+        *self.tick_height.lock().unwrap()
     }
 
     fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {

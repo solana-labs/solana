@@ -6,7 +6,6 @@ use counter::Counter;
 use entry::{EntryReceiver, EntrySender};
 use hash::Hash;
 use influx_db_client as influxdb;
-use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
 use metrics;
@@ -61,9 +60,7 @@ impl ReplicateStage {
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
-        tick_height: &mut u64,
         entry_height: &mut u64,
-        leader_scheduler: &RwLock<LeaderScheduler>,
     ) -> Result<Hash> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -81,33 +78,23 @@ impl ReplicateStage {
         let mut res = Ok(());
         let last_entry_id = {
             let mut num_entries_to_write = entries.len();
+            let current_leader = bank
+                .get_current_leader()
+                .expect("Scheduled leader id should never be unknown while processing entries");
             for (i, entry) in entries.iter().enumerate() {
-                // max_tick_height is the PoH height at which the next leader rotation will
-                // happen. The leader should send an entry such that the total PoH is equal
-                // to max_tick_height - guard.
-                // TODO: Introduce a "guard" for the end of transmission periods, the guard
-                // is assumed to be zero for now.
-                let max_tick_height = {
-                    let ls_lock = leader_scheduler.read().unwrap();
-                    ls_lock.max_height_for_leader(*tick_height)
-                };
-
                 res = bank.process_entry(&entry);
+                let my_id = keypair.pubkey();
+                let scheduled_leader = bank
+                    .get_current_leader()
+                    .expect("Scheduled leader id should never be unknown while processing entries");
 
-                // Will run only if leader_scheduler.use_only_bootstrap_leader is false
-                if let Some(max_tick_height) = max_tick_height {
-                    let ls_lock = leader_scheduler.read().unwrap();
-                    if *tick_height == max_tick_height {
-                        let my_id = keypair.pubkey();
-                        let scheduled_leader = ls_lock.get_scheduled_leader(*tick_height).expect(
-                            "Scheduled leader id should never be unknown while processing entries",
-                        );
-                        cluster_info.write().unwrap().set_leader(scheduled_leader);
-                        if my_id == scheduled_leader {
-                            num_entries_to_write = i + 1;
-                            break;
-                        }
-                    }
+                // TODO: Remove this soon once we boot the leader from ClusterInfo
+                if scheduled_leader != current_leader {
+                    cluster_info.write().unwrap().set_leader(scheduled_leader);
+                }
+                if my_id == scheduled_leader {
+                    num_entries_to_write = i + 1;
+                    break;
                 }
 
                 if res.is_err() {
@@ -160,7 +147,6 @@ impl ReplicateStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
         exit: Arc<AtomicBool>,
-        tick_height: u64,
         entry_height: u64,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
@@ -177,18 +163,15 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
-                let mut tick_height_ = tick_height;
                 let mut last_entry_id = None;
                 loop {
-                    let leader_scheduler = &bank.leader_scheduler;
-                    let leader_id = leader_scheduler
-                        .read()
-                        .unwrap()
-                        .get_scheduled_leader(tick_height_)
-                        .expect("Scheduled leader id should never be unknown at this point");
+                    let leader_id =
+                        bank.get_current_leader()
+                            .expect("Scheduled leader id should never be unknown at this point");
+
                     if leader_id == keypair.pubkey() {
                         return Some(ReplicateStageReturnType::LeaderRotation(
-                            tick_height_,
+                            bank.get_tick_height(),
                             entry_height_,
                             // We should never start the TPU / this stage on an exact entry that causes leader
                             // rotation (Fullnode should automatically transition on startup if it detects
@@ -213,9 +196,7 @@ impl ReplicateStage {
                         &keypair,
                         vote_sender,
                         &ledger_entry_sender,
-                        &mut tick_height_,
                         &mut entry_height_,
-                        leader_scheduler,
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -330,7 +311,6 @@ mod test {
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
             exit.clone(),
-            initial_tick_height,
             initial_entry_len,
         );
 

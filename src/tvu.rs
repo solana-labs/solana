@@ -117,7 +117,6 @@ impl Tvu {
             cluster_info,
             blob_window_receiver,
             exit.clone(),
-            tick_height,
             entry_height,
         );
 
