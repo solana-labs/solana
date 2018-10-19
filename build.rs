@@ -3,8 +3,6 @@ use std::fs;
 use std::process::Command;
 
 fn main() {
-    println!("cargo:rerun-if-changed=target/perf-libs");
-    println!("cargo:rerun-if-changed=target/perf-libs/libcuda-crypt.a");
     println!("cargo:rerun-if-changed=build.rs");
 
     // Ensure target/perf-libs/ exists.  It's been observed that
@@ -63,9 +61,14 @@ fn main() {
         assert!(status.success());
     }
     if chacha || cuda || erasure {
+        println!("cargo:rerun-if-changed=target/perf-libs");
         println!("cargo:rustc-link-search=native=target/perf-libs");
     }
+    if chacha {
+        println!("cargo:rerun-if-changed=target/perf-libs/libcpu-crypt.a");
+    }
     if cuda {
+        println!("cargo:rerun-if-changed=target/perf-libs/libcuda-crypt.a");
         println!("cargo:rustc-link-lib=static=cuda-crypt");
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
         println!("cargo:rustc-link-lib=dylib=cudart");
@@ -73,6 +76,8 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cudadevrt");
     }
     if erasure {
+        println!("cargo:rerun-if-changed=target/perf-libs/libgf_complete.so");
+        println!("cargo:rerun-if-changed=target/perf-libs/libJerasure.so");
         println!("cargo:rustc-link-lib=dylib=Jerasure");
         println!("cargo:rustc-link-lib=dylib=gf_complete");
     }
