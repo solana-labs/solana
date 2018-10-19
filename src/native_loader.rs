@@ -83,11 +83,11 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].account.userdata.len() <= offset + bytes.len() {
+                if keyed_accounts[0].account.userdata.len() < offset + bytes.len() {
                     warn!(
-                        "Error: Overflow, {} > {}",
-                        offset + bytes.len(),
-                        keyed_accounts[0].account.userdata.len()
+                        "Error: Overflow, {} < {}",
+                        keyed_accounts[0].account.userdata.len(),
+                        offset + bytes.len()
                     );
                     return false;
                 }
