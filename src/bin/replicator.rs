@@ -6,7 +6,7 @@ extern crate serde_json;
 extern crate solana;
 
 use clap::{App, Arg};
-use solana::chacha::chacha_cbc_encrypt_files;
+use solana::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
 use solana::client::mk_client;
 use solana::cluster_info::Node;
 use solana::drone::DRONE_PORT;
@@ -114,13 +114,12 @@ fn main() {
     let ledger_path = Path::new(ledger_path.unwrap());
     let ledger_data_file = ledger_path.join(LEDGER_DATA_FILE);
     let ledger_data_file_encrypted = ledger_path.join(format!("{}.enc", LEDGER_DATA_FILE));
-    let key = "abc123";
+    let mut ivec = [0u8; CHACHA_BLOCK_SIZE];
+    ivec[0..4].copy_from_slice(&[2, 3, 4, 5]);
 
-    if let Err(e) = chacha_cbc_encrypt_files(
-        &ledger_data_file,
-        &ledger_data_file_encrypted,
-        key.to_string(),
-    ) {
+    if let Err(e) =
+        chacha_cbc_encrypt_file(&ledger_data_file, &ledger_data_file_encrypted, &mut ivec)
+    {
         println!("Error while encrypting ledger: {:?}", e);
         return;
     }
