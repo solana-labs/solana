@@ -149,7 +149,7 @@ declare module '@solana/web3.js' {
       delegate: PublicKey,
       amount: number | TokenAmount
     ): Promise<void>;
-    (
+    revoke(
       owner: Account,
       source: PublicKey,
       delegate: PublicKey
