@@ -89,6 +89,10 @@ extern crate chrono;
 extern crate clap;
 extern crate dirs;
 extern crate generic_array;
+#[cfg(test)]
+#[cfg(any(feature = "chacha", feature = "cuda"))]
+#[macro_use]
+extern crate hex_literal;
 extern crate ipnetwork;
 extern crate itertools;
 extern crate libc;

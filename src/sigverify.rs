@@ -38,7 +38,7 @@ extern "C" {
 
     pub fn chacha_cbc_encrypt_many_sample(
         input: *const u8,
-        output: *mut u8,
+        sha_state: *mut u8,
         in_len: usize,
         keys: *const u8,
         ivec: *mut u8,
@@ -48,6 +48,9 @@ extern "C" {
         starting_block: u64,
         time_us: *mut f32,
     );
+
+    pub fn chacha_init_sha_state(sha_state: *mut u8, num_keys: u32);
+    pub fn chacha_end_sha_state(sha_state_in: *const u8, out: *mut u8, num_keys: u32);
 }
 
 #[cfg(not(feature = "cuda"))]
