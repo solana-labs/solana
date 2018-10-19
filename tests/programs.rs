@@ -18,14 +18,17 @@ use solana_program_interface::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
 
-/// BPF program file prefixs
+/// BPF program file prefixes
+#[cfg(feature = "bpf_c")]
 const PLATFORM_FILE_PREFIX_BPF: &str = "";
 /// BPF program file extension
+#[cfg(feature = "bpf_c")]
 const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
 /// BPF program ELF section name where the program code is located
 pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
 pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 /// Create a BPF program file name
+#[cfg(feature = "bpf_c")]
 fn create_bpf_path(name: &str) -> PathBuf {
     let pathbuf = {
         let current_exe = env::current_exe().unwrap();
