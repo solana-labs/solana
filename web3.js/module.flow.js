@@ -130,6 +130,7 @@ declare module '@solana/web3.js' {
       name: string,
       symbol: string,
       decimals: number,
+      programId?: PublicKey,
     ): Promise<TokenAndPublicKey>;
 
     constructor(connection: Connection, token: PublicKey) : Token;
