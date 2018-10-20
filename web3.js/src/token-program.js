@@ -193,8 +193,8 @@ export class Token {
     programId: PublicKey = SYSTEM_TOKEN_PROGRAM_ID,
   ): Promise<TokenAndPublicKey> {
     const tokenAccount = new Account();
-    const token = new Token(connection, tokenAccount.publicKey);
-    const initialAccountPublicKey = (await token._newAccount(owner, null)).publicKey;
+    const token = new Token(connection, tokenAccount.publicKey, programId);
+    const initialAccountPublicKey = await token.newAccount(owner, null);
 
     let transaction;
 
@@ -243,9 +243,16 @@ export class Token {
   }
 
   /**
-   * @private
+   * Create a new and empty token account.
+   *
+   * This account may then be used as a `transfer()` or `approve()` destination
+   *
+   * @param owner User account that will own the new token account
+   * @param source If not null, create a delegate account that when authorized
+   *               may transfer tokens from this `source` account
+   * @return Public key of the new empty token account
    */
-  async _newAccount(owner: Account, source: null | PublicKey): Promise<Account> {
+  async newAccount(owner: Account, source: null | PublicKey = null): Promise<PublicKey> {
     const tokenAccount = new Account();
     let transaction;
 
@@ -282,23 +289,10 @@ export class Token {
       programId: this.programId,
       userdata,
     });
+
     await sendAndConfirmTransaction(this.connection, tokenAccount, transaction);
 
-    return tokenAccount;
-  }
-
-  /**
-   * Create a new and empty token account.
-   *
-   * This account may then be used as a `transfer()` or `approve()` destination
-   *
-   * @param owner User account that will own the new token account
-   * @param source If not null, create a delegate account that when authorized
-   *               may transfer tokens from this `source` account
-   * @return Public key of the new empty token account
-   */
-  async newAccount(owner: Account, source: null | PublicKey = null): Promise<PublicKey> {
-    return (await this._newAccount(owner, source)).publicKey;
+    return tokenAccount.publicKey;
   }
 
   /**
