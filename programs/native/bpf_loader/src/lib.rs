@@ -2,50 +2,22 @@ pub mod bpf_verifier;
 
 extern crate bincode;
 extern crate byteorder;
-extern crate elf;
 extern crate env_logger;
-extern crate libc;
 #[macro_use]
 extern crate log;
 extern crate rbpf;
-#[macro_use]
-extern crate serde_derive;
 extern crate solana_program_interface;
 
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::loader_instruction::LoaderInstruction;
 use solana_program_interface::pubkey::Pubkey;
-use std::env;
 use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
-use std::path::PathBuf;
 use std::str;
 use std::sync::{Once, ONCE_INIT};
-
-/// Dynamic link library prefixs
-const PLATFORM_FILE_PREFIX_BPF: &str = "";
-
-/// Dynamic link library file extension specific to the platform
-const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
-
-/// Section name
-pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
-pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
-
-fn create_path(name: &str) -> PathBuf {
-    let pathbuf = {
-        let current_exe = env::current_exe().unwrap();
-        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
-    };
-
-    pathbuf.join(
-        PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
-            .with_extension(PLATFORM_FILE_EXTENSION_BPF),
-    )
-}
 
 fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
     let mut vm = rbpf::EbpfVmRaw::new(None)?;
@@ -72,7 +44,7 @@ fn dump_prog(name: &str, prog: &[u8]) {
     }
 }
 
-fn serialize_state(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec<u8> {
+fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec<u8> {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut v: Vec<u8> = Vec::new();
@@ -91,7 +63,7 @@ fn serialize_state(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec<u8> 
     v
 }
 
-fn deserialize_state(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
+fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut start = mem::size_of::<u64>();
@@ -109,12 +81,6 @@ fn deserialize_state(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum BpfLoader {
-    File { name: String },
-    Bytes { bytes: Vec<u8> },
-}
-
 #[no_mangle]
 pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
     static INIT: Once = ONCE_INIT;
@@ -124,43 +90,8 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
     });
 
     if keyed_accounts[0].account.executable {
-        let prog: Vec<u8>;
-        if let Ok(program) = deserialize(&keyed_accounts[0].account.userdata) {
-            match program {
-                BpfLoader::File { name } => {
-                    trace!("Call Bpf with file {:?}", name);
-                    let path = create_path(&name);
-                    let file = match elf::File::open_path(&path) {
-                        Ok(f) => f,
-                        Err(e) => {
-                            warn!("Error opening ELF {:?}: {:?}", path, e);
-                            return false;
-                        }
-                    };
-
-                    let text_section = match file.get_section(PLATFORM_SECTION_RS) {
-                        Some(s) => s,
-                        None => match file.get_section(PLATFORM_SECTION_C) {
-                            Some(s) => s,
-                            None => {
-                                warn!("Failed to find elf section {:?}", PLATFORM_SECTION_C);
-                                return false;
-                            }
-                        },
-                    };
-                    prog = text_section.data.clone();
-                }
-                BpfLoader::Bytes { bytes } => {
-                    trace!("Call Bpf with bytes");
-                    prog = bytes;
-                }
-            }
-        } else {
-            warn!("deserialize failed: {:?}", tx_data);
-            return false;
-        }
+        let prog = keyed_accounts[0].account.userdata.clone();
         trace!("Call BPF, {} Instructions", prog.len() / 8);
-
         let vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
@@ -168,34 +99,27 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
                 return false;
             }
         };
-
-        let mut v = serialize_state(&mut keyed_accounts[1..], &tx_data);
+        let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data);
         if 0 == vm.prog_exec(v.as_mut_slice()) {
             warn!("BPF program failed");
             return false;
         }
-        deserialize_state(&mut keyed_accounts[1..], &v);
+        deserialize_parameters(&mut keyed_accounts[1..], &v);
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
-                trace!("BPFLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].account.userdata.len() <= offset + bytes.len() {
+                let len = bytes.len();
+                trace!("LuaLoader::Write offset {} length {:?}", offset, len);
+                if keyed_accounts[0].account.userdata.len() < offset + len {
+                    println!(
+                        "Overflow {} < {}",
+                        keyed_accounts[0].account.userdata.len(),
+                        offset + len
+                    );
                     return false;
                 }
-                let name = match str::from_utf8(&bytes) {
-                    Ok(s) => s.to_string(),
-                    Err(e) => {
-                        println!("Invalid UTF-8 sequence: {}", e);
-                        return false;
-                    }
-                };
-                trace!("name: {:?}", name);
-                let s = serialize(&BpfLoader::File { name }).unwrap();
-                keyed_accounts[0]
-                    .account
-                    .userdata
-                    .splice(0..s.len(), s.iter().cloned());
+                keyed_accounts[0].account.userdata[offset..offset + len].copy_from_slice(&bytes);
             }
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;

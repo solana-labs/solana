@@ -3,22 +3,14 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate rlua;
-#[macro_use]
-extern crate serde_derive;
 extern crate solana_program_interface;
 
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use rlua::{Lua, Result, Table};
 use solana_program_interface::account::KeyedAccount;
 use solana_program_interface::loader_instruction::LoaderInstruction;
 use std::str;
 use std::sync::{Once, ONCE_INIT};
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum LuaLoader {
-    File { name: String },
-    Bytes { bytes: Vec<u8> },
-}
 
 /// Make KeyAccount values available to Lua.
 fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Result<()> {
@@ -68,24 +60,8 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
     });
 
     if keyed_accounts[0].account.executable {
-        let prog: Vec<u8>;
-        if let Ok(program) = deserialize(&keyed_accounts[0].account.userdata) {
-            match program {
-                LuaLoader::File { name } => {
-                    trace!("Call Lua with file {:?}", name);
-                    panic!("Not supported");
-                }
-                LuaLoader::Bytes { bytes } => {
-                    trace!("Call Lua with bytes, code size {}", bytes.len());
-                    prog = bytes;
-                }
-            }
-        } else {
-            warn!("deserialize failed: {:?}", tx_data);
-            return false;
-        }
-
-        let code = str::from_utf8(&prog).unwrap();
+        let code = keyed_accounts[0].account.userdata.clone();
+        let code = str::from_utf8(&code).unwrap();
         match run_lua(&mut keyed_accounts[1..], &code, tx_data) {
             Ok(()) => {
                 trace!("Lua success");
@@ -99,17 +75,18 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
-                trace!("LuaLoader::Write offset {} bytes {:?}", offset, bytes);
                 let offset = offset as usize;
-                if keyed_accounts[0].account.userdata.len() <= offset + bytes.len() {
-                    warn!("program overflow offset {} len {}", offset, bytes.len());
+                let len = bytes.len();
+                trace!("LuaLoader::Write offset {} length {:?}", offset, len);
+                if keyed_accounts[0].account.userdata.len() < offset + len {
+                    println!(
+                        "Overflow {} < {}",
+                        keyed_accounts[0].account.userdata.len(),
+                        offset + len
+                    );
                     return false;
                 }
-                let s = serialize(&LuaLoader::Bytes { bytes }).unwrap();
-                keyed_accounts[0]
-                    .account
-                    .userdata
-                    .splice(0..s.len(), s.iter().cloned());
+                keyed_accounts[0].account.userdata[offset..offset + len].copy_from_slice(&bytes);
             }
 
             LoaderInstruction::Finalize => {

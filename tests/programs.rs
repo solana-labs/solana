@@ -15,9 +15,32 @@ use solana::system_transaction::SystemTransaction;
 use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
 use solana_program_interface::pubkey::Pubkey;
+#[cfg(feature = "bpf_c")]
+use std::env;
+#[cfg(feature = "bpf_c")]
+use std::path::PathBuf;
 
-// TODO test modified user data
-// TODO test failure if account tokens decrease but not assigned to program
+/// BPF program file prefixes
+#[cfg(feature = "bpf_c")]
+const PLATFORM_FILE_PREFIX_BPF: &str = "";
+/// BPF program file extension
+#[cfg(feature = "bpf_c")]
+const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
+/// BPF program ELF section name where the program code is located
+pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
+pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
+/// Create a BPF program file name
+#[cfg(feature = "bpf_c")]
+fn create_bpf_path(name: &str) -> PathBuf {
+    let pathbuf = {
+        let current_exe = env::current_exe().unwrap();
+        PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
+    };
+    pathbuf.join(
+        PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
+            .with_extension(PLATFORM_FILE_EXTENSION_BPF),
+    )
+}
 
 fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
     assert_eq!(result.len(), 1);
@@ -37,14 +60,14 @@ impl Loader {
         let bank = Bank::new(&mint);
         let loader = Keypair::new();
 
-        // allocate, populate, finalize BPF loader
+        // allocate, populate, finalize, and spawn BPF loader
 
         let tx = Transaction::system_create(
             &mint.keypair(),
             loader.pubkey(),
             mint.last_id(),
             1,
-            56, // TODO How does the user know how much space to allocate for what should be an internally known size
+            56, // TODO
             native_loader::id(),
             0,
         );
@@ -88,17 +111,17 @@ struct Program {
 }
 
 impl Program {
-    pub fn new(loader: &Loader, userdata: Vec<u8>, size: u64) -> Self {
+    pub fn new(loader: &Loader, userdata: Vec<u8>) -> Self {
         let program = Keypair::new();
 
-        // allocate, populate, and finalize user program
+        // allocate, populate, and finalize and spawn program
 
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
             program.pubkey(),
             loader.mint.last_id(),
             1,
-            size,
+            userdata.len() as u64,
             loader.loader,
             0,
         );
@@ -108,19 +131,24 @@ impl Program {
             loader.bank.process_transactions(&vec![tx.clone()]),
         );
 
-        let tx = Transaction::write(
-            &program,
-            loader.loader,
-            0,
-            userdata,
-            loader.mint.last_id(),
-            0,
-        );
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
+        let chunk_size = 256; // Size of chunk just needs to fix into tx
+        let mut offset = 0;
+        for chunk in userdata.chunks(chunk_size) {
+            let tx = Transaction::write(
+                &program,
+                loader.loader,
+                offset,
+                chunk.to_vec(),
+                loader.mint.last_id(),
+                0,
+            );
+            check_tx_results(
+                &loader.bank,
+                &tx,
+                loader.bank.process_transactions(&vec![tx.clone()]),
+            );
+            offset += chunk_size as u32;
+        }
 
         let tx = Transaction::finalize(&program, loader.loader, loader.mint.last_id(), 0);
         check_tx_results(
@@ -141,18 +169,18 @@ impl Program {
 }
 
 #[test]
-fn test_transaction_load_native() {
+fn test_program_native_noop() {
     logger::setup();
 
     let loader = Loader::new_native();
     let name = String::from("noop");
     let userdata = name.as_bytes().to_vec();
-    let program = Program::new(&loader, userdata, 300);
+    let program = Program::new(&loader, userdata);
 
     // Call user program
 
     let tx = Transaction::new(
-        &loader.mint.keypair(), // TODO
+        &loader.mint.keypair(),
         &[],
         program.program.pubkey(),
         vec![1u8],
@@ -178,7 +206,7 @@ fn test_program_lua_move_funds() {
             accounts[2].tokens = accounts[2].tokens + tokens
         "#.as_bytes()
     .to_vec();
-    let program = Program::new(&loader, userdata, 300);
+    let program = Program::new(&loader, userdata);
     let from = Keypair::new();
     let to = Keypair::new().pubkey();
 
@@ -238,14 +266,20 @@ fn test_program_bpf_noop_c() {
     logger::setup();
 
     let loader = Loader::new_dynamic("bpf_loader");
-    let name = String::from("noop_c");
-    let userdata = name.as_bytes().to_vec();
-    let program = Program::new(&loader, userdata, 56);
+    let program = Program::new(
+        &loader,
+        elf::File::open_path(&create_bpf_path("noop_c"))
+            .unwrap()
+            .get_section(PLATFORM_SECTION_C)
+            .unwrap()
+            .data
+            .clone(),
+    );
 
     // Call user program
 
     let tx = Transaction::new(
-        &loader.mint.keypair(), // TODO
+        &loader.mint.keypair(),
         &[],
         program.program.pubkey(),
         vec![1u8],
@@ -434,13 +468,19 @@ impl Dashboard {
 
 #[cfg(feature = "bpf_c")]
 #[test]
-fn test_program_bpf_file_tictactoe_c() {
+fn test_program_bpf_tictactoe_c() {
     logger::setup();
 
     let loader = Loader::new_dynamic("bpf_loader");
-    let name = String::from("tictactoe_c");
-    let userdata = name.as_bytes().to_vec();
-    let program = Program::new(&loader, userdata, 56);
+    let program = Program::new(
+        &loader,
+        elf::File::open_path(&create_bpf_path("tictactoe_c"))
+            .unwrap()
+            .get_section(PLATFORM_SECTION_C)
+            .unwrap()
+            .data
+            .clone(),
+    );
     let player_x = Pubkey::new(&[0xA; 32]);
     let player_y = Pubkey::new(&[0xB; 32]);
 
@@ -461,13 +501,19 @@ fn test_program_bpf_file_tictactoe_c() {
 
 #[cfg(feature = "bpf_c")]
 #[test]
-fn test_program_bpf_file_tictactoe_dashboard_c() {
+fn test_program_bpf_tictactoe_dashboard_c() {
     logger::setup();
 
     let loader = Loader::new_dynamic("bpf_loader");
-    let name = String::from("tictactoe_c");
-    let userdata = name.as_bytes().to_vec();
-    let ttt_program = Program::new(&loader, userdata, 56);
+    let ttt_program = Program::new(
+        &loader,
+        elf::File::open_path(&create_bpf_path("tictactoe_c"))
+            .unwrap()
+            .get_section(PLATFORM_SECTION_C)
+            .unwrap()
+            .data
+            .clone(),
+    );
     let player_x = Pubkey::new(&[0xA; 32]);
     let player_y = Pubkey::new(&[0xB; 32]);
 
@@ -494,9 +540,15 @@ fn test_program_bpf_file_tictactoe_dashboard_c() {
     let ttt3 = TicTacToe::new(&loader, &ttt_program);
     ttt3.init(&loader, &ttt_program, &player_x);
 
-    let name = String::from("tictactoe_dashboard_c");
-    let userdata = name.as_bytes().to_vec();
-    let dashboard_program = Program::new(&loader, userdata, 56);
+    let dashboard_program = Program::new(
+        &loader,
+        elf::File::open_path(&create_bpf_path("tictactoe_dashboard_c"))
+            .unwrap()
+            .get_section(PLATFORM_SECTION_C)
+            .unwrap()
+            .data
+            .clone(),
+    );
     let dashboard = Dashboard::new(&loader, &dashboard_program);
 
     dashboard.update(&loader, &dashboard_program, &ttt1.id());
