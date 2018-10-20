@@ -18,7 +18,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
-use sys_info::hostname;
 use timing::duration_as_ms;
 use window::{blob_idx_in_window, SharedWindow, WindowUtil};
 
@@ -122,9 +121,6 @@ fn retransmit_all_leader_blocks(
         metrics::submit(
             influxdb::Point::new("retransmit-queue")
                 .add_field(
-                    "host",
-                    influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-                ).add_field(
                     "count",
                     influxdb::Value::Integer(retransmit_queue.len() as i64),
                 ).to_owned(),
@@ -177,10 +173,7 @@ fn recv_window(
 
     metrics::submit(
         influxdb::Point::new("recv-window")
-            .add_field(
-                "host",
-                influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-            ).add_field("count", influxdb::Value::Integer(dq.len() as i64))
+            .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
 
@@ -314,10 +307,7 @@ pub fn window_service(
 
                 metrics::submit(
                     influxdb::Point::new("window-stage")
-                        .add_field(
-                            "host",
-                            influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-                        ).add_field("consumed", influxdb::Value::Integer(consumed as i64))
+                        .add_field("consumed", influxdb::Value::Integer(consumed as i64))
                         .to_owned(),
                 );
 

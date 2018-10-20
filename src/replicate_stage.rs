@@ -22,7 +22,6 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer::{responder, BlobSender};
-use sys_info::hostname;
 use vote_stage::send_validator_vote;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -75,10 +74,7 @@ impl ReplicateStage {
 
         metrics::submit(
             influxdb::Point::new("replicate-stage")
-                .add_field(
-                    "host",
-                    influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-                ).add_field("count", influxdb::Value::Integer(entries.len() as i64))
+                .add_field("count", influxdb::Value::Integer(entries.len() as i64))
                 .to_owned(),
         );
 
