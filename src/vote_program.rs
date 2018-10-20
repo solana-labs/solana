@@ -27,12 +27,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
-    /// We send some gossip specific membership information through the vote to shortcut
-    /// liveness voting
-    /// The version of the ClusterInfo struct that the last_id of this network voted with
-    pub version: u64,
-    /// The version of the ClusterInfo struct that has the same network configuration as this one
-    pub contact_info_version: u64,
     // TODO: add signature of the state here as well
     /// A vote for height tick_height
     pub tick_height: u64,
@@ -90,8 +84,6 @@ impl VoteProgram {
         }
 
         let serialized_len = self_serialized.len() as u16;
-
-        assert!(serialized_len <= 65536);
         LittleEndian::write_u16(&mut output[0..2], serialized_len);
         output[2..=serialized_len as usize].clone_from_slice(&self_serialized);
         Ok(())

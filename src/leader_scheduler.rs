@@ -514,10 +514,7 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create vote entry
-    let vote = Vote {
-        version: 0,
-        contact_info_version: 0,
-    };
+    let vote = Vote { tick_height: 1 };
     let vote_tx = Transaction::vote_new(&active_keypair, vote, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;

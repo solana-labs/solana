@@ -35,7 +35,6 @@ pub mod fetch_stage;
 pub mod fullnode;
 pub mod hash;
 pub mod leader_scheduler;
-pub mod leader_vote_stage;
 pub mod ledger;
 pub mod ledger_write_stage;
 pub mod loader_transaction;

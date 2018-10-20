@@ -5,7 +5,7 @@ use hash::Hash;
 use signature::Keypair;
 use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
-use vote_program::{Vote, VoteProgram};
+use vote_program::{Vote, VoteInstruction, VoteProgram};
 
 pub trait VoteTransaction {
     fn vote_new(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
@@ -14,7 +14,7 @@ pub trait VoteTransaction {
 
 impl VoteTransaction for Transaction {
     fn vote_new(from: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
-        let instruction = VoteProgram::NewVote(vote);
+        let instruction = VoteInstruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Transaction::new(from, &[], VoteProgram::id(), userdata, last_id, fee)
     }
@@ -24,7 +24,7 @@ impl VoteTransaction for Transaction {
         for i in 0..self.instructions.len() {
             let tx_program_id = self.program_id(i);
             if VoteProgram::check_id(&tx_program_id) {
-                if let Ok(Some(VoteProgram::NewVote(vote))) = deserialize(&self.userdata(i)) {
+                if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&self.userdata(i)) {
                     votes.push((self.account_keys[0], vote, self.last_id))
                 }
             }

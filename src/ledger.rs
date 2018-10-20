@@ -716,15 +716,7 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
-        let tx0 = Transaction::vote_new(
-            &keypair,
-            Vote {
-                version: 0,
-                contact_info_version: 1,
-            },
-            one,
-            1,
-        );
+        let tx0 = Transaction::vote_new(&keypair, Vote { tick_height: 1 }, one, 1);
         let tx1 = Transaction::budget_new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -774,15 +766,7 @@ mod tests {
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
-        let tx_small = Transaction::vote_new(
-            &keypair,
-            Vote {
-                version: 0,
-                contact_info_version: 2,
-            },
-            next_id,
-            2,
-        );
+        let tx_small = Transaction::vote_new(&keypair, Vote { tick_height: 1 }, next_id, 2);
         let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;

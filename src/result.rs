@@ -10,6 +10,7 @@ use poh_recorder;
 use serde_json;
 use std;
 use std::any::Any;
+use vote_stage;
 
 #[derive(Debug)]
 pub enum Error {
@@ -27,6 +28,7 @@ pub enum Error {
     ErasureError(erasure::ErasureError),
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
+    VoteError(vote_stage::VoteError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -98,6 +100,11 @@ impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
 impl std::convert::From<poh_recorder::PohRecorderError> for Error {
     fn from(e: poh_recorder::PohRecorderError) -> Error {
         Error::PohRecorderError(e)
+    }
+}
+impl std::convert::From<vote_stage::VoteError> for Error {
+    fn from(e: vote_stage::VoteError) -> Error {
+        Error::VoteError(e)
     }
 }
 
