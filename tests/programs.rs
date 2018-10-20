@@ -15,7 +15,9 @@ use solana::system_transaction::SystemTransaction;
 use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
 use solana_program_interface::pubkey::Pubkey;
+#[cfg(feature = "bpf_c")]
 use std::env;
+#[cfg(feature = "bpf_c")]
 use std::path::PathBuf;
 
 /// BPF program file prefixes
