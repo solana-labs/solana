@@ -17,7 +17,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
-use sys_info::hostname;
 use window::SharedWindow;
 use window_service::window_service;
 
@@ -34,10 +33,7 @@ fn retransmit(
 
     metrics::submit(
         influxdb::Point::new("retransmit-stage")
-            .add_field(
-                "host",
-                influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-            ).add_field("count", influxdb::Value::Integer(dq.len() as i64))
+            .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
 
