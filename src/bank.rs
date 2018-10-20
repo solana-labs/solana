@@ -151,7 +151,7 @@ impl Default for LastIds {
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    accounts: RwLock<HashMap<Pubkey, Account>>,
+    pub accounts: RwLock<HashMap<Pubkey, Account>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -1279,13 +1279,6 @@ impl Bank {
             }
         }
         subscriptions.remove(&signature);
-    }
-
-    #[cfg(test)]
-    // Used to access accounts for things like controlling stake to control
-    // the eligible set of nodes for leader selection
-    pub fn accounts(&self) -> &RwLock<HashMap<Pubkey, Account>> {
-        &self.accounts
     }
 }
 

@@ -405,20 +405,26 @@ impl Fullnode {
 
         // Correctness check: Ensure that references to the bank and leader scheduler are no
         // longer held by any running thread
-        let bank = match Arc::try_unwrap(
-            self.bank
-                .take()
-                .expect("Bank does not exist during leader to validator transition"),
-        ) {
-            Ok(bank) => bank,
-            Err(_) => panic!("References to Bank still exist"),
+        let bank = {
+            if let Ok(bank) = Arc::try_unwrap(
+                self.bank
+                    .take()
+                    .expect("Bank does not exist during leader to validator transition"),
+            ) {
+                bank
+            } else {
+                panic!("References to Bank still exist");
+            }
         };
 
-        let mut leader_scheduler = match Arc::try_unwrap(bank.leader_scheduler) {
-            Ok(leader_scheduler) => leader_scheduler
-                .into_inner()
-                .expect("RwLock for bank's LeaderScheduler is still locked"),
-            Err(_) => panic!("References to LeaderScheduler still exist"),
+        let mut leader_scheduler = {
+            if let Ok(leader_scheduler) = Arc::try_unwrap(bank.leader_scheduler) {
+                leader_scheduler
+                    .into_inner()
+                    .expect("RwLock for bank's LeaderScheduler is still locked")
+            } else {
+                panic!("References to LeaderScheduler still exist");
+            }
         };
 
         // Clear the leader scheduler

@@ -6,9 +6,13 @@ use byteorder::{ByteOrder, LittleEndian};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std;
+use std::collections::VecDeque;
 use transaction::Transaction;
 
-// The number of bytes used to record the size of the vote state in the account userdata
+// Upper limit on the size of the Vote State
+pub const MAX_STATE_SIZE: usize = 1024;
+
+// Maximum number of votes to keep around
 const MAX_VOTE_HISTORY: usize = 32;
 
 #[derive(Debug, PartialEq)]
@@ -39,8 +43,8 @@ pub enum VoteInstruction {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct VoteProgram {
-    pub votes: Vec<Vote>,
-    pub validator_id: Pubkey,
+    pub votes: VecDeque<Vote>,
+    pub node_id: Pubkey,
 }
 
 pub const VOTE_PROGRAM_ID: [u8; 32] = [
@@ -64,7 +68,7 @@ impl VoteProgram {
         } else if input.len() < len + 1 {
             Err(Error::InvalidUserdata)
         } else {
-            deserialize(&input[2..=len]).map_err(|err| {
+            deserialize(&input[2..=len + 1]).map_err(|err| {
                 error!("Unable to deserialize vote state: {:?}", err);
                 Error::InvalidUserdata
             })
@@ -85,7 +89,7 @@ impl VoteProgram {
 
         let serialized_len = self_serialized.len() as u16;
         LittleEndian::write_u16(&mut output[0..2], serialized_len);
-        output[2..=serialized_len as usize].clone_from_slice(&self_serialized);
+        output[2..=serialized_len as usize + 1].clone_from_slice(&self_serialized);
         Ok(())
     }
 
@@ -94,30 +98,37 @@ impl VoteProgram {
         instruction_index: usize,
         accounts: &mut [&mut Account],
     ) -> Result<()> {
-        if !Self::check_id(&accounts[0].program_id) {
-            error!("accounts[0] is not assigned to the VOTE_PROGRAM");
+        if !Self::check_id(&accounts[1].program_id) {
+            error!("accounts[1] is not assigned to the VOTE_PROGRAM");
             Err(Error::InvalidArguments)?;
         }
 
-        let mut vote_state = Self::deserialize(&accounts[0].userdata)?;
+        let mut vote_state = Self::deserialize(&accounts[1].userdata)?;
 
         match deserialize(tx.userdata(instruction_index)) {
             Ok(VoteInstruction::NewVote(vote)) => {
-                if vote_state.validator_id == Pubkey::default() {
+                if vote_state.node_id == Pubkey::default() {
                     // If it's a new account, setup this account for voting
-                    vote_state.validator_id = *tx.from();
-                    vote_state.votes = vec![];
-                } else if vote_state.validator_id != *tx.from() {
-                    // If it's an old account, verify the state's validator id and
-                    // the sender's id match (ensures validators can't vote for others)
+                    vote_state.node_id = *tx.from();
+                    vote_state.votes = VecDeque::new();
+                } else if vote_state.node_id != *tx.from() {
+                    // If it's an old account, verify the state's node id and
+                    // the sender's id match (ensures nodes can't vote for other nodes)
                     Err(Error::InvalidArguments)?;
                 }
 
-                // TODO: Verify the vote's bank hash matches what is expected
+                // TODO: Integrity checks
+                // a) Verify the vote's bank hash matches what is expected
+                // b) Verify vote is older than previous votes
 
-                vote_state.votes.push(vote);
-                vote_state.serialize(&mut accounts[0].userdata)?;
-                // Update the active set in the leader scheduler
+                // Only keep around the most recent MAX_VOTE_HISTORY votes
+                if vote_state.votes.len() == MAX_VOTE_HISTORY {
+                    vote_state.votes.pop_front();
+                }
+
+                vote_state.votes.push_back(vote);
+                vote_state.serialize(&mut accounts[1].userdata)?;
+
                 Ok(())
             }
             Err(_) => {
