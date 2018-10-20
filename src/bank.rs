@@ -623,12 +623,7 @@ impl Bank {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else if VoteProgram::check_id(&tx_program_id) {
-            VoteProgram::process_transaction(
-                &tx,
-                instruction_index,
-                &mut *self.leader_scheduler.write().unwrap(),
-                *self.tick_height.lock().unwrap(),
-            ).is_err();
+            VoteProgram::process_transaction(&tx, instruction_index, program_accounts).is_err();
         } else {
             let mut depth = 0;
             let mut keys = Vec::new();

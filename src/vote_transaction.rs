@@ -13,7 +13,6 @@ pub trait VoteTransaction {
 }
 
 impl VoteTransaction for Transaction {
-    /// Create and sign new SystemProgram::CreateAccount transaction
     fn vote_new(from: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = VoteProgram::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");

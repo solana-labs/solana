@@ -295,10 +295,7 @@ impl Fullnode {
 
         // Get the scheduled leader
         let scheduled_leader = bank
-            .leader_scheduler
-            .read()
-            .unwrap()
-            .get_scheduled_leader(tick_height)
+            .get_current_leader()
             .expect("Leader not known after processing bank");
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
@@ -439,10 +436,7 @@ impl Fullnode {
 
             let new_bank = Arc::new(new_bank);
             let scheduled_leader = new_bank
-                .leader_scheduler
-                .read()
-                .unwrap()
-                .get_scheduled_leader(entry_height)
+                .get_current_leader()
                 .expect("Scheduled leader should exist after rebuilding bank");
 
             (
