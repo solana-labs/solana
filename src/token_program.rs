@@ -86,9 +86,10 @@ pub struct TokenAccountInfo {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 enum Command {
     NewToken(TokenInfo),
-    NewTokenAccount(),
+    NewTokenAccount,
     Transfer(u64),
     Approve(u64),
+    SetOwner,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -369,6 +370,33 @@ impl TokenProgram {
         Ok(())
     }
 
+    pub fn process_command_setowner(
+        tx: &Transaction,
+        pix: usize,
+        input_program_accounts: &[TokenProgram],
+        output_program_accounts: &mut Vec<(usize, TokenProgram)>,
+    ) -> Result<()> {
+        if input_program_accounts.len() < 3 {
+            error!("Expected 3 accounts");
+            Err(Error::InvalidArgument)?;
+        }
+
+        if let TokenProgram::Account(source_account) = &input_program_accounts[1] {
+            if Some(&source_account.owner) != tx.key(pix, 0) {
+                info!("owner of account 1 not present");
+                Err(Error::InvalidArgument)?;
+            }
+
+            let mut output_source_account = source_account.clone();
+            output_source_account.owner = *tx.key(pix, 2).unwrap();
+            output_program_accounts.push((1, TokenProgram::Account(output_source_account)));
+        } else {
+            info!("account 1 is invalid");
+            Err(Error::InvalidArgument)?;
+        }
+        Ok(())
+    }
+
     pub fn process_transaction(
         tx: &Transaction,
         pix: usize,
@@ -402,7 +430,7 @@ impl TokenProgram {
                 &input_program_accounts,
                 &mut output_program_accounts,
             )?,
-            Command::NewTokenAccount() => Self::process_command_newaccount(
+            Command::NewTokenAccount => Self::process_command_newaccount(
                 tx,
                 pix,
                 &input_program_accounts,
@@ -421,6 +449,13 @@ impl TokenProgram {
                 tx,
                 pix,
                 amount,
+                &input_program_accounts,
+                &mut output_program_accounts,
+            )?,
+
+            Command::SetOwner => Self::process_command_setowner(
+                tx,
+                pix,
                 &input_program_accounts,
                 &mut output_program_accounts,
             )?,
