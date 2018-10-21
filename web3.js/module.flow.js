@@ -145,14 +145,19 @@ declare module '@solana/web3.js' {
     ): Promise<void>;
     approve(
       owner: Account,
-      source: PublicKey,
+      account: PublicKey,
       delegate: PublicKey,
       amount: number | TokenAmount
     ): Promise<void>;
     revoke(
       owner: Account,
-      source: PublicKey,
+      account: PublicKey,
       delegate: PublicKey
+    ): Promise<void>;
+    setOwner(
+      owner: Account,
+      account: PublicKey,
+      newOwner: PublicKey
     ): Promise<void>;
   }
 

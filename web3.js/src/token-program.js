@@ -402,13 +402,13 @@ export class Token {
    * Grant a third-party permission to transfer up the specified number of tokens from an account
    *
    * @param owner Owner of the source token account
-   * @param source Source token account
+   * @param account Public key of the token account
    * @param delegate Token account authorized to perform a transfer tokens from the source account
    * @param amount Maximum number of tokens the delegate may transfer
    */
   async approve(
     owner: Account,
-    source: PublicKey,
+    account: PublicKey,
     delegate: PublicKey,
     amount: number | TokenAmount
   ): Promise<void> {
@@ -429,7 +429,7 @@ export class Token {
 
     const transaction = new Transaction({
       fee: 0,
-      keys: [owner.publicKey, source, delegate],
+      keys: [owner.publicKey, account, delegate],
       programId: this.programId,
       userdata,
     });
@@ -440,15 +440,50 @@ export class Token {
    * Remove approval for the transfer of any remaining tokens
    *
    * @param owner Owner of the source token account
-   * @param source Source token account
+   * @param account Public key of the token account
    * @param delegate Token account to revoke authorization from
    */
   revoke(
     owner: Account,
-    source: PublicKey,
+    account: PublicKey,
     delegate: PublicKey
   ): Promise<void> {
-    return this.approve(owner, source, delegate, 0);
+    return this.approve(owner, account, delegate, 0);
+  }
+
+  /**
+   * Assign a new owner to the account
+   *
+   * @param owner Owner of the token account
+   * @param account Public key of the token account
+   * @param newOwner New owner of the token account
+   */
+  async setOwner(
+    owner: Account,
+    account: PublicKey,
+    newOwner: PublicKey,
+  ): Promise<void> {
+
+    const userdataLayout = BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+    ]);
+
+    const userdata = Buffer.alloc(userdataLayout.span);
+    userdataLayout.encode(
+      {
+        instruction: 4, // SetOwner instruction
+      },
+      userdata,
+    );
+
+    const keys = [owner.publicKey, account,newOwner];
+    const transaction = new Transaction({
+      fee: 0,
+      keys,
+      programId: this.programId,
+      userdata,
+    });
+    await sendAndConfirmTransaction(this.connection, owner, transaction);
   }
 }
 
