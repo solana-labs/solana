@@ -473,7 +473,7 @@ test('invalid approve', async () => {
   const account2 = await testToken.newAccount(owner);
 
   // account2 is not a delegate account of account1
-  expect(
+  await expect(
     testToken.approve(
       owner,
       account1,
@@ -483,7 +483,7 @@ test('invalid approve', async () => {
   ).rejects.toThrow();
 
   // account1Delegate is not a delegate account of account2
-  expect(
+  await expect(
     testToken.approve(
       owner,
       account2,
@@ -548,7 +548,7 @@ test.skip('fail on approve overspend', async () => {
   expect(delegateAccountInfo.amount.toNumber()).toBe(0);
   expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
-  expect(
+  await expect(
     testToken.transfer(
       owner,
       account1Delegate,
@@ -556,4 +556,29 @@ test.skip('fail on approve overspend', async () => {
       1,
     )
   ).rejects.toThrow();
+});
+
+
+test('set owner', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const owner = await newAccountWithTokens(connection);
+  const newOwner = await newAccountWithTokens(connection);
+
+  const account = await testToken.newAccount(owner);
+
+  await testToken.setOwner(owner, account, newOwner.publicKey);
+  await expect(
+    testToken.setOwner(owner, account, newOwner.publicKey)
+  ).rejects.toThrow();
+
+  await testToken.setOwner(newOwner, account, owner.publicKey);
+  await expect(
+    testToken.setOwner(newOwner, account, owner.publicKey)
+  ).rejects.toThrow();
+
 });
