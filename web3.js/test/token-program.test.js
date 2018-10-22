@@ -494,8 +494,7 @@ test('invalid approve', async () => {
 });
 
 
-// TODO: Why is this test flaky?
-test.skip('fail on approve overspend', async () => {
+test('fail on approve overspend', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
