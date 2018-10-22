@@ -7,6 +7,7 @@ import {struct} from 'superstruct';
 
 import {Transaction} from './transaction';
 import {PublicKey} from './publickey';
+import {sleep} from './util/sleep';
 import type {Account} from './account';
 import type {TransactionSignature, TransactionId} from './transaction';
 
@@ -158,6 +159,7 @@ export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntim
  */
 export class Connection {
   _rpcRequest: RpcRequest;
+  _lastId: null | TransactionId;
 
   /**
    * Establish a JSON RPC connection
@@ -169,6 +171,7 @@ export class Connection {
       throw new Error('Connection endpoint not specified');
     }
     this._rpcRequest = createRpcRequest(endpoint);
+    this._lastId = null;
   }
 
   /**
@@ -298,7 +301,26 @@ export class Connection {
    * Sign and send a transaction
    */
   async sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature> {
-    transaction.lastId = await this.getLastId();
+
+    let attempts = 0;
+    for (;;) {
+      transaction.lastId = await this.getLastId();
+
+      // TODO: Waiting for the next lastId is really only necessary if a second
+      //       transaction with the raw input bytes as an in-flight transaction
+      //       is issued.
+      if (this._lastId != transaction.lastId) {
+        this._lastId = transaction.lastId;
+        break;
+      }
+      if (attempts === 20) {
+        throw new Error('Unable to obtain new last id');
+      }
+      // TODO: Add a pubsub notification for obtaining the next last id instead
+      //       of polling?
+      await sleep(100);
+      ++attempts;
+    }
     transaction.sign(from);
 
     const wireTransaction = transaction.serialize();

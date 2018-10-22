@@ -10,24 +10,11 @@ import {SYSTEM_TOKEN_PROGRAM_ID} from '../src/token-program';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
 import {newAccountWithTokens} from './new-account-with-tokens';
+import {mockGetLastId} from './mockrpc/getlastid';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
   jest.setTimeout(10000);
-}
-
-function mockGetLastId() {
-  mockRpc.push([
-    url,
-    {
-      method: 'getLastId',
-      params: [],
-    },
-    {
-      error: null,
-      result: '2BjEqiiT43J6XskiHdz7aoocjPeWkCPiKD72SiFQsrA2',
-    }
-  ]);
 }
 
 function mockGetSignatureStatus(result: string = 'Confirmed') {
