@@ -6,6 +6,7 @@ import {
   SystemProgram,
 } from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
+import {mockGetLastId} from './mockrpc/getlastid';
 import {url} from './url';
 
 if (!mockRpcEnabled) {
@@ -117,18 +118,7 @@ test('get transaction count', async () => {
 test('get last Id', async () => {
   const connection = new Connection(url);
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getLastId',
-      params: [],
-    },
-    {
-      error: null,
-      result: '2BjEqiiT43J6XskiHdz7aoocjPeWkCPiKD72SiFQsrA2',
-    }
-  ]
-  );
+  mockGetLastId();
 
   const lastId = await connection.getLastId();
   expect(lastId.length).toBeGreaterThanOrEqual(43);
@@ -283,18 +273,7 @@ test('transaction', async () => {
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 
-  mockRpc.push([
-    url,
-    {
-      method: 'getLastId',
-      params: [],
-    },
-    {
-      error: null,
-      result: '2BjEqiiT43J6XskiHdz7aoocjPeWkCPiKD72SiFQsrA2',
-    }
-  ]
-  );
+  mockGetLastId();
   mockRpc.push([
     url,
     {
