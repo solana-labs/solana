@@ -16,7 +16,6 @@ use solana_program_interface::pubkey::Pubkey;
 use std::io::prelude::*;
 use std::io::Error;
 use std::mem;
-use std::str;
 use std::sync::{Once, ONCE_INIT};
 
 fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
