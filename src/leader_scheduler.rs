@@ -61,7 +61,7 @@ impl LeaderSchedulerConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LeaderScheduler {
     // Set to true if we want the default implementation of the LeaderScheduler,
     // where ony the bootstrap leader is used

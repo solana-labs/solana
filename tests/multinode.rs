@@ -1365,12 +1365,7 @@ fn test_full_leader_validator_network() {
         for n in nodes.iter() {
             let node_lock = n.read().unwrap();
             let ls_lock = node_lock.get_leader_scheduler();
-            if let Some(sh) = ls_lock
-                .expect("Expect leader scheduler to exist")
-                .read()
-                .unwrap()
-                .last_seed_height
-            {
+            if let Some(sh) = ls_lock.read().unwrap().last_seed_height {
                 if sh >= target_height {
                     num_reached_target_height += 1;
                 }

@@ -92,7 +92,7 @@ pub struct Fullnode {
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     ncp: Ncp,
-    bank: Option<Arc<Bank>>,
+    bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
     sigverify_disabled: bool,
@@ -370,7 +370,7 @@ impl Fullnode {
             vote_account_keypair,
             cluster_info,
             shared_window,
-            bank: Some(bank),
+            bank,
             sigverify_disabled,
             rpu,
             ncp,
@@ -409,37 +409,17 @@ impl Fullnode {
 
         // Correctness check: Ensure that references to the bank and leader scheduler are no
         // longer held by any running thread
-        let bank = {
-            if let Ok(bank) = Arc::try_unwrap(
-                self.bank
-                    .take()
-                    .expect("Bank does not exist during leader to validator transition"),
-            ) {
-                bank
-            } else {
-                panic!("References to Bank still exist");
-            }
-        };
-
-        let mut leader_scheduler = {
-            if let Ok(leader_scheduler) = Arc::try_unwrap(bank.leader_scheduler) {
-                leader_scheduler
-                    .into_inner()
-                    .expect("RwLock for bank's LeaderScheduler is still locked")
-            } else {
-                panic!("References to LeaderScheduler still exist");
-            }
-        };
+        let mut new_leader_scheduler = self.bank.leader_scheduler.read().unwrap().clone();
 
         // Clear the leader scheduler
-        leader_scheduler.reset();
+        new_leader_scheduler.reset();
 
         let (new_bank, scheduled_leader, tick_height, entry_height, last_entry_id) = {
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
             let (new_bank, tick_height, entry_height, ledger_tail) = Self::new_bank_from_ledger(
                 &self.ledger_path,
-                Arc::new(RwLock::new(leader_scheduler)),
+                Arc::new(RwLock::new(new_leader_scheduler)),
             );
 
             let new_bank = Arc::new(new_bank);
@@ -480,7 +460,7 @@ impl Fullnode {
             Self::startup_rpc_services(self.rpc_port, &new_bank, &self.cluster_info);
         self.rpc_service = Some(rpc_service);
         self.rpc_pubsub_service = Some(rpc_pubsub_service);
-        self.bank = Some(new_bank);
+        self.bank = new_bank;
 
         // In the rare case that the leader exited on a multiple of seed_rotation_interval
         // when the new leader schedule was being generated, and there are no other validators
@@ -493,7 +473,7 @@ impl Fullnode {
             let tvu = Tvu::new(
                 self.keypair.clone(),
                 self.vote_account_keypair.clone(),
-                self.bank.as_ref().unwrap(),
+                &self.bank,
                 entry_height,
                 self.cluster_info.clone(),
                 self.shared_window.clone(),
@@ -521,18 +501,13 @@ impl Fullnode {
             .unwrap()
             .set_leader(self.keypair.pubkey());
 
-        let bank = match self.bank {
-            Some(ref bank) => bank,
-            None => panic!("Bank does not exist during validator to leader transition"),
-        };
-
         let max_tick_height = {
-            let ls_lock = bank.leader_scheduler.read().unwrap();
+            let ls_lock = self.bank.leader_scheduler.read().unwrap();
             ls_lock.max_height_for_leader(tick_height)
         };
 
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
-            &bank,
+            &self.bank,
             Default::default(),
             self.transaction_sockets
                 .iter()
@@ -556,7 +531,7 @@ impl Fullnode {
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
-            bank.leader_scheduler.clone(),
+            self.bank.leader_scheduler.clone(),
             tick_height,
             tpu_exit,
         );
@@ -636,8 +611,8 @@ impl Fullnode {
         (bank, tick_height, entry_height, ledger_tail)
     }
 
-    pub fn get_leader_scheduler(&self) -> Option<&Arc<RwLock<LeaderScheduler>>> {
-        self.bank.as_ref().map(|bank| &bank.leader_scheduler)
+    pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
+        &self.bank.leader_scheduler
     }
 
     fn startup_rpc_services(
