@@ -168,6 +168,7 @@ events.
     * `Confirmed` - Transaction was successful
     * `SignatureNotFound` - Unknown transaction
     * `ProgramRuntimeError` - An error occurred in the program that processed this Transaction
+    * `AccountInUse` - Another Transaction had a write lock one of the Accounts specified in this Transaction.  The Transaction may succeed if retried
     * `GenericFailure` - Some other error occurred.  **Note**: In the future new Transaction statuses may be added to this list.  It's safe to assume that all new statuses will be more specific error conditions that previously presented as `GenericFailure`
 
 ##### Example:

@@ -90,10 +90,11 @@ impl Metadata for Meta {}
 
 #[derive(Copy, Clone, PartialEq, Serialize, Debug)]
 pub enum RpcSignatureStatus {
+    AccountInUse,
     Confirmed,
-    SignatureNotFound,
-    ProgramRuntimeError,
     GenericFailure,
+    ProgramRuntimeError,
+    SignatureNotFound,
 }
 
 build_rpc_trait! {
@@ -157,6 +158,7 @@ impl RpcSol for RpcSolImpl {
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
                 Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
                 Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
                 Err(err) => {
