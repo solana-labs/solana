@@ -248,7 +248,6 @@ impl BankingStage {
             mms.len(),
         );
         inc_new_counter_info!("banking_stage-entries_received", mms_len);
-        let bank_starting_tx_count = bank.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
