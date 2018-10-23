@@ -1,6 +1,5 @@
 //! The `ledger_write_stage` module implements the ledger write stage. It
-//! writes entries to the given writer, which is typically a file or
-//! stdout
+//! writes entries to the given writer, which is typically a file
 
 use counter::Counter;
 use entry::{EntryReceiver, EntrySender};
@@ -39,7 +38,7 @@ impl LedgerWriteStage {
         if let Some(ledger_writer) = ledger_writer {
             for entries in ventries {
                 for e in &entries {
-                    ledger_writer.write_entry_noflush(&e)?;
+                    ledger_writer.write_entry(&e)?;
                 }
                 if let Some(forwarder) = forwarder {
                     forwarder.send(entries)?;

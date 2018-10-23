@@ -330,7 +330,7 @@ mod test {
         // Set up the replicate stage
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replicate_stage, _) = ReplicateStage::new(
+        let (replicate_stage, _ledger_writer_recv) = ReplicateStage::new(
             Arc::new(my_keypair),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),

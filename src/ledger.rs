@@ -372,7 +372,7 @@ impl LedgerWriter {
         Ok(LedgerWriter { index, data })
     }
 
-    pub fn write_entry_noflush(&mut self, entry: &Entry) -> io::Result<()> {
+    fn write_entry_noflush(&mut self, entry: &Entry) -> io::Result<()> {
         let len = serialized_size(&entry).map_err(err_bincode_to_io)?;
 
         serialize_into(&mut self.data, &len).map_err(err_bincode_to_io)?;
@@ -399,15 +399,9 @@ impl LedgerWriter {
         Ok(())
     }
 
-    pub fn flush(&mut self) -> io::Result<()> {
-        self.index.flush()?;
-        self.data.flush()?;
-        Ok(())
-    }
-
     pub fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
         self.write_entry_noflush(&entry)?;
-        self.flush()
+        Ok(())
     }
 
     pub fn write_entries<I>(&mut self, entries: I) -> io::Result<()>
@@ -417,7 +411,7 @@ impl LedgerWriter {
         for entry in entries {
             self.write_entry_noflush(&entry)?;
         }
-        self.flush()
+        Ok(())
     }
 }
 
