@@ -31,15 +31,17 @@ use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
 use hash::Hash;
+use leader_vote_stage::LeaderVoteStage;
+use ledger_write_stage::LedgerWriteStage;
 use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use write_stage::WriteStage;
 
 pub enum TpuReturnType {
     LeaderRotation,
@@ -49,7 +51,8 @@ pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
-    write_stage: WriteStage,
+    leader_vote_stage: LeaderVoteStage,
+    ledger_write_stage: LedgerWriteStage,
     exit: Arc<AtomicBool>,
 }
 
@@ -83,19 +86,22 @@ impl Tpu {
             max_tick_height,
         );
 
-        let (write_stage, entry_forwarder) = WriteStage::new(
-            keypair,
-            bank.clone(),
-            cluster_info.clone(),
-            ledger_path,
-            entry_receiver,
+        let (leader_vote_stage, ledger_entry_receiver) =
+            LeaderVoteStage::new(keypair, bank.clone(), cluster_info.clone(), entry_receiver);
+
+        let (ledger_entry_sender, entry_forwarder) = channel();
+        let ledger_write_stage = LedgerWriteStage::new(
+            Some(ledger_path),
+            ledger_entry_receiver,
+            Some(ledger_entry_sender),
         );
 
         let tpu = Tpu {
             fetch_stage,
             sigverify_stage,
             banking_stage,
-            write_stage,
+            leader_vote_stage,
+            ledger_write_stage,
             exit: exit.clone(),
         };
         (tpu, entry_forwarder, exit)
@@ -121,7 +127,8 @@ impl Service for Tpu {
     fn join(self) -> thread::Result<(Option<TpuReturnType>)> {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
-        self.write_stage.join()?;
+        self.leader_vote_stage.join()?;
+        self.ledger_write_stage.join()?;
         match self.banking_stage.join()? {
             Some(BankingStageReturnType::LeaderRotation) => Ok(Some(TpuReturnType::LeaderRotation)),
             _ => Ok(None),

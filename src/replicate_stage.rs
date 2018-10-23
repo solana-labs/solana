@@ -3,11 +3,11 @@
 use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
-use entry::EntryReceiver;
+use entry::{EntryReceiver, EntrySender};
 use hash::Hash;
 use influx_db_client as influxdb;
 use leader_scheduler::LeaderScheduler;
-use ledger::{Block, LedgerWriter};
+use ledger::Block;
 use log::Level;
 use metrics;
 use result::{Error, Result};
@@ -58,9 +58,9 @@ impl ReplicateStage {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
-        ledger_writer: Option<&mut LedgerWriter>,
         keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
+        ledger_entry_sender: &EntrySender,
         tick_height: &mut u64,
         entry_height: &mut u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
@@ -149,8 +149,8 @@ impl ReplicateStage {
         // TODO: In line with previous behavior, this will write all the entries even if
         // an error occurred processing one of the entries (causing the rest of the entries to
         // not be processed).
-        if let Some(ledger_writer) = ledger_writer {
-            ledger_writer.write_entries(entries)?;
+        if entries_len != 0 {
+            ledger_entry_sender.send(entries)?;
         }
 
         *entry_height += entries_len;
@@ -163,17 +163,16 @@ impl ReplicateStage {
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
-        ledger_path: Option<&str>,
         exit: Arc<AtomicBool>,
         tick_height: u64,
         entry_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-    ) -> Self {
+    ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
+        let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder("replicate_stage", Arc::new(send), vote_blob_receiver);
 
-        let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
         let keypair = Arc::new(keypair);
 
         let t_replicate = Builder::new()
@@ -215,9 +214,9 @@ impl ReplicateStage {
                         &bank,
                         &cluster_info,
                         &window_receiver,
-                        ledger_writer.as_mut(),
                         &keypair,
                         vote_sender,
+                        &ledger_entry_sender,
                         &mut tick_height_,
                         &mut entry_height_,
                         &leader_scheduler,
@@ -234,10 +233,13 @@ impl ReplicateStage {
                 None
             }).unwrap();
 
-        ReplicateStage {
-            t_responder,
-            t_replicate,
-        }
+        (
+            ReplicateStage {
+                t_responder,
+                t_replicate,
+            },
+            ledger_entry_receiver,
+        )
     }
 }
 
@@ -328,12 +330,11 @@ mod test {
         // Set up the replicate stage
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let replicate_stage = ReplicateStage::new(
+        let (replicate_stage, _) = ReplicateStage::new(
             Arc::new(my_keypair),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
-            Some(&my_ledger_path),
             exit.clone(),
             initial_tick_height,
             initial_entry_len,
