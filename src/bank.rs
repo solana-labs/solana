@@ -191,16 +191,7 @@ impl Bank {
     /// Create an Bank with built-in programs.
     pub fn new_with_builtin_programs() -> Self {
         let bank = Self::default();
-
-        {
-            // Preload Bpf Loader account
-            let mut accounts = bank.accounts.write().unwrap();
-            let mut account = accounts
-                .entry(bpf_loader::id())
-                .or_insert_with(Account::default);
-            bpf_loader::populate_account(&mut account);
-        }
-
+        bank.add_builtin_programs();
         bank
     }
 
@@ -212,14 +203,7 @@ impl Bank {
             let account = accounts.entry(deposit.to).or_insert_with(Account::default);
             Self::apply_payment(deposit, account);
         }
-        {
-            // Preload Bpf Loader account
-            let mut accounts = bank.accounts.write().unwrap();
-            let mut account = accounts
-                .entry(bpf_loader::id())
-                .or_insert_with(Account::default);
-            bpf_loader::populate_account(&mut account);
-        }
+        bank.add_builtin_programs();
         bank
     }
 
@@ -232,6 +216,15 @@ impl Bank {
         let bank = Self::new_from_deposit(&deposit);
         bank.register_entry_id(&mint.last_id());
         bank
+    }
+
+    fn add_builtin_programs(&self) {
+        // Preload Bpf Loader account
+        let mut accounts = self.accounts.write().unwrap();
+        let mut account = accounts
+            .entry(bpf_loader::id())
+            .or_insert_with(Account::default);
+        bpf_loader::populate_account(&mut account);
     }
 
     /// Commit funds to the given account
