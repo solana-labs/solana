@@ -423,6 +423,7 @@ fn test_multi_node_basic() {
 }
 
 #[test]
+#[ignore]
 fn test_boot_validator_from_file() -> result::Result<()> {
     logger::setup();
     let leader_keypair = Keypair::new();
