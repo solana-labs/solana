@@ -22,8 +22,19 @@ export async function sendAndConfirmTransaction(
   let i = 4;
   for (;;) {
     const status = await connection.getSignatureStatus(signature);
-    if (status == 'Confirmed') return;
-    if (runtimeErrorOk && status == 'ProgramRuntimeError') return;
+    switch (status) {
+    case 'Confirmed':
+      return;
+    case 'ProgramRuntimeError':
+      if (runtimeErrorOk) return;
+      //fall through
+    case 'GenericError':
+    default:
+      throw new Error(`Transaction ${signature} failed (${status})`);
+    case 'SignatureNotFound':
+      break;
+    }
+
     await sleep(500);
     if (--i < 0) {
       const duration = (Date.now() - start) / 1000;
