@@ -189,7 +189,6 @@ fn test_program_native_noop() {
     let program = Program::new(&loader, userdata);
 
     // Call user program
-
     let tx = Transaction::new(
         &loader.mint.keypair(),
         &[],
@@ -288,7 +287,6 @@ fn test_program_builtin_bpf_noop() {
     );
 
     // Call user program
-
     let tx = Transaction::new(
         &loader.mint.keypair(),
         &[],
@@ -321,7 +319,6 @@ fn test_program_bpf_noop_c() {
     );
 
     // Call user program
-
     let tx = Transaction::new(
         &loader.mint.keypair(),
         &[],
@@ -348,7 +345,6 @@ impl TicTacToe {
         let game = Keypair::new();
 
         // Create game account
-
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
             game.pubkey(),
@@ -444,7 +440,6 @@ impl Dashboard {
         let dashboard = Keypair::new();
 
         // Create game account
-
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
             dashboard.pubkey(),
