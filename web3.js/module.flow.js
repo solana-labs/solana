@@ -41,7 +41,11 @@ declare module '@solana/web3.js' {
     userdata: Buffer,
   }
 
-  declare export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
+  declare export type SignatureStatus = 'Confirmed'
+    | 'AccountInUse'
+    | 'SignatureNotFound'
+    | 'ProgramRuntimeError'
+    | 'GenericFailure';
 
   declare export class Connection {
     constructor(endpoint: string): Connection;

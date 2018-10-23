@@ -101,10 +101,11 @@ const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
 const GetSignatureStatusRpcResult = jsonRpcResult(struct.enum([
+  'AccountInUse',
   'Confirmed',
-  'SignatureNotFound',
-  'ProgramRuntimeError',
   'GenericFailure',
+  'ProgramRuntimeError',
+  'SignatureNotFound',
 ]));
 
 /**
@@ -152,7 +153,11 @@ type AccountInfo = {
  *
  * @typedef {string} SignatureStatus
  */
-export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntimeError' | 'GenericFailure';
+export type SignatureStatus = 'Confirmed'
+  | 'AccountInUse'
+  | 'SignatureNotFound'
+  | 'ProgramRuntimeError'
+  | 'GenericFailure';
 
 /**
  * A connection to a fullnode JSON RPC endpoint
