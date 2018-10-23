@@ -11,7 +11,6 @@ use metrics;
 use result::{Error, Result};
 use service::Service;
 use signature::{Keypair, KeypairUtil};
-use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -58,7 +57,7 @@ impl ReplicateStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account: &mut Pubkey,
+        vote_account_keypair: &Arc<Keypair>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -118,7 +117,7 @@ impl ReplicateStage {
         };
 
         if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, keypair, vote_account, &cluster_info, sender)?;
+            send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
         }
 
         inc_new_counter_info!(
@@ -142,6 +141,7 @@ impl ReplicateStage {
 
     pub fn new(
         keypair: Arc<Keypair>,
+        vote_account_keypair: Arc<Keypair>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -163,7 +163,6 @@ impl ReplicateStage {
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = None;
-                let mut vote_account = Pubkey::default();
                 loop {
                     let leader_id =
                         bank.get_current_leader()
@@ -194,7 +193,7 @@ impl ReplicateStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &mut vote_account,
+                        &vote_account_keypair,
                         vote_sender,
                         &ledger_entry_sender,
                         &mut entry_height_,
@@ -272,7 +271,7 @@ mod test {
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
-        let active_set_entries =
+        let (active_set_entries, vote_account_keypair) =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
@@ -308,6 +307,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (replicate_stage, _ledger_writer_recv) = ReplicateStage::new(
             Arc::new(my_keypair),
+            Arc::new(vote_account_keypair),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,

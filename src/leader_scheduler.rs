@@ -10,6 +10,7 @@ use hash::{hash, Hash};
 use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
+use std::collections::HashSet;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
@@ -281,7 +282,10 @@ impl LeaderScheduler {
         Some(self.leader_schedule[validator_index])
     }
 
-    fn get_active_set(&mut self, height: u64, bank: &Bank) -> Vec<Pubkey> {
+    // TODO: We use a HashSet for now because a single validator could potentially register
+    // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
+    // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
+    fn get_active_set(&mut self, height: u64, bank: &Bank) -> HashSet<Pubkey> {
         let upper_bound = height;
         let lower_bound = height.saturating_sub(self.active_window_length);
 
@@ -316,8 +320,7 @@ impl LeaderScheduler {
         let seed = Self::calculate_seed(height);
         self.seed = seed;
         let active_set = self.get_active_set(height, &bank);
-        println!("Active set: {:?}", active_set);
-        let ranked_active_set = Self::rank_active_set(bank, &active_set[..]);
+        let ranked_active_set = Self::rank_active_set(bank, active_set.iter());
 
         // Handle case where there are no active validators with
         // non-zero stake. In this case, use the bootstrap leader for
@@ -372,7 +375,6 @@ impl LeaderScheduler {
         }
 
         self.leader_schedule = validator_rankings;
-        println!("leader schedule: {:?}", self.leader_schedule);
         self.last_seed_height = Some(height);
     }
 
@@ -380,9 +382,11 @@ impl LeaderScheduler {
         bank.get_balance(id)
     }
 
-    fn rank_active_set<'a>(bank: &Bank, active: &'a [Pubkey]) -> Vec<(&'a Pubkey, u64)> {
+    fn rank_active_set<'a, I>(bank: &Bank, active: I) -> Vec<(&'a Pubkey, u64)>
+    where
+        I: Iterator<Item = &'a Pubkey>,
+    {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
-            .iter()
             .filter_map(|pk| {
                 let stake = Self::get_stake(pk, bank);
                 if stake > 0 {
@@ -451,7 +455,7 @@ pub fn make_active_set_entries(
     last_entry_id: &Hash,
     last_tick_id: &Hash,
     num_ending_ticks: usize,
-) -> Vec<Entry> {
+) -> (Vec<Entry>, Keypair) {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 2, *last_tick_id);
@@ -459,23 +463,36 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create the vote account
-    let (vote_account, create_vote_account_tx) =
-        Transaction::vote_account_new(active_keypair, *last_tick_id, 1, 0);
+    let vote_account = Keypair::new();
+    let create_vote_account_tx =
+        Transaction::vote_account_new(active_keypair, vote_account.pubkey(), *last_tick_id, 1);
 
     let create_vote_account_entry = Entry::new(&last_entry_id, 1, vec![create_vote_account_tx]);
     last_entry_id = create_vote_account_entry.id;
 
-    // 3) Create vote entry
+    // 3) Register the vote account
+    let register_vote_account_tx =
+        Transaction::vote_account_register(active_keypair, vote_account.pubkey(), *last_tick_id, 0);
+
+    let register_vote_account_entry = Entry::new(&last_entry_id, 1, vec![register_vote_account_tx]);
+    last_entry_id = register_vote_account_entry.id;
+
+    // 4) Create vote entry
     let vote = Vote { tick_height: 1 };
-    let vote_tx = Transaction::vote_new(&active_keypair, vote_account, vote, *last_tick_id, 0);
+    let vote_tx = Transaction::vote_new(&vote_account, vote, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
-    // 4) Create the ending empty ticks
-    let mut txs = vec![transfer_entry, create_vote_account_entry, vote_entry];
+    // 5) Create the ending empty ticks
+    let mut txs = vec![
+        transfer_entry,
+        create_vote_account_entry,
+        register_vote_account_entry,
+        vote_entry,
+    ];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
-    txs
+    (txs, vote_account)
 }
 
 #[cfg(test)]
@@ -504,18 +521,12 @@ mod tests {
         HashSet::from_iter(slice.iter().cloned())
     }
 
-    fn push_vote(
-        node_keypair: &Keypair,
-        node_vote_account: Pubkey,
-        bank: &Bank,
-        height: u64,
-        last_id: Hash,
-    ) {
+    fn push_vote(vote_account: &Keypair, bank: &Bank, height: u64, last_id: Hash) {
         let vote = Vote {
             tick_height: height,
         };
 
-        let new_vote_tx = Transaction::vote_new(node_keypair, node_vote_account, vote, last_id, 0);
+        let new_vote_tx = Transaction::vote_new(vote_account, vote, last_id, 0);
 
         bank.process_transaction(&new_vote_tx).unwrap();
     }
@@ -525,11 +536,23 @@ mod tests {
         bank: &Bank,
         num_tokens: i64,
         last_id: Hash,
-    ) -> Result<Pubkey> {
-        let (new_vote_account, tx) =
-            Transaction::vote_account_new(node_keypair, last_id, num_tokens, 0);
+    ) -> Result<Keypair> {
+        let new_vote_account = Keypair::new();
 
+        // Create the new vote account
+        let tx = Transaction::vote_account_new(
+            node_keypair,
+            new_vote_account.pubkey(),
+            last_id,
+            num_tokens,
+        );
         bank.process_transaction(&tx)?;
+
+        // Register the vote account to the validator
+        let tx =
+            Transaction::vote_account_register(node_keypair, new_vote_account.pubkey(), last_id, 0);
+        bank.process_transaction(&tx)?;
+
         Ok(new_vote_account)
     }
 
@@ -588,7 +611,7 @@ mod tests {
             ).unwrap();
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
-            push_vote(&new_validator, new_vote_account, &bank, 1, mint.last_id());
+            push_vote(&new_vote_account, &bank, 1, mint.last_id());
         }
 
         // The scheduled leader during the bootstrapping period (assuming a seed + schedule
@@ -697,13 +720,7 @@ mod tests {
                 create_vote_account(&new_keypair, &bank, 1, mint.last_id()).unwrap();
 
             // Push a vote for the account
-            push_vote(
-                &new_keypair,
-                new_vote_account,
-                &bank,
-                start_height,
-                mint.last_id(),
-            );
+            push_vote(&new_vote_account, &bank, start_height, mint.last_id());
         }
 
         // Insert a bunch of votes at height "start_height + active_window_length"
@@ -722,8 +739,7 @@ mod tests {
                 create_vote_account(&new_keypair, &bank, 1, mint.last_id()).unwrap();
 
             push_vote(
-                &new_keypair,
-                new_vote_account,
+                &new_vote_account,
                 &bank,
                 start_height + active_window_length,
                 mint.last_id(),
@@ -733,26 +749,18 @@ mod tests {
         // Queries for the active set
         let result =
             leader_scheduler.get_active_set(active_window_length + start_height - 1, &bank);
-        assert_eq!(result.len(), num_old_ids);
-        let result_set = to_hashset_owned(&result);
-        assert_eq!(result_set, old_ids);
+        assert_eq!(result, old_ids);
 
         let result = leader_scheduler.get_active_set(active_window_length + start_height, &bank);
-        assert_eq!(result.len(), num_new_ids);
-        let result_set = to_hashset_owned(&result);
-        assert_eq!(result_set, new_ids);
+        assert_eq!(result, new_ids);
 
         let result =
             leader_scheduler.get_active_set(2 * active_window_length + start_height - 1, &bank);
-        assert_eq!(result.len(), num_new_ids);
-        let result_set = to_hashset_owned(&result);
-        assert_eq!(result_set, new_ids);
+        assert_eq!(result, new_ids);
 
         let result =
             leader_scheduler.get_active_set(2 * active_window_length + start_height, &bank);
-        assert_eq!(result.len(), 0);
-        let result_set = to_hashset_owned(&result);
-        assert!(result_set.is_empty());
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -792,7 +800,7 @@ mod tests {
         }
 
         let validators_pk: Vec<Pubkey> = validators.iter().map(Keypair::pubkey).collect();
-        let result = LeaderScheduler::rank_active_set(&bank, &validators_pk[..]);
+        let result = LeaderScheduler::rank_active_set(&bank, validators_pk.iter());
 
         assert_eq!(result.len(), validators.len());
 
@@ -822,7 +830,7 @@ mod tests {
             .chain(new_validators.iter())
             .map(Keypair::pubkey)
             .collect();
-        let result = LeaderScheduler::rank_active_set(&bank, &all_validators[..]);
+        let result = LeaderScheduler::rank_active_set(&bank, all_validators.iter());
         assert_eq!(result.len(), new_validators.len());
 
         for (i, (pk, balance)) in result.into_iter().enumerate() {
@@ -848,7 +856,7 @@ mod tests {
                 .unwrap();
         }
 
-        let result = LeaderScheduler::rank_active_set(&bank, &tied_validators_pk[..]);
+        let result = LeaderScheduler::rank_active_set(&bank, tied_validators_pk.iter());
         let mut sorted: Vec<&Pubkey> = tied_validators_pk.iter().map(|x| x).collect();
         sorted.sort_by(|pk1, pk2| pk1.cmp(pk2));
         assert_eq!(result.len(), tied_validators_pk.len());
@@ -1015,8 +1023,7 @@ mod tests {
 
             // Vote at height i * active_window_length for validator i
             push_vote(
-                &new_validator,
-                new_vote_account,
+                &new_vote_account,
                 &bank,
                 i * active_window_length + bootstrap_height,
                 mint.last_id(),
@@ -1071,15 +1078,13 @@ mod tests {
 
         // Vote twice
         push_vote(
-            &leader_keypair,
-            new_vote_account,
+            &new_vote_account,
             &bank,
             initial_vote_height,
             mint.last_id(),
         );
         push_vote(
-            &leader_keypair,
-            new_vote_account,
+            &new_vote_account,
             &bank,
             initial_vote_height + 1,
             mint.last_id(),
@@ -1087,10 +1092,10 @@ mod tests {
 
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length, &bank);
-        assert_eq!(result, vec![leader_id]);
+        assert_eq!(result, to_hashset_owned(&vec![leader_id]));
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length + 1, &bank);
-        assert_eq!(result, vec![]);
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -1217,8 +1222,7 @@ mod tests {
             let new_vote_account =
                 create_vote_account(&validator_keypair, &bank, 1, mint.last_id()).unwrap();
             push_vote(
-                &validator_keypair,
-                new_vote_account,
+                &new_vote_account,
                 &bank,
                 initial_vote_height,
                 mint.last_id(),
@@ -1257,8 +1261,7 @@ mod tests {
 
         // Add leader to the active set
         push_vote(
-            &bootstrap_leader_keypair,
-            new_vote_account,
+            &new_vote_account,
             &bank,
             initial_vote_height,
             mint.last_id(),
@@ -1372,8 +1375,7 @@ mod tests {
         let new_validator_vote_account =
             create_vote_account(&validator_keypair, &bank, 1, mint.last_id()).unwrap();
         push_vote(
-            &validator_keypair,
-            new_validator_vote_account,
+            &new_validator_vote_account,
             &bank,
             initial_vote_height,
             mint.last_id(),
@@ -1387,8 +1389,7 @@ mod tests {
 
         // Add leader to the active set
         push_vote(
-            &bootstrap_leader_keypair,
-            new_leader_vote_account,
+            &new_leader_vote_account,
             &bank,
             initial_vote_height,
             mint.last_id(),

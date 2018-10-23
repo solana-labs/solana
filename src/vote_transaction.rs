@@ -2,61 +2,69 @@
 
 use bincode::{deserialize, serialize};
 use hash::Hash;
-use signature::{Keypair, KeypairUtil};
+use signature::Keypair;
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 use vote_program::{Vote, VoteInstruction, VoteProgram, MAX_STATE_SIZE};
 
 pub trait VoteTransaction {
-    fn vote_new(
-        from_keypair: &Keypair,
-        vote_account: Pubkey,
-        vote: Vote,
+    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
+    fn vote_account_new(
+        validator_id: &Keypair,
+        new_vote_account_id: Pubkey,
+        last_id: Hash,
+        num_tokens: i64,
+    ) -> Self;
+    fn vote_account_register(
+        validator_id: &Keypair,
+        vote_account_id: Pubkey,
         last_id: Hash,
         fee: i64,
     ) -> Self;
-    fn vote_account_new(
-        validator_id: &Keypair,
-        last_id: Hash,
-        num_tokens: i64,
-        fee: i64,
-    ) -> (Pubkey, Self);
     fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl VoteTransaction for Transaction {
-    fn vote_new(from: &Keypair, vote_account: Pubkey, vote: Vote, last_id: Hash, fee: i64) -> Self {
+    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
         let instruction = VoteInstruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
+        Transaction::new(vote_account, &[], VoteProgram::id(), userdata, last_id, fee)
+    }
+
+    fn vote_account_new(
+        validator_id: &Keypair,
+        new_vote_account_id: Pubkey,
+        last_id: Hash,
+        num_tokens: i64,
+    ) -> Self {
+        Transaction::system_create(
+            validator_id,
+            new_vote_account_id,
+            last_id,
+            num_tokens,
+            MAX_STATE_SIZE as u64,
+            VoteProgram::id(),
+            0,
+        )
+    }
+
+    fn vote_account_register(
+        validator_id: &Keypair,
+        vote_account_id: Pubkey,
+        last_id: Hash,
+        fee: i64,
+    ) -> Self {
+        let register_tx = VoteInstruction::RegisterAccount;
+        let userdata = serialize(&register_tx).unwrap();
         Transaction::new(
-            from,
-            &[vote_account],
+            validator_id,
+            &[vote_account_id],
             VoteProgram::id(),
             userdata,
             last_id,
             fee,
         )
-    }
-
-    fn vote_account_new(
-        validator_id: &Keypair,
-        last_id: Hash,
-        num_tokens: i64,
-        fee: i64,
-    ) -> (Pubkey, Self) {
-        let new_vote_account = Keypair::new().pubkey();
-        let create_vote_account_tx = Transaction::system_create(
-            validator_id,
-            new_vote_account,
-            last_id,
-            num_tokens,
-            MAX_STATE_SIZE as u64,
-            VoteProgram::id(),
-            fee,
-        );
-
-        (new_vote_account, create_vote_account_tx)
     }
 
     fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)> {

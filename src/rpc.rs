@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_rpc_send_tx() {
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
@@ -618,8 +618,10 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
 
+        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
+            vote_account_keypair,
             bank,
             0,
             entry_height,

@@ -86,6 +86,7 @@ pub enum FullnodeReturnType {
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
     keypair: Arc<Keypair>,
+    vote_account_keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
     rpu: Option<Rpu>,
     rpc_service: Option<JsonRpcService>,
@@ -132,7 +133,8 @@ impl Fullnode {
     pub fn new(
         node: Node,
         ledger_path: &str,
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
+        vote_account_keypair: Arc<Keypair>,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -156,6 +158,7 @@ impl Fullnode {
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
         let server = Self::new_with_bank(
             keypair,
+            vote_account_keypair,
             bank,
             tick_height,
             entry_height,
@@ -237,7 +240,8 @@ impl Fullnode {
     /// ```
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new_with_bank(
-        keypair: Keypair,
+        keypair: Arc<Keypair>,
+        vote_account_keypair: Arc<Keypair>,
         bank: Bank,
         tick_height: u64,
         entry_height: u64,
@@ -285,8 +289,6 @@ impl Fullnode {
             exit.clone(),
         );
 
-        let keypair = Arc::new(keypair);
-
         // Insert the bootstrap leader info, should only be None if this node
         // is the bootstrap leader
         if let Some(bootstrap_leader_info) = bootstrap_leader_info_option {
@@ -303,6 +305,7 @@ impl Fullnode {
             // Start in validator mode.
             let tvu = Tvu::new(
                 keypair.clone(),
+                vote_account_keypair.clone(),
                 &bank,
                 entry_height,
                 cluster_info.clone(),
@@ -364,6 +367,7 @@ impl Fullnode {
 
         Fullnode {
             keypair,
+            vote_account_keypair,
             cluster_info,
             shared_window,
             bank: Some(bank),
@@ -488,6 +492,7 @@ impl Fullnode {
         } else {
             let tvu = Tvu::new(
                 self.keypair.clone(),
+                self.vote_account_keypair.clone(),
                 self.bank.as_ref().unwrap(),
                 entry_height,
                 self.cluster_info.clone(),
@@ -728,7 +733,8 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
 
         let v = Fullnode::new_with_bank(
-            keypair,
+            Arc::new(keypair),
+            Arc::new(Keypair::new()),
             bank,
             0,
             entry_height,
@@ -765,7 +771,8 @@ mod tests {
                 bank.leader_scheduler = leader_scheduler;
 
                 Fullnode::new_with_bank(
-                    keypair,
+                    Arc::new(keypair),
+                    Arc::new(Keypair::new()),
                     bank,
                     0,
                     entry_height,
@@ -832,7 +839,8 @@ mod tests {
         let mut bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_ledger_path,
-            bootstrap_leader_keypair,
+            Arc::new(bootstrap_leader_keypair),
+            Arc::new(Keypair::new()),
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -858,7 +866,7 @@ mod tests {
     #[test]
     fn test_wrong_role_transition() {
         // Create the leader node information
-        let bootstrap_leader_keypair = Keypair::new();
+        let bootstrap_leader_keypair = Arc::new(Keypair::new());
         let bootstrap_leader_node =
             Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
@@ -880,7 +888,7 @@ mod tests {
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-        let active_set_entries = make_active_set_entries(
+        let (active_set_entries, validator_vote_account_keypair) = make_active_set_entries(
             &validator_keypair,
             &mint.keypair(),
             &last_id,
@@ -912,10 +920,12 @@ mod tests {
         );
 
         // Test that a node knows to transition to a validator based on parsing the ledger
+        let leader_vote_account_keypair = Arc::new(Keypair::new());
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_ledger_path,
             bootstrap_leader_keypair,
+            leader_vote_account_keypair,
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -932,7 +942,8 @@ mod tests {
         let validator = Fullnode::new(
             validator_node,
             &bootstrap_leader_ledger_path,
-            validator_keypair,
+            Arc::new(validator_keypair),
+            Arc::new(validator_vote_account_keypair),
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -980,7 +991,7 @@ mod tests {
         //
         // 2) A vote from the validator
         let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
-        let active_set_entries =
+        let (active_set_entries, validator_vote_account_keypair) =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
         let initial_tick_height = genesis_entries
             .iter()
@@ -1008,7 +1019,8 @@ mod tests {
         let mut validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
-            validator_keypair,
+            Arc::new(validator_keypair),
+            Arc::new(validator_vote_account_keypair),
             Some(leader_ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),

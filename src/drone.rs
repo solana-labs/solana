@@ -314,7 +314,7 @@ mod tests {
         const TPS_BATCH: i64 = 5_000_000;
 
         logger::setup();
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
@@ -328,8 +328,10 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = get_tmp_ledger_path("send_airdrop");
 
+        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
+            vote_account_keypair,
             bank,
             0,
             0,
@@ -372,13 +374,14 @@ mod tests {
         // restart the leader, drone should find the new one at the same gossip port
         server.close().unwrap();
 
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let server = Fullnode::new(
             leader,
             &ledger_path,
             leader_keypair,
+            Arc::new(Keypair::new()),
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_data.id),

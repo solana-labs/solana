@@ -38,6 +38,12 @@ pub struct Vote {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
+    /// Register a new "vote account" to represent a particular validator in the Vote Contract,
+    /// and initialize the VoteState for this "vote account"
+    /// * Transaction::keys[0] - the validator id
+    /// * Transaction::keys[1] - the new "vote account" to be associated with the validator
+    /// identified by keys[0] for voting
+    RegisterAccount,
     NewVote(Vote),
 }
 
@@ -63,9 +69,7 @@ impl VoteProgram {
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram> {
         let len = LittleEndian::read_u16(&input[0..2]) as usize;
 
-        if len == 0 {
-            Ok(VoteProgram::default())
-        } else if input.len() < len + 1 {
+        if len == 0 || input.len() < len + 1 {
             Err(Error::InvalidUserdata)
         } else {
             deserialize(&input[2..=len + 1]).map_err(|err| {
@@ -98,24 +102,28 @@ impl VoteProgram {
         instruction_index: usize,
         accounts: &mut [&mut Account],
     ) -> Result<()> {
-        if !Self::check_id(&accounts[1].program_id) {
-            error!("accounts[1] is not assigned to the VOTE_PROGRAM");
-            Err(Error::InvalidArguments)?;
-        }
-
-        let mut vote_state = Self::deserialize(&accounts[1].userdata)?;
-
         match deserialize(tx.userdata(instruction_index)) {
+            Ok(VoteInstruction::RegisterAccount) => {
+                // TODO: a single validator could register multiple "vote accounts"
+                // which would clutter the "accounts" structure.
+                accounts[1].program_id = Self::id();
+
+                let mut vote_state = VoteProgram {
+                    votes: VecDeque::new(),
+                    node_id: *tx.from(),
+                };
+
+                vote_state.serialize(&mut accounts[1].userdata)?;
+
+                Ok(())
+            }
             Ok(VoteInstruction::NewVote(vote)) => {
-                if vote_state.node_id == Pubkey::default() {
-                    // If it's a new account, setup this account for voting
-                    vote_state.node_id = *tx.from();
-                    vote_state.votes = VecDeque::new();
-                } else if vote_state.node_id != *tx.from() {
-                    // If it's an old account, verify the state's node id and
-                    // the sender's id match (ensures nodes can't vote for other nodes)
+                if !Self::check_id(&accounts[0].program_id) {
+                    error!("accounts[0] is not assigned to the VOTE_PROGRAM");
                     Err(Error::InvalidArguments)?;
                 }
+
+                let mut vote_state = Self::deserialize(&accounts[0].userdata)?;
 
                 // TODO: Integrity checks
                 // a) Verify the vote's bank hash matches what is expected
@@ -127,7 +135,7 @@ impl VoteProgram {
                 }
 
                 vote_state.votes.push_back(vote);
-                vote_state.serialize(&mut accounts[1].userdata)?;
+                vote_state.serialize(&mut accounts[0].userdata)?;
 
                 Ok(())
             }

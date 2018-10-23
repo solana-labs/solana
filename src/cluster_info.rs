@@ -497,7 +497,7 @@ impl ClusterInfo {
             );
 
             // Make sure the next leader in line knows about the entries before his slot in the leader
-            // rotation so he can initiate repairs if necessary
+            // rotation so they can initiate repairs if necessary
             {
                 let ls_lock = leader_scheduler.read().unwrap();
                 let next_leader_height = ls_lock.max_height_for_leader(tick_height);
