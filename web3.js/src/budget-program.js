@@ -203,8 +203,7 @@ export class BudgetProgram {
         pos += payment.length;
       }
 
-      return new Transaction({
-        fee: 0,
+      return new Transaction().add({
         keys: [from, to],
         programId: this.programId,
         userdata: userdata.slice(0, pos),
@@ -224,8 +223,7 @@ export class BudgetProgram {
         pos += paymentData.length;
       }
 
-      return new Transaction({
-        fee: 0,
+      return new Transaction().add({
         keys: [from, program, to],
         programId: this.programId,
         userdata: userdata.slice(0, pos),
@@ -245,8 +243,7 @@ export class BudgetProgram {
         pos += paymentData.length;
       }
 
-      return new Transaction({
-        fee: 0,
+      return new Transaction().add({
         keys: [from, program, to],
         programId: this.programId,
         userdata: userdata.slice(0, pos),
@@ -289,8 +286,7 @@ export class BudgetProgram {
     paymentData.copy(userdata, pos);
     pos += paymentData.length;
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
       userdata: userdata.slice(0, pos),
@@ -309,8 +305,7 @@ export class BudgetProgram {
     userdata.writeUInt32LE(1, 0); // ApplyTimestamp instruction
     whenData.copy(userdata, 4);
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
       userdata,
@@ -334,8 +329,7 @@ export class BudgetProgram {
       userdata,
     );
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from, program, to],
       programId: this.programId,
       userdata,

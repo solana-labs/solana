@@ -46,8 +46,7 @@ export class SystemProgram {
       userdata,
     );
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from, newAccount],
       programId: SystemProgram.programId,
       userdata,
@@ -72,8 +71,7 @@ export class SystemProgram {
       userdata,
     );
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from, to],
       programId: SystemProgram.programId,
       userdata,
@@ -98,8 +96,7 @@ export class SystemProgram {
       userdata,
     );
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [from],
       programId: SystemProgram.programId,
       userdata,
@@ -122,8 +119,7 @@ export class SystemProgram {
       userdata,
     );
 
-    return new Transaction({
-      fee: 0,
+    return new Transaction().add({
       keys: [programId],
       programId: SystemProgram.programId,
       userdata,

@@ -80,22 +80,25 @@ declare module '@solana/web3.js' {
   declare export type TransactionSignature = string;
   declare export type TransactionId = string;
 
-  declare type TransactionCtorFields = {|
-    signature?: Buffer;
+  declare type TransactionInstructionCtorFields = {|
     keys?: Array<PublicKey>;
     programId?: PublicKey;
-    fee?: number;
     userdata?: Buffer;
   |};
 
+  declare export class TransactionInstruction {
+    fee: number;
+
+    constructor(opts?: TransactionInstructionCtorFields): TransactionInstruction;
+  }
+
+  declare type TransactionCtorFields = {|
+    fee?: number;
+  |};
 
   declare export class Transaction {
     signature: ?Buffer;
-    keys: Array<PublicKey>;
-    programId: ?PublicKey;
-    lastId: ?TransactionId;
     fee: number;
-    userdata: Buffer;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     sign(from: Account): void;

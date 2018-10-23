@@ -26,8 +26,7 @@ test('load noop program', async () => {
   const from = await newAccountWithTokens(connection);
 
   const noopProgramId = await NativeLoader.load(connection, from, 'noop');
-  const noopTransaction = new Transaction({
-    fee: 0,
+  const noopTransaction = new Transaction().add({
     keys: [from.publicKey],
     programId: noopProgramId,
   });

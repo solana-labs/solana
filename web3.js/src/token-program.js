@@ -231,8 +231,7 @@ export class Token {
     );
     await sendAndConfirmTransaction(connection, owner, transaction);
 
-    transaction = new Transaction({
-      fee: 0,
+    transaction = new Transaction().add({
       keys: [tokenAccount.publicKey, initialAccountPublicKey],
       programId,
       userdata,
@@ -283,8 +282,7 @@ export class Token {
     if (source) {
       keys.push(source);
     }
-    transaction = new Transaction({
-      fee: 0,
+    transaction = new Transaction().add({
       keys,
       programId: this.programId,
       userdata,
@@ -389,8 +387,7 @@ export class Token {
     if (accountInfo.source) {
       keys.push(accountInfo.source);
     }
-    const transaction = new Transaction({
-      fee: 0,
+    const transaction = new Transaction().add({
       keys,
       programId: this.programId,
       userdata,
@@ -427,8 +424,7 @@ export class Token {
       userdata,
     );
 
-    const transaction = new Transaction({
-      fee: 0,
+    const transaction = new Transaction().add({
       keys: [owner.publicKey, account, delegate],
       programId: this.programId,
       userdata,
@@ -477,8 +473,7 @@ export class Token {
     );
 
     const keys = [owner.publicKey, account,newOwner];
-    const transaction = new Transaction({
-      fee: 0,
+    const transaction = new Transaction().add({
       keys,
       programId: this.programId,
       userdata,
