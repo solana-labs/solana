@@ -73,12 +73,15 @@ impl SystemProgram {
                     program_id,
                 } => {
                     if !Self::check_id(&accounts[0].program_id) {
+                        info!("Invalid account[0] program_id");
                         Err(Error::InvalidArgument)?;
                     }
+
                     if space > 0
                         && (!accounts[1].userdata.is_empty()
                             || !Self::check_id(&accounts[1].program_id))
                     {
+                        info!("Invalid account[1]");
                         Err(Error::InvalidArgument)?;
                     }
                     accounts[0].tokens -= tokens;
