@@ -15,30 +15,35 @@ export async function sendAndConfirmTransaction(
   transaction: Transaction,
   runtimeErrorOk: boolean = false
 ): Promise<void> {
-  const start = Date.now();
-  const signature = await connection.sendTransaction(from, transaction);
 
-  // Wait up to a couple seconds for a confirmation
-  let i = 4;
+  let sendRetries = 3;
   for (;;) {
-    const status = await connection.getSignatureStatus(signature);
-    switch (status) {
-    case 'Confirmed':
-      return;
-    case 'ProgramRuntimeError':
-      if (runtimeErrorOk) return;
-      //fall through
-    case 'GenericError':
-    default:
-      throw new Error(`Transaction ${signature} failed (${status})`);
-    case 'SignatureNotFound':
-      break;
+    const start = Date.now();
+    const signature = await connection.sendTransaction(from, transaction);
+
+    // Wait up to a couple seconds for a confirmation
+    let status = 'SignatureNotFound';
+    let statusRetries = 4;
+    for (;;) {
+      status = await connection.getSignatureStatus(signature);
+      if (status !== 'SignatureNotFound') {
+        break;
+      }
+
+      await sleep(500);
+      if (--statusRetries <= 0) {
+        const duration = (Date.now() - start) / 1000;
+        throw new Error(`Transaction '${signature}' was not confirmed in ${duration.toFixed(2)} seconds (${status})`);
+      }
     }
 
-    await sleep(500);
-    if (--i < 0) {
-      const duration = (Date.now() - start) / 1000;
-      throw new Error(`Transaction '${signature}' was not confirmed in ${duration.toFixed(2)} seconds (${status})`);
+    if ( (status === 'Confirmed') ||
+         (status === 'ProgramRuntimeError' && runtimeErrorOk) ) {
+      return;
+    }
+
+    if (status !== 'AccountInUse' || --sendRetries <= 0) {
+      throw new Error(`Transaction ${signature} failed (${status})`);
     }
   }
 }
