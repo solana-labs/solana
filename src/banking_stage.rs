@@ -251,6 +251,7 @@ impl BankingStage {
         let bank_starting_tx_count = bank.transaction_count();
         let count = mms.iter().map(|x| x.1.len()).sum();
         let proc_start = Instant::now();
+        let mut new_tx_count = 0;
         for (msgs, vers) in mms {
             let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
             reqs_len += transactions.len();
@@ -270,6 +271,7 @@ impl BankingStage {
                 }).collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;
+            new_tx_count += transactions.len();
         }
 
         inc_new_counter_info!(
@@ -287,10 +289,7 @@ impl BankingStage {
             (reqs_len as f32) / (total_time_s)
         );
         inc_new_counter_info!("banking_stage-process_packets", count);
-        inc_new_counter_info!(
-            "banking_stage-process_transactions",
-            bank.transaction_count() - bank_starting_tx_count
-        );
+        inc_new_counter_info!("banking_stage-process_transactions", new_tx_count);
         Ok(())
     }
 }
