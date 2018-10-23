@@ -5,7 +5,6 @@ extern crate atty;
 extern crate clap;
 extern crate serde_json;
 extern crate solana;
-extern crate untrusted;
 
 use clap::{App, Arg};
 use solana::fullnode::Config;

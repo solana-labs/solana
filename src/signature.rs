@@ -1,20 +1,19 @@
 //! The `signature` module provides functionality for public, and private keys.
 
 use bs58;
+use ed25519_dalek;
 use generic_array::typenum::U64;
 use generic_array::GenericArray;
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{ChaChaRng, OsRng, Rng, SeedableRng};
 use rayon::prelude::*;
-use ring::signature::Ed25519KeyPair;
-use ring::{rand, signature};
 use serde_json;
+use sha2::Sha512;
 use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::fmt;
 use std::fs::File;
-use untrusted::Input;
 
-pub type Keypair = Ed25519KeyPair;
+pub type Keypair = ed25519_dalek::Keypair;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Signature(GenericArray<u8, U64>);
@@ -24,10 +23,9 @@ impl Signature {
         Signature(GenericArray::clone_from_slice(&signature_slice))
     }
     pub fn verify(&self, pubkey_bytes: &[u8], message_bytes: &[u8]) -> bool {
-        let pubkey = Input::from(pubkey_bytes);
-        let message = Input::from(message_bytes);
-        let signature = Input::from(self.0.as_slice());
-        signature::verify(&signature::ED25519, pubkey, message, signature).is_ok()
+        let pubkey = ed25519_dalek::PublicKey::from_bytes(pubkey_bytes).unwrap();
+        let signature = ed25519_dalek::Signature::from_bytes(self.0.as_slice()).unwrap();
+        pubkey.verify::<Sha512>(message_bytes, &signature).is_ok()
     }
 }
 
@@ -54,17 +52,16 @@ pub trait KeypairUtil {
     fn pubkey(&self) -> Pubkey;
 }
 
-impl KeypairUtil for Ed25519KeyPair {
+impl KeypairUtil for Keypair {
     /// Return a new ED25519 keypair
     fn new() -> Self {
-        let rng = rand::SystemRandom::new();
-        let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).expect("generate_pkcs8");
-        Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8_bytes)).expect("from_pcks8")
+        let mut rng: OsRng = OsRng::new().unwrap();
+        Keypair::generate::<Sha512, _>(&mut rng)
     }
 
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
-        Pubkey::new(self.public_key_bytes())
+        Pubkey::new(&self.public.to_bytes())
     }
 }
 
@@ -78,20 +75,20 @@ impl GenKeys {
         GenKeys { generator }
     }
 
-    fn gen_seed(&mut self) -> [u8; 32] {
-        let mut seed = [0u8; 32];
+    fn gen_seed(&mut self) -> [u8; 64] {
+        let mut seed = [0u8; 64];
         self.generator.fill(&mut seed);
         seed
     }
 
-    fn gen_n_seeds(&mut self, n: u64) -> Vec<[u8; 32]> {
+    fn gen_n_seeds(&mut self, n: u64) -> Vec<[u8; 64]> {
         (0..n).map(|_| self.gen_seed()).collect()
     }
 
     pub fn gen_n_keypairs(&mut self, n: u64) -> Vec<Keypair> {
         self.gen_n_seeds(n)
             .into_par_iter()
-            .map(|seed| Keypair::from_seed_unchecked(Input::from(&seed)).unwrap())
+            .map(|seed| Keypair::from_bytes(&seed).unwrap())
             .collect()
     }
 }
@@ -104,7 +101,7 @@ pub fn read_pkcs8(path: &str) -> Result<Vec<u8>, Box<error::Error>> {
 
 pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     let pkcs8 = read_pkcs8(path)?;
-    let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8))?;
+    let keypair = Keypair::from_bytes(&pkcs8).unwrap();
     Ok(keypair)
 }
 
