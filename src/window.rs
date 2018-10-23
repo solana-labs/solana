@@ -474,7 +474,7 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
+                Ok(m) => *num += m.read().packets.len(),
                 e => info!("error {:?}", e),
             }
             if *num == 10 {

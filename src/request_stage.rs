@@ -50,7 +50,7 @@ impl RequestStage {
         let mut reqs_len = 0;
         let proc_start = Instant::now();
         for msgs in batch {
-            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read().unwrap())
+            let reqs: Vec<_> = Self::deserialize_requests(&msgs.read())
                 .into_iter()
                 .filter_map(|x| x)
                 .collect();

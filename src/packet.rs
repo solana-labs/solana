@@ -10,6 +10,7 @@ use hash::Hash;
 use ledger::Block;
 use log::Level;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use recycler;
 use result::{Error, Result};
 use serde::Serialize;
 use solana_program_interface::pubkey::Pubkey;
@@ -20,9 +21,10 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
-pub type SharedPackets = Arc<RwLock<Packets>>;
+pub type SharedPackets = recycler::Recyclable<Packets>;
 pub type SharedBlob = Arc<RwLock<Blob>>;
 pub type SharedBlobs = Vec<SharedBlob>;
+pub type PacketRecycler = recycler::Recycler<Packets>;
 
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
@@ -64,6 +66,12 @@ impl Default for Packet {
             data: [0u8; PACKET_DATA_SIZE],
             meta: Meta::default(),
         }
+    }
+}
+
+impl recycler::Reset for Packet {
+    fn reset(&mut self) {
+        self.meta = Meta::default();
     }
 }
 
@@ -117,6 +125,14 @@ impl Default for Packets {
     fn default() -> Packets {
         Packets {
             packets: vec![Packet::default(); NUM_PACKETS],
+        }
+    }
+}
+
+impl recycler::Reset for Packets {
+    fn reset(&mut self) {
+        for i in 0..self.packets.len() {
+            self.packets[i].reset();
         }
     }
 }
@@ -205,15 +221,16 @@ impl Packets {
     }
 }
 
-pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPackets> {
+pub fn to_packets_chunked<T: Serialize>(
+    r: &PacketRecycler,
+    xs: &[T],
+    chunks: usize,
+) -> Vec<SharedPackets> {
     let mut out = vec![];
     for x in xs.chunks(chunks) {
-        let mut p = SharedPackets::default();
-        p.write()
-            .unwrap()
-            .packets
-            .resize(x.len(), Default::default());
-        for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
+        let mut p = r.allocate();
+        p.write().packets.resize(x.len(), Default::default());
+        for (i, o) in x.iter().zip(p.write().packets.iter_mut()) {
             let v = serialize(&i).expect("serialize request");
             let len = v.len();
             o.data[..len].copy_from_slice(&v);
@@ -224,8 +241,8 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPa
     out
 }
 
-pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<SharedPackets> {
-    to_packets_chunked(xs, NUM_PACKETS)
+pub fn to_packets<T: Serialize>(r: &PacketRecycler, xs: &[T]) -> Vec<SharedPackets> {
+    to_packets_chunked(r, xs, NUM_PACKETS)
 }
 
 pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<SharedBlob> {
@@ -428,8 +445,8 @@ pub fn make_consecutive_blobs(
 #[cfg(test)]
 mod tests {
     use packet::{
-        to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
-        PACKET_DATA_SIZE,
+        to_packets, Blob, Meta, Packet, PacketRecycler, Packets, SharedBlob,
+        NUM_PACKETS, PACKET_DATA_SIZE,
     };
     use request::Request;
     use std::io;
@@ -442,15 +459,16 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").expect("bind");
         let saddr = sender.local_addr().unwrap();
-        let p = SharedPackets::default();
-        p.write().unwrap().packets.resize(10, Packet::default());
-        for m in p.write().unwrap().packets.iter_mut() {
+        let r = PacketRecycler::default();
+        let p = r.allocate();
+        p.write().packets.resize(10, Packet::default());
+        for m in p.write().packets.iter_mut() {
             m.meta.set_addr(&addr);
             m.meta.size = PACKET_DATA_SIZE;
         }
-        p.read().unwrap().send_to(&sender).unwrap();
-        p.write().unwrap().recv_from(&reader).unwrap();
-        for m in p.write().unwrap().packets.iter_mut() {
+        p.read().send_to(&sender).unwrap();
+        p.write().recv_from(&reader).unwrap();
+        for m in p.write().packets.iter_mut() {
             assert_eq!(m.meta.size, PACKET_DATA_SIZE);
             assert_eq!(m.meta.addr(), saddr);
         }
@@ -459,18 +477,19 @@ mod tests {
     #[test]
     fn test_to_packets() {
         let tx = Request::GetTransactionCount;
-        let rv = to_packets(&vec![tx.clone(); 1]);
+        let re = PacketRecycler::default();
+        let rv = to_packets(&re, &vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().unwrap().packets.len(), 1);
+        assert_eq!(rv[0].read().packets.len(), 1);
 
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS]);
+        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
-        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[0].read().packets.len(), NUM_PACKETS);
 
-        let rv = to_packets(&vec![tx.clone(); NUM_PACKETS + 1]);
+        let rv = to_packets(&re, &vec![tx.clone(); NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
-        assert_eq!(rv[0].read().unwrap().packets.len(), NUM_PACKETS);
-        assert_eq!(rv[1].read().unwrap().packets.len(), 1);
+        assert_eq!(rv[0].read().packets.len(), NUM_PACKETS);
+        assert_eq!(rv[1].read().packets.len(), 1);
     }
 
     #[test]

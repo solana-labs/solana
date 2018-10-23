@@ -2,7 +2,7 @@
 //!
 use influx_db_client as influxdb;
 use metrics;
-use packet::{Blob, SharedBlobs, SharedPackets};
+use packet::{Blob, PacketRecycler, SharedBlobs, SharedPackets};
 use result::{Error, Result};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,19 +20,20 @@ pub type BlobReceiver = Receiver<SharedBlobs>;
 fn recv_loop(
     sock: &UdpSocket,
     exit: &Arc<AtomicBool>,
+    re: &PacketRecycler,
     channel: &PacketSender,
     channel_tag: &'static str,
 ) -> Result<()> {
     loop {
-        let msgs = SharedPackets::default();
+        let msgs = re.allocate();
         loop {
             // Check for exit signal, even if socket is busy
             // (for instance the leader trasaction socket)
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
-            if msgs.write().unwrap().recv_from(sock).is_ok() {
-                let len = msgs.read().unwrap().packets.len();
+            if msgs.write().recv_from(sock).is_ok() {
+                let len = msgs.read().packets.len();
                 metrics::submit(
                     influxdb::Point::new(channel_tag)
                         .add_field("count", influxdb::Value::Integer(len as i64))
@@ -52,13 +53,14 @@ pub fn receiver(
     sender_tag: &'static str,
 ) -> JoinHandle<()> {
     let res = sock.set_read_timeout(Some(Duration::new(1, 0)));
+    let recycler = PacketRecycler::default();
     if res.is_err() {
         panic!("streamer::receiver set_read_timeout error");
     }
     Builder::new()
         .name("solana-receiver".to_string())
         .spawn(move || {
-            let _ = recv_loop(&sock, &exit, &packet_sender, sender_tag);
+            let _ = recv_loop(&sock, &exit, &recycler, &packet_sender, sender_tag);
             ()
         }).unwrap()
 }
@@ -75,11 +77,11 @@ pub fn recv_batch(recvr: &PacketReceiver) -> Result<(Vec<SharedPackets>, usize, 
     let msgs = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
     trace!("got msgs");
-    let mut len = msgs.read().unwrap().packets.len();
+    let mut len = msgs.read().packets.len();
     let mut batch = vec![msgs];
     while let Ok(more) = recvr.try_recv() {
         trace!("got more msgs");
-        len += more.read().unwrap().packets.len();
+        len += more.read().packets.len();
         batch.push(more);
 
         if len > 100_000 {
@@ -148,7 +150,7 @@ mod test {
         for _t in 0..5 {
             let timer = Duration::new(1, 0);
             match r.recv_timeout(timer) {
-                Ok(m) => *num += m.read().unwrap().packets.len(),
+                Ok(m) => *num += m.read().packets.len(),
                 _ => info!("get_msgs error"),
             }
             if *num == 10 {

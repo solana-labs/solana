@@ -252,7 +252,7 @@ impl BankingStage {
         let proc_start = Instant::now();
         let mut new_tx_count = 0;
         for (msgs, vers) in mms {
-            let transactions = Self::deserialize_transactions(&msgs.read().unwrap());
+            let transactions = Self::deserialize_transactions(&msgs.read());
             reqs_len += transactions.len();
 
             debug!("transactions received {}", transactions.len());
@@ -322,7 +322,7 @@ mod tests {
     use banking_stage::BankingStageReturnType;
     use ledger::Block;
     use mint::Mint;
-    use packet::to_packets;
+    use packet::{to_packets, PacketRecycler};
     use signature::{Keypair, KeypairUtil};
     use std::thread::sleep;
     use system_transaction::SystemTransaction;
@@ -419,7 +419,8 @@ mod tests {
         let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // send 'em over
-        let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
+        let recycler = PacketRecycler::default();
+        let packets = to_packets(&recycler, &[tx, tx_no_ver, tx_anf]);
 
         // glad they all fit
         assert_eq!(packets.len(), 1);
@@ -452,6 +453,7 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
+        let recycler = PacketRecycler::default();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
@@ -466,14 +468,14 @@ mod tests {
         let alice = Keypair::new();
         let tx = Transaction::system_new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
 
-        let packets = to_packets(&[tx]);
+        let packets = to_packets(&recycler, &[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
 
         // Process a second batch that spends one of those tokens.
         let tx = Transaction::system_new(&alice, mint.pubkey(), 1, mint.last_id());
-        let packets = to_packets(&[tx]);
+        let packets = to_packets(&recycler, &[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])
             .unwrap();
