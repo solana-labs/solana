@@ -150,7 +150,7 @@ V     +----+                                           hang on to E(L4) and E(L5
 
 Note that an `E` appearing on 2 branches at the same period is a slashable condition, so a validator observing `E(L3)` and `E(L3)'` can slash L3 and safely choose `x` for that period.  Once a validator observes a supermajority vote on any branch, other branches can be discarded below that tick count.  For any period, validators need only consider a single "has entries" chain or a "ticks only" chain.
 
-##### Time Divsion
+##### Time Division
 
 It's useful to consider leader rotation over PoH tick count as time division of the job of encoding state for the network.  The following table presents the above tree of forks as a time-divided ledger.
 
