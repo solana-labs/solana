@@ -5,6 +5,8 @@ extern crate solana_program_interface;
 
 use bincode::serialize;
 use solana::bank::Bank;
+#[cfg(feature = "bpf_c")]
+use solana::bpf_loader;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
@@ -60,7 +62,7 @@ impl Loader {
         let bank = Bank::new(&mint);
         let loader = Keypair::new();
 
-        // allocate, populate, finalize, and spawn BPF loader
+        // allocate, populate, finalize, and spawn loader
 
         let tx = Transaction::system_create(
             &mint.keypair(),
@@ -104,6 +106,15 @@ impl Loader {
 
         Loader { mint, bank, loader }
     }
+
+    #[cfg(feature = "bpf_c")]
+    pub fn new_bpf() -> Self {
+        let mint = Mint::new(50);
+        let bank = Bank::new(&mint);
+        let loader = bpf_loader::id();
+
+        Loader { mint, bank, loader }
+    }
 }
 
 struct Program {
@@ -114,7 +125,7 @@ impl Program {
     pub fn new(loader: &Loader, userdata: Vec<u8>) -> Self {
         let program = Keypair::new();
 
-        // allocate, populate, and finalize and spawn program
+        // allocate, populate, finalize and spawn program
 
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
@@ -131,7 +142,7 @@ impl Program {
             loader.bank.process_transactions(&vec![tx.clone()]),
         );
 
-        let chunk_size = 256; // Size of chunk just needs to fix into tx
+        let chunk_size = 256; // Size of chunk just needs to fit into tx
         let mut offset = 0;
         for chunk in userdata.chunks(chunk_size) {
             let tx = Transaction::write(
@@ -178,7 +189,6 @@ fn test_program_native_noop() {
     let program = Program::new(&loader, userdata);
 
     // Call user program
-
     let tx = Transaction::new(
         &loader.mint.keypair(),
         &[],
@@ -262,6 +272,38 @@ fn test_program_lua_move_funds() {
 
 #[cfg(feature = "bpf_c")]
 #[test]
+fn test_program_builtin_bpf_noop() {
+    logger::setup();
+
+    let loader = Loader::new_bpf();
+    let program = Program::new(
+        &loader,
+        elf::File::open_path(&create_bpf_path("noop_c"))
+            .unwrap()
+            .get_section(PLATFORM_SECTION_C)
+            .unwrap()
+            .data
+            .clone(),
+    );
+
+    // Call user program
+    let tx = Transaction::new(
+        &loader.mint.keypair(),
+        &[],
+        program.program.pubkey(),
+        vec![1u8],
+        loader.mint.last_id(),
+        0,
+    );
+    check_tx_results(
+        &loader.bank,
+        &tx,
+        loader.bank.process_transactions(&vec![tx.clone()]),
+    );
+}
+
+#[cfg(feature = "bpf_c")]
+#[test]
 fn test_program_bpf_noop_c() {
     logger::setup();
 
@@ -277,7 +319,6 @@ fn test_program_bpf_noop_c() {
     );
 
     // Call user program
-
     let tx = Transaction::new(
         &loader.mint.keypair(),
         &[],
@@ -304,7 +345,6 @@ impl TicTacToe {
         let game = Keypair::new();
 
         // Create game account
-
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
             game.pubkey(),
@@ -400,7 +440,6 @@ impl Dashboard {
         let dashboard = Keypair::new();
 
         // Create game account
-
         let tx = Transaction::system_create(
             &loader.mint.keypair(),
             dashboard.pubkey(),

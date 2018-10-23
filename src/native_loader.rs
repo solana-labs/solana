@@ -1,3 +1,4 @@
+//! Native loader
 use bincode::deserialize;
 use libc;
 #[cfg(unix)]
@@ -39,18 +40,18 @@ fn create_path(name: &str) -> PathBuf {
     )
 }
 
-pub const NATIVE_PROGRAM_ID: [u8; 32] = [2u8; 32];
+const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [2u8; 32];
 
 // All native programs export a symbol named process()
 const ENTRYPOINT: &str = "process";
 type Entrypoint = unsafe extern "C" fn(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> bool;
 
 pub fn check_id(program_id: &Pubkey) -> bool {
-    program_id.as_ref() == NATIVE_PROGRAM_ID
+    program_id.as_ref() == NATIVE_LOADER_PROGRAM_ID
 }
 
 pub fn id() -> Pubkey {
-    Pubkey::new(&NATIVE_PROGRAM_ID)
+    Pubkey::new(&NATIVE_LOADER_PROGRAM_ID)
 }
 
 pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
