@@ -58,8 +58,7 @@ export class Loader {
       userdata,
     );
 
-    const transaction = new Transaction({
-      fee: 0,
+    const transaction = new Transaction().add({
       keys: [program.publicKey],
       programId: this.programId,
       userdata,
@@ -85,8 +84,7 @@ export class Loader {
       userdata,
     );
 
-    let transaction = new Transaction({
-      fee: 0,
+    let transaction = new Transaction().add({
       keys: [program.publicKey],
       programId: this.programId,
       userdata,

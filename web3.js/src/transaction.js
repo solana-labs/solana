@@ -20,34 +20,24 @@ export type TransactionSignature = string;
 export type TransactionId = string;
 
 /**
- * List of Transaction object fields that may be initialized at construction
+ * List of TransactionInstruction object fields that may be initialized at construction
  *
- * @typedef {Object} TransactionCtorFields
- * @property {?Buffer} signature
+ * @typedef {Object} TransactionInstructionCtorFields
  * @property {?Array<PublicKey>} keys
  * @property {?PublicKey} programId
- * @property {?number} fee
  * @property {?Buffer} userdata
  */
-type TransactionCtorFields = {|
-  signature?: Buffer;
+type TransactionInstructionCtorFields = {|
   keys?: Array<PublicKey>;
   programId?: PublicKey;
-  fee?: number;
   userdata?: Buffer;
 |};
 
+
 /**
- * Mirrors the Transaction struct in src/transaction.rs
+ * Transaction Instruction class
  */
-export class Transaction {
-
-  /**
-   * Current signature of the transaction.  Typically created by invoking the
-   * `sign()` method
-   */
-  signature: ?Buffer;
-
+export class TransactionInstruction {
   /**
    * Public keys to include in this transaction
    */
@@ -59,6 +49,48 @@ export class Transaction {
   programId: PublicKey;
 
   /**
+   * Program input
+   */
+  userdata: Buffer = Buffer.alloc(0);
+
+  constructor(opts?: TransactionInstructionCtorFields) {
+    opts && Object.assign(this, opts);
+  }
+}
+
+
+/**
+ * List of Transaction object fields that may be initialized at construction
+ *
+ * @typedef {Object} TransactionCtorFields
+ * @property {?Buffer} signature
+ * @property {?Array<PublicKey>} keys
+ * @property {?PublicKey} programId
+ * @property {?number} fee
+ * @property {?Buffer} userdata
+ */
+type TransactionCtorFields = {|
+  fee?: number;
+|};
+
+/**
+ * Transaction class
+ */
+export class Transaction {
+
+  /**
+   * Current signature of the transaction.  Typically created by invoking the
+   * `sign()` method
+   */
+  signature: ?Buffer;
+
+
+  /**
+   * The instructions to atomically execute
+   */
+  instructions: Array<TransactionInstruction> = [];
+
+  /**
    * A recent transaction id.  Must be populated by the caller
    */
   lastId: ?TransactionId;
@@ -68,23 +100,33 @@ export class Transaction {
    */
   fee: number = 0;
 
-  /**
-   * Program input
-   */
-  userdata: Buffer = Buffer.alloc(0);
-
   constructor(opts?: TransactionCtorFields) {
     opts && Object.assign(this, opts);
+  }
+
+  add(instruction: TransactionInstructionCtorFields): Transaction {
+    if (this.instructions.length !== 0) {
+      throw new Error('Multiple instructions not supported yet');
+    }
+
+    this.instructions.push(new TransactionInstruction(instruction));
+    return this;
   }
 
   /**
    * @private
    */
   _getSignData(): Buffer {
-    const {lastId, keys, programId, userdata} = this;
+    const {lastId} = this;
     if (!lastId) {
       throw new Error('Transaction lastId required');
     }
+
+    if (this.instructions.length !== 1) {
+      throw new Error('No instruction provided');
+    }
+
+    const {keys, programId, userdata} = this.instructions[0];
     const programIds = [programId];
     const instructions = [
       {
@@ -184,5 +226,33 @@ export class Transaction {
     signData.copy(wireTransaction, signature.length);
     return wireTransaction;
   }
+
+  /**
+   * Deprecated method
+   * @private
+   */
+  get keys(): Array<PublicKey> {
+    assert(this.instructions.length === 1);
+    return this.instructions[0].keys;
+  }
+
+  /**
+   * Deprecated method
+   * @private
+   */
+  get programId(): PublicKey {
+    assert(this.instructions.length === 1);
+    return this.instructions[0].programId;
+  }
+
+  /**
+   * Deprecated method
+   * @private
+   */
+  get userdata(): Buffer {
+    assert(this.instructions.length === 1);
+    return this.instructions[0].userdata;
+  }
+
 }
 
