@@ -188,6 +188,24 @@ impl Default for Bank {
 }
 
 impl Bank {
+    /// Create an Bank with built-in programs.
+    pub fn new_default() -> Self {
+        let bank = Self::default();
+
+        {
+            // Preload Bpf Loader account
+            let mut accounts = bank.accounts.write().unwrap();
+            let mut account = accounts
+                .entry(bpf_loader::id())
+                .or_insert_with(Account::default);
+            bpf_loader::populate_account(&mut account);
+            println!("BPF Loader Built-in!");
+            info!("BPF Loader Built-in!");
+        }
+
+        bank
+    }
+
     /// Create an Bank using a deposit.
     pub fn new_from_deposit(deposit: &Payment) -> Self {
         let bank = Self::default();
