@@ -10,8 +10,6 @@ use elf;
 use fullnode::Config;
 use hash::Hash;
 use loader_transaction::LoaderTransaction;
-use ring::rand::SystemRandom;
-use ring::signature::Ed25519KeyPair;
 use rpc::RpcSignatureStatus;
 use rpc_request::RpcRequest;
 use serde_json;
@@ -693,8 +691,7 @@ pub fn request_airdrop(
 }
 
 pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
-    let rnd = SystemRandom::new();
-    let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
+    let pkcs8_bytes = Keypair::new().to_bytes();
     let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
 
     if outfile != "-" {
