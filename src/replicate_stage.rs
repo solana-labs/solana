@@ -382,11 +382,6 @@ mod test {
             .expect("RwLock for LeaderScheduler is still locked");
 
         leader_scheduler.reset();
-        let (_, tick_height, entry_height, _) =
-            Fullnode::new_bank_from_ledger(&my_ledger_path, &mut leader_scheduler);
-
-        assert_eq!(tick_height, bootstrap_height);
-        assert_eq!(entry_height, expected_entry_height);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 }
