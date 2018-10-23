@@ -15,6 +15,7 @@ export async function sendAndConfirmTransaction(
   transaction: Transaction,
   runtimeErrorOk: boolean = false
 ): Promise<void> {
+  const start = Date.now();
   const signature = await connection.sendTransaction(from, transaction);
 
   // Wait up to a couple seconds for a confirmation
@@ -25,7 +26,8 @@ export async function sendAndConfirmTransaction(
     if (runtimeErrorOk && status == 'ProgramRuntimeError') return;
     await sleep(500);
     if (--i < 0) {
-      throw new Error(`Transaction '${signature}' was not confirmed (${status})`);
+      const duration = (Date.now() - start) / 1000;
+      throw new Error(`Transaction '${signature}' was not confirmed in ${duration.toFixed(2)} seconds (${status})`);
     }
   }
 }
