@@ -159,7 +159,13 @@ export type SignatureStatus = 'Confirmed' | 'SignatureNotFound' | 'ProgramRuntim
  */
 export class Connection {
   _rpcRequest: RpcRequest;
-  _lastId: null | TransactionId;
+
+  _lastIdInfo: {
+    lastId: TransactionId | null,
+    seconds: number,
+    transactionSignatures: Array<string>,
+  };
+  _disableLastIdCaching: boolean = false
 
   /**
    * Establish a JSON RPC connection
@@ -171,7 +177,11 @@ export class Connection {
       throw new Error('Connection endpoint not specified');
     }
     this._rpcRequest = createRpcRequest(endpoint);
-    this._lastId = null;
+    this._lastIdInfo = {
+      lastId: null,
+      seconds: -1,
+      transactionSignatures: [],
+    };
   }
 
   /**
@@ -301,27 +311,50 @@ export class Connection {
    * Sign and send a transaction
    */
   async sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature> {
-
-    let attempts = 0;
     for (;;) {
-      transaction.lastId = await this.getLastId();
+      // Attempt to use the previous last id for up to 1 second
+      const seconds = (new Date()).getSeconds();
+      if ( (this._lastIdInfo.lastId != null) &&
+           (this._lastIdInfo.seconds === seconds) ) {
 
-      // TODO: Waiting for the next lastId is really only necessary if a second
-      //       transaction with the raw input bytes as an in-flight transaction
-      //       is issued.
-      if (this._lastId != transaction.lastId) {
-        this._lastId = transaction.lastId;
-        break;
+        transaction.lastId = this._lastIdInfo.lastId;
+        transaction.sign(from);
+        if (!transaction.signature) {
+          throw new Error('!signature'); // should never happen
+        }
+
+        // If the signature of this transaction has not been seen before with the
+        // current lastId, all done.
+        const signature = transaction.signature.toString();
+        if (!this._lastIdInfo.transactionSignatures.includes(signature)) {
+          this._lastIdInfo.transactionSignatures.push(signature);
+          if (this._disableLastIdCaching) {
+            this._lastIdInfo.seconds = -1;
+          }
+          break;
+        }
       }
-      if (attempts === 20) {
-        throw new Error('Unable to obtain new last id');
+
+      // Fetch a new last id
+      let attempts = 0;
+      for (;;) {
+        const lastId = await this.getLastId();
+
+        if (this._lastIdInfo.lastId != lastId) {
+          this._lastIdInfo = {
+            lastId,
+            seconds: (new Date()).getSeconds(),
+            transactionSignatures: [],
+          };
+          break;
+        }
+        if (attempts === 8) {
+          throw new Error('Unable to obtain new last id');
+        }
+        await sleep(250);
+        ++attempts;
       }
-      // TODO: Add a pubsub notification for obtaining the next last id instead
-      //       of polling?
-      await sleep(100);
-      ++attempts;
     }
-    transaction.sign(from);
 
     const wireTransaction = transaction.serialize();
     const unsafeRes = await this._rpcRequest('sendTransaction', [[...wireTransaction]]);

@@ -52,6 +52,7 @@ let initialOwnerTokenAccount: PublicKey;
 
 test('create new token', async () => {
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
 
   initialOwner = await newAccountWithTokens(connection);
 
@@ -168,6 +169,7 @@ test('create new token', async () => {
 
 test('create new token account', async () => {
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const destOwner = await newAccountWithTokens(connection);
 
   {
@@ -224,6 +226,7 @@ test('create new token account', async () => {
 
 test('transfer', async () => {
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const destOwner = await newAccountWithTokens(connection);
 
   {
@@ -319,6 +322,7 @@ test('transfer', async () => {
 
 test('approve/revoke', async () => {
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const delegateOwner = await newAccountWithTokens(connection);
 
   {
@@ -453,6 +457,7 @@ test('invalid approve', async () => {
   }
 
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
 
   const account1 = await testToken.newAccount(owner);
@@ -488,6 +493,7 @@ test('fail on approve overspend', async () => {
   }
 
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
 
   const account1 = await testToken.newAccount(owner);
@@ -552,6 +558,7 @@ test('set owner', async () => {
   }
 
   const connection = new Connection(url);
+  connection._disableLastIdCaching = mockRpcEnabled;
   const owner = await newAccountWithTokens(connection);
   const newOwner = await newAccountWithTokens(connection);
 
