@@ -307,7 +307,7 @@ test('transaction', async () => {
     }
   ]
   );
-  expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+  await expect(connection.confirmTransaction(signature)).resolves.toBe(true);
 
   mockRpc.push([
     url,
@@ -323,7 +323,7 @@ test('transaction', async () => {
     }
   ]
   );
-  expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
+  await expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
 
   mockRpc.push([
     url,
