@@ -109,7 +109,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             LoaderInstruction::Write { offset, bytes } => {
                 let offset = offset as usize;
                 let len = bytes.len();
-                trace!("LuaLoader::Write offset {} length {:?}", offset, len);
+                trace!("BpfLoader::Write offset {} length {:?}", offset, len);
                 if keyed_accounts[0].account.userdata.len() < offset + len {
                     println!(
                         "Overflow {} < {}",
