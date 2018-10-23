@@ -189,7 +189,7 @@ impl Default for Bank {
 
 impl Bank {
     /// Create an Bank with built-in programs.
-    pub fn new_default() -> Self {
+    pub fn new_with_builtin_programs() -> Self {
         let bank = Self::default();
 
         {
@@ -199,8 +199,6 @@ impl Bank {
                 .entry(bpf_loader::id())
                 .or_insert_with(Account::default);
             bpf_loader::populate_account(&mut account);
-            println!("BPF Loader Built-in!");
-            info!("BPF Loader Built-in!");
         }
 
         bank

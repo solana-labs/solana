@@ -585,7 +585,7 @@ impl Fullnode {
         ledger_path: &str,
         leader_scheduler: &mut LeaderScheduler,
     ) -> (Bank, u64, u64, Vec<Entry>) {
-        let bank = Bank::new_default();
+        let bank = Bank::new_with_builtin_programs();
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
