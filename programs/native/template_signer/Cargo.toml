@@ -1,0 +1,15 @@
+[package]
+name = "template_signer"
+version = "0.1.0"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+
+[dependencies]
+bincode = "1.0.0"
+generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
+solana-sdk = { path = "../../../sdk" }
+serde_derive = "1.0.27"
+serde = "1.0.27"
+
+[lib]
+name = "template_signer"
+crate-type = ["cdylib"]
