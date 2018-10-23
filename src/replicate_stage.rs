@@ -303,7 +303,7 @@ mod test {
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
-        ledger_writer.write_entries(active_set_entries).unwrap();
+        ledger_writer.write_entries(&active_set_entries).unwrap();
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval

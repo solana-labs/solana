@@ -36,13 +36,12 @@ impl LedgerWriteStage {
         }
 
         if let Some(ledger_writer) = ledger_writer {
+            ledger_writer.write_entries(ventries.iter().flatten())?;
+        }
+
+        if let Some(forwarder) = forwarder {
             for entries in ventries {
-                for e in &entries {
-                    ledger_writer.write_entry(&e)?;
-                }
-                if let Some(forwarder) = forwarder {
-                    forwarder.send(entries)?;
-                }
+                forwarder.send(entries)?;
             }
         }
         Ok(())

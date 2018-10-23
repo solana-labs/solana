@@ -129,7 +129,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize);
         let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
 
-        writer.write_entries(entries).unwrap();
+        writer.write_entries(&entries).unwrap();
     }
 
     let leader = Fullnode::new(
@@ -802,7 +802,7 @@ fn test_leader_to_validator_transition() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let bootstrap_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
-    ledger_writer.write_entries(bootstrap_entries).unwrap();
+    ledger_writer.write_entries(&bootstrap_entries).unwrap();
 
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
@@ -932,7 +932,7 @@ fn test_leader_validator_basic() {
     let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let active_set_entries =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
-    ledger_writer.write_entries(active_set_entries).unwrap();
+    ledger_writer.write_entries(&active_set_entries).unwrap();
 
     // Create the leader scheduler config
     let num_bootstrap_slots = 2;
@@ -1100,7 +1100,7 @@ fn test_dropped_handoff_recovery() {
 
     // Write the entries
     let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-    ledger_writer.write_entries(active_set_entries).unwrap();
+    ledger_writer.write_entries(&active_set_entries).unwrap();
 
     let next_leader_ledger_path = tmp_copy_ledger(
         &bootstrap_leader_ledger_path,
@@ -1263,7 +1263,7 @@ fn test_full_leader_validator_network() {
             .last()
             .expect("expected at least one genesis entry")
             .id;
-        ledger_writer.write_entries(bootstrap_entries).unwrap();
+        ledger_writer.write_entries(&bootstrap_entries).unwrap();
     }
 
     // Create the common leader scheduling configuration
