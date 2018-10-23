@@ -25,15 +25,16 @@ test('equals', () => {
   const decimalKey = new PublicKey('1356938545749799165119972480570561420155507632800475359837393562592731987968');
   const base56Key = new PublicKey('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
 
-  expect(arrayKey.equals(hexKey)).toBeTruthy();
-  expect(arrayKey.equals(decimalKey)).toBeTruthy();
-  expect(arrayKey.equals(base56Key)).toBeTruthy();
+  expect(arrayKey.equals(hexKey)).toBe(true);
+  expect(arrayKey.equals(decimalKey)).toBe(true);
+  expect(arrayKey.equals(base56Key)).toBe(true);
+
 });
 
 test('isPublicKey', () => {
   const key = new PublicKey('0x100000000000000000000000000000000000000000000000000000000000000');
-  expect(PublicKey.isPublicKey(key)).toBeTruthy();
-  expect(PublicKey.isPublicKey({})).toBeFalsy();
+  expect(PublicKey.isPublicKey(key)).toBe(true);
+  expect(PublicKey.isPublicKey({})).toBe(false);
 });
 
 test('toBase58', () => {
@@ -42,8 +43,8 @@ test('toBase58', () => {
   expect(key.toString()).toBe('CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3');
 
   const key2 = new PublicKey('123456789');
-  expect(key2.toBase58()).toBe('Vj3WURvtMv1mii1vhTqLhcSwVWDRs2E135KtTYUXtTq');
-  expect(key2.toString()).toBe('Vj3WURvtMv1mii1vhTqLhcSwVWDRs2E135KtTYUXtTq');
+  expect(key2.toBase58()).toBe('1111111111111111111111111111BukQL');
+  expect(key2.toString()).toBe('1111111111111111111111111111BukQL');
 });
 
 test('toBuffer', () => {
@@ -54,5 +55,14 @@ test('toBuffer', () => {
   const key2 = new PublicKey('0x000000000000000000000000000000000000000000000000000000000000000');
   expect(key2.toBuffer()).toHaveLength(32);
   expect(key2.toBase58()).toBe('11111111111111111111111111111111');
+});
+
+test('equals (II)', () => {
+  const key1 = new PublicKey([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  ]);
+  const key2 = new PublicKey(key1.toBuffer());
+
+  expect(key1.equals(key2)).toBe(true);
 });
 
