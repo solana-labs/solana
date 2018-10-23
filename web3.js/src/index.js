@@ -8,3 +8,4 @@ export {PublicKey} from './publickey';
 export {SystemProgram} from './system-program';
 export {Token, TokenAmount} from './token-program';
 export {Transaction} from './transaction';
+export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
