@@ -817,7 +817,7 @@ mod tests {
             .iter()
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64)
             + num_ending_ticks as u64;
-        ledger_writer.write_entries(active_set_entries).unwrap();
+        ledger_writer.write_entries(&active_set_entries).unwrap();
 
         // Create the common leader scheduling configuration
         let num_slots_per_epoch = 3;
@@ -913,7 +913,7 @@ mod tests {
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let active_set_entries_len = active_set_entries.len() as u64;
         last_id = active_set_entries.last().unwrap().id;
-        ledger_writer.write_entries(active_set_entries).unwrap();
+        ledger_writer.write_entries(&active_set_entries).unwrap();
         let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
 
         // Set the leader scheduler for the validator

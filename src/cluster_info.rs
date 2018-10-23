@@ -1823,7 +1823,7 @@ mod tests {
             let zero = Hash::default();
             let one = hash(&zero.as_ref());
             writer
-                .write_entries(vec![Entry::new_tick(0, &zero), Entry::new_tick(0, &one)].to_vec())
+                .write_entries(&vec![Entry::new_tick(0, &zero), Entry::new_tick(0, &one)].to_vec())
                 .unwrap();
             path
         }

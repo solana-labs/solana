@@ -41,6 +41,7 @@ use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
 use hash::Hash;
 use leader_scheduler::LeaderScheduler;
+use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
 use service::Service;
@@ -60,6 +61,7 @@ pub struct Tvu {
     replicate_stage: ReplicateStage,
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
+    ledger_write_stage: LedgerWriteStage,
     exit: Arc<AtomicBool>,
 }
 
@@ -111,22 +113,24 @@ impl Tvu {
             leader_scheduler.clone(),
         );
 
-        let replicate_stage = ReplicateStage::new(
+        let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
             keypair,
             bank.clone(),
             cluster_info,
             blob_window_receiver,
-            ledger_path,
             exit.clone(),
             tick_height,
             entry_height,
             leader_scheduler,
         );
 
+        let ledger_write_stage = LedgerWriteStage::new(ledger_path, ledger_entry_receiver, None);
+
         Tvu {
             replicate_stage,
             fetch_stage,
             retransmit_stage,
+            ledger_write_stage,
             exit,
         }
     }
@@ -151,6 +155,7 @@ impl Service for Tvu {
     fn join(self) -> thread::Result<Option<TvuReturnType>> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
+        self.ledger_write_stage.join()?;
         match self.replicate_stage.join()? {
             Some(ReplicateStageReturnType::LeaderRotation(
                 tick_height,

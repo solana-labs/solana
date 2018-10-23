@@ -33,7 +33,7 @@ impl StoreLedgerStage {
         );
 
         if let Some(ledger_writer) = ledger_writer {
-            ledger_writer.write_entries(entries)?;
+            ledger_writer.write_entries(&entries)?;
         }
 
         Ok(())

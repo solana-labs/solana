@@ -372,7 +372,7 @@ impl LedgerWriter {
         Ok(LedgerWriter { index, data })
     }
 
-    pub fn write_entry_noflush(&mut self, entry: &Entry) -> io::Result<()> {
+    fn write_entry_noflush(&mut self, entry: &Entry) -> io::Result<()> {
         let len = serialized_size(&entry).map_err(err_bincode_to_io)?;
 
         serialize_into(&mut self.data, &len).map_err(err_bincode_to_io)?;
@@ -399,25 +399,23 @@ impl LedgerWriter {
         Ok(())
     }
 
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
+        self.write_entry_noflush(&entry)?;
         self.index.flush()?;
         self.data.flush()?;
         Ok(())
     }
 
-    pub fn write_entry(&mut self, entry: &Entry) -> io::Result<()> {
-        self.write_entry_noflush(&entry)?;
-        self.flush()
-    }
-
-    pub fn write_entries<I>(&mut self, entries: I) -> io::Result<()>
+    pub fn write_entries<'a, I>(&mut self, entries: I) -> io::Result<()>
     where
-        I: IntoIterator<Item = Entry>,
+        I: IntoIterator<Item = &'a Entry>,
     {
         for entry in entries {
             self.write_entry_noflush(&entry)?;
         }
-        self.flush()
+        self.index.flush()?;
+        self.data.flush()?;
+        Ok(())
     }
 }
 
@@ -616,7 +614,7 @@ pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
     let path = get_tmp_ledger_path(name);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(mint.create_entries()).unwrap();
+    writer.write_entries(&mint.create_entries()).unwrap();
 
     path
 }
@@ -653,7 +651,7 @@ pub fn create_tmp_sample_ledger(
     genesis.extend(ticks);
 
     let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(genesis.clone()).unwrap();
+    writer.write_entries(&genesis.clone()).unwrap();
 
     (mint, path, genesis)
 }
@@ -830,7 +828,7 @@ mod tests {
 
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(entries.clone()).unwrap();
+            writer.write_entries(&entries.clone()).unwrap();
             // drops writer, flushes buffers
         }
         verify_ledger(&ledger_path).unwrap();
@@ -862,7 +860,7 @@ mod tests {
     fn truncated_last_entry(ledger_path: &str, entries: Vec<Entry>) {
         let len = {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(entries).unwrap();
+            writer.write_entries(&entries).unwrap();
             writer.data.seek(SeekFrom::Current(0)).unwrap()
         };
         verify_ledger(&ledger_path).unwrap();
@@ -876,7 +874,7 @@ mod tests {
 
     fn garbage_on_data(ledger_path: &str, entries: Vec<Entry>) {
         let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-        writer.write_entries(entries).unwrap();
+        writer.write_entries(&entries).unwrap();
         writer.data.write_all(b"hi there!").unwrap();
     }
 
@@ -959,7 +957,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("test_verify_ledger");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(entries.clone()).unwrap();
+            writer.write_entries(&entries).unwrap();
         }
         // TODO more cases that make ledger_verify() fail
         // assert!(verify_ledger(&ledger_path).is_err());
@@ -976,7 +974,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("test_raw_entries");
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(entries.clone()).unwrap();
+            writer.write_entries(&entries).unwrap();
         }
 
         let mut window = LedgerWindow::open(&ledger_path).unwrap();
