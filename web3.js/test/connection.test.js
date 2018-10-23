@@ -8,6 +8,7 @@ import {
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetLastId} from './mockrpc/getlastid';
 import {url} from './url';
+import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
@@ -307,7 +308,17 @@ test('transaction', async () => {
     }
   ]
   );
-  await expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+
+  let i = 0;
+  for (;;) {
+    if (await connection.confirmTransaction(signature)) {
+      break;
+    }
+
+    expect(mockRpcEnabled).toBe(false);
+    expect(++i).toBeLessThan(10);
+    await sleep(500);
+  }
 
   mockRpc.push([
     url,
