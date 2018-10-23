@@ -1,4 +1,5 @@
 use bincode::{deserialize, serialize};
+// use bpf_loader;
 use bs58;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
@@ -6,8 +7,11 @@ use chrono::prelude::*;
 use clap::ArgMatches;
 use cluster_info::NodeInfo;
 use drone::DroneRequest;
+use elf;
 use fullnode::Config;
 use hash::Hash;
+use loader_transaction::LoaderTransaction;
+use native_loader;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use rpc_request::RpcRequest;
@@ -26,6 +30,10 @@ use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 
+// TODO: put these somewhere more logical
+const PLATFORM_SECTION_C: &str = ".text.entrypoint";
+const USERDATA_CHUNK_SIZE: usize = 256;
+
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
     Address,
@@ -33,6 +41,7 @@ pub enum WalletCommand {
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
+    Deploy(String),
     // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         i64,
@@ -52,6 +61,7 @@ pub enum WalletCommand {
 pub enum WalletError {
     CommandNotRecognized(String),
     BadParameter(String),
+    DynamicProgramError(String),
     RpcRequestError(String),
 }
 
@@ -129,6 +139,12 @@ pub fn parse_command(
                 Err(WalletError::BadParameter("Invalid signature".to_string()))
             }
         }
+        ("deploy", Some(deploy_matches)) => Ok(WalletCommand::Deploy(
+            deploy_matches
+                .value_of("program-location")
+                .unwrap()
+                .to_string(),
+        )),
         ("pay", Some(pay_matches)) => {
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
             let to = if pay_matches.is_present("to") {
@@ -362,6 +378,133 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 None => Err(WalletError::RpcRequestError(
                     "Received result of an unexpected type".to_string(),
                 ))?,
+            }
+        }
+        // Deploy a custom program to the chain
+        WalletCommand::Deploy(ref program_location) => {
+            let params = json!(format!("{}", config.id.pubkey()));
+            let balance = RpcRequest::GetBalance
+                .make_rpc_request(&config.rpc_addr, 1, Some(params))?
+                .as_i64();
+            if let Some(tokens) = balance {
+                if tokens < 2 {
+                    Err(WalletError::DynamicProgramError(
+                        "Insufficient funds".to_string(),
+                    ))?
+                }
+            }
+
+            let last_id = get_last_id(&config)?;
+            let program = Keypair::new();
+            let program_userdata = elf::File::open_path(program_location)
+                .map_err(|_| {
+                    WalletError::DynamicProgramError("Could not parse program file".to_string())
+                })?.get_section(PLATFORM_SECTION_C)
+                .ok_or_else(|| {
+                    WalletError::DynamicProgramError(
+                        "Could not find entrypoint in program file".to_string(),
+                    )
+                })?.data
+                .clone();
+
+            // Loader instance for testing; REMOVE
+            let loader = Keypair::new();
+            let tx = Transaction::system_create(
+                &config.id,
+                loader.pubkey(),
+                last_id,
+                1,
+                56,
+                native_loader::id(),
+                0,
+            );
+            let _signature_str = serialize_and_send_tx(&config, &tx)?;
+
+            let name = String::from("bpf_loader");
+            let tx = Transaction::write(
+                &loader,
+                native_loader::id(),
+                0,
+                name.as_bytes().to_vec(),
+                last_id,
+                0,
+            );
+            let _signature_str = serialize_and_send_tx(&config, &tx)?;
+
+            let tx = Transaction::finalize(&loader, native_loader::id(), last_id, 0);
+            let _signature_str = serialize_and_send_tx(&config, &tx)?;
+
+            let tx = Transaction::system_spawn(&loader, last_id, 0);
+            let _signature_str = serialize_and_send_tx(&config, &tx)?;
+            // end loader instance
+
+            let tx = Transaction::system_create(
+                &config.id,
+                program.pubkey(),
+                last_id,
+                1,
+                program_userdata.len() as u64,
+                // bpf_loader::id(),
+                loader.pubkey(),
+                0,
+            );
+            let signature_str = serialize_and_send_tx(&config, &tx)?;
+            if !confirm_tx(&config, &signature_str)? {
+                Err(WalletError::DynamicProgramError(
+                    "Program allocate space failed".to_string(),
+                ))?
+            }
+
+            let mut offset = 0;
+            let write_result = program_userdata
+                .chunks(USERDATA_CHUNK_SIZE)
+                .map(|chunk| {
+                    let tx = Transaction::write(
+                        &program,
+                        // bpf_loader::id(),
+                        loader.pubkey(),
+                        offset,
+                        chunk.to_vec(),
+                        last_id,
+                        0,
+                    );
+                    let signature_str = serialize_and_send_tx(&config, &tx).unwrap();
+                    offset += USERDATA_CHUNK_SIZE as u32;
+                    signature_str
+                }).map(|signature| confirm_tx(&config, &signature).unwrap())
+                .all(|status| status);
+
+            if write_result {
+                let last_id = get_last_id(&config)?;
+                let tx = Transaction::finalize(
+                    &program,
+                    // bpf_loader::id(),
+                    loader.pubkey(),
+                    last_id,
+                    0,
+                );
+                let signature_str = serialize_and_send_tx(&config, &tx)?;
+                if !confirm_tx(&config, &signature_str)? {
+                    Err(WalletError::DynamicProgramError(
+                        "Program finalize transaction failed".to_string(),
+                    ))?
+                }
+
+                let tx = Transaction::system_spawn(&program, last_id, 0);
+                let signature_str = serialize_and_send_tx(&config, &tx)?;
+                if !confirm_tx(&config, &signature_str)? {
+                    Err(WalletError::DynamicProgramError(
+                        "Program spawn failed".to_string(),
+                    ))?
+                }
+
+                Ok(json!({
+                    "programId": format!("{}", program.pubkey()),
+                }).to_string())
+            } else {
+                Err(WalletError::DynamicProgramError(
+                    "Program chunks write error".to_string(),
+                ))?
             }
         }
         // If client has positive balance, pay tokens to another address
@@ -607,6 +750,18 @@ fn serialize_and_send_tx(
         ))?
     }
     Ok(signature.as_str().unwrap().to_string())
+}
+
+fn confirm_tx(config: &WalletConfig, signature: &str) -> Result<bool, Box<error::Error>> {
+    let params = json!(signature.to_string());
+    let status =
+        RpcRequest::ConfirmTransaction.make_rpc_request(&config.rpc_addr, 1, Some(params))?;
+    if status.as_bool().is_none() {
+        Err(WalletError::RpcRequestError(
+            "Received result of an unexpected type".to_string(),
+        ))?
+    }
+    Ok(status.as_bool().unwrap())
 }
 
 #[cfg(test)]

@@ -151,6 +151,18 @@ fn main() -> Result<(), Box<error::Error>> {
                         .help("The transaction signature to confirm"),
                 ),
         ).subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy a program")
+                .arg(
+                    Arg::with_name("program-location")
+                        .index(1)
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .required(true)
+                        .help("/path/to/program.o"),
+                )
+                // TODO: Add "loader" argument; current default is bpf_loader
+        ).subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(

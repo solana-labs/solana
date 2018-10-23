@@ -90,6 +90,7 @@ extern crate bytes;
 extern crate chrono;
 extern crate clap;
 extern crate dirs;
+extern crate elf;
 extern crate generic_array;
 extern crate ipnetwork;
 extern crate itertools;
