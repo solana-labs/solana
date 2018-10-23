@@ -1,5 +1,5 @@
 use bincode::{deserialize, serialize};
-// use bpf_loader;
+use bpf_loader;
 use bs58;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
@@ -11,7 +11,6 @@ use elf;
 use fullnode::Config;
 use hash::Hash;
 use loader_transaction::LoaderTransaction;
-use native_loader;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use rpc_request::RpcRequest;
@@ -30,7 +29,6 @@ use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 
-// TODO: put these somewhere more logical
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 const USERDATA_CHUNK_SIZE: usize = 256;
 
@@ -354,11 +352,9 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => {
             let last_id = get_last_id(&config)?;
-
             let tx =
                 Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
             let signature_str = serialize_and_send_tx(&config, &tx)?;
-
             Ok(signature_str.to_string())
         }
         // Confirm the last client transaction by signature
@@ -387,7 +383,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
                 .as_i64();
             if let Some(tokens) = balance {
-                if tokens < 2 {
+                if tokens < 1 {
                     Err(WalletError::DynamicProgramError(
                         "Insufficient funds".to_string(),
                     ))?
@@ -407,45 +403,13 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 })?.data
                 .clone();
 
-            // Loader instance for testing; REMOVE
-            let loader = Keypair::new();
-            let tx = Transaction::system_create(
-                &config.id,
-                loader.pubkey(),
-                last_id,
-                1,
-                56,
-                native_loader::id(),
-                0,
-            );
-            let _signature_str = serialize_and_send_tx(&config, &tx)?;
-
-            let name = String::from("bpf_loader");
-            let tx = Transaction::write(
-                &loader,
-                native_loader::id(),
-                0,
-                name.as_bytes().to_vec(),
-                last_id,
-                0,
-            );
-            let _signature_str = serialize_and_send_tx(&config, &tx)?;
-
-            let tx = Transaction::finalize(&loader, native_loader::id(), last_id, 0);
-            let _signature_str = serialize_and_send_tx(&config, &tx)?;
-
-            let tx = Transaction::system_spawn(&loader, last_id, 0);
-            let _signature_str = serialize_and_send_tx(&config, &tx)?;
-            // end loader instance
-
             let tx = Transaction::system_create(
                 &config.id,
                 program.pubkey(),
                 last_id,
                 1,
                 program_userdata.len() as u64,
-                // bpf_loader::id(),
-                loader.pubkey(),
+                bpf_loader::id(),
                 0,
             );
             let signature_str = serialize_and_send_tx(&config, &tx)?;
@@ -461,8 +425,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 .map(|chunk| {
                     let tx = Transaction::write(
                         &program,
-                        // bpf_loader::id(),
-                        loader.pubkey(),
+                        bpf_loader::id(),
                         offset,
                         chunk.to_vec(),
                         last_id,
@@ -476,13 +439,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             if write_result {
                 let last_id = get_last_id(&config)?;
-                let tx = Transaction::finalize(
-                    &program,
-                    // bpf_loader::id(),
-                    loader.pubkey(),
-                    last_id,
-                    0,
-                );
+                let tx = Transaction::finalize(&program, bpf_loader::id(), last_id, 0);
                 let signature_str = serialize_and_send_tx(&config, &tx)?;
                 if !confirm_tx(&config, &signature_str)? {
                     Err(WalletError::DynamicProgramError(
