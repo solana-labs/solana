@@ -18,7 +18,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::Result;
 use tpu::{Tpu, TpuReturnType};
 use tvu::{Tvu, TvuReturnType};
-use untrusted::Input;
 use window::{new_window, SharedWindow};
 
 pub enum NodeRole {
@@ -113,15 +112,13 @@ pub struct Config {
 
 impl Config {
     pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
-        let keypair =
-            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
+        let keypair = Keypair::from_bytes(&pkcs8).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
         let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
         Config { node_info, pkcs8 }
     }
     pub fn keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.pkcs8))
-            .expect("from_pkcs8 in fullnode::Config keypair")
+        Keypair::from_bytes(&self.pkcs8).expect("from_pkcs8 in fullnode::Config keypair")
     }
 }
 

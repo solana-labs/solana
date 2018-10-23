@@ -643,7 +643,7 @@ fn main() {
     let mut barrier_client = mk_client(&leader);
 
     let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.public_key_bytes()[..32]);
+    seed.copy_from_slice(&id.to_bytes()[..32]);
     let mut rnd = GenKeys::new(seed);
 
     println!("Creating {} keypairs...", tx_count * 2);

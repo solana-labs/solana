@@ -59,10 +59,8 @@ pub fn init() {
 }
 
 fn verify_packet(packet: &Packet) -> u8 {
-    use ring::signature;
     use signature::Signature;
     use solana_sdk::pubkey::Pubkey;
-    use untrusted;
 
     let msg_start = TX_OFFSET + SIGNED_DATA_OFFSET;
     let sig_start = TX_OFFSET + SIG_OFFSET;
@@ -75,12 +73,11 @@ fn verify_packet(packet: &Packet) -> u8 {
     }
 
     let msg_end = packet.meta.size;
-    signature::verify(
-        &signature::ED25519,
-        untrusted::Input::from(&packet.data[pubkey_start..pubkey_end]),
-        untrusted::Input::from(&packet.data[msg_start..msg_end]),
-        untrusted::Input::from(&packet.data[sig_start..sig_end]),
-    ).is_ok() as u8
+    let signature = Signature::new(&packet.data[sig_start..sig_end]);
+    signature.verify(
+        &packet.data[pubkey_start..pubkey_end],
+        &packet.data[msg_start..msg_end],
+    ) as u8
 }
 
 fn verify_packet_disabled(_packet: &Packet) -> u8 {

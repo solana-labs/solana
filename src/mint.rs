@@ -2,12 +2,10 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
-use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
-use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Mint {
@@ -25,8 +23,7 @@ impl Mint {
         bootstrap_leader_id: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let keypair =
-            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
+        let keypair = Keypair::from_bytes(&pkcs8).expect("from_pkcs8 in mint pub fn new");
         let pubkey = keypair.pubkey();
         Mint {
             pkcs8,
@@ -42,19 +39,12 @@ impl Mint {
         bootstrap_leader: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = Keypair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
+        let pkcs8 = Keypair::new().to_bytes().to_vec();
         Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
     }
 
     pub fn new(tokens: u64) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = Keypair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
-        Self::new_with_pkcs8(tokens, pkcs8, Pubkey::default(), 0)
+        Self::new_with_leader(tokens, Pubkey::default(), 0)
     }
 
     pub fn seed(&self) -> Hash {
@@ -66,7 +56,7 @@ impl Mint {
     }
 
     pub fn keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.pkcs8)).expect("from_pkcs8 in mint pub fn keypair")
+        Keypair::from_bytes(&self.pkcs8).expect("from_pkcs8 in mint pub fn keypair")
     }
 
     pub fn pubkey(&self) -> Pubkey {
