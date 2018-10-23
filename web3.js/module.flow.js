@@ -177,4 +177,12 @@ declare module '@solana/web3.js' {
       programName: string,
     ): Promise<PublicKey>;
   }
+
+  // === src/util/send-and-confirm-transaction.js ===
+  declare export function sendAndConfirmTransaction(
+    connection: Connection,
+    from: Account,
+    transaction: Transaction,
+    runtimeErrorOk?: boolean,
+  ): Promise<void>;
 }
