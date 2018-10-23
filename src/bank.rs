@@ -5,6 +5,7 @@
 
 use bincode::deserialize;
 use bincode::serialize;
+use bpf_loader;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use counter::Counter;
@@ -194,6 +195,14 @@ impl Bank {
             let mut accounts = bank.accounts.write().unwrap();
             let account = accounts.entry(deposit.to).or_insert_with(Account::default);
             Self::apply_payment(deposit, account);
+        }
+        {
+            // Preload Bpf Loader account
+            let mut accounts = bank.accounts.write().unwrap();
+            let mut account = accounts
+                .entry(bpf_loader::id())
+                .or_insert_with(Account::default);
+            bpf_loader::populate_account(&mut account);
         }
         bank
     }

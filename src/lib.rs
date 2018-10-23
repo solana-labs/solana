@@ -12,6 +12,7 @@ pub mod counter;
 pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
+pub mod bpf_loader;
 pub mod broadcast_stage;
 pub mod budget;
 pub mod budget_instruction;
