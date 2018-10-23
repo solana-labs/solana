@@ -174,8 +174,10 @@ impl RpcSol for RpcSolImpl {
 
         let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
         drone_addr.set_port(DRONE_PORT);
-        let signature =
-            request_airdrop(&drone_addr, &pubkey, tokens).map_err(|_| Error::internal_error())?;
+        let signature = request_airdrop(&drone_addr, &pubkey, tokens).map_err(|err| {
+            info!("request_airdrop failed: {:?}", err);
+            Error::internal_error()
+        })?;;
 
         let now = Instant::now();
         let mut signature_status;
@@ -185,6 +187,7 @@ impl RpcSol for RpcSolImpl {
             if signature_status.is_ok() {
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
+                info!("airdrop signature timeout");
                 return Err(Error::internal_error());
             }
             sleep(Duration::from_millis(100));
@@ -192,7 +195,7 @@ impl RpcSol for RpcSolImpl {
     }
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
         let tx: Transaction = deserialize(&data).map_err(|err| {
-            debug!("send_transaction: deserialize error: {:?}", err);
+            info!("send_transaction: deserialize error: {:?}", err);
             Error::invalid_request()
         })?;
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -200,7 +203,7 @@ impl RpcSol for RpcSolImpl {
         transactions_socket
             .send_to(&data, transactions_addr)
             .map_err(|err| {
-                debug!("send_transaction: send_to error: {:?}", err);
+                info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
         Ok(bs58::encode(tx.signature).into_string())
@@ -254,9 +257,10 @@ fn get_leader_addr(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr
 }
 
 fn verify_pubkey(input: String) -> Result<Pubkey> {
-    let pubkey_vec = bs58::decode(input)
-        .into_vec()
-        .map_err(|_| Error::invalid_request())?;
+    let pubkey_vec = bs58::decode(input).into_vec().map_err(|err| {
+        info!("verify_pubkey: invalid input: {:?}", err);
+        Error::invalid_request()
+    })?;
     if pubkey_vec.len() != mem::size_of::<Pubkey>() {
         Err(Error::invalid_request())
     } else {
@@ -265,9 +269,10 @@ fn verify_pubkey(input: String) -> Result<Pubkey> {
 }
 
 fn verify_signature(input: String) -> Result<Signature> {
-    let signature_vec = bs58::decode(input)
-        .into_vec()
-        .map_err(|_| Error::invalid_request())?;
+    let signature_vec = bs58::decode(input).into_vec().map_err(|err| {
+        info!("verify_signature: invalid input: {:?}", err);
+        Error::invalid_request()
+    })?;
     if signature_vec.len() != mem::size_of::<Signature>() {
         Err(Error::invalid_request())
     } else {

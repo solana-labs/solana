@@ -551,9 +551,10 @@ pub fn request_airdrop(
     let tx = serialize(&req).expect("serialize drone request");
     stream.write_all(&tx)?;
     let mut buffer = [0; size_of::<Signature>()];
-    stream
-        .read_exact(&mut buffer)
-        .or_else(|_| Err(Error::new(ErrorKind::Other, "Airdrop failed")))?;
+    stream.read_exact(&mut buffer).or_else(|err| {
+        info!("request_airdrop: read_exact error: {:?}", err);
+        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+    })?;
     let signature: Signature = deserialize(&buffer).or_else(|err| {
         Err(Error::new(
             ErrorKind::Other,
