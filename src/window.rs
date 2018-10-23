@@ -17,7 +17,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
-pub const WINDOW_SIZE: u64 = 2 * 1024;
+pub const WINDOW_SIZE: u64 = 32 * 1024;
 
 #[derive(Default, Clone)]
 pub struct WindowSlot {
