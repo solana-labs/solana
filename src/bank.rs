@@ -302,6 +302,7 @@ impl Bank {
             if res[i] != Err(BankError::SignatureNotFound) {
                 let status = match res[i] {
                     Ok(_) => RpcSignatureStatus::Confirmed,
+                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
                     Err(BankError::ProgramRuntimeError(_)) => {
                         RpcSignatureStatus::ProgramRuntimeError
                     }
