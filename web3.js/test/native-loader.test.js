@@ -4,6 +4,7 @@ import {
   Connection,
   NativeLoader,
   Transaction,
+  sendAndConfirmTransaction,
 } from '../src';
 import {mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
@@ -30,7 +31,6 @@ test('load noop program', async () => {
     keys: [from.publicKey],
     programId: noopProgramId,
   });
-  const signature = await connection.sendTransaction(from, noopTransaction);
-  await expect(connection.confirmTransaction(signature)).resolves.toBe(true);
+  await expect(sendAndConfirmTransaction(connection, from, noopTransaction)).resolves.toBeUndefined();
 });
 
