@@ -161,7 +161,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(entries.clone()).unwrap();
+            writer.write_entries(&entries).unwrap();
         }
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");
