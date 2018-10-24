@@ -7,6 +7,7 @@ use cluster_info::ClusterInfo;
 use drone::DRONE_PORT;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
+use packet::PACKET_DATA_SIZE;
 use service::Service;
 use signature::Signature;
 use solana_program_interface::account::Account;
@@ -169,7 +170,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.get_last_id()
     }
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
-        let signature = verify_signature(id)?;
+        let signature = verify_signature(&id)?;
         Ok(
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
@@ -187,6 +188,7 @@ impl RpcSol for RpcSolImpl {
         meta.request_processor.get_transaction_count()
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
+        trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
         let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
@@ -215,6 +217,14 @@ impl RpcSol for RpcSolImpl {
             info!("send_transaction: deserialize error: {:?}", err);
             Error::invalid_request()
         })?;
+        if data.len() >= PACKET_DATA_SIZE {
+            info!(
+                "send_transaction: transaction too large: {} bytes (max: {} bytes)",
+                data.len(),
+                PACKET_DATA_SIZE
+            );
+            return Err(Error::invalid_request());
+        }
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_addr = get_leader_addr(&meta.cluster_info)?;
         transactions_socket
@@ -223,7 +233,13 @@ impl RpcSol for RpcSolImpl {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        Ok(bs58::encode(tx.signature).into_string())
+        let signature = bs58::encode(tx.signature).into_string();
+        trace!(
+            "send_transaction: sent {} bytes, signature={}",
+            data.len(),
+            signature
+        );
+        Ok(signature)
     }
 }
 #[derive(Clone)]
@@ -279,18 +295,26 @@ fn verify_pubkey(input: String) -> Result<Pubkey> {
         Error::invalid_request()
     })?;
     if pubkey_vec.len() != mem::size_of::<Pubkey>() {
+        info!(
+            "verify_pubkey: invalid pubkey_vec length: {}",
+            pubkey_vec.len()
+        );
         Err(Error::invalid_request())
     } else {
         Ok(Pubkey::new(&pubkey_vec))
     }
 }
 
-fn verify_signature(input: String) -> Result<Signature> {
+fn verify_signature(input: &str) -> Result<Signature> {
     let signature_vec = bs58::decode(input).into_vec().map_err(|err| {
-        info!("verify_signature: invalid input: {:?}", err);
+        info!("verify_signature: invalid input: {}: {:?}", input, err);
         Error::invalid_request()
     })?;
     if signature_vec.len() != mem::size_of::<Signature>() {
+        info!(
+            "verify_signature: invalid signature_vec length: {}",
+            signature_vec.len()
+        );
         Err(Error::invalid_request())
     } else {
         Ok(Signature::new(&signature_vec))
@@ -702,12 +726,12 @@ mod tests {
         let tx =
             Transaction::system_move(&Keypair::new(), Keypair::new().pubkey(), 20, hash(&[0]), 0);
         assert_eq!(
-            verify_signature(tx.signature.to_string()).unwrap(),
+            verify_signature(&tx.signature.to_string()).unwrap(),
             tx.signature
         );
         let bad_signature = "a1b2c3d4";
         assert_eq!(
-            verify_signature(bad_signature.to_string()),
+            verify_signature(&bad_signature.to_string()),
             Err(Error::invalid_request())
         );
     }
