@@ -1,5 +1,6 @@
 // @flow
 export {Account} from './account';
+export {BpfLoader} from './bpf-loader';
 export {BudgetProgram} from './budget-program';
 export {Connection} from './connection';
 export {Loader} from './loader';

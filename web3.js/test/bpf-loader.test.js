@@ -2,7 +2,7 @@
 
 import {
   Connection,
-  NativeLoader,
+  BpfLoader,
   Transaction,
   sendAndConfirmTransaction,
 } from '../src';
@@ -15,7 +15,7 @@ if (!mockRpcEnabled) {
   jest.setTimeout(10000);
 }
 
-test('load native program', async () => {
+test('load BPF program', async () => {
   if (mockRpcEnabled) {
     console.log('non-live test skipped');
     return;
@@ -23,12 +23,11 @@ test('load native program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithTokens(connection);
-  const programId = await NativeLoader.load(connection, from, 'noop');
+  const programId = await BpfLoader.load(connection, from, 'test/bin/noop_c.o');
   const transaction = new Transaction().add({
     keys: [from.publicKey],
     programId,
   });
-
   await sendAndConfirmTransaction(connection, from, transaction);
 });
 
