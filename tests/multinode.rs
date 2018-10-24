@@ -492,6 +492,7 @@ fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
 }
 
 #[test]
+#[ignore]
 fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // this test verifies that a freshly started leader makes his ledger available
     //    in the repair window to validators that are started with an older
