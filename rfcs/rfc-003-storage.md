@@ -28,10 +28,10 @@ We have the following constraints:
 
 # Validation and Replication Protocol
 
-1. Network sets the replication target number, lets say 1k. 1k PoRep identities are created from signatures of a PoH hash. So they are tied to a specific PoH hash. It doesn't matter who creates them, or simply the last 1k validation signatures we saw for the ledger at that count. This maybe just the initial batch of identities, because we want to stagger identity rotation.
+1. The network sets a replication target number, let's say 1k. 1k PoRep identities are created from signatures of a PoH hash. So they are tied to a specific PoH hash. It doesn't matter who creates them, or it could simply be the last 1k validation signatures we saw for the ledger at that count. This is maybe just the initial batch of identities, because we want to stagger identity rotation.
 2. Any client can use any of these identities to create PoRep proofs. Replicator identities are the CBC encryption keys.
-3. Periodically at a specific PoH count, replicator that want to create PoRep proofs sign the PoH hash at that count. That signature is the seed used to pick the block and identity to replicate. A block is 1TB of ledger.
-4. Periodically at a specific PoH count, replicator submits PoRep proofs for their selected block. A signature of the PoH hash at that count is the seed used to sample the 1TB encrypted block, and hash it. This is done faster than it takes to encrypt the 1TB block with the original identity.
+3. Periodically at a specific PoH count, a replicator that wants to create PoRep proofs signs the PoH hash at that count. That signature is the seed used to pick the block and identity to replicate. A block is 1TB of ledger.
+4. Periodically at a specific PoH count, a replicator submits PoRep proofs for their selected block. A signature of the PoH hash at that count is the seed used to sample the 1TB encrypted block, and hash it. This is done faster than it takes to encrypt the 1TB block with the original identity.
 5. Replicators must submit some number of fake proofs, which they can prove to be fake by providing the seed for the hash result.
 6. Periodically at a specific PoH count, validators sign the hash and use the signature to select the 1TB block that they need to validate. They batch all the identities and proofs and submit approval for all the verified ones.
 7. After #6, replicator client submit the proofs of fake proofs.

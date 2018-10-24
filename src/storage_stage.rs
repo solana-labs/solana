@@ -1,6 +1,6 @@
 // A stage that handles generating the keys used to encrypt the ledger and sample it
 // for storage mining. Replicators submit storage proofs, validator then bundles them
-// to submit it's proof for mining to be rewarded.
+// to submit its proof for mining to be rewarded.
 
 #[cfg(feature = "cuda")]
 use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
