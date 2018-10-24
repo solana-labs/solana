@@ -362,3 +362,51 @@ test('transaction', async () => {
   ]);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
 });
+
+
+test('multi-instruction transaction', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const accountFrom = new Account();
+  const accountTo = new Account();
+  const connection = new Connection(url);
+
+  await connection.requestAirdrop(accountFrom.publicKey, 12);
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
+
+  await connection.requestAirdrop(accountTo.publicKey, 21);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+
+  // 1. Move(accountFrom, accountTo)
+  // 2. Move(accountTo, accountFrom)
+  const transaction = SystemProgram.move(
+    accountFrom.publicKey,
+    accountTo.publicKey,
+    10
+  )
+  .add(SystemProgram.move(
+    accountTo.publicKey,
+    accountFrom.publicKey,
+    10
+  ));
+
+  const signature = await connection.sendTransaction(accountFrom, transaction);
+  let i = 0;
+  for (;;) {
+    if (await connection.confirmTransaction(signature)) {
+      break;
+    }
+
+    expect(mockRpcEnabled).toBe(false);
+    expect(++i).toBeLessThan(10);
+    await sleep(500);
+  }
+  await expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
+
+  expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
+  expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+});
+
