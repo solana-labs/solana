@@ -19,7 +19,7 @@ pub mod budget_instruction;
 pub mod budget_transaction;
 #[cfg(feature = "chacha")]
 pub mod chacha;
-#[cfg(feature = "cuda")]
+#[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
 pub mod choose_gossip_peer_strategy;
 pub mod client;
