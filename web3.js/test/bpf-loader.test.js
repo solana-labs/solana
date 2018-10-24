@@ -12,7 +12,7 @@ import {newAccountWithTokens} from './new-account-with-tokens';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(10000);
+  jest.setTimeout(15000);
 }
 
 test('load BPF program', async () => {

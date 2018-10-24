@@ -14,7 +14,7 @@ import {mockGetLastId} from './mockrpc/getlastid';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
-  jest.setTimeout(10000);
+  jest.setTimeout(15000);
 }
 
 function mockGetSignatureStatus(result: string = 'Confirmed') {
