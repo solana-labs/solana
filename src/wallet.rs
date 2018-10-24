@@ -13,6 +13,7 @@ use hash::Hash;
 use loader_transaction::LoaderTransaction;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
+use rpc::RpcSignatureStatus;
 use rpc_request::RpcRequest;
 use serde_json;
 use signature::{Keypair, KeypairUtil, Signature};
@@ -23,6 +24,7 @@ use std::io::{Error, ErrorKind, Write};
 use std::mem::size_of;
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::Path;
+use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
@@ -412,57 +414,43 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 bpf_loader::id(),
                 0,
             );
-            let signature_str = serialize_and_send_tx(&config, &tx)?;
-            if !confirm_tx(&config, &signature_str)? {
-                Err(WalletError::DynamicProgramError(
-                    "Program allocate space failed".to_string(),
-                ))?
-            }
+            send_and_confirm_tx(&config, &tx).map_err(|_| {
+                WalletError::DynamicProgramError("Program allocate space failed".to_string())
+            })?;
 
             let mut offset = 0;
-            let write_result = program_userdata
-                .chunks(USERDATA_CHUNK_SIZE)
-                .map(|chunk| {
-                    let tx = Transaction::write(
-                        &program,
-                        bpf_loader::id(),
-                        offset,
-                        chunk.to_vec(),
-                        last_id,
-                        0,
-                    );
-                    let signature_str = serialize_and_send_tx(&config, &tx).unwrap();
-                    offset += USERDATA_CHUNK_SIZE as u32;
-                    signature_str
-                }).map(|signature| confirm_tx(&config, &signature).unwrap())
-                .all(|status| status);
-
-            if write_result {
-                let last_id = get_last_id(&config)?;
-                let tx = Transaction::finalize(&program, bpf_loader::id(), last_id, 0);
-                let signature_str = serialize_and_send_tx(&config, &tx)?;
-                if !confirm_tx(&config, &signature_str)? {
-                    Err(WalletError::DynamicProgramError(
-                        "Program finalize transaction failed".to_string(),
-                    ))?
-                }
-
-                let tx = Transaction::system_spawn(&program, last_id, 0);
-                let signature_str = serialize_and_send_tx(&config, &tx)?;
-                if !confirm_tx(&config, &signature_str)? {
-                    Err(WalletError::DynamicProgramError(
-                        "Program spawn failed".to_string(),
-                    ))?
-                }
-
-                Ok(json!({
-                    "programId": format!("{}", program.pubkey()),
-                }).to_string())
-            } else {
-                Err(WalletError::DynamicProgramError(
-                    "Program chunks write error".to_string(),
-                ))?
+            for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
+                let tx = Transaction::write(
+                    &program,
+                    bpf_loader::id(),
+                    offset,
+                    chunk.to_vec(),
+                    last_id,
+                    0,
+                );
+                send_and_confirm_tx(&config, &tx).map_err(|_| {
+                    WalletError::DynamicProgramError(format!(
+                        "Program write failed at offset {:?}",
+                        offset
+                    ))
+                })?;
+                offset += USERDATA_CHUNK_SIZE as u32;
             }
+
+            let last_id = get_last_id(&config)?;
+            let tx = Transaction::finalize(&program, bpf_loader::id(), last_id, 0);
+            send_and_confirm_tx(&config, &tx).map_err(|_| {
+                WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
+            })?;
+
+            let tx = Transaction::system_spawn(&program, last_id, 0);
+            send_and_confirm_tx(&config, &tx).map_err(|_| {
+                WalletError::DynamicProgramError("Program spawn failed".to_string())
+            })?;
+
+            Ok(json!({
+                "programId": format!("{}", program.pubkey()),
+            }).to_string())
         }
         // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
@@ -709,16 +697,60 @@ fn serialize_and_send_tx(
     Ok(signature.as_str().unwrap().to_string())
 }
 
-fn confirm_tx(config: &WalletConfig, signature: &str) -> Result<bool, Box<error::Error>> {
+fn confirm_tx(
+    config: &WalletConfig,
+    signature: &str,
+) -> Result<RpcSignatureStatus, Box<error::Error>> {
     let params = json!(signature.to_string());
-    let status =
-        RpcRequest::ConfirmTransaction.make_rpc_request(&config.rpc_addr, 1, Some(params))?;
-    if status.as_bool().is_none() {
+    let signature_status =
+        RpcRequest::GetSignatureStatus.make_rpc_request(&config.rpc_addr, 1, Some(params))?;
+    if let Some(status) = signature_status.as_str() {
+        let rpc_status = RpcSignatureStatus::from_str(status).map_err(|_| {
+            WalletError::RpcRequestError("Unable to parse signature status".to_string())
+        })?;
+        Ok(rpc_status)
+    } else {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
         ))?
     }
-    Ok(status.as_bool().unwrap())
+}
+
+fn send_and_confirm_tx(config: &WalletConfig, tx: &Transaction) -> Result<(), Box<error::Error>> {
+    let mut send_retries = 3;
+    while send_retries > 0 {
+        let mut status_retries = 4;
+        let signature_str = serialize_and_send_tx(config, tx)?;
+        let status = loop {
+            let status = confirm_tx(config, &signature_str)?;
+            if status == RpcSignatureStatus::SignatureNotFound {
+                status_retries -= 1;
+                if status_retries == 0 {
+                    break status;
+                }
+            } else {
+                break status;
+            }
+        };
+        match status {
+            RpcSignatureStatus::AccountInUse => {
+                send_retries -= 1;
+            }
+            RpcSignatureStatus::Confirmed => {
+                return Ok(());
+            }
+            _ => {
+                return Err(WalletError::RpcRequestError(format!(
+                    "Transaction {:?} failed: {:?}",
+                    signature_str, status
+                )))?;
+            }
+        }
+    }
+    Err(WalletError::RpcRequestError(format!(
+        "AccountInUse after 3 retries: {:?}",
+        tx.account_keys[0]
+    )))?
 }
 
 #[cfg(test)]
