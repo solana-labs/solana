@@ -32,10 +32,9 @@ export class Loader {
    * Load program data
    *
    * @param program Account to load the program info
-   * @param offset Account userdata offset to write `bytes` into
-   * @param bytes Program data
+   * @param data Program data
    */
-  async load(program: Account, offset: number, bytes: Array<number>) {
+  async load(program: Account, data: Array<number>) {
     const userdataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.u32('offset'),
@@ -43,27 +42,35 @@ export class Loader {
       BufferLayout.u32('bytesLengthPadding'),
       BufferLayout.seq(
         BufferLayout.u8('byte'),
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'bytes'
-      ),
+        BufferLayout.offset(BufferLayout.u32(), -8), 'bytes'),
     ]);
 
-    let userdata = Buffer.alloc(bytes.length + 16);
-    userdataLayout.encode(
-      {
-        instruction: 0, // Load instruction
-        offset,
-        bytes,
-      },
-      userdata,
-    );
+    const chunkSize = 256;
+    let userdata = Buffer.alloc(chunkSize + 16);
+    let offset = 0;
+    let array = data;
+    while (array.length > 0) {
+      const bytes = array.slice(0, chunkSize);
 
-    const transaction = new Transaction().add({
-      keys: [program.publicKey],
-      programId: this.programId,
-      userdata,
-    });
-    await sendAndConfirmTransaction(this.connection, program, transaction);
+      userdataLayout.encode(
+        {
+          instruction: 0, // Load instruction
+          offset,
+          bytes,
+        },
+        userdata,
+      );
+
+      const transaction = new Transaction().add({
+        keys: [program.publicKey],
+        programId: this.programId,
+        userdata,
+      });
+      await sendAndConfirmTransaction(this.connection, program, transaction);
+
+      offset += chunkSize;
+      array = array.slice(chunkSize);
+    }
   }
 
   /**
