@@ -17,7 +17,7 @@ use sigverify_stage::VerifiedPackets;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -58,7 +58,7 @@ impl Default for Config {
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     pub fn new(
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
@@ -210,7 +210,7 @@ impl BankingStage {
     }
 
     fn process_transactions(
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         transactions: &[Transaction],
         poh: &PohRecorder,
     ) -> Result<()> {
@@ -219,7 +219,9 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
+            bank.read()
+                .unwrap()
+                .process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
 
             chunk_start = chunk_end;
         }
@@ -230,7 +232,7 @@ impl BankingStage {
     /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
     /// Discard packets via `packet_recycler`.
     pub fn process_packets(
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &PohRecorder,
     ) -> Result<()> {
@@ -262,11 +264,13 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_refs() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
+                    Some((tx, _addr)) => {
+                        if tx.verify_refs() && ver != 0 {
+                            Some(tx)
+                        } else {
+                            None
+                        }
+                    }
                 }).collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;
@@ -330,13 +334,13 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let bank = Arc::new(RwLock::new(Bank::new(&Mint::new(2))));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             None,
         );
@@ -349,13 +353,13 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let bank = Arc::new(RwLock::new(Bank::new(&Mint::new(2))));
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             None,
         );
@@ -368,14 +372,14 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
-        let start_hash = bank.last_id();
+        let bank = Arc::new(RwLock::new(Bank::new(&Mint::new(2))));
+        let start_hash = bank.read().unwrap().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             None,
         );
@@ -385,7 +389,10 @@ mod tests {
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        assert_eq!(
+            entries[entries.len() - 1].id,
+            bank.read().unwrap().last_id()
+        );
         assert_eq!(
             banking_stage.join().unwrap(),
             Some(BankingStageReturnType::ChannelDisconnected)
@@ -395,14 +402,14 @@ mod tests {
     #[test]
     fn test_banking_stage_entries_only() {
         let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
-        let start_hash = bank.last_id();
+        let bank = Arc::new(RwLock::new(Bank::new(&mint)));
+        let start_hash = bank.read().unwrap().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             None,
         );
@@ -423,7 +430,7 @@ mod tests {
 
         // glad they all fit
         assert_eq!(packets.len(), 1);
-        verified_sender                       // tx, no_ver, anf
+        verified_sender // tx, no_ver, anf
             .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
             .unwrap();
 
@@ -451,13 +458,13 @@ mod tests {
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(RwLock::new(Bank::new(&mint)));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             None,
         );
@@ -504,14 +511,14 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let bank = Arc::new(RwLock::new(Bank::new(&Mint::new(2))));
         let (_verified_sender_, verified_receiver) = channel();
         let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.read().unwrap().last_id(),
             0,
             Some(max_tick_height),
         );

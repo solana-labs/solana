@@ -410,9 +410,11 @@ impl Bank {
     fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
         match result {
             Err(BankError::AccountInUse) => (),
-            _ => for k in &tx.account_keys {
-                account_locks.remove(k);
-            },
+            _ => {
+                for k in &tx.account_keys {
+                    account_locks.remove(k);
+                }
+            }
         }
     }
 

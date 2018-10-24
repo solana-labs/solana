@@ -80,7 +80,7 @@ impl Tvu {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         tick_height: u64,
         entry_height: u64,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -255,7 +255,7 @@ pub mod tests {
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
         let replicate_addr = target1.info.contact_info.tvu;
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(RwLock::new(Bank::new(&mint)));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
@@ -289,7 +289,7 @@ pub mod tests {
         let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![]);
-            bank.register_entry_id(&cur_hash);
+            bank.read().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             let tx0 = Transaction::system_new(
@@ -298,10 +298,10 @@ pub mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            bank.register_entry_id(&cur_hash);
+            bank.read().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
             let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
-            bank.register_entry_id(&cur_hash);
+            bank.read().unwrap().register_entry_id(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             alice_ref_balance -= transfer_amount;
@@ -334,10 +334,10 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint.keypair().pubkey());
+        let alice_balance = bank.read().unwrap().get_balance(&mint.keypair().pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = bank.get_balance(&bob_keypair.pubkey());
+        let bob_balance = bank.read().unwrap().get_balance(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         tvu.close().expect("close");

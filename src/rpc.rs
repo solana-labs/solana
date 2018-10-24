@@ -32,7 +32,7 @@ pub struct JsonRpcService {
 
 impl JsonRpcService {
     pub fn new(
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
         exit: Arc<AtomicBool>,
@@ -244,36 +244,38 @@ impl RpcSol for RpcSolImpl {
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
-    bank: Arc<Bank>,
+    bank: Arc<RwLock<Bank>>,
 }
 impl JsonRpcRequestProcessor {
     /// Create a new request processor that wraps the given Bank.
-    pub fn new(bank: Arc<Bank>) -> Self {
+    pub fn new(bank: Arc<RwLock<Bank>>) -> Self {
         JsonRpcRequestProcessor { bank }
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank
+            .read()
+            .unwrap()
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
     fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
-        let val = self.bank.get_balance(&pubkey);
+        let val = self.bank.read().unwrap().get_balance(&pubkey);
         Ok(val)
     }
     fn get_finality(&self) -> Result<usize> {
-        Ok(self.bank.finality())
+        Ok(self.bank.read().unwrap().finality())
     }
     fn get_last_id(&self) -> Result<String> {
-        let id = self.bank.last_id();
+        let id = self.bank.read().unwrap().last_id();
         Ok(bs58::encode(id).into_string())
     }
     pub fn get_signature_status(&self, signature: Signature) -> result::Result<(), BankError> {
-        self.bank.get_signature_status(&signature)
+        self.bank.read().unwrap().get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {
-        Ok(self.bank.transaction_count() as u64)
+        Ok(self.bank.read().unwrap().transaction_count() as u64)
     }
 }
 
@@ -349,7 +351,7 @@ mod tests {
         let tx = Transaction::system_move(&alice.keypair(), pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
-        let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
+        let request_processor = JsonRpcRequestProcessor::new(Arc::new(RwLock::new(bank)));
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
         ));
@@ -380,7 +382,8 @@ mod tests {
         ));
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
         let exit = Arc::new(AtomicBool::new(false));
-        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, exit);
+        let rpc_service =
+            JsonRpcService::new(&Arc::new(RwLock::new(bank)), &cluster_info, rpc_addr, exit);
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -408,12 +411,14 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
-        let arc_bank = Arc::new(bank);
+        let arc_bank = Arc::new(RwLock::new(bank));
         let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
         thread::spawn(move || {
-            let last_id = arc_bank.last_id();
+            let last_id = arc_bank.read().unwrap().last_id();
             let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
             arc_bank
+                .read()
+                .unwrap()
                 .process_transaction(&tx)
                 .expect("process transaction");
         }).join()
@@ -668,7 +673,7 @@ mod tests {
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            request_processor: JsonRpcRequestProcessor::new(Arc::new(RwLock::new(bank))),
             cluster_info: Arc::new(RwLock::new(
                 ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
             )),

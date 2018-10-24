@@ -92,7 +92,7 @@ pub struct Fullnode {
     rpc_service: JsonRpcService,
     rpc_pubsub_service: PubSubService,
     ncp: Ncp,
-    bank: Arc<Bank>,
+    bank: Arc<RwLock<Bank>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
     sigverify_disabled: bool,
@@ -102,8 +102,6 @@ pub struct Fullnode {
     retransmit_socket: UdpSocket,
     transaction_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
-    requests_socket: UdpSocket,
-    respond_socket: UdpSocket,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -249,7 +247,7 @@ impl Fullnode {
         rpc_port: Option<u16>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
-        let bank = Arc::new(bank);
+        let bank = Arc::new(RwLock::new(bank));
 
         let rpu = Some(Rpu::new(
             &bank,
@@ -274,21 +272,8 @@ impl Fullnode {
             ClusterInfo::new(node.info).expect("ClusterInfo::new"),
         ));
 
-        // Use custom RPC port, if provided (`Some(port)`)
-        // RPC port may be any open port on the node
-        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
-        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
-        //  Rpc and RpcPubsub serivces. Useful for tests.
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
-        // TODO: The RPC service assumes that there is a drone running on the leader
-        // Drone location/id will need to be handled a different way as soon as leader rotation begins
-        let rpc_service = JsonRpcService::new(&bank, &cluster_info, rpc_addr, exit.clone());
-
-        let rpc_pubsub_addr = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::from(0)),
-            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
-        );
-        let rpc_pubsub_service = PubSubService::new(&bank, rpc_pubsub_addr, exit.clone());
+        let (rpc_service, rpc_pubsub_service) =
+            Self::startup_rpc_services(rpc_port, &bank, &cluster_info, &exit);
 
         let ncp = Ncp::new(
             &cluster_info,
@@ -400,26 +385,23 @@ impl Fullnode {
             retransmit_socket: node.sockets.retransmit,
             transaction_sockets: node.sockets.transaction,
             broadcast_socket: node.sockets.broadcast,
-            requests_socket: node.sockets.requests,
-            respond_socket: node.sockets.respond,
             leader_scheduler,
         }
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        let (scheduled_leader, tick_height, entry_height, last_entry_id) = {
+        let (new_bank, scheduled_leader, tick_height, entry_height, last_entry_id) = {
             let mut ls_lock = self.leader_scheduler.write().unwrap();
             // Clear the leader scheduler
             ls_lock.reset();
 
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
-            let (bank, tick_height, entry_height, ledger_tail) =
+            let (new_bank, tick_height, entry_height, ledger_tail) =
                 Self::new_bank_from_ledger(&self.ledger_path, &mut *ls_lock);
 
-            self.bank = Arc::new(bank);
-
             (
+                new_bank,
                 ls_lock
                     .get_scheduled_leader(entry_height)
                     .expect("Scheduled leader should exist after rebuilding bank"),
@@ -437,21 +419,8 @@ impl Fullnode {
             .unwrap()
             .set_leader(scheduled_leader);
 
-        // Make a new RPU to serve requests out of the new bank we've created
-        // instead of the old one
-        if self.rpu.is_some() {
-            let old_rpu = self.rpu.take().unwrap();
-            old_rpu.close()?;
-            self.rpu = Some(Rpu::new(
-                &self.bank,
-                self.requests_socket
-                    .try_clone()
-                    .expect("Failed to clone requests socket"),
-                self.respond_socket
-                    .try_clone()
-                    .expect("Failed to clone respond socket"),
-            ));
-        }
+        // Replace the old bank with new bank
+        *self.bank.write().unwrap() = new_bank;
 
         // In the rare case that the leader exited on a multiple of seed_rotation_interval
         // when the new leader schedule was being generated, and there are no other validators
@@ -597,6 +566,36 @@ impl Fullnode {
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
         (bank, tick_height, entry_height, ledger_tail)
+    }
+
+    pub fn get_last_seed_height(&self) -> Option<u64> {
+        self.leader_scheduler.read().unwrap().last_seed_height
+    }
+
+    fn startup_rpc_services(
+        rpc_port: Option<u16>,
+        bank: &Arc<RwLock<Bank>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        exit: &Arc<AtomicBool>,
+    ) -> (JsonRpcService, PubSubService) {
+        // Use custom RPC port, if provided (`Some(port)`)
+        // RPC port may be any open port on the node
+        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
+        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
+        //  Rpc and RpcPubsub serivces. Useful for tests.
+
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
+        let rpc_pubsub_addr = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::from(0)),
+            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
+        );
+
+        // TODO: The RPC service assumes that there is a drone running on the leader
+        // Drone location/id will need to be handled a different way as soon as leader rotation begins
+        (
+            JsonRpcService::new(bank, cluster_info, rpc_addr, exit.clone()),
+            PubSubService::new(bank, rpc_pubsub_addr, exit.clone()),
+        )
     }
 }
 

@@ -241,9 +241,7 @@ pub fn set_panic_hook(program: &'static str) {
                     )
                     .add_field(
                         "host",
-                        influxdb::Value::String(
-                            hostname().unwrap_or_else(|_| "?".to_string())
-                        ),
+                        influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
                     )
                     .to_owned(),
             );

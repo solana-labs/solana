@@ -54,12 +54,12 @@ pub fn create_new_signed_vote_blob(
 fn get_last_id_to_vote_on(
     id: &Pubkey,
     ids: &[Hash],
-    bank: &Arc<Bank>,
+    bank: &Arc<RwLock<Bank>>,
     now: u64,
     last_vote: &mut u64,
     last_valid_validator_timestamp: &mut u64,
 ) -> result::Result<(Hash, u64), VoteError> {
-    let mut valid_ids = bank.count_valid_ids(&ids);
+    let mut valid_ids = bank.read().unwrap().count_valid_ids(&ids);
     let super_majority_index = (2 * ids.len()) / 3;
 
     //TODO(anatoly): this isn't stake based voting
@@ -106,7 +106,7 @@ fn get_last_id_to_vote_on(
 pub fn send_leader_vote(
     id: &Pubkey,
     keypair: &Keypair,
-    bank: &Arc<Bank>,
+    bank: &Arc<RwLock<Bank>>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
     last_vote: &mut u64,
@@ -131,7 +131,9 @@ pub fn send_leader_vote(
                 debug!("{} leader_sent_vote finality: {} ms", id, finality_ms);
                 inc_new_counter_info!("vote_stage-leader_sent_vote", 1);
 
-                bank.set_finality((now - *last_valid_validator_timestamp) as usize);
+                bank.read()
+                    .unwrap()
+                    .set_finality((now - *last_valid_validator_timestamp) as usize);
 
                 metrics::submit(
                     influxdb::Point::new(&"leader-finality")
@@ -145,7 +147,7 @@ pub fn send_leader_vote(
 }
 
 pub fn send_validator_vote(
-    bank: &Arc<Bank>,
+    bank: &Bank,
     keypair: &Arc<Keypair>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
@@ -183,12 +185,12 @@ pub mod tests {
 
         // create a mint/bank
         let mint = Mint::new(1000);
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(RwLock::new(Bank::new(&mint)));
         let hash0 = Hash::default();
 
         // get a non-default hash last_id
         let entry = next_entry(&hash0, 1, vec![]);
-        bank.register_entry_id(&entry.id);
+        bank.read().unwrap().register_entry_id(&entry.id);
 
         // Create a leader
         let leader_data = NodeInfo::new_with_socketaddr(&"127.0.0.1:1234".parse().unwrap());
@@ -198,7 +200,10 @@ pub mod tests {
         // give the leader some tokens
         let give_leader_tokens_tx =
             Transaction::system_new(&mint.keypair(), leader_pubkey.clone(), 100, entry.id);
-        bank.process_transaction(&give_leader_tokens_tx).unwrap();
+        bank.read()
+            .unwrap()
+            .process_transaction(&give_leader_tokens_tx)
+            .unwrap();
 
         leader_cluster_info.set_leader(leader_pubkey);
 
@@ -285,7 +290,7 @@ pub mod tests {
         // vote should be valid
         let blob = &vote_blob.unwrap()[0];
         let tx = deserialize(&(blob.read().unwrap().data)).unwrap();
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.read().unwrap().process_transaction(&tx), Ok(()));
     }
 
     #[test]
@@ -293,7 +298,7 @@ pub mod tests {
         logger::setup();
 
         let mint = Mint::new(1234);
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(RwLock::new(Bank::new(&mint)));
         let mut last_vote = 0;
         let mut last_valid_validator_timestamp = 0;
 
@@ -302,7 +307,7 @@ pub mod tests {
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 if i < 6 {
-                    bank.register_entry_id(&last_id);
+                    bank.read().unwrap().register_entry_id(&last_id);
                 }
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
@@ -322,7 +327,7 @@ pub mod tests {
         );
 
         // register another, see passing
-        bank.register_entry_id(&ids[6]);
+        bank.read().unwrap().register_entry_id(&ids[6]);
 
         let res = get_last_id_to_vote_on(
             &Pubkey::default(),

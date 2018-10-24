@@ -30,7 +30,7 @@ use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
 use streamer;
 
@@ -41,7 +41,11 @@ pub struct Rpu {
 }
 
 impl Rpu {
-    pub fn new(bank: &Arc<Bank>, requests_socket: UdpSocket, respond_socket: UdpSocket) -> Self {
+    pub fn new(
+        bank: &Arc<RwLock<Bank>>,
+        requests_socket: UdpSocket,
+        respond_socket: UdpSocket,
+    ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
         let t_receiver = streamer::receiver(

@@ -55,7 +55,7 @@ pub struct ReplicateStage {
 impl ReplicateStage {
     /// Process entry blobs, already in order
     fn replicate_requests(
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
@@ -92,7 +92,7 @@ impl ReplicateStage {
                     ls_lock.max_height_for_leader(*tick_height)
                 };
 
-                res = bank.process_entry(
+                res = bank.read().unwrap().process_entry(
                     &entry,
                     tick_height,
                     &mut *leader_scheduler.write().unwrap(),
@@ -118,7 +118,7 @@ impl ReplicateStage {
                     // TODO: This will return early from the first entry that has an erroneous
                     // transaction, instad of processing the rest of the entries in the vector
                     // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but doesn't solve the
+                    // bank.read().unwrap().process_entries() was used to process the entries, but doesn't solve the
                     // issue that the bank state was still changed, leading to inconsistencies with the
                     // leader as the leader currently should not be publishing erroneous transactions
                     break;
@@ -134,7 +134,7 @@ impl ReplicateStage {
         };
 
         if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, keypair, cluster_info, sender)?;
+            send_validator_vote(&*bank.read().unwrap(), keypair, cluster_info, sender)?;
         }
 
         cluster_info.write().unwrap().insert_votes(&entries.votes());
@@ -160,7 +160,7 @@ impl ReplicateStage {
 
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: Arc<Bank>,
+        bank: Arc<RwLock<Bank>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
         exit: Arc<AtomicBool>,
@@ -231,7 +231,8 @@ impl ReplicateStage {
                 }
 
                 None
-            }).unwrap();
+            })
+            .unwrap();
 
         (
             ReplicateStage {
@@ -332,7 +333,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (replicate_stage, _ledger_writer_recv) = ReplicateStage::new(
             Arc::new(my_keypair),
-            Arc::new(bank),
+            Arc::new(RwLock::new(bank)),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
             exit.clone(),

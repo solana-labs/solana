@@ -20,7 +20,7 @@ use solana::transaction::Transaction;
 use solana_program_interface::pubkey::Pubkey;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use test::Bencher;
 
@@ -49,7 +49,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mint = Mint::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
-    let bank = Arc::new(Bank::new(&mint));
+    let bank = Arc::new(RwLock::new(Bank::new(&mint)));
     let dummy = Transaction::system_move(
         &mint.keypair(),
         mint.keypair().pubkey(),
@@ -78,20 +78,20 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             mint.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&fund).is_ok());
+        assert!(bank.read().unwrap().process_transaction(&fund).is_ok());
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {
-        let res = bank.process_transaction(&tx);
+        let res = bank.read().unwrap().process_transaction(&tx);
         assert!(res.is_ok(), "sanity test transactions");
     });
-    bank.clear_signatures();
+    bank.read().unwrap().clear_signatures();
     //sanity check, make sure all the transactions can execute in parallel
-    let res = bank.process_transactions(&transactions);
+    let res = bank.read().unwrap().process_transactions(&transactions);
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.clear_signatures();
+    bank.read().unwrap().clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 192)
         .into_iter()
         .map(|x| {
@@ -110,19 +110,25 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mut id = mint.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_entry_id(&id);
+        bank.read().unwrap().register_entry_id(&id);
     }
 
     bencher.iter(move || {
         // make sure the tx last id is still registered
-        if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_entry_id(&mint.last_id());
+        if bank
+            .read()
+            .unwrap()
+            .count_valid_ids(&[mint.last_id()])
+            .len()
+            == 0
+        {
+            bank.read().unwrap().register_entry_id(&mint.last_id());
         }
         for v in verified.chunks(verified.len() / NUM_THREADS) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes);
-        bank.clear_signatures();
+        bank.read().unwrap().clear_signatures();
     });
 }
 
@@ -134,7 +140,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mint = Mint::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
-    let bank = Arc::new(Bank::new(&mint));
+    let bank = Arc::new(RwLock::new(Bank::new(&mint)));
     let dummy = Transaction::system_move(
         &mint.keypair(),
         mint.keypair().pubkey(),
@@ -179,20 +185,20 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             mint.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&fund).is_ok());
+        assert!(bank.read().unwrap().process_transaction(&fund).is_ok());
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {
-        let res = bank.process_transaction(&tx);
+        let res = bank.read().unwrap().process_transaction(&tx);
         assert!(res.is_ok(), "sanity test transactions");
     });
-    bank.clear_signatures();
+    bank.read().unwrap().clear_signatures();
     //sanity check, make sure all the transactions can execute in parallel
-    let res = bank.process_transactions(&transactions);
+    let res = bank.read().unwrap().process_transactions(&transactions);
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.clear_signatures();
+    bank.read().unwrap().clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 96)
         .into_iter()
         .map(|x| {
@@ -211,18 +217,24 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mut id = mint.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_entry_id(&id);
+        bank.read().unwrap().register_entry_id(&id);
     }
 
     bencher.iter(move || {
         // make sure the transactions are still valid
-        if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_entry_id(&mint.last_id());
+        if bank
+            .read()
+            .unwrap()
+            .count_valid_ids(&[mint.last_id()])
+            .len()
+            == 0
+        {
+            bank.read().unwrap().register_entry_id(&mint.last_id());
         }
         for v in verified.chunks(verified.len() / NUM_THREADS) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes);
-        bank.clear_signatures();
+        bank.read().unwrap().clear_signatures();
     });
 }

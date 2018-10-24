@@ -1338,13 +1338,12 @@ fn test_full_leader_validator_network() {
         num_reached_target_height = 0;
         for n in nodes.iter() {
             let node_lock = n.read().unwrap();
-            let ls_lock = &node_lock.leader_scheduler;
-            if let Some(sh) = ls_lock.read().unwrap().last_seed_height {
+            let seed_height = node_lock.get_last_seed_height();
+            if let Some(sh) = seed_height {
                 if sh >= target_height {
                     num_reached_target_height += 1;
                 }
             }
-            drop(ls_lock);
         }
 
         sleep(Duration::new(1, 0));

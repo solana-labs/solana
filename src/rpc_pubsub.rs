@@ -38,7 +38,7 @@ impl Service for PubSubService {
 }
 
 impl PubSubService {
-    pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(bank: &Arc<RwLock<Bank>>, pubsub_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
         let rpc = RpcSolPubSubImpl::new(JsonRpcRequestProcessor::new(bank.clone()), bank.clone());
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
@@ -101,13 +101,13 @@ build_rpc_trait! {
 struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
     request_processor: JsonRpcRequestProcessor,
-    bank: Arc<Bank>,
+    bank: Arc<RwLock<Bank>>,
     account_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Pubkey)>>>,
     signature_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Signature)>>>,
 }
 
 impl RpcSolPubSubImpl {
-    fn new(request_processor: JsonRpcRequestProcessor, bank: Arc<Bank>) -> Self {
+    fn new(request_processor: JsonRpcRequestProcessor, bank: Arc<RwLock<Bank>>) -> Self {
         RpcSolPubSubImpl {
             uid: Default::default(),
             request_processor,
@@ -150,6 +150,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .insert(sub_id.clone(), (bank_sub_id, pubkey));
 
         self.bank
+            .read()
+            .unwrap()
             .add_account_subscription(bank_sub_id, pubkey, sink);
     }
 
@@ -157,7 +159,10 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         info!("account_unsubscribe");
         if let Some((bank_sub_id, pubkey)) = self.account_subscriptions.write().unwrap().remove(&id)
         {
-            self.bank.remove_account_subscription(&bank_sub_id, &pubkey);
+            self.bank
+                .read()
+                .unwrap()
+                .remove_account_subscription(&bank_sub_id, &pubkey);
             Ok(true)
         } else {
             Err(Error {
@@ -208,6 +213,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             }
             Err(_) => {
                 self.bank
+                    .read()
+                    .unwrap()
                     .add_signature_subscription(bank_sub_id, signature, sink);
             }
         }
@@ -219,6 +226,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             self.signature_subscriptions.write().unwrap().remove(&id)
         {
             self.bank
+                .read()
+                .unwrap()
                 .remove_signature_subscription(&bank_sub_id, &signature);
             Ok(true)
         } else {
@@ -250,7 +259,7 @@ mod tests {
         let bank = Bank::new(&alice);
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
-        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr, exit);
+        let pubsub_service = PubSubService::new(&Arc::new(RwLock::new(bank)), pubsub_addr, exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }
@@ -261,8 +270,8 @@ mod tests {
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&alice);
-        let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let arc_bank = Arc::new(RwLock::new(bank));
+        let last_id = arc_bank.read().unwrap().last_id();
 
         let (sender, mut receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
@@ -304,6 +313,8 @@ mod tests {
         assert_eq!(expected, result);
 
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
         sleep(Duration::from_millis(200));
@@ -337,8 +348,8 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
-        let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let arc_bank = Arc::new(RwLock::new(bank));
+        let last_id = arc_bank.read().unwrap().last_id();
 
         let (sender, _receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
@@ -393,8 +404,8 @@ mod tests {
         let loader_program_id = Pubkey::default(); // TODO
         let executable = false; // TODO
         let bank = Bank::new(&alice);
-        let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let arc_bank = Arc::new(RwLock::new(bank));
+        let last_id = arc_bank.read().unwrap().last_id();
 
         let (sender, mut receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
@@ -443,6 +454,8 @@ mod tests {
             0,
         );
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
 
@@ -457,6 +470,8 @@ mod tests {
         );
 
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
 
@@ -465,6 +480,8 @@ mod tests {
         assert!(string.is_ok());
 
         let expected_userdata = arc_bank
+            .read()
+            .unwrap()
             .get_account(&contract_state.pubkey())
             .unwrap()
             .userdata;
@@ -499,6 +516,8 @@ mod tests {
             last_id,
         );
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
         sleep(Duration::from_millis(200));
@@ -507,6 +526,8 @@ mod tests {
         let string = receiver.poll();
         assert!(string.is_ok());
         let expected_userdata = arc_bank
+            .read()
+            .unwrap()
             .get_account(&contract_state.pubkey())
             .unwrap()
             .userdata;
@@ -531,6 +552,8 @@ mod tests {
 
         let tx = Transaction::system_new(&alice.keypair(), witness.pubkey(), 1, last_id);
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
         sleep(Duration::from_millis(200));
@@ -541,11 +564,15 @@ mod tests {
             last_id,
         );
         arc_bank
+            .read()
+            .unwrap()
             .process_transaction(&tx)
             .expect("process transaction");
         sleep(Duration::from_millis(200));
 
         let expected_userdata = arc_bank
+            .read()
+            .unwrap()
             .get_account(&contract_state.pubkey())
             .unwrap()
             .userdata;
@@ -575,7 +602,7 @@ mod tests {
         let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
-        let arc_bank = Arc::new(bank);
+        let arc_bank = Arc::new(RwLock::new(bank));
 
         let (sender, _receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));

@@ -81,7 +81,7 @@ impl LeaderVoteStage {
     /// Create a new LeaderVoteStage for voting and broadcasting entries.
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: Arc<Bank>,
+        bank: Arc<RwLock<Bank>>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         entry_receiver: Receiver<Vec<Entry>>,
     ) -> (Self, Receiver<Vec<Entry>>) {

@@ -60,7 +60,7 @@ impl Tpu {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
-        bank: &Arc<Bank>,
+        bank: &Arc<RwLock<Bank>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_duration: Config,
         transactions_sockets: Vec<UdpSocket>,
