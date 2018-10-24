@@ -101,6 +101,7 @@ declare module '@solana/web3.js' {
     fee: number;
 
     constructor(opts?: TransactionCtorFields): Transaction;
+    add(item: Transaction | TransactionInstructionCtorFields): Transaction;
     sign(from: Account): void;
     serialize(): Buffer;
   }
