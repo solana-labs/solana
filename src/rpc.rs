@@ -14,6 +14,7 @@ use solana_program_interface::pubkey::Pubkey;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::result;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
@@ -95,6 +96,20 @@ pub enum RpcSignatureStatus {
     GenericFailure,
     ProgramRuntimeError,
     SignatureNotFound,
+}
+impl FromStr for RpcSignatureStatus {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<RpcSignatureStatus> {
+        match s {
+            "AccountInUse" => Ok(RpcSignatureStatus::AccountInUse),
+            "Confirmed" => Ok(RpcSignatureStatus::Confirmed),
+            "GenericFailure" => Ok(RpcSignatureStatus::GenericFailure),
+            "ProgramRuntimeError" => Ok(RpcSignatureStatus::ProgramRuntimeError),
+            "SignatureNotFound" => Ok(RpcSignatureStatus::SignatureNotFound),
+            _ => Err(Error::parse_error()),
+        }
+    }
 }
 
 build_rpc_trait! {
