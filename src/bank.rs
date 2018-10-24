@@ -20,6 +20,7 @@ use mint::Mint;
 use native_loader;
 use payment_plan::Payment;
 use poh_recorder::PohRecorder;
+use poh_service::NUM_TICKS_PER_SECOND;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
@@ -49,7 +50,6 @@ use window::WINDOW_SIZE;
 /// but requires clients to update its `last_id` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
-pub const NUM_TICKS_PER_SECOND: usize = 10;
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
