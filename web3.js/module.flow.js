@@ -101,7 +101,7 @@ declare module '@solana/web3.js' {
     fee: number;
 
     constructor(opts?: TransactionCtorFields): Transaction;
-    add(item: Transaction | TransactionInstructionCtorFields): Transaction;
+    add(item: TransactionInstruction | TransactionInstructionCtorFields): Transaction;
     sign(from: Account): void;
     serialize(): Buffer;
   }
@@ -167,6 +167,29 @@ declare module '@solana/web3.js' {
       account: PublicKey,
       newOwner: PublicKey
     ): Promise<void>;
+
+    transferInstruction(
+      owner: PublicKey,
+      source: PublicKey,
+      destination: PublicKey,
+      amount: number | TokenAmount,
+    ): Promise<TransactionInstruction>;
+    approveInstruction(
+      owner: PublicKey,
+      account: PublicKey,
+      delegate: PublicKey,
+      amount: number | TokenAmount
+    ): TransactionInstruction;
+    revokeInstruction(
+      owner: PublicKey,
+      account: PublicKey,
+      delegate: PublicKey,
+    ): TransactionInstruction;
+    setOwnerInstruction(
+      owner: PublicKey,
+      account: PublicKey,
+      newOwner: PublicKey,
+    ): TransactionInstruction;
   }
 
   // === src/loader.js ===

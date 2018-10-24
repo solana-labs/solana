@@ -12,8 +12,9 @@ import {
   PublicKey,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
+  sendAndConfirmTransaction,
 } from '.';
-import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from '.';
 
 /**
@@ -363,36 +364,18 @@ export class Token {
     destination: PublicKey,
     amount: number | TokenAmount,
   ): Promise<void> {
-
-    const accountInfo = await this.accountInfo(source);
-    if (!owner.publicKey.equals(accountInfo.owner)) {
-      throw new Error('Account owner mismatch');
-    }
-
-    const userdataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.uint64('amount'),
-    ]);
-
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
-      {
-        instruction: 2, // Transfer instruction
-        amount: (new TokenAmount(amount)).toBuffer(),
-      },
-      userdata,
+    await sendAndConfirmTransaction(
+      this.connection,
+      owner,
+      new Transaction().add(
+        await this.transferInstruction(
+          owner.publicKey,
+          source,
+          destination,
+          amount,
+        )
+      ),
     );
-
-    const keys = [owner.publicKey, source, destination];
-    if (accountInfo.source) {
-      keys.push(accountInfo.source);
-    }
-    const transaction = new Transaction().add({
-      keys,
-      programId: this.programId,
-      userdata,
-    });
-    await sendAndConfirmTransaction(this.connection, owner, transaction);
   }
 
   /**
@@ -409,27 +392,18 @@ export class Token {
     delegate: PublicKey,
     amount: number | TokenAmount
   ): Promise<void> {
-
-    const userdataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-      Layout.uint64('amount'),
-    ]);
-
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
-      {
-        instruction: 3, // Approve instruction
-        amount: (new TokenAmount(amount)).toBuffer(),
-      },
-      userdata,
+    await sendAndConfirmTransaction(
+      this.connection,
+      owner,
+      new Transaction().add(
+        this.approveInstruction(
+          owner.publicKey,
+          account,
+          delegate,
+          amount,
+        )
+      ),
     );
-
-    const transaction = new Transaction().add({
-      keys: [owner.publicKey, account, delegate],
-      programId: this.programId,
-      userdata,
-    });
-    await sendAndConfirmTransaction(this.connection, owner, transaction);
   }
 
   /**
@@ -459,7 +433,129 @@ export class Token {
     account: PublicKey,
     newOwner: PublicKey,
   ): Promise<void> {
+    await sendAndConfirmTransaction(
+      this.connection,
+      owner,
+      new Transaction().add(
+        this.setOwnerInstruction(
+          owner.publicKey,
+          account,
+          newOwner
+        )
+      ),
+    );
+  }
 
+  /**
+   * Construct a Transfer instruction
+   *
+   * @param owner Owner of the source token account
+   * @param source Source token account
+   * @param destination Destination token account
+   * @param amount Number of tokens to transfer
+   */
+  async transferInstruction(
+    owner: PublicKey,
+    source: PublicKey,
+    destination: PublicKey,
+    amount: number | TokenAmount,
+  ): Promise<TransactionInstruction> {
+    const accountInfo = await this.accountInfo(source);
+    if (!owner.equals(accountInfo.owner)) {
+      throw new Error('Account owner mismatch');
+    }
+
+    const userdataLayout = BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.uint64('amount'),
+    ]);
+
+    const userdata = Buffer.alloc(userdataLayout.span);
+    userdataLayout.encode(
+      {
+        instruction: 2, // Transfer instruction
+        amount: (new TokenAmount(amount)).toBuffer(),
+      },
+      userdata,
+    );
+
+    const keys = [owner, source, destination];
+    if (accountInfo.source) {
+      keys.push(accountInfo.source);
+    }
+    return new TransactionInstruction({
+      keys,
+      programId: this.programId,
+      userdata,
+    });
+  }
+
+  /**
+   * Construct an Approve instruction
+   *
+   * @param programId Token program
+   * @param owner Owner of the source token account
+   * @param account Public key of the token account
+   * @param delegate Token account authorized to perform a transfer tokens from the source account
+   * @param amount Maximum number of tokens the delegate may transfer
+   */
+  approveInstruction(
+    owner: PublicKey,
+    account: PublicKey,
+    delegate: PublicKey,
+    amount: number | TokenAmount
+  ): TransactionInstruction {
+    const userdataLayout = BufferLayout.struct([
+      BufferLayout.u32('instruction'),
+      Layout.uint64('amount'),
+    ]);
+
+    const userdata = Buffer.alloc(userdataLayout.span);
+    userdataLayout.encode(
+      {
+        instruction: 3, // Approve instruction
+        amount: (new TokenAmount(amount)).toBuffer(),
+      },
+      userdata,
+    );
+
+    return new TransactionInstruction({
+      keys: [owner, account, delegate],
+      programId: this.programId,
+      userdata,
+    });
+  }
+
+  /**
+   * Construct an Revoke instruction
+   *
+   * @param programId Token program
+   * @param owner Owner of the source token account
+   * @param account Public key of the token account
+   * @param delegate Token account authorized to perform a transfer tokens from the source account
+   * @param amount Maximum number of tokens the delegate may transfer
+   */
+  revokeInstruction(
+    owner: PublicKey,
+    account: PublicKey,
+    delegate: PublicKey,
+  ): TransactionInstruction {
+    return this.approveInstruction(owner, account, delegate, 0);
+  }
+
+  /**
+   * Construct a SetOwner instruction
+   *
+   * @param programId Token program
+   * @param owner Owner of the token account
+   * @param account Public key of the token account
+   * @param newOwner New owner of the token account
+   */
+  setOwnerInstruction(
+    owner: PublicKey,
+    account: PublicKey,
+    newOwner: PublicKey,
+  ): TransactionInstruction {
     const userdataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
     ]);
@@ -472,13 +568,11 @@ export class Token {
       userdata,
     );
 
-    const keys = [owner.publicKey, account,newOwner];
-    const transaction = new Transaction().add({
-      keys,
+    return new TransactionInstruction({
+      keys: [owner, account, newOwner],
       programId: this.programId,
       userdata,
     });
-    await sendAndConfirmTransaction(this.connection, owner, transaction);
   }
 }
 
