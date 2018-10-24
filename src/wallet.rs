@@ -543,7 +543,7 @@ pub fn request_airdrop(
 ) -> Result<Signature, Error> {
     // TODO: make this async tokio client
     let mut stream = TcpStream::connect(drone_addr)?;
-    stream.set_read_timeout(Some(Duration::new(3, 0)))?;
+    stream.set_read_timeout(Some(Duration::new(10, 0)))?;
     let req = DroneRequest::GetAirdrop {
         airdrop_request_amount: tokens,
         client_pubkey: *id,
