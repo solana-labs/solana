@@ -14,3 +14,6 @@ Cargo.lock
 
 # test temp files, ledgers, etc.
 /farf/
+
+# log files
+*.log
