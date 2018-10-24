@@ -31,9 +31,9 @@ fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
 }
 
 #[allow(dead_code)]
-fn dump_prog(key: &Pubkey, prog: &[u8]) {
+fn dump_prog(name: &str, prog: &[u8]) {
     let mut eight_bytes: Vec<u8> = Vec::new();
-    trace!("BPF Program: {:?}", key);
+    println!("BPF Program: {}", name);
     for i in prog.iter() {
         if eight_bytes.len() >= 7 {
             println!("{:02X?}", eight_bytes);
@@ -92,7 +92,6 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
         trace!("Call BPF, {} Instructions", prog.len() / 8);
-        // dump_prog(keyed_accounts[0].key, &prog);
         let vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
@@ -111,7 +110,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             LoaderInstruction::Write { offset, bytes } => {
                 let offset = offset as usize;
                 let len = bytes.len();
-                trace!("BpfLoader::Write offset {} length {:?}", offset, len);
+                trace!("LuaLoader::Write offset {} length {:?}", offset, len);
                 if keyed_accounts[0].account.userdata.len() < offset + len {
                     println!(
                         "Overflow {} < {}",
