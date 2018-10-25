@@ -493,7 +493,6 @@ export class Token {
   /**
    * Construct an Approve instruction
    *
-   * @param programId Token program
    * @param owner Owner of the source token account
    * @param account Public key of the token account
    * @param delegate Token account authorized to perform a transfer tokens from the source account
@@ -529,11 +528,9 @@ export class Token {
   /**
    * Construct an Revoke instruction
    *
-   * @param programId Token program
    * @param owner Owner of the source token account
    * @param account Public key of the token account
    * @param delegate Token account authorized to perform a transfer tokens from the source account
-   * @param amount Maximum number of tokens the delegate may transfer
    */
   revokeInstruction(
     owner: PublicKey,
@@ -546,7 +543,6 @@ export class Token {
   /**
    * Construct a SetOwner instruction
    *
-   * @param programId Token program
    * @param owner Owner of the token account
    * @param account Public key of the token account
    * @param newOwner New owner of the token account
