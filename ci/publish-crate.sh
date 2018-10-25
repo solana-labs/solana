@@ -2,7 +2,7 @@
 
 cd "$(dirname "$0")/.."
 
-if [[ -z "$BUILDKITE_TAG" ]]; then
+if [[ -z "$BUILDKITE_TAG" && -z "$TRIGGERED_BUILDKITE_TAG" ]]; then
   # Skip publish if this is not a tagged release
   exit 0
 fi
