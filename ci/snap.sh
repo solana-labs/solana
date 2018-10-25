@@ -2,6 +2,13 @@
 
 cd "$(dirname "$0")/.."
 
+if ! ci/version-check.sh stable; then
+  # This job doesn't run within a container, try once to upgrade tooling on a
+  # version check failure
+  rustup install stable
+  ci/version-check.sh stable
+fi
+
 DRYRUN=
 if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
   DRYRUN="echo"
