@@ -35,19 +35,18 @@ pay_and_confirm() {
 
 leader_readiness=false
 timeout=60
-while [ $timeout -gt 0 ]
-do
+while [[ $timeout -gt 0 ]]; do
   expected_output="Leader ready"
   exec 42>&1
-  output=$($solana_wallet "${entrypoint[@]}" leader-ready | tee >(cat - >&42))
-  if [[ "$output" =~ $expected_output ]]; then
+  output=$($solana_wallet "${entrypoint[@]}" get-transaction-count | tee >(cat - >&42))
+  if [[ $output -gt 0 ]]; then
     leader_readiness=true
     break
   fi
   sleep 2
   (( timeout=timeout-2 ))
 done
-if [ "$leader_readiness" = false ]; then
+if ! "$leader_readiness"; then
   echo "Timed out waiting for leader"
   exit 1
 fi
