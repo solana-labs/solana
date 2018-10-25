@@ -163,6 +163,9 @@ fn main() -> Result<(), Box<error::Error>> {
                 )
                 // TODO: Add "loader" argument; current default is bpf_loader
         ).subcommand(
+            SubCommand::with_name("leader-ready")
+                .about("Determine leader readiness")
+        ).subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(

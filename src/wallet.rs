@@ -42,6 +42,7 @@ pub enum WalletCommand {
     Cancel(Pubkey),
     Confirm(Signature),
     Deploy(String),
+    GetLeaderReadiness,
     // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
         i64,
@@ -145,6 +146,7 @@ pub fn parse_command(
                 .unwrap()
                 .to_string(),
         )),
+        ("leader-ready", Some(_matches)) => Ok(WalletCommand::GetLeaderReadiness),
         ("pay", Some(pay_matches)) => {
             let tokens = pay_matches.value_of("tokens").unwrap().parse()?;
             let to = if pay_matches.is_present("to") {
@@ -451,6 +453,20 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             Ok(json!({
                 "programId": format!("{}", program.pubkey()),
             }).to_string())
+        }
+        WalletCommand::GetLeaderReadiness => {
+            // TODO: This logic is currently only correct for initial network boot;
+            // needs updating for leader rotation
+            let transaction_count = RpcRequest::GetTransactionCount
+                .make_rpc_request(&config.rpc_addr, 1, None)?
+                .as_u64();
+            match transaction_count {
+                Some(0) => Ok("Leader not ready".to_string()),
+                Some(_) => Ok("Leader ready".to_string()),
+                None => Err(WalletError::RpcRequestError(
+                    "Received result of an unexpected type".to_string(),
+                ))?,
+            }
         }
         // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
