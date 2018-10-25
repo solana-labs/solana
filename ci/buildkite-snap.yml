@@ -5,3 +5,6 @@ steps:
   - command: "ci/docker-solana/build.sh"
     timeout_in_minutes: 20
     name: "docker-solana"
+  - command: "ci/publish-crate.sh"
+    timeout_in_minutes: 20
+    name: "publish crate [public]"

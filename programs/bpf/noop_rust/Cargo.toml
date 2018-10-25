@@ -7,5 +7,5 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 
 [dependencies]
-rbpf = { git = "https://github.com/qmonnet/rbpf", rev="bc41ec47d9b51751585f6ddcde1d1eb1afe2be69" }
-solana = { path = "../../.." }
+rbpf = "0.1.0"
+solana-sdk = { path = "../../../common", version = "0.10.0" }
