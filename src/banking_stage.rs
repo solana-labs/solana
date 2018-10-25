@@ -2,7 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use bank::{Bank, NUM_TICKS_PER_SECOND};
+use bank::Bank;
 use bincode::deserialize;
 use counter::Counter;
 use entry::Entry;
@@ -10,15 +10,15 @@ use hash::Hash;
 use log::Level;
 use packet::Packets;
 use poh_recorder::{PohRecorder, PohRecorderError};
+use poh_service::{Config, PohService};
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use sigverify_stage::VerifiedPackets;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -38,23 +38,9 @@ pub const NUM_THREADS: usize = 10;
 pub struct BankingStage {
     /// Handle to the stage's thread.
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
-    tick_producer: JoinHandle<Option<BankingStageReturnType>>,
+    poh_service: PohService,
 }
 
-pub enum Config {
-    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
-    Tick(usize),
-    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 poh once and producing 1
-    /// tick.
-    Sleep(Duration),
-}
-
-impl Default for Config {
-    fn default() -> Config {
-        // TODO: Change this to Tick to enable PoH
-        Config::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64))
-    }
-}
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
     pub fn new(
@@ -67,49 +53,28 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh = PohRecorder::new(
+        let poh_recorder = PohRecorder::new(
             bank.clone(),
             entry_sender,
             *last_entry_id,
             tick_height,
             max_tick_height,
+            false,
+            vec![],
         );
-        let tick_poh = poh.clone();
-        // Tick producer is a headless producer, so when it exits it should notify the banking stage.
-        // Since channel are not used to talk between these threads an AtomicBool is used as a
-        // signal.
-        let poh_exit = Arc::new(AtomicBool::new(false));
-        let banking_exit = poh_exit.clone();
+
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
-        let tick_producer = Builder::new()
-            .name("solana-banking-stage-tick_producer".to_string())
-            .spawn(move || {
-                let mut tick_poh_ = tick_poh;
-                let return_value = match Self::tick_producer(&mut tick_poh_, &config, &poh_exit) {
-                    Err(Error::SendError) => Some(BankingStageReturnType::ChannelDisconnected),
-                    Err(e) => {
-                        error!(
-                            "solana-banking-stage-tick_producer unexpected error {:?}",
-                            e
-                        );
-                        None
-                    }
-                    Ok(x) => x,
-                };
-                debug!("tick producer exiting");
-                poh_exit.store(true, Ordering::Relaxed);
-                return_value
-            }).unwrap();
+        let poh_service = PohService::new(poh_recorder.clone(), config);
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0..NUM_THREADS)
             .map(|_| {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
-                let thread_poh = poh.clone();
-                let thread_banking_exit = banking_exit.clone();
+                let thread_poh_recorder = poh_recorder.clone();
+                let thread_banking_exit = poh_service.poh_exit.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -117,7 +82,7 @@ impl BankingStage {
                             if let Err(e) = Self::process_packets(
                                 &thread_bank,
                                 &thread_verified_receiver,
-                                &thread_poh,
+                                &thread_poh_recorder,
                             ) {
                                 debug!("got error {:?}", e);
                                 match e {
@@ -138,7 +103,6 @@ impl BankingStage {
                                 }
                             }
                             if thread_banking_exit.load(Ordering::Relaxed) {
-                                debug!("tick service exited");
                                 break None;
                             }
                         };
@@ -150,7 +114,7 @@ impl BankingStage {
         (
             BankingStage {
                 bank_thread_hdls,
-                tick_producer,
+                poh_service,
             },
             entry_receiver,
         )
@@ -166,47 +130,6 @@ impl BankingStage {
                     .map(|req| (req, x.meta.addr()))
                     .ok()
             }).collect()
-    }
-
-    fn tick_producer(
-        poh: &mut PohRecorder,
-        config: &Config,
-        poh_exit: &AtomicBool,
-    ) -> Result<Option<BankingStageReturnType>> {
-        loop {
-            match *config {
-                Config::Tick(num) => {
-                    for _ in 0..num {
-                        match poh.hash() {
-                            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                                return Ok(Some(BankingStageReturnType::LeaderRotation));
-                            }
-                            Err(e) => {
-                                return Err(e);
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                Config::Sleep(duration) => {
-                    sleep(duration);
-                }
-            }
-            match poh.tick() {
-                Ok(height) if Some(height) == poh.max_tick_height => {
-                    // CASE 1: We were successful in recording the last tick, so exit
-                    return Ok(Some(BankingStageReturnType::LeaderRotation));
-                }
-                Ok(_) => (),
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            if poh_exit.load(Ordering::Relaxed) {
-                debug!("tick service exited");
-                return Ok(None);
-            }
-        }
     }
 
     fn process_transactions(
@@ -306,9 +229,16 @@ impl Service for BankingStage {
             }
         }
 
-        let tick_return_value = self.tick_producer.join()?;
-        if tick_return_value.is_some() {
-            return_value = tick_return_value;
+        let poh_return_value = self.poh_service.join()?;
+        match poh_return_value {
+            Ok(_) => (),
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                return_value = Some(BankingStageReturnType::LeaderRotation);
+            }
+            Err(Error::SendError) => {
+                return_value = Some(BankingStageReturnType::ChannelDisconnected);
+            }
+            Err(_) => (),
         }
 
         Ok(return_value)

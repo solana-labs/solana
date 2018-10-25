@@ -26,13 +26,14 @@
 //! ```
 
 use bank::Bank;
-use banking_stage::{BankingStage, BankingStageReturnType, Config};
+use banking_stage::{BankingStage, BankingStageReturnType};
 use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
 use hash::Hash;
 use leader_vote_stage::LeaderVoteStage;
 use ledger_write_stage::LedgerWriteStage;
+use poh_service::Config;
 use service::Service;
 use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
