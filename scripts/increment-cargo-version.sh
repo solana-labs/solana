@@ -14,28 +14,40 @@ here="$(dirname "$0")"
 cd "$here"/..
 source ci/semver_bash/semver.sh
 
-readCargoVersion() {
-  declare Cargo_toml="$1"
+readCargoVariable() {
+  declare variable="$1"
+  declare Cargo_toml="$2"
 
-  while read -r version equals semver _; do
-    if [[ $version = version && $equals = = ]]; then
-      echo "${semver//\"/}"
+  while read -r name equals value _; do
+    if [[ $name = "$variable" && $equals = = ]]; then
+      echo "${value//\"/}"
       return
     fi
   done < <(cat "$Cargo_toml")
-  echo "Unable to locate version in $Cargo_toml" 1>&2
+  echo "Unable to locate $variable in $Cargo_toml" 1>&2
 }
 
+# shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
+Cargo_tomls="$(find . -name Cargo.toml)"
+
+# Collect the name of all the internal crates
+crates=()
+for Cargo_toml in $Cargo_tomls; do
+  crates+=("$(readCargoVariable name "$Cargo_toml")")
+done
+
+# Read the current version
 MAJOR=0
 MINOR=0
 PATCH=0
 SPECIAL=""
-semverParseInto "$(readCargoVersion ./Cargo.toml)" MAJOR MINOR PATCH SPECIAL
+semverParseInto "$(readCargoVariable version ./Cargo.toml)" MAJOR MINOR PATCH SPECIAL
 [[ -n $MAJOR ]] || usage
 
 currentVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 SPECIAL=""
 
+# Figure out what to increment
 case ${1:-minor} in
 patch)
   PATCH=$((PATCH + 1))
@@ -57,21 +69,23 @@ esac
 
 newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
-# shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
-for Cargo_toml in $(find . -name Cargo.toml); do
-  # Bump crate version
+# Update all the Cargo.toml files
+for Cargo_toml in $Cargo_tomls; do
+  # Set new crate version
   (
     set -x
     sed -i "$Cargo_toml" -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/"
   )
 
-  # Fix up the internal references to the solana_sdk crate
-  (
-    set -x
-    sed -i "$Cargo_toml" -e "
-      s/^solana-sdk.*\(\"[^\"]*common\"\).*\$/solana-sdk = \{ path = \1, version = \"$newVersion\" \}/
-    "
-  )
+  # Fix up the version references to other internal crates
+  for crate in "${crates[@]}"; do
+    (
+      set -x
+      sed -i "$Cargo_toml" -e "
+        s/^$crate = .*path = \"\([^\"]*\)\".*\$/$crate = \{ path = \"\1\", version = \"$newVersion\" \}/
+      "
+    )
+  done
 done
 
 echo "$currentVersion -> $newVersion"

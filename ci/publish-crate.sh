@@ -12,8 +12,18 @@ if [[ -z "$CRATES_IO_TOKEN" ]]; then
   exit 1
 fi
 
-# TODO: Ensure the published version matches the contents of BUILDKITE_TAG
-ci/docker-run.sh rust \
-  bash -exc "cargo package; cargo publish --token $CRATES_IO_TOKEN"
+maybePublish="echo Publish skipped"
+if [[ -n $CI ]]; then
+  maybePublish="cargo publish --token $CRATES_IO_TOKEN"
+fi
+
+# shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
+for Cargo_toml in {common,programs/native/{bpf_loader,lua_loader,noop}}/Cargo.toml; do
+  # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
+  (
+    set -x
+    ci/docker-run.sh rust bash -exc "cd $(dirname "$Cargo_toml"); cargo package; $maybePublish"
+  )
+done
 
 exit 0

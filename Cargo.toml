@@ -109,9 +109,9 @@ sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-solana-noop = { path = "programs/native/noop" }
-solana-bpfloader = { path = "programs/native/bpf_loader" }
-solana-lualoader = { path = "programs/native/lua_loader" }
+solana-noop = { path = "programs/native/noop", version = "0.10.0" }
+solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.10.0" }
+solana-lualoader = { path = "programs/native/lua_loader", version = "0.10.0" }
 
 [[bench]]
 name = "bank"
