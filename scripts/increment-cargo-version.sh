@@ -2,7 +2,7 @@
 
 usage() {
   cat <<EOF
-usage: $0 [major|minor|patch]
+usage: $0 [major|minor|patch|-preXYZ]
 
 Increments the Cargo.toml version.
 A minor version increment is the default
@@ -33,7 +33,8 @@ SPECIAL=""
 semverParseInto "$(readCargoVersion ./Cargo.toml)" MAJOR MINOR PATCH SPECIAL
 [[ -n $MAJOR ]] || usage
 
-currentVersion="$MAJOR.$MINOR.$PATCH"
+currentVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
+SPECIAL=""
 
 case ${1:-minor} in
 patch)
@@ -45,20 +46,23 @@ major)
 minor)
   MINOR=$((MINOR+ 1))
   ;;
+-*)
+  SPECIAL="$1"
+  ;;
 *)
   echo "Error: unknown argument: $1"
   usage
   ;;
 esac
 
-newVersion="$MAJOR.$MINOR.$PATCH"
+newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
 # shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
 for Cargo_toml in $(find . -name Cargo.toml); do
   # Bump crate version
   (
     set -x
-    sed -i "$Cargo_toml" -e "s/^version = \"[^\"]\"$/version = \"$newVersion\"/"
+    sed -i "$Cargo_toml" -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/"
   )
 
   # Fix up the internal references to the solana_program_interface crate
