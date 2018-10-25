@@ -1,6 +1,6 @@
 [package]
 name = "solana_program_interface"
-version = "0.1.0"
+version = "0.10.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
