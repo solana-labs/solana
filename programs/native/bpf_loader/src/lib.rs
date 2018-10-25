@@ -21,18 +21,18 @@ use std::sync::{Once, ONCE_INIT};
 fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
     let mut vm = rbpf::EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
-    vm.set_prog(&prog)?;
+    vm.set_program(&prog)?;
     vm.register_helper(
         rbpf::helpers::BPF_TRACE_PRINTK_IDX,
         rbpf::helpers::bpf_trace_printf,
-    );
+    )?;
     Ok(vm)
 }
 
 #[allow(dead_code)]
-fn dump_prog(name: &str, prog: &[u8]) {
+fn dump_program(key: &Pubkey, prog: &[u8]) {
     let mut eight_bytes: Vec<u8> = Vec::new();
-    println!("BPF Program: {}", name);
+    println!("BPF Program: {:?}", key);
     for i in prog.iter() {
         if eight_bytes.len() >= 7 {
             println!("{:02X?}", eight_bytes);
@@ -91,6 +91,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
         trace!("Call BPF, {} Instructions", prog.len() / 8);
+        //dump_program(keyed_accounts[0].key, &prog);
         let vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
@@ -99,9 +100,14 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             }
         };
         let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data);
-        if 0 == vm.prog_exec(v.as_mut_slice()) {
-            warn!("BPF program failed");
-            return false;
+        match vm.execute_program(v.as_mut_slice()) {
+            Ok(status) => if 0 == status {
+                return false;
+            },
+            Err(e) => {
+                warn!("{}", e);
+                return false;
+            }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
     } else if let Ok(instruction) = deserialize(tx_data) {

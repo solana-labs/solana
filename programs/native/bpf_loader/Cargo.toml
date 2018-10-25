@@ -10,7 +10,7 @@ elf = "0.0.10"
 env_logger = "0.5.12"
 libc = "0.2.43"
 log = "0.4.2"
-rbpf = { git = "https://github.com/qmonnet/rbpf", rev="bc41ec47d9b51751585f6ddcde1d1eb1afe2be69" }
+rbpf = "0.1.0"
 serde = "1.0.27"
 serde_derive = "1.0.27"
 solana_program_interface = { path = "../../../common" }
