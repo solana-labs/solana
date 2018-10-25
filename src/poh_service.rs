@@ -4,7 +4,6 @@
 use poh_recorder::PohRecorder;
 use result::Result;
 use service::Service;
-use std::marker::Send;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
@@ -43,7 +42,7 @@ impl PohService {
         self.join()
     }
 
-    pub fn new<T: PohRecorder + Send + 'static>(poh_recorder: T, config: Config) -> Self {
+    pub fn new(poh_recorder: PohRecorder, config: Config) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
@@ -65,11 +64,7 @@ impl PohService {
         }
     }
 
-    fn tick_producer<T: PohRecorder>(
-        poh: &mut T,
-        config: Config,
-        poh_exit: &AtomicBool,
-    ) -> Result<()> {
+    fn tick_producer(poh: &mut PohRecorder, config: Config, poh_exit: &AtomicBool) -> Result<()> {
         loop {
             match config {
                 Config::Tick(num) => {

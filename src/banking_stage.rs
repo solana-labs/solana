@@ -9,7 +9,7 @@ use entry::Entry;
 use hash::Hash;
 use log::Level;
 use packet::Packets;
-use poh_recorder::{PohRecorderError, PohRecorderLeader};
+use poh_recorder::{PohRecorder, PohRecorderError};
 use poh_service::{Config, PohService};
 use rayon::prelude::*;
 use result::{Error, Result};
@@ -53,12 +53,14 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh_recorder = PohRecorderLeader::new(
+        let poh_recorder = PohRecorder::new(
             bank.clone(),
             entry_sender,
             *last_entry_id,
             tick_height,
             max_tick_height,
+            false,
+            vec![],
         );
 
         // Single thread to generate entries from many banks.
@@ -133,7 +135,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        poh: &PohRecorderLeader,
+        poh: &PohRecorder,
     ) -> Result<()> {
         debug!("transactions: {}", transactions.len());
         let mut chunk_start = 0;
@@ -153,7 +155,7 @@ impl BankingStage {
     pub fn process_packets(
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
-        poh: &PohRecorderLeader,
+        poh: &PohRecorder,
     ) -> Result<()> {
         let recv_start = Instant::now();
         let mms = verified_receiver
