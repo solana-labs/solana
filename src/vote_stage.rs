@@ -12,7 +12,7 @@ use metrics;
 use packet::SharedBlob;
 use result::Result;
 use signature::Keypair;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::result;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};

@@ -4,7 +4,7 @@
 //! `Payment`, the payment is executed.
 
 use chrono::prelude::*;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 
 /// The types of events a payment plan can process.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

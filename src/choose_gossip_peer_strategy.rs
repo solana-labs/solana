@@ -2,7 +2,7 @@ use cluster_info::{ClusterInfoError, NodeInfo};
 use rand::distributions::{Distribution, Weighted, WeightedChoice};
 use rand::thread_rng;
 use result::Result;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std;
 use std::collections::HashMap;
 
@@ -193,7 +193,7 @@ mod tests {
     use choose_gossip_peer_strategy::{ChooseWeightedPeerStrategy, DEFAULT_WEIGHT};
     use logger;
     use signature::{Keypair, KeypairUtil};
-    use solana_program_interface::pubkey::Pubkey;
+    use solana_sdk::pubkey::Pubkey;
     use std;
     use std::collections::HashMap;
 

@@ -5,9 +5,9 @@ use libc;
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
-use solana_program_interface::account::KeyedAccount;
-use solana_program_interface::loader_instruction::LoaderInstruction;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
 use std::str;

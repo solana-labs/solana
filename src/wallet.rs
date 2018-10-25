@@ -17,7 +17,7 @@ use rpc::RpcSignatureStatus;
 use rpc_request::RpcRequest;
 use serde_json;
 use signature::{Keypair, KeypairUtil, Signature};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind, Write};

@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use serde_json;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::error;
 use std::fmt;
 use std::fs::File;

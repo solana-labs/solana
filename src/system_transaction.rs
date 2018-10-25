@@ -3,7 +3,7 @@
 use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use system_program::SystemProgram;
 use transaction::{Instruction, Transaction};
 

@@ -1,7 +1,7 @@
 extern crate bincode;
 extern crate elf;
 extern crate solana;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 
 use bincode::serialize;
 use solana::bank::Bank;
@@ -16,7 +16,7 @@ use solana::system_transaction::SystemTransaction;
 #[cfg(feature = "bpf_c")]
 use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 #[cfg(feature = "bpf_c")]
 use std::env;
 #[cfg(feature = "bpf_c")]

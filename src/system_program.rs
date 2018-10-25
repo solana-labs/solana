@@ -1,8 +1,8 @@
 //! system program
 
 use bincode::deserialize;
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use std;
 use transaction::Transaction;
 
@@ -123,8 +123,8 @@ mod test {
     use super::*;
     use hash::Hash;
     use signature::{Keypair, KeypairUtil};
-    use solana_program_interface::account::Account;
-    use solana_program_interface::pubkey::Pubkey;
+    use solana_sdk::account::Account;
+    use solana_sdk::pubkey::Pubkey;
     use system_program::SystemProgram;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;

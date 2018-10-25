@@ -4,8 +4,8 @@
 
 use bincode::deserialize;
 use hash::Hash;
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -1,8 +1,8 @@
 //! tic-tac-toe dashboard program
 
 use serde_cbor;
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use tictactoe_program::{Error, Game, Result, State, TicTacToeProgram};
 use transaction::Transaction;
 

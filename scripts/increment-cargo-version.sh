@@ -65,11 +65,11 @@ for Cargo_toml in $(find . -name Cargo.toml); do
     sed -i "$Cargo_toml" -e "s/^version = \"[^\"]*\"$/version = \"$newVersion\"/"
   )
 
-  # Fix up the internal references to the solana_program_interface crate
+  # Fix up the internal references to the solana_sdk crate
   (
     set -x
     sed -i "$Cargo_toml" -e "
-      s/^solana_program_interface.*\(\"[^\"]*common\"\).*\$/solana_program_interface = \{ path = \1, version = \"$newVersion\" \}/
+      s/^solana-sdk.*\(\"[^\"]*common\"\).*\$/solana-sdk = \{ path = \1, version = \"$newVersion\" \}/
     "
   )
 done

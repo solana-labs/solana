@@ -6,7 +6,7 @@ use bincode::{serialize_into, serialized_size};
 use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::io::Cursor;
 use std::mem::size_of;
 use std::net::SocketAddr;
