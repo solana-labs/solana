@@ -2,8 +2,8 @@
 
 use hash::Hash;
 use signature::Signature;
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]

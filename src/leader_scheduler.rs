@@ -12,8 +12,8 @@ use hash::{hash, Hash};
 use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
 #[cfg(test)]
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
@@ -538,7 +538,7 @@ mod tests {
     };
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
-    use solana_program_interface::pubkey::Pubkey;
+    use solana_sdk::pubkey::Pubkey;
     use std::collections::HashSet;
     use std::hash::Hash;
     use std::iter::FromIterator;

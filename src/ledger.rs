@@ -17,7 +17,7 @@ use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use result::{Error, Result};
 use signature::{Keypair, KeypairUtil};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};

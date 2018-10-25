@@ -4,7 +4,7 @@ extern crate bincode;
 extern crate chrono;
 extern crate serde_json;
 extern crate solana;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
@@ -25,7 +25,7 @@ use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use solana::window::{default_window, WINDOW_SIZE};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::{copy, create_dir_all, remove_dir_all};

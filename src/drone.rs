@@ -9,7 +9,7 @@ use bytes::Bytes;
 use influx_db_client as influxdb;
 use metrics;
 use signature::{Keypair, Signature};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};

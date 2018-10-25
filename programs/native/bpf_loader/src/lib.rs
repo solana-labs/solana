@@ -6,13 +6,13 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate rbpf;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 
 use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_program_interface::account::KeyedAccount;
-use solana_program_interface::loader_instruction::LoaderInstruction;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::pubkey::Pubkey;
 use std::io::prelude::*;
 use std::io::Error;
 use std::mem;

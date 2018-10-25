@@ -2,8 +2,8 @@
 
 use bincode;
 
-use solana_program_interface::account::Account;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::Account;
+use solana_sdk::pubkey::Pubkey;
 use std;
 use transaction::Transaction;
 

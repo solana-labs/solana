@@ -4,7 +4,7 @@ use entry::Entry;
 use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 use untrusted::Input;

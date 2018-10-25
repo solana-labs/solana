@@ -3,8 +3,8 @@
 use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
-use solana_program_interface::loader_instruction::LoaderInstruction;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
 
 pub trait LoaderTransaction {

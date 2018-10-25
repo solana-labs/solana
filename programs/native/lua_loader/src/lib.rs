@@ -3,12 +3,12 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate rlua;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 
 use bincode::deserialize;
 use rlua::{Lua, Result, Table};
-use solana_program_interface::account::KeyedAccount;
-use solana_program_interface::loader_instruction::LoaderInstruction;
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::loader_instruction::LoaderInstruction;
 use std::str;
 use std::sync::{Once, ONCE_INIT};
 
@@ -107,8 +107,8 @@ mod tests {
 
     use self::bincode::serialize;
     use super::*;
-    use solana_program_interface::account::{create_keyed_accounts, Account};
-    use solana_program_interface::pubkey::Pubkey;
+    use solana_sdk::account::{create_keyed_accounts, Account};
+    use solana_sdk::pubkey::Pubkey;
     use std::fs::File;
     use std::io::prelude::*;
     use std::path::PathBuf;

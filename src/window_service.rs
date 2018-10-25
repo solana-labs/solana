@@ -10,7 +10,7 @@ use metrics;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;

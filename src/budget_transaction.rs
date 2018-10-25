@@ -8,7 +8,7 @@ use chrono::prelude::*;
 use hash::Hash;
 use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil};
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use system_program::SystemProgram;
 use transaction::{self, Transaction};
 

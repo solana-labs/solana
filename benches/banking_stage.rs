@@ -3,7 +3,7 @@ extern crate bincode;
 extern crate rand;
 extern crate rayon;
 extern crate solana;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 extern crate test;
 
 use rand::{thread_rng, Rng};
@@ -17,7 +17,7 @@ use solana::packet::to_packets_chunked;
 use solana::signature::{KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::pubkey::Pubkey;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
