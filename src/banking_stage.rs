@@ -353,7 +353,7 @@ mod tests {
 
         // glad they all fit
         assert_eq!(packets.len(), 1);
-        verified_sender                       // tx, no_ver, anf
+        verified_sender // tx, no_ver, anf
             .send(vec![(packets[0].clone(), vec![1u8, 0u8, 1u8])])
             .unwrap();
 
