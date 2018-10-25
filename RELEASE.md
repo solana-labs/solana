@@ -12,9 +12,9 @@ When cutting a new channel branch these pre-steps are required:
 
 1. Pick your branch point for release on master.
 2. Create the branch.  The name should be "v" + the first 2 "version" fields from Cargo.toml.  For example, a Cargo.toml with version = "0.9.0" implies the next branch name is "v0.9".
-3. Update Cargo.toml to the next semantic version (e.g. 0.9.0 -> 0.10.0).
+3. Update Cargo.toml to the next semantic version (e.g. 0.9.0 -> 0.10.0) by running `./scripts/increment-cargo-version.sh`.
 4. Push your new branch to solana.git
-5. Land your Carto.toml change as a master PR.
+5. Land your Cargo.toml change as a master PR.
 
 At this point, ci/channel-info.sh should show your freshly cut release branch as "BETA_CHANNEL" and the previous release branch as "STABLE_CHANNEL".
 
