@@ -502,13 +502,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -555,13 +555,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -616,21 +616,19 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
 
-        let genesis_entries = &alice.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let entry_height = alice.create_entries().len() as u64;
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
-            0,
             entry_height,
-            &genesis_entries,
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -686,21 +684,19 @@ mod tests {
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
 
-        let genesis_entries = &alice.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
+        let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
-            0,
             entry_height,
-            &genesis_entries,
+            &last_id,
             leader,
             None,
             &ledger_path,

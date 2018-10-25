@@ -21,7 +21,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use timing::duration_as_ms;
-use window::{self, SharedWindow, WindowIndex, WindowUtil, WINDOW_SIZE};
+use window::{self, SharedWindow, WindowIndex, WindowUtil};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -71,16 +71,16 @@ fn broadcast(
     let blobs_chunking = Instant::now();
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
-    let blobs_chunked = blobs_vec.chunks(WINDOW_SIZE as usize).map(|x| x.to_vec());
+    let window_size = window.read().unwrap().window_size();
+    let blobs_chunked = blobs_vec.chunks(window_size as usize).map(|x| x.to_vec());
     let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
-
-    trace!("{}", window.read().unwrap().print(&id, *receive_index));
 
     let broadcast_start = Instant::now();
     for mut blobs in blobs_chunked {
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
+        // TODO: move all this into window.rs
         // Index the blobs
         window::index_blobs(node_info, &blobs, receive_index)
             .expect("index blobs for initial window");
@@ -92,7 +92,7 @@ fn broadcast(
             assert!(blobs.len() <= win.len());
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
-                let pos = (ix % WINDOW_SIZE) as usize;
+                let pos = (ix % window_size) as usize;
                 if let Some(x) = win[pos].data.take() {
                     trace!(
                         "{} popped {} at {}",
@@ -114,7 +114,7 @@ fn broadcast(
             }
             for b in &blobs {
                 let ix = b.read().unwrap().get_index().expect("blob index");
-                let pos = (ix % WINDOW_SIZE) as usize;
+                let pos = (ix % window_size) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
                 win[pos].data = Some(b.clone());
