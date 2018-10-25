@@ -1,10 +1,9 @@
 // @flow
 
-import {Connection, Transaction} from '..';
-
+import {Connection} from '../connection';
+import {Transaction} from '../transaction';
 import {sleep} from './sleep';
-
-import type {Account} from '..';
+import type {Account} from '../account';
 
 /**
  * Sign, send and confirm a transaction
