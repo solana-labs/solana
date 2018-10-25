@@ -28,6 +28,7 @@ pub const RPC_PORT: u16 = 8899;
 
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
+    exit: Arc<AtomicBool>,
 }
 
 impl JsonRpcService {
@@ -35,11 +36,12 @@ impl JsonRpcService {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
-        exit: Arc<AtomicBool>,
     ) -> Self {
+        let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(bank.clone());
         let info = cluster_info.clone();
         let exit_pubsub = exit.clone();
+        let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
@@ -62,14 +64,23 @@ impl JsonRpcService {
                     warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
                     return;
                 }
-                while !exit.load(Ordering::Relaxed) {
+                while !exit_.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
                 ()
             })
             .unwrap();
-        JsonRpcService { thread_hdl }
+        JsonRpcService { thread_hdl, exit }
+    }
+
+    pub fn exit(&self) {
+        self.exit.store(true, Ordering::Relaxed);
+    }
+
+    pub fn close(self) -> thread::Result<()> {
+        self.exit();
+        self.join()
     }
 }
 
@@ -379,8 +390,7 @@ mod tests {
             ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
         ));
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
-        let exit = Arc::new(AtomicBool::new(false));
-        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, exit);
+        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr);
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -586,11 +596,11 @@ mod tests {
 
     #[test]
     fn test_rpc_send_tx() {
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let bank = Bank::new(&alice);
+        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("rpc_send_tx", &alice);
@@ -602,8 +612,16 @@ mod tests {
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
+
+        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
+            vote_account_keypair,
             bank,
             0,
             entry_height,
@@ -612,7 +630,6 @@ mod tests {
             None,
             &ledger_path,
             false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));

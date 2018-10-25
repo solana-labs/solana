@@ -40,7 +40,6 @@ use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
 use hash::Hash;
-use leader_scheduler::LeaderScheduler;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -80,8 +79,8 @@ impl Tvu {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         keypair: Arc<Keypair>,
+        vote_account_keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
-        tick_height: u64,
         entry_height: u64,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -89,7 +88,6 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -105,23 +103,22 @@ impl Tvu {
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &cluster_info,
             window,
-            tick_height,
+            bank.get_tick_height(),
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            leader_scheduler.clone(),
+            bank.leader_scheduler.clone(),
         );
 
         let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
             keypair,
+            vote_account_keypair,
             bank.clone(),
             cluster_info,
             blob_window_receiver,
             exit.clone(),
-            tick_height,
             entry_height,
-            leader_scheduler,
         );
 
         let ledger_write_stage = LedgerWriteStage::new(ledger_path, ledger_entry_receiver, None);
@@ -139,7 +136,7 @@ impl Tvu {
         self.exit.load(Ordering::Relaxed)
     }
 
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
 
@@ -255,7 +252,12 @@ pub mod tests {
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
         let replicate_addr = target1.info.contact_info.tvu;
-        let bank = Arc::new(Bank::new(&mint));
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_id,
+        )));
+        let mut bank = Bank::new(&mint);
+        bank.leader_scheduler = leader_scheduler;
+        let bank = Arc::new(bank);
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
@@ -264,10 +266,11 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
+        let vote_account_keypair = Arc::new(Keypair::new());
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
+            vote_account_keypair,
             &bank,
-            0,
             0,
             cref1,
             dr_1.1,
@@ -275,9 +278,6 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_id,
-            ))),
         );
 
         let mut alice_ref_balance = starting_balance;

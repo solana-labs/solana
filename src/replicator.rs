@@ -198,14 +198,16 @@ mod tests {
         let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100);
 
         info!("starting leader node");
-        let leader_keypair = Keypair::new();
+        let leader_keypair = Arc::new(Keypair::new());
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let network_addr = leader_node.sockets.gossip.local_addr().unwrap();
         let leader_info = leader_node.info.clone();
+        let vote_account_keypair = Arc::new(Keypair::new());
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
+            vote_account_keypair,
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
