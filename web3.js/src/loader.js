@@ -51,7 +51,7 @@ export class Loader {
     const transactions = [];
     while (array.length > 0) {
       const bytes = array.slice(0, chunkSize);
-      let userdata = Buffer.alloc(chunkSize + 16);
+      const userdata = Buffer.alloc(chunkSize + 16);
       userdataLayout.encode(
         {
           instruction: 0, // Load instruction

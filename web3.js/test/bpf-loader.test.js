@@ -1,5 +1,7 @@
 // @flow
 
+import fs from 'mz/fs';
+
 import {
   Connection,
   BpfLoader,
@@ -23,7 +25,8 @@ test('load BPF program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithTokens(connection);
-  const programId = await BpfLoader.load(connection, from, 'test/bin/noop_c.o');
+  const data = await fs.readFile('test/bin/noop_c.o');
+  const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [from.publicKey],
     programId,
