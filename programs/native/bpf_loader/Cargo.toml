@@ -1,6 +1,6 @@
 [package]
 name = "bpf_loader"
-version = "0.1.0"
+version = "0.10.0"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 
 [dependencies]
@@ -13,7 +13,7 @@ log = "0.4.2"
 rbpf = "0.1.0"
 serde = "1.0.27"
 serde_derive = "1.0.27"
-solana_program_interface = { path = "../../../common" }
+solana_program_interface = { path = "../../../common", version = "0.10.0" }
 
 [lib]
 name = "bpf_loader"

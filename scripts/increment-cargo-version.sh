@@ -53,12 +53,23 @@ esac
 
 newVersion="$MAJOR.$MINOR.$PATCH"
 
-for Cargo_toml in {,common/}Cargo.toml; do
+# shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
+for Cargo_toml in $(find . -name Cargo.toml); do
+  # Bump crate version
   (
     set -x
-    sed -i $Cargo_toml -e "s/^version = \"$currentVersion\"$/version = \"$newVersion\"/"
+    sed -i "$Cargo_toml" -e "s/^version = \"[^\"]\"$/version = \"$newVersion\"/"
+  )
+
+  # Fix up the internal references to the solana_program_interface crate
+  (
+    set -x
+    sed -i "$Cargo_toml" -e "
+      s/^solana_program_interface.*\(\"[^\"]*common\"\).*\$/solana_program_interface = \{ path = \1, version = \"$newVersion\" \}/
+    "
   )
 done
+
 echo "$currentVersion -> $newVersion"
 
 exit 0
