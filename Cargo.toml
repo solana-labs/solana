@@ -109,7 +109,6 @@ sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-move_funds = { path = "programs/native/move_funds" }
 noop = { path = "programs/native/noop" }
 bpf_loader = { path = "programs/native/bpf_loader" }
 lua_loader = { path = "programs/native/lua_loader" }
@@ -137,7 +136,6 @@ name = "chacha"
 members = [
     ".",
     "common",
-    "programs/native/move_funds",
     "programs/native/noop",
     "programs/native/bpf_loader",
     "programs/native/lua_loader",
