@@ -33,6 +33,25 @@ pay_and_confirm() {
   $solana_wallet "${entrypoint[@]}" confirm "$signature"
 }
 
+leader_readiness=false
+timeout=60
+while [ $timeout -gt 0 ]
+do
+  expected_output="Leader ready"
+  exec 42>&1
+  output=$($solana_wallet "${entrypoint[@]}" leader-ready | tee >(cat - >&42))
+  if [[ "$output" =~ $expected_output ]]; then
+    leader_readiness=true
+    break
+  fi
+  sleep 2
+  (( timeout=timeout-2 ))
+done
+if [ "$leader_readiness" = false ]; then
+  echo "Timed out waiting for leader"
+  exit 1
+fi
+
 $solana_keygen
 $solana_wallet "${entrypoint[@]}" address
 check_balance_output "No account found" "Your balance is: 0"
