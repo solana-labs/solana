@@ -58,7 +58,7 @@ major)
 minor)
   MINOR=$((MINOR+ 1))
   ;;
--*)
+-[A-Za-z0-9]*$)
   SPECIAL="$1"
   ;;
 *)
