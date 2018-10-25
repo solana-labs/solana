@@ -17,7 +17,7 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 rm -rf usr/
-../docker-run.sh solanalabs/rust:1.29.1 \
+../docker-run.sh solanalabs/rust:1.30.0 \
   cargo install --path . --root ci/docker-solana/usr
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
 ../../scripts/install-native-programs.sh usr/bin/
