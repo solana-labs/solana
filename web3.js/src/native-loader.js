@@ -1,8 +1,11 @@
 // @flow
 
-import {Account, PublicKey, Loader, SystemProgram} from '.';
+import {Account} from './account';
+import {PublicKey} from './publickey';
+import {Loader} from './loader';
+import {SystemProgram} from './system-program';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
-import type {Connection} from '.';
+import type {Connection} from './connection';
 
 /**
  * Factory class for transactions to interact with a program loader

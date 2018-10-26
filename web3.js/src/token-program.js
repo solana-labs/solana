@@ -7,15 +7,12 @@ import BN from 'bn.js';
 import * as BufferLayout from 'buffer-layout';
 
 import * as Layout from './layout';
-import {
-  Account,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-  TransactionInstruction,
-  sendAndConfirmTransaction,
-} from '.';
-import type {Connection} from '.';
+import {Account} from './account';
+import {PublicKey} from './publickey';
+import {SystemProgram} from './system-program';
+import {Transaction, TransactionInstruction} from './transaction';
+import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
+import type {Connection} from './connection';
 
 /**
  * Some amount of tokens
