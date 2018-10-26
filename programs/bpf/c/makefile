@@ -1,6 +1,9 @@
+
 _@ :=@
-OUT_DIR := out
-LLVM_DIR := /usr/local/opt/llvm/bin#_
+INC_DIRS := -I.
+SRC_DIR := ./src
+OUT_DIR := ./out
+LLVM_DIR := /usr/local/opt/llvm/bin
 
 CC = $(LLVM_DIR)/clang
 CC_FLAGS = \
@@ -22,10 +25,6 @@ OBJ_DUMP_FLAGS = \
 	-source \
 	-disassemble
 
-SRC_DIR = ./src
-INC_DIRS = -I.
-PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
-
 .PRECIOUS: $(OUT_DIR)/%.bc
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	$(_@)mkdir -p $(OUT_DIR)
@@ -36,6 +35,8 @@ $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	$(_@)$(LD) $(LD_FLAGS) -o $@ $<
 
 -include $(wildcard $(OUT_DIR)/*.d)
+
+PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
 
 define \n
 
@@ -55,8 +56,16 @@ help:
 	@echo ''
 	@echo 'User settings'
 	@echo '  - The following setting are overridable on the command line, default values shown'
-	@echo '    - OUT_DIR = $(OUT_DIR)'
-	@echo '    - LLVM_DIR = $(LLVM_DIR)'
+	@echo '    - Verbosity, for verbose: '_@=':'
+	@echo '    - _@=$(_@)'
+	@echo '    - List of include dirs:'
+	@echo '      INC_DIRS=$(INC_DIRS)'
+	@echo '    - Location of source files:'
+	@echo '      SRC_DIR=$(SRC_DIR)'
+	@echo '    - Location to place output files:'
+	@echo '      OUT_DIR=$(OUT_DIR)'
+	@echo '    - Location of LLVM:'
+	@echo '      LLVM_DIR=$(LLVM_DIR)'
 	@echo ''
 	@echo 'Usage:'
 	@echo '  - make help - This help message'
@@ -67,6 +76,11 @@ help:
 	@echo ''
 	@echo 'Available programs:'
 	$(foreach name, $(PROGRAM_NAMES), @echo '  - $(name)'$(\n))
+	@echo ''
+	@echo 'Example:'
+	@echo '  - Assuming a programed named foo (src/foo.c)'
+	@echo '    - make foo INC_DIRS='-I. -Isrc''
+	@echo '    - make dump_foo'
 
 %: $(addprefix $(OUT_DIR)/, %.o)
 	@echo $@ up to date
@@ -80,7 +94,3 @@ dump_%: %
 
 clean:
 	$(_@)rm -rf $(OUT_DIR)
-
-debug:
-	@echo $(PROGRAM_NAMES)
-	@echo $(TARGETS)

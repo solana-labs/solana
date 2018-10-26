@@ -24,7 +24,7 @@ typedef enum { false = 0, true } bool;
 /**
  * Built-in helper functions
  * @{
- * The Solana BPF VM makes a limited number of helper functions available to BPF
+ * The BPF VM makes a limited number of helper functions available to BPF
  * programs.  They are resolved at run-time and identified by a function index.
  * Calling any of these functions results in `Call` instruction out of the
  * user's BPF program.
@@ -38,7 +38,7 @@ typedef enum { false = 0, true } bool;
  */
 
 /**
- * Prints to stdout
+ * Helper function that prints to stdout
  *
  * Prints the hexadecimal representation of each parameter
  */
@@ -51,19 +51,18 @@ static int (*sol_print)(uint64_t, uint64_t, uint64_t, uint64_t,
 /**
  * Prefix for all BPF functions
  *
- * This prefix should also be used for all user defined
- * functions as well in order to facilitate interopability
- * with BPF representation
+ * This prefix should be used for functions in order to facilitate
+ * interopability with BPF representation
  */
 #define SOL_FN_PREFIX __attribute__((always_inline)) static
 
 /**
- * Size of Public Key in bytes
+ * Size of Public key in bytes
  */
 #define SIZE_PUBKEY 32
 
 /**
- * Public Key
+ * Public key
  */
 typedef struct {
   uint8_t x[SIZE_PUBKEY];
@@ -71,7 +70,7 @@ typedef struct {
 
 /**
  * Compares two public keys
- * 
+ *
  * @param one First public key
  * @param two Second public key
  * @return True if the same
@@ -108,10 +107,8 @@ SOL_FN_PREFIX void sol_memcpy(void *dst, void *src, int len) {
 /**
  * Panics
  *
- * Cause a print to stdout of
- * the line number where the panic occurred and then the BPF VM to immediately
- * halt execution. No accounts' userdata are updated and a runtime error is
- * returned to Solana
+ * Prints the line number where the panic occurred and then causes
+ * the BPF VM to immediately halt execution. No accounts' userdata are updated
  */
 #define sol_panic() _sol_panic(__LINE__)
 SOL_FN_PREFIX void _sol_panic(uint64_t line) {
@@ -200,7 +197,7 @@ SOL_FN_PREFIX void print_array(uint8_t *array, int len) {
 }
 
 /**
- * Prints the hexadecimal representation the program's input parameters
+ * Prints the hexadecimal representation of the program's input parameters
  *
  * @param num_ka Numer of SolKeyedAccounts to print
  * @param ka A pointer to an array of SolKeyedAccounts to print
@@ -225,7 +222,7 @@ SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
  * Program entrypoint
  * @{
  *
- * An example of a simple program that prints the input
+ * The following is An example of a simple program that prints the input
  * parameters it received:
  *
  * #define NUM_KA 1
@@ -253,4 +250,4 @@ extern bool entrypoint(uint8_t *input);
 
 /**@}*/
 
-#endif // SOL_BPF_C_H
+#endif  // SOL_BPF_C_H
