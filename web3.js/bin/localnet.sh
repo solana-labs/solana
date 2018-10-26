@@ -75,13 +75,16 @@ up)
       --env RUST_LOG="$RUST_LOG" \
       solanalabs/solana:"$channel"
 
-    curl \
-      --retry 10 \
-      --retry-connrefused \
-      -X POST \
-      -H "Content-Type: application/json" \
-      -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-      http://localhost:8899
+    for _ in 1 2 3 4 5; do
+      if curl \
+          -X POST \
+          -H "Content-Type: application/json" \
+          -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
+          http://localhost:8899; then
+        break;
+      fi
+      sleep 1
+    done
   )
   ;;
 down)
