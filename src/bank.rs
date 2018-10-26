@@ -2033,4 +2033,59 @@ mod tests {
             Err(BankError::AccountNotFound)
         );
     }
+
+    #[test]
+    fn test_program_ids() {
+        let system = Pubkey::new(&[
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let native = Pubkey::new(&[
+            1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let bpf = Pubkey::new(&[
+            128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let budget = Pubkey::new(&[
+            129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let storage = Pubkey::new(&[
+            130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let token = Pubkey::new(&[
+            131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+        let vote = Pubkey::new(&[
+            132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]);
+
+        assert_eq!(SystemProgram::id(), system);
+        assert_eq!(native_loader::id(), native);
+        assert_eq!(bpf_loader::id(), bpf);
+        assert_eq!(BudgetState::id(), budget);
+        assert_eq!(StorageProgram::id(), storage);
+        assert_eq!(TokenProgram::id(), token);
+        assert_eq!(VoteProgram::id(), vote);
+    }
+
+    #[test]
+    fn test_program_id_uniqueness() {
+        let mut unique = HashSet::new();
+        let ids = vec![
+            SystemProgram::id(),
+            native_loader::id(),
+            bpf_loader::id(),
+            BudgetState::id(),
+            StorageProgram::id(),
+            TokenProgram::id(),
+            VoteProgram::id(),
+        ];
+        assert!(ids.into_iter().all(move |id| unique.insert(id)));
+    }
 }
