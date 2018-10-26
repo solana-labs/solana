@@ -66,7 +66,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen()).collect();
             new.account_keys[0] = Pubkey::new(&from[0..32]);
             new.account_keys[1] = Pubkey::new(&to[0..32]);
-            new.signature = Signature::new(&sig[0..64]);
+            new.signatures = vec![Signature::new(&sig[0..64])];
             new
         }).collect();
     // fund all the accounts
@@ -128,7 +128,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
-    let progs = 5;
+    let progs = 4;
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
@@ -168,7 +168,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
                 );
             }
             assert_eq!(new.instructions.len(), progs);
-            new.signature = Signature::new(&sig[0..64]);
+            new.signatures = vec![Signature::new(&sig[0..64])];
             new
         }).collect();
     transactions.iter().for_each(|tx| {

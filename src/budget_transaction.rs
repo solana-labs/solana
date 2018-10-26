@@ -92,7 +92,14 @@ impl BudgetTransaction for Transaction {
             transaction::Instruction::new(1, &budget_instruction, vec![1]),
         ];
 
-        Self::new_with_instructions(from_keypair, &keys, last_id, fee, program_ids, instructions)
+        Self::new_with_instructions(
+            &[from_keypair],
+            &keys,
+            last_id,
+            fee,
+            program_ids,
+            instructions,
+        )
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -258,9 +265,10 @@ mod tests {
         let instruction = Instruction::NewBudget(expr);
         let instructions = vec![transaction::Instruction::new(0, &instruction, vec![])];
         let claim0 = Transaction {
+            signed_keys: vec![],
             account_keys: vec![],
             last_id: Default::default(),
-            signature: Default::default(),
+            signatures: vec![],
             program_ids: vec![],
             instructions,
             fee: 0,

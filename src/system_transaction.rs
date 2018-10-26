@@ -110,7 +110,7 @@ impl SystemTransaction for Transaction {
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
 
         Transaction::new_with_instructions(
-            from,
+            &[from],
             &to_keys,
             last_id,
             fee,
@@ -149,19 +149,36 @@ mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
     use packet::PACKET_DATA_SIZE;
-    use transaction::{PUB_KEY_OFFSET, SIGNED_DATA_OFFSET, SIG_OFFSET};
+    use sigverify;
+    use transaction::SIG_OFFSET;
 
     #[test]
     fn test_layout() {
         let tx = test_tx();
-        let sign_data = tx.get_sign_data();
         let tx_bytes = serialize(&tx).unwrap();
-        assert_eq!(memfind(&tx_bytes, &sign_data), Some(SIGNED_DATA_OFFSET));
-        assert_eq!(memfind(&tx_bytes, &tx.signature.as_ref()), Some(SIG_OFFSET));
+        let sign_data = tx.get_sign_data();
+        let packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
+            sigverify::get_packet_offsets(&packet, 0);
+
+        assert_eq!(
+            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            Some(SIG_OFFSET)
+        );
         assert_eq!(
             memfind(&tx_bytes, &tx.account_keys[0].as_ref()),
-            Some(PUB_KEY_OFFSET)
+            Some(pubkey_offset as usize)
         );
+        assert_eq!(
+            memfind(&tx_bytes, &sign_data),
+            Some(msg_start_offset as usize)
+        );
+        assert_eq!(
+            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            Some(sig_start as usize)
+        );
+        assert_eq!(sig_len, 1);
         assert!(tx.verify_signature());
     }
 
@@ -172,14 +189,9 @@ mod tests {
         let sign_data0a = tx0.get_sign_data();
         let tx_bytes = serialize(&tx0).unwrap();
         assert!(tx_bytes.len() < PACKET_DATA_SIZE);
-        assert_eq!(memfind(&tx_bytes, &sign_data0a), Some(SIGNED_DATA_OFFSET));
         assert_eq!(
-            memfind(&tx_bytes, &tx0.signature.as_ref()),
+            memfind(&tx_bytes, &tx0.signatures[0].as_ref()),
             Some(SIG_OFFSET)
-        );
-        assert_eq!(
-            memfind(&tx_bytes, &tx0.account_keys[0].as_ref()),
-            Some(PUB_KEY_OFFSET)
         );
         let tx1 = deserialize(&tx_bytes).unwrap();
         assert_eq!(tx0, tx1);

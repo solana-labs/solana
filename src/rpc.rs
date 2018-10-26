@@ -251,7 +251,7 @@ impl RpcSol for RpcSolImpl {
                 info!("send_transaction: send_to error: {:?}", err);
                 Error::internal_error()
             })?;
-        let signature = bs58::encode(tx.signature).into_string();
+        let signature = bs58::encode(tx.signatures[0]).into_string();
         trace!(
             "send_transaction: sent {} bytes, signature={}",
             data.len(),
@@ -504,7 +504,7 @@ mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
-            tx.signature
+            tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
@@ -523,7 +523,7 @@ mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signature
+            tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"Confirmed","id":1}}"#);
@@ -537,7 +537,7 @@ mod tests {
         let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
-            tx.signature
+            tx.signatures[0]
         );
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}}"#);
@@ -738,8 +738,8 @@ mod tests {
         let tx =
             Transaction::system_move(&Keypair::new(), Keypair::new().pubkey(), 20, hash(&[0]), 0);
         assert_eq!(
-            verify_signature(&tx.signature.to_string()).unwrap(),
-            tx.signature
+            verify_signature(&tx.signatures[0].to_string()).unwrap(),
+            tx.signatures[0]
         );
         let bad_signature = "a1b2c3d4";
         assert_eq!(

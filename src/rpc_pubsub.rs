@@ -290,7 +290,7 @@ mod tests {
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
-            tx.signature.to_string()
+            tx.signatures[0].to_string()
         );
         let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":0,"id":1}}"#);
@@ -331,7 +331,7 @@ mod tests {
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
-            tx.signature.to_string()
+            tx.signatures[0].to_string()
         );
         let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","result":1,"id":1}}"#);
@@ -364,7 +364,7 @@ mod tests {
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
-            tx.signature.to_string()
+            tx.signatures[0].to_string()
         );
         let _res = io.handle_request_sync(&req, session.clone());
 

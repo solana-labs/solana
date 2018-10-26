@@ -222,7 +222,7 @@ impl StorageStage {
                         );
                         let mut storage_keys = storage_keys.write().unwrap();
                         storage_keys[*current_key_idx..*current_key_idx + size_of::<Signature>()]
-                            .copy_from_slice(tx.signature.as_ref());
+                            .copy_from_slice(tx.signatures[0].as_ref());
                         *current_key_idx += size_of::<Signature>();
                         *current_key_idx %= storage_keys.len();
                     }
