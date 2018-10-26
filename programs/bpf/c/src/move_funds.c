@@ -16,7 +16,7 @@ extern bool entrypoint(uint8_t *input) {
   uint8_t *data;
   uint64_t data_len;
 
-  if (1 != sol_deserialize((uint8_t *)input, NUM_KA, ka, &data, &data_len)) {
+  if (!sol_deserialize((uint8_t *)input, NUM_KA, ka, &data, &data_len)) {
     return false;
   }
 

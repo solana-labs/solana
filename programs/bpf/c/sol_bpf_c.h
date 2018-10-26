@@ -118,6 +118,14 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
 }
 
 /**
+ * Asserts
+ */
+#define sol_assert(expr) \
+  if (!(expr)) { \
+   _sol_panic(__LINE__); \
+  }
+
+/**
  * De-serializes the input parameters into usable types
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
@@ -134,9 +142,9 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  * @param data_len On return, the length in bytes of the instruction data
  * @return Boolan True if successful
  */
-SOL_FN_PREFIX int sol_deserialize(uint8_t *input, uint64_t num_ka,
-                                  SolKeyedAccounts *ka, uint8_t **data,
-                                  uint64_t *data_len) {
+SOL_FN_PREFIX bool sol_deserialize(uint8_t *input, uint64_t num_ka,
+                                   SolKeyedAccounts *ka, uint8_t **data,
+                                   uint64_t *data_len) {
   if (num_ka != *(uint64_t *)input) {
     return false;
   }
@@ -179,7 +187,7 @@ SOL_FN_PREFIX int sol_deserialize(uint8_t *input, uint64_t num_ka,
  *
  * @param key The public key to print
  */
-SOL_FN_PREFIX void print_key(SolPubkey *key) {
+SOL_FN_PREFIX void sol_print_key(SolPubkey *key) {
   for (int j = 0; j < SIZE_PUBKEY; j++) {
     sol_print(0, 0, 0, j, key->x[j]);
   }
@@ -190,7 +198,7 @@ SOL_FN_PREFIX void print_key(SolPubkey *key) {
  *
  * @param array The array to print
  */
-SOL_FN_PREFIX void print_array(uint8_t *array, int len) {
+SOL_FN_PREFIX void sol_print_array(uint8_t *array, int len) {
   for (int j = 0; j < len; j++) {
     sol_print(0, 0, 0, j, array[j]);
   }
@@ -204,16 +212,16 @@ SOL_FN_PREFIX void print_array(uint8_t *array, int len) {
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
-SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
-                                uint8_t *data, uint64_t data_len) {
+SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, SolKeyedAccounts *ka,
+                                    uint8_t *data, uint64_t data_len) {
   sol_print(0, 0, 0, 0, num_ka);
   for (int i = 0; i < num_ka; i++) {
-    print_key(ka[i].key);
+    sol_print_key(ka[i].key);
     sol_print(0, 0, 0, 0, *ka[i].tokens);
-    print_array(ka[i].userdata, ka[i].userdata_len);
-    print_key(ka[i].program_id);
+    sol_print_array(ka[i].userdata, ka[i].userdata_len);
+    sol_print_key(ka[i].program_id);
   }
-  print_array(data, data_len);
+  sol_print_array(data, data_len);
 }
 
 /**@}*/
