@@ -1,128 +1,10 @@
-//#include <stdint.h>
-//#include <stddef.h>
+/**
+ * @brief TicTacToe Dashboard C-based BPF program
+ */
 
-#if 1
-#define BPF_TRACE_PRINTK_IDX 6
-static int (*sol_print)(int, int, int, int, int) = (void *)BPF_TRACE_PRINTK_IDX;
-#else
-// relocation is another option
-extern int sol_print(int, int, int, int, int);
-#endif
+#include "sol_bpf_c.h"
 
-typedef long long unsigned int uint64_t;
-typedef long long int int64_t;
-typedef unsigned char uint8_t;
-
-typedef enum { false = 0, true } bool;
-
-// TODO support BPF function calls rather then forcing everything to be inlined
-#define SOL_FN_PREFIX __attribute__((always_inline)) static
-
-// TODO move this to a registered helper
-SOL_FN_PREFIX void sol_memcpy(void *dst, void *src, int len) {
-  for (int i = 0; i < len; i++) {
-    *((uint8_t *)dst + i) = *((uint8_t *)src + i);
-  }
-}
-
-#define sol_trace() sol_print(0, 0, 0xFF, 0xFF, (__LINE__));
-#define sol_panic() _sol_panic(__LINE__)
-SOL_FN_PREFIX void _sol_panic(uint64_t line) {
-  sol_print(0, 0, 0xFF, 0xFF, line);
-  char *pv = (char *)1;
-  *pv = 1;
-}
-
-#define SIZE_PUBKEY 32
-typedef struct {
-  uint8_t x[SIZE_PUBKEY];
-} SolPubkey;
-
-typedef struct {
-  SolPubkey *key;
-  int64_t tokens;
-  uint64_t userdata_len;
-  uint8_t *userdata;
-  SolPubkey *program_id;
-} SolKeyedAccounts;
-
-SOL_FN_PREFIX int sol_deserialize(uint8_t *src, uint64_t num_ka,
-                                  SolKeyedAccounts *ka, uint8_t **tx_data,
-                                  uint64_t *tx_data_len) {
-  if (num_ka != *(uint64_t *)src) {
-    return 0;
-  }
-  src += sizeof(uint64_t);
-
-  // TODO fixed iteration loops ok? unrolled?
-  for (int i = 0; i < num_ka;
-       i++) {  // TODO this should end up unrolled, confirm
-    // key
-    ka[i].key = (SolPubkey *)src;
-    src += SIZE_PUBKEY;
-
-    // tokens
-    ka[i].tokens = *(uint64_t *)src;
-    src += sizeof(uint64_t);
-
-    // account userdata
-    ka[i].userdata_len = *(uint64_t *)src;
-    src += sizeof(uint64_t);
-    ka[i].userdata = src;
-    src += ka[i].userdata_len;
-
-    // program_id
-    ka[i].program_id = (SolPubkey *)src;
-    src += SIZE_PUBKEY;
-  }
-  // tx userdata
-  *tx_data_len = *(uint64_t *)src;
-  src += sizeof(uint64_t);
-  *tx_data = src;
-
-  return 1;
-}
-
-// // -- Debug --
-
-SOL_FN_PREFIX void print_key(SolPubkey *key) {
-  for (int j = 0; j < SIZE_PUBKEY; j++) {
-    sol_print(0, 0, 0, j, key->x[j]);
-  }
-}
-
-SOL_FN_PREFIX void print_data(uint8_t *data, int len) {
-  for (int j = 0; j < len; j++) {
-    sol_print(0, 0, 0, j, data[j]);
-  }
-}
-
-SOL_FN_PREFIX void print_params(uint64_t num_ka, SolKeyedAccounts *ka,
-                                uint8_t *tx_data, uint64_t tx_data_len) {
-  sol_print(0, 0, 0, 0, num_ka);
-  for (int i = 0; i < num_ka; i++) {
-    // key
-    print_key(ka[i].key);
-
-    // tokens
-    sol_print(0, 0, 0, 0, ka[i].tokens);
-
-    // account userdata
-    print_data(ka[i].userdata, ka[i].userdata_len);
-
-    // program_id
-    print_key(ka[i].program_id);
-  }
-  // tx userdata
-  print_data(tx_data, tx_data_len);
-}
-
-// -- TicTacToe --
-
-//  Board Coodinates
-// | 0,0 | 1,0 | 2,0 |
-// | 0,1 | 1,1 | 2,1 |
-// | 0,2 | 1,2 | 2,2 |
+#include "tictactoe.h"
 
 typedef enum {
   Result_Ok,
@@ -138,30 +20,6 @@ typedef enum {
   Result_UserdataTooSmall,
 } Result;
 
-typedef enum { BoardItem_F, BoardItem_X, BoardItem_O } BoardItem;
-
-typedef enum {
-  State_Waiting,
-  State_XMove,
-  State_OMove,
-  State_XWon,
-  State_OWon,
-  State_Draw,
-} State;
-
-typedef struct {
-  // Player who initialized the game
-  SolPubkey player_x;
-  // Player who joined the game
-  SolPubkey player_o;
-  // Current state of the game
-  State state;
-  // Tracks the player moves
-  BoardItem board[9];
-  // Keep Alive for each player
-  int64_t keep_alive[2];
-} Game;
-
 typedef enum {
   Command_Init = 0,
   Command_Join,
@@ -170,21 +28,17 @@ typedef enum {
 } Command;
 
 SOL_FN_PREFIX void game_dump_board(Game *self) {
-  sol_print(0, 0, 0x9, 0x9, 0x9);
+  sol_print(0x9, 0x9, 0x9, 0x9, 0x9);
   sol_print(0, 0, self->board[0], self->board[1], self->board[2]);
   sol_print(0, 0, self->board[3], self->board[4], self->board[5]);
   sol_print(0, 0, self->board[6], self->board[7], self->board[8]);
-  sol_print(0, 0, 0x9, 0x9, 0x9);
+  sol_print(0x9, 0x9, 0x9, 0x9, 0x9);
 }
 
 SOL_FN_PREFIX void game_create(Game *self, SolPubkey *player_x) {
+  // account memory is zero-initialized
   sol_memcpy(self->player_x.x, player_x, SIZE_PUBKEY);
-  // TODO self->player_o = 0;
   self->state = State_Waiting;
-  self->keep_alive[0] = 0;
-  self->keep_alive[1] = 0;
-
-  // TODO fixed iteration loops ok? unrolled?
   for (int i = 0; i < 9; i++) {
     self->board[i] = BoardItem_F;
   }
@@ -215,7 +69,6 @@ SOL_FN_PREFIX bool game_same(BoardItem x_or_o, BoardItem one, BoardItem two,
 }
 
 SOL_FN_PREFIX bool game_same_player(SolPubkey *one, SolPubkey *two) {
-  // TODO fixed iteration loops ok? unrolled?
   for (int i = 0; i < SIZE_PUBKEY; i++) {
     if (one->x[i] != two->x[i]) {
       return false;
@@ -280,7 +133,6 @@ SOL_FN_PREFIX Result game_next_move(Game *self, SolPubkey *player, int x,
 
   {
     int draw = true;
-    // TODO fixed iteration loops ok? unrolled?
     for (int i = 0; i < 9; i++) {
       if (BoardItem_F == self->board[i]) {
         draw = false;
@@ -321,17 +173,24 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
   return Result_Ok;
 }
 
-// accounts[0] On Init must be player X, after that doesn't matter,
-//             anybody can cause a dashboard update
-// accounts[1] must be a TicTacToe state account
-// accounts[2] must be account of current player, only Pubkey is used
-uint64_t entrypoint(uint8_t *buf) {
-  SolKeyedAccounts ka[3];
-  uint64_t tx_data_len;
-  uint8_t *tx_data;
+/**
+ * Numer of SolKeyedAccounts expected. The program should bail if an
+ * unexpected number of accounts are passed to the program's entrypoint
+ *
+ * accounts[0] On Init must be player X, after that doesn't matter,
+ *             anybody can cause a dashboard update
+ * accounts[1] must be a TicTacToe state account
+ * accounts[2] must be account of current player, only Pubkey is used
+ */
+#define NUM_KA 3
+
+extern bool entrypoint(uint8_t *input) {
+  SolKeyedAccounts ka[NUM_KA];
+  uint8_t *data;
+  uint64_t data_len;
   int err = 0;
 
-  if (1 != sol_deserialize(buf, 3, ka, &tx_data, &tx_data_len)) {
+  if (1 != sol_deserialize((uint8_t *)input, NUM_KA, ka, &data, &data_len)) {
     return false;
   }
 
@@ -342,14 +201,14 @@ uint64_t entrypoint(uint8_t *buf) {
   Game game;
   sol_memcpy(&game, ka[1].userdata, sizeof(game));
 
-  Command command = *tx_data;
+  Command command = *data;
   switch (command) {
     case Command_Init:
       game_create(&game, ka[2].key);
       break;
 
     case Command_Join:
-      err = game_join(&game, ka[2].key, *((int64_t *)(tx_data + 4)));
+      err = game_join(&game, ka[2].key, *((int64_t *)(data + 4)));
       break;
 
     case Command_KeepAlive:
@@ -357,7 +216,7 @@ uint64_t entrypoint(uint8_t *buf) {
       break;
 
     case Command_Move:
-      err = game_next_move(&game, ka[2].key, tx_data[4], tx_data[5]);
+      err = game_next_move(&game, ka[2].key, data[4], data[5]);
       break;
 
     default:
