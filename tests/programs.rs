@@ -4,8 +4,8 @@ extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
 
-use serde_derive::Serialize;
 use bincode::serialize;
+use serde_derive::Serialize;
 use solana::bank::Bank;
 #[cfg(feature = "bpf_c")]
 use solana::bpf_loader;
