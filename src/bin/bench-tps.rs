@@ -293,7 +293,7 @@ fn do_tx_transfers(
 
 const MAX_SPENDS_PER_TX: usize = 5;
 fn verify_transfer(client: &mut ThinClient, tx: &Transaction) -> bool {
-    if client.poll_for_signature(&tx.signature).is_err() {
+    if client.poll_for_signature(&tx.signatures[0]).is_err() {
         println!("no signature");
         return false;
     }

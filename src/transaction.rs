@@ -7,9 +7,7 @@ use signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::pubkey::Pubkey;
 use std::mem::size_of;
 
-pub const SIGNED_DATA_OFFSET: usize = size_of::<Signature>();
-pub const SIG_OFFSET: usize = 0;
-pub const PUB_KEY_OFFSET: usize = size_of::<Signature>() + size_of::<u64>();
+pub const SIG_OFFSET: usize = size_of::<u64>();
 
 /// An instruction to execute a program under the `program_id` of `program_ids_index` with the
 /// specified accounts and userdata
@@ -38,8 +36,11 @@ impl Instruction {
 /// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by `Pubkey`.
-    pub signature: Signature,
+    /// A set of digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by `signed_keys`.
+    pub signatures: Vec<Signature>,
+
+    /// The `Pubkeys` that correspond to signature in `signatures`
+    pub signed_keys: Vec<Pubkey>,
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
     /// program-specific.
@@ -74,7 +75,7 @@ impl Transaction {
         let accounts = (0..=transaction_keys.len() as u8).collect();
         let instructions = vec![Instruction::new(0, userdata, accounts)];
         Self::new_with_instructions(
-            from_keypair,
+            &[from_keypair],
             transaction_keys,
             last_id,
             fee,
@@ -91,25 +92,31 @@ impl Transaction {
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - The programs and their arguments that the transaction will execute atomically
     pub fn new_with_instructions(
-        from_keypair: &Keypair,
+        from_keypairs: &[&Keypair],
         keys: &[Pubkey],
         last_id: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<Instruction>,
     ) -> Self {
-        let from = from_keypair.pubkey();
-        let mut account_keys = vec![from];
+        let from = from_keypairs[0].pubkey();
+        let mut account_keys = Vec::with_capacity(keys.len() + 1);
+        account_keys.push(from);
         account_keys.extend_from_slice(keys);
+        let signed_keys = from_keypairs
+            .iter()
+            .map(|keypair| keypair.pubkey())
+            .collect();
         let mut tx = Transaction {
-            signature: Signature::default(),
+            signatures: vec![],
+            signed_keys,
             account_keys,
             last_id: Hash::default(),
             fee,
             program_ids,
             instructions,
         };
-        tx.sign(from_keypair, last_id);
+        tx.sign(from_keypairs, last_id);
         tx
     }
     pub fn userdata(&self, instruction_index: usize) -> &[u8] {
@@ -138,7 +145,10 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
+        let mut data = serialize(&self.signed_keys).expect("serialize signed keys");
+
+        let account_keys_data = serialize(&self.account_keys).expect("serialize account_keys");
+        data.extend_from_slice(&account_keys_data);
 
         let last_id_data = serialize(&self.last_id).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
@@ -155,17 +165,21 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign(&mut self, keypair: &Keypair, last_id: Hash) {
+    pub fn sign(&mut self, keypairs: &[&Keypair], last_id: Hash) {
         self.last_id = last_id;
         let sign_data = self.get_sign_data();
-        self.signature = Signature::new(keypair.sign(&sign_data).as_ref());
+        self.signatures = keypairs
+            .iter()
+            .map(|keypair| Signature::new(&keypair.sign(&sign_data).as_ref()))
+            .collect();
     }
 
     /// Verify only the transaction signature.
     pub fn verify_signature(&self) -> bool {
         warn!("transaction signature verification called");
-        self.signature
-            .verify(&self.from().as_ref(), &self.get_sign_data())
+        self.signatures
+            .iter()
+            .all(|s| s.verify(&self.from().as_ref(), &self.get_sign_data()))
     }
 
     /// Verify that references in the instructions are valid
@@ -192,7 +206,7 @@ impl Transaction {
         let mut hasher = Hasher::default();
         transactions
             .iter()
-            .for_each(|tx| hasher.hash(&tx.signature.as_ref()));
+            .for_each(|tx| hasher.hash(&tx.signatures[0].as_ref()));
         hasher.result()
     }
 }
@@ -215,7 +229,7 @@ mod tests {
             Instruction::new(1, &(), vec![0, 2]),
         ];
         let tx = Transaction::new_with_instructions(
-            &key,
+            &[&key],
             &[key1, key2],
             Default::default(),
             0,
@@ -250,7 +264,7 @@ mod tests {
         let key = Keypair::new();
         let instructions = vec![Instruction::new(1, &(), vec![])];
         let tx = Transaction::new_with_instructions(
-            &key,
+            &[&key],
             &[],
             Default::default(),
             0,
@@ -264,7 +278,7 @@ mod tests {
         let key = Keypair::new();
         let instructions = vec![Instruction::new(0, &(), vec![1])];
         let tx = Transaction::new_with_instructions(
-            &key,
+            &[&key],
             &[],
             Default::default(),
             0,
@@ -301,19 +315,22 @@ mod tests {
         assert_eq!(
             serialize(&tx).unwrap(),
             vec![
-                234, 139, 34, 5, 120, 28, 107, 203, 69, 25, 236, 200, 164, 1, 12, 47, 147, 53, 41,
-                143, 23, 116, 230, 203, 59, 228, 153, 14, 22, 241, 103, 226, 186, 169, 181, 65, 49,
-                215, 44, 2, 61, 214, 113, 216, 184, 206, 147, 104, 140, 225, 138, 21, 172, 135,
-                211, 80, 103, 80, 216, 106, 249, 86, 194, 1, 3, 0, 0, 0, 0, 0, 0, 0, 32, 253, 186,
-                201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30,
-                78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 32, 253, 186, 201, 177, 11,
-                117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16,
-                252, 180, 72, 134, 137, 247, 161, 68, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9,
-                9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0,
-                0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0,
-                0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
+                1, 0, 0, 0, 0, 0, 0, 0, 199, 111, 28, 46, 13, 235, 122, 203, 210, 118, 158, 0, 59,
+                175, 148, 175, 225, 134, 90, 155, 188, 232, 218, 54, 199, 116, 67, 99, 65, 84, 164,
+                94, 224, 60, 187, 249, 92, 210, 242, 99, 58, 121, 202, 5, 140, 152, 14, 166, 13,
+                134, 103, 127, 216, 96, 217, 139, 5, 252, 40, 146, 48, 112, 59, 7, 1, 0, 0, 0, 0,
+                0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206,
+                105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 3,
+                0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22,
+                59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161,
+                68, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105,
+                231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 1, 1, 1,
+                4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1,
+                1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 99, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6,
+                7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0,
+                0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2,
+                3
             ],
         );
     }

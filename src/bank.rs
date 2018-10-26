@@ -484,7 +484,7 @@ impl Bank {
         for (i, tx) in txs.iter().enumerate() {
             Self::update_signature_status_with_last_id(
                 &mut last_ids.entries,
-                &tx.signature,
+                &tx.signatures[0],
                 &res[i],
                 &tx.last_id,
             );
@@ -498,7 +498,7 @@ impl Bank {
                     Err(_) => RpcSignatureStatus::GenericFailure,
                 };
                 if status != RpcSignatureStatus::SignatureNotFound {
-                    self.check_signature_subscriptions(&tx.signature, status);
+                    self.check_signature_subscriptions(&tx.signatures[0], status);
                 }
             }
         }
@@ -651,7 +651,8 @@ impl Bank {
 
             // There is no way to predict what contract will execute without an error
             // If a fee can pay for execution then the contract will be scheduled
-            let err = Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signature);
+            let err =
+                Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signatures[0]);
             if let Err(BankError::LastIdNotFound) = err {
                 error_counters.reserve_last_id += 1;
             } else if let Err(BankError::DuplicateSignature) = err {
@@ -1292,7 +1293,7 @@ impl Bank {
         last_id: Hash,
     ) -> Result<Signature> {
         let tx = Transaction::system_new(keypair, to, n, last_id);
-        let signature = tx.signature;
+        let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }
 
@@ -1550,10 +1551,13 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
-        assert_eq!(bank.get_signature(&t1.last_id, &t1.signature), Some(Ok(())));
+        assert_eq!(
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
+            Some(Ok(()))
+        );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
-            bank.get_signature(&t2.last_id, &t2.signature),
+            bank.get_signature(&t2.last_id, &t2.signatures[0]),
             Some(Err(BankError::AccountInUse))
         );
     }
@@ -1579,7 +1583,7 @@ mod tests {
         ];
 
         let t1 = Transaction::new_with_instructions(
-            &mint.keypair(),
+            &[&mint.keypair()],
             &[key1, key2],
             mint.last_id(),
             0,
@@ -1593,7 +1597,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
-            bank.get_signature(&t1.last_id, &t1.signature),
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
             Some(Err(BankError::ResultWithNegativeTokens(1)))
         );
     }
@@ -1616,7 +1620,10 @@ mod tests {
         assert_eq!(bank.get_balance(&mint.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
-        assert_eq!(bank.get_signature(&t1.last_id, &t1.signature), Some(Ok(())));
+        assert_eq!(
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
+            Some(Ok(()))
+        );
     }
 
     // TODO: This test demonstrates that fees are not paid when a program fails.
@@ -1637,7 +1644,7 @@ mod tests {
             Pubkey::default(),
             1,
         );
-        let signature = tx.signature;
+        let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
         let res = bank.process_transaction(&tx);
 
@@ -2044,7 +2051,7 @@ mod tests {
         let bank_sub_id = Keypair::new().pubkey();
         let last_id = bank.last_id();
         let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
-        let signature = tx.signature;
+        let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 
         let (subscriber, _id_receiver, mut transport_receiver) =
