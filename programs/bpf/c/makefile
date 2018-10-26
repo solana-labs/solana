@@ -25,24 +25,6 @@ OBJ_DUMP_FLAGS = \
 	-source \
 	-disassemble
 
-.PRECIOUS: $(OUT_DIR)/%.bc
-$(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
-	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(CC_FLAGS) $(INC_DIRS) -o $@ -c $<  -MMD -MF $(@:.bc=.d)
-
-.PRECIOUS: $(OUT_DIR)/%.o
-$(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
-	$(_@)$(LD) $(LD_FLAGS) -o $@ $<
-
--include $(wildcard $(OUT_DIR)/*.d)
-
-PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
-
-define \n
-
-
-endef
-
 help:
 	@echo 'BPF Program makefile'
 	@echo ''
@@ -81,6 +63,24 @@ help:
 	@echo '  - Assuming a programed named foo (src/foo.c)'
 	@echo '    - make foo INC_DIRS='-I. -Isrc''
 	@echo '    - make dump_foo'
+
+.PRECIOUS: $(OUT_DIR)/%.bc
+$(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
+	$(_@)mkdir -p $(OUT_DIR)
+	$(_@)$(CC) $(CC_FLAGS) $(INC_DIRS) -o $@ -c $<  -MMD -MF $(@:.bc=.d)
+
+.PRECIOUS: $(OUT_DIR)/%.o
+$(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
+	$(_@)$(LD) $(LD_FLAGS) -o $@ $<
+
+-include $(wildcard $(OUT_DIR)/*.d)
+
+PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
+
+define \n
+
+
+endef
 
 %: $(addprefix $(OUT_DIR)/, %.o)
 	@echo $@ up to date

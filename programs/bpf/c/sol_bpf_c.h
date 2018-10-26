@@ -120,9 +120,9 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
 /**
  * Asserts
  */
-#define sol_assert(expr) \
-  if (!(expr)) { \
-   _sol_panic(__LINE__); \
+#define sol_assert(expr)  \
+  if (!(expr)) {          \
+    _sol_panic(__LINE__); \
   }
 
 /**
