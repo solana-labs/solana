@@ -780,7 +780,6 @@ mod tests {
     use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
 
     #[test]
     fn test_wallet_parse_command() {
@@ -1075,11 +1074,11 @@ mod tests {
     #[ignore]
     fn test_wallet_process_command() {
         let (alice, ledger_path) = create_tmp_genesis("wallet_process_command", 10_000_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
 
         let bob_pubkey = Keypair::new().pubkey();
 
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1087,14 +1086,8 @@ mod tests {
         let mut config = WalletConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -1103,6 +1096,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1158,10 +1152,10 @@ mod tests {
     #[test]
     fn test_wallet_request_airdrop() {
         let (alice, ledger_path) = create_tmp_genesis("wallet_request_airdrop", 10_000_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
 
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
 
@@ -1169,15 +1163,8 @@ mod tests {
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             entry_height,
@@ -1186,6 +1173,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1239,11 +1227,11 @@ mod tests {
     #[ignore]
     fn test_wallet_timestamp_tx() {
         let (alice, ledger_path) = create_tmp_genesis("wallet_timestamp_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
 
         let bob_pubkey = Keypair::new().pubkey();
 
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1253,14 +1241,8 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13579; // Needs to be distinct known number to not conflict with other tests
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -1269,6 +1251,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1366,9 +1349,9 @@ mod tests {
     #[ignore]
     fn test_wallet_witness_tx() {
         let (alice, ledger_path) = create_tmp_genesis("wallet_witness_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1378,14 +1361,8 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -1394,6 +1371,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));
@@ -1489,9 +1467,9 @@ mod tests {
     #[ignore]
     fn test_wallet_cancel_tx() {
         let (alice, ledger_path) = create_tmp_genesis("wallet_cancel_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
@@ -1501,14 +1479,8 @@ mod tests {
         let mut config_witness = WalletConfig::default();
         let rpc_port = 13456; // Needs to be distinct known number to not conflict with other tests
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -1517,6 +1489,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(rpc_port),
         );
         sleep(Duration::from_millis(900));

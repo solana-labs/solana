@@ -2,7 +2,7 @@
 
 use bincode::{deserialize, serialize};
 use budget::{Budget, Condition};
-use budget_instruction::Instruction;
+use budget_instruction::{Instruction, Vote};
 use budget_program::BudgetState;
 use chrono::prelude::*;
 use hash::Hash;
@@ -38,6 +38,8 @@ pub trait BudgetTransaction {
         last_id: Hash,
     ) -> Self;
 
+    fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
+
     fn budget_new_on_date(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -58,6 +60,8 @@ pub trait BudgetTransaction {
         tokens: i64,
         last_id: Hash,
     ) -> Self;
+
+    fn vote(&self) -> Option<(Pubkey, Vote, Hash)>;
 
     fn instruction(&self, program_index: usize) -> Option<Instruction>;
     fn system_instruction(&self, program_index: usize) -> Option<SystemProgram>;
@@ -149,6 +153,12 @@ impl BudgetTransaction for Transaction {
         )
     }
 
+    fn budget_new_vote(from_keypair: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+        let instruction = Instruction::NewVote(vote);
+        let userdata = serialize(&instruction).expect("serialize instruction");
+        Self::new(from_keypair, &[], BudgetState::id(), userdata, last_id, fee)
+    }
+
     /// Create and sign a postdated Transaction. Used for unit-testing.
     fn budget_new_on_date(
         from_keypair: &Keypair,
@@ -207,6 +217,16 @@ impl BudgetTransaction for Transaction {
             last_id,
             0,
         )
+    }
+
+    fn vote(&self) -> Option<(Pubkey, Vote, Hash)> {
+        if self.instructions.len() > 1 {
+            None
+        } else if let Some(Instruction::NewVote(vote)) = self.instruction(0) {
+            Some((self.account_keys[0], vote, self.last_id))
+        } else {
+            None
+        }
     }
 
     fn instruction(&self, instruction_index: usize) -> Option<Instruction> {

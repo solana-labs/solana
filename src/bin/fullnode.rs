@@ -17,16 +17,14 @@ use solana::logger;
 use solana::metrics::set_panic_hook;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
-use solana::vote_program::VoteProgram;
 use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
-use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn main() {
+fn main() -> () {
     logger::setup();
     set_panic_hook("fullnode");
     let matches = App::new("fullnode")
@@ -84,6 +82,7 @@ fn main() {
 
     // save off some stuff for airdrop
     let node_info = node.info.clone();
+    let pubkey = keypair.pubkey();
 
     let leader = match network {
         Some(network) => {
@@ -92,16 +91,10 @@ fn main() {
         None => node_info,
     };
 
-    let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_account_id = vote_account_keypair.pubkey();
-    let keypair = Arc::new(keypair);
-    let pubkey = keypair.pubkey();
-
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
-        keypair.clone(),
-        vote_account_keypair,
+        keypair,
         network,
         false,
         LeaderScheduler::from_bootstrap_leader(leader.id),
@@ -134,49 +127,6 @@ fn main() {
             );
             sleep(Duration::from_secs(2));
         }
-    }
-
-    // Create the vote account
-    loop {
-        let last_id = client.get_last_id();
-        if client
-            .create_vote_account(&keypair, vote_account_id, &last_id, 1)
-            .is_err()
-        {
-            sleep(Duration::from_secs(2));
-            continue;
-        }
-
-        let balance = client.poll_get_balance(&vote_account_id).unwrap_or(0);
-
-        if balance > 0 {
-            break;
-        }
-
-        sleep(Duration::from_secs(2));
-    }
-
-    // Register the vote account to this node
-    loop {
-        let last_id = client.get_last_id();
-        if client
-            .register_vote_account(&keypair, vote_account_id, &last_id)
-            .is_err()
-        {
-            sleep(Duration::from_secs(2));
-            continue;
-        }
-
-        let account_user_data = client.get_account_userdata(&vote_account_id);
-        if let Ok(Some(account_user_data)) = account_user_data {
-            if let Ok(vote_state) = VoteProgram::deserialize(&account_user_data) {
-                if vote_state.node_id == pubkey {
-                    break;
-                }
-            }
-        }
-
-        sleep(Duration::from_secs(2));
     }
 
     loop {

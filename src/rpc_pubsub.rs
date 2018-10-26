@@ -27,7 +27,6 @@ pub enum ClientState {
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
-    exit: Arc<AtomicBool>,
 }
 
 impl Service for PubSubService {
@@ -39,10 +38,8 @@ impl Service for PubSubService {
 }
 
 impl PubSubService {
-    pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
+    pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
         let rpc = RpcSolPubSubImpl::new(JsonRpcRequestProcessor::new(bank.clone()), bank.clone());
-        let exit = Arc::new(AtomicBool::new(false));
-        let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-pubsub".to_string())
             .spawn(move || {
@@ -63,23 +60,14 @@ impl PubSubService {
                     warn!("Pubsub service unavailable: unable to bind to port {}. \nMake sure this port is not already in use by another application", pubsub_addr.port());
                     return;
                 }
-                while !exit_.load(Ordering::Relaxed) {
+                while !exit.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
                 ()
             })
             .unwrap();
-        PubSubService { thread_hdl, exit }
-    }
-
-    pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
-    }
-
-    pub fn close(self) -> thread::Result<()> {
-        self.exit();
-        self.join()
+        PubSubService { thread_hdl }
     }
 }
 
@@ -261,7 +249,8 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr);
+        let exit = Arc::new(AtomicBool::new(false));
+        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr, exit);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }

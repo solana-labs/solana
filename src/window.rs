@@ -127,8 +127,8 @@ impl WindowUtil for Window {
                         // 2) We are on the border between seed_rotation_intervals, so the
                         // schedule won't be known until the entry on that cusp is received
                         // by the replicate stage (which comes after this stage). Hence, the next
-                        // leader at the beginning of that next epoch will not know they are the
-                        // leader until they receive that last "cusp" entry. The leader also won't ask for repairs
+                        // leader at the beginning of that next epoch will not know he is the
+                        // leader until he receives that last "cusp" entry. He also won't ask for repairs
                         // for that entry because "is_next_leader" won't be set here. In this case,
                         // everybody will be blocking waiting for that "cusp" entry instead of repairing,
                         // until the leader hits "times" >= the max times in calculate_max_repair().
