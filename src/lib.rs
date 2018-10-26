@@ -34,6 +34,7 @@ pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
 pub mod hash;
+pub mod leader_finality_stage;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;

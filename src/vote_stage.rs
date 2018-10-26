@@ -17,11 +17,9 @@ use transaction::Transaction;
 use vote_program::Vote;
 use vote_transaction::VoteTransaction;
 
-pub const VOTE_TIMEOUT_MS: u64 = 1000;
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum VoteError {
-    NoValidLastIdsToVoteOn,
+    NoValidSupermajority,
     NoLeader,
     LeaderInfoNotFound,
 }

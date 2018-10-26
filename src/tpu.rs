@@ -30,6 +30,7 @@ use banking_stage::{BankingStage, BankingStageReturnType};
 use entry::Entry;
 use fetch_stage::FetchStage;
 use hash::Hash;
+use leader_finality_stage::LeaderFinalityStage;
 use ledger_write_stage::LedgerWriteStage;
 use poh_service::Config;
 use service::Service;
@@ -50,6 +51,7 @@ pub struct Tpu {
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
     ledger_write_stage: LedgerWriteStage,
+    leader_finality_stage: LeaderFinalityStage,
     exit: Arc<AtomicBool>,
 }
 
@@ -83,11 +85,14 @@ impl Tpu {
         let ledger_write_stage =
             LedgerWriteStage::new(Some(ledger_path), entry_receiver, Some(ledger_entry_sender));
 
+        let leader_finality_stage = LeaderFinalityStage::new(bank.clone(), exit.clone());
+
         let tpu = Tpu {
             fetch_stage,
             sigverify_stage,
             banking_stage,
             ledger_write_stage,
+            leader_finality_stage,
             exit: exit.clone(),
         };
         (tpu, entry_forwarder, exit)
@@ -114,6 +119,7 @@ impl Service for Tpu {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
         self.ledger_write_stage.join()?;
+        self.leader_finality_stage.join()?;
         match self.banking_stage.join()? {
             Some(BankingStageReturnType::LeaderRotation) => Ok(Some(TpuReturnType::LeaderRotation)),
             _ => Ok(None),

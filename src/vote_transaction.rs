@@ -1,8 +1,14 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
+#[cfg(test)]
+use bank::Bank;
 use bincode::{deserialize, serialize};
 use hash::Hash;
+#[cfg(test)]
+use result::Result;
 use signature::Keypair;
+#[cfg(test)]
+use signature::KeypairUtil;
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
@@ -79,6 +85,28 @@ impl VoteTransaction for Transaction {
         }
         votes
     }
+}
+
+#[cfg(test)]
+pub fn create_vote_account(
+    node_keypair: &Keypair,
+    bank: &Bank,
+    num_tokens: i64,
+    last_id: Hash,
+) -> Result<Keypair> {
+    let new_vote_account = Keypair::new();
+
+    // Create the new vote account
+    let tx =
+        Transaction::vote_account_new(node_keypair, new_vote_account.pubkey(), last_id, num_tokens);
+    bank.process_transaction(&tx)?;
+
+    // Register the vote account to the validator
+    let tx =
+        Transaction::vote_account_register(node_keypair, new_vote_account.pubkey(), last_id, 0);
+    bank.process_transaction(&tx)?;
+
+    Ok(new_vote_account)
 }
 
 #[cfg(test)]

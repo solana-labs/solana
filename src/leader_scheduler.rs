@@ -378,17 +378,13 @@ impl LeaderScheduler {
         self.last_seed_height = Some(height);
     }
 
-    fn get_stake(id: &Pubkey, bank: &Bank) -> i64 {
-        bank.get_balance(id)
-    }
-
     fn rank_active_set<'a, I>(bank: &Bank, active: I) -> Vec<(&'a Pubkey, u64)>
     where
         I: Iterator<Item = &'a Pubkey>,
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pk| {
-                let stake = Self::get_stake(pk, bank);
+                let stake = bank.get_stake(pk);
                 if stake > 0 {
                     Some((pk, stake as u64))
                 } else {
@@ -504,7 +500,6 @@ mod tests {
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
     use mint::Mint;
-    use result::Result;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashSet;
@@ -512,7 +507,7 @@ mod tests {
     use std::iter::FromIterator;
     use transaction::Transaction;
     use vote_program::Vote;
-    use vote_transaction::VoteTransaction;
+    use vote_transaction::{create_vote_account, VoteTransaction};
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where
@@ -529,31 +524,6 @@ mod tests {
         let new_vote_tx = Transaction::vote_new(vote_account, vote, last_id, 0);
 
         bank.process_transaction(&new_vote_tx).unwrap();
-    }
-
-    fn create_vote_account(
-        node_keypair: &Keypair,
-        bank: &Bank,
-        num_tokens: i64,
-        last_id: Hash,
-    ) -> Result<Keypair> {
-        let new_vote_account = Keypair::new();
-
-        // Create the new vote account
-        let tx = Transaction::vote_account_new(
-            node_keypair,
-            new_vote_account.pubkey(),
-            last_id,
-            num_tokens,
-        );
-        bank.process_transaction(&tx)?;
-
-        // Register the vote account to the validator
-        let tx =
-            Transaction::vote_account_register(node_keypair, new_vote_account.pubkey(), last_id, 0);
-        bank.process_transaction(&tx)?;
-
-        Ok(new_vote_account)
     }
 
     fn run_scheduler_test(

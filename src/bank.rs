@@ -123,7 +123,7 @@ pub struct LastIds {
     /// values are so old that the `last_id` has been pulled out of the queue.
 
     /// updated whenever an id is registered
-    nth: isize,
+    nth: u64,
 
     /// last id to be registered
     last: Option<Hash>,
@@ -132,7 +132,7 @@ pub struct LastIds {
     /// was when the id was added. The bank uses this data to
     /// reject transactions with signatures it's seen before and to reject
     /// transactions that are too old (nth is too small)
-    sigs: HashMap<Hash, (SignatureStatusMap, u64, isize)>,
+    sigs: HashMap<Hash, (SignatureStatusMap, u64, u64)>,
 }
 
 impl Default for LastIds {
@@ -281,7 +281,7 @@ impl Bank {
         sig: &Signature,
     ) -> Result<()> {
         if let Some(entry) = last_ids.sigs.get_mut(last_id) {
-            if ((last_ids.nth - entry.2) as usize) <= MAX_ENTRY_IDS {
+            if ((last_ids.nth - entry.2) as usize) < MAX_ENTRY_IDS {
                 return Self::reserve_signature(&mut entry.0, sig);
             }
         }
@@ -304,7 +304,7 @@ impl Bank {
     }
 
     fn update_signature_status_with_last_id(
-        last_ids_sigs: &mut HashMap<Hash, (SignatureStatusMap, u64, isize)>,
+        last_ids_sigs: &mut HashMap<Hash, (SignatureStatusMap, u64, u64)>,
         signature: &Signature,
         result: &Result<()>,
         last_id: &Hash,
@@ -339,6 +339,17 @@ impl Bank {
         }
     }
 
+    /// Maps a tick height to a timestamp
+    fn tick_height_to_timestamp(last_ids: &LastIds, tick_height: u64) -> Option<u64> {
+        for entry in last_ids.sigs.values() {
+            if entry.2 == tick_height {
+                return Some(entry.1);
+            }
+        }
+
+        None
+    }
+
     /// Look through the last_ids and find all the valid ids
     /// This is batched to avoid holding the lock for a significant amount of time
     ///
@@ -349,12 +360,36 @@ impl Bank {
         let mut ret = Vec::new();
         for (i, id) in ids.iter().enumerate() {
             if let Some(entry) = last_ids.sigs.get(id) {
-                if ((last_ids.nth - entry.2) as usize) <= MAX_ENTRY_IDS {
+                if ((last_ids.nth - entry.2) as usize) < MAX_ENTRY_IDS {
                     ret.push((i, entry.1));
                 }
             }
         }
         ret
+    }
+
+    /// Looks through a list of tick heights and stakes, and finds the latest
+    /// tick that has achieved finality
+    pub fn get_finality_timestamp(
+        &self,
+        ticks_and_stakes: &mut [(u64, i64)],
+        supermajority_stake: i64,
+    ) -> Option<u64> {
+        // Sort by tick height
+        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+        let last_ids = self.last_ids.read().unwrap();
+        let nth = last_ids.nth;
+        let mut total = 0;
+        for (tick_height, stake) in ticks_and_stakes.iter() {
+            if ((nth - tick_height) as usize) < MAX_ENTRY_IDS {
+                total += stake;
+                if total > supermajority_stake {
+                    return Self::tick_height_to_timestamp(&*last_ids, *tick_height);
+                }
+            }
+        }
+
+        None
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -364,6 +399,9 @@ impl Bank {
     pub fn register_entry_id(&self, last_id: &Hash) {
         let mut last_ids = self.last_ids.write().unwrap();
 
+        // Increment "nth" so that the index of this tick in the LastIds structure
+        // matches the "tick height" when the validator votes for this tick
+        last_ids.nth += 1;
         let last_ids_nth = last_ids.nth;
 
         // this clean up can be deferred until sigs gets larger
@@ -371,14 +409,13 @@ impl Bank {
         if last_ids.sigs.len() >= MAX_ENTRY_IDS {
             last_ids
                 .sigs
-                .retain(|_, (_, _, nth)| ((last_ids_nth - *nth) as usize) <= MAX_ENTRY_IDS);
+                .retain(|_, (_, _, nth)| ((last_ids_nth - *nth) as usize) < MAX_ENTRY_IDS);
         }
 
         last_ids
             .sigs
             .insert(*last_id, (HashMap::new(), timestamp(), last_ids_nth));
 
-        last_ids.nth += 1;
         last_ids.last = Some(*last_id);
 
         inc_new_counter_info!("bank-register_entry_id-registered", 1);
@@ -395,6 +432,7 @@ impl Bank {
             Ok(_) => Ok(()),
         }
     }
+
     fn lock_account(
         account_locks: &mut HashSet<Pubkey>,
         keys: &[Pubkey],
@@ -1085,6 +1123,11 @@ impl Bank {
         self.get_account(pubkey)
             .map(|x| Self::read_balance(&x))
             .unwrap_or(0)
+    }
+
+    /// TODO: fix once there's real staking
+    pub fn get_stake(&self, pubkey: &Pubkey) -> i64 {
+        self.get_balance(pubkey)
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
