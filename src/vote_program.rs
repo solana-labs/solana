@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use transaction::Transaction;
 
 // Upper limit on the size of the Vote State
-pub const MAX_STATE_SIZE: usize = 1024;
+pub const MAX_STATE_SIZE: usize = 512;
 
 // Maximum number of votes to keep around
 const MAX_VOTE_HISTORY: usize = 32;
@@ -70,7 +70,7 @@ impl VoteProgram {
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram> {
         let len = LittleEndian::read_u16(&input[0..2]) as usize;
 
-        if len == 0 || input.len() < len + 1 {
+        if len == 0 || input.len() < len + 2 {
             Err(Error::InvalidUserdata)
         } else {
             deserialize(&input[2..=len + 1]).map_err(|err| {
