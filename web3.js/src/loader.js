@@ -2,9 +2,12 @@
 
 import * as BufferLayout from 'buffer-layout';
 
-import {PublicKey, SystemProgram, Transaction} from '.';
+import {Account} from './account';
+import {PublicKey} from './publickey';
+import {SystemProgram} from './system-program';
+import {Transaction} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
-import type {Account, Connection} from '.';
+import type {Connection} from './connection';
 
 /**
  * Program loader interface
