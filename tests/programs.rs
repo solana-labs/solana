@@ -1,9 +1,11 @@
 extern crate bincode;
 extern crate elf;
+extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
 
 use bincode::serialize;
+use serde_derive::Serialize;
 use solana::bank::Bank;
 #[cfg(feature = "bpf_c")]
 use solana::bpf_loader;
@@ -13,8 +15,6 @@ use solana::mint::Mint;
 use solana::native_loader;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
-#[cfg(feature = "bpf_c")]
-use solana::tictactoe_program::Command;
 use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
 #[cfg(feature = "bpf_c")]
@@ -332,6 +332,15 @@ fn test_program_bpf_noop_c() {
         &tx,
         loader.bank.process_transactions(&vec![tx.clone()]),
     );
+}
+
+#[derive(Debug, Serialize)]
+#[repr(C)]
+pub enum Command {
+    Init,           // player X initializes a new game
+    Join(i64),      // player O wants to join (seconds since UNIX epoch)
+    KeepAlive(i64), // player X/O keep alive (seconds since UNIX epoch)
+    Move(u8, u8),   // player X/O mark board position (x, y)
 }
 
 #[cfg(feature = "bpf_c")]
