@@ -1742,7 +1742,7 @@ mod tests {
         //            let (_, _) = bank.process_ledger(ledger).unwrap();
         //        }
 
-        let window_size = WINDOW_SIZE as usize;
+        let window_size = 128;
         for entry_count in window_size - 3..window_size + 2 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
@@ -1752,7 +1752,7 @@ mod tests {
             assert_eq!(bank.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 3);
             assert_eq!(tick_height, 2);
-            assert!(tail.len() <= window_size);
+            assert!(tail.len() <= WINDOW_SIZE as usize);
             let last_entry = &tail[tail.len() - 1];
             assert_eq!(bank.last_id(), last_entry.id);
         }
