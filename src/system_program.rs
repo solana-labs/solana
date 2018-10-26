@@ -261,7 +261,7 @@ mod test {
     #[test]
     fn test_sdk_serialize() {
         let keypair = Keypair::new();
-        use budget_program::BUDGET_PROGRAM_ID;
+        use budget_program::BudgetState;
 
         // CreateAccount
         let tx = Transaction::system_create(
@@ -270,14 +270,14 @@ mod test {
             Hash::default(),
             111,
             222,
-            Pubkey::new(&BUDGET_PROGRAM_ID),
+            BudgetState::id(),
             0,
         );
 
         assert_eq!(
             tx.userdata(0).to_vec(),
             vec![
-                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 111, 0, 0, 0, 0, 0, 0, 0, 222, 0, 0, 0, 0, 0, 0, 0, 129, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
@@ -302,17 +302,12 @@ mod test {
         );
 
         // Assign
-        let tx = Transaction::system_assign(
-            &keypair,
-            Hash::default(),
-            Pubkey::new(&BUDGET_PROGRAM_ID),
-            0,
-        );
+        let tx = Transaction::system_assign(&keypair, Hash::default(), BudgetState::id(), 0);
         assert_eq!(
             tx.userdata(0).to_vec(),
             vec![
-                1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0
+                1, 0, 0, 0, 129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
 
