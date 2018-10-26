@@ -1,10 +1,10 @@
 extern crate bincode;
 extern crate elf;
-#[macro_use]
 extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
 
+use serde_derive::Serialize;
 use bincode::serialize;
 use solana::bank::Bank;
 #[cfg(feature = "bpf_c")]
@@ -334,7 +334,7 @@ fn test_program_bpf_noop_c() {
     );
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[repr(C)]
 pub enum Command {
     Init,           // player X initializes a new game
