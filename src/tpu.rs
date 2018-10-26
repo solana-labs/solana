@@ -27,18 +27,21 @@
 
 use bank::Bank;
 use banking_stage::{BankingStage, BankingStageReturnType};
+use cluster_info::ClusterInfo;
 use entry::Entry;
 use fetch_stage::FetchStage;
 use hash::Hash;
+use leader_vote_stage::LeaderVoteStage;
 use ledger_write_stage::LedgerWriteStage;
 use poh_service::Config;
 use service::Service;
+use signature::Keypair;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub enum TpuReturnType {
@@ -49,6 +52,7 @@ pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
+    leader_vote_stage: LeaderVoteStage,
     ledger_write_stage: LedgerWriteStage,
     exit: Arc<AtomicBool>,
 }
@@ -56,7 +60,9 @@ pub struct Tpu {
 impl Tpu {
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
+        keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_duration: Config,
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
@@ -81,21 +87,28 @@ impl Tpu {
             max_tick_height,
         );
 
+        let (leader_vote_stage, ledger_entry_receiver) =
+            LeaderVoteStage::new(keypair, bank.clone(), cluster_info.clone(), entry_receiver);
+
         let (ledger_entry_sender, entry_forwarder) = channel();
-        let ledger_write_stage =
-            LedgerWriteStage::new(Some(ledger_path), entry_receiver, Some(ledger_entry_sender));
+        let ledger_write_stage = LedgerWriteStage::new(
+            Some(ledger_path),
+            ledger_entry_receiver,
+            Some(ledger_entry_sender),
+        );
 
         let tpu = Tpu {
             fetch_stage,
             sigverify_stage,
             banking_stage,
+            leader_vote_stage,
             ledger_write_stage,
             exit: exit.clone(),
         };
         (tpu, entry_forwarder, exit)
     }
 
-    pub fn exit(&self) {
+    pub fn exit(&self) -> () {
         self.exit.store(true, Ordering::Relaxed);
     }
 
@@ -115,6 +128,7 @@ impl Service for Tpu {
     fn join(self) -> thread::Result<(Option<TpuReturnType>)> {
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
+        self.leader_vote_stage.join()?;
         self.ledger_write_stage.join()?;
         match self.banking_stage.join()? {
             Some(BankingStageReturnType::LeaderRotation) => Ok(Some(TpuReturnType::LeaderRotation)),

@@ -3,7 +3,7 @@
 //! access read to a persistent file-based ledger.
 
 use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
-#[cfg(test)]
+use budget_instruction::Vote;
 use budget_transaction::BudgetTransaction;
 #[cfg(test)]
 use chrono::prelude::Utc;
@@ -25,8 +25,6 @@ use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 use transaction::Transaction;
-use vote_program::Vote;
-use vote_transaction::VoteTransaction;
 use window::WINDOW_SIZE;
 
 //
@@ -498,7 +496,7 @@ impl Block for [Entry] {
                 entry
                     .transactions
                     .iter()
-                    .flat_map(VoteTransaction::get_votes)
+                    .filter_map(BudgetTransaction::vote)
             }).collect()
     }
 }
@@ -686,6 +684,7 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
 mod tests {
     use super::*;
     use bincode::serialized_size;
+    use budget_instruction::Vote;
     use budget_transaction::BudgetTransaction;
     use entry::{next_entry, Entry};
     use hash::hash;
@@ -694,7 +693,6 @@ mod tests {
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;
-    use vote_program::Vote;
 
     #[test]
     fn test_verify_slice() {
@@ -716,8 +714,15 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
-        let vote_account = Keypair::new();
-        let tx0 = Transaction::vote_new(&vote_account, Vote { tick_height: 1 }, one, 1);
+        let tx0 = Transaction::budget_new_vote(
+            &keypair,
+            Vote {
+                version: 0,
+                contact_info_version: 1,
+            },
+            one,
+            1,
+        );
         let tx1 = Transaction::budget_new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -767,8 +772,15 @@ mod tests {
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
-        let vote_account = Keypair::new();
-        let tx_small = Transaction::vote_new(&vote_account, Vote { tick_height: 1 }, next_id, 2);
+        let tx_small = Transaction::budget_new_vote(
+            &keypair,
+            Vote {
+                version: 0,
+                contact_info_version: 2,
+            },
+            next_id,
+            2,
+        );
         let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;

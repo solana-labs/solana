@@ -13,6 +13,7 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use bincode::{deserialize, serialize, serialized_size};
+use budget_instruction::Vote;
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
@@ -337,6 +338,47 @@ impl ClusterInfo {
         self.external_liveness.get(key)
     }
 
+    pub fn insert_vote(&mut self, pubkey: &Pubkey, v: &Vote, last_id: Hash) {
+        if self.table.get(pubkey).is_none() {
+            warn!("{}: VOTE for unknown id: {}", self.id, pubkey);
+            return;
+        }
+        if v.contact_info_version > self.table[pubkey].contact_info.version {
+            warn!(
+                "{}: VOTE for new address version from: {} ours: {} vote: {:?}",
+                self.id, pubkey, self.table[pubkey].contact_info.version, v,
+            );
+            return;
+        }
+        if *pubkey == self.my_data().leader_id {
+            info!("{}: LEADER_VOTED! {}", self.id, pubkey);
+            inc_new_counter_info!("cluster_info-insert_vote-leader_voted", 1);
+        }
+
+        if v.version <= self.table[pubkey].version {
+            debug!("{}: VOTE for old version: {}", self.id, pubkey);
+            self.update_liveness(*pubkey);
+            return;
+        } else {
+            let mut data = self.table[pubkey].clone();
+            data.version = v.version;
+            data.ledger_state.last_id = last_id;
+
+            debug!("{}: INSERTING VOTE! for {}", self.id, data.id);
+            self.update_liveness(data.id);
+            self.insert(&data);
+        }
+    }
+    pub fn insert_votes(&mut self, votes: &[(Pubkey, Vote, Hash)]) {
+        inc_new_counter_info!("cluster_info-vote-count", votes.len());
+        if !votes.is_empty() {
+            info!("{}: INSERTING VOTES {}", self.id, votes.len());
+        }
+        for v in votes {
+            self.insert_vote(&v.0, &v.1, v.2);
+        }
+    }
+
     pub fn insert(&mut self, v: &NodeInfo) -> usize {
         // TODO check that last_verified types are always increasing
         // update the peer table
@@ -497,7 +539,7 @@ impl ClusterInfo {
             );
 
             // Make sure the next leader in line knows about the entries before his slot in the leader
-            // rotation so they can initiate repairs if necessary
+            // rotation so he can initiate repairs if necessary
             {
                 let ls_lock = leader_scheduler.read().unwrap();
                 let next_leader_height = ls_lock.max_height_for_leader(tick_height);
@@ -780,6 +822,22 @@ impl ClusterInfo {
         );
 
         Ok((v.contact_info.ncp, req))
+    }
+
+    pub fn new_vote(&mut self, last_id: Hash) -> Result<(Vote, SocketAddr)> {
+        let mut me = self.my_data().clone();
+        let leader = self
+            .leader_data()
+            .ok_or(ClusterInfoError::NoLeader)?
+            .clone();
+        me.version += 1;
+        me.ledger_state.last_id = last_id;
+        let vote = Vote {
+            version: me.version,
+            contact_info_version: me.contact_info.version,
+        };
+        self.insert(&me);
+        Ok((vote, leader.contact_info.tpu))
     }
 
     /// At random pick a node and try to get updated changes from them
@@ -1330,6 +1388,7 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
+    use budget_instruction::Vote;
     use cluster_info::{
         ClusterInfo, ClusterInfoError, Node, NodeInfo, Protocol, FULLNODE_PORT_RANGE,
         GOSSIP_PURGE_MILLIS, GOSSIP_SLEEP_MILLIS, MIN_TABLE_SIZE,
@@ -1376,6 +1435,62 @@ mod tests {
         cluster_info.insert(&d);
         assert_eq!(cluster_info.table[&d.id].version, 3);
         assert!(liveness < cluster_info.alive[&d.id]);
+    }
+    #[test]
+    fn test_new_vote() {
+        let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        assert_eq!(d.version, 0);
+        let mut cluster_info = ClusterInfo::new(d.clone()).unwrap();
+        assert_eq!(cluster_info.table[&d.id].version, 0);
+        let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1235"));
+        assert_ne!(d.id, leader.id);
+        assert_matches!(
+            cluster_info.new_vote(Hash::default()).err(),
+            Some(Error::ClusterInfoError(ClusterInfoError::NoLeader))
+        );
+        cluster_info.insert(&leader);
+        assert_matches!(
+            cluster_info.new_vote(Hash::default()).err(),
+            Some(Error::ClusterInfoError(ClusterInfoError::NoLeader))
+        );
+        cluster_info.set_leader(leader.id);
+        assert_eq!(cluster_info.table[&d.id].version, 1);
+        let v = Vote {
+            version: 2, //version should increase when we vote
+            contact_info_version: 0,
+        };
+        let expected = (v, cluster_info.table[&leader.id].contact_info.tpu);
+        assert_eq!(cluster_info.new_vote(Hash::default()).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_insert_vote() {
+        let d = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+        assert_eq!(d.version, 0);
+        let mut cluster_info = ClusterInfo::new(d.clone()).unwrap();
+        assert_eq!(cluster_info.table[&d.id].version, 0);
+        let vote_same_version = Vote {
+            version: d.version,
+            contact_info_version: 0,
+        };
+        cluster_info.insert_vote(&d.id, &vote_same_version, Hash::default());
+        assert_eq!(cluster_info.table[&d.id].version, 0);
+
+        let vote_new_version_new_addrs = Vote {
+            version: d.version + 1,
+            contact_info_version: 1,
+        };
+        cluster_info.insert_vote(&d.id, &vote_new_version_new_addrs, Hash::default());
+        //should be dropped since the address is newer then we know
+        assert_eq!(cluster_info.table[&d.id].version, 0);
+
+        let vote_new_version_old_addrs = Vote {
+            version: d.version + 1,
+            contact_info_version: 0,
+        };
+        cluster_info.insert_vote(&d.id, &vote_new_version_old_addrs, Hash::default());
+        //should be accepted, since the update is for the same address field as the one we know
+        assert_eq!(cluster_info.table[&d.id].version, 1);
     }
     fn sorted(ls: &Vec<(NodeInfo, u64)>) -> Vec<(NodeInfo, u64)> {
         let mut copy: Vec<_> = ls.iter().cloned().collect();

@@ -7,6 +7,7 @@ use bincode::deserialize;
 use bincode::serialize;
 use bpf_loader;
 use budget_program::BudgetState;
+use budget_transaction::BudgetTransaction;
 use counter::Counter;
 use entry::Entry;
 use hash::{hash, Hash};
@@ -30,7 +31,7 @@ use std;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 use storage_program::StorageProgram;
 use system_program::SystemProgram;
@@ -41,7 +42,6 @@ use timing::{duration_as_us, timestamp};
 use token_program::TokenProgram;
 use tokio::prelude::Future;
 use transaction::Transaction;
-use vote_program::VoteProgram;
 use window::WINDOW_SIZE;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -151,7 +151,7 @@ impl Default for LastIds {
 /// The state of all accounts and contracts after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
-    pub accounts: RwLock<HashMap<Pubkey, Account>>,
+    accounts: RwLock<HashMap<Pubkey, Account>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -171,13 +171,6 @@ pub struct Bank {
 
     // Mapping of signatures to Subscriber ids and sinks to notify on confirmation
     signature_subscriptions: RwLock<HashMap<Signature, HashMap<Pubkey, Sink<RpcSignatureStatus>>>>,
-
-    /// Tracks and updates the leader schedule based on the votes and account stakes
-    /// processed by the bank
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-
-    // The number of ticks that have elapsed since genesis
-    tick_height: Mutex<u64>,
 }
 
 impl Default for Bank {
@@ -190,8 +183,6 @@ impl Default for Bank {
             finality_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
-            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-            tick_height: Mutex::new(0),
         }
     }
 }
@@ -622,8 +613,6 @@ impl Bank {
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if VoteProgram::check_id(&tx_program_id) {
-            VoteProgram::process_transaction(&tx, instruction_index, program_accounts).is_err();
         } else {
             let mut depth = 0;
             let mut keys = Vec::new();
@@ -901,26 +890,39 @@ impl Bank {
         results
     }
 
-    pub fn process_entry(&self, entry: &Entry) -> Result<()> {
+    pub fn process_entry(
+        &self,
+        entry: &Entry,
+        tick_height: &mut u64,
+        leader_scheduler: &mut LeaderScheduler,
+    ) -> Result<()> {
         if !entry.is_tick() {
             for result in self.process_transactions(&entry.transactions) {
                 result?;
             }
         } else {
-            let tick_height = {
-                let mut tick_height_lock = self.tick_height.lock().unwrap();
-                *tick_height_lock += 1;
-                *tick_height_lock
-            };
-
-            self.leader_scheduler
-                .write()
-                .unwrap()
-                .update_height(tick_height, self);
+            *tick_height += 1;
             self.register_entry_id(&entry.id);
         }
 
+        self.process_entry_votes(entry, *tick_height, leader_scheduler);
         Ok(())
+    }
+
+    fn process_entry_votes(
+        &self,
+        entry: &Entry,
+        tick_height: u64,
+        leader_scheduler: &mut LeaderScheduler,
+    ) {
+        for tx in &entry.transactions {
+            if tx.vote().is_some() {
+                // Update the active set in the leader scheduler
+                leader_scheduler.push_vote(*tx.from(), tick_height);
+            }
+        }
+
+        leader_scheduler.update_height(tick_height, self);
     }
 
     /// Process an ordered list of entries, populating a circular buffer "tail"
@@ -930,6 +932,8 @@ impl Bank {
         entries: &[Entry],
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
+        tick_height: &mut u64,
+        leader_scheduler: &mut LeaderScheduler,
     ) -> Result<u64> {
         let mut entry_count = 0;
 
@@ -947,7 +951,7 @@ impl Bank {
             // the leader scheduler. Next we will extract the vote tracking structure
             // out of the leader scheduler, and into the bank, and remove the leader
             // scheduler from these banking functions.
-            self.process_entry(entry)?;
+            self.process_entry(entry, tick_height, leader_scheduler)?;
         }
 
         Ok(entry_count)
@@ -992,7 +996,6 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_entry_id(&entry.id);
-                *self.tick_height.lock().unwrap() += 1;
                 mt_group = vec![];
                 continue;
             }
@@ -1022,18 +1025,17 @@ impl Bank {
         entries: I,
         tail: &mut Vec<Entry>,
         tail_idx: &mut usize,
-    ) -> Result<u64>
+        leader_scheduler: &mut LeaderScheduler,
+    ) -> Result<(u64, u64)>
     where
         I: IntoIterator<Item = Entry>,
     {
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
         let mut entry_height = *tail_idx as u64;
-
+        let mut tick_height = 0;
         for entry in &tail[0..*tail_idx] {
-            if entry.is_tick() {
-                *self.tick_height.lock().unwrap() += 1;
-            }
+            tick_height += entry.is_tick() as u64
         }
 
         let mut id = start_hash;
@@ -1044,15 +1046,25 @@ impl Bank {
                 return Err(BankError::LedgerVerificationFailed);
             }
             id = block.last().unwrap().id;
-            let entry_count = self.process_entries_tail(&block, tail, tail_idx)?;
+            let entry_count = self.process_entries_tail(
+                &block,
+                tail,
+                tail_idx,
+                &mut tick_height,
+                leader_scheduler,
+            )?;
 
             entry_height += entry_count;
         }
-        Ok(entry_height)
+        Ok((tick_height, entry_height))
     }
 
     /// Process a full ledger.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, u64, Vec<Entry>)>
+    pub fn process_ledger<I>(
+        &self,
+        entries: I,
+        leader_scheduler: &mut LeaderScheduler,
+    ) -> Result<(u64, u64, Vec<Entry>)>
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -1094,14 +1106,20 @@ impl Bank {
         tail.push(entry0);
         tail.push(entry1);
         let mut tail_idx = 2;
-        let entry_height = self.process_blocks(entry1_id, entries, &mut tail, &mut tail_idx)?;
+        let (tick_height, entry_height) = self.process_blocks(
+            entry1_id,
+            entries,
+            &mut tail,
+            &mut tail_idx,
+            leader_scheduler,
+        )?;
 
         // check if we need to rotate tail
         if tail.len() == WINDOW_SIZE as usize {
             tail.rotate_left(tail_idx)
         }
 
-        Ok((*self.tick_height.lock().unwrap(), entry_height, tail))
+        Ok((tick_height, entry_height, tail))
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1218,16 +1236,6 @@ impl Bank {
         subscriptions.remove(pubkey).is_some()
     }
 
-    pub fn get_current_leader(&self) -> Option<Pubkey> {
-        let ls_lock = self.leader_scheduler.read().unwrap();
-        let tick_height = self.tick_height.lock().unwrap();
-        ls_lock.get_scheduled_leader(*tick_height)
-    }
-
-    pub fn get_tick_height(&self) -> u64 {
-        *self.tick_height.lock().unwrap()
-    }
-
     fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {
         let subscriptions = self.account_subscriptions.read().unwrap();
         if let Some(hashmap) = subscriptions.get(pubkey) {
@@ -1280,6 +1288,13 @@ impl Bank {
         }
         subscriptions.remove(&signature);
     }
+
+    #[cfg(test)]
+    // Used to access accounts for things like controlling stake to control
+    // the eligible set of nodes for leader selection
+    pub fn accounts(&self) -> &RwLock<HashMap<Pubkey, Account>> {
+        &self.accounts
+    }
 }
 
 #[cfg(test)]
@@ -1292,6 +1307,7 @@ mod tests {
     use entry_writer::{self, EntryWriter};
     use hash::hash;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
+    use leader_scheduler::LeaderScheduler;
     use ledger;
     use logger;
     use signature::Keypair;
@@ -1624,7 +1640,8 @@ mod tests {
         let mint = Mint::new(1);
         let genesis = mint.create_entries();
         let bank = Bank::default();
-        bank.process_ledger(genesis).unwrap();
+        bank.process_ledger(genesis, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
@@ -1701,7 +1718,9 @@ mod tests {
         let (ledger, pubkey) = create_sample_ledger(1);
         let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
-        let (tick_height, ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+        let (tick_height, ledger_height, tail) = bank
+            .process_ledger(ledger, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 4);
         assert_eq!(tick_height, 2);
@@ -1727,7 +1746,9 @@ mod tests {
         for entry_count in window_size - 3..window_size + 2 {
             let (ledger, pubkey) = create_sample_ledger(entry_count);
             let bank = Bank::default();
-            let (tick_height, ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+            let (tick_height, ledger_height, tail) = bank
+                .process_ledger(ledger, &mut LeaderScheduler::default())
+                .unwrap();
             assert_eq!(bank.get_balance(&pubkey), 1);
             assert_eq!(ledger_height, entry_count as u64 + 3);
             assert_eq!(tick_height, 2);
@@ -1753,7 +1774,8 @@ mod tests {
         let ledger = to_file_iter(ledger);
 
         let bank = Bank::default();
-        bank.process_ledger(ledger).unwrap();
+        bank.process_ledger(ledger, &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
@@ -1764,7 +1786,8 @@ mod tests {
         let block = to_file_iter(create_sample_block_with_ticks(&mint, 1, 1));
 
         let bank = Bank::default();
-        bank.process_ledger(genesis.chain(block)).unwrap();
+        bank.process_ledger(genesis.chain(block), &mut LeaderScheduler::default())
+            .unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
     }
 
@@ -1778,9 +1801,13 @@ mod tests {
         let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
         let bank0 = Bank::default();
-        bank0.process_ledger(ledger0).unwrap();
+        bank0
+            .process_ledger(ledger0, &mut LeaderScheduler::default())
+            .unwrap();
         let bank1 = Bank::default();
-        bank1.process_ledger(ledger1).unwrap();
+        bank1
+            .process_ledger(ledger1, &mut LeaderScheduler::default())
+            .unwrap();
 
         let initial_state = bank0.hash_internal_state();
 

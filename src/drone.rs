@@ -235,7 +235,6 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{SocketAddr, UdpSocket};
-    use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use thin_client::ThinClient;
 
@@ -314,24 +313,18 @@ mod tests {
         const TPS_BATCH: i64 = 5_000_000;
 
         logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         let alice = Mint::new(10_000_000);
-        let mut bank = Bank::new(&alice);
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader.info.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let carlos_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = get_tmp_ledger_path("send_airdrop");
 
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -340,6 +333,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
 
@@ -374,14 +368,13 @@ mod tests {
         // restart the leader, drone should find the new one at the same gossip port
         server.close().unwrap();
 
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let server = Fullnode::new(
             leader,
             &ledger_path,
             leader_keypair,
-            Arc::new(Keypair::new()),
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_data.id),

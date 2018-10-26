@@ -5,6 +5,7 @@ extern crate solana;
 
 use clap::{App, Arg, SubCommand};
 use solana::bank::Bank;
+use solana::leader_scheduler::LeaderScheduler;
 use solana::ledger::{read_ledger, verify_ledger};
 use solana::logger;
 use std::io::{stdout, Write};
@@ -115,7 +116,7 @@ fn main() {
                 };
 
                 let genesis = genesis.take(2).map(|e| e.unwrap());
-                if let Err(e) = bank.process_ledger(genesis) {
+                if let Err(e) = bank.process_ledger(genesis, &mut LeaderScheduler::default()) {
                     eprintln!("verify failed at genesis err: {:?}", e);
                     if !matches.is_present("continue") {
                         exit(1);
@@ -141,7 +142,10 @@ fn main() {
                 }
                 last_id = entry.id;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                let mut tick_height = 0;
+                let mut leader_scheduler = LeaderScheduler::default();
+                if let Err(e) = bank.process_entry(&entry, &mut tick_height, &mut leader_scheduler)
+                {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

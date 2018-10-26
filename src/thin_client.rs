@@ -26,7 +26,6 @@ use std::time::Instant;
 use system_transaction::SystemTransaction;
 use timing;
 use transaction::Transaction;
-use vote_transaction::VoteTransaction;
 
 use influx_db_client as influxdb;
 use metrics;
@@ -149,29 +148,6 @@ impl ThinClient {
         ))
     }
 
-    pub fn create_vote_account(
-        &self,
-        node_keypair: &Keypair,
-        vote_account_id: Pubkey,
-        last_id: &Hash,
-        num_tokens: i64,
-    ) -> io::Result<Signature> {
-        let tx =
-            Transaction::vote_account_new(&node_keypair, vote_account_id, *last_id, num_tokens);
-        self.transfer_signed(&tx)
-    }
-
-    /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
-    pub fn register_vote_account(
-        &self,
-        node_keypair: &Keypair,
-        vote_account_id: Pubkey,
-        last_id: &Hash,
-    ) -> io::Result<Signature> {
-        let tx = Transaction::vote_account_register(node_keypair, vote_account_id, *last_id, 0);
-        self.transfer_signed(&tx)
-    }
-
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
@@ -192,24 +168,6 @@ impl ThinClient {
                 ).to_owned(),
         );
         result
-    }
-
-    pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
-        let req = Request::GetAccount { key: *pubkey };
-        let data = serialize(&req).expect("serialize GetAccount in pub fn get_account_userdata");
-        self.requests_socket
-            .send_to(&data, &self.requests_addr)
-            .expect("buffer error in pub fn get_account_userdata");
-
-        loop {
-            let resp = self.recv_response()?;
-            trace!("recv_response {:?}", resp);
-            if let Response::Account { key, account } = resp {
-                if key == *pubkey {
-                    return Ok(account.map(|account| account.userdata));
-                }
-            }
-        }
     }
 
     /// Request the balance of the user holding `pubkey`. This method blocks
@@ -488,23 +446,17 @@ mod tests {
     #[ignore]
     fn test_thin_client() {
         logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
 
         let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -513,6 +465,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));
@@ -542,22 +495,16 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("bad_sig", &alice);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             0,
@@ -566,6 +513,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -608,25 +556,18 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             entry_height,
@@ -635,6 +576,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(300));
@@ -678,25 +620,18 @@ mod tests {
     #[test]
     fn test_zero_balance_after_nonzero() {
         logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let bank = Bank::new(&alice);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
 
         let genesis_entries = &alice.create_entries();
         let entry_height = genesis_entries.len() as u64;
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
             bank,
             0,
             entry_height,
@@ -705,6 +640,7 @@ mod tests {
             None,
             &ledger_path,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_data.id),
             Some(0),
         );
         sleep(Duration::from_millis(900));
