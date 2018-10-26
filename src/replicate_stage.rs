@@ -164,9 +164,9 @@ impl ReplicateStage {
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = None;
                 loop {
-                    let leader_id =
-                        bank.get_current_leader()
-                            .expect("Scheduled leader id should never be unknown at this point");
+                    let leader_id = bank
+                        .get_current_leader()
+                        .expect("Scheduled leader id should never be unknown at this point");
 
                     if leader_id == keypair.pubkey() {
                         return Some(ReplicateStageReturnType::LeaderRotation(
