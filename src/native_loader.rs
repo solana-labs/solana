@@ -40,7 +40,9 @@ fn create_path(name: &str) -> PathBuf {
     )
 }
 
-const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [2u8; 32];
+const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 // All native programs export a symbol named process()
 const ENTRYPOINT: &str = "process";

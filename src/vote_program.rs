@@ -53,8 +53,9 @@ pub struct VoteProgram {
     pub node_id: Pubkey,
 }
 
-pub const VOTE_PROGRAM_ID: [u8; 32] = [
-    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+const VOTE_PROGRAM_ID: [u8; 32] = [
+    132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
 ];
 
 impl VoteProgram {
