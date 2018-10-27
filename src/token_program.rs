@@ -105,8 +105,9 @@ impl Default for TokenProgram {
     }
 }
 
-pub const TOKEN_PROGRAM_ID: [u8; 32] = [
-    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+const TOKEN_PROGRAM_ID: [u8; 32] = [
+    131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
 ];
 
 impl TokenProgram {
