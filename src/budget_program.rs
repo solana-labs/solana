@@ -30,9 +30,11 @@ pub struct BudgetState {
     pub pending_budget: Option<Budget>,
 }
 
-pub const BUDGET_PROGRAM_ID: [u8; 32] = [
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+const BUDGET_PROGRAM_ID: [u8; 32] = [
+    129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
 ];
+
 impl BudgetState {
     fn is_pending(&self) -> bool {
         self.pending_budget != None

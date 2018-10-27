@@ -17,7 +17,10 @@ pub enum StorageError {
     InvalidUserData,
 }
 
-pub const STORAGE_PROGRAM_ID: [u8; 32] = [1u8; 32];
+const STORAGE_PROGRAM_ID: [u8; 32] = [
+    130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
+];
 
 impl StorageProgram {
     pub fn check_id(program_id: &Pubkey) -> bool {

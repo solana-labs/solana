@@ -3,8 +3,11 @@ use native_loader;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 
-pub const BPF_LOADER_PROGRAM_ID: [u8; 32] = [6u8; 32];
-pub const BPF_LOADER_NAME: &str = "bpf_loader";
+const BPF_LOADER_NAME: &str = "bpf_loader";
+const BPF_LOADER_PROGRAM_ID: [u8; 32] = [
+    128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
+];
 
 pub fn id() -> Pubkey {
     Pubkey::new(&BPF_LOADER_PROGRAM_ID)
