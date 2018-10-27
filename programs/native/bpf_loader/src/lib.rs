@@ -18,17 +18,6 @@ use std::io::Error;
 use std::mem;
 use std::sync::{Once, ONCE_INIT};
 
-fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
-    let mut vm = rbpf::EbpfVmRaw::new(None)?;
-    vm.set_verifier(bpf_verifier::check)?;
-    vm.set_program(&prog)?;
-    vm.register_helper(
-        rbpf::helpers::BPF_TRACE_PRINTK_IDX,
-        rbpf::helpers::bpf_trace_printf,
-    )?;
-    Ok(vm)
-}
-
 #[allow(dead_code)]
 fn dump_program(key: &Pubkey, prog: &[u8]) {
     let mut eight_bytes: Vec<u8> = Vec::new();
@@ -41,6 +30,34 @@ fn dump_program(key: &Pubkey, prog: &[u8]) {
             eight_bytes.push(i.clone());
         }
     }
+}
+
+pub fn helper_printf(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
+    println!(
+        "bpf_trace_printf: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+        arg1, arg2, arg3, arg4, arg5
+    );
+    let size_arg = |x| {
+        if x == 0 {
+            1
+        } else {
+            (x as f64).log(16.0).floor() as u64 + 1
+        }
+    };
+    "bpf_trace_printf: 0x, 0x, 0x, 0x, 0x\n".len() as u64
+        + size_arg(arg1)
+        + size_arg(arg2)
+        + size_arg(arg3)
+        + size_arg(arg4)
+        + size_arg(arg5)
+}
+
+fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
+    let mut vm = rbpf::EbpfVmRaw::new(None)?;
+    vm.set_verifier(bpf_verifier::check)?;
+    vm.set_program(&prog)?;
+    vm.register_helper(rbpf::helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
+    Ok(vm)
 }
 
 fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec<u8> {

@@ -22,9 +22,6 @@ use std::env;
 #[cfg(feature = "bpf_c")]
 use std::path::PathBuf;
 
-/// BPF program file prefixes
-#[cfg(feature = "bpf_c")]
-const PLATFORM_FILE_PREFIX_BPF: &str = "";
 /// BPF program file extension
 #[cfg(feature = "bpf_c")]
 const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
@@ -34,14 +31,14 @@ pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 /// Create a BPF program file name
 #[cfg(feature = "bpf_c")]
 fn create_bpf_path(name: &str) -> PathBuf {
-    let pathbuf = {
+    let mut pathbuf = {
         let current_exe = env::current_exe().unwrap();
         PathBuf::from(current_exe.parent().unwrap().parent().unwrap())
     };
-    pathbuf.join(
-        PathBuf::from(PLATFORM_FILE_PREFIX_BPF.to_string() + name)
-            .with_extension(PLATFORM_FILE_EXTENSION_BPF),
-    )
+    pathbuf.push("bpf/");
+    pathbuf.push(name);
+    pathbuf.set_extension(PLATFORM_FILE_EXTENSION_BPF);
+    pathbuf
 }
 
 fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
@@ -278,7 +275,7 @@ fn test_program_builtin_bpf_noop() {
     let loader = Loader::new_bpf();
     let program = Program::new(
         &loader,
-        elf::File::open_path(&create_bpf_path("noop_c"))
+        elf::File::open_path(&create_bpf_path("noop"))
             .unwrap()
             .get_section(PLATFORM_SECTION_C)
             .unwrap()
@@ -310,7 +307,7 @@ fn test_program_bpf_noop_c() {
     let loader = Loader::new_dynamic("bpf_loader");
     let program = Program::new(
         &loader,
-        elf::File::open_path(&create_bpf_path("noop_c"))
+        elf::File::open_path(&create_bpf_path("noop"))
             .unwrap()
             .get_section(PLATFORM_SECTION_C)
             .unwrap()
@@ -513,7 +510,7 @@ fn test_program_bpf_tictactoe_c() {
     let loader = Loader::new_dynamic("bpf_loader");
     let program = Program::new(
         &loader,
-        elf::File::open_path(&create_bpf_path("tictactoe_c"))
+        elf::File::open_path(&create_bpf_path("tictactoe"))
             .unwrap()
             .get_section(PLATFORM_SECTION_C)
             .unwrap()
@@ -546,7 +543,7 @@ fn test_program_bpf_tictactoe_dashboard_c() {
     let loader = Loader::new_dynamic("bpf_loader");
     let ttt_program = Program::new(
         &loader,
-        elf::File::open_path(&create_bpf_path("tictactoe_c"))
+        elf::File::open_path(&create_bpf_path("tictactoe"))
             .unwrap()
             .get_section(PLATFORM_SECTION_C)
             .unwrap()
@@ -581,7 +578,7 @@ fn test_program_bpf_tictactoe_dashboard_c() {
 
     let dashboard_program = Program::new(
         &loader,
-        elf::File::open_path(&create_bpf_path("tictactoe_dashboard_c"))
+        elf::File::open_path(&create_bpf_path("tictactoe_dashboard"))
             .unwrap()
             .get_section(PLATFORM_SECTION_C)
             .unwrap()
