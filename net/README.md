@@ -34,7 +34,7 @@ $ cd net/
 $ ./gce.sh create -n 5 -c 1  #<-- Create a GCE testnet with 5 validators, 1 client (billing starts here)
 $ ./init-metrics.sh $(whoami)   #<-- Configure a metrics database for the testnet
 $ ./net.sh start             #<-- Deploy the network from the local workspace
-$ ./ssh.sh                   #<-- Details on how to ssh into any testnet node
+$ ./ssh.sh                   #<-- Details on how to ssh into any testnet node to access logs/etc
 $ ./gce.sh delete            #<-- Dispose of the network (billing stops here)
 ```
 
@@ -94,7 +94,7 @@ or
 $ ./ec2.sh config -p master-testnet-solana-com
 ```
 
-Then run the following for details on how to ssh into any testnet node
+Then run the following for details on how to ssh into any testnet node to access logs or otherwise inspect the node
 ```bash
 $ ./ssh.sh
 ```
