@@ -41,6 +41,8 @@ declare module '@solana/web3.js' {
     userdata: Buffer,
   }
 
+  declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
+
   declare export type SignatureStatus = 'Confirmed'
     | 'AccountInUse'
     | 'SignatureNotFound'
@@ -58,6 +60,8 @@ declare module '@solana/web3.js' {
     getFinality(): Promise<number>;
     requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature>;
     sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature>;
+    onAccountChange(publickey: PublicKey, callback: AccountChangeCallback): Promise<number>;
+    removeAccountListener(id: number): Promise<void>;
   }
 
   // === src/system-program.js ===

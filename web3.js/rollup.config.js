@@ -70,18 +70,31 @@ function generateConfig(configType) {
     // maintained.
     config.external = [
       'assert',
+      'babel-runtime/core-js/get-iterator',
+      'babel-runtime/core-js/json/stringify',
+      'babel-runtime/core-js/object/assign',
+      'babel-runtime/core-js/object/get-prototype-of',
+      'babel-runtime/core-js/object/keys',
       'babel-runtime/core-js/promise',
       'babel-runtime/helpers/asyncToGenerator',
       'babel-runtime/helpers/classCallCheck',
       'babel-runtime/helpers/createClass',
+      'babel-runtime/helpers/get',
+      'babel-runtime/helpers/inherits',
+      'babel-runtime/helpers/possibleConstructorReturn',
       'babel-runtime/helpers/toConsumableArray',
       'babel-runtime/helpers/typeof',
       'babel-runtime/regenerator',
+      'bn.js',
       'bs58',
+      'buffer-layout',
+      'elfy',
       'jayson/lib/client/browser',
       'node-fetch',
+      'rpc-websockets',
       'superstruct',
       'tweetnacl',
+      'url',
     ];
     break;
   default:

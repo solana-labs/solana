@@ -22,12 +22,17 @@ export const mockRpc: Array<[string, RpcRequest, RpcResponse]> = [];
 // identified by `url` instead of using the mock
 export const mockRpcEnabled = !process.env.DOITLIVE;
 
+let mockNotice = true;
+
 // Suppress lint: 'JestMockFn' is not defined
 // eslint-disable-next-line no-undef
 const mock: JestMockFn<any, any> = jest.fn(
   (fetchUrl, fetchOptions) => {
     if (!mockRpcEnabled) {
-      console.log(`Note: node-fetch mock is disabled, testing live against ${fetchUrl}`);
+      if (mockNotice) {
+        console.log(`Note: node-fetch mock is disabled, testing live against ${fetchUrl}`);
+        mockNotice = false;
+      }
       return fetch(fetchUrl, fetchOptions);
     }
 
