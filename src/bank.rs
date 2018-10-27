@@ -2104,10 +2104,6 @@ mod tests {
             131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
-        let vote = Pubkey::new(&[
-            132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
 
         assert_eq!(SystemProgram::id(), system);
         assert_eq!(native_loader::id(), native);
@@ -2115,7 +2111,6 @@ mod tests {
         assert_eq!(BudgetState::id(), budget);
         assert_eq!(StorageProgram::id(), storage);
         assert_eq!(TokenProgram::id(), token);
-        assert_eq!(VoteProgram::id(), vote);
     }
 
     #[test]
@@ -2128,7 +2123,6 @@ mod tests {
             BudgetState::id(),
             StorageProgram::id(),
             TokenProgram::id(),
-            VoteProgram::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
