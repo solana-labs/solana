@@ -20,44 +20,22 @@ fn main() {
     let erasure = !env::var("CARGO_FEATURE_ERASURE").is_err();
 
     if bpf_c {
-        let out_dir = "target/".to_string() + &env::var("PROFILE").unwrap();
+        let out_dir = "OUT_DIR=../../../target/".to_string()
+            + &env::var("PROFILE").unwrap()
+            + &"/bpf".to_string();
 
-        println!("cargo:rerun-if-changed=programs/bpf/noop_c/build.sh");
-        println!("cargo:rerun-if-changed=programs/bpf/noop_c/src/noop.c");
-        println!("cargo:warning=(not a warning) Compiling noop_c");
-        let status = Command::new("programs/bpf/noop_c/build.sh")
+        println!("cargo:rerun-if-changed=programs/bpf/c/makefile");
+        println!("cargo:rerun-if-changed=programs/bpf/c/src/move_funds.c");
+        println!("cargo:rerun-if-changed=programs/bpf/c/src/noop.c");
+        println!("cargo:rerun-if-changed=programs/bpf/c/src/tictactoe.c");
+        println!("cargo:rerun-if-changed=programs/bpf/c/src/tictactoe_dashboard.c");
+        println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
+        let status = Command::new("make")
+            .current_dir("programs/bpf/c")
+            .arg("all")
             .arg(&out_dir)
             .status()
-            .expect("Failed to call noop_c build script");
-        assert!(status.success());
-
-        println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/build.sh");
-        println!("cargo:rerun-if-changed=programs/bpf/move_funds_c/src/move_funds.c");
-        println!("cargo:warning=(not a warning) Compiling move_funds_c");
-        let status = Command::new("programs/bpf/move_funds_c/build.sh")
-            .arg(&out_dir)
-            .status()
-            .expect("Failed to call move_funds_c build script");
-        assert!(status.success());
-
-        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_c/build.sh");
-        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_c/src/tictactoe.c");
-        println!("cargo:warning=(not a warning) Compiling tictactoe_c");
-        let status = Command::new("programs/bpf/tictactoe_c/build.sh")
-            .arg(&out_dir)
-            .status()
-            .expect("Failed to call tictactoe_c build script");
-        assert!(status.success());
-
-        println!("cargo:rerun-if-changed=programs/bpf/tictactoe_dashboard_c/build.sh");
-        println!(
-            "cargo:rerun-if-changed=programs/bpf/tictactoe_dashboard_c/src/tictactoe_dashboard.c"
-        );
-        println!("cargo:warning=(not a warning) Compiling tictactoe_dashboard_c");
-        let status = Command::new("programs/bpf/tictactoe_dashboard_c/build.sh")
-            .arg(&out_dir)
-            .status()
-            .expect("Failed to call tictactoe_dashboard_c build script");
+            .expect("Failed to build C-based BPF programs");
         assert!(status.success());
     }
     if chacha || cuda || erasure {

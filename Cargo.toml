@@ -139,5 +139,5 @@ members = [
     "programs/native/noop",
     "programs/native/bpf_loader",
     "programs/native/lua_loader",
-    "programs/bpf/noop_rust",
+    "programs/bpf/rust/noop",
 ]
