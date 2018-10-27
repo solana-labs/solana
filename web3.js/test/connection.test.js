@@ -1,9 +1,11 @@
 // @flow
-
 import {
   Account,
   Connection,
+  BpfLoader,
+  Loader,
   SystemProgram,
+  sendAndConfirmTransaction,
 } from '../src';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {mockGetLastId} from './mockrpc/getlastid';
@@ -408,5 +410,48 @@ test('multi-instruction transaction', async () => {
 
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
+});
+
+
+test('account change notification', async () => {
+  if (mockRpcEnabled) {
+    console.log('non-live test skipped');
+    return;
+  }
+
+  const connection = new Connection(url);
+  const owner = new Account();
+  const programAccount = new Account();
+
+  const mockCallback = jest.fn();
+
+  const subscriptionId = connection.onAccountChange(programAccount.publicKey, mockCallback);
+
+  await connection.requestAirdrop(owner.publicKey, 42);
+  const transaction = SystemProgram.createAccount(
+    owner.publicKey,
+    programAccount.publicKey,
+    42,
+    3,
+    BpfLoader.programId,
+  );
+  await sendAndConfirmTransaction(connection, owner, transaction);
+
+  const loader = new Loader(connection, BpfLoader.programId);
+  await loader.load(programAccount, [1, 2, 3]);
+
+  await connection.removeAccountChangeListener(subscriptionId);
+
+  // mockCallback should be called twice
+  expect(mockCallback.mock.calls).toHaveLength(2);
+
+  // First mockCallback call is due to SystemProgram.createAccount()
+  expect(mockCallback.mock.calls[0][0].tokens).toBe(42);
+  expect(mockCallback.mock.calls[0][0].executable).toBe(false);
+  expect(mockCallback.mock.calls[0][0].userdata).toEqual(Buffer.from([0, 0, 0]));
+  expect(mockCallback.mock.calls[0][0].programId).toEqual(BpfLoader.programId);
+
+  // Second mockCallback call is due to loader.load()
+  expect(mockCallback.mock.calls[1][0].userdata).toEqual(Buffer.from([1, 2, 3]));
 });
 

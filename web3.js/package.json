@@ -59,8 +59,10 @@
     "jayson": "^2.0.6",
     "mz": "^2.7.0",
     "node-fetch": "^2.2.0",
+    "rpc-websockets": "^4.3.3",
     "superstruct": "^0.6.0",
-    "tweetnacl": "^1.0.0"
+    "tweetnacl": "^1.0.0",
+    "ws": "^6.1.0"
   },
   "devDependencies": {
     "babel-core": "6.26.3",
