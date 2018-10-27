@@ -186,11 +186,8 @@ export class BudgetProgram {
   ): Transaction {
     const userdata = Buffer.alloc(1024);
     let pos = 0;
-    userdata.writeUInt32LE(0, pos); // NewContract instruction
+    userdata.writeUInt32LE(0, pos); // NewBudget instruction
     pos += 4;
-
-    userdata.writeUInt32LE(amount, pos); // Contract.tokens
-    pos += 8;
 
     switch (conditions.length) {
     case 0:
@@ -267,11 +264,8 @@ export class BudgetProgram {
   ): Transaction {
     const userdata = Buffer.alloc(1024);
     let pos = 0;
-    userdata.writeUInt32LE(0, pos); // NewContract instruction
+    userdata.writeUInt32LE(0, pos); // NewBudget instruction
     pos += 4;
-
-    userdata.writeUInt32LE(amount, pos); // Contract.tokens
-    pos += 8;
 
     userdata.writeUInt32LE(3, pos); // Budget enum = And
     pos += 4;
