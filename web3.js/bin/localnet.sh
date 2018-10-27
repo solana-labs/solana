@@ -71,6 +71,7 @@ up)
       --name solana-localnet \
       --rm \
       --publish 8899:8899 \
+      --publish 8900:8900 \
       --tty \
       --env RUST_LOG="$RUST_LOG" \
       solanalabs/solana:"$channel"
