@@ -136,7 +136,7 @@ type TokenAndPublicKey = [Token, PublicKey]; // This type exists to workaround a
 /**
  * The built-in token program
  */
-export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey('0x500000000000000000000000000000000000000000000000000000000000000');
+export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey('0x8300000000000000000000000000000000000000000000000000000000000000');
 
 /**
  * An ERC20-like Token
