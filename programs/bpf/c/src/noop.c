@@ -20,6 +20,5 @@ extern bool entrypoint(uint8_t *input) {
     return false;
   }
   sol_print_params(1, ka, data, data_len);
-  sol_assert(1 == 0);
   return true;
 }
