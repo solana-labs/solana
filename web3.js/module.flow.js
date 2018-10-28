@@ -61,7 +61,7 @@ declare module '@solana/web3.js' {
     requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature>;
     sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature>;
     onAccountChange(publickey: PublicKey, callback: AccountChangeCallback): Promise<number>;
-    removeAccountListener(id: number): Promise<void>;
+    removeAccountChangeListener(id: number): Promise<void>;
   }
 
   // === src/system-program.js ===
