@@ -60,7 +60,7 @@ declare module '@solana/web3.js' {
     getFinality(): Promise<number>;
     requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature>;
     sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature>;
-    onAccountChange(publickey: PublicKey, callback: AccountChangeCallback): Promise<number>;
+    onAccountChange(publickey: PublicKey, callback: AccountChangeCallback): number;
     removeAccountChangeListener(id: number): Promise<void>;
   }
 
