@@ -8,3 +8,6 @@ steps:
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 20
     name: "publish crate [public]"
+  - command: "ci/publish-bpf-sdk.sh"
+    timeout_in_minutes: 5
+    name: "publish bpf sdk"
