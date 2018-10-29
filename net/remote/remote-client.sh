@@ -59,7 +59,7 @@ clientCommand="\
     --network $entrypointIp:8001 \
     --identity client.json \
     --num-nodes $numNodes \
-    --duration 600 \
+    --duration 7500 \
     --sustained \
     --threads $threadCount \
 "
