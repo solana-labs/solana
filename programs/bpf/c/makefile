@@ -1,5 +1,8 @@
 
+ifneq ($(V),1)
 _@ :=@
+endif
+
 INC_DIRS := -I.
 SRC_DIR := ./src
 OUT_DIR := ./out
@@ -44,8 +47,8 @@ help:
 	@echo ''
 	@echo 'User settings'
 	@echo '  - The following setting are overridable on the command line, default values shown'
-	@echo '    - Verbosity, for verbose: '_@=':'
-	@echo '    - _@=$(_@)'
+	@echo '    - Show commands:'
+	@echo '      V=1'
 	@echo '    - List of include dirs:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - Location of source files:'
