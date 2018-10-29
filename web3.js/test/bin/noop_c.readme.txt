@@ -1,9 +1,0 @@
-
-The Solana SDK Test Binary
-
-One of the functions that the SDK tests exercises is the loading and calling of Berkley Packet Filter programs (BPF).
-
-The test file noop_c.o is an ELF object file containing a small BPF program contained in the ELF section named ".text.entrypoint".
-
-The C source file for noop_c.o is noop_c.c and it can be rebuilt using the build.sh script.
-The build.sh script depends on LLVM 6.0 to be installed.
