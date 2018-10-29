@@ -35,6 +35,8 @@ else
   setupArgs="-l"
 fi
 
+sudo sysctl -w net.core.rmem_default=1610612736
+sudo sysctl -w net.core.wmem_default=1610612736
 
 case $deployMethod in
 snap)
