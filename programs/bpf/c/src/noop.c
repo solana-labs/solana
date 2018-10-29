@@ -3,7 +3,7 @@
  * passed to it
  */
 
-#include "sol_bpf_c.h"
+#include <sol_bpf_c.h>
 
 /**
  * Numer of SolKeyedAccounts expected. The program should bail if an

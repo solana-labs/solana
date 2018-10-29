@@ -14,7 +14,7 @@ echo --- Creating tarball
     git rev-parse HEAD
   ) > bpf-sdk/version.txt
 
-  cp -ra programs/bpf/c/* bpf-sdk/
+  cp -ra programs/bpf/c/sdk/* bpf-sdk/
 
   tar jvcf bpf-sdk.tar.bz2 bpf-sdk/
 )
