@@ -413,7 +413,6 @@ impl ClusterInfo {
             if *id == leader_id {
                 info!("{}: PURGE LEADER {}", self.id, id,);
                 inc_new_counter_info!("cluster_info-purge-purged_leader", 1, 1);
-                self.set_leader(Pubkey::default());
             }
         }
     }
@@ -1667,7 +1666,7 @@ mod tests {
         let len = cluster_info.table.len() as u64;
         cluster_info.purge(now + GOSSIP_PURGE_MILLIS + 1);
         assert_eq!(len as usize - 1, cluster_info.table.len());
-        assert_eq!(cluster_info.my_data().leader_id, Pubkey::default());
+        assert_eq!(cluster_info.my_data().leader_id, nxt.id);
         assert!(cluster_info.leader_data().is_none());
     }
 
