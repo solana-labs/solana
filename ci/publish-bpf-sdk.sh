@@ -23,10 +23,6 @@ echo --- Creating tarball
 echo --- AWS S3 Store
 
 set -x
-if [[ -z "$BRANCH" || $BRANCH =~ pull/* ]]; then
-  exit 0
-fi
-
 if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
   rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
   wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
