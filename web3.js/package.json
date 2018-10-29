@@ -35,6 +35,7 @@
     "test:watch": "cross-env NODE_ENV=test jest --watch --useStderr",
     "test:cover": "cross-env NODE_ENV=test jest --coverage --useStderr",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
+    "fetch-bpf-sdk": "test -d bpf-sdk || curl http://solana-sdk.s3.amazonaws.com/0.10.0/bpf-sdk.tar.bz2 | tar jxv",
     "flow": "flow stop; flow-typed install jest@22 && flow",
     "flow:watch": "flow stop; watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "flow:stop": "flow stop",
