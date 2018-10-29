@@ -24,6 +24,14 @@
   "bin": {
     "solana-localnet": "bin/localnet.sh"
   },
+  "files": [
+    "/bin",
+    "/doc",
+    "/examples",
+    "/bpf-sdk",
+    "/lib",
+    "/module.flow.js"
+  ],
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
     "dev": "cross-env NODE_ENV=development rollup -c",
