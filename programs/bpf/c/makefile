@@ -3,9 +3,15 @@ _@ :=@
 INC_DIRS := -I.
 SRC_DIR := ./src
 OUT_DIR := ./out
-LLVM_DIR := /usr/local/opt/llvm/bin
 
-CC = $(LLVM_DIR)/clang
+OS=$(uname)
+ifeq ($(OS),Darwin)
+LLVM_DIR := $(brew --prefix llvm)
+else
+LLVM_DIR := /usr/local/opt/llvm
+endif
+
+CC = $(LLVM_DIR)/bin/clang
 CC_FLAGS = \
 	-Werror \
 	-target \
@@ -13,13 +19,13 @@ CC_FLAGS = \
 	-emit-llvm \
 	-fno-builtin
 
-LD = $(LLVM_DIR)/llc
+LD = $(LLVM_DIR)/bin/llc
 LD_FLAGS = \
 	-march=bpf \
 	-filetype=obj \
 	-function-sections
 
-OBJ_DUMP = $(LLVM_DIR)/llvm-objdump
+OBJ_DUMP = $(LLVM_DIR)/bin/llvm-objdump
 OBJ_DUMP_FLAGS = \
 	-color \
 	-source \
