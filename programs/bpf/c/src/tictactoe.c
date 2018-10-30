@@ -173,7 +173,7 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
 }
 
 /**
- * Numer of SolKeyedAccounts expected. The program should bail if an
+ * Number of SolKeyedAccounts expected. The program should bail if an
  * unexpected number of accounts are passed to the program's entrypoint
  *
  * accounts[0] On Init must be player X, after that doesn't matter,
@@ -183,13 +183,13 @@ SOL_FN_PREFIX Result game_keep_alive(Game *self, SolPubkey *player,
  */
 #define NUM_KA 3
 
-extern bool entrypoint(uint8_t *input) {
+extern bool entrypoint(const uint8_t *input) {
   SolKeyedAccounts ka[NUM_KA];
   uint8_t *data;
   uint64_t data_len;
   int err = 0;
 
-  if (!sol_deserialize((uint8_t *)input, NUM_KA, ka, &data, &data_len)) {
+  if (!sol_deserialize(input, NUM_KA, ka, &data, &data_len)) {
     return false;
   }
 
