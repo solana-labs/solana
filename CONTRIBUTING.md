@@ -56,13 +56,18 @@ Proposing architectural changes
 ---
 
 Solana's architecture is described by markdown files in the `doc/` directory, currently maintained
-by @garious. Changing the architecture is a three step process:
+by @garious. To change the architecture, you'll need to at least propose a change with an RFC document,
+and create an issue to track its implementation. Here's the full process:
 
-1. Propose to a change to the architecture by creating a PR that adds a markdown file called a "wip-doc"
-   (meaning "work-in-progress document" and pronounced "whip dock") to the directory `doc/wip/`. Add
-   at least the maintainer of `doc/` as a reviewer.
-2. The PR being merged indicates your proposed change was accepted. The document will remain in `wip/`
-   while additional PRs are submitted to update the Solana reference design, which is the Rust-only
-   version of this codebase (no `--features` enabled). Be sure to update the wip-doc as the
-   implementation reveals the need for tweaks to the architecture.
-3. Once implemented, contact the maintainer of the `doc/` to integrate the wip-doc into `doc/`.
+1. Propose to a change to the architecture by creating a PR that adds a markdown document called an RFC
+   (standing for "request for comments") to the directory `rfcs/`. Add at least the maintainer of `doc/`
+   as a reviewer.
+2. The PR being merged indicates your proposed change was accepted and that the Solana maintainers
+   support your plan of attack. Next, create an issue to track its implementation and create a PR
+   that updates the RFC with a link to the issue. This link allows anyone to quickly check the
+   implementation status of any RFC.
+3. Submit PRs that implement the RFC. Be sure to reference the issue created above in your PR description.
+   Feel free to update the RFC as the implementation reveals the need for tweaks to the architecture,
+   but if you do, be sure to add the maintainer of `doc/` as a reviewer to your PR.
+4. Once the implementation is complete, close the issue. Depending on the scope of the RFC, the maintainer
+   of `doc/` may then create a separate ticket to integrate the RFC into `doc/`.
