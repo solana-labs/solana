@@ -3,6 +3,10 @@
  * @brief Solana C-based BPF program utility functions and types
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Numeric types
  */
@@ -267,5 +271,9 @@ SOL_FN_PREFIX void sol_print_params(
  * @return true if successful
  */
 extern bool entrypoint(const uint8_t *input);
+
+#ifdef __cplusplus
+}
+#endif
 
 /**@}*/
