@@ -19,6 +19,6 @@ extern bool entrypoint(const uint8_t *input) {
   if (!sol_deserialize(input, NUM_KA, ka, &data, &data_len)) {
     return false;
   }
-  sol_print_params(1, ka, data, data_len);
+  sol_print_params(NUM_KA, ka, data, data_len);
   return true;
 }
