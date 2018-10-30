@@ -30,7 +30,8 @@
     "/examples",
     "/bpf-sdk",
     "/lib",
-    "/module.flow.js"
+    "/module.flow.js",
+    "/src"
   ],
   "scripts": {
     "clean": "rimraf ./coverage ./lib",
