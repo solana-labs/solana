@@ -1,5 +1,5 @@
-#ifndef SOL_BPF_C_H
-#define SOL_BPF_C_H
+#ifndef SOL_BPF_H
+#define SOL_BPF_H
 /**
  * @brief Solana C-based BPF program utility functions and types
  */
@@ -271,4 +271,4 @@ extern bool entrypoint(const uint8_t *input);
 
 /**@}*/
 
-#endif  // SOL_BPF_C_H
+#endif  // SOL_BPF_C
