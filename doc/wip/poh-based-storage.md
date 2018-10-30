@@ -1,10 +1,6 @@
 # Storage
 
-The goal of this RFC is to define a protocol for storing a very large ledger over a p2p network that is verified by solana validators.  At full capacity on a 1gbps network solana will generate 4 petabytes of data per year.  To prevent the network from centralizing around full nodes that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the network.
-
-# Version 
-
-version 0.1
+The goal of this document is to define a protocol for storing a very large ledger over a p2p network that is verified by solana validators.  At full capacity on a 1gbps network solana will generate 4 petabytes of data per year.  To prevent the network from centralizing around full nodes that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the network.
 
 # Background
 
