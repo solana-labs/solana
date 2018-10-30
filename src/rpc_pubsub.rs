@@ -139,7 +139,6 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         subscriber: pubsub::Subscriber<Account>,
         pubkey_str: String,
     ) {
-        info!("account_subscribe");
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             subscriber
@@ -154,6 +153,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
+        info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         let bank_sub_id = Keypair::new().pubkey();
         self.account_subscriptions
@@ -166,7 +166,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     }
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
-        info!("account_unsubscribe");
+        info!("account_unsubscribe: id={:?}", id);
         if let Some((bank_sub_id, pubkey)) = self.account_subscriptions.write().unwrap().remove(&id)
         {
             self.bank.remove_account_subscription(&bank_sub_id, &pubkey);
