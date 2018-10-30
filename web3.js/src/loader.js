@@ -95,14 +95,14 @@ export class Loader {
       userdata,
     );
 
-    let transaction = new Transaction().add({
+    const transaction = new Transaction();
+
+    transaction.add({
       keys: [program.publicKey],
       programId: this.programId,
       userdata,
     });
-    await sendAndConfirmTransaction(this.connection, program, transaction);
-
-    transaction = SystemProgram.spawn(program.publicKey);
+    transaction.add(SystemProgram.spawn(program.publicKey));
     await sendAndConfirmTransaction(this.connection, program, transaction);
   }
 }
