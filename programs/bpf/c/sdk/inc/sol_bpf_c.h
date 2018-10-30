@@ -75,7 +75,7 @@ typedef struct {
  * @param two Second public key
  * @return True if the same
  */
-SOL_FN_PREFIX bool SolPubkey_same(SolPubkey *one, SolPubkey *two) {
+SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
   for (int i = 0; i < SIZE_PUBKEY; i++) {
     if (one->x[i] != two->x[i]) {
       return false;
@@ -98,9 +98,9 @@ typedef struct {
 /**
  * Copies memory
  */
-SOL_FN_PREFIX void sol_memcpy(void *dst, void *src, int len) {
+SOL_FN_PREFIX void sol_memcpy(void *dst, const void *src, int len) {
   for (int i = 0; i < len; i++) {
-    *((uint8_t *)dst + i) = *((uint8_t *)src + i);
+    *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
   }
 }
 
@@ -142,7 +142,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  * @param data_len On return, the length in bytes of the instruction data
  * @return Boolan True if successful
  */
-SOL_FN_PREFIX bool sol_deserialize(uint8_t *input, uint64_t num_ka,
+SOL_FN_PREFIX bool sol_deserialize(const uint8_t *input, uint64_t num_ka,
                                    SolKeyedAccounts *ka, uint8_t **data,
                                    uint64_t *data_len) {
   if (num_ka != *(uint64_t *)input) {
@@ -187,7 +187,7 @@ SOL_FN_PREFIX bool sol_deserialize(uint8_t *input, uint64_t num_ka,
  *
  * @param key The public key to print
  */
-SOL_FN_PREFIX void sol_print_key(SolPubkey *key) {
+SOL_FN_PREFIX void sol_print_key(const SolPubkey *key) {
   for (int j = 0; j < SIZE_PUBKEY; j++) {
     sol_print(0, 0, 0, j, key->x[j]);
   }
@@ -198,7 +198,7 @@ SOL_FN_PREFIX void sol_print_key(SolPubkey *key) {
  *
  * @param array The array to print
  */
-SOL_FN_PREFIX void sol_print_array(uint8_t *array, int len) {
+SOL_FN_PREFIX void sol_print_array(const uint8_t *array, int len) {
   for (int j = 0; j < len; j++) {
     sol_print(0, 0, 0, j, array[j]);
   }
@@ -212,8 +212,8 @@ SOL_FN_PREFIX void sol_print_array(uint8_t *array, int len) {
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
-SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, SolKeyedAccounts *ka,
-                                    uint8_t *data, uint64_t data_len) {
+SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, const SolKeyedAccounts *ka,
+                                    const uint8_t *data, uint64_t data_len) {
   sol_print(0, 0, 0, 0, num_ka);
   for (int i = 0; i < num_ka; i++) {
     sol_print_key(ka[i].key);
@@ -235,12 +235,12 @@ SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, SolKeyedAccounts *ka,
  *
  * #define NUM_KA 1
  *
- * bool entrypoint(uint8_t *input) {
+ * bool entrypoint(const uint8_t *input) {
  *   SolKeyedAccounts ka[NUM_KA];
  *   uint8_t *data;
  *   uint64_t data_len;
  *
- *   if (1 != sol_deserialize((uint8_t *)buf, NUM_KA, ka, &data, &data_len)) {
+ *   if (1 != sol_deserialize(buf, NUM_KA, ka, &data, &data_len)) {
  *     return false;
  *   }
  *   print_params(1, ka, data, data_len);
@@ -254,7 +254,7 @@ SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, SolKeyedAccounts *ka,
  * @param input An array containing serialized input parameters
  * @return True if successful
  */
-extern bool entrypoint(uint8_t *input);
+extern bool entrypoint(const uint8_t *input);
 
 /**@}*/
 
