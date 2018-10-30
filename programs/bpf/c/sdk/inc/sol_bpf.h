@@ -1,11 +1,10 @@
-#ifndef SOL_BPF_H
-#define SOL_BPF_H
+#pragma once
 /**
  * @brief Solana C-based BPF program utility functions and types
  */
 
 /**
- * Numberic types
+ * Numeric types
  */
 typedef signed char int8_t;
 typedef unsigned char uint8_t;
@@ -57,7 +56,7 @@ static int (*sol_print)(
  * Prefix for all BPF functions
  *
  * This prefix should be used for functions in order to facilitate
- * interopability with BPF representation
+ * interoperability with BPF representation
  */
 #define SOL_FN_PREFIX __attribute__((always_inline)) static
 
@@ -78,7 +77,7 @@ typedef struct {
  *
  * @param one First public key
  * @param two Second public key
- * @return True if the same
+ * @return true if the same
  */
 SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
   for (int i = 0; i < SIZE_PUBKEY; i++) {
@@ -145,7 +144,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  * @param ka Pointer to an array of SolKeyedAccounts to deserialize into
  * @param data On return, a pointer to the instruction data
  * @param data_len On return, the length in bytes of the instruction data
- * @return Boolan True if successful
+ * @return Boolean true if successful
  */
 SOL_FN_PREFIX bool sol_deserialize(
   const uint8_t *input,
@@ -243,7 +242,7 @@ SOL_FN_PREFIX void sol_print_params(
  * Program entrypoint
  * @{
  *
- * The following is An example of a simple program that prints the input
+ * The following is an example of a simple program that prints the input
  * parameters it received:
  *
  * #define NUM_KA 1
@@ -265,10 +264,8 @@ SOL_FN_PREFIX void sol_print_params(
  * Program entrypoint signature
  *
  * @param input An array containing serialized input parameters
- * @return True if successful
+ * @return true if successful
  */
 extern bool entrypoint(const uint8_t *input);
 
 /**@}*/
-
-#endif  // SOL_BPF_C
