@@ -70,16 +70,21 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
         trace!("Call native {:?}", name);
         let path = create_path(&name);
         // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
-        let library = Library::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW).unwrap();
-        unsafe {
-            let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
-                Ok(s) => s,
-                Err(e) => {
-                    warn!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT);
-                    return false;
-                }
-            };
-            return entrypoint(&mut keyed_accounts[1..], tx_data);
+        match Library::open(Some(&path), libc::RTLD_NODELETE | libc::RTLD_NOW) {
+            Ok(library) => unsafe {
+                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT);
+                        return false;
+                    }
+                };
+                return entrypoint(&mut keyed_accounts[1..], tx_data);
+            },
+            Err(e) => {
+                warn!("Unable to load: {:?}", e);
+                return false;
+            }
         }
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
