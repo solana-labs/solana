@@ -346,7 +346,6 @@ impl Bank {
                 return Some(entry.1);
             }
         }
-
         None
     }
 
@@ -388,7 +387,6 @@ impl Bank {
                 }
             }
         }
-
         None
     }
 
@@ -1125,7 +1123,8 @@ impl Bank {
             .unwrap_or(0)
     }
 
-    /// TODO: fix once there's real staking
+    /// TODO: Need to implement a real staking contract to hold node stake.
+    /// Right now this just gets the account balances. See github issue #1655.
     pub fn get_stake(&self, pubkey: &Pubkey) -> i64 {
         self.get_balance(pubkey)
     }

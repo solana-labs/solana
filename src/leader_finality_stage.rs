@@ -19,7 +19,7 @@ pub enum FinalityError {
     NoValidSupermajority,
 }
 
-pub const COMPTUTE_FINALITY_MS: u64 = 1000;
+pub const COMPUTE_FINALITY_MS: u64 = 1000;
 
 pub struct LeaderFinalityStage {
     compute_finality_thread: JoinHandle<()>,
@@ -38,6 +38,7 @@ impl LeaderFinalityStage {
             // TODO: Doesn't account for duplicates since a single validator could potentially register
             // multiple vote accounts. Once that is no longer possible (see the TODO in vote_program.rs,
             // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
+            // See github issue 1654.
             bank_accounts
                 .values()
                 .filter_map(|account| {
@@ -106,7 +107,7 @@ impl LeaderFinalityStage {
                         break;
                     }
                     Self::compute_finality(&bank, &mut last_valid_validator_timestamp);
-                    sleep(Duration::from_millis(COMPTUTE_FINALITY_MS));
+                    sleep(Duration::from_millis(COMPUTE_FINALITY_MS));
                 }
             }).unwrap();
 
