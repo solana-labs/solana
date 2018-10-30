@@ -203,6 +203,17 @@ declare module '@solana/web3.js' {
     finalize(program: Account): Promise<void>;
   }
 
+  // === src/bpf-loader.js ===
+  declare export class BpfLoader {
+    static programId: PublicKey;
+    static load(
+      connection: Connection,
+      owner: Account,
+      elfBytes: Array<number>,
+    ): Promise<PublicKey>;
+  }
+
+
   // === src/native-loader.js ===
   declare export class NativeLoader {
     static programId: PublicKey;
