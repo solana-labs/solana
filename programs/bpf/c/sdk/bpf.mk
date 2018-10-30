@@ -7,7 +7,7 @@ _@ :=@
 endif
 
 INC_DIRS :=
-SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))/inc
+SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
 SRC_DIR := ./src
 OUT_DIR := ./out
 
@@ -18,25 +18,25 @@ else
 LLVM_DIR := /usr/local/opt/llvm
 endif
 
-CC = $(LLVM_DIR)/bin/clang
-CC_FLAGS = \
-	-Werror \
-	-target \
-	bpf -O2 \
-	-emit-llvm \
-	-fno-builtin
+CC := $(LLVM_DIR)/bin/clang
+CC_FLAGS := \
+  -Werror \
+  -target bpf \
+  -O2 \
+  -emit-llvm \
+  -fno-builtin \
 
-LD = $(LLVM_DIR)/bin/llc
-LD_FLAGS = \
-	-march=bpf \
-	-filetype=obj \
-	-function-sections
+LD := $(LLVM_DIR)/bin/llc
+LD_FLAGS := \
+  -march=bpf \
+  -filetype=obj \
+  -function-sections \
 
-OBJ_DUMP = $(LLVM_DIR)/bin/llvm-objdump
-OBJ_DUMP_FLAGS = \
-	-color \
-	-source \
-	-disassemble
+OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
+OBJ_DUMP_FLAGS := \
+  -color \
+  -source \
+  -disassemble \
 
 help:
 	@echo 'BPF Program makefile'
@@ -81,7 +81,7 @@ help:
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $<  -MMD -MF $(@:.bc=.d)
+	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
