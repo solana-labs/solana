@@ -473,18 +473,23 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
 pub fn retry_get_balance(
     client: &mut ThinClient,
     bob_pubkey: &Pubkey,
-    expected: Option<i64>,
+    expected_balance: Option<i64>,
 ) -> Option<i64> {
     const LAST: usize = 30;
-    for run in 0..=LAST {
-        let out = client.poll_get_balance(bob_pubkey);
-        if expected.is_none() || run == LAST {
-            return out.ok();
+    for run in 0..LAST {
+        let balance_result = client.poll_get_balance(bob_pubkey);
+        if expected_balance.is_none() {
+            return balance_result.ok();
         }
-        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
-        if let (Some(e), Ok(o)) = (expected, out) {
-            if o == e {
-                return Some(o);
+        trace!(
+            "retry_get_balance[{}] {:?} {:?}",
+            run,
+            balance_result,
+            expected_balance
+        );
+        if let (Some(expected_balance), Ok(balance_result)) = (expected_balance, balance_result) {
+            if expected_balance == balance_result {
+                return Some(balance_result);
             }
         }
     }
