@@ -79,11 +79,13 @@ help:
 
 .PRECIOUS: $(OUT_DIR)/%.bc
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
+	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $<  -MMD -MF $(@:.bc=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
+	@echo "[ld] $@ ($<)"
 	$(_@)$(LD) $(LD_FLAGS) -o $@ $<
 
 -include $(wildcard $(OUT_DIR)/*.d)
@@ -97,8 +99,7 @@ endef
 
 all: $(PROGRAM_NAMES)
 
-%: $(addprefix $(OUT_DIR)/, %.o)
-	@echo $@ up to date
+%: $(addprefix $(OUT_DIR)/, %.o) ;
 
 dump_%: %
 	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .o, $<))
