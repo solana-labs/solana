@@ -15,7 +15,7 @@ export async function sendAndConfirmTransaction(
   runtimeErrorOk: boolean = false
 ): Promise<void> {
 
-  let sendRetries = 3;
+  let sendRetries = 10;
   for (;;) {
     const start = Date.now();
     const signature = await connection.sendTransaction(from, transaction);
@@ -44,6 +44,9 @@ export async function sendAndConfirmTransaction(
     if (status !== 'AccountInUse' || --sendRetries <= 0) {
       throw new Error(`Transaction ${signature} failed (${status})`);
     }
+
+    // Retry in 0..100ms to try to avoid another collision
+    await sleep(Math.random() * 100);
   }
 }
 
