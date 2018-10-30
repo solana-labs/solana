@@ -51,3 +51,18 @@ Some terms we currently use regularly in the codebase:
 * pubkey: n. The public key of a Ed25519 key-pair.
 * sigverify: v. To verify a Ed25519 digital signature.
 
+
+Proposing architectural changes
+---
+
+Solana's architecture is described by markdown files in the `doc/` directory, currently maintained
+by @garious. Changing the architecture is a three step process:
+
+1. Propose to a change to the architecture by creating a PR that adds a markdown file called a "wip-doc"
+   (meaning "work-in-progress document" and pronounced "whip dock") to the directory `doc/wip/`. Add
+   at least the maintainer of `doc/` as a reviewer.
+2. The PR being merged indicates your proposed change was accepted. The document will remain in `wip/`
+   while additional PRs are submitted to update the Solana reference design, which is the Rust-only
+   version of this codebase (no `--features` enabled). Be sure to update the wip-doc as the
+   implementation reveals the need for tweaks to the architecture.
+3. Once implemented, contact the maintainer of the `doc/` to integrate the wip-doc into `doc/`.

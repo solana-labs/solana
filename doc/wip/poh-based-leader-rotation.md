@@ -1,11 +1,7 @@
 # Leader Rotation
 
-The goal of this RFC is to define how leader nodes are rotated in Solana, how rotation may cause forks to arise, and how the converges
+The goal of this document is to define how leader nodes are rotated in Solana, how rotation may cause forks to arise, and how the converges
 in response.
-
-## Version
-
-version 0.1
 
 ## Leader Seed Generation
 
