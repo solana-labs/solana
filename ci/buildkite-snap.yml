@@ -11,3 +11,6 @@ steps:
   - command: "ci/publish-bpf-sdk.sh"
     timeout_in_minutes: 5
     name: "publish bpf sdk"
+  - command: "ci/publish-solana-tar.sh"
+    timeout_in_minutes: 15
+    name: "publish solana release tar"
