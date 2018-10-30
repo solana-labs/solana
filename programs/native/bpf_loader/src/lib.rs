@@ -21,10 +21,10 @@ use std::sync::{Once, ONCE_INIT};
 #[allow(dead_code)]
 fn dump_program(key: &Pubkey, prog: &[u8]) {
     let mut eight_bytes: Vec<u8> = Vec::new();
-    println!("BPF Program: {:?}", key);
+    info!("BPF Program: {:?}", key);
     for i in prog.iter() {
         if eight_bytes.len() >= 7 {
-            println!("{:02X?}", eight_bytes);
+            info!("{:02X?}", eight_bytes);
             eight_bytes.clear();
         } else {
             eight_bytes.push(i.clone());
@@ -33,7 +33,7 @@ fn dump_program(key: &Pubkey, prog: &[u8]) {
 }
 
 pub fn helper_printf(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
-    println!(
+    info!(
         "bpf_trace_printf: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     );
@@ -112,7 +112,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         let vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
-                warn!("{}", e);
+                warn!("create_vm failed: {}", e);
                 return false;
             }
         };
@@ -122,7 +122,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
                 return false;
             },
             Err(e) => {
-                warn!("{}", e);
+                warn!("execute_program failed: {}", e);
                 return false;
             }
         }
@@ -132,10 +132,10 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             LoaderInstruction::Write { offset, bytes } => {
                 let offset = offset as usize;
                 let len = bytes.len();
-                trace!("BpfLoader::Write offset {} length {:?}", offset, len);
+                debug!("Write: offset={} length={}", offset, len);
                 if keyed_accounts[0].account.userdata.len() < offset + len {
-                    println!(
-                        "Overflow {} < {}",
+                    warn!(
+                        "Write overflow: {} < {}",
                         keyed_accounts[0].account.userdata.len(),
                         offset + len
                     );
@@ -145,7 +145,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             }
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                trace!("BPfLoader::Finalize prog: {:?}", keyed_accounts[0].key);
+                info!("Finalize: account {:?}", keyed_accounts[0].key);
             }
         }
     } else {
