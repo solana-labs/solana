@@ -2,7 +2,7 @@
  * @brief TicTacToe Dashboard C-based BPF program
  */
 
-#include <sol_bpf_c.h>
+#include <sol_bpf.h>
 #include "tictactoe.h"
 
 typedef enum {
