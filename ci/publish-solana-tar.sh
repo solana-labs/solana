@@ -34,6 +34,7 @@ if [[ -z $DRYRUN ]]; then
   ) > solana-release/version.txt
 
   cargo install --features=cuda --root solana-release
+  ./scripts/install-native-programs.sh solana-release
 
   tar jvcf solana-release.tar.bz2 solana-release/
 )
