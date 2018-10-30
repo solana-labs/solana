@@ -97,11 +97,9 @@ impl Mint {
 
     pub fn create_entries(&self) -> Vec<Entry> {
         let e0 = Entry::new(&self.seed(), 0, vec![]);
-
-        // Create the transactions that give the mint the initial tokens, and gives the first
-        // leader the initial tokens
-        let e1 = Entry::new(&self.seed(), 0, self.create_transaction());
-        vec![e0, e1]
+        let e1 = Entry::new(&e0.id, 1, self.create_transaction());
+        let e2 = Entry::new(&e1.id, 1, vec![]); // include a tick
+        vec![e0, e1, e2]
     }
 }
 

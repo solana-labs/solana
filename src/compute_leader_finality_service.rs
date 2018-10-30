@@ -41,6 +41,7 @@ impl ComputeLeaderFinalityService {
             // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
             // See github issue 1654.
             bank_accounts
+                .accounts
                 .values()
                 .filter_map(|account| {
                     // Filter out any accounts that don't belong to the VoteProgram
@@ -156,7 +157,7 @@ pub mod tests {
         let ids: Vec<_> = (0..10)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_entry_id(&last_id);
+                bank.register_tick(&last_id);
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id

@@ -1,5 +1,5 @@
 //! The `poh_recorder` module provides an object for synchronizing with Proof of History.
-//! It synchronizes PoH, bank's register_entry_id and the ledger
+//! It synchronizes PoH, bank's register_tick and the ledger
 //!
 use bank::Bank;
 use entry::Entry;
@@ -86,7 +86,7 @@ impl PohRecorder {
         is_virtual: bool,
         virtual_tick_entries: Vec<Entry>,
     ) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.get_tick_height())));
+        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.tick_height())));
         let virtual_tick_entries = Arc::new(Mutex::new(virtual_tick_entries));
         PohRecorder {
             poh,
@@ -134,7 +134,7 @@ impl PohRecorder {
 
     fn register_and_send_tick(&self, poh: &mut Poh) -> Result<()> {
         let tick_entry = self.generate_tick_entry(poh);
-        self.bank.register_entry_id(&tick_entry.id);
+        self.bank.register_tick(&tick_entry.id);
         self.sender.send(vec![tick_entry])?;
         Ok(())
     }

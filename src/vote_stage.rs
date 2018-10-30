@@ -32,7 +32,7 @@ pub fn create_new_signed_vote_blob(
     cluster_info: &Arc<RwLock<ClusterInfo>>,
 ) -> Result<SharedBlob> {
     let shared_blob = SharedBlob::default();
-    let tick_height = bank.get_tick_height();
+    let tick_height = bank.tick_height();
 
     let leader_tpu = get_leader_tpu(bank, cluster_info)?;
     //TODO: doesn't seem like there is a synchronous call to get height and id

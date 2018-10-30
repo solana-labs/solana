@@ -323,7 +323,7 @@ impl Fullnode {
         } else {
             let max_tick_height = {
                 let ls_lock = bank.leader_scheduler.read().unwrap();
-                ls_lock.max_height_for_leader(bank.get_tick_height())
+                ls_lock.max_height_for_leader(bank.tick_height())
             };
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
@@ -350,7 +350,7 @@ impl Fullnode {
                 entry_height,
                 entry_receiver,
                 bank.leader_scheduler.clone(),
-                bank.get_tick_height(),
+                bank.tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -450,7 +450,7 @@ impl Fullnode {
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
         if scheduled_leader == self.keypair.pubkey() {
-            let tick_height = self.bank.get_tick_height();
+            let tick_height = self.bank.tick_height();
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
             Ok(())
         } else {
@@ -1056,7 +1056,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         );
 
-        assert_eq!(bank.get_tick_height(), bootstrap_height);
+        assert_eq!(bank.tick_height(), bootstrap_height);
         assert_eq!(
             entry_height,
             // Only the first genesis entry has num_hashes = 0, every other entry

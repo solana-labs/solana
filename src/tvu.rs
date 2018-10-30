@@ -108,7 +108,7 @@ impl Tvu {
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             &cluster_info,
             window,
-            bank.get_tick_height(),
+            bank.tick_height(),
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
@@ -311,7 +311,7 @@ pub mod tests {
         let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![]);
-            bank.register_entry_id(&cur_hash);
+            bank.register_tick(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             let tx0 = Transaction::system_new(
@@ -320,10 +320,10 @@ pub mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            bank.register_entry_id(&cur_hash);
+            bank.register_tick(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
             let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
-            bank.register_entry_id(&cur_hash);
+            bank.register_tick(&cur_hash);
             cur_hash = hash(&cur_hash.as_ref());
 
             alice_ref_balance -= transfer_amount;
