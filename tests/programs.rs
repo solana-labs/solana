@@ -204,7 +204,7 @@ fn test_program_native_noop() {
 fn test_program_lua_move_funds() {
     logger::setup();
 
-    let loader = Loader::new_dynamic("lua_loader");
+    let loader = Loader::new_dynamic("solana_lua_loader");
     let userdata = r#"
             print("Lua Script!")
             local tokens, _ = string.unpack("I", data)
@@ -303,7 +303,7 @@ fn test_program_builtin_bpf_noop() {
 fn test_program_bpf_noop_c() {
     logger::setup();
 
-    let loader = Loader::new_dynamic("bpf_loader");
+    let loader = Loader::new_dynamic("solana_bpf_loader");
     let program = Program::new(
         &loader,
         elf::File::open_path(&create_bpf_path("noop"))

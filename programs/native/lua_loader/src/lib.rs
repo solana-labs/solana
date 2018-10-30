@@ -79,8 +79,8 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
                 let len = bytes.len();
                 trace!("LuaLoader::Write offset {} length {:?}", offset, len);
                 if keyed_accounts[0].account.userdata.len() < offset + len {
-                    println!(
-                        "Overflow {} < {}",
+                    warn!(
+                        "Write overflow {} < {}",
                         keyed_accounts[0].account.userdata.len(),
                         offset + len
                     );
