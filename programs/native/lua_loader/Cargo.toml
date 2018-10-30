@@ -19,6 +19,6 @@ solana-sdk = { path = "../../../sdk", version = "0.11.0" }
 bincode = "1.0.0"
 
 [lib]
-name = "lua_loader"
+name = "solana_lua_loader"
 crate-type = ["cdylib"]
 
