@@ -79,7 +79,8 @@ impl Replicator {
         network_addr: Option<SocketAddr>,
         done: Arc<AtomicBool>,
     ) -> (Replicator, NodeInfo) {
-        let window = window::new_window_from_entries(&[], entry_height, &node.info);
+        const REPLICATOR_WINDOW_SIZE: usize = 32 * 1024;
+        let window = window::new_window(REPLICATOR_WINDOW_SIZE);
         let shared_window = Arc::new(RwLock::new(window));
 
         let cluster_info = Arc::new(RwLock::new(

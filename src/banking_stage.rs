@@ -48,7 +48,6 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
-        tick_height: u64,
         max_tick_height: Option<u64>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
@@ -57,7 +56,6 @@ impl BankingStage {
             bank.clone(),
             entry_sender,
             *last_entry_id,
-            tick_height,
             max_tick_height,
             false,
             vec![],
@@ -267,7 +265,6 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            0,
             None,
         );
         drop(verified_sender);
@@ -286,7 +283,6 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            0,
             None,
         );
         drop(entry_receiver);
@@ -306,7 +302,6 @@ mod tests {
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
-            0,
             None,
         );
         sleep(Duration::from_millis(500));
@@ -333,7 +328,6 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            0,
             None,
         );
 
@@ -388,7 +382,6 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            0,
             None,
         );
 
@@ -442,7 +435,6 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            0,
             Some(max_tick_height),
         );
         assert_eq!(

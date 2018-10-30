@@ -610,22 +610,19 @@ mod tests {
         let serial_tx = serialize(&tx).unwrap();
         let rpc_port = 22222; // Needs to be distinct known number to not conflict with other tests
 
-        let genesis_entries = &alice.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
         bank.leader_scheduler = leader_scheduler;
 
         let vote_account_keypair = Arc::new(Keypair::new());
+        let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
-            0,
             entry_height,
-            &genesis_entries,
+            &last_id,
             leader,
             None,
             &ledger_path,

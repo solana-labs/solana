@@ -19,7 +19,7 @@ use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
 use timing::duration_as_ms;
-use window::{blob_idx_in_window, SharedWindow, WindowUtil};
+use window::{SharedWindow, WindowUtil};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
 
@@ -206,7 +206,11 @@ fn recv_window(
         };
         pixs.push(pix);
 
-        if !blob_idx_in_window(&id, pix, *consumed, received) {
+        if !window
+            .read()
+            .unwrap()
+            .blob_idx_in_window(&id, pix, *consumed, received)
+        {
             continue;
         }
 

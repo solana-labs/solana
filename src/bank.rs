@@ -40,7 +40,6 @@ use token_program::TokenProgram;
 use tokio::prelude::Future;
 use transaction::Transaction;
 use vote_program::VoteProgram;
-use window::WINDOW_SIZE;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -906,36 +905,6 @@ impl Bank {
         Ok(())
     }
 
-    /// Process an ordered list of entries, populating a circular buffer "tail"
-    /// as we go.
-    fn process_entries_tail(
-        &self,
-        entries: &[Entry],
-        tail: &mut Vec<Entry>,
-        tail_idx: &mut usize,
-    ) -> Result<u64> {
-        let mut entry_count = 0;
-
-        for entry in entries {
-            if tail.len() > *tail_idx {
-                tail[*tail_idx] = entry.clone();
-            } else {
-                tail.push(entry.clone());
-            }
-            *tail_idx = (*tail_idx + 1) % WINDOW_SIZE as usize;
-
-            entry_count += 1;
-            // TODO: We prepare for implementing voting contract by making the associated
-            // process_entries functions aware of the vote-tracking structure inside
-            // the leader scheduler. Next we will extract the vote tracking structure
-            // out of the leader scheduler, and into the bank, and remove the leader
-            // scheduler from these banking functions.
-            self.process_entry(entry)?;
-        }
-
-        Ok(entry_count)
-    }
-
     /// Process an ordered list of entries.
     pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
         self.par_process_entries(entries)
@@ -998,44 +967,56 @@ impl Bank {
         Ok(())
     }
 
+    /// Process an ordered list of entries, populating a circular buffer "tail"
+    /// as we go.
+    fn process_block(&self, entries: &[Entry]) -> Result<()> {
+        for entry in entries {
+            // TODO: We prepare for implementing voting contract by making the associated
+            // process_entries functions aware of the vote-tracking structure inside
+            // the leader scheduler. Next we will extract the vote tracking structure
+            // out of the leader scheduler, and into the bank, and remove the leader
+            // scheduler from these banking functions.
+            self.process_entry(entry)?;
+        }
+
+        Ok(())
+    }
+
     /// Append entry blocks to the ledger, verifying them along the way.
-    fn process_blocks<I>(
+    fn process_ledger_blocks<I>(
         &self,
         start_hash: Hash,
+        entry_height: u64,
         entries: I,
-        tail: &mut Vec<Entry>,
-        tail_idx: &mut usize,
-    ) -> Result<u64>
+    ) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
+        // these magic numbers are from genesis of the mint, could pull them
+        //  back out of this loop.
+        let mut entry_height = entry_height;
+        let mut last_id = start_hash;
+
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
-        let mut entry_height = *tail_idx as u64;
-
-        for entry in &tail[0..*tail_idx] {
-            if entry.is_tick() {
-                *self.tick_height.lock().unwrap() += 1;
-            }
-        }
-
-        let mut id = start_hash;
         for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
-            if !block.verify(&id) {
+
+            if !block.verify(&last_id) {
                 warn!("Ledger proof of history failed at entry: {}", entry_height);
                 return Err(BankError::LedgerVerificationFailed);
             }
-            id = block.last().unwrap().id;
-            let entry_count = self.process_entries_tail(&block, tail, tail_idx)?;
 
-            entry_height += entry_count;
+            self.process_block(&block)?;
+
+            last_id = block.last().unwrap().id;
+            entry_height += block.len() as u64;
         }
-        Ok(entry_height)
+        Ok((entry_height, last_id))
     }
 
     /// Process a full ledger.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, u64, Vec<Entry>)>
+    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
@@ -1071,20 +1052,8 @@ impl Bank {
         }
         self.register_entry_id(&entry0.id);
         self.register_entry_id(&entry1.id);
-        let entry1_id = entry1.id;
 
-        let mut tail = Vec::with_capacity(WINDOW_SIZE as usize);
-        tail.push(entry0);
-        tail.push(entry1);
-        let mut tail_idx = 2;
-        let entry_height = self.process_blocks(entry1_id, entries, &mut tail, &mut tail_idx)?;
-
-        // check if we need to rotate tail
-        if tail.len() == WINDOW_SIZE as usize {
-            tail.rotate_left(tail_idx)
-        }
-
-        Ok((*self.tick_height.lock().unwrap(), entry_height, tail))
+        Ok(self.process_ledger_blocks(entry1.id, 2, entries)?)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1682,42 +1651,12 @@ mod tests {
     #[test]
     fn test_process_ledger_simple() {
         let (ledger, pubkey) = create_sample_ledger(1);
-        let (ledger, dup) = ledger.tee();
         let bank = Bank::default();
-        let (tick_height, ledger_height, tail) = bank.process_ledger(ledger).unwrap();
+        let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 4);
-        assert_eq!(tick_height, 2);
-        assert_eq!(tail.len(), 4);
-        assert_eq!(tail, dup.collect_vec());
-        let last_entry = &tail[tail.len() - 1];
-        // last entry is a tick
-        assert_eq!(0, last_entry.transactions.len());
-        // tick is registered
-        assert_eq!(bank.last_id(), last_entry.id);
-    }
-
-    #[test]
-    fn test_process_ledger_around_window_size() {
-        // TODO: put me back in when Criterion is up
-        //        for _ in 0..10 {
-        //            let (ledger, _) = create_sample_ledger(WINDOW_SIZE as usize);
-        //            let bank = Bank::default();
-        //            let (_, _) = bank.process_ledger(ledger).unwrap();
-        //        }
-
-        let window_size = 128;
-        for entry_count in window_size - 3..window_size + 2 {
-            let (ledger, pubkey) = create_sample_ledger(entry_count);
-            let bank = Bank::default();
-            let (tick_height, ledger_height, tail) = bank.process_ledger(ledger).unwrap();
-            assert_eq!(bank.get_balance(&pubkey), 1);
-            assert_eq!(ledger_height, entry_count as u64 + 3);
-            assert_eq!(tick_height, 2);
-            assert!(tail.len() <= WINDOW_SIZE as usize);
-            let last_entry = &tail[tail.len() - 1];
-            assert_eq!(bank.last_id(), last_entry.id);
-        }
+        assert_eq!(bank.get_tick_height(), 1);
+        assert_eq!(bank.last_id(), last_id);
     }
 
     // Write the given entries to a file and then return a file iterator to them.

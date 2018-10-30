@@ -24,7 +24,7 @@ use solana::system_transaction::SystemTransaction;
 use solana::thin_client::ThinClient;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
-use solana::window::{default_window, WINDOW_SIZE};
+use solana::window::default_window;
 use solana_sdk::pubkey::Pubkey;
 use std::collections::{HashSet, VecDeque};
 use std::env;
@@ -126,7 +126,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // write a bunch more ledger into leader's ledger, this should populate his window
     // and force him to respond to repair from the ledger window
     {
-        let entries = make_tiny_test_entries(alice.last_id(), WINDOW_SIZE as usize);
+        let entries = make_tiny_test_entries(alice.last_id(), 100);
         let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
 
         writer.write_entries(&entries).unwrap();
@@ -897,12 +897,12 @@ fn test_leader_to_validator_transition() {
 
     // Check the ledger to make sure it's the right height, we should've
     // transitioned after tick_height == bootstrap_height
-    let (_, tick_height, _, _) = Fullnode::new_bank_from_ledger(
+    let (bank, _, _) = Fullnode::new_bank_from_ledger(
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::default())),
     );
 
-    assert_eq!(tick_height, bootstrap_height);
+    assert_eq!(bank.get_tick_height(), bootstrap_height);
 
     // Shut down
     ncp.close().unwrap();

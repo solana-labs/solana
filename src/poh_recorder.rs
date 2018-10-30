@@ -82,12 +82,11 @@ impl PohRecorder {
         bank: Arc<Bank>,
         sender: Sender<Vec<Entry>>,
         last_entry_id: Hash,
-        tick_height: u64,
         max_tick_height: Option<u64>,
         is_virtual: bool,
         virtual_tick_entries: Vec<Entry>,
     ) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, tick_height)));
+        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.get_tick_height())));
         let virtual_tick_entries = Arc::new(Mutex::new(virtual_tick_entries));
         PohRecorder {
             poh,
@@ -156,8 +155,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder =
-            PohRecorder::new(bank, entry_sender, last_id, 0, None, false, vec![]);
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, last_id, None, false, vec![]);
 
         //send some data
         let h1 = hash(b"hello world!");

@@ -6,7 +6,7 @@ use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
 use leader_scheduler::LeaderScheduler;
-use ledger::{reconstruct_entries_from_blobs, Block};
+use ledger::reconstruct_entries_from_blobs;
 use log::Level;
 use packet::SharedBlob;
 use result::Result;
@@ -16,8 +16,6 @@ use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
-
-pub const WINDOW_SIZE: u64 = 32 * 1024;
 
 #[derive(Default, Clone)]
 pub struct WindowSlot {
@@ -52,6 +50,8 @@ pub trait WindowUtil {
     /// Finds available slots, clears them, and returns their indices.
     fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64>;
 
+    fn window_size(&self) -> u64;
+
     #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn repair(
         &mut self,
@@ -79,13 +79,15 @@ pub trait WindowUtil {
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     );
+
+    fn blob_idx_in_window(&self, id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool;
 }
 
 impl WindowUtil for Window {
     fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64> {
         (consumed..received)
             .filter_map(|pix| {
-                let i = (pix % WINDOW_SIZE) as usize;
+                let i = (pix % self.window_size()) as usize;
                 if let Some(blob_idx) = self[i].blob_index() {
                     if blob_idx == pix {
                         return None;
@@ -94,6 +96,43 @@ impl WindowUtil for Window {
                 self[i].clear_data();
                 Some(pix)
             }).collect()
+    }
+
+    fn blob_idx_in_window(&self, id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool {
+        // Prevent receive window from running over
+        // Got a blob which has already been consumed, skip it
+        // probably from a repair window request
+        if pix < consumed {
+            trace!(
+                "{}: received: {} but older than consumed: {} skipping..",
+                id,
+                pix,
+                consumed
+            );
+            false
+        } else {
+            // received always has to be updated even if we don't accept the packet into
+            //  the window.  The worst case here is the server *starts* outside
+            //  the window, none of the packets it receives fits in the window
+            //  and repair requests (which are based on received) are never generated
+            *received = cmp::max(pix, *received);
+
+            if pix >= consumed + self.window_size() {
+                trace!(
+                    "{}: received: {} will overrun window: {} skipping..",
+                    id,
+                    pix,
+                    consumed + self.window_size()
+                );
+                false
+            } else {
+                true
+            }
+        }
+    }
+
+    fn window_size(&self) -> u64 {
+        self.len() as u64
     }
 
     fn repair(
@@ -144,7 +183,14 @@ impl WindowUtil for Window {
         let num_peers = rcluster_info.table.len() as u64;
 
         let max_repair = if max_entry_height == 0 {
-            calculate_max_repair(num_peers, consumed, received, times, is_next_leader)
+            calculate_max_repair(
+                num_peers,
+                consumed,
+                received,
+                times,
+                is_next_leader,
+                self.window_size(),
+            )
         } else {
             max_entry_height + 1
         };
@@ -181,7 +227,7 @@ impl WindowUtil for Window {
             .iter()
             .enumerate()
             .map(|(i, _v)| {
-                if i == (consumed % WINDOW_SIZE) as usize {
+                if i == (consumed % self.window_size()) as usize {
                     "V"
                 } else {
                     " "
@@ -237,7 +283,7 @@ impl WindowUtil for Window {
         leader_unknown: bool,
         pending_retransmits: &mut bool,
     ) {
-        let w = (pix % WINDOW_SIZE) as usize;
+        let w = (pix % self.window_size()) as usize;
 
         let is_coding = blob.read().unwrap().is_coding();
 
@@ -283,14 +329,15 @@ impl WindowUtil for Window {
 
         #[cfg(feature = "erasure")]
         {
-            if erasure::recover(id, self, *consumed, (*consumed % WINDOW_SIZE) as usize).is_err() {
+            let window_size = self.window_size();
+            if erasure::recover(id, self, *consumed, (*consumed % window_size) as usize).is_err() {
                 trace!("{}: erasure::recover failed", id);
             }
         }
 
         // push all contiguous blobs into consumed queue, increment consumed
         loop {
-            let k = (*consumed % WINDOW_SIZE) as usize;
+            let k = (*consumed % self.window_size()) as usize;
             trace!("{}: k: {} consumed: {}", id, k, *consumed,);
 
             let k_data_blob;
@@ -334,6 +381,7 @@ fn calculate_max_repair(
     received: u64,
     times: usize,
     is_next_leader: bool,
+    window_size: u64,
 ) -> u64 {
     // Calculate the highest blob index that this node should have already received
     // via avalanche. The avalanche splits data stream into nodes and each node retransmits
@@ -350,44 +398,15 @@ fn calculate_max_repair(
     // This check prevents repairing a blob that will cause window to roll over. Even if
     // the highes_lost blob is actually missing, asking to repair it might cause our
     // current window to move past other missing blobs
-    cmp::min(consumed + WINDOW_SIZE - 1, max_repair)
+    cmp::min(consumed + window_size - 1, max_repair)
 }
 
-pub fn blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool {
-    // Prevent receive window from running over
-    // Got a blob which has already been consumed, skip it
-    // probably from a repair window request
-    if pix < consumed {
-        trace!(
-            "{}: received: {} but older than consumed: {} skipping..",
-            id,
-            pix,
-            consumed
-        );
-        false
-    } else {
-        // received always has to be updated even if we don't accept the packet into
-        //  the window.  The worst case here is the server *starts* outside
-        //  the window, none of the packets it receives fits in the window
-        //  and repair requests (which are based on received) are never generated
-        *received = cmp::max(pix, *received);
-
-        if pix >= consumed + WINDOW_SIZE {
-            trace!(
-                "{}: received: {} will overrun window: {} skipping..",
-                id,
-                pix,
-                consumed + WINDOW_SIZE
-            );
-            false
-        } else {
-            true
-        }
-    }
+pub fn new_window(window_size: usize) -> Window {
+    (0..window_size).map(|_| WindowSlot::default()).collect()
 }
 
 pub fn default_window() -> Window {
-    (0..WINDOW_SIZE).map(|_| WindowSlot::default()).collect()
+    (0..2048).map(|_| WindowSlot::default()).collect()
 }
 
 pub fn index_blobs(
@@ -410,52 +429,6 @@ pub fn index_blobs(
     Ok(())
 }
 
-/// Initialize a rebroadcast window with most recent Entry blobs
-/// * `cluster_info` - gossip instance, used to set blob ids
-/// * `blobs` - up to WINDOW_SIZE most recent blobs
-/// * `entry_height` - current entry height
-pub fn initialized_window(
-    node_info: &NodeInfo,
-    blobs: Vec<SharedBlob>,
-    entry_height: u64,
-) -> Window {
-    let mut window = default_window();
-    let id = node_info.id;
-
-    trace!(
-        "{} initialized window entry_height:{} blobs_len:{}",
-        id,
-        entry_height,
-        blobs.len()
-    );
-
-    // Index the blobs
-    let mut received = entry_height - blobs.len() as u64;
-    index_blobs(&node_info, &blobs, &mut received).expect("index blobs for initial window");
-
-    // populate the window, offset by implied index
-    let diff = cmp::max(blobs.len() as isize - window.len() as isize, 0) as usize;
-    for b in blobs.into_iter().skip(diff) {
-        let ix = b.read().unwrap().get_index().expect("blob index");
-        let pos = (ix % WINDOW_SIZE) as usize;
-        trace!("{} caching {} at {}", id, ix, pos);
-        assert!(window[pos].data.is_none());
-        window[pos].data = Some(b);
-    }
-
-    window
-}
-
-pub fn new_window_from_entries(
-    ledger_tail: &[Entry],
-    entry_height: u64,
-    node_info: &NodeInfo,
-) -> Window {
-    // convert to blobs
-    let blobs = ledger_tail.to_blobs();
-    initialized_window(&node_info, blobs, entry_height)
-}
-
 #[cfg(test)]
 mod test {
     use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
@@ -468,7 +441,7 @@ mod test {
     use std::sync::Arc;
     use std::time::Duration;
     use streamer::{receiver, responder, PacketReceiver};
-    use window::{blob_idx_in_window, calculate_max_repair, WINDOW_SIZE};
+    use window::{calculate_max_repair, new_window, Window, WindowUtil};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {
@@ -530,59 +503,79 @@ mod test {
     }
 
     #[test]
-    pub fn calculate_max_repair_test() {
-        assert_eq!(calculate_max_repair(0, 10, 90, 0, false), 90);
-        assert_eq!(calculate_max_repair(15, 10, 90, 32, false), 90);
-        assert_eq!(calculate_max_repair(15, 10, 90, 0, false), 75);
-        assert_eq!(calculate_max_repair(90, 10, 90, 0, false), 10);
-        assert_eq!(calculate_max_repair(90, 10, 50, 0, false), 10);
-        assert_eq!(calculate_max_repair(90, 10, 99, 0, false), 10);
-        assert_eq!(calculate_max_repair(90, 10, 101, 0, false), 11);
+    pub fn test_calculate_max_repair() {
+        const WINDOW_SIZE: u64 = 200;
+
+        assert_eq!(calculate_max_repair(0, 10, 90, 0, false, WINDOW_SIZE), 90);
+        assert_eq!(calculate_max_repair(15, 10, 90, 32, false, WINDOW_SIZE), 90);
+        assert_eq!(calculate_max_repair(15, 10, 90, 0, false, WINDOW_SIZE), 75);
+        assert_eq!(calculate_max_repair(90, 10, 90, 0, false, WINDOW_SIZE), 10);
+        assert_eq!(calculate_max_repair(90, 10, 50, 0, false, WINDOW_SIZE), 10);
+        assert_eq!(calculate_max_repair(90, 10, 99, 0, false, WINDOW_SIZE), 10);
+        assert_eq!(calculate_max_repair(90, 10, 101, 0, false, WINDOW_SIZE), 11);
         assert_eq!(
-            calculate_max_repair(90, 10, 95 + WINDOW_SIZE, 0, false),
+            calculate_max_repair(90, 10, 95 + WINDOW_SIZE, 0, false, WINDOW_SIZE),
             WINDOW_SIZE + 5
         );
         assert_eq!(
-            calculate_max_repair(90, 10, 99 + WINDOW_SIZE, 0, false),
+            calculate_max_repair(90, 10, 99 + WINDOW_SIZE, 0, false, WINDOW_SIZE),
             WINDOW_SIZE + 9
         );
         assert_eq!(
-            calculate_max_repair(90, 10, 100 + WINDOW_SIZE, 0, false),
+            calculate_max_repair(90, 10, 100 + WINDOW_SIZE, 0, false, WINDOW_SIZE),
             WINDOW_SIZE + 9
         );
         assert_eq!(
-            calculate_max_repair(90, 10, 120 + WINDOW_SIZE, 0, false),
+            calculate_max_repair(90, 10, 120 + WINDOW_SIZE, 0, false, WINDOW_SIZE),
             WINDOW_SIZE + 9
         );
         assert_eq!(
-            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, false),
+            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, false, WINDOW_SIZE),
             WINDOW_SIZE
         );
         assert_eq!(
-            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, true),
+            calculate_max_repair(50, 100, 50 + WINDOW_SIZE, 0, true, WINDOW_SIZE),
             50 + WINDOW_SIZE
         );
     }
 
-    fn wrap_blob_idx_in_window(id: &Pubkey, pix: u64, consumed: u64, received: u64) -> (bool, u64) {
+    fn wrap_blob_idx_in_window(
+        window: &Window,
+        id: &Pubkey,
+        pix: u64,
+        consumed: u64,
+        received: u64,
+    ) -> (bool, u64) {
         let mut received = received;
-        let is_in_window = blob_idx_in_window(&id, pix, consumed, &mut received);
+        let is_in_window = window.blob_idx_in_window(&id, pix, consumed, &mut received);
         (is_in_window, received)
     }
     #[test]
-    pub fn blob_idx_in_window_test() {
+    pub fn test_blob_idx_in_window() {
         let id = Pubkey::default();
+        const WINDOW_SIZE: u64 = 200;
+        let window = new_window(WINDOW_SIZE as usize);
+
         assert_eq!(
-            wrap_blob_idx_in_window(&id, 90 + WINDOW_SIZE, 90, 100),
+            wrap_blob_idx_in_window(&window, &id, 90 + WINDOW_SIZE, 90, 100),
             (false, 90 + WINDOW_SIZE)
         );
         assert_eq!(
-            wrap_blob_idx_in_window(&id, 91 + WINDOW_SIZE, 90, 100),
+            wrap_blob_idx_in_window(&window, &id, 91 + WINDOW_SIZE, 90, 100),
             (false, 91 + WINDOW_SIZE)
         );
-        assert_eq!(wrap_blob_idx_in_window(&id, 89, 90, 100), (false, 100));
+        assert_eq!(
+            wrap_blob_idx_in_window(&window, &id, 89, 90, 100),
+            (false, 100)
+        );
 
-        assert_eq!(wrap_blob_idx_in_window(&id, 91, 90, 100), (true, 100));
-        assert_eq!(wrap_blob_idx_in_window(&id, 101, 90, 100), (true, 101));
+        assert_eq!(
+            wrap_blob_idx_in_window(&window, &id, 91, 90, 100),
+            (true, 100)
+        );
+        assert_eq!(
+            wrap_blob_idx_in_window(&window, &id, 101, 90, 100),
+            (true, 101)
+        );
     }
 }

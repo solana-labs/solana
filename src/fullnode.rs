@@ -3,7 +3,6 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
-use entry::Entry;
 use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
@@ -21,7 +20,7 @@ use std::thread::Result;
 use tpu::{Tpu, TpuReturnType};
 use tvu::{Tvu, TvuReturnType};
 use untrusted::Input;
-use window;
+use window::{new_window, SharedWindow};
 
 pub enum NodeRole {
     Leader(LeaderServices),
@@ -96,7 +95,7 @@ pub struct Fullnode {
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
     sigverify_disabled: bool,
-    shared_window: window::SharedWindow,
+    shared_window: SharedWindow,
     replicate_socket: Vec<UdpSocket>,
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
@@ -142,7 +141,8 @@ impl Fullnode {
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         info!("creating bank...");
-        let (bank, tick_height, entry_height, ledger_tail) =
+
+        let (bank, entry_height, last_id) =
             Self::new_bank_from_ledger(ledger_path, leader_scheduler);
 
         info!("creating networking stack...");
@@ -160,9 +160,8 @@ impl Fullnode {
             keypair,
             vote_account_keypair,
             bank,
-            tick_height,
             entry_height,
-            &ledger_tail,
+            &last_id,
             node,
             leader_info.as_ref(),
             ledger_path,
@@ -243,9 +242,8 @@ impl Fullnode {
         keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,
         bank: Bank,
-        tick_height: u64,
         entry_height: u64,
-        ledger_tail: &[Entry],
+        last_id: &Hash,
         node: Node,
         bootstrap_leader_info_option: Option<&NodeInfo>,
         ledger_path: &str,
@@ -267,12 +265,7 @@ impl Fullnode {
                 .expect("Failed to clone respond socket"),
         ));
 
-        let last_entry_id = &ledger_tail
-            .last()
-            .expect("Expected at least one entry in the ledger")
-            .id;
-
-        let window = window::new_window_from_entries(ledger_tail, entry_height, &node.info);
+        let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(node.info).expect("ClusterInfo::new"),
@@ -330,7 +323,7 @@ impl Fullnode {
         } else {
             let max_tick_height = {
                 let ls_lock = bank.leader_scheduler.read().unwrap();
-                ls_lock.max_height_for_leader(tick_height)
+                ls_lock.max_height_for_leader(bank.get_tick_height())
             };
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
@@ -343,9 +336,8 @@ impl Fullnode {
                     .collect(),
                 ledger_path,
                 sigverify_disabled,
-                tick_height,
                 max_tick_height,
-                last_entry_id,
+                last_id,
             );
 
             let broadcast_stage = BroadcastStage::new(
@@ -358,7 +350,7 @@ impl Fullnode {
                 entry_height,
                 entry_receiver,
                 bank.leader_scheduler.clone(),
-                tick_height,
+                bank.get_tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -414,10 +406,10 @@ impl Fullnode {
         // Clear the leader scheduler
         new_leader_scheduler.reset();
 
-        let (new_bank, scheduled_leader, tick_height, entry_height, last_entry_id) = {
+        let (new_bank, scheduled_leader, entry_height, last_entry_id) = {
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
-            let (new_bank, tick_height, entry_height, ledger_tail) = Self::new_bank_from_ledger(
+            let (new_bank, entry_height, last_id) = Self::new_bank_from_ledger(
                 &self.ledger_path,
                 Arc::new(RwLock::new(new_leader_scheduler)),
             );
@@ -427,16 +419,7 @@ impl Fullnode {
                 .get_current_leader()
                 .expect("Scheduled leader should exist after rebuilding bank");
 
-            (
-                new_bank,
-                scheduled_leader,
-                tick_height,
-                entry_height,
-                ledger_tail
-                    .last()
-                    .expect("Expected at least one entry in the ledger")
-                    .id,
-            )
+            (new_bank, scheduled_leader, entry_height, last_id)
         };
 
         self.cluster_info
@@ -467,6 +450,7 @@ impl Fullnode {
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
         if scheduled_leader == self.keypair.pubkey() {
+            let tick_height = self.bank.get_tick_height();
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
             Ok(())
         } else {
@@ -495,7 +479,7 @@ impl Fullnode {
         }
     }
 
-    fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_entry_id: Hash) {
+    fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_id: Hash) {
         self.cluster_info
             .write()
             .unwrap()
@@ -515,12 +499,11 @@ impl Fullnode {
                 .collect(),
             &self.ledger_path,
             self.sigverify_disabled,
-            tick_height,
             max_tick_height,
             // We pass the last_entry_id from the replicate stage because we can't trust that
             // the window didn't overwrite the slot at for the last entry that the replicate stage
             // processed. We also want to avoid reading processing the ledger for the last id.
-            &last_entry_id,
+            &last_id,
         );
 
         let broadcast_stage = BroadcastStage::new(
@@ -596,19 +579,19 @@ impl Fullnode {
     pub fn new_bank_from_ledger(
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-    ) -> (Bank, u64, u64, Vec<Entry>) {
+    ) -> (Bank, u64, Hash) {
         let mut bank = Bank::new_with_builtin_programs();
         bank.leader_scheduler = leader_scheduler;
         let entries = read_ledger(ledger_path, true).expect("opening ledger");
         let entries = entries
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
         info!("processing ledger...");
-        let (tick_height, entry_height, ledger_tail) =
-            bank.process_ledger(entries).expect("process_ledger");
+
+        let (entry_height, last_id) = bank.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
-        (bank, tick_height, entry_height, ledger_tail)
+        (bank, entry_height, last_id)
     }
 
     pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
@@ -707,13 +690,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
 
+        let last_id = bank.last_id();
         let v = Fullnode::new_with_bank(
             Arc::new(keypair),
             Arc::new(Keypair::new()),
             bank,
-            0,
             entry_height,
-            &genesis_entries,
+            &last_id,
             tn,
             Some(&entry),
             &validator_ledger_path,
@@ -737,21 +720,19 @@ mod tests {
                 let mut bank = Bank::new(&mint);
                 let entry = tn.info.clone();
 
-                let genesis_entries = &mint.create_entries();
-                let entry_height = genesis_entries.len() as u64;
-
                 let leader_scheduler = Arc::new(RwLock::new(
                     LeaderScheduler::from_bootstrap_leader(entry.id),
                 ));
                 bank.leader_scheduler = leader_scheduler;
 
+                let entry_height = mint.create_entries().len() as u64;
+                let last_id = bank.last_id();
                 Fullnode::new_with_bank(
                     Arc::new(keypair),
                     Arc::new(Keypair::new()),
                     bank,
-                    0,
                     entry_height,
-                    &genesis_entries,
+                    &last_id,
                     tn,
                     Some(&entry),
                     &validator_ledger_path,
@@ -788,6 +769,7 @@ mod tests {
 
         let initial_tick_height = genesis_entries
             .iter()
+            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
 
         // Create the common leader scheduling configuration
@@ -873,6 +855,7 @@ mod tests {
 
         let genesis_tick_height = genesis_entries
             .iter()
+            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64)
             + num_ending_ticks as u64;
         ledger_writer.write_entries(&active_set_entries).unwrap();
@@ -970,6 +953,7 @@ mod tests {
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
         let initial_tick_height = genesis_entries
             .iter()
+            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let active_set_entries_len = active_set_entries.len() as u64;
@@ -1053,12 +1037,12 @@ mod tests {
 
         // Check the validator ledger for the correct entry + tick heights, we should've
         // transitioned after tick_height = bootstrap_height.
-        let (_, tick_height, entry_height, _) = Fullnode::new_bank_from_ledger(
+        let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         );
 
-        assert_eq!(tick_height, bootstrap_height);
+        assert_eq!(bank.get_tick_height(), bootstrap_height);
         assert_eq!(
             entry_height,
             // Only the first genesis entry has num_hashes = 0, every other entry
