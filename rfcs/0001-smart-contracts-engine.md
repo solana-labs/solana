@@ -1,6 +1,6 @@
 # Smart Contracts Engine
  
-The goal of this document is to define a set of constraints for APIs and smart contracts runtime such that we can execute our contracts safely on massively parallel hardware such as a GPU.
+The goal of this RFC is to define a set of constraints for APIs and smart contracts runtime such that we can execute our contracts safely on massively parallel hardware such as a GPU.
 
 ## Definitions
 

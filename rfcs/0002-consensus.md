@@ -1,6 +1,6 @@
 # Consensus
 
-The goal of this document is to define the consensus algorithm used in Solana.  This proposal covers a Proof of Stake (PoS) algorithm that leverages Proof of History (PoH).  PoH is a permissionless clock for blockchain that is available before consensus.  This PoS approach leverages PoH to make strong assumptions about time among partitions.
+The goal of this RFC is to define the consensus algorithm used in Solana.  This proposal covers a Proof of Stake (PoS) algorithm that leverages Proof of History (PoH).  PoH is a permissionless clock for blockchain that is available before consensus.  This PoS approach leverages PoH to make strong assumptions about time among partitions.
 
 
 ## Basic Design Idea
